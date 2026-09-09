@@ -128,6 +128,16 @@ export class ProgramsService {
     }
   }
 
+  /** Codes to the names the catalog gives them, for a screen that must print one rather than a code. */
+  async namesByCode(codes: readonly string[]): Promise<Map<string, string>> {
+    if (codes.length === 0) return new Map();
+    const rows = await this.prisma.program.findMany({
+      where: { code: { in: [...codes] } },
+      select: { code: true, name: true },
+    });
+    return new Map(rows.map((row) => [row.code, row.name]));
+  }
+
   private async requireProgram(id: string): Promise<ProgramRow> {
     const program = await this.prisma.program.findUnique({ where: { id } });
     if (!program) throw new AppException(ErrorCodes.NOT_FOUND, 'No such program');

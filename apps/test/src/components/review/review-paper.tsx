@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -10,6 +10,9 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   cn,
 } from '@iace/ui';
 import {
@@ -45,6 +48,13 @@ const verdictOf = (question: ReviewedQuestion): Verdict => {
   return question.isCorrect === false ? VERDICT.WRONG : VERDICT.LEFT;
 };
 
+/** The star, wired by the screen. Absent while the gate is shut — there is nothing to review yet. */
+export interface BookmarkControl {
+  saved: ReadonlySet<string>;
+  onToggle: (questionId: string) => void;
+  pendingId: string | null;
+}
+
 export interface ReviewPaperProps {
   sections: readonly ExamSection[];
   questions: readonly ReviewedQuestion[];
@@ -52,6 +62,7 @@ export interface ReviewPaperProps {
   languageMode: LanguageMode;
   /** What the gate is still holding back, said once at the top rather than per question. */
   notice?: React.ReactNode;
+  bookmark?: BookmarkControl;
 }
 
 /** The CBT arrangement, read-only — and a palette coloured by how each question went. */
@@ -61,6 +72,7 @@ export function ReviewPaper({
   languages,
   languageMode,
   notice,
+  bookmark,
 }: Readonly<ReviewPaperProps>) {
   const [sectionId, setSectionId] = useState(sections[0]?.id ?? '');
   const inSection = questions.filter((row) => row.baseConfigSectionId === sectionId);
@@ -106,6 +118,7 @@ export function ReviewPaper({
               languages={languages}
               languageMode={languageMode}
               onStep={step}
+              bookmark={bookmark}
             />
           ) : (
             <Alert variant="info">Nothing was served in this section.</Alert>
@@ -124,6 +137,7 @@ function ReviewQuestion({
   languages,
   languageMode,
   onStep,
+  bookmark,
 }: Readonly<{
   question: ReviewedQuestion;
   index: number;
@@ -131,6 +145,7 @@ function ReviewQuestion({
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
   onStep: (by: number) => void;
+  bookmark?: BookmarkControl;
 }>) {
   const shown = shownLanguages(languages, languageMode);
   const verdict = verdictOf(question);
@@ -149,6 +164,7 @@ function ReviewQuestion({
             {question.marksAwarded ?? 0} / {question.marks}
           </Badge>
           <Badge variant="neutral">Time spent: {question.timeSpentSec}s</Badge>
+          {bookmark ? <StarToggle questionId={question.questionId} bookmark={bookmark} /> : null}
         </span>
       </div>
 
@@ -193,6 +209,33 @@ function ReviewQuestion({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** One glyph, both states. It names itself on hover AND focus, which native `title` never does. */
+function StarToggle({
+  questionId,
+  bookmark,
+}: Readonly<{ questionId: string; bookmark: BookmarkControl }>) {
+  const saved = bookmark.saved.has(questionId);
+  const label = saved ? 'Remove bookmark' : 'Bookmark this question';
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="iconSm"
+          variant="ghost"
+          aria-pressed={saved}
+          loading={bookmark.pendingId === questionId}
+          onClick={() => bookmark.onToggle(questionId)}
+        >
+          <Bookmark aria-hidden className={cn(saved && 'fill-current text-primary')} />
+          <span className="sr-only">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

@@ -127,6 +127,7 @@ erodes.
 | attempts      | `Attempt`, `AttemptQuestion`, `PerformanceShare`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
 | audit         | `RowActionLog`, `ImportLog`                                                                                                                                                |
 | notifications | `Notification`                                                                                                                                                             |
+| saved         | `SavedQuestion`                                                                                                                                                            |
 
 `auth`, `imports`, `me` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
@@ -141,6 +142,9 @@ owns the sitting owns the derivation.
   `configs` has no way to learn that a paper was sat.
 - `tests` moves a `Question` in-use counter on finalize and on thaw. Being depended on is what
   freezes a question, and only the freeze knows.
+- `attempts` writes the MISTAKE half of `SavedQuestion` in the rollup fold. Only the fold knows
+  which answers the key called wrong, and it is the one path that is durable and runs exactly once
+  per sitting; `saved` owns the table and writes every BOOKMARK.
 - the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
   the one crossing that is infra rather than domain: retention is a property of the buffer, not of
   the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.

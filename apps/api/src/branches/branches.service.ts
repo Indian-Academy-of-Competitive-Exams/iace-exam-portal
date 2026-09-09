@@ -176,6 +176,15 @@ export class BranchesService {
     await this.prisma.branch.delete({ where: { id } });
   }
 
+  /** The branch's name for a screen that holds only its id. Null where it has been deleted. */
+  async nameOf(branchId: string): Promise<string | null> {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { name: true },
+    });
+    return branch?.name ?? null;
+  }
+
   private async branchTypeOf(branchId: string): Promise<BranchType | null> {
     const branch = await this.prisma.branch.findUnique({
       where: { id: branchId },

@@ -5,7 +5,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS, EVALUATION_MODE } from '@iace/contracts';
+import { ATTEMPT_STATUS, EVALUATION_MODE, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { cohortShapeOf } from './performance-analytics';
@@ -279,6 +279,8 @@ export class RollupService {
         },
       });
 
+      await this.foldMistakes(tx, attempt);
+
       for (const subject of totals.subjects.values()) {
         await tx.studentSubjectStat.upsert({
           where: {
@@ -309,6 +311,26 @@ export class RollupService {
           },
         });
       }
+    });
+  }
+
+  /** `isCorrect` is false only for a CHOSEN wrong answer; `skipDuplicates` makes a re-fold write once. */
+  private async foldMistakes(
+    tx: Prisma.TransactionClient,
+    attempt: FoldableAttempt,
+  ): Promise<void> {
+    const wrong = attempt.questions.filter((question) => question.isCorrect === false);
+    if (wrong.length === 0) return;
+
+    await tx.savedQuestion.createMany({
+      data: wrong.map((question) => ({
+        studentId: attempt.studentId,
+        questionId: question.questionId,
+        kind: SAVED_QUESTION_KIND.MISTAKE,
+        attemptId: attempt.id,
+        paperQuestionId: question.paperQuestionId,
+      })),
+      skipDuplicates: true,
     });
   }
 

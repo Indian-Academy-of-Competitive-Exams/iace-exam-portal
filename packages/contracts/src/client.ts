@@ -81,6 +81,15 @@ import {
   type UpdateMeInput,
 } from './me';
 import {
+  SAVED_ROUTES,
+  bookmarkedInAttemptSchema,
+  savedQuestionSchema,
+  type BookmarkQuestionInput,
+  type BookmarkedInAttempt,
+  type SavedListQueryInput,
+  type SavedQuestion,
+} from './saved';
+import {
   ADMIN_BRANCH_ROUTES,
   branchSchema,
   type Branch,
@@ -784,6 +793,28 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
           schema: performanceShareSchema,
         }),
+
+      /** One of the two lists, newest first. The kind is required — there is no combined list. */
+      savedQuestions: (query: SavedListQueryInput): Promise<Paginated<SavedQuestion>> =>
+        requestPaginated(`${SAVED_ROUTES.list}${queryString({ ...query })}`, {
+          schema: savedQuestionSchema.array(),
+        }),
+
+      /** Idempotent: starring a question already starred returns the row it already had. */
+      bookmarkQuestion: (input: BookmarkQuestionInput): Promise<SavedQuestion> =>
+        request(SAVED_ROUTES.bookmark, {
+          method: 'POST',
+          body: input,
+          schema: savedQuestionSchema,
+        }),
+
+      /** Drops one saved row. A dismissed mistake comes back only if they get it wrong again. */
+      removeSavedQuestion: (id: string): Promise<NoContent> =>
+        request(SAVED_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+      /** Which questions of one sitting are already starred — what the review draws its stars from. */
+      bookmarksInAttempt: (attemptId: string): Promise<BookmarkedInAttempt> =>
+        request(SAVED_ROUTES.inAttempt(attemptId), { schema: bookmarkedInAttemptSchema }),
     },
 
     admin: {

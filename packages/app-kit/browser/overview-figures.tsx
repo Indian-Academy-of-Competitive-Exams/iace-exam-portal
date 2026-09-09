@@ -22,6 +22,7 @@ import {
   measureOf,
   percentLabel,
   overallModeGap,
+  rankSubjectsByWeakness,
   scopeComparison,
   scopesNotSat,
   subjectModeGaps,
@@ -368,6 +369,52 @@ export function SubjectStrengthFigure({ subjects, mode, scope, className }: Read
     </ChartFigure>
   );
 }
+
+/** Ranked, so five is the read and a sixth is noise: past that it is the accuracy chart again. */
+const WEAKEST_SHOWN = 5;
+
+/** Weakest first, off the pre-folded rows. Insight only: it offers no paper, and cannot. */
+export function WeakestSubjectsFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
+  const ranking = rankSubjectsByWeakness(subjects, mode, scope);
+  const shown = ranking.weakest.slice(0, WEAKEST_SHOWN);
+
+  const bars: MeasureBar[] = shown.map((row) => ({
+    key: row.subjectId,
+    label: row.name,
+    value: row.measure.accuracy ?? 0,
+    display: percentLabel(row.measure.accuracy, UNMEASURED),
+    meta: `of ${row.measure.attempted}`,
+  }));
+
+  return (
+    <ChartFigure
+      title="Weakest subjects"
+      meta={plural(ranking.weakest.length, 'subject')}
+      className={cn('min-w-0', className)}
+    >
+      {bars.length === 0 ? <NothingRanked thin={ranking.thin.length} /> : null}
+      {bars.length > 0 ? <MeasureBars bars={bars} max={100} /> : null}
+      {bars.length > 0 && ranking.thin.length > 0 ? (
+        /* ui-copy-ok: rule */
+        <Alert variant="info">
+          Not enough data yet on {ranking.thin.map((row) => row.name).join(', ')} — a subject is
+          ranked once {SUBJECT_SAMPLE_FLOOR} of its questions have been marked.
+        </Alert>
+      ) : null}
+    </ChartFigure>
+  );
+}
+
+/** Nothing over the floor yet is not the same fact as nothing answered at all. */
+const NothingRanked = ({ thin }: Readonly<{ thin: number }>) =>
+  thin === 0 ? (
+    <NothingMeasured />
+  ) : (
+    /* ui-copy-ok: rule */
+    <Alert variant="info">
+      No subject has {SUBJECT_SAMPLE_FLOOR} marked questions behind it yet, so none is ranked.
+    </Alert>
+  );
 
 /** Where each subject sits against the median of the reader's OWN subjects, never a cohort's. */
 export function SpeedAccuracyFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
