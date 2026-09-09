@@ -586,8 +586,21 @@ export const paperQuestionSchema = z.object({
 });
 export type PaperQuestion = z.infer<typeof paperQuestionSchema>;
 
+/** Required, not optional: this rewrites published scores, and the audit row has to say why. */
+export const DISPOSITION_REASON_MAX = 300;
+
 /** DROPPED pays everyone who attempted it; BONUS pays the whole cohort; ACTIVE undoes either. */
-export const setPaperQuestionStatusSchema = z.object({ status: paperQuestionStatusSchema });
+export const setPaperQuestionStatusSchema = z.object({
+  status: paperQuestionStatusSchema,
+  reason: z
+    .string()
+    .trim()
+    .min(1, 'Say why this question is changing')
+    .max(
+      DISPOSITION_REASON_MAX,
+      `A reason cannot be longer than ${DISPOSITION_REASON_MAX} characters`,
+    ),
+});
 export type SetPaperQuestionStatusInput = z.input<typeof setPaperQuestionStatusSchema>;
 export type SetPaperQuestionStatusBody = z.infer<typeof setPaperQuestionStatusSchema>;
 

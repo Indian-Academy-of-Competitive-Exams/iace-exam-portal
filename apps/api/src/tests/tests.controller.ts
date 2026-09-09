@@ -147,7 +147,7 @@ export class TestsController {
     @Param('rowId') rowId: string,
     @Body(new ZodBody(setPaperQuestionStatusSchema)) body: SetPaperQuestionStatusBody,
   ): Promise<TestPaper> {
-    return this.paper.setQuestionStatus(id, rowId, body.status);
+    return this.paper.setQuestionStatus(id, rowId, body);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)

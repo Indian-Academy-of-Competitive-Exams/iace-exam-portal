@@ -2175,8 +2175,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve(created);
     },
 
+    // Detached, as Prisma hands them over: a live reference lets a later write rewrite the read.
     findUnique: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.paperQuestions.find((row) => row.id === where.id) ?? null),
+      Promise.resolve(copyOf(this.paperQuestions.find((row) => row.id === where.id))),
 
     findFirst: ({
       where,
@@ -2184,12 +2185,14 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       where: { testId: string; questionId: string; id?: { not: string } };
     }) =>
       Promise.resolve(
-        this.paperQuestions.find(
-          (row) =>
-            row.testId === where.testId &&
-            row.questionId === where.questionId &&
-            row.id !== where.id?.not,
-        ) ?? null,
+        copyOf(
+          this.paperQuestions.find(
+            (row) =>
+              row.testId === where.testId &&
+              row.questionId === where.questionId &&
+              row.id !== where.id?.not,
+          ),
+        ),
       ),
 
     update: ({ where, data }: { where: { id: string }; data: Partial<FakePaperRow> }) => {
@@ -2889,8 +2892,8 @@ const touched = () => {
   return { updatedAt: new Date(FIXED_NOW.getTime() + writes) };
 };
 
-const copyOf = (row: FakeQuestionVersionRow | undefined): FakeQuestionVersionRow | null =>
-  row ? { ...row } : null;
+/** What every Prisma read hands back: a detached copy, never the row the store still holds. */
+const copyOf = <TRow>(row: TRow | undefined): TRow | null => (row ? { ...row } : null);
 
 /** A reference is looked up by one question or by a batch of them, and sometimes by version too. */
 interface FakeRefWhere {
