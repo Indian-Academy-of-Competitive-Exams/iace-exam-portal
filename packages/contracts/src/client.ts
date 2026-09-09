@@ -194,6 +194,20 @@ import {
   type LeaderboardQueryInput,
 } from './leaderboard';
 import {
+  ADMIN_LIVE_OPS_ROUTES,
+  liveOpsBoardSchema,
+  liveOpsTestSchema,
+  resolvedAttemptSchema,
+  type ExtendAttemptInput,
+  type ForceSubmitAttemptInput,
+  type LiveOpsBoard,
+  type LiveOpsTest,
+  type LiveOpsTestQueryInput,
+  type ResetAttemptInput,
+  type ResolvedAttempt,
+  type VoidAttemptInput,
+} from './live-ops';
+import {
   PERFORMANCE_SHARE_ROUTES,
   performanceShareSchema,
   performanceSharesSchema,
@@ -773,6 +787,48 @@ export function createApiClient(options: ApiClientOptions) {
     },
 
     admin: {
+      /** Watching one test's sittings, and resolving the ones that broke. */
+      liveOps: {
+        tests: (query: LiveOpsTestQueryInput = {}): Promise<Paginated<LiveOpsTest>> =>
+          requestPaginated(`${ADMIN_LIVE_OPS_ROUTES.tests}${queryString({ ...query })}`, {
+            schema: liveOpsTestSchema.array(),
+          }),
+
+        board: (testId: string): Promise<LiveOpsBoard> =>
+          request(ADMIN_LIVE_OPS_ROUTES.board(testId), { schema: liveOpsBoardSchema }),
+
+        forceSubmit: (
+          attemptId: string,
+          input: ForceSubmitAttemptInput,
+        ): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.forceSubmit(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        extend: (attemptId: string, input: ExtendAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.extend(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        reset: (attemptId: string, input: ResetAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.reset(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        void: (attemptId: string, input: VoidAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.void(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+      },
+
       /** What an admin says to a cohort, and what reaching them cost. */
       announcements: {
         list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<AnnouncementSummary>> =>

@@ -1,4 +1,4 @@
-import { type AnswerState } from '@iace/contracts';
+import { type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { type HeldState } from './attempt-state';
 
 /** What the flusher writes, worked out without a database so it can be read as a table. */
@@ -26,4 +26,28 @@ export function rowsToFlush(held: HeldState): FlushRow[] {
       answeredAt: answer.answeredAt === null ? null : new Date(answer.answeredAt),
     },
   }));
+}
+
+/** The flush read backwards: what a lost live key is put back from, so a resume keeps its answers. */
+export function answersFromRows(
+  rows: readonly {
+    questionId: string;
+    state: AnswerState;
+    selectedOptionId: string | null;
+    typedAnswer: string | null;
+    timeSpentSec: number;
+    answeredAt: Date | null;
+  }[],
+): Record<string, LiveAnswer> {
+  const answers: Record<string, LiveAnswer> = {};
+  for (const row of rows) {
+    answers[row.questionId] = {
+      state: row.state,
+      selectedOptionId: row.selectedOptionId,
+      typedAnswer: row.typedAnswer,
+      timeSpentSec: row.timeSpentSec,
+      answeredAt: row.answeredAt?.toISOString() ?? null,
+    };
+  }
+  return answers;
 }

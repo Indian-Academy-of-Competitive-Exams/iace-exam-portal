@@ -312,6 +312,26 @@ export class FakeRedis {
     return Promise.resolve(raw === undefined ? null : (JSON.parse(raw) as T));
   }
 
+  mgetJson<T>(keys: readonly string[]): Promise<(T | null)[]> {
+    return Promise.resolve(
+      keys.map((key) => {
+        const raw = this.text(key);
+        return raw === undefined ? null : (JSON.parse(raw) as T);
+      }),
+    );
+  }
+
+  getRaw(key: string): Promise<string | null> {
+    return Promise.resolve(this.text(key) ?? null);
+  }
+
+  /** One thread, so the compare and the set are already atomic — the real one needs a script. */
+  async replaceJson(key: string, was: string, value: unknown, ttlSec: number): Promise<boolean> {
+    if (this.text(key) !== was) return false;
+    await this.setJson(key, value, ttlSec);
+    return true;
+  }
+
   async del(...keys: string[]): Promise<void> {
     if (keys.length > 0) await this.client.del(...keys);
   }
@@ -1573,6 +1593,20 @@ export interface FakeAttemptRow {
   createdAt: Date;
 }
 
+/** The two set-shaped status filters the access catalog asks with. */
+function statusAsked(status: string, asked?: { in: string[] } | { not: string }): boolean {
+  if (asked === undefined) return true;
+  return 'in' in asked ? asked.in.includes(status) : status !== asked.not;
+}
+
+/** Prisma reads a bare value as equality and `{ not }` as its negation; the fake reads both. */
+function statusMatches(
+  status: AttemptStatus,
+  asked: AttemptStatus | { not: AttemptStatus },
+): boolean {
+  return typeof asked === 'string' ? status === asked : status !== asked.not;
+}
+
 export function makeAttempt(overrides: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
   const startedAt = overrides.startedAt ?? new Date('2026-08-24T04:00:00.000Z');
   return {
@@ -1995,7 +2029,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       take,
     }: {
       where: {
-        status: AttemptStatus;
+        testId?: string;
+        studentId?: string;
+        status: AttemptStatus | { not: AttemptStatus };
         endsAt?: { lt: Date };
         score?: null;
         submittedAt?: { lt: Date };
@@ -2006,7 +2042,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         this.attemptRows
           .filter(
             (row) =>
-              row.status === where.status &&
+              (where.testId === undefined || row.testId === where.testId) &&
+              (where.studentId === undefined || row.studentId === where.studentId) &&
+              statusMatches(row.status, where.status) &&
               (where.endsAt === undefined || row.endsAt < where.endsAt.lt) &&
               (where.score === undefined || row.score === null) &&
               (where.submittedAt === undefined ||
@@ -4018,14 +4056,18 @@ export class FakeCatalogPrisma {
     findMany: async ({
       where,
     }: {
-      where: { studentId: string; testId?: { in: string[] }; status?: { in: string[] } };
+      where: {
+        studentId: string;
+        testId?: { in: string[] };
+        status?: { in: string[] } | { not: string };
+      };
     }) => {
       await this.record('attempt.findMany');
       return this.data.attempts.filter(
         (row) =>
           row.studentId === where.studentId &&
           (where.testId === undefined || where.testId.in.includes(row.testId)) &&
-          (where.status === undefined || where.status.in.includes(row.status)),
+          statusAsked(row.status, where.status),
       );
     },
   };
@@ -4763,11 +4805,14 @@ export class FakeScoringPrisma {
       where,
       data,
     }: {
-      where: { id: string; evaluatedAt: null };
-      data: { evaluatedAt: Date };
+      where: { id: string; evaluatedAt?: null; status?: { in: AttemptStatus[] } };
+      data: Partial<FakeAttemptRow>;
     }) => {
       const matched = this.attempts.filter(
-        (row) => row.id === where.id && row.evaluatedAt === null,
+        (row) =>
+          row.id === where.id &&
+          (where.evaluatedAt === undefined || row.evaluatedAt === null) &&
+          (where.status === undefined || where.status.in.includes(row.status)),
       );
       for (const row of matched) Object.assign(row, data);
       return Promise.resolve({ count: matched.length });
@@ -5777,7 +5822,7 @@ interface FakeRollupAttemptWhere {
   testId?: string;
   studentId?: string;
   isGraded?: boolean;
-  status?: AttemptStatus;
+  status?: AttemptStatus | { in: AttemptStatus[] };
   attemptNo?: { lt?: number; gt?: number };
   evaluatedAt?: Date | { lt: Date } | null;
   test?: { evaluationMode: EvaluationMode };
@@ -5967,10 +6012,13 @@ export class FakeRollupPrisma {
       [where.testId, row.testId],
       [where.studentId, row.studentId],
       [where.isGraded, row.isGraded],
-      [where.status, row.status],
       [where.test?.evaluationMode, this.modeOf(row)],
     ];
-    return asked.every(([wanted, held]) => wanted === undefined || wanted === held);
+    if (!asked.every(([wanted, held]) => wanted === undefined || wanted === held)) return false;
+    if (where.status === undefined) return true;
+    return typeof where.status === 'string'
+      ? row.status === where.status
+      : where.status.in.includes(row.status);
   }
 
   private matches(row: FakeAttemptRow, where: FakeRollupAttemptWhere): boolean {

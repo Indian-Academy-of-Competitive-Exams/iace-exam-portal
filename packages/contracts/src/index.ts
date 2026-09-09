@@ -16,6 +16,7 @@ export * from './announcements';
 export * from './question-versions';
 export * from './stats';
 export * from './leaderboard';
+export * from './live-ops';
 export * from './shares';
 export * from './imports';
 export * from './questions';

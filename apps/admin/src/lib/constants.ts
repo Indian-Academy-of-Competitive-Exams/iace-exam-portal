@@ -10,6 +10,7 @@ import {
   Megaphone,
   KeyRound,
   Layers,
+  Radar,
   Route,
   ShieldCheck,
   SlidersHorizontal,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 import { filterNavBy, type NavItem } from '@iace/app-kit';
 import {
+  type AttemptStatus,
   type AuditAction,
   type AuditActorType,
   type AuditFeature,
@@ -103,6 +105,8 @@ export const ROUTES = {
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
+  /** Watching a test's sittings while they run, and resolving the ones that broke. */
+  LIVE_OPS: '/live-ops',
   /** Every admin reaches these — the service, not the route, scopes what they see. */
   ANNOUNCEMENTS: '/announcements',
   AUDIT: '/audit',
@@ -191,6 +195,15 @@ export const courseLabel = (course: string) => course.replaceAll('_', '/');
 export const BRANCH_TYPE_LABELS: Readonly<Record<BranchType, string>> = {
   [BRANCH_TYPE.PHYSICAL]: 'Physical',
   [BRANCH_TYPE.VIRTUAL]: 'Online',
+};
+
+/** What a sitting's state is called on screen. VOIDED is an admin's own doing, so it is named. */
+export const ATTEMPT_STATUS_LABELS: Readonly<Record<AttemptStatus, string>> = {
+  IN_PROGRESS: 'In progress',
+  SUBMITTED: 'Submitted',
+  EVALUATED: 'Marked',
+  EXPIRED: 'Expired',
+  VOIDED: 'Void',
 };
 
 /** What an audit row's `feature` is called on screen. */
@@ -394,6 +407,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     ],
   },
   {
+    label: 'Live operations',
+    icon: Radar,
+    featureKey: FEATURE_KEYS.TEST_OPERATIONS,
+    children: [{ to: ROUTES.LIVE_OPS, label: 'Sittings', icon: Radar }],
+  },
+  {
     label: 'Administration',
     icon: ShieldCheck,
     superAdminOnly: true,
@@ -442,6 +461,7 @@ export const QUERY_KEYS = {
   EXAM_STAGES: [ADMIN, 'exam-stages'],
   EXAMS: [ADMIN, 'exams'],
   FEATURES: [ADMIN, 'features'],
+  LIVE_OPS: [ADMIN, 'live-ops'],
   ME: ['auth', 'me'],
   PROGRAMS: [ADMIN, 'programs'],
   QUESTION: [ADMIN, 'question'],

@@ -200,6 +200,41 @@ describe('AttemptStateService', () => {
     return { redis, service: new AttemptStateService(prisma.asService(), redis.asService()) };
   };
 
+  /** One answer already flushed to Postgres, which is what a lost key is put back from. */
+  const buildWithDurable = () => {
+    const prisma = new FakeTestsPrisma(
+      [makeTest({ id: 'tst_1' })],
+      [makeBaseConfig({ id: 'cfg_1' })],
+      [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
+      [],
+      [],
+      [],
+      [],
+      [makeAttempt({ id: 'att_1', studentId: 'stu_1', endsAt: new Date(ENDS_AT) })],
+      [
+        {
+          attemptId: 'att_1',
+          questionId: 'q1',
+          paperQuestionId: 'pq_1',
+          questionVersionId: 'q1_v1',
+          baseConfigSectionId: 'sec_1',
+          order: 1,
+          selectedOptionId: 'opt_a',
+          typedAnswer: null,
+          state: ANSWER_STATE.ANSWERED,
+          timeSpentSec: 20,
+          answeredAt: new Date('2026-09-01T05:01:00.000Z'),
+        },
+      ],
+    );
+    const redis = new FakeRedis();
+    return {
+      prisma,
+      redis,
+      service: new AttemptStateService(prisma.asService(), redis.asService()),
+    };
+  };
+
   const now = new Date('2026-09-01T05:00:00.000Z');
 
   it('saves to Redis and marks the attempt dirty', async () => {
@@ -249,6 +284,59 @@ describe('AttemptStateService', () => {
     assert.deepEqual(await service.dirtyIds(), []);
     const rebuilt = await service.save('stu_1', 'att_1', { revision: 2, answers: [] }, now);
     assert.equal(Object.keys(rebuilt.answers).length, 0);
+  });
+
+  /** The failure this prevents: a support reset handing the student back an empty paper. */
+  it('puts a lost live key back from the answers already written', async () => {
+    const { service, prisma } = buildWithDurable();
+
+    const rebuilt = await service.reestablish('stu_1', 'att_1');
+
+    assert.equal(prisma.attemptQuestions.length, 1);
+    assert.equal(rebuilt.answers.q1?.state, ANSWER_STATE.ANSWERED);
+    assert.equal(rebuilt.answers.q1?.selectedOptionId, 'opt_a');
+  });
+
+  /** The key holds what landed since the last flush, so a reset must not roll the student back. */
+  it('keeps whatever the key still holds over the durable copy', async () => {
+    const { service } = buildWithDurable();
+    await service.open({ id: 'att_1', studentId: 'stu_1', endsAt: new Date(ENDS_AT) });
+    await service.save(
+      'stu_1',
+      'att_1',
+      { revision: 4, answers: [change({ questionId: 'q2' })] },
+      now,
+    );
+
+    const rebuilt = await service.reestablish('stu_1', 'att_1');
+
+    assert.equal(rebuilt.revision, 4);
+    assert.deepEqual(Object.keys(rebuilt.answers).sort(), ['q1', 'q2']);
+  });
+
+  /** The bug this prevents: an extension rewriting the whole key and dropping the last autosave. */
+  it('moves the deadline without touching what the sitting has answered', async () => {
+    const { service, redis } = build();
+    await service.open({ id: 'att_1', studentId: 'stu_1', endsAt: new Date(ENDS_AT) });
+    await service.save('stu_1', 'att_1', { revision: 1, answers: [change()] }, now);
+
+    const later = new Date('2026-09-01T06:00:00.000Z');
+    await service.pushDeadline('att_1', later);
+
+    const state = await service.current('stu_1', 'att_1', now);
+    assert.equal(state.endsAt, later.toISOString());
+    assert.equal(state.revision, 1);
+    assert.equal(state.answers.q1?.state, ANSWER_STATE.ANSWERED);
+    assert.ok(redis.snapshot()['attempt:state:att_1']);
+  });
+
+  /** No key is no clock to move: the row carries the new deadline, and a rebuild reads it there. */
+  it('does nothing to a deadline whose live key has gone', async () => {
+    const { service } = build();
+
+    await service.pushDeadline('att_1', new Date('2026-09-01T06:00:00.000Z'));
+
+    assert.deepEqual(await service.read('att_1'), null);
   });
 
   it('leaves the answers of a resumed sitting alone', async () => {

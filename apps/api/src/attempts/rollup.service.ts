@@ -161,18 +161,46 @@ export class RollupService {
     this.logger.log(`Rebuilt ${tests.length} tests and ${students.length} students`);
   }
 
-  /** `isGraded` gates every cohort, so rows written before it knew about PRACTICE are fixed first. */
+  /** `isGraded` gates every cohort, so rows that hold a slot they should not are fixed first. */
   private async honestGrading(): Promise<void> {
     const corrected = await this.prisma.attempt.updateMany({
-      where: {
-        isGraded: true,
-        OR: [{ attemptNo: { gt: 1 } }, { test: { evaluationMode: EVALUATION_MODE.PRACTICE } }],
-      },
+      where: { isGraded: true, test: { evaluationMode: EVALUATION_MODE.PRACTICE } },
       data: { isGraded: false },
     });
-    if (corrected.count > 0) {
-      this.logger.warn(`Corrected ${corrected.count} sittings that were graded but should not be`);
+    const wrong = corrected.count + (await this.demoteSpareRankedSittings());
+    if (wrong > 0) {
+      this.logger.warn(`Corrected ${wrong} sittings that were graded but should not be`);
     }
+  }
+
+  /** At most one ranked sitting per (student, test), the earliest keeping it — not "attempt 1". */
+  private async demoteSpareRankedSittings(): Promise<number> {
+    // Scoped to a RETAKE: the earliest sitting keeps the slot, so only a later one can be spare.
+    const later = await this.prisma.attempt.findMany({
+      where: { isGraded: true, attemptNo: { gt: 1 } },
+      orderBy: { attemptNo: 'asc' },
+      select: { id: true, testId: true, studentId: true, attemptNo: true },
+    });
+
+    const spare: string[] = [];
+    for (const row of later) {
+      const earlier = await this.prisma.attempt.count({
+        where: {
+          testId: row.testId,
+          studentId: row.studentId,
+          isGraded: true,
+          attemptNo: { lt: row.attemptNo },
+        },
+      });
+      if (earlier > 0) spare.push(row.id);
+    }
+    if (spare.length === 0) return 0;
+
+    const { count } = await this.prisma.attempt.updateMany({
+      where: { id: { in: spare } },
+      data: { isGraded: false },
+    });
+    return count;
   }
 
   private async foldable(attemptId: string): Promise<FoldableAttempt | null> {
