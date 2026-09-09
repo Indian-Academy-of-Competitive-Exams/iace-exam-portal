@@ -4,11 +4,11 @@
  * works. `Test.announcedAt` is what makes it exactly-once: it is stamped in the same transaction as
  * the outbox rows, so a crash mid-fan-out replays and a finished one is never seen again.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { TestStatus } from '@prisma/client';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService } from '../access';
+import { type AccessResolverService } from '../access';
 import { NotificationOutbox } from './notification-outbox';
 
 /** One student at a time would be one transaction each; this is the fan-out the announcer uses. */
@@ -23,6 +23,14 @@ export class TestOpeningService {
 
   constructor(
     private readonly prisma: PrismaService,
+    // `require`, not a static import: `access` reads this barrel back, closing the cycle on load.
+    @Inject(
+      forwardRef(
+        () =>
+          (module.require('../access') as { AccessResolverService: typeof AccessResolverService })
+            .AccessResolverService,
+      ),
+    )
     private readonly access: AccessResolverService,
     private readonly outbox: NotificationOutbox,
   ) {}
