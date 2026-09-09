@@ -7,6 +7,8 @@ import {
   nextQuestionId,
   openSections,
   paletteCounts,
+  sectionEffort,
+  type AnswerState,
   secondsLeft,
   type ExamClock,
 } from '../src/index';
@@ -130,5 +132,88 @@ describe('nextOpenSectionId', () => {
     const closed = { a: { closed: true }, b: { closed: true }, c: { closed: true } };
 
     assert.equal(nextOpenSectionId(sections, closed, 'c'), null);
+  });
+});
+
+describe('what a sitting knows about itself the moment it ends', () => {
+  const sections = [
+    {
+      id: 'sec_quant',
+      name: 'Quantitative Aptitude',
+      order: 1,
+      questionCount: 3,
+      durationSec: null,
+    },
+    { id: 'sec_reason', name: 'Reasoning', order: 2, questionCount: 2, durationSec: null },
+  ];
+  const questions = [
+    { questionId: 'q1', baseConfigSectionId: 'sec_quant' },
+    { questionId: 'q2', baseConfigSectionId: 'sec_quant' },
+    { questionId: 'q3', baseConfigSectionId: 'sec_quant' },
+    { questionId: 'q4', baseConfigSectionId: 'sec_reason' },
+    { questionId: 'q5', baseConfigSectionId: 'sec_reason' },
+  ];
+
+  it('reports one row per section, in the papered order, under the section its own name', () => {
+    const effort = sectionEffort(sections, questions, {});
+    assert.deepEqual(
+      effort.map((row) => [row.id, row.name, row.total]),
+      [
+        ['sec_quant', 'Quantitative Aptitude', 3],
+        ['sec_reason', 'Reasoning', 2],
+      ],
+    );
+  });
+
+  /** Attempted means a real answer. A flagged question with none scores as unattempted, so it reads as one. */
+  it('counts only a real answer as attempted', () => {
+    const effort = sectionEffort(sections, questions, {
+      q1: { state: ANSWER_STATE.ANSWERED },
+      q2: { state: ANSWER_STATE.ANSWERED_MARKED },
+      q3: { state: ANSWER_STATE.MARKED_REVIEW },
+      q4: { state: ANSWER_STATE.NOT_ANSWERED },
+    });
+
+    assert.deepEqual(effort[0], {
+      id: 'sec_quant',
+      name: 'Quantitative Aptitude',
+      total: 3,
+      attempted: 2,
+      unattempted: 1,
+    });
+    assert.deepEqual(effort[1], {
+      id: 'sec_reason',
+      name: 'Reasoning',
+      total: 2,
+      attempted: 0,
+      unattempted: 2,
+    });
+  });
+
+  /** The two numbers are the section, so a screen showing both can never leave a question out. */
+  it('always splits the section in two', () => {
+    const cases: Record<string, { state: AnswerState }>[] = [
+      {},
+      { q1: { state: ANSWER_STATE.ANSWERED } },
+    ];
+    for (const answers of cases) {
+      for (const row of sectionEffort(sections, questions, answers)) {
+        assert.equal(row.attempted + row.unattempted, row.total, row.name);
+      }
+    }
+  });
+
+  /** A scoped or drawn paper serves what it serves; the blueprint's count is not this student's. */
+  it('counts the questions actually served, not the ones the blueprint asked for', () => {
+    const served = questions.filter((row) => row.questionId !== 'q3');
+    assert.equal(sectionEffort(sections, served, {})[0]?.total, 2);
+  });
+
+  it('leaves out a section this paper served nothing from', () => {
+    const quantOnly = questions.filter((row) => row.baseConfigSectionId === 'sec_quant');
+    assert.deepEqual(
+      sectionEffort(sections, quantOnly, {}).map((row) => row.id),
+      ['sec_quant'],
+    );
   });
 });

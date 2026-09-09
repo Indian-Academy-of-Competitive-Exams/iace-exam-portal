@@ -1,5 +1,5 @@
 // IACE — generated from prisma/schema.prisma
-// Generated 2026-09-07. Source of truth is the Prisma schema.
+// Source of truth is the Prisma schema. Regenerate with the schema-to-dbml script.
 // Arrays are marked note:'array' (DBML has no native array type); native DB types are lifted from @db.*
 
 Enum Gender {
@@ -126,6 +126,7 @@ Enum AttemptStatus {
   SUBMITTED
   EVALUATED
   EXPIRED
+  VOIDED
 }
 
 Enum AnswerState {
@@ -142,6 +143,22 @@ Enum NotificationType {
   ENROLLMENT_ADDED
   GRANT_ADDED
   GENERIC
+}
+
+Enum DeliveryChannel {
+  IN_APP
+  WEB_PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+Enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
 }
 
 Enum StudentType {
@@ -167,11 +184,6 @@ Enum TestSeriesKind {
   FREE
   PROGRAM
   EVENT
-}
-
-Enum UnlockState {
-  LOCKED
-  UNLOCKED
 }
 
 Enum PermissionLevel {
@@ -215,6 +227,25 @@ Enum ActorType {
 
 Enum ConsentPurpose {
   PLATFORM
+}
+
+Enum SavedQuestionKind {
+  BOOKMARK
+  MISTAKE
+}
+
+Enum QuestionFlagCategory {
+  AWKWARD
+  INVALID
+  TOO_DIFFICULT
+  INSUFFICIENT_DATA
+  OTHER
+}
+
+Enum QuestionFlagStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
 }
 
 Table Exam {
@@ -455,6 +486,9 @@ Table Attempt {
   lastPercentile decimal(5, 2)
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
+  voidedAt timestamptz(3)
+  voidReason text
+  voidedById text
   indexes {
     (testId, studentId, attemptNo) [unique]
     (studentId, createdAt)
@@ -737,19 +771,63 @@ Table ProcessedRollup {
 
 Table Notification {
   id text [pk, default: `cuid()`]
-  studentId text [not null]
+  studentId text
+  adminId text
   type NotificationType [not null]
   title text [not null]
   body text
+  data jsonb
+  dedupeKey text
+  actBy timestamptz(3)
   testId text
   testSeriesId text
+  announcementId text
   isRead boolean [not null, default: false]
+  openedVia DeliveryChannel
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (studentId, createdAt)
     (studentId, isRead)
     (testId)
     (testSeriesId)
+    (announcementId)
+  }
+}
+
+Table Announcement {
+  id text [pk, default: `cuid()`]
+  title text [not null]
+  body text [not null]
+  audience jsonb [not null]
+  paidChannels DeliveryChannel [not null, note: 'array']
+  recipientCount integer [not null]
+  estimatedCostPaise integer [not null]
+  createdById text [not null]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (createdAt)
+    (createdById)
+  }
+}
+
+Table NotificationDelivery {
+  id text [pk, default: `cuid()`]
+  notificationId text [not null]
+  channel DeliveryChannel [not null]
+  status DeliveryStatus [not null, default: 'PENDING']
+  skipReason text
+  templateId text
+  providerMessageId text
+  attempts integer [not null, default: 0]
+  lastError text
+  queuedAt timestamptz(3) [not null, default: `now()`]
+  sentAt timestamptz(3)
+  deliveredAt timestamptz(3)
+  failedAt timestamptz(3)
+  indexes {
+    (notificationId, channel) [unique]
+    (status, queuedAt)
+    (providerMessageId)
   }
 }
 
@@ -837,6 +915,64 @@ Table TestQuestionStat {
   }
 }
 
+Table NotificationPreference {
+  id text [pk, default: `cuid()`]
+  studentId text [not null]
+  channel DeliveryChannel [not null]
+  type NotificationType
+  enabled boolean [not null, default: true]
+  updatedAt timestamptz(3) [not null]
+  indexes {
+    (studentId, channel, type) [unique]
+    (studentId)
+  }
+}
+
+Table PushSubscription {
+  id text [pk, default: `cuid()`]
+  studentId text [not null]
+  endpoint text [unique, not null]
+  p256dh text [not null]
+  auth text [not null]
+  userAgent text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  lastSeenAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (studentId)
+  }
+}
+
+Table SavedQuestion {
+  id text [pk, default: `cuid()`]
+  studentId text [not null]
+  questionId text [not null]
+  kind SavedQuestionKind [not null]
+  attemptId text
+  paperQuestionId text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (studentId, questionId, kind) [unique]
+    (studentId, kind, createdAt)
+  }
+}
+
+Table QuestionFlag {
+  id text [pk, default: `cuid()`]
+  questionId text [not null]
+  versionId text
+  category QuestionFlagCategory [not null]
+  comment text [not null]
+  status QuestionFlagStatus [not null, default: 'OPEN']
+  raisedById text [not null]
+  resolvedById text
+  resolvedAt timestamptz(3)
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (questionId, status)
+    (status, createdAt)
+  }
+}
+
 Ref: ExamStage.examId > Exam.id
 Ref: BaseConfig.examStageId > ExamStage.id
 Ref: BaseConfig.clonedFromId > BaseConfig.id [delete: restrict]
@@ -883,8 +1019,12 @@ Ref: TestProgramUnlock.programCode > Program.code [delete: restrict]
 Ref: RowActionLog.importLogId > ImportLog.id [delete: restrict]
 Ref: ProcessedRollup.attemptId > Attempt.id [delete: cascade]
 Ref: Notification.studentId > Student.id [delete: cascade]
+Ref: Notification.adminId > Admin.id [delete: cascade]
 Ref: Notification.testId > Test.id
 Ref: Notification.testSeriesId > TestSeries.id
+Ref: Notification.announcementId > Announcement.id [delete: cascade]
+Ref: Announcement.createdById > Admin.id [delete: restrict]
+Ref: NotificationDelivery.notificationId > Notification.id [delete: cascade]
 Ref: StudentStat.studentId > Student.id [delete: cascade]
 Ref: StudentSubjectStat.studentId > Student.id [delete: cascade]
 Ref: StudentSubjectStat.subjectId > Subject.id
@@ -895,12 +1035,15 @@ Ref: TestSectionStat.baseConfigSectionId > BaseConfigSection.id
 Ref: TestQuestionStat.testId > Test.id [delete: cascade]
 Ref: TestQuestionStat.paperQuestionId > PaperQuestion.id [delete: cascade]
 Ref: TestQuestionStat.questionId > Question.id
+Ref: NotificationPreference.studentId > Student.id [delete: cascade]
+Ref: PushSubscription.studentId > Student.id [delete: cascade]
+Ref: SavedQuestion.studentId > Student.id [delete: cascade]
+Ref: SavedQuestion.questionId > Question.id
+Ref: QuestionFlag.questionId > Question.id [delete: cascade]
 
 // ============================================================================
-//  TABLE GROUPS — visual domains, rendered as areas in ChartDB / dbdiagram.
-//  Purely presentational; no effect on the generated SQL / Prisma schema.
-//  Colors are kept as comments: @dbml/core rejects `[color: ...]` on a
-//  TableGroup (dbdiagram.io-only syntax), and it would break parsing here.
+// Table groups. Colors are kept as trailing comments: @dbml/core rejects
+// `[color: ...]` on a TableGroup (dbdiagram.io-only syntax) and would fail to parse.
 // ============================================================================
 
 TableGroup "Exam Taxonomy" { // color: #B83939
@@ -919,6 +1062,8 @@ TableGroup "Question Bank" { // color: #B8860B
   Topic
   Question
   QuestionVersion
+  SavedQuestion
+  QuestionFlag
 }
 
 TableGroup "Tests & Papers" { // color: #2E7D5B
@@ -963,6 +1108,10 @@ TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   ImportLog
   RowActionLog
   Notification
+  Announcement
+  NotificationDelivery
+  NotificationPreference
+  PushSubscription
   OutboxEvent
   ProcessedRollup
 }

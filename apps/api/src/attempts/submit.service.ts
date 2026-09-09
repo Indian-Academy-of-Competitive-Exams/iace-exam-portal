@@ -7,8 +7,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import {
-  ANSWER_STATE,
   AppException,
+  ANSWERED_STATES,
   ATTEMPT_STATUS,
   ErrorCodes,
   type AttemptStatus,
@@ -22,9 +22,6 @@ import { ScoringOutbox } from './scoring-outbox';
 import { MetricsService } from '../common/metrics';
 
 const NOT_YOURS = 'No such attempt';
-
-/** What counts as answered on the way out — a marked answer is still an answer. */
-const ANSWERED_STATES = [ANSWER_STATE.ANSWERED, ANSWER_STATE.ANSWERED_MARKED];
 
 /** Ahead of the claim, so a call that lost the race cannot write over the winner's answers. */
 const STILL_LIVE = { attempt: { status: ATTEMPT_STATUS.IN_PROGRESS } } as const;
@@ -129,7 +126,7 @@ export class SubmitService {
 
   private async countAnswered(attemptId: string): Promise<number> {
     return this.prisma.attemptQuestion.count({
-      where: { attemptId, state: { in: ANSWERED_STATES } },
+      where: { attemptId, state: { in: [...ANSWERED_STATES] } },
     });
   }
 
