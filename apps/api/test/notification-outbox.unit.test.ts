@@ -5,7 +5,10 @@ import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { NotificationsProcessor } from '../src/notifications/notifications.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { FakeNotificationsPrisma, FakeQueue } from './support/fakes';
+import { NotificationPreferencesService } from '../src/notifications/notification-preferences.service';
+import { PushService } from '../src/notifications/push.service';
+import { TestOpeningService } from '../src/notifications/test-opening.service';
+import { FakeConfig, FakeNotificationsPrisma, FakePushSender, FakeQueue } from './support/fakes';
 
 /** The durable path: the fact and the intent commit together, and the queue is a later step. */
 
@@ -16,12 +19,23 @@ const INTENT = {
   dedupeKey: 'result:att_1',
 };
 
+/** No kind pays by default, so a test about not buying twice has to be told to buy once. */
+const PAID_INTENT = { ...INTENT, escalate: [DeliveryChannel.WHATSAPP] };
+
 function build() {
   const prisma = new FakeNotificationsPrisma();
   const queue = new FakeQueue();
   const deliveries = new FakeQueue();
   const outbox = new NotificationOutbox(prisma.asService(), queue.asQueue());
   const service = new NotificationsService(prisma.asService());
+  const preferences = new NotificationPreferencesService(
+    prisma.asService(),
+    new FakeConfig().asService(),
+  );
+  const push = new PushService(prisma.asService(), preferences, new FakePushSender(false));
+  // Nothing here opens a test, so the audience it would fan out to is deliberately empty.
+  const access = { studentsReaching: () => Promise.resolve([]) } as never;
+  const openings = new TestOpeningService(prisma.asService(), access, outbox);
   return {
     prisma,
     queue,
@@ -31,6 +45,8 @@ function build() {
       prisma.asService(),
       service,
       outbox,
+      push,
+      openings,
       deliveries.asQueue(),
     ),
   };
@@ -114,7 +130,7 @@ describe('Acting on a relayed request', () => {
   /** At-least-once arriving, exactly-once landing: the second pass loses to the dedupe key. */
   it('tells a student once however many times the job runs', async () => {
     const { prisma, outbox, processor } = build();
-    const eventId = await outbox.request(prisma.asService(), INTENT);
+    const eventId = await outbox.request(prisma.asService(), PAID_INTENT);
 
     await processor.write(eventId);
     await processor.write(eventId);

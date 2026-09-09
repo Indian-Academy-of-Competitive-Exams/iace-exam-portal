@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Send } from 'lucide-react';
 import { FEATURE_KEYS, PERMISSION_LEVELS, type AnnouncementSummary } from '@iace/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
@@ -7,10 +7,12 @@ import {
   Badge,
   BadgeList,
   Button,
+  DropdownMenuItem,
   ListView,
   Metric,
   MetricGroup,
   PageHeader,
+  RowActions,
   Skeleton,
   TableFrame,
   TruncatedText,
@@ -26,11 +28,13 @@ import { CHANNEL_LABEL, rupees } from '../components/announcements/money';
 /** Nothing to narrow yet: an announcement carries no dimension worth filtering a short list by. */
 const NO_FILTERS = [] as const satisfies readonly ListFilter[];
 
-/** What an admin said, to whom, and what it cost. Immutable once sent, so no row actions. */
+/** What an admin said and to whom. A sent notice is immutable; the one action re-sends a copy. */
 export function AnnouncementsPage() {
   const { can } = useAuth();
   const queryClient = useQueryClient();
   const [composing, setComposing] = useState(false);
+  // The row being sent again, which is also the dialog's key: without it the form keeps the last one.
+  const [resending, setResending] = useState<AnnouncementSummary | null>(null);
 
   const canSend = can(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
@@ -49,7 +53,13 @@ export function AnnouncementsPage() {
           title="Announcements"
           action={
             canSend ? (
-              <Button size="sm" onClick={() => setComposing(true)}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setResending(null);
+                  setComposing(true);
+                }}
+              >
                 <Plus aria-hidden />
                 New announcement
               </Button>
@@ -59,8 +69,10 @@ export function AnnouncementsPage() {
       }
     >
       <ComposeAnnouncementDialog
+        key={resending?.id ?? 'new'}
         open={composing}
         onOpenChange={setComposing}
+        draft={resending}
         onSent={() => {
           setComposing(false);
           void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ANNOUNCEMENTS });
@@ -69,7 +81,14 @@ export function AnnouncementsPage() {
 
       <ListView
         list={announcements}
-        columns={COLUMNS}
+        columns={columnsWith(
+          canSend
+            ? (row) => {
+                setResending(row);
+                setComposing(true);
+              }
+            : undefined,
+        )}
         rowKey={(row) => row.id}
         expand={{
           render: (row) => <AnnouncementPanel announcement={row} />,
@@ -81,7 +100,10 @@ export function AnnouncementsPage() {
   );
 }
 
-const COLUMNS: DataTableColumn<AnnouncementSummary>[] = [
+/** The action is left out rather than disabled for an admin who cannot send. */
+const columnsWith = (
+  onResend?: (row: AnnouncementSummary) => void,
+): DataTableColumn<AnnouncementSummary>[] => [
   {
     key: 'title',
     header: 'Title',
@@ -110,6 +132,22 @@ const COLUMNS: DataTableColumn<AnnouncementSummary>[] = [
     className: 'max-w-48',
     cell: (row) => <TruncatedText>{row.createdBy.fullName ?? row.createdBy.email}</TruncatedText>,
   },
+  ...(onResend
+    ? [
+        {
+          key: 'actions',
+          header: '',
+          cell: (row: AnnouncementSummary) => (
+            <RowActions label={`Actions for ${row.title}`}>
+              <DropdownMenuItem onSelect={() => onResend(row)}>
+                <Send aria-hidden />
+                Send again
+              </DropdownMenuItem>
+            </RowActions>
+          ),
+        },
+      ]
+    : []),
 ];
 
 /** A row's own detail. The ledger is counted HERE — per row on the list is six queries each. */

@@ -216,6 +216,7 @@ interface AnnouncementRow {
   id: string;
   title: string;
   body: string;
+  audience: unknown;
   paidChannels: string[];
   recipientCount: number;
   estimatedCostPaise: number;
@@ -229,6 +230,8 @@ function toSummary(row: AnnouncementRow): AnnouncementSummary {
     title: row.title,
     body: row.body,
     paidChannels: row.paidChannels as AnnouncementChannel[],
+    // Trusted because only `send` writes it, and it wrote a filter this schema had already parsed.
+    audience: row.audience as AnnouncementAudience,
     recipientCount: row.recipientCount,
     estimatedCostPaise: row.estimatedCostPaise,
     createdBy: row.createdBy,

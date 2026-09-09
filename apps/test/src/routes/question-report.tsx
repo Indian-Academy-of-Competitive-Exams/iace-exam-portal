@@ -87,7 +87,7 @@ function Body({
     () => report.questions.filter((row) => matches(row, filter)),
     [report.questions, filter],
   );
-  const columns = useMemo(() => columnsFor(report.solutionsOpen), [report.solutionsOpen]);
+  const columns = useMemo(() => columnsFor(), []);
   const insights = useMemo(() => questionReportInsights(report.questions), [report.questions]);
 
   const list: ListState<QuestionReportRow> = {
@@ -100,18 +100,11 @@ function Body({
   };
 
   // Options with every count at zero are four empty bars, so the chevron promises nothing.
-  const split =
-    report.solutionsOpen &&
-    report.questions.some((row) => row.optionCounts.some((option) => option.count > 0));
+  const split = report.questions.some((row) => row.optionCounts.some((option) => option.count > 0));
 
   return (
     // Every ancestor between the frame and the table has to shrink, or the page takes the scroll.
     <div className="flex min-h-0 flex-1 flex-col gap-6">
-      {report.closedReason === null ? null : (
-        /* ui-copy-ok: consequence */
-        <Alert variant="info">{report.closedReason}</Alert>
-      )}
-
       <StatBand>
         <Metric
           label="Pace"
@@ -196,7 +189,7 @@ function optionMark(
   return named.length === 0 ? '' : ` — ${named.join(', ')}`;
 }
 
-function columnsFor(solutionsOpen: boolean): DataTableColumn<QuestionReportRow>[] {
+function columnsFor(): DataTableColumn<QuestionReportRow>[] {
   const columns: DataTableColumn<QuestionReportRow>[] = [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
     {
@@ -251,7 +244,6 @@ function columnsFor(solutionsOpen: boolean): DataTableColumn<QuestionReportRow>[
     },
   ];
 
-  if (!solutionsOpen) return columns;
   return [
     ...columns,
     {

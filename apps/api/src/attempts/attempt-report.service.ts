@@ -27,7 +27,6 @@ import {
   scopedDurationSec,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService } from '../access';
 import { StorageService } from '../storage/storage.service';
 import { imageUrlsIn } from './exam-images';
 import {
@@ -40,18 +39,10 @@ import {
 } from './attempt-analytics';
 import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
-import {
-  gateFacts,
-  solutionsAreOpen,
-  solutionsClosedReason,
-  solutionsOpenAt,
-} from './solution-gate';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService } from './leaderboard.service';
 import {
   elapsedSeconds,
-  isProvisional,
-  lastSittingEndsAt,
   marksBySection,
   numberOrNull,
   percentageOf,
@@ -191,16 +182,11 @@ type SolutionRow = Prisma.AttemptGetPayload<{ select: typeof SOLUTION_SELECT }>;
 export class AttemptReportService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly access: AccessResolverService,
     private readonly leaderboard: LeaderboardService,
     private readonly storage: StorageService,
   ) {}
 
-  async scoreCard(
-    studentId: string,
-    attemptId: string,
-    now: Date = new Date(),
-  ): Promise<ScoreCard> {
+  async scoreCard(studentId: string, attemptId: string): Promise<ScoreCard> {
     const attempt = await this.require(studentId, attemptId);
     if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
       throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
@@ -210,9 +196,6 @@ export class AttemptReportService {
     const questions = attempt.questions.map(toScoreCardQuestion);
     const perSection = marksBySection(questions);
 
-    // Finality is not one branch's business: while ANY branch can still let somebody in, it moves.
-    const schedule = await this.access.testSchedule(attempt.testId);
-    const endsAt = lastSittingEndsAt(schedule.closesAt, config.durationSec, schedule.extraTimeSec);
     const standing = await this.leaderboard.liveStanding(attempt.testId, attempt.id);
     const score = Number(attempt.score ?? 0);
     const maxMarks = round([...perSection.values()].reduce((sum, marks) => sum + marks, 0));
@@ -248,7 +231,6 @@ export class AttemptReportService {
       rank: standing?.rank ?? attempt.lastRank,
       percentile: standing?.percentile ?? numberOrNull(attempt.lastPercentile),
       cohortSize: standing?.cohortSize ?? null,
-      provisional: isProvisional(endsAt, now),
       sections: sectionsWithScores(
         config.sections.map((section) => ({
           ...section,
@@ -333,12 +315,8 @@ export class AttemptReportService {
     return cohortAggregate(this.prisma, testId);
   }
 
-  /** The answer key, once and only once the gate has opened. Two reads, so a refusal never held it. */
-  async solutions(
-    studentId: string,
-    attemptId: string,
-    now: Date = new Date(),
-  ): Promise<SolutionReport> {
+  /** The answer key. Only a sitting the student finished and had marked ever reaches it. */
+  async solutions(studentId: string, attemptId: string): Promise<SolutionReport> {
     const gate = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
       select: GATE_SELECT,
@@ -346,12 +324,6 @@ export class AttemptReportService {
     if (!gate) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     if (gate.status !== ATTEMPT_STATUS.EVALUATED) {
       throw new AppException(ErrorCodes.CONFLICT, NOT_REVIEWABLE);
-    }
-
-    const facts = gateFacts(gate, await this.access.testSchedule(gate.testId));
-    // The key has not been fetched yet, so a refusal here cannot be carrying a fragment of it.
-    if (!solutionsAreOpen(facts, now)) {
-      throw new AppException(ErrorCodes.FORBIDDEN, solutionsClosedReason(facts));
     }
 
     const attempt = await this.prisma.attempt.findFirst({
@@ -373,7 +345,6 @@ export class AttemptReportService {
       testId: attempt.testId,
       testTitle: attempt.test.title,
       languages: attempt.languages,
-      openedAt: solutionsOpenAt(facts),
       sections: attempt.test.baseConfig.sections.map((section) => ({
         id: section.id,
         name: section.name,

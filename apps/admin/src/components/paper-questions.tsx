@@ -21,6 +21,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { framingOf } from '../routes/test-paper-view';
+import { DispositionBadge, PaperDisposition } from './paper-disposition';
 import { QuestionLink } from './question-viewer';
 
 /** One section of the paper as it stands: what is on it, and what its own settings now refuse. */
@@ -39,8 +40,19 @@ function refusalOf(stranded: Readonly<Record<string, PickRefusal>>, questionId: 
   return <Badge variant="warning">{STRANDED_LABELS[refusal]}</Badge>;
 }
 
+/** What the disposition menu needs beyond the row itself. Absent where nothing may be disposed. */
+export interface PaperDispositionSpec {
+  /** Every sitting on the test, for the confirm to name what it is about to move. */
+  attemptCount: number;
+  variantCount: number;
+  onRescoring: () => void;
+}
+
 function paperColumns(
   stranded: Readonly<Record<string, PickRefusal>>,
+  testId: string,
+  disposition: PaperDispositionSpec | undefined,
+  onChanged: (next: TestPaper) => Promise<void>,
 ): DataTableColumn<PaperRow>[] {
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
@@ -65,10 +77,21 @@ function paperColumns(
                 .join(' · ')}
             </TruncatedText>
             {refusalOf(stranded, row.questionId)}
+            <DispositionBadge status={row.status} />
           </span>
         </span>
       ),
     },
+    ...(disposition
+      ? [
+          {
+            key: 'actions',
+            cell: (row: PaperRow) => (
+              <PaperDisposition testId={testId} row={row} onChanged={onChanged} {...disposition} />
+            ),
+          },
+        ]
+      : []),
   ];
 }
 
@@ -78,6 +101,7 @@ export function PaperQuestions({
   rows,
   spec,
   editable,
+  disposition,
   isLoading = false,
   action,
   banner,
@@ -89,6 +113,8 @@ export function PaperQuestions({
   /** What the section draws from now, which is what strands a question chosen before it changed. */
   spec: SectionDrawSpec;
   editable: boolean;
+  /** Absent on a draft and without TEST_MANAGEMENT write, which is when nothing may be disposed. */
+  disposition?: PaperDispositionSpec;
   /** True while `rows` are last read's, so the table draws its shape instead of another paper's. */
   isLoading?: boolean;
   /** Beside the heading — filling the rest of this section. */
@@ -142,7 +168,7 @@ export function PaperQuestions({
       {banner}
 
       <DataTable
-        columns={paperColumns(stranded)}
+        columns={paperColumns(stranded, testId, disposition, onChanged)}
         rows={rows}
         rowKey={(row) => row.id}
         selection={

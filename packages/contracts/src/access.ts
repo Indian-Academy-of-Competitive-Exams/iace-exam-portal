@@ -30,6 +30,9 @@ export const NOTIFICATION_TYPE = {
   ENROLLMENT_ADDED: 'ENROLLMENT_ADDED',
   GRANT_ADDED: 'GRANT_ADDED',
   GENERIC: 'GENERIC',
+  RESULT_UPDATED: 'RESULT_UPDATED',
+  PIN_CHANGED: 'PIN_CHANGED',
+  WELCOME: 'WELCOME',
 } as const;
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
@@ -309,37 +312,70 @@ export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
 export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;
 
 // ============================================================================
-// When a test opens. `unlockAt` belongs to the series-test link — one time for
-// every branch, because a rank only means something if the cohort sat together.
-// `lateEntrySec` is the branch's own, counted FROM that unlock so it can never
-// contradict it and survives the exam being moved.
+// How the platform reaches one student. The bell is the floor; an absent preference is the default.
 // ============================================================================
 
-const MILLISECONDS_PER_SECOND = 1000;
+/** Mirrors `DeliveryChannel` in prisma/schema.prisma — the two are edited together. */
+export const DELIVERY_CHANNEL = {
+  IN_APP: 'IN_APP',
+  WEB_PUSH: 'WEB_PUSH',
+  EMAIL: 'EMAIL',
+  SMS: 'SMS',
+  WHATSAPP: 'WHATSAPP',
+} as const;
+export const deliveryChannelSchema = z.enum(DELIVERY_CHANNEL);
+export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
 
-export interface TestTiming {
-  unlockAt: string | null;
-  lateEntrySec: number | null;
-}
+/** One channel as the student's own screen shows it. `locked` is the bell, which has no switch. */
+export const notificationPreferenceSchema = z.object({
+  channel: deliveryChannelSchema,
+  enabled: z.boolean(),
+  locked: z.boolean(),
+  /** False where nothing is configured to carry it — a row to show as unavailable, not as off. */
+  available: z.boolean(),
+});
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
 
-export interface TestWindow {
-  opensAt: string | null;
-  closesAt: string | null;
-}
+/** The screen's whole read. The VAPID public key rides along so nothing is configured twice. */
+export const notificationPreferencesSchema = z.object({
+  channels: z.array(notificationPreferenceSchema),
+  webPushPublicKey: z.string().nullable(),
+});
+export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
 
-/** A cutoff with nothing to count from is not a cutoff, so both halves must be there. */
-export function testWindow({ unlockAt, lateEntrySec }: TestTiming): TestWindow {
-  if (unlockAt === null || lateEntrySec === null) return { opensAt: unlockAt, closesAt: null };
+export const setNotificationPreferenceSchema = z.object({
+  channel: deliveryChannelSchema,
+  enabled: z.boolean(),
+});
+export type SetNotificationPreferenceInput = z.input<typeof setNotificationPreferenceSchema>;
+export type SetNotificationPreferenceBody = z.infer<typeof setNotificationPreferenceSchema>;
 
-  const closes = Date.parse(unlockAt) + lateEntrySec * MILLISECONDS_PER_SECOND;
-  return { opensAt: unlockAt, closesAt: new Date(closes).toISOString() };
-}
+/** What `pushManager.subscribe` hands back, flattened — the browser's own endpoint and its keys. */
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().min(1),
+  p256dh: z.string().min(1),
+  auth: z.string().min(1),
+  userAgent: z.string().optional(),
+});
+export type PushSubscriptionInput = z.input<typeof pushSubscriptionSchema>;
+export type PushSubscriptionBody = z.infer<typeof pushSubscriptionSchema>;
 
-/** Whether a sitting may BEGIN: open at the instant it opens, shut at the instant entry closes. */
-export function testIsOpen(window: TestWindow, now: Date): boolean {
-  const at = now.getTime();
-  if (window.opensAt !== null && Date.parse(window.opensAt) > at) return false;
-  return window.closesAt === null || Date.parse(window.closesAt) > at;
+/** Where a push lands: the bell, which already carries every notification's own way in. */
+export const NOTIFICATION_INBOX_PATH = '/notifications';
+
+/** Unsubscribing names the endpoint, because a browser may hold several across devices. */
+export const dropPushSubscriptionSchema = z.object({ endpoint: z.string().min(1) });
+export type DropPushSubscriptionInput = z.input<typeof dropPushSubscriptionSchema>;
+export type DropPushSubscriptionBody = z.infer<typeof dropPushSubscriptionSchema>;
+
+// ============================================================================
+// When a test opens, which is the whole of its timing. There is no cutoff: it
+// opens at `opensAt` and never shuts, so a student sits it whenever they reach it.
+// ============================================================================
+
+/** Whether a sitting may BEGIN. Nothing shuts a test, so this is the opening and nothing else. */
+export function testIsOpen(opensAt: string | null, now: Date): boolean {
+  return opensAt === null || Date.parse(opensAt) <= now.getTime();
 }
 
 // ============================================================================
@@ -359,8 +395,6 @@ export const studentCatalogTestSchema = z.object({
   order: z.number().int().nullable(),
   /** When this test opens inside its series. Null is open from the moment the series is reached. */
   opensAt: z.string().nullable(),
-  /** The last instant a student may BEGIN it. Null is any time while it is open. */
-  closesAt: z.string().nullable(),
   /** Where this student has got to. Null is never opened; IN_PROGRESS is what Resume reopens. */
   attemptStatus: attemptStatusSchema.nullable(),
   canStart: z.boolean(),
@@ -389,25 +423,21 @@ export const studentCatalogSeriesSchema = z.object({
 });
 export type StudentCatalogSeries = z.infer<typeof studentCatalogSeriesSchema>;
 
-/** Which tab a test sits under, read off the TEST: a series has no window and no sitting. */
+/** Which tab a test sits under. No MISSED: nothing shuts, so a chance is never gone. */
 export const TEST_BUCKET = {
   OPEN: 'OPEN',
   LATER: 'LATER',
-  MISSED: 'MISSED',
   DONE: 'DONE',
 } as const;
 export type TestBucket = (typeof TEST_BUCKET)[keyof typeof TEST_BUCKET];
 
 const SAT = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
-export function testBucket(test: StudentCatalogTest, now: Date): TestBucket {
+export function testBucket(test: StudentCatalogTest): TestBucket {
   // Sat comes first: a test with retakes left is still startable, and Done is where it belongs.
   if (test.attemptStatus !== null && SAT.has(test.attemptStatus)) return TEST_BUCKET.DONE;
-  if (test.canStart) return TEST_BUCKET.OPEN;
 
-  // Shut and never sat: the chance is gone, which is a different fact from not open YET.
-  const closed = test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime();
-  return closed ? TEST_BUCKET.MISSED : TEST_BUCKET.LATER;
+  return test.canStart ? TEST_BUCKET.OPEN : TEST_BUCKET.LATER;
 }
 
 /** What the card's button says. A running sitting is resumed, never started a second time. */

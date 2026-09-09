@@ -418,6 +418,47 @@ export function subjectShares(
   });
 }
 
+/** One subject read at one mode and scope, which is the unit every ranking below sorts. */
+export interface RankedSubject {
+  subjectId: string;
+  name: string;
+  measure: SubjectMeasure;
+}
+
+/** Weakest first, and what is still too thin to rank — a subject is never branded off five questions. */
+export interface SubjectRanking {
+  /** Ascending by accuracy, each one past the floor. */
+  weakest: RankedSubject[];
+  /** Answered, but under the floor: shown as "not enough data yet" rather than ranked. */
+  thin: RankedSubject[];
+}
+
+/** The weakest-first read of the rollup. Nothing here proposes a paper — a student cannot sit one they made. */
+export function rankSubjectsByWeakness(
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+  scope: TestScope | null = null,
+  floor: number = SUBJECT_SAMPLE_FLOOR,
+): SubjectRanking {
+  const measured = subjects
+    .map((subject) => ({
+      subjectId: subject.subjectId,
+      name: subject.name,
+      measure: measureOf(subject.tallies, mode, scope),
+    }))
+    .filter((row) => row.measure.attempted > 0);
+
+  const byAccuracy = (a: RankedSubject, b: RankedSubject) =>
+    (a.measure.accuracy ?? 0) - (b.measure.accuracy ?? 0);
+
+  return {
+    weakest: measured.filter((row) => row.measure.attempted >= floor).sort(byAccuracy),
+    thin: measured
+      .filter((row) => row.measure.attempted < floor)
+      .sort((a, b) => b.measure.attempted - a.measure.attempted),
+  };
+}
+
 /** Served and never answered — the rows every other figure filters out, which is what hides them. */
 export function untouchedSubjects(
   subjects: readonly SubjectStanding[],
@@ -1014,7 +1055,9 @@ export function questionReportInsights(rows: readonly QuestionReportRow[]): Ques
 type CountedOption = QuestionReportRow['optionCounts'][number];
 
 /** The option most of the field chose. Null where nothing was counted at all. */
-export function distractorThatWon(row: QuestionReportRow): CountedOption | null {
+export function distractorThatWon(
+  row: Pick<QuestionReportRow, 'optionCounts'>,
+): CountedOption | null {
   const top = row.optionCounts.reduce<CountedOption | null>(
     (best, option) => (best === null || option.count > best.count ? option : best),
     null,
@@ -1026,10 +1069,6 @@ export const questionReportSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
   testTitle: z.string().nullable(),
-  /** True once the key may be shown. The gated fields above are populated only then. */
-  solutionsOpen: z.boolean(),
-  /** What to say while it is shut, in the Solution Report's own words. Null once open. */
-  closedReason: z.string().nullable(),
   /** Sittings behind the cohort columns. Zero means no rollup has run, not an empty cohort. */
   cohortSize: z.number().int(),
   /** This paper's time against the cohort's average: above 1 is slower, below 1 is faster. */
@@ -1057,3 +1096,152 @@ export const PERFORMANCE_ROUTES = {
   questionReportOfStudent: (studentId: string, attemptId: string) =>
     `/admin/students/${studentId}/attempts/${attemptId}/question-report`,
 } as const;
+
+// ============================================================================
+// The test's own view of its cohort. One read of each of the three rollups
+// above, keyed by `testId` — nothing here scans attempts, and nothing new is
+// folded for it. Only ranked first sittings fold at all, so every figure below
+// describes the RANKED cohort by construction.
+// ============================================================================
+
+/** Who topped the paper, off `TestStat.topperAttemptId`. Null until a first sitting is evaluated. */
+export const testTopperSchema = z.object({
+  attemptId: z.string(),
+  studentId: z.string(),
+  name: z.string(),
+  score: z.number().nullable(),
+  timeSpentSec: z.number().int().nullable(),
+});
+export type TestTopper = z.infer<typeof testTopperSchema>;
+
+export const testAnalyticsSummarySchema = z.object({
+  /** Every sitting, ranked or not. `evaluatedCount` is the cohort the rest of this describes. */
+  attemptCount: z.number().int(),
+  evaluatedCount: z.number().int(),
+  meanScore: z.number().nullable(),
+  /** Interpolated inside the band holding the middle sitting — never an exact order statistic. */
+  medianScore: z.number().nullable(),
+  maxScore: z.number().nullable(),
+  minScore: z.number().nullable(),
+  averageTimeSec: z.number().nullable(),
+  /** `TestStat.scoreHistogram` as stored. Empty means no rollup has run, not a flat curve. */
+  bands: z.array(cohortBandSchema),
+  topper: testTopperSchema.nullable(),
+  computedAt: z.string().nullable(),
+});
+export type TestAnalyticsSummary = z.infer<typeof testAnalyticsSummarySchema>;
+
+export const testSectionAnalyticsSchema = z.object({
+  baseConfigSectionId: z.string(),
+  name: z.string(),
+  order: z.number().int(),
+  /** What the section was out of, so two sections of different sizes are read on one scale. */
+  maxMarks: z.number(),
+  attempted: z.number().int(),
+  averageScore: z.number().nullable(),
+  averageTimeSec: z.number().nullable(),
+});
+export type TestSectionAnalytics = z.infer<typeof testSectionAnalyticsSchema>;
+
+/** What a single item can trip. Each is read off the rollup's own columns, never recomputed. */
+export const ITEM_SIGNALS = {
+  LOW_ACCURACY: 'LOW_ACCURACY',
+  HIGH_SKIP: 'HIGH_SKIP',
+  SLOW: 'SLOW',
+  NEGATIVE_DISCRIMINATION: 'NEGATIVE_DISCRIMINATION',
+} as const;
+export const itemSignalSchema = z.enum(ITEM_SIGNALS);
+export type ItemSignal = z.infer<typeof itemSignalSchema>;
+
+export const testItemAnalyticsSchema = z.object({
+  paperQuestionId: z.string(),
+  questionId: z.string(),
+  order: z.number().int(),
+  baseConfigSectionId: z.string(),
+  questionCode: z.string().nullable(),
+  stemPreview: z.string(),
+  attemptedCount: z.number().int(),
+  correctCount: z.number().int(),
+  wrongCount: z.number().int(),
+  skippedCount: z.number().int(),
+  averageTimeSec: z.number().nullable(),
+  pValue: z.number().nullable(),
+  /** Null wherever the fold has not written it; the item signals stand without it. */
+  discrimination: z.number().nullable(),
+  optionCounts: z.array(optionShareSchema),
+  signals: z.array(itemSignalSchema),
+});
+export type TestItemAnalytics = z.infer<typeof testItemAnalyticsSchema>;
+
+export const testAnalyticsSchema = z.object({
+  testId: z.string(),
+  title: z.string().nullable(),
+  evaluationMode: evaluationModeSchema,
+  summary: testAnalyticsSummarySchema,
+  sections: z.array(testSectionAnalyticsSchema),
+  items: z.array(testItemAnalyticsSchema),
+});
+export type TestAnalytics = z.infer<typeof testAnalyticsSchema>;
+
+/** At four options this is chance, so below it the cohort was guessing rather than answering. */
+export const LOW_ACCURACY_BELOW = 0.25;
+
+/** Left blank by more of the field than answered it. */
+export const HIGH_SKIP_ABOVE = 0.5;
+
+/** Against the paper's own per-question average, so a slow PAPER does not flag every item on it. */
+export const SLOW_ITEM_MULTIPLE = 2;
+
+/** Below this many sittings on the item, the counts are too thin to read a signal off at all. */
+export const ITEM_SIGNAL_FLOOR = 10;
+
+/** One signal is a property of the question; two is a question worth a person opening it. */
+export const INSPECT_AT_LEAST = 2;
+
+export interface ItemCounts {
+  attemptedCount: number;
+  skippedCount: number;
+  pValue: number | null;
+  discrimination: number | null;
+  averageTimeSec: number | null;
+}
+
+/** Every signal an item trips, off the columns the fold already wrote. */
+export function itemSignalsOf(item: ItemCounts, paperAverageTimeSec: number | null): ItemSignal[] {
+  const sat = item.attemptedCount + item.skippedCount;
+  if (sat < ITEM_SIGNAL_FLOOR) return [];
+
+  const slowerThan = paperAverageTimeSec === null ? null : paperAverageTimeSec * SLOW_ITEM_MULTIPLE;
+  const tripped: (ItemSignal | null)[] = [
+    item.pValue !== null && item.pValue < LOW_ACCURACY_BELOW ? ITEM_SIGNALS.LOW_ACCURACY : null,
+    item.skippedCount / sat > HIGH_SKIP_ABOVE ? ITEM_SIGNALS.HIGH_SKIP : null,
+    slowerThan !== null && item.averageTimeSec !== null && item.averageTimeSec > slowerThan
+      ? ITEM_SIGNALS.SLOW
+      : null,
+    item.discrimination !== null && item.discrimination <= 0
+      ? ITEM_SIGNALS.NEGATIVE_DISCRIMINATION
+      : null,
+  ];
+  return tripped.filter((signal): signal is ItemSignal => signal !== null);
+}
+
+/** The flag itself: enough signals at once that the item, not the cohort, is the likely fault. */
+export const worthInspecting = (item: Pick<TestItemAnalytics, 'signals'>): boolean =>
+  item.signals.length >= INSPECT_AT_LEAST;
+
+/** The middle sitting, interpolated inside its band — bands are all there is, so approximate. */
+export function medianInBands(bands: readonly CohortBand[]): number | null {
+  const counted = bands.reduce((total, band) => total + band.count, 0);
+  if (counted === 0) return null;
+
+  const middle = counted / 2;
+  let below = 0;
+  for (const band of bands) {
+    if (below + band.count >= middle) {
+      const within = band.count === 0 ? 0 : (middle - below) / band.count;
+      return round2(band.from + (band.to - band.from) * within);
+    }
+    below += band.count;
+  }
+  return round2(bands.at(-1)?.to ?? 0);
+}

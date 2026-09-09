@@ -25,6 +25,7 @@ import { ImportsModule } from './imports/imports.module';
 import { QuestionsModule } from './questions';
 import { TestsModule } from './tests';
 import { AttemptsModule } from './attempts';
+import { SavedModule } from './saved';
 import { DashboardModule } from './dashboard';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
@@ -61,6 +62,7 @@ import { RequestIdMiddleware } from './common/request-id';
     QuestionsModule,
     TestsModule,
     AttemptsModule,
+    SavedModule,
     DashboardModule,
     HealthModule,
     ThrottlingModule,

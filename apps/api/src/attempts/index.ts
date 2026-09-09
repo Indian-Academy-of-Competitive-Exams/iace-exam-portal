@@ -4,3 +4,4 @@ export { AttemptsService } from './attempts.service';
 export { AttemptPaperService } from './attempt-paper.service';
 export { LeaderboardService } from './leaderboard.service';
 export { ScoringOutbox } from './scoring-outbox';
+/** Pure, and the ONE definition of when a key may be seen — anything gating on it borrows these. */

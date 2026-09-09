@@ -7,6 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import {
+  ANSWER_STATE,
   AppException,
   ATTEMPT_STATUS,
   ErrorCodes,
@@ -17,11 +18,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { applyBatch, isInTime, type HeldState } from './attempt-state';
+import { answersFromRows } from './attempt-flush';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
 const STATE_TTL_SEC = 12 * 60 * 60;
 
+/** How many times a patch of the live key gives way before it refuses rather than writes over. */
+const PATCH_TRIES = 5;
+
 const NOT_YOURS = 'No such attempt';
+const BEING_ANSWERED = 'This sitting is being written to right now. Try again in a moment.';
 const ALREADY_ENDED = 'This sitting has ended, so nothing more can be saved to it.';
 
 @Injectable()
@@ -83,6 +89,54 @@ export class AttemptStateService {
     return this.redis.getJson<HeldState>(redisKeys.attemptState(attemptId));
   }
 
+  /** Several at once, for a screen watching a hall. A GET, never a take: this must evict nothing. */
+  async readMany(attemptIds: readonly string[]): Promise<Map<string, HeldState>> {
+    const held = await this.redis.mgetJson<HeldState>(
+      attemptIds.map((id) => redisKeys.attemptState(id)),
+    );
+    return new Map(
+      held.flatMap((state, index) => {
+        const attemptId = attemptIds[index];
+        return state === null || attemptId === undefined ? [] : [[attemptId, state] as const];
+      }),
+    );
+  }
+
+  /** The support console's reset: the key written again from the durable rows, losing nothing. */
+  async reestablish(studentId: string, attemptId: string): Promise<HeldState> {
+    const durable = await this.durableState(studentId, attemptId);
+    // Anything the key still holds landed AFTER the last flush, so it wins over the durable copy.
+    const merged = await this.patch(attemptId, (held) => mergedOver(durable, held));
+    if (merged) return merged;
+
+    await this.write(durable);
+    return durable;
+  }
+
+  /** The clock the student is watching. Moved here too, or the screen would count to the old one. */
+  async pushDeadline(attemptId: string, endsAt: Date): Promise<void> {
+    await this.patch(attemptId, (held) => ({ ...held, endsAt: endsAt.toISOString() }));
+  }
+
+  /** Gives way to a save that beat it rather than writing over one. Null when the key has gone. */
+  private async patch(
+    attemptId: string,
+    change: (held: HeldState) => HeldState,
+  ): Promise<HeldState | null> {
+    const key = redisKeys.attemptState(attemptId);
+    for (let tries = 0; tries < PATCH_TRIES; tries += 1) {
+      const raw = await this.redis.getRaw(key);
+      if (raw === null) return null;
+
+      const held = parsedHeld(raw);
+      if (held === null) return null;
+
+      const next = change(held);
+      if (await this.redis.replaceJson(key, raw, next, STATE_TTL_SEC)) return next;
+    }
+    throw new AppException(ErrorCodes.CONFLICT, BEING_ANSWERED);
+  }
+
   /** What the flusher drains. Read as a whole: a save landing mid-drain re-marks its own attempt. */
   async dirtyIds(): Promise<string[]> {
     return this.redis.client.smembers(redisKeys.attemptsDirty);
@@ -107,6 +161,13 @@ export class AttemptStateService {
   }
 
   private async rebuild(studentId: string, attemptId: string): Promise<HeldState> {
+    const rebuilt = await this.durableState(studentId, attemptId);
+    await this.write(rebuilt);
+    return rebuilt;
+  }
+
+  /** The sitting as Postgres holds it, whether or not anything is going to be written back. */
+  private async durableState(studentId: string, attemptId: string): Promise<HeldState> {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
       select: { id: true, studentId: true, endsAt: true, status: true },
@@ -119,17 +180,47 @@ export class AttemptStateService {
       throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
     }
 
-    const rebuilt: HeldState = {
+    // TOUCHED rows only: the whole paper is seeded at start, and a flush writes a row per entry.
+    const durable = await this.prisma.attemptQuestion.findMany({
+      where: { attemptId, state: { not: ANSWER_STATE.NOT_VISITED } },
+      select: {
+        questionId: true,
+        state: true,
+        selectedOptionId: true,
+        typedAnswer: true,
+        timeSpentSec: true,
+        answeredAt: true,
+      },
+    });
+
+    return {
       attemptId: attempt.id,
       studentId: attempt.studentId,
       endsAt: attempt.endsAt.toISOString(),
       revision: 0,
-      answers: {},
+      answers: answersFromRows(durable),
       sections: {},
     };
-    await this.write(rebuilt);
-    return rebuilt;
   }
+}
+
+/** A corrupt value reads as no key at all, which is what both callers of `patch` already repair. */
+function parsedHeld(raw: string): HeldState | null {
+  try {
+    return JSON.parse(raw) as HeldState;
+  } catch {
+    return null;
+  }
+}
+
+/** The row's own deadline stands, because an extension moves it there first. */
+function mergedOver(durable: HeldState, held: HeldState): HeldState {
+  return {
+    ...durable,
+    revision: held.revision,
+    answers: { ...durable.answers, ...held.answers },
+    sections: held.sections,
+  };
 }
 
 /** The student never sees whose attempt it is — they know — and never the raw held shape. */

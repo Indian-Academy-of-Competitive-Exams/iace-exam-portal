@@ -100,8 +100,9 @@ describe('bandsFor — which bands a caller may see', () => {
     assert.equal(bandsFor(holding(FEATURE_KEYS.TEST_MANAGEMENT)).windows, true);
   });
 
-  it('gates the sittings series on student performance', () => {
+  it('opens the sittings series to either key that watches a sitting', () => {
     assert.equal(bandsFor(holding(FEATURE_KEYS.STUDENT_PERFORMANCE)).sittings, true);
+    assert.equal(bandsFor(holding(FEATURE_KEYS.TEST_OPERATIONS)).sittings, true);
     assert.equal(bandsFor(holding(FEATURE_KEYS.TEST_MANAGEMENT)).sittings, false);
   });
 

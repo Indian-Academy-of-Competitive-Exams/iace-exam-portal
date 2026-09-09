@@ -12,7 +12,7 @@ import {
   type TestDetail,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import { bannerMessage, isNotNumeric, optionalNumber } from '@iace/app-kit';
+import { bannerMessage, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
@@ -37,7 +37,6 @@ import {
 import { ConfigSummaryButton } from '../components/config-summary';
 import {
   applyServerErrors,
-  RETAKES_NOT_A_NUMBER,
   scopeRefOf,
   SERVER_FIELDS,
   valuesOf,
@@ -144,7 +143,6 @@ function TestBuilder({
         paperBinding: values.paperBinding,
         // Left out while unchosen, so the server takes the config's rather than guessing here.
         examTemplate: values.examTemplate ?? undefined,
-        maxRetakes: optionalNumber(values.maxRetakes),
         variantCount: optionalNumber(values.variantCount),
       };
       return detail
@@ -168,15 +166,8 @@ function TestBuilder({
     onError: (error) => applyServerErrors(error, form, scope),
   });
 
-  /** Blank is unlimited, so text that is not a number would save AS unlimited without this. */
   const saveThenOpen = (target: TestBuilderStep) =>
-    form.handleSubmit((values) => {
-      if (isNotNumeric(values.maxRetakes)) {
-        form.setError('maxRetakes', { type: 'validate', message: RETAKES_NOT_A_NUMBER });
-        return;
-      }
-      save.mutate({ values, target });
-    })();
+    form.handleSubmit((values) => save.mutate({ values, target }))();
 
   /** Leaving Setup saves it first, so no move can quietly drop what was typed — Offer owns nothing to save. */
   const open = (target: TestBuilderStep) => {

@@ -74,10 +74,11 @@ export const RELAY_BATCH = 200;
 /** How long an event must sit before a SWEEP takes it: its writer may still be finishing. */
 export const RELAY_GRACE_SEC = 30;
 
-/** What a rollup job is: one sitting to fold in, one test to rebuild, or every table at once. */
+/** What a rollup job is: one sitting to fold in, one test or student to rebuild, or every table. */
 export const ROLLUP_JOBS = {
   FOLD: 'fold-attempt',
   REBUILD_TEST: 'rebuild-test',
+  REBUILD_STUDENT: 'rebuild-student',
   REBUILD_ALL: 'rebuild-all',
 } as const;
 
@@ -87,6 +88,7 @@ export type RollupJob = (typeof ROLLUP_JOBS)[keyof typeof ROLLUP_JOBS];
 export interface RollupJobData {
   attemptId?: string;
   testId?: string;
+  studentId?: string;
 }
 
 /** The EVENT's own: a redelivered relay is the same job, so one evaluation folds once. */
@@ -99,14 +101,27 @@ export function rollupRebuildJobId(testId: string): string {
   return `${QUEUE_NAMES.ROLLUP}-rebuild-${testId}`;
 }
 
+/** The STUDENT's own: voiding several of their sittings collapses into the one recount they need. */
+export function rollupRebuildStudentJobId(studentId: string): string {
+  return `${QUEUE_NAMES.ROLLUP}-rebuild-student-${studentId}`;
+}
+
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
 export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
 
 /** Writing one request, or sweeping up whatever a crash left unrelayed. */
-export const NOTIFICATION_JOBS = { WRITE: 'write-notification', SWEEP: 'relay-sweep' } as const;
+export const NOTIFICATION_JOBS = {
+  WRITE: 'write-notification',
+  SWEEP: 'relay-sweep',
+  /** Finds tests that have opened since anybody was last told, and tells whoever reaches them. */
+  TESTS_OPENED: 'tests-opened-sweep',
+} as const;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
 export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;
+
+/** A test opening is not to the minute; five is soon enough and a fifth of the wake-ups. */
+export const TESTS_OPENED_SWEEP_EVERY_MS = 5 * 60 * 1000;
 
 /** Ids only, like every other job: the worker re-reads the outbox row it is about to act on. */
 export interface NotificationJobData {

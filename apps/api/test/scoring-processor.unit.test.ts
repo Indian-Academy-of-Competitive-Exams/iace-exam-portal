@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS } from '@iace/contracts';
+import { ATTEMPT_STATUS, NOTIFICATION_TYPE, PAPER_QUESTION_STATUS } from '@iace/contracts';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import {
@@ -58,10 +58,15 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
       leaderboard,
       fakeRollupOutbox(prisma, rollups),
       new FakeEventBus().asService(),
-      fakeNotificationOutbox(),
+      fakeNotificationOutbox(prisma),
     ),
   };
 }
+
+const notificationIn = (prisma: { outboxEvents: { eventType: string; payload: unknown }[] }) =>
+  prisma.outboxEvents
+    .filter((row) => row.eventType === 'notification.requested')
+    .map((row) => row.payload as Record<string, unknown>)[0];
 
 describe('ScoringProcessor — what it writes', () => {
   it('scores the paper into the sitting and into every question it served', async () => {
@@ -84,6 +89,34 @@ describe('ScoringProcessor — what it writes', () => {
       ],
     );
     assert.equal(prisma.attempts[0]?.sectionScores?.[0]?.score, 1.5);
+  });
+
+  /** A first evaluation is RESULT_READY; only a re-score reaches the correction path at all. */
+  it('tells a student whose marks a re-score actually moved', async () => {
+    const { prisma, attempt, processor } = sitting({
+      status: ATTEMPT_STATUS.EVALUATED,
+      evaluatedAt: new Date('2026-08-01T05:00:00.000Z'),
+      score: 0,
+    });
+
+    await processor.score(attempt.id);
+
+    const intent = notificationIn(prisma);
+    assert.equal(intent?.type, NOTIFICATION_TYPE.RESULT_UPDATED);
+    assert.equal(intent?.dedupeKey, `result-updated:${attempt.id}:1.5`);
+  });
+
+  /** A drop that left this student on the same total is not news, so it is not sent as news. */
+  it('says nothing when the re-score landed on the same total', async () => {
+    const { prisma, attempt, processor } = sitting({
+      status: ATTEMPT_STATUS.EVALUATED,
+      evaluatedAt: new Date('2026-08-01T05:00:00.000Z'),
+      score: 1.5,
+    });
+
+    await processor.score(attempt.id);
+
+    assert.equal(notificationIn(prisma), undefined);
   });
 
   it('stamps a sitting nobody had stamped, and leaves a stamped one where it was', async () => {

@@ -1,6 +1,7 @@
 import {
   LANGUAGE_MODE,
   TEST_STATUS,
+  type AttemptStatus,
   type LanguageCode,
   type LanguageMode,
   type TestStatus,
@@ -23,11 +24,26 @@ export function testStartBlocker(test: { status: TestStatus; isLocked: boolean }
   return null;
 }
 
-/** Null `maxRetakes` is unlimited, and the first sitting is never a retake. */
-export function retakeBlocker(maxRetakes: number | null, finishedAttempts: number): string | null {
-  if (maxRetakes === null || finishedAttempts < maxRetakes) return null;
-  const sittings = finishedAttempts === 1 ? 'once' : `${finishedAttempts} times`;
-  return `You have already sat this test ${sittings}, which is all it allows.`;
+/** One ended sitting, as the start gate reads it. A voided one did not happen. */
+export interface EndedSitting {
+  status: AttemptStatus;
+  isGraded: boolean;
+}
+
+/** What a student's ended sittings leave for the next one. */
+export interface SittingSlots {
+  attemptNo: number;
+  ranksAgain: boolean;
+}
+
+/** The number the next sitting takes, and whether it is the one that ranks. */
+export function slotsAfter(ended: readonly EndedSitting[]): SittingSlots {
+  return {
+    // Every sitting counts here, void included: the attempt number is a unique key, not a tally.
+    attemptNo: ended.length + 1,
+    // Spent unless a void handed it back: the slot is held by whichever sitting still carries it.
+    ranksAgain: !ended.some((row) => row.isGraded),
+  };
 }
 
 /** DUAL sits every language offered; SINGLE the one picked, narrowed to what actually exists. */

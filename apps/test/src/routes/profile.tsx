@@ -9,12 +9,15 @@ import {
   GENDERS,
   todayISO,
   updateMeSchema,
+  type EnrolmentName,
+  type Me,
   type UpdateMeInput,
   type Gender,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
   Alert,
+  Badge,
   Button,
   Combobox,
   DatePicker,
@@ -24,6 +27,7 @@ import {
   Input,
   PageHeader,
   SkeletonParagraph,
+  StatRow,
   Textarea,
 } from '@iace/ui';
 import { DocumentCard } from '../components/document-card';
@@ -31,7 +35,7 @@ import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY } from '../lib/constants';
+import { courseLabel, ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY } from '../lib/constants';
 
 /** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
 const FORM_FIELDS = [
@@ -249,6 +253,8 @@ export function ProfilePage() {
             </div>
           </FormSection>
 
+          <Standing me={me.data} />
+
           <FormSection title="Your documents">
             <div className="flex flex-wrap gap-4">
               <DocumentCard
@@ -298,3 +304,50 @@ export function ProfilePage() {
     </FormPanel>
   );
 }
+
+const NONE_RECORDED = 'None recorded';
+
+/** Read-only on purpose: enrolment, branch and verification are the admin's to set, not theirs. */
+function Standing({ me }: Readonly<{ me: Me }>) {
+  const { enrolment } = me;
+
+  return (
+    <FormSection title="Enrolment">
+      <div className="flex flex-col gap-3">
+        <StatRow label="Branch" value={enrolment.branch ?? NONE_RECORDED} />
+        <StatRow label="Course" value={<Names names={me.enrolledCourses.map(courseLabel)} />} />
+        <StatRow label="Programs" value={<Names names={enrolment.programs.map(nameOf)} />} />
+        <StatRow label="Exams" value={<Names names={enrolment.exams.map(nameOf)} />} />
+        <StatRow
+          label="Aadhaar"
+          value={<Verified isVerified={me.profile?.aadhaarVerified ?? false} />}
+        />
+        <StatRow label="PAN" value={<Verified isVerified={me.profile?.panVerified ?? false} />} />
+      </div>
+    </FormSection>
+  );
+}
+
+const nameOf = (entry: EnrolmentName) => entry.name;
+
+/** Every one of them, wrapped — this IS the detail screen, so nothing here hides behind a `+N`. */
+function Names({ names }: Readonly<{ names: readonly string[] }>) {
+  if (names.length === 0) return <span className="text-muted-foreground">{NONE_RECORDED}</span>;
+  return (
+    <span className="flex flex-wrap justify-end gap-1.5">
+      {names.map((name) => (
+        <Badge key={name} variant="neutral">
+          {name}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+/** Never the number and never the image — the platform stores only whether it was checked. */
+const Verified = ({ isVerified }: Readonly<{ isVerified: boolean }>) =>
+  isVerified ? (
+    <Badge variant="success">Verified</Badge>
+  ) : (
+    <Badge variant="neutral">Not verified</Badge>
+  );

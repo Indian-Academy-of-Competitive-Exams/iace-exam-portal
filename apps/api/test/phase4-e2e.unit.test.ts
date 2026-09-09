@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  ANSWER_STATE,
-  ATTEMPT_STATUS,
-  ErrorCodes,
-  PAPER_QUESTION_STATUS,
-  type AppException,
-} from '@iace/contracts';
+import { ANSWER_STATE, ATTEMPT_STATUS, PAPER_QUESTION_STATUS } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
@@ -29,8 +23,6 @@ import {
 
 const TEST_ID = 'tst_1';
 const STARTED = new Date('2026-09-01T05:00:00.000Z');
-const NOW = new Date('2026-09-01T12:00:00.000Z');
-const HOUR = 3_600_000;
 
 /** Three questions, two marks each, half a mark off for a wrong one. The right option is `o2`. */
 const SHAPE = makeScoredTest({
@@ -87,7 +79,7 @@ function served(): FakeServedAnswerRow[] {
   );
 }
 
-function platform(schedule: { closesAt: string | null; extraTimeSec: number }) {
+function platform() {
   const attempts = Object.keys(COHORT).map(sitting);
   const rows = served();
   const prisma = new FakeScoringPrisma(attempts, rows, SHAPE);
@@ -97,8 +89,6 @@ function platform(schedule: { closesAt: string | null; extraTimeSec: number }) {
     redis.asService(),
     new FakeQueue().asQueue(),
   );
-  const access = { testSchedule: () => Promise.resolve(schedule) } as never;
-
   return {
     prisma,
     redis,
@@ -111,12 +101,7 @@ function platform(schedule: { closesAt: string | null; extraTimeSec: number }) {
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
     ),
-    reports: new AttemptReportService(
-      prisma.asService(),
-      access,
-      leaderboard,
-      new FakeStorage() as never,
-    ),
+    reports: new AttemptReportService(prisma.asService(), leaderboard, new FakeStorage() as never),
   };
 }
 
@@ -125,18 +110,9 @@ async function scoreEveryone(scoring: ScoringProcessor): Promise<void> {
   for (const attemptId of Object.keys(COHORT)) await scoring.score(attemptId);
 }
 
-const CLOSED = {
-  closesAt: new Date(NOW.getTime() - 4 * HOUR).toISOString(),
-  extraTimeSec: 0,
-};
-const OPEN = {
-  closesAt: new Date(NOW.getTime() + HOUR).toISOString(),
-  extraTimeSec: 0,
-};
-
 describe('a cohort, end to end: scored, ranked, reported', () => {
   it('scores every sitting exactly as the paper says', async () => {
-    const { scoring, attempts } = platform(CLOSED);
+    const { scoring, attempts } = platform();
 
     await scoreEveryone(scoring);
 
@@ -152,7 +128,7 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
   });
 
   it('ranks them off the board, best first', async () => {
-    const { scoring, redis } = platform(CLOSED);
+    const { scoring, redis } = platform();
 
     await scoreEveryone(scoring);
 
@@ -164,15 +140,14 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
   });
 
   it('reports a score card that carries the rank and no answer key', async () => {
-    const { scoring, reports } = platform(CLOSED);
+    const { scoring, reports } = platform();
     await scoreEveryone(scoring);
 
-    const card = await reports.scoreCard('stu_att_middle', 'att_middle', NOW);
+    const card = await reports.scoreCard('stu_att_middle', 'att_middle');
 
     assert.equal(card.score, 3.5);
     assert.equal(card.rank, 2);
     assert.equal(card.cohortSize, 3);
-    assert.equal(card.provisional, false);
     // The one they missed: their own answer is there, and what was right is not.
     const missed = card.questions.find((row) => row.isCorrect === false);
     assert.equal(missed?.selectedOptionId, 'o1');
@@ -180,24 +155,19 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
     assert.ok(card.questions.every((row) => !('options' in row)));
   });
 
-  it('refuses the solutions while the test can still be sat, and serves them once it cannot', async () => {
-    const shut = platform(OPEN);
-    const open = platform(CLOSED);
-    await scoreEveryone(shut.scoring);
+  /** A test never shuts, so the key rides on the student's own marked sitting and nothing else. */
+  it('serves the solutions off the student’s own evaluated sitting', async () => {
+    const open = platform();
     await scoreEveryone(open.scoring);
 
-    await assert.rejects(
-      () => shut.reports.solutions('stu_att_middle', 'att_middle', NOW),
-      (error: AppException) => error.code === ErrorCodes.FORBIDDEN,
-    );
+    const report = await open.reports.solutions('stu_att_middle', 'att_middle');
 
-    const report = await open.reports.solutions('stu_att_middle', 'att_middle', NOW);
     assert.equal(report.questions[0]?.options.find((option) => option.isCorrect)?.id, 'o2');
   });
 
   /** The acceptance for the whole run: one dropped question moves every affected score AND rank. */
   it('moves every score and every rank when one question is dropped', async () => {
-    const { scoring, redis, rows, attempts } = platform(CLOSED);
+    const { scoring, redis, rows, attempts } = platform();
     await scoreEveryone(scoring);
     const before = redis.descending(redisKeys.testLeaderboard(TEST_ID));
 
@@ -226,7 +196,7 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
   });
 
   it('scores the same cohort the same way however many times it runs', async () => {
-    const { scoring, attempts } = platform(CLOSED);
+    const { scoring, attempts } = platform();
     await scoreEveryone(scoring);
     const first = attempts.map((row) => [row.score, row.correctCount, row.evaluatedAt]);
 

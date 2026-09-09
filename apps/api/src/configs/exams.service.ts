@@ -176,6 +176,16 @@ export class ExamsService {
     }
   }
 
+  /** Codes to the names the catalog gives them, for a screen that must print one rather than a code. */
+  async namesByCode(codes: readonly string[]): Promise<Map<string, string>> {
+    if (codes.length === 0) return new Map();
+    const rows = await this.prisma.exam.findMany({
+      where: { code: { in: [...codes] } },
+      select: { code: true, name: true },
+    });
+    return new Map(rows.map((row) => [row.code, row.name]));
+  }
+
   private async requireExam(id: string): Promise<ExamRow> {
     const exam = await this.prisma.exam.findUnique({ where: { id }, include: EXAM_INCLUDE });
     if (!exam) throw new AppException(ErrorCodes.NOT_FOUND, 'No such exam');

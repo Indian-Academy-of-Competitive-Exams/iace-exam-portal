@@ -491,8 +491,6 @@ export const scoreCardSchema = z.object({
   rank: z.number().int().nullable(),
   percentile: z.number().nullable(),
   cohortSize: z.number().int().nullable(),
-  /** True while the test can still be sat by somebody, so the standing is not final yet. */
-  provisional: z.boolean(),
   sections: z.array(scoreCardSectionSchema),
   questions: z.array(scoreCardQuestionSchema),
 });
@@ -519,8 +517,6 @@ export const solutionReportSchema = z.object({
   testId: z.string(),
   testTitle: z.string().nullable(),
   languages: z.array(languageCodeSchema),
-  /** When the key opened. Null when there was never anything to wait for. */
-  openedAt: z.string().nullable(),
   sections: z.array(examSectionSchema),
   questions: z.array(solutionQuestionSchema),
 });

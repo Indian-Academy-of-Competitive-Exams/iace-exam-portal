@@ -19,6 +19,8 @@ export class RollupProcessor extends WorkerHost {
         return this.foldOne(job.data.attemptId);
       case ROLLUP_JOBS.REBUILD_TEST:
         return this.rebuildOne(job.data.testId);
+      case ROLLUP_JOBS.REBUILD_STUDENT:
+        return this.rebuildStudent(job.data.studentId);
       case ROLLUP_JOBS.REBUILD_ALL:
         return this.rollup.rebuildAll();
       default:
@@ -40,5 +42,13 @@ export class RollupProcessor extends WorkerHost {
       return;
     }
     await this.rollup.rebuildForTest(testId);
+  }
+
+  private async rebuildStudent(studentId: string | undefined): Promise<void> {
+    if (studentId === undefined) {
+      this.logger.error('A rebuild job names no student, so there is nothing to recount');
+      return;
+    }
+    await this.rollup.rebuildStudent(studentId);
   }
 }

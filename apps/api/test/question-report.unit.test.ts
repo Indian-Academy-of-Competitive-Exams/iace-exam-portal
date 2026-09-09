@@ -12,7 +12,6 @@ import {
 } from '@iace/contracts';
 import { QuestionReportService } from '../src/attempts/question-report.service';
 import { paceIndexOf } from '../src/attempts/question-report';
-import { type AccessResolverService } from '../src/access';
 import {
   FakePerformancePrisma,
   makeAttempt,
@@ -115,14 +114,7 @@ function sittings() {
   ];
 }
 
-/** The gate's other input. A ranked test with no close date is one nobody may see the key of. */
-function schedule(closesAt: string | null): AccessResolverService {
-  return {
-    testSchedule: () => Promise.resolve({ closesAt, extraTimeSec: 0 }),
-  } as unknown as AccessResolverService;
-}
-
-function bench(overrides: Partial<FakePerformanceData> = {}, access = schedule(null)) {
+function bench(overrides: Partial<FakePerformanceData> = {}) {
   const attempts = overrides.attempts ?? sittings();
   const data: FakePerformanceData = {
     attempts,
@@ -174,7 +166,7 @@ function bench(overrides: Partial<FakePerformanceData> = {}, access = schedule(n
   };
 
   const prisma = new FakePerformancePrisma(data);
-  return { data, prisma, service: new QuestionReportService(prisma.asService(), access) };
+  return { data, prisma, service: new QuestionReportService(prisma.asService()) };
 }
 
 describe('systemDifficultyOf', () => {
@@ -250,39 +242,13 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
   });
 });
 
-describe('QuestionReportService — the half the answer key rides on', () => {
-  it('withholds the key and the option split until the gate opens', async () => {
+describe('QuestionReportService — the answer key it carries', () => {
+  /** Nothing shuts a test, so the student's own EVALUATED sitting is the whole of the gate. */
+  it('serves the key and the option split off a marked sitting', async () => {
     const { service } = bench();
 
     const report = await service.forAttempt(STUDENT, ATTEMPT);
 
-    assert.equal(report.solutionsOpen, false);
-    assert.notEqual(report.closedReason, null);
-    for (const row of report.questions) {
-      assert.deepEqual(row.optionCounts, []);
-      assert.equal(row.correctOptionId, null);
-      assert.equal(row.correctAnswer, null);
-    }
-  });
-
-  it('carries no answer key and no option on the payload the gate has shut', async () => {
-    const { service } = bench();
-
-    const payload = JSON.stringify(await service.forAttempt(STUDENT, ATTEMPT));
-
-    assert.equal(payload.includes('answerKey'), false);
-    assert.equal(payload.includes('isCorrect":true'), true);
-    assert.equal(payload.includes(ANSWER_TEXT), false);
-    assert.equal(payload.includes('"position"'), false);
-  });
-
-  it('opens the key once the last sitting has finished', async () => {
-    const { service } = bench({}, schedule('2026-08-24T05:00:00.000Z'));
-
-    const report = await service.forAttempt(STUDENT, ATTEMPT, new Date('2026-08-25T00:00:00.000Z'));
-
-    assert.equal(report.solutionsOpen, true);
-    assert.equal(report.closedReason, null);
     const first = report.questions[0];
     assert.equal(first?.correctOptionId, 'o1');
     // An option names the answer, so the typed key is only carried where there are no options.
@@ -299,8 +265,16 @@ describe('QuestionReportService — the half the answer key rides on', () => {
     );
   });
 
-  /** A practice paper has no cohort to spoil, so it opens the moment it is marked. */
-  it('opens immediately on a practice paper', async () => {
+  /** The raw column never rides along: an option's `isCorrect` is the only shape the key takes. */
+  it('never carries the stored answer key on the payload', async () => {
+    const { service } = bench();
+
+    const payload = JSON.stringify(await service.forAttempt(STUDENT, ATTEMPT));
+
+    assert.equal(payload.includes('answerKey'), false);
+  });
+
+  it('reads the same on a practice paper as on a ranked one', async () => {
     const { service } = bench({
       shape: makeScoredTest({
         evaluationMode: EVALUATION_MODE.PRACTICE,
@@ -310,7 +284,6 @@ describe('QuestionReportService — the half the answer key rides on', () => {
 
     const report = await service.forAttempt(STUDENT, ATTEMPT);
 
-    assert.equal(report.solutionsOpen, true);
     assert.equal(report.questions[0]?.correctOptionId, 'o1');
   });
 });

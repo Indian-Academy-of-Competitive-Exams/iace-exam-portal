@@ -98,12 +98,16 @@ function bench(isLocked = true) {
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
   const queue = new FakeQueue();
   const outbox = new ScoringOutbox(prisma.asService(), queue.asQueue());
+  const audit = new AuditContext();
   return {
     prisma,
     queue,
-    service: new PaperService(prisma.asService(), configs, outbox, new AuditContext()),
+    audit,
+    service: new PaperService(prisma.asService(), configs, outbox, audit),
   };
 }
+
+const A_REASON = 'Answer key was wrong';
 
 const scoringRequests = (prisma: FakeTestsPrisma) =>
   prisma.outboxEvents.filter((row) => row.eventType === SCORING_REQUEST.EVENT_TYPE);
@@ -112,7 +116,10 @@ describe('dropping a question on a paper somebody has already sat', () => {
   it('marks the row and asks for every ended sitting that served it to be scored again', async () => {
     const { prisma, queue, service } = bench();
 
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: A_REASON,
+    });
 
     // Every variant carrying that question, because a faulty question is faulty on all of them.
     assert.deepEqual(
@@ -132,10 +139,16 @@ describe('dropping a question on a paper somebody has already sat', () => {
   /** The failure this prevents: a second click re-scoring a whole cohort for no change at all. */
   it('does nothing at all when the status it is asked for is the one it already has', async () => {
     const { prisma, service } = bench();
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: A_REASON,
+    });
     const asked = scoringRequests(prisma).length;
 
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: A_REASON,
+    });
 
     assert.equal(scoringRequests(prisma).length, asked);
   });
@@ -143,7 +156,10 @@ describe('dropping a question on a paper somebody has already sat', () => {
   it('leaves every other question on the paper where it was', async () => {
     const { prisma, service } = bench();
 
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.BONUS);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.BONUS,
+      reason: A_REASON,
+    });
 
     assert.equal(
       prisma.paperQuestions.find((paperRow) => paperRow.id === 'pq_2')?.status,
@@ -155,7 +171,10 @@ describe('dropping a question on a paper somebody has already sat', () => {
     const { prisma, service } = bench();
     prisma.attemptQuestions.length = 0;
 
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: A_REASON,
+    });
 
     assert.equal(scoringRequests(prisma).length, 0);
     assert.equal(
@@ -174,16 +193,25 @@ describe('dropping a question on a paper somebody has already sat', () => {
       order: 2,
     });
 
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: A_REASON,
+    });
 
     assert.equal(scoringRequests(prisma).length, 2);
   });
 
   it('takes a dropped question back, which is another change and another re-score', async () => {
     const { prisma, service } = bench();
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: A_REASON,
+    });
 
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.ACTIVE);
+    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+      status: PAPER_QUESTION_STATUS.ACTIVE,
+      reason: A_REASON,
+    });
 
     assert.equal(
       prisma.paperQuestions.find((paperRow) => paperRow.id === DROPPED_ROW)?.status,
@@ -196,7 +224,11 @@ describe('dropping a question on a paper somebody has already sat', () => {
     const { prisma, service } = bench(false);
 
     await assert.rejects(
-      () => service.setQuestionStatus(TEST_ID, DROPPED_ROW, PAPER_QUESTION_STATUS.DROPPED),
+      () =>
+        service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+          status: PAPER_QUESTION_STATUS.DROPPED,
+          reason: A_REASON,
+        }),
       (error: AppException) => error.code === ErrorCodes.CONFLICT,
     );
     assert.equal(scoringRequests(prisma).length, 0);
@@ -206,8 +238,52 @@ describe('dropping a question on a paper somebody has already sat', () => {
     const { service } = bench();
 
     await assert.rejects(
-      () => service.setQuestionStatus(TEST_ID, 'pq_elsewhere', PAPER_QUESTION_STATUS.DROPPED),
+      () =>
+        service.setQuestionStatus(TEST_ID, 'pq_elsewhere', {
+          status: PAPER_QUESTION_STATUS.DROPPED,
+          reason: A_REASON,
+        }),
       (error: AppException) => error.code === ErrorCodes.NOT_FOUND,
     );
+  });
+});
+
+describe('the audit row a disposition change leaves behind', () => {
+  it('carries the row, the move it made, and the reason the admin gave for it', async () => {
+    const { audit, service } = bench();
+
+    const store = await audit.run(async () => {
+      await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+        status: PAPER_QUESTION_STATUS.DROPPED,
+        reason: A_REASON,
+      });
+      return audit.current();
+    });
+
+    // Against the ROW, not the test: "test updated" cannot settle a dispute about one question.
+    assert.equal(store?.entityId, DROPPED_ROW);
+    assert.deepEqual(store?.changed, {
+      status: { from: PAPER_QUESTION_STATUS.ACTIVE, to: PAPER_QUESTION_STATUS.DROPPED },
+      reason: { from: null, to: A_REASON },
+    });
+  });
+
+  /** The failure this prevents: a re-click logging a change that moved nothing and re-scored nothing. */
+  it('is not written when the status asked for is the one the row already has', async () => {
+    const { audit, service } = bench();
+    const ask = () =>
+      service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
+        status: PAPER_QUESTION_STATUS.DROPPED,
+        reason: A_REASON,
+      });
+    await ask();
+
+    const store = await audit.run(async () => {
+      await ask();
+      return audit.current();
+    });
+
+    assert.equal(store?.entityId, null);
+    assert.equal(store?.changed, null);
   });
 });

@@ -40,6 +40,9 @@ const BANK_KEYS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHO
 /** Scheduling lives on the test since the access revamp, so a test manager reads windows too. */
 const WINDOW_KEYS = [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, FEATURE_KEYS.TEST_MANAGEMENT] as const;
 
+/** Live operations watches sittings for a living, so the series answers to that key as well. */
+const SITTING_KEYS = [FEATURE_KEYS.STUDENT_PERFORMANCE, FEATURE_KEYS.TEST_OPERATIONS] as const;
+
 export function bandsFor(user: AuthenticatedUser): DashboardBands {
   const students = holds(user, [FEATURE_KEYS.STUDENT_MANAGEMENT]);
 
@@ -49,7 +52,7 @@ export function bandsFor(user: AuthenticatedUser): DashboardBands {
     questions: holds(user, BANK_KEYS),
     tests: holds(user, [FEATURE_KEYS.TEST_MANAGEMENT]),
     bank: holds(user, BANK_KEYS),
-    sittings: holds(user, [FEATURE_KEYS.STUDENT_PERFORMANCE]),
+    sittings: holds(user, SITTING_KEYS),
     feed: user.isActive,
     windows: holds(user, WINDOW_KEYS),
   };

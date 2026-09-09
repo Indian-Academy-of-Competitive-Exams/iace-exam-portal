@@ -6,7 +6,6 @@ import {
   AppException,
   EVALUATION_MODE,
   ErrorCodes,
-  FORM_LEVEL_FIELD,
   type LanguageCode,
   type LiveAttempt,
   type StartAttemptBody,
@@ -21,8 +20,9 @@ import {
   deadlineFrom,
   displayOrder,
   languagesFor,
-  retakeBlocker,
+  slotsAfter,
   testStartBlocker,
+  type SittingSlots,
 } from './attempt-rules';
 import { sectionScoresIn } from './score-paper';
 
@@ -93,14 +93,15 @@ export class AttemptsService {
 
     const test = this.assertSittable(await this.requireTest(testId));
 
-    const finished = await this.prisma.attempt.count({
+    // Read, not counted: a paper may be sat any number of times, and the VOID ones still matter.
+    const ended = await this.prisma.attempt.findMany({
       where: { testId, studentId, status: { not: LIVE } },
+      select: { status: true, isGraded: true },
     });
-    this.assertRetakeAllowed(test.maxRetakes, finished);
-    const extraTimeSec = await this.access.extraTimeSecFor(studentId, testId);
+    const slots = slotsAfter(ended);
 
     try {
-      const started = await this.create(studentId, test, finished, input.languages, extraTimeSec);
+      const started = await this.create(studentId, test, slots, input.languages);
       await this.state.open(started);
       // The catalog caches where this student has got to, and starting is one of two things that move it.
       await this.access.invalidateStudent(studentId);
@@ -120,23 +121,21 @@ export class AttemptsService {
   private async create(
     studentId: string,
     test: SittableTest,
-    finished: number,
+    slots: SittingSlots,
     picked: readonly LanguageCode[] | undefined,
-    extraTimeSec: number,
   ) {
     const startedAt = new Date();
-    const attemptNo = finished + 1;
 
     return this.prisma.$transaction(async (tx) => {
       const attempt = await tx.attempt.create({
         data: {
           testId: test.id,
           studentId,
-          attemptNo,
-          // Counts toward a cohort: one attempt per student, the first, and never on a practice paper.
-          isGraded: attemptNo === 1 && test.evaluationMode === EVALUATION_MODE.RANKED,
+          attemptNo: slots.attemptNo,
+          // Counts toward a cohort: the one sitting holding the ranked slot, never on a practice paper.
+          isGraded: slots.ranksAgain && test.evaluationMode === EVALUATION_MODE.RANKED,
           startedAt,
-          endsAt: deadlineFrom(startedAt, sittingSeconds(test) + extraTimeSec),
+          endsAt: deadlineFrom(startedAt, sittingSeconds(test)),
           shuffleSeed: randomInt(SEED_CEILING),
           languages: languagesFor(test.baseConfig.languageMode, test.baseConfig.languages, picked),
         },
@@ -181,15 +180,6 @@ export class AttemptsService {
       where: { testId, studentId, status: LIVE },
       orderBy: { attemptNo: 'desc' },
     });
-  }
-
-  private assertRetakeAllowed(maxRetakes: number | null, finished: number): void {
-    const blocker = retakeBlocker(maxRetakes, finished);
-    if (blocker) {
-      throw new AppException(ErrorCodes.CONFLICT, blocker, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [blocker] },
-      });
-    }
   }
 
   private async requireTest(testId: string): Promise<SittableTest> {

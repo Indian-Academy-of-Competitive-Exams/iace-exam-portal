@@ -17,3 +17,9 @@ export function durationLabel(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined) return '—';
   return `${Math.round(seconds / SECONDS_PER_MINUTE)} min`;
 }
+
+/** Per-question time, which a paper is read in seconds rather than minutes. */
+export function secondsLabel(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return '—';
+  return `${Math.round(seconds)}s`;
+}

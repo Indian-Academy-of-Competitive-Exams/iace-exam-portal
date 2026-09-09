@@ -6,6 +6,13 @@ import { evictionRisk } from './eviction-policy';
 /** The value is never read — a lock is the key's existence. */
 const LOCK_HELD = '1';
 
+/** Redis runs one script at a time, so the compare and the set cannot be interleaved. */
+const REPLACE_IF_UNCHANGED = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+return 1
+`;
+
 /** Reconnect backoff: quick enough for a restart, slow enough not to storm a Redis that is still down. */
 const RETRY_STEP_MS = 200;
 const RETRY_CEILING_MS = 5000;
@@ -79,6 +86,37 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       await this.client.del(key);
       return null;
     }
+  }
+
+  /** One round trip for many keys. A corrupt value reads as absent and is LEFT: this never evicts. */
+  async mgetJson<T>(keys: readonly string[]): Promise<(T | null)[]> {
+    if (keys.length === 0) return [];
+    const raw = await this.client.mget(...keys);
+    return raw.map((value) => {
+      if (value === null) return null;
+      try {
+        return JSON.parse(value) as T;
+      } catch {
+        return null;
+      }
+    });
+  }
+
+  async getRaw(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  /** Compare-and-set on the exact bytes read, so a write that lost the race changes nothing. */
+  async replaceJson(key: string, was: string, value: unknown, ttlSec: number): Promise<boolean> {
+    const applied = await this.client.eval(
+      REPLACE_IF_UNCHANGED,
+      1,
+      key,
+      was,
+      JSON.stringify(value),
+      String(ttlSec),
+    );
+    return applied === 1;
   }
 
   /** Reads and removes in ONE command: whatever arrives after it finds nothing, which is the point. */

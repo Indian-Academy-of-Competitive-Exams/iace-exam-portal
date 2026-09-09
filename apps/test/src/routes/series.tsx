@@ -53,14 +53,12 @@ const BUCKET_BADGE: Readonly<Record<string, 'success' | 'neutral' | 'warning'>> 
   [TEST_BUCKET.DONE]: 'success',
   [TEST_BUCKET.OPEN]: 'success',
   [TEST_BUCKET.LATER]: 'neutral',
-  [TEST_BUCKET.MISSED]: 'warning',
 };
 
 const BUCKET_LABEL: Readonly<Record<string, string>> = {
   [TEST_BUCKET.DONE]: 'Done',
   [TEST_BUCKET.OPEN]: 'Open now',
   [TEST_BUCKET.LATER]: 'Later',
-  [TEST_BUCKET.MISSED]: 'Missed',
 };
 
 export function SeriesPage() {
@@ -193,8 +191,8 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
       key: 'state',
       header: 'State',
       cell: (row) => (
-        <Badge variant={BUCKET_BADGE[testBucket(row, now)] ?? 'neutral'}>
-          {BUCKET_LABEL[testBucket(row, now)]}
+        <Badge variant={BUCKET_BADGE[testBucket(row)] ?? 'neutral'}>
+          {BUCKET_LABEL[testBucket(row)]}
         </Badge>
       ),
     },
@@ -224,13 +222,10 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
   ];
 }
 
+/** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
     return `Opens ${WHEN.format(new Date(test.opensAt))}`;
-  }
-  if (test.closesAt !== null) {
-    const closed = Date.parse(test.closesAt) <= now.getTime();
-    return `${closed ? 'Entry closed' : 'Entry closes'} ${WHEN.format(new Date(test.closesAt))}`;
   }
   return 'Any time';
 }
@@ -238,6 +233,5 @@ function whenLine(test: StudentCatalogTest, now: Date): string {
 /** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
 function shutReason(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
-  if (test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime()) return 'Entry closed';
   return 'Waiting its turn';
 }
