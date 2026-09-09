@@ -6,6 +6,7 @@ import {
   type AttemptSectionScore,
   AppException,
   type AttemptStatus,
+  type SavedQuestionKind,
   BRANCH_TYPE,
   type BranchType,
   DIFFICULTY_LEVEL,
@@ -77,7 +78,7 @@ import {
   type DomainEventPayloads,
 } from '../../src/common/events';
 import { type EventsService } from '../../src/events';
-import { type ProgramsService } from '../../src/access';
+import { type AccessResolverService, type ProgramsService } from '../../src/access';
 
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
@@ -4233,6 +4234,15 @@ export class FakeCodeCatalog {
     return Promise.resolve();
   }
 
+  /** Names for the codes it knows; an unknown one is absent, which is what the resolver falls back on. */
+  namesByCode(codes: readonly string[]): Promise<Map<string, string>> {
+    return Promise.resolve(
+      new Map(
+        codes.filter((code) => this.usable.includes(code)).map((code) => [code, `${code} name`]),
+      ),
+    );
+  }
+
   asService<T>(): T {
     return this as unknown as T;
   }
@@ -5626,6 +5636,15 @@ export interface FakeProcessedRollupRow {
   rollupType: string;
 }
 
+/** A row the fold writes to the student's own two lists. */
+export interface FakeSavedQuestionRow {
+  studentId: string;
+  questionId: string;
+  kind: string;
+  attemptId: string | null;
+  paperQuestionId: string | null;
+}
+
 /** The test the fold reads its bucketing off — a rollup never needs more of one than this. */
 export interface FakeRollupTest {
   id: string;
@@ -5939,6 +5958,28 @@ export class FakeRollupPrisma {
     },
   };
 
+  readonly savedQuestions: FakeSavedQuestionRow[] = [];
+
+  /** Guarded on `(studentId, questionId, kind)`, so `skipDuplicates` is what makes a re-fold safe. */
+  readonly savedQuestion = {
+    createMany: ({
+      data,
+      skipDuplicates,
+    }: {
+      data: FakeSavedQuestionRow[];
+      skipDuplicates?: boolean;
+    }) => {
+      const fresh = data.filter(
+        (row) => !this.savedQuestions.some((held) => savedKey(held) === savedKey(row)),
+      );
+      if (fresh.length < data.length && skipDuplicates !== true) {
+        throw uniqueViolation('studentId_questionId_kind');
+      }
+      this.savedQuestions.push(...fresh);
+      return Promise.resolve({ count: fresh.length });
+    },
+  };
+
   /** Both selects at once: the scorer's answer key and the fold's subjects off one row. */
   private joined(row: FakeAttemptRow) {
     const test = this.tests.find((candidate) => candidate.id === row.testId) ?? makeRollupTest();
@@ -6072,6 +6113,7 @@ export class FakeRollupPrisma {
       this.testStat.rows,
       this.testSectionStat.rows,
       this.testQuestionStat.rows,
+      this.savedQuestions,
     ];
   }
 
@@ -6098,6 +6140,8 @@ export class FakeRollupPrisma {
     return this as unknown as PrismaService;
   }
 }
+
+const savedKey = (row: FakeSavedQuestionRow) => `${row.studentId}|${row.questionId}|${row.kind}`;
 
 /** The seam an evaluated sitting reaches the rollup queue through. */
 export function fakeRollupOutbox(
@@ -6286,4 +6330,202 @@ export class FakeMetrics {
   asService(): MetricsService {
     return this as unknown as MetricsService;
   }
+}
+
+// ---------------------------------------------------------------------------
+// SavedQuestionsService — the two lists, the sitting they were starred from,
+// and the bank row a list draws its preview off.
+// ---------------------------------------------------------------------------
+
+export interface FakeSavedRow {
+  id: string;
+  studentId: string;
+  questionId: string;
+  kind: SavedQuestionKind;
+  attemptId: string | null;
+  paperQuestionId: string | null;
+  createdAt: Date;
+}
+
+export interface FakeSavedAttempt {
+  id: string;
+  studentId: string;
+  testId: string;
+  status: AttemptStatus;
+  evaluationMode: EvaluationMode;
+  durationSec: number;
+  questionIds: readonly string[];
+}
+
+export function makeSavedAttempt(overrides: Partial<FakeSavedAttempt> = {}): FakeSavedAttempt {
+  return {
+    id: 'att_1',
+    studentId: 'stu_1',
+    testId: 'tst_1',
+    status: ATTEMPT_STATUS.EVALUATED,
+    evaluationMode: EVALUATION_MODE.PRACTICE,
+    durationSec: 3_600,
+    questionIds: ['q_1', 'q_2'],
+    ...overrides,
+  };
+}
+
+/** One bank row per question id, carrying only what a saved row shows — never options or a key. */
+const savedQuestionRow = (questionId: string) => ({
+  subject: { name: 'Reasoning' },
+  topic: { name: 'Series' },
+  currentVersion: {
+    content: { en: { stem: [{ type: 'TEXT', text: `<p>Stem for ${questionId}</p>` }] } },
+  },
+});
+
+export class FakeSavedPrisma {
+  private seq = 0;
+
+  constructor(
+    readonly rows: FakeSavedRow[] = [],
+    readonly attempts: FakeSavedAttempt[] = [makeSavedAttempt()],
+  ) {}
+
+  private served(attemptId: string, studentId?: string) {
+    const attempt = this.attempts.find(
+      (row) => row.id === attemptId && (studentId === undefined || row.studentId === studentId),
+    );
+    return attempt ?? null;
+  }
+
+  readonly attemptQuestion = {
+    findFirst: ({
+      where,
+    }: {
+      where: { attemptId: string; questionId: string; attempt: { studentId: string } };
+    }) => {
+      const attempt = this.served(where.attemptId, where.attempt.studentId);
+      if (!attempt?.questionIds.includes(where.questionId)) return Promise.resolve(null);
+      return Promise.resolve({
+        paperQuestionId: `pq_${where.questionId}`,
+        attempt: {
+          testId: attempt.testId,
+          status: attempt.status,
+          test: {
+            evaluationMode: attempt.evaluationMode,
+            baseConfig: { durationSec: attempt.durationSec },
+          },
+        },
+      });
+    },
+
+    findMany: ({ where }: { where: { attemptId: string; attempt: { studentId: string } } }) => {
+      const attempt = this.served(where.attemptId, where.attempt.studentId);
+      return Promise.resolve((attempt?.questionIds ?? []).map((questionId) => ({ questionId })));
+    },
+  };
+
+  private matches(row: FakeSavedRow, where: FakeSavedWhere): boolean {
+    return (
+      (where.id === undefined || row.id === where.id) &&
+      (where.studentId === undefined || row.studentId === where.studentId) &&
+      (where.kind === undefined || row.kind === where.kind) &&
+      (where.questionId === undefined || where.questionId.in.includes(row.questionId))
+    );
+  }
+
+  readonly savedQuestion = {
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: {
+      where?: FakeSavedWhere;
+      orderBy?: unknown;
+      skip?: number;
+      take?: number;
+      select?: unknown;
+    } = {}) => {
+      const matched = this.rows
+        .filter((row) => this.matches(row, where))
+        .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return Promise.resolve(
+        matched.slice(skip, take === undefined ? undefined : skip + take).map(withQuestion),
+      );
+    },
+
+    count: ({ where = {} }: { where?: FakeSavedWhere } = {}) =>
+      Promise.resolve(this.rows.filter((row) => this.matches(row, where)).length),
+
+    create: ({ data }: { data: Omit<FakeSavedRow, 'id' | 'createdAt'> }) => {
+      const clash = this.rows.some(
+        (row) =>
+          row.studentId === data.studentId &&
+          row.questionId === data.questionId &&
+          row.kind === data.kind,
+      );
+      if (clash) throw uniqueViolation('studentId_questionId_kind');
+      this.seq += 1;
+      const created: FakeSavedRow = {
+        ...data,
+        id: `svq_${this.seq}`,
+        createdAt: new Date(this.seq),
+      };
+      this.rows.push(created);
+      return Promise.resolve(created);
+    },
+
+    findUniqueOrThrow: ({
+      where,
+    }: {
+      where: {
+        studentId_questionId_kind: {
+          studentId: string;
+          questionId: string;
+          kind: SavedQuestionKind;
+        };
+      };
+    }) => {
+      const key = where.studentId_questionId_kind;
+      const row = this.rows.find(
+        (held) =>
+          held.studentId === key.studentId &&
+          held.questionId === key.questionId &&
+          held.kind === key.kind,
+      );
+      if (!row) throw new Error('no saved row');
+      return Promise.resolve(withQuestion(row));
+    },
+
+    deleteMany: ({ where }: { where: { id: string; studentId: string } }) => {
+      const kept = this.rows.filter(
+        (row) => !(row.id === where.id && row.studentId === where.studentId),
+      );
+      const count = this.rows.length - kept.length;
+      this.rows.length = 0;
+      this.rows.push(...kept);
+      return Promise.resolve({ count });
+    },
+  };
+
+  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
+    return Promise.all(work);
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+}
+
+interface FakeSavedWhere {
+  id?: string;
+  studentId?: string;
+  kind?: SavedQuestionKind;
+  questionId?: { in: string[] };
+}
+
+const withQuestion = (row: FakeSavedRow) => ({
+  ...row,
+  question: savedQuestionRow(row.questionId),
+});
+
+/** The schedule the star's gate reads. `closesAt` null is a ranked test nobody has capped entry on. */
+export function fakeTestSchedule(closesAt: string | null): AccessResolverService {
+  return { testSchedule: () => Promise.resolve({ closesAt, extraTimeSec: 0 }) } as never;
 }

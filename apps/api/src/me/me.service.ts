@@ -6,6 +6,7 @@ import {
   type DocumentKind,
   type Me,
   type StudentCatalog,
+  type StudentDetail,
   type UpdateMeBody,
 } from '@iace/contracts';
 import { StorageService } from '../storage/storage.service';
@@ -38,7 +39,12 @@ export class MeService {
   ) {}
 
   profile(studentId: string): Promise<Me> {
-    return this.students.detail(studentId);
+    return this.students.detail(studentId).then((student) => this.withEnrolment(student));
+  }
+
+  /** Where a student reads their own standing: codes resolved to names, and never editable here. */
+  private async withEnrolment(student: StudentDetail): Promise<Me> {
+    return { ...student, enrolment: await this.students.enrolmentOf(student) };
   }
 
   /** The catalog, with each paper's crowd read live off its board rather than out of the cache. */
@@ -74,7 +80,7 @@ export class MeService {
     this.auditContext.setEntityId(studentId);
     this.auditContext.setChanged(columns || profile ? { ...columns, ...profile } : null);
 
-    return updated;
+    return this.withEnrolment(updated);
   }
 
   /** Stores an uploaded document and points the profile column for its kind at it. */
