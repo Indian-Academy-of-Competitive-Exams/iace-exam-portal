@@ -453,8 +453,6 @@ export const testSchema = z.object({
   paperBinding: paperBindingSchema,
   /** This test's own copy — the config's is only what it started from. */
   examTemplate: examTemplateSchema,
-  /** Null means unlimited. A ranked graded attempt is always one. */
-  maxRetakes: z.number().int().nullable(),
   /** What each section is drawn from. Named for the column it has always lived in. */
   questionPoolFilter: drawSpecSchema.nullable(),
   status: testStatusSchema,
@@ -491,8 +489,6 @@ export const testDetailSchema = testSchema.extend({
   seriesOrder: z.number().int().nullable(),
   /** When this test opens. Null opens with the series it sits in. */
   opensAt: z.string().nullable(),
-  /** Seconds added to every sitting's clock. Null is the duration its section gives everyone. */
-  extraTimeSec: z.number().int().nullable(),
   /** Per-program staggers on top of `opensAt`. Empty is no program-specific delay. */
   programUnlocks: z.array(testProgramUnlockSchema),
 });
@@ -602,9 +598,6 @@ export const testTitleSchema = z
   .min(2, 'Give the test a name')
   .max(TEST_TITLE_MAX, `A name cannot be longer than ${TEST_TITLE_MAX} characters`);
 
-/** Retakes are a small number by design; unlimited is null, not a large one. */
-export const MAX_RETAKES_CEILING = 20;
-
 /** Each variant is a whole paper on file, so the ceiling is rows in the table, not a preference. */
 export const MAX_PAPER_VARIANTS = 50;
 /** Under this a cohort shares papers too often for drawing them apart to have been worth it. */
@@ -619,7 +612,6 @@ const testOwnFieldsSchema = z.object({
   paperBinding: paperBindingSchema.optional(),
   /** Absent on create means take the config's; a test chooses its own screen from then on. */
   examTemplate: examTemplateSchema.optional(),
-  maxRetakes: z.coerce.number().int().min(1).max(MAX_RETAKES_CEILING).nullish(),
   /** How many papers to draw. A fixed test is one, and the server holds it there. */
   variantCount: z.coerce.number().int().min(1).max(MAX_PAPER_VARIANTS).optional(),
   questionPoolFilter: drawSpecSchema.nullish(),
@@ -726,13 +718,6 @@ export const setProgramUnlockSchema = z.object({ opensAt: z.iso.datetime() });
 export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
 export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
 
-/** The test's own clock. Null is the plain rule: sit it any time after it opens, on its duration. */
-export const testScheduleSchema = z.object({
-  extraTimeSec: z.number().int().min(0).nullable(),
-});
-export type TestScheduleInput = z.input<typeof testScheduleSchema>;
-export type TestSchedule = z.infer<typeof testScheduleSchema>;
-
 /** What a finalize did. `finalizedByThisCall` is false when another request got there first. */
 export const finalizeResultSchema = z.object({
   testId: z.string(),
@@ -802,7 +787,6 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   offer: (id: string) => `/admin/tests/${id}/offer`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,
-  schedule: (id: string) => `/admin/tests/${id}/schedule`,
   programUnlock: (id: string, programCode: string) =>
     `/admin/tests/${id}/program-unlocks/${encodeURIComponent(programCode)}`,
 } as const;

@@ -10,7 +10,6 @@ import {
 
 const draft = (over: Partial<ScheduleDraft> = {}): ScheduleDraft => ({
   opensAt: '2026-09-10T09:00',
-  extraTime: '',
   programs: [{ programCode: 'SSC 2026', opensAt: '2026-09-10T08:00' }],
   ...over,
 });
@@ -19,12 +18,10 @@ describe('the schedule a test is read out of', () => {
   it('says the institute clock, not UTC', () => {
     const held = savedSchedule({
       opensAt: '2026-09-10T03:30:00.000Z',
-      extraTimeSec: 900,
       programUnlocks: [{ programCode: 'SSC 2026', opensAt: '2026-09-10T02:30:00.000Z' }],
     });
 
     assert.equal(held.opensAt, '2026-09-10T09:00');
-    assert.equal(held.extraTime, '15');
     assert.deepEqual(held.programs, [{ programCode: 'SSC 2026', opensAt: '2026-09-10T08:00' }]);
   });
 
@@ -43,7 +40,6 @@ describe('what the schedule step would save', () => {
 
     assert.equal(changes.count, 0);
     assert.equal(changes.opening, false);
-    assert.equal(changes.timing, false);
     assert.deepEqual(changes.written, []);
     assert.deepEqual(changes.cleared, []);
   });
@@ -52,13 +48,6 @@ describe('what the schedule step would save', () => {
     const changes = changesOf(draft(), draft({ opensAt: '2026-09-10T10:00' }));
 
     assert.equal(changes.opening, true);
-    assert.equal(changes.count, 1);
-  });
-
-  it('counts extra time as the one write it is', () => {
-    const changes = changesOf(draft(), draft({ extraTime: '10' }));
-
-    assert.equal(changes.timing, true);
     assert.equal(changes.count, 1);
   });
 
@@ -118,12 +107,11 @@ describe('what the schedule step would save', () => {
       draft(),
       draft({
         opensAt: '2026-09-10T10:00',
-        extraTime: '20',
         programs: [{ programCode: 'RRB JE', opensAt: '2026-09-10T07:00' }],
       }),
     );
 
-    assert.equal(changes.count, 4);
+    assert.equal(changes.count, 3);
     assert.deepEqual(changes.cleared, ['SSC 2026']);
   });
 });

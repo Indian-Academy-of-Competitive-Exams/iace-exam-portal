@@ -20,18 +20,15 @@ import {
   DateTimePicker,
   Field,
   FormSection,
-  NumericInput,
   SectionHeading,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  digitsOnly,
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ProgramPicker, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
-import { toSeconds } from '../lib/schedule-format';
 import {
   changesOf,
   instantOf,
@@ -175,12 +172,6 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
           unlockAt: held.opensAt ? instantOf(held.opensAt) : null,
         });
       }
-      if (changes.timing) {
-        await api.admin.tests.setSchedule(detail.id, {
-          extraTimeSec: toSeconds(held.extraTime),
-        });
-      }
-
       for (const row of changes.written) {
         try {
           await api.admin.tests.setProgramUnlock(detail.id, row.programCode, {
@@ -204,8 +195,6 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
       await refresh();
     },
   });
-
-  const setField = (field: 'extraTime', value: string) => setDraft({ ...held, [field]: value });
 
   const setOpensAt = (opensAt: string) => setDraft({ ...held, opensAt });
 
@@ -258,19 +247,6 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
             />
           )}
         </Field>
-
-        {ranked ? (
-          <Field htmlFor="test-extra-time" label="Extra time (minutes)" className="w-44">
-            {(control) => (
-              <NumericInput
-                {...control}
-                placeholder="None"
-                value={held.extraTime}
-                onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
-              />
-            )}
-          </Field>
-        ) : null}
       </div>
 
       {ranked ? (

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  allowsCohortScheduling,
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
@@ -82,24 +81,8 @@ export const AUDITED_TEST_FIELDS = [
   'scope',
   'paperBinding',
   'examTemplate',
-  'maxRetakes',
   'status',
 ] as const;
-
-const RETAKES_ARE_RANKED_ONLY =
-  'A practice test may be sat as often as a student likes, so it takes no retake limit. Make this test ranked, or leave the limit blank.';
-
-/** The CHECK on the table in service form, so the admin reads a sentence and not a driver error. */
-function assertRetakesAreRanked(
-  evaluationMode: TestRow['evaluationMode'],
-  maxRetakes: number | null,
-): void {
-  if (allowsCohortScheduling(evaluationMode) || maxRetakes === null) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, RETAKES_ARE_RANKED_ONLY, {
-    fieldErrors: { maxRetakes: [RETAKES_ARE_RANKED_ONLY] },
-  });
-}
 
 /** Owns `Test`: what it covers and how it is judged. Its shape is its `BaseConfig`'s. */
 @Injectable()
@@ -152,7 +135,6 @@ export class TestsService {
     const paperBinding = input.paperBinding ?? TEST_DEFAULTS.paperBinding;
     const scopeRef = input.scopeRef ?? null;
     this.assertJudgeable(series.evaluationMode, paperBinding, series.name);
-    assertRetakesAreRanked(series.evaluationMode, input.maxRetakes ?? null);
     this.assertCovers(config, scope, scopeRef);
     const variantCount = variantCountFor(paperBinding, input.variantCount);
     this.assertDrawable(paperBinding, variantCount);
@@ -169,7 +151,6 @@ export class TestsService {
         scopeRef: toJson(scopeRef),
         evaluationMode: series.evaluationMode,
         paperBinding,
-        maxRetakes: input.maxRetakes ?? null,
         variantCount,
         questionPoolFilter: toJson(input.questionPoolFilter ?? null),
         createdById,
@@ -209,7 +190,6 @@ export class TestsService {
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
     const paperBinding = input.paperBinding ?? test.paperBinding;
     this.assertJudgeable(test.evaluationMode, paperBinding, test.testSeries.name);
-    assertRetakesAreRanked(test.evaluationMode, input.maxRetakes ?? null);
     this.assertCovers(config, scope, scopeRef);
 
     // Papers are already drawn against a frozen count, so only an unfrozen one is raised to the floor.
@@ -239,7 +219,6 @@ export class TestsService {
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
-          ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
           ...(variantCount === test.variantCount ? {} : { variantCount }),
           ...(input.questionPoolFilter === undefined
             ? {}
@@ -359,7 +338,6 @@ function toTest(row: TestRow): Test {
     evaluationMode: row.evaluationMode,
     paperBinding: row.paperBinding,
     examTemplate: row.examTemplate,
-    maxRetakes: row.maxRetakes,
     variantCount: row.variantCount,
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     status: row.status,
@@ -379,7 +357,6 @@ function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig
   return {
     seriesOrder: row.seriesOrder,
     opensAt: row.opensAt?.toISOString() ?? null,
-    extraTimeSec: row.extraTimeSec,
     programUnlocks: row.programUnlocks.map((unlock) => ({
       programCode: unlock.programCode,
       opensAt: unlock.opensAt.toISOString(),

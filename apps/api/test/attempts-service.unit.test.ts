@@ -189,8 +189,9 @@ describe('AttemptsService — starting a sitting', () => {
     );
   });
 
+  /** The whole of what ranked and practice differ by: WHICH sitting counts, never how many. */
   it('marks the first sitting graded, and a later one not', async () => {
-    const { service, prisma } = serviceWith(sittable({ maxRetakes: 3 }));
+    const { service, prisma } = serviceWith(sittable());
 
     const first = await service.start(STUDENT, 'tst_1', {});
     assert.equal(first.attemptNo, 1);
@@ -277,18 +278,22 @@ describe('AttemptsService — starting twice', () => {
     assert.equal(prisma.attemptQuestions.length, 3);
   });
 
-  it('refuses a retake past what the test allows', async () => {
-    const done = makeAttempt({
-      id: 'att_done',
-      status: ATTEMPT_STATUS.SUBMITTED,
-      submittedAt: new Date('2026-08-24T05:00:00.000Z'),
-    });
-    const { service } = serviceWith(sittable({ maxRetakes: 1 }), [done]);
+  /** No cap exists any more: a student may sit a paper as often as they like, ranked or not. */
+  it('lets a ranked paper be sat again however many sittings are behind it', async () => {
+    const done = [1, 2, 3].map((n) =>
+      makeAttempt({
+        id: `att_done_${n}`,
+        attemptNo: n,
+        status: ATTEMPT_STATUS.SUBMITTED,
+        submittedAt: new Date('2026-08-24T05:00:00.000Z'),
+      }),
+    );
+    const { service } = serviceWith(sittable(), done);
 
-    const error = await service.start(STUDENT, 'tst_1', {}).catch((e: unknown) => e);
+    const next = await service.start(STUDENT, 'tst_1', {});
 
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(next.attemptNo, 4);
+    assert.equal(next.isGraded, false, 'and still only the first one ever ranked');
   });
 });
 

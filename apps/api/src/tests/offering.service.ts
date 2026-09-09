@@ -12,7 +12,6 @@ import {
   type SetProgramUnlockBody,
   type SetTestSeriesBody,
   type TestProgramUnlock,
-  type TestSchedule,
   type TestSeriesLink,
   type TestStatus,
 } from '@iace/contracts';
@@ -76,18 +75,6 @@ function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date):
   const message = testOpensAt === null ? TEST_HAS_NO_OPENING : OPENS_BEFORE_THE_TEST_DOES;
   throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
     fieldErrors: { opensAt: [message] },
-  });
-}
-
-const EXTRA_TIME_IS_RANKED_ONLY =
-  'Extra time is an allowance against a rank, and this test is practice. Make it ranked, or leave extra time blank.';
-
-/** The CHECK on the table in service form, so the admin reads a sentence and not a driver error. */
-function assertWindowIsRanked(evaluationMode: EvaluationMode, input: TestSchedule): void {
-  if (allowsCohortScheduling(evaluationMode) || input.extraTimeSec === null) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, EXTRA_TIME_IS_RANKED_ONLY, {
-    fieldErrors: { extraTimeSec: [EXTRA_TIME_IS_RANKED_ONLY] },
   });
 }
 
@@ -261,17 +248,6 @@ export class OfferingService {
       select: { code: true },
     });
     if (!program) throw new AppException(ErrorCodes.NOT_FOUND, 'No such program');
-  }
-
-  /** The test's own clock, written where the resolver reads it. No branch row collapses onto it. */
-  async setSchedule(testId: string, input: TestSchedule): Promise<TestSchedule> {
-    const test = await this.requireTest(testId);
-    assertWindowIsRanked(test.evaluationMode, input);
-
-    await this.prisma.test.update({ where: { id: testId }, data: input });
-
-    this.announce(test);
-    return input;
   }
 
   /** Filed against the test, and the series carrying it loses its cached catalog. */

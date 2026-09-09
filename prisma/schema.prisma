@@ -499,8 +499,6 @@ model Test {
   // Denormalised from TestSeries so the composite FK below is always enforced.
   evaluationMode     EvaluationMode
   paperBinding       PaperBinding   @default(FIXED)
-  // RANKED-only, by CHECK: practice exists to be sat again, so it carries no cap.
-  maxRetakes         Int?
   questionPoolFilter Json?
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate   @default(DEFAULT)
@@ -516,10 +514,8 @@ model Test {
   updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
   testSeriesId       String
   seriesOrder        Int?
-  // A test opens and never shuts. There is no cutoff: entry is the unlock instant and nothing else.
+  // A test opens and never shuts, and that instant is the whole of its timing.
   opensAt            DateTime?      @db.Timestamptz(3)
-  // RANKED-only, by CHECK: an allowance answers to a rank, and practice has none.
-  extraTimeSec       Int?
 
   baseConfig     BaseConfig          @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
   examStage      ExamStage           @relation(fields: [examStageId], references: [id])

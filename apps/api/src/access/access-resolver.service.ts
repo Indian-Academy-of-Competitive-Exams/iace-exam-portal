@@ -43,7 +43,6 @@ const catalogInclude = (programs: string[]) =>
         title: true,
         seriesOrder: true,
         opensAt: true,
-        extraTimeSec: true,
         scope: true,
         scopeRef: true,
         baseConfig: {
@@ -84,8 +83,6 @@ interface ResolvedTest {
   opensAt: string | null;
   /** Where this student got to. Cached, and busted when a sitting starts or ends. */
   attemptStatus: AttemptStatus | null;
-  /** This test's, in seconds, so the deadline is computed from one duration and not two. */
-  extraTimeSec: number | null;
 }
 
 /** What is cached: everything the clock does NOT decide. */
@@ -98,17 +95,6 @@ interface ResolvedSeries {
   kind: TestSeriesKind;
   sequentialTests: boolean;
   tests: ResolvedTest[];
-}
-
-/** How a test is offered institute-wide. Nothing shuts it, so only the allowance is left. */
-export interface TestSchedule {
-  extraTimeSec: number;
-}
-
-/** When one test opens FOR THIS STUDENT, and what the test adds to the clock. */
-export interface StudentTestWindow {
-  opensAt: string | null;
-  extraTimeSec: number | null;
 }
 
 interface ResolvedCatalog {
@@ -170,30 +156,6 @@ export class AccessResolverService {
       series.tests.some((test) => test.id === testId),
     );
     if (!reaches) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-  }
-
-  /** What this TEST adds to the clock here — from the catalog the gate just read. */
-  async extraTimeSecFor(studentId: string, testId: string): Promise<number> {
-    return (await this.windowFor(studentId, testId))?.extraTimeSec ?? 0;
-  }
-
-  /** How this test is offered to the whole institute — not to one branch, and not to one student. */
-  async testSchedule(testId: string): Promise<TestSchedule> {
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      select: { extraTimeSec: true },
-    });
-    if (test === null) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-
-    return { extraTimeSec: test.extraTimeSec ?? 0 };
-  }
-
-  /** This student's window on one test, as the catalog resolved it. Null when they cannot reach it. */
-  async windowFor(studentId: string, testId: string): Promise<StudentTestWindow | null> {
-    const resolved = await this.resolved(studentId);
-    const test = resolved.series.flatMap((series) => series.tests).find((row) => row.id === testId);
-    if (!test) return null;
-    return { opensAt: test.opensAt, extraTimeSec: test.extraTimeSec };
   }
 
   async invalidateStudent(studentId: string): Promise<void> {
@@ -361,7 +323,6 @@ function toResolvedTest(
     order: test.seriesOrder,
     opensAt: opensFor(test)?.toISOString() ?? null,
     attemptStatus: sittings.get(test.id) ?? null,
-    extraTimeSec: test.extraTimeSec,
   };
 }
 
@@ -387,9 +348,8 @@ const NONE_WAITING = -1;
 
 /** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
-  const { extraTimeSec: _extraTimeSec, ...shown } = test;
-  // A sat test stays startable: `maxRetakes` decides whether it may be sat again, not this.
-  return { ...shown, canStart: reachable && testIsOpen(test.opensAt, now), sittingCount: null };
+  // A sat test stays startable: a paper may always be sat again, and Done is only where it sorts.
+  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now), sittingCount: null };
 }
 
 /** Why a sitting may not begin: not open YET is a different fact from having no access at all. */

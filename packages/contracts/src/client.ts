@@ -218,7 +218,6 @@ import {
   offerResultSchema,
   seriesTestRowSchema,
   testProgramUnlockSchema,
-  testScheduleSchema,
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
@@ -237,8 +236,6 @@ import {
   type SeriesTestRow,
   type SetSeriesTestUnlockInput,
   type TestProgramUnlock,
-  type TestSchedule,
-  type TestScheduleInput,
   type TestSeriesLink,
   type TestStatus,
   type UpdateTestInput,
@@ -1313,14 +1310,6 @@ export function createApiClient(options: ApiClientOptions) {
 
         offer: (id: string): Promise<OfferResult> =>
           request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
-
-        /** The test's own late entry and extra time. Both null is the plain rules. */
-        setSchedule: (id: string, input: TestScheduleInput): Promise<TestSchedule> =>
-          request(ADMIN_TEST_PAPER_ROUTES.schedule(id), {
-            method: 'PUT',
-            body: input,
-            schema: testScheduleSchema,
-          }),
 
         moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), {

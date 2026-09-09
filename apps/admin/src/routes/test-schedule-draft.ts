@@ -1,5 +1,4 @@
 import { fromInstituteWallTime, instituteWallTime, type TestDetail } from '@iace/contracts';
-import { toMinutes } from '../lib/schedule-format';
 
 /** The test's clock as the schedule step holds it: institute wall time on screen, instants on the wire. */
 
@@ -11,19 +10,17 @@ export interface ProgramOpening {
 
 export interface ScheduleDraft {
   opensAt: string;
-  extraTime: string;
   programs: readonly ProgramOpening[];
 }
 
 export interface ScheduleChanges {
   opening: boolean;
-  timing: boolean;
   written: readonly ProgramOpening[];
   cleared: readonly string[];
   count: number;
 }
 
-export type ScheduleSource = Pick<TestDetail, 'opensAt' | 'extraTimeSec' | 'programUnlocks'>;
+export type ScheduleSource = Pick<TestDetail, 'opensAt' | 'programUnlocks'>;
 
 export const wallOf = (at: string | null): string => (at ? instituteWallTime(new Date(at)) : '');
 
@@ -31,7 +28,6 @@ export const instantOf = (wall: string): string => fromInstituteWallTime(wall).t
 
 export const savedSchedule = (detail: ScheduleSource): ScheduleDraft => ({
   opensAt: wallOf(detail.opensAt),
-  extraTime: toMinutes(detail.extraTimeSec),
   programs: detail.programUnlocks.map((row) => ({
     programCode: row.programCode,
     opensAt: wallOf(row.opensAt),
@@ -52,13 +48,11 @@ export function changesOf(saved: ScheduleDraft, held: ScheduleDraft): ScheduleCh
     .filter((row) => !timed.has(row.programCode))
     .map((row) => row.programCode);
   const opening = held.opensAt !== saved.opensAt;
-  const timing = held.extraTime !== saved.extraTime;
 
   return {
     opening,
-    timing,
     written,
     cleared,
-    count: written.length + cleared.length + Number(opening) + Number(timing),
+    count: written.length + cleared.length + Number(opening),
   };
 }

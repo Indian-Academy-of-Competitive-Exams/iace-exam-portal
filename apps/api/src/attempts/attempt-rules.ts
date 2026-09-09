@@ -23,13 +23,6 @@ export function testStartBlocker(test: { status: TestStatus; isLocked: boolean }
   return null;
 }
 
-/** Null `maxRetakes` is unlimited, and the first sitting is never a retake. */
-export function retakeBlocker(maxRetakes: number | null, finishedAttempts: number): string | null {
-  if (maxRetakes === null || finishedAttempts < maxRetakes) return null;
-  const sittings = finishedAttempts === 1 ? 'once' : `${finishedAttempts} times`;
-  return `You have already sat this test ${sittings}, which is all it allows.`;
-}
-
 /** DUAL sits every language offered; SINGLE the one picked, narrowed to what actually exists. */
 export function languagesFor(
   mode: LanguageMode,

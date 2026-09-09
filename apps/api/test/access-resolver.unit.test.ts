@@ -354,27 +354,6 @@ describe('AccessResolverService — when a test opens for one program', () => {
   });
 });
 
-describe('AccessResolverService.testSchedule', () => {
-  const scheduleOf = (over: Partial<FakeTestRow>) =>
-    build(reachable({ tests: [makeTestRow({ id: 'tst_1', ...over })] })).resolver.testSchedule(
-      'tst_1',
-    );
-
-  it('carries the allowance the test grants every sitting', async () => {
-    const schedule = await scheduleOf({
-      testSeriesId: 'srs_1',
-      opensAt: new Date('2026-06-01T09:00:00.000Z'),
-      extraTimeSec: 300,
-    });
-
-    assert.deepEqual(schedule, { extraTimeSec: 300 });
-  });
-
-  it('reads no allowance as none, never as undefined', async () => {
-    assert.deepEqual(await scheduleOf({ testSeriesId: 'srs_1' }), { extraTimeSec: 0 });
-  });
-});
-
 describe('AccessResolverService — what the paper is', () => {
   /** THE failure this prevents: an unstartable test must not blank out what the paper itself is. */
   it('reports duration, questions and marks though it cannot be started yet', async () => {

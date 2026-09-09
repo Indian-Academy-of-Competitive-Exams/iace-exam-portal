@@ -8,7 +8,6 @@ import {
   EXAM_TEMPLATES,
   MAX_PAPER_VARIANTS,
   MIN_PAPER_VARIANTS,
-  MAX_RETAKES_CEILING,
   PAPER_BINDING,
   PAPER_BINDINGS,
   TEST_SCOPE,
@@ -386,22 +385,6 @@ function Rules({
               label: PAPER_BINDING_LABELS[value],
               hint: PAPER_BINDING_HINTS[value],
             }))}
-          />
-        )}
-      </FormField>
-
-      <FormField
-        form={form}
-        name="maxRetakes"
-        label="Retakes"
-        /* ui-copy-ok: limit */ hint="Blank means unlimited"
-      >
-        {(control) => (
-          <Input
-            {...control}
-            disabled={sat}
-            inputMode="numeric"
-            placeholder={String(MAX_RETAKES_CEILING)}
           />
         )}
       </FormField>

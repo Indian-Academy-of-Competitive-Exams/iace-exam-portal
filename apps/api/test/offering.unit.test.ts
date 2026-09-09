@@ -330,69 +330,12 @@ describe('OfferingService — a series and the tests it holds', () => {
   });
 });
 
-describe('OfferingService — the test carries its own clock', () => {
-  const opened = () => makeTest({ id: 'tst_1', opensAt: OPENS_AT });
-
-  it('stores extra time on the test itself, in seconds', async () => {
-    const { service, prisma } = serviceWith(opened());
-
-    const saved = await service.setSchedule('tst_1', { extraTimeSec: 600 });
-
-    assert.deepEqual(saved, { extraTimeSec: 600 });
-    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
-  });
-
-  /** The failure this prevents: the old writer went through the branches, so none meant no write. */
-  it('stores the clock of a test no branch reaches', async () => {
-    const { service, prisma } = serviceWith(opened());
-
-    await service.setSchedule('tst_1', { extraTimeSec: 900 });
-
-    assert.equal(prisma.tests[0]?.extraTimeSec, 900);
-  });
-
-  it('takes extra time on a test with no opening, which needs nothing to count from', async () => {
-    const { service, prisma } = serviceWith();
-
-    await service.setSchedule('tst_1', { extraTimeSec: 300 });
-
-    assert.equal(prisma.tests[0]?.extraTimeSec, 300);
-  });
-});
-
-describe('OfferingService — a practice test opens at its time and never shuts', () => {
+describe('OfferingService — a practice test opens once, for everybody', () => {
   const practice = () =>
     makeTest({ id: 'tst_1', opensAt: OPENS_AT, evaluationMode: EVALUATION_MODE.PRACTICE });
 
   const refusedField = (field: string) => (error: unknown) =>
     AppException.is(error) && error.fieldErrors?.[field] !== undefined;
-
-  /** The failure this prevents: an allowance compensating for a rank a practice sitting never enters. */
-  it('refuses extra time on a practice test, under the field that carries it', async () => {
-    const { service, prisma } = serviceWith(practice());
-
-    await assert.rejects(
-      () => service.setSchedule('tst_1', { extraTimeSec: 600 }),
-      refusedField('extraTimeSec'),
-    );
-    assert.equal(prisma.tests[0]?.extraTimeSec, null);
-  });
-
-  it('still takes a schedule that asks for none', async () => {
-    const { service, prisma } = serviceWith(practice());
-
-    await service.setSchedule('tst_1', { extraTimeSec: null });
-
-    assert.equal(prisma.tests[0]?.extraTimeSec, null);
-  });
-
-  it('leaves a ranked test able to carry it', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1', opensAt: OPENS_AT }));
-
-    await service.setSchedule('tst_1', { extraTimeSec: 600 });
-
-    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
-  });
 
   /** The failure this prevents: one cohort put ahead of another on a paper that ranks neither. */
   it('refuses a program opening on a practice test', async () => {

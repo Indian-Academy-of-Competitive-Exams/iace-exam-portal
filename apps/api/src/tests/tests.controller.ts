@@ -26,7 +26,6 @@ import {
   setSeriesTestUnlockSchema,
   setTestStatusSchema,
   testListQuerySchema,
-  testScheduleSchema,
   updateTestSchema,
   type AddPaperQuestionBody,
   type ReplacePaperQuestionBody,
@@ -46,7 +45,6 @@ import {
   type SetProgramUnlockBody,
   type SetSeriesTestUnlockBody,
   type TestProgramUnlock,
-  type TestSchedule,
   type TestStatus,
   type UpdateTestBody,
   setPaperQuestionStatusSchema,
@@ -179,17 +177,6 @@ export class TestsController {
   @HttpCode(HttpStatus.OK)
   finalize(@Param('id') id: string): Promise<FinalizeResult> {
     return this.finalizer.finalize(id);
-  }
-
-  /** The test's own late entry and extra time, on the key that owns every other field of it. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Put(':id/schedule')
-  setSchedule(
-    @Param('id') id: string,
-    @Body(new ZodBody(testScheduleSchema)) body: TestSchedule,
-  ): Promise<TestSchedule> {
-    return this.offering.setSchedule(id, body);
   }
 
   /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
