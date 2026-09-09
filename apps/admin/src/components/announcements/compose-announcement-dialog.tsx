@@ -6,14 +6,12 @@ import {
   ANNOUNCEMENT_BODY_MAX,
   ANNOUNCEMENT_TITLE_MAX,
   EXAM_COURSES,
-  announcementChannelSchema,
   examCourseSchema,
-  type AnnouncementChannel,
+  type AnnouncementAudience,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
   Alert,
-  Checkbox,
   FormDialog,
   FormField,
   Input,
@@ -23,9 +21,6 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { CHANNEL_LABEL, rupees } from './money';
-
-const CHANNELS: readonly AnnouncementChannel[] = ['WHATSAPP', 'SMS'];
 
 const COURSE_ITEMS = EXAM_COURSES.map((course) => ({
   value: course,
@@ -40,7 +35,6 @@ const composeSchema = z.object({
     branchId: z.array(z.string()),
     course: z.array(examCourseSchema),
   }),
-  paidChannels: z.array(announcementChannelSchema),
 });
 
 type ComposeForm = z.infer<typeof composeSchema>;
@@ -52,19 +46,46 @@ const BLANK: ComposeForm = {
   title: '',
   body: '',
   audience: { branchId: [], course: [] },
-  paidChannels: [],
 };
+
+/** A notice worth sending twice: the words and the cohort, lifted off a row already sent. */
+export interface AnnouncementDraft {
+  title: string;
+  body: string;
+  audience: AnnouncementAudience;
+}
+
+/** The two dimensions this dialog offers; a saved audience may carry filters it cannot show. */
+function draftForm(draft: AnnouncementDraft | null): ComposeForm {
+  if (!draft) return BLANK;
+
+  return {
+    title: draft.title,
+    body: draft.body,
+    audience: {
+      branchId: draft.audience.branchId ?? [],
+      course: draft.audience.course ?? [],
+    },
+  };
+}
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSent: () => void;
+  /** A notice being sent again. The dialog is keyed by it, so opening one resets the form to it. */
+  draft?: AnnouncementDraft | null;
 }
 
-export function ComposeAnnouncementDialog({ open, onOpenChange, onSent }: Readonly<Props>) {
+export function ComposeAnnouncementDialog({
+  open,
+  onOpenChange,
+  onSent,
+  draft = null,
+}: Readonly<Props>) {
   const form = useForm<ComposeForm>({
     resolver: zodResolver(composeSchema),
-    defaultValues: BLANK,
+    defaultValues: draftForm(draft),
   });
 
   const branches = useQuery({
@@ -75,22 +96,21 @@ export function ComposeAnnouncementDialog({ open, onOpenChange, onSent }: Readon
 
   const branchId = useWatch({ control: form.control, name: 'audience.branchId' }) ?? [];
   const course = useWatch({ control: form.control, name: 'audience.course' }) ?? [];
-  const paidChannels = useWatch({ control: form.control, name: 'paidChannels' }) ?? [];
 
   // Not memoised: a query key is hashed structurally, so a fresh object each render costs nothing.
   const audience = { branchId, course };
 
   const preview = useQuery({
-    queryKey: ['admin', 'announcements', 'preview', audience, paidChannels],
+    queryKey: ['admin', 'announcements', 'preview', audience],
     queryFn: () =>
-      api.admin.announcements.preview({ title: 'x', body: 'x', audience, paidChannels }),
+      api.admin.announcements.preview({ title: 'x', body: 'x', audience, paidChannels: [] }),
     enabled: open,
   });
 
   const send = useMutation({
     mutationFn: (values: ComposeForm) => api.admin.announcements.send(values),
     onSuccess: () => {
-      form.reset(BLANK);
+      form.reset(draftForm(draft));
       onSent();
     },
     onError: (error) => applyFieldErrors(error, form.setError, COMPOSE_FIELDS),
@@ -107,7 +127,7 @@ export function ComposeAnnouncementDialog({ open, onOpenChange, onSent }: Readon
       onOpenChange={onOpenChange}
       form={form}
       onSubmit={(values) => send.mutate(values)}
-      title="New announcement"
+      title={draft ? 'Send again' : 'New announcement'}
       submitLabel="Send"
       loading={send.isPending}
     >
@@ -147,64 +167,24 @@ export function ComposeAnnouncementDialog({ open, onOpenChange, onSent }: Readon
         )}
       </FormField>
 
-      <PaidChannels
-        chosen={paidChannels}
-        onChange={(next) => form.setValue('paidChannels', next, { shouldDirty: true })}
-      />
-
       <Reach preview={preview.data} loading={preview.isLoading} />
     </FormDialog>
   );
 }
 
-/** Ordered: the first is what everyone gets, the second only what a failure falls back to. */
-function PaidChannels({
-  chosen,
-  onChange,
-}: Readonly<{ chosen: AnnouncementChannel[]; onChange: (next: AnnouncementChannel[]) => void }>) {
-  const toggle = (channel: AnnouncementChannel) =>
-    onChange(
-      chosen.includes(channel)
-        ? chosen.filter((held) => held !== channel)
-        : CHANNELS.filter((held) => held === channel || chosen.includes(held)),
-    );
-
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium">Also send by</span>
-      <div className="flex gap-6">
-        {CHANNELS.map((channel) => (
-          <Checkbox
-            key={channel}
-            label={CHANNEL_LABEL[channel]}
-            checked={chosen.includes(channel)}
-            onChange={() => toggle(channel)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The consequence that is invisible until too late: how many, and what it costs. */
+/** The consequence that is invisible until too late: how many students this reaches. */
 function Reach({ preview, loading }: Readonly<{ preview?: Preview; loading: boolean }>) {
   if (loading || !preview) return <Skeleton variant="row" className="h-12" />;
 
-  if (preview.overCap) {
-    /* ui-copy-ok: consequence */
-    return <Alert variant="danger">{overCap(preview)}</Alert>;
-  }
+  /* ui-copy-ok: consequence */
+  if (preview.overCap) return <Alert variant="danger">{overCap(preview)}</Alert>;
 
   /* ui-copy-ok: consequence */
-  return (
-    <Alert variant={preview.estimatedCostPaise > 0 ? 'warning' : 'info'}>{reach(preview)}</Alert>
-  );
+  return <Alert variant="info">{plural(preview.recipientCount, 'student')}, in the app.</Alert>;
 }
 
 interface Preview {
   recipientCount: number;
-  reachableCount: number;
-  estimatedCostPaise: number;
   overCap: boolean;
   cap: number;
 }
@@ -214,16 +194,4 @@ function overCap(preview: Preview): string {
   const cap = preview.cap.toLocaleString('en-IN');
 
   return `That reaches ${reaches} students, over the ${cap} a single send allows.`;
-}
-
-function reach(preview: Preview): string {
-  if (preview.estimatedCostPaise === 0) {
-    return `${plural(preview.recipientCount, 'student')}, in the app only.`;
-  }
-
-  const spend = `${plural(preview.reachableCount, 'student')}, about ${rupees(preview.estimatedCostPaise)}`;
-  const unreachable = preview.recipientCount - preview.reachableCount;
-  if (unreachable === 0) return `${spend}.`;
-
-  return `${spend} — ${unreachable} more have no mobile number on file.`;
 }

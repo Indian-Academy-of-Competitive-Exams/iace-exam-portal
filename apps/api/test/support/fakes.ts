@@ -4627,6 +4627,8 @@ export interface FakeAnnouncementRow {
   id: string;
   title: string;
   body: string;
+  /** The filter as sent, which "Send again" reads back — so the fake carries it like the column. */
+  audience: unknown;
   paidChannels: string[];
   recipientCount: number;
   estimatedCostPaise: number;
