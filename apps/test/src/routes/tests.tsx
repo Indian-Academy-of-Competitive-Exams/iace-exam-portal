@@ -21,7 +21,7 @@ import {
   type StudentCatalogSeries,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY } from '../lib/constants';
+import { CATALOG_QUERY_KEY, courseLabel, NAV_ITEMS, PERFORMANCE_QUERY_KEY } from '../lib/constants';
 import {
   matching,
   resultsByTest,
@@ -31,9 +31,6 @@ import {
 } from '../lib/catalog';
 import { SeriesShelf } from '../components/tests/series-shelf';
 import { PageBody } from '../components/ui';
-
-/** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
-const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 const ANY_FAMILY = '';
 const SKELETON_KEYS = ['a', 'b', 'c'];

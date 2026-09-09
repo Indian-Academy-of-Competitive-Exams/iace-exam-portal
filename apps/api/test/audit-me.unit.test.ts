@@ -77,10 +77,9 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
   const prisma = new FakePrisma(students);
   const auditContext = new AuditContext();
   const storage = new FakeStorage();
-  // Neither exercised: `updateMeSchema` never carries `enrolledExams` or `currentBranchId`,
-  // so `StudentsService.update` never reaches either check for these tests.
-  const exams = {} as ExamsService;
-  const branches = {} as BranchesService;
+  // Never validated here, but wired all the same: every `me` read resolves the enrolment.
+  const exams = new FakeCodeCatalog().asService<ExamsService>();
+  const branches = { nameOf: () => Promise.resolve(null) } as unknown as BranchesService;
 
   const students_ = new StudentsService(
     prisma.asService(),

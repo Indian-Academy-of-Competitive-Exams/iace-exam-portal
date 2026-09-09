@@ -74,10 +74,11 @@ export const RELAY_BATCH = 200;
 /** How long an event must sit before a SWEEP takes it: its writer may still be finishing. */
 export const RELAY_GRACE_SEC = 30;
 
-/** What a rollup job is: one sitting to fold in, one test to rebuild, or every table at once. */
+/** What a rollup job is: one sitting to fold in, one test or student to rebuild, or every table. */
 export const ROLLUP_JOBS = {
   FOLD: 'fold-attempt',
   REBUILD_TEST: 'rebuild-test',
+  REBUILD_STUDENT: 'rebuild-student',
   REBUILD_ALL: 'rebuild-all',
 } as const;
 
@@ -87,6 +88,7 @@ export type RollupJob = (typeof ROLLUP_JOBS)[keyof typeof ROLLUP_JOBS];
 export interface RollupJobData {
   attemptId?: string;
   testId?: string;
+  studentId?: string;
 }
 
 /** The EVENT's own: a redelivered relay is the same job, so one evaluation folds once. */
@@ -97,6 +99,11 @@ export function rollupJobId(eventId: string): string {
 /** The TEST's own: every re-score of one paper collapses into the single rebuild they all want. */
 export function rollupRebuildJobId(testId: string): string {
   return `${QUEUE_NAMES.ROLLUP}-rebuild-${testId}`;
+}
+
+/** The STUDENT's own: voiding several of their sittings collapses into the one recount they need. */
+export function rollupRebuildStudentJobId(studentId: string): string {
+  return `${QUEUE_NAMES.ROLLUP}-rebuild-student-${studentId}`;
 }
 
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */

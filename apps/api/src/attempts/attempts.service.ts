@@ -16,7 +16,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { isUniqueViolation } from '../common/prisma-errors';
-import { deadlineFrom, displayOrder, languagesFor, testStartBlocker } from './attempt-rules';
+import {
+  deadlineFrom,
+  displayOrder,
+  languagesFor,
+  slotsAfter,
+  testStartBlocker,
+  type SittingSlots,
+} from './attempt-rules';
 import { sectionScoresIn } from './score-paper';
 
 const SITTABLE_INCLUDE = {
@@ -86,13 +93,15 @@ export class AttemptsService {
 
     const test = this.assertSittable(await this.requireTest(testId));
 
-    // Counted, not capped: a paper may be sat any number of times, and this only names which one.
-    const finished = await this.prisma.attempt.count({
+    // Read, not counted: a paper may be sat any number of times, and the VOID ones still matter.
+    const ended = await this.prisma.attempt.findMany({
       where: { testId, studentId, status: { not: LIVE } },
+      select: { status: true, isGraded: true },
     });
+    const slots = slotsAfter(ended);
 
     try {
-      const started = await this.create(studentId, test, finished, input.languages);
+      const started = await this.create(studentId, test, slots, input.languages);
       await this.state.open(started);
       // The catalog caches where this student has got to, and starting is one of two things that move it.
       await this.access.invalidateStudent(studentId);
@@ -112,20 +121,19 @@ export class AttemptsService {
   private async create(
     studentId: string,
     test: SittableTest,
-    finished: number,
+    slots: SittingSlots,
     picked: readonly LanguageCode[] | undefined,
   ) {
     const startedAt = new Date();
-    const attemptNo = finished + 1;
 
     return this.prisma.$transaction(async (tx) => {
       const attempt = await tx.attempt.create({
         data: {
           testId: test.id,
           studentId,
-          attemptNo,
-          // Counts toward a cohort: one attempt per student, the first, and never on a practice paper.
-          isGraded: attemptNo === 1 && test.evaluationMode === EVALUATION_MODE.RANKED,
+          attemptNo: slots.attemptNo,
+          // Counts toward a cohort: the one sitting holding the ranked slot, never on a practice paper.
+          isGraded: slots.ranksAgain && test.evaluationMode === EVALUATION_MODE.RANKED,
           startedAt,
           endsAt: deadlineFrom(startedAt, sittingSeconds(test)),
           shuffleSeed: randomInt(SEED_CEILING),

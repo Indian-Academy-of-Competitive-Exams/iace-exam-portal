@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2 } from 'lucide-react';
+import { BarChart3, Pencil, Trash2 } from 'lucide-react';
 import {
+  EVALUATION_MODE,
   EVALUATION_MODE_LABELS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -204,21 +205,39 @@ function TestRowActions({
     onError: close,
   });
 
-  if (!canWrite) return null;
+  // Only a ranked test folds a cohort, so on any other one the report would have nothing to read.
+  const ranked = test.evaluationMode === EVALUATION_MODE.RANKED;
+  if (!canWrite && !ranked) return null;
 
   return (
     <>
       <RowActions label={`Actions for ${test.title ?? UNTITLED}`}>
-        <DropdownMenuItem asChild>
-          <Link to={ROUTES.TEST(test.id)}>
-            <Pencil aria-hidden />
-            Edit
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem destructive disabled={remove.isPending} onSelect={() => setAsking(true)}>
-          <Trash2 aria-hidden />
-          Delete
-        </DropdownMenuItem>
+        {ranked ? (
+          <DropdownMenuItem asChild>
+            <Link to={ROUTES.TEST_ANALYTICS(test.id)}>
+              <BarChart3 aria-hidden />
+              Analytics
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
+        {canWrite ? (
+          <DropdownMenuItem asChild>
+            <Link to={ROUTES.TEST(test.id)}>
+              <Pencil aria-hidden />
+              Edit
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
+        {canWrite ? (
+          <DropdownMenuItem
+            destructive
+            disabled={remove.isPending}
+            onSelect={() => setAsking(true)}
+          >
+            <Trash2 aria-hidden />
+            Delete
+          </DropdownMenuItem>
+        ) : null}
       </RowActions>
 
       <ConfirmDialog

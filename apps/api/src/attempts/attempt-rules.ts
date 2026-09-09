@@ -1,6 +1,7 @@
 import {
   LANGUAGE_MODE,
   TEST_STATUS,
+  type AttemptStatus,
   type LanguageCode,
   type LanguageMode,
   type TestStatus,
@@ -21,6 +22,28 @@ export function testStartBlocker(test: { status: TestStatus; isLocked: boolean }
   // The freeze is what wrote the papers, one for a fixed test and one per variant for a generated one.
   if (!test.isLocked) return PAPER_NOT_READY_MESSAGE;
   return null;
+}
+
+/** One ended sitting, as the start gate reads it. A voided one did not happen. */
+export interface EndedSitting {
+  status: AttemptStatus;
+  isGraded: boolean;
+}
+
+/** What a student's ended sittings leave for the next one. */
+export interface SittingSlots {
+  attemptNo: number;
+  ranksAgain: boolean;
+}
+
+/** The number the next sitting takes, and whether it is the one that ranks. */
+export function slotsAfter(ended: readonly EndedSitting[]): SittingSlots {
+  return {
+    // Every sitting counts here, void included: the attempt number is a unique key, not a tally.
+    attemptNo: ended.length + 1,
+    // Spent unless a void handed it back: the slot is held by whichever sitting still carries it.
+    ranksAgain: !ended.some((row) => row.isGraded),
+  };
 }
 
 /** DUAL sits every language offered; SINGLE the one picked, narrowed to what actually exists. */

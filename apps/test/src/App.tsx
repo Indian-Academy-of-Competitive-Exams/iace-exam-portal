@@ -19,6 +19,7 @@ import { ReportRedirect, ReportShell } from './routes/report';
 import { LeaderboardPage } from './routes/leaderboard';
 import { NotificationsPage } from './routes/notifications';
 import { NotificationSettingsPage } from './routes/notification-settings';
+import { SavedPage } from './routes/saved';
 import { PageSkeleton, ReportSkeleton } from './components/ui';
 
 /** Every screen that draws charts, so the plotting library stays off the first payload. */
@@ -78,6 +79,7 @@ export function App() {
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
           <Route path={ROUTES.NOTIFICATIONS} element={<NotificationsPage />} />
           <Route path={ROUTES.NOTIFICATION_SETTINGS} element={<NotificationSettingsPage />} />
+          <Route path={ROUTES.SAVED} element={<SavedPage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />

@@ -81,6 +81,15 @@ import {
   type UpdateMeInput,
 } from './me';
 import {
+  SAVED_ROUTES,
+  bookmarkedInAttemptSchema,
+  savedQuestionSchema,
+  type BookmarkQuestionInput,
+  type BookmarkedInAttempt,
+  type SavedListQueryInput,
+  type SavedQuestion,
+} from './saved';
+import {
   ADMIN_BRANCH_ROUTES,
   branchSchema,
   type Branch,
@@ -185,12 +194,14 @@ import {
   questionReportSchema,
   satSeriesListSchema,
   studentOverviewSchema,
+  testAnalyticsSchema,
   type PerformanceReport,
   type PracticeCalendar,
   type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
   type StudentOverview,
+  type TestAnalytics,
 } from './stats';
 import {
   LEADERBOARD_ROUTES,
@@ -198,6 +209,20 @@ import {
   type Leaderboard,
   type LeaderboardQueryInput,
 } from './leaderboard';
+import {
+  ADMIN_LIVE_OPS_ROUTES,
+  liveOpsBoardSchema,
+  liveOpsTestSchema,
+  resolvedAttemptSchema,
+  type ExtendAttemptInput,
+  type ForceSubmitAttemptInput,
+  type LiveOpsBoard,
+  type LiveOpsTest,
+  type LiveOpsTestQueryInput,
+  type ResetAttemptInput,
+  type ResolvedAttempt,
+  type VoidAttemptInput,
+} from './live-ops';
 import {
   PERFORMANCE_SHARE_ROUTES,
   performanceShareSchema,
@@ -800,9 +825,73 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
           schema: performanceShareSchema,
         }),
+
+      /** One of the two lists, newest first. The kind is required — there is no combined list. */
+      savedQuestions: (query: SavedListQueryInput): Promise<Paginated<SavedQuestion>> =>
+        requestPaginated(`${SAVED_ROUTES.list}${queryString({ ...query })}`, {
+          schema: savedQuestionSchema.array(),
+        }),
+
+      /** Idempotent: starring a question already starred returns the row it already had. */
+      bookmarkQuestion: (input: BookmarkQuestionInput): Promise<SavedQuestion> =>
+        request(SAVED_ROUTES.bookmark, {
+          method: 'POST',
+          body: input,
+          schema: savedQuestionSchema,
+        }),
+
+      /** Drops one saved row. A dismissed mistake comes back only if they get it wrong again. */
+      removeSavedQuestion: (id: string): Promise<NoContent> =>
+        request(SAVED_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+      /** Which questions of one sitting are already starred — what the review draws its stars from. */
+      bookmarksInAttempt: (attemptId: string): Promise<BookmarkedInAttempt> =>
+        request(SAVED_ROUTES.inAttempt(attemptId), { schema: bookmarkedInAttemptSchema }),
     },
 
     admin: {
+      /** Watching one test's sittings, and resolving the ones that broke. */
+      liveOps: {
+        tests: (query: LiveOpsTestQueryInput = {}): Promise<Paginated<LiveOpsTest>> =>
+          requestPaginated(`${ADMIN_LIVE_OPS_ROUTES.tests}${queryString({ ...query })}`, {
+            schema: liveOpsTestSchema.array(),
+          }),
+
+        board: (testId: string): Promise<LiveOpsBoard> =>
+          request(ADMIN_LIVE_OPS_ROUTES.board(testId), { schema: liveOpsBoardSchema }),
+
+        forceSubmit: (
+          attemptId: string,
+          input: ForceSubmitAttemptInput,
+        ): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.forceSubmit(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        extend: (attemptId: string, input: ExtendAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.extend(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        reset: (attemptId: string, input: ResetAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.reset(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        void: (attemptId: string, input: VoidAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.void(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+      },
+
       /** What an admin says to a cohort, and what reaching them cost. */
       announcements: {
         list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<AnnouncementSummary>> =>
@@ -1246,6 +1335,10 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+        /** How the cohort did on it: the three rollups, read whole and derived from. */
+        analytics: (id: string): Promise<TestAnalytics> =>
+          request(ADMIN_TEST_ROUTES.analytics(id), { schema: testAnalyticsSchema }),
 
         /** The draft paper, as it stands: drawn at finalize, then edited a question at a time. */
         readPaper: (id: string, variant?: number): Promise<TestPaper> =>

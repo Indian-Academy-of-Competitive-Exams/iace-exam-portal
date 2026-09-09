@@ -36,8 +36,24 @@ export const ACCEPTED_TYPES_FOR: Record<DocumentKind, readonly string[]> = {
   [DOCUMENT_KINDS.TENTH_MARKSHEET]: MARKSHEET_ACCEPTED_TYPES,
 };
 
-/** The student's own record — the same shape the admin sees. */
-export const meSchema = studentDetailSchema;
+/** One code the student carries, beside the catalog's name for it. */
+export const enrolmentNameSchema = z.object({
+  code: z.string(),
+  /** A code with no catalog row keeps its own code here, so a row never renders blank. */
+  name: z.string(),
+});
+export type EnrolmentName = z.infer<typeof enrolmentNameSchema>;
+
+/** What the student's record says they stand on, resolved to names a screen can print. */
+export const enrolmentStandingSchema = z.object({
+  programs: z.array(enrolmentNameSchema),
+  exams: z.array(enrolmentNameSchema),
+  branch: z.string().nullable(),
+});
+export type EnrolmentStanding = z.infer<typeof enrolmentStandingSchema>;
+
+/** The admin's shape plus the enrolment resolved for reading — the student sees names, not codes. */
+export const meSchema = studentDetailSchema.extend({ enrolment: enrolmentStandingSchema });
 export type Me = z.infer<typeof meSchema>;
 
 /**
