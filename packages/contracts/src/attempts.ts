@@ -27,6 +27,8 @@ export const ATTEMPT_STATUS = {
   SUBMITTED: 'SUBMITTED',
   EVALUATED: 'EVALUATED',
   EXPIRED: 'EXPIRED',
+  /** Archived by an admin: excluded from every rollup, leaderboard and cohort read. */
+  VOIDED: 'VOIDED',
 } as const;
 export const attemptStatusSchema = z.enum(ATTEMPT_STATUS);
 export type AttemptStatus = z.infer<typeof attemptStatusSchema>;
@@ -274,6 +276,45 @@ export function paletteCounts(
     counts[answers[id]?.state ?? ANSWER_STATE.NOT_VISITED] += 1;
   }
   return counts;
+}
+
+/** Attempted is a real answer, not a visit: a flagged question carrying none scores as unattempted. */
+export const ANSWERED_STATES = [ANSWER_STATE.ANSWERED, ANSWER_STATE.ANSWERED_MARKED] as const;
+
+export interface SectionEffort {
+  id: string;
+  name: string;
+  total: number;
+  attempted: number;
+  unattempted: number;
+}
+
+/** What a handed-in paper says about itself before anything is marked, section by section. */
+export function sectionEffort(
+  sections: readonly ExamSection[],
+  questions: readonly { questionId: string; baseConfigSectionId: string }[],
+  answers: Readonly<Record<string, { state: AnswerState }>>,
+): SectionEffort[] {
+  const attempted = new Set<AnswerState>(ANSWERED_STATES);
+
+  return sections.flatMap((section) => {
+    const served = questions.filter((row) => row.baseConfigSectionId === section.id);
+    if (served.length === 0) return [];
+
+    const answered = served.filter((row) =>
+      attempted.has(answers[row.questionId]?.state ?? ANSWER_STATE.NOT_VISITED),
+    ).length;
+
+    return [
+      {
+        id: section.id,
+        name: section.name,
+        total: served.length,
+        attempted: answered,
+        unattempted: served.length - answered,
+      },
+    ];
+  });
 }
 
 /** The seat after this one, wrapping to the first: "next" is never a dead end mid-paper. */

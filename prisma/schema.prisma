@@ -152,6 +152,8 @@ enum AttemptStatus {
   SUBMITTED
   EVALUATED
   EXPIRED
+  // Archived by an admin (support console). Excluded from every rollup, leaderboard and cohort read.
+  VOIDED
 }
 
 enum AnswerState {
@@ -212,12 +214,6 @@ enum TestSeriesKind {
   FREE
   PROGRAM
   EVENT
-}
-
-// Unused by any column.
-enum UnlockState {
-  LOCKED
-  UNLOCKED
 }
 
 // WRITE covers create + update + delete, and implies READ.
@@ -455,6 +451,8 @@ model Question {
   paperQuestions PaperQuestion[]
   attemptItems   AttemptQuestion[]
   questionStats  TestQuestionStat[]
+  flags          QuestionFlag[]
+  savedBy        SavedQuestion[]
 
   @@index([subjectId, difficulty, status])
   @@index([topicId])
@@ -605,6 +603,10 @@ model Attempt {
   lastPercentile   Decimal?            @db.Decimal(5, 2)
   createdAt        DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  // Void (support console): archive, never delete. When set, excluded from rollups/leaderboard/cohort reads.
+  voidedAt         DateTime?           @db.Timestamptz(3)
+  voidReason       String?
+  voidedById       String?
 
   test             Test               @relation(fields: [testId], references: [id])
   student          Student            @relation(fields: [studentId], references: [id])
@@ -705,15 +707,18 @@ model Student {
   createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
-  profile          StudentProfile?
-  consents         StudentConsent[]
-  currentBranch    Branch?              @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
-  attempts         Attempt[]
-  grants           StudentGrant[]
-  notifications    Notification[]
-  stat             StudentStat?
-  subjectStats     StudentSubjectStat[]
-  eventCandidacies EventCandidate[]
+  profile           StudentProfile?
+  consents          StudentConsent[]
+  currentBranch     Branch?                  @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
+  attempts          Attempt[]
+  grants            StudentGrant[]
+  notifications     Notification[]
+  stat              StudentStat?
+  subjectStats      StudentSubjectStat[]
+  eventCandidacies  EventCandidate[]
+  notificationPrefs NotificationPreference[]
+  pushSubscriptions PushSubscription[]
+  savedQuestions    SavedQuestion[]
 
   @@index([mobile])
   @@index([externalRef])
@@ -1200,4 +1205,94 @@ model TestQuestionStat {
   @@id([testId, paperQuestionId])
   @@index([paperQuestionId])
   @@index([questionId])
+}
+
+enum SavedQuestionKind {
+  BOOKMARK // the student saved it deliberately
+  MISTAKE // auto-added because they answered it wrong
+}
+
+enum QuestionFlagCategory {
+  AWKWARD
+  INVALID
+  TOO_DIFFICULT
+  INSUFFICIENT_DATA
+  OTHER
+}
+
+enum QuestionFlagStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// Absent row = the policy default. IN_APP is the floor and cannot be turned off (enforced in code).
+// A null `type` means the choice applies to every notification type.
+model NotificationPreference {
+  id        String            @id @default(cuid())
+  studentId String
+  channel   DeliveryChannel
+  type      NotificationType?
+  enabled   Boolean           @default(true)
+  updatedAt DateTime          @updatedAt @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, channel, type])
+  @@index([studentId])
+}
+
+//A browser push endpoint. Pruned when a send returns 404/410 (dead subscription).
+model PushSubscription {
+  id         String   @id @default(cuid())
+  studentId  String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+// Two lists in one table: manual BOOKMARK and auto-collected MISTAKE.
+// Saved by bank `questionId` so the list survives across papers; attempt/paperQuestion are provenance.
+model SavedQuestion {
+  id              String            @id @default(cuid())
+  studentId       String
+  questionId      String
+  kind            SavedQuestionKind
+  attemptId       String?
+  paperQuestionId String?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@unique([studentId, questionId, kind])
+  @@index([studentId, kind, createdAt])
+}
+
+//  A proof-reader's quality flag. An OPEN flag blocks the question from going ACTIVE
+// (enforced in questions.service assertStatusReachable). raisedById/resolvedById are Admin ids
+// (scalar by design, resolved by a separate lookup, so no lane needs to widen Admin).
+model QuestionFlag {
+  id           String               @id @default(cuid())
+  questionId   String
+  versionId    String?
+  category     QuestionFlagCategory
+  comment      String
+  status       QuestionFlagStatus   @default(OPEN)
+  raisedById   String
+  resolvedById String?
+  resolvedAt   DateTime?            @db.Timestamptz(3)
+  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, status])
+  @@index([status, createdAt])
 }
