@@ -228,10 +228,12 @@ import {
   PERFORMANCE_SHARE_ROUTES,
   performanceShareSchema,
   performanceSharesSchema,
+  shareableSittingSchema,
   sharedReportSchema,
   type CreatePerformanceShareInput,
   type PerformanceShare,
   type PerformanceShares,
+  type ShareableSitting,
   type SharedReport,
 } from './shares';
 import {
@@ -287,6 +289,7 @@ import {
   type CreateStudentInput,
   type SetStudentTestBlockedBody,
   type StudentDetail,
+  type StudentSittingsQueryInput,
   type StudentListQueryInput,
   type StudentSummary,
   type UpdateStudentInput,
@@ -963,6 +966,15 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: input,
             schema: studentDetailSchema,
+          }),
+
+        /** Their evaluated sittings, paged. The share picker's own list is capped; a report's is not. */
+        sittings: (
+          id: string,
+          query: StudentSittingsQueryInput,
+        ): Promise<Paginated<ShareableSitting>> =>
+          requestPaginated(`${ADMIN_STUDENT_ROUTES.sittings(id)}${queryString({ ...query })}`, {
+            schema: shareableSittingSchema.array(),
           }),
 
         /** Anonymises the person. Super admin only, and every sitting they sat is left standing. */

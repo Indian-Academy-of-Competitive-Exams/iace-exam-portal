@@ -22,12 +22,14 @@ interface PickerProps {
   'aria-label'?: string;
 }
 
+/** A CHOOSER: only active exams, because a retired one is not something to file new work under. */
 export function ExamPicker(props: Readonly<PickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
     queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) => api.admin.exams.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+    fetchPage: (page) =>
+      api.admin.exams.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
   });
 
   return (
@@ -114,11 +116,12 @@ interface MultiPickerProps {
   'aria-label'?: string;
 }
 
+/** A FILTER, so it reaches retired exams — tests and configurations are still filed under them. */
 export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.PICKER, search],
+    queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.FILTER, search],
     fetchPage: (page) => api.admin.exams.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 

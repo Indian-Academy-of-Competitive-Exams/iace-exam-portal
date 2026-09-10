@@ -1,6 +1,7 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import {
   AppException,
+  ATTEMPT_STATUS,
   BLOCKED_ENROLMENT_MESSAGE,
   ErrorCodes,
   NOTIFICATION_TYPE,
@@ -12,6 +13,8 @@ import {
   type Gender,
   type CreateStudentBody,
   type Paginated,
+  type PaginationQuery,
+  type ShareableSitting,
   type StudentDetail,
   type StudentListQuery,
   type StudentSummary,
@@ -112,6 +115,33 @@ export class StudentsService {
 
     return {
       items: rows.map((row) => this.toSummary(row)),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+    };
+  }
+
+  /** Evaluated only, newest first, PAGED — the report's scope picker must reach the oldest one. */
+  async sittings(studentId: string, query: PaginationQuery): Promise<Paginated<ShareableSitting>> {
+    const where = { studentId, status: ATTEMPT_STATUS.EVALUATED };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.attempt.findMany({
+        where,
+        orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: { id: true, submittedAt: true, test: { select: { title: true } } },
+      }),
+      this.prisma.attempt.count({ where }),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        attemptId: row.id,
+        testTitle: row.test.title,
+        submittedAt: row.submittedAt?.toISOString() ?? null,
+      })),
       page: query.page,
       pageSize: query.pageSize,
       total,

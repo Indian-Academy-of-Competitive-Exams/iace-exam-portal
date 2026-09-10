@@ -19,11 +19,14 @@ import {
   setStudentActiveSchema,
   setStudentTestBlockedSchema,
   studentListQuerySchema,
+  studentSittingsQuerySchema,
   updateStudentSchema,
   type CreateStudentBody,
   type ErasureReceipt,
   type Paginated,
+  type PaginationQuery,
   type SetStudentActiveBody,
+  type ShareableSitting,
   type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentListQuery,
@@ -61,6 +64,16 @@ export class StudentsController {
   @Get(':id')
   detail(@Param('id') id: string): Promise<StudentDetail> {
     return this.students.detail(id);
+  }
+
+  /** Behind STUDENT_PERFORMANCE: it is the report's scope picker, not part of managing a student. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.READ)
+  @Get(':id/sittings')
+  sittings(
+    @Param('id') id: string,
+    @Query(new ZodQuery(studentSittingsQuerySchema)) query: PaginationQuery,
+  ): Promise<Paginated<ShareableSitting>> {
+    return this.students.sittings(id, query);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.CREATE)

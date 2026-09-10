@@ -175,7 +175,7 @@ export function TestSeriesPicker({
   );
 }
 
-/** The same catalog as `ProgramPicker`, for a filter choosing several at once. */
+/** A FILTER, so unlike `ProgramPicker` it reaches retired programs — students are still on them. */
 export function ProgramMultiPicker({
   value,
   onChange,
@@ -191,9 +191,8 @@ export function ProgramMultiPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) =>
-      api.admin.programs.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
+    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.FILTER, search],
+    fetchPage: (page) => api.admin.programs.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 
   return (
@@ -236,7 +235,7 @@ export function EventMultiPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.PICKER, search],
+    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.FILTER, search],
     fetchPage: (page) => api.admin.events.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 

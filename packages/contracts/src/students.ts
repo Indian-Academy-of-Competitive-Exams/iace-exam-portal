@@ -297,6 +297,10 @@ export const setStudentTestBlockedSchema = z.object({ isTestBlocked: z.boolean()
 export type SetStudentTestBlockedBody = z.infer<typeof setStudentTestBlockedSchema>;
 
 /** Admin routes are namespaced so a future student-facing `/students` cannot collide. */
+/** Paged, because the report scope picker must reach a sitting older than any cap would keep. */
+export const studentSittingsQuerySchema = paginationQuerySchema;
+export type StudentSittingsQueryInput = z.input<typeof studentSittingsQuerySchema>;
+
 export const ADMIN_STUDENT_ROUTES = {
   list: '/admin/students',
   create: '/admin/students',
@@ -305,4 +309,5 @@ export const ADMIN_STUDENT_ROUTES = {
   setActive: (id: string) => `/admin/students/${id}/active`,
   setTestBlocked: (id: string) => `/admin/students/${id}/test-blocked`,
   erasure: (id: string) => `/admin/students/${id}/erasure`,
+  sittings: (id: string) => `/admin/students/${id}/sittings`,
 } as const;

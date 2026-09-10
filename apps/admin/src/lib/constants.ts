@@ -525,9 +525,12 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
 };
 
-/** One student's share links, and the sittings the picker offers — both cards read the one row set. */
+/** One student's share links. The sittings a SHARE may open are capped; a report's picker is not. */
 export const studentSharesQueryKey = (studentId: string) =>
   [...QUERY_KEYS.STUDENT, studentId, 'shares'] as const;
+
+export const studentSittingsQueryKey = (studentId: string) =>
+  [...QUERY_KEYS.STUDENT, studentId, 'sittings'] as const;
 
 /** Keyed by what the report is OF, so switching sitting or scope never reads a stale one. */
 export const studentReportQueryKey = (
@@ -539,7 +542,10 @@ export const studentReportQueryKey = (
 /** Segments that qualify a key, shared because a picker and the list it feeds must agree. */
 export const QUERY_SCOPES = {
   NAMED: 'named',
+  /** A CHOOSER: it attaches something, so it offers only what is still running. */
   PICKER: 'picker',
+  /** A FILTER: it narrows a list, so it must reach a retired value or those rows go missing. */
+  FILTER: 'filter',
 } as const;
 
 /**

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useInfinitePages } from '@iace/app-kit';
 import {
   EVALUATION_MODE,
   FEATURE_KEYS,
+  PAGE_SIZE_MAX,
   PERFORMANCE_SCOPES,
   paperCounts,
   sittingLabel,
@@ -34,7 +36,7 @@ import { api } from '../lib/api';
 import {
   PERFORMANCE_SCOPE_LABELS,
   studentReportQueryKey,
-  studentSharesQueryKey,
+  studentSittingsQueryKey,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
@@ -58,12 +60,13 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
 
   const canRead = can(FEATURE_KEYS.STUDENT_PERFORMANCE);
 
-  const held = useQuery({
-    queryKey: studentSharesQueryKey(studentId),
-    queryFn: () => api.admin.students.performanceShares(studentId),
+  // Its own list, paged: the share endpoint caps at what a LINK may open, which is a different rule.
+  const held = useInfinitePages({
+    queryKey: studentSittingsQueryKey(studentId),
+    fetchPage: (page) => api.admin.students.sittings(studentId, { page, pageSize: PAGE_SIZE_MAX }),
     enabled: canRead,
   });
-  const sittings = held.data?.sittings ?? [];
+  const sittings = held.items;
   const attemptId = sittings.some((row) => row.attemptId === picked)
     ? picked
     : (sittings[0]?.attemptId ?? '');
@@ -99,6 +102,10 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
                     value: row.attemptId,
                     label: sittingLabel(row),
                   }))}
+                  hasMore={held.hasMore}
+                  onLoadMore={held.loadMore}
+                  isLoading={held.isLoading}
+                  isLoadingMore={held.isLoadingMore}
                 />
               )}
             </Field>
@@ -123,7 +130,7 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
         <Body
           sittingsLoading={held.isLoading}
           sittingsFailed={held.isError}
-          onRetrySittings={() => void held.refetch()}
+          onRetrySittings={held.retry}
           sittingCount={sittings.length}
           report={report}
           onOneSitting={onOneSitting}
