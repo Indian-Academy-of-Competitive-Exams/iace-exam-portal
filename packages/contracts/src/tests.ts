@@ -718,6 +718,9 @@ export const seriesTestRowSchema = z.object({
   title: z.string().nullable(),
   order: z.number().int().nullable(),
   unlockAt: z.string().nullable(),
+  status: testStatusSchema,
+  /** Whether the paper is frozen. Draft, finalized and offered are three states, not two. */
+  isLocked: z.boolean(),
   /** Nothing that has been sat may be taken out of a series, so the row says whether it has. */
   attemptCount: z.number().int(),
 });

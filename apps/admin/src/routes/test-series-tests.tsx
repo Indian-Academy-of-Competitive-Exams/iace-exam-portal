@@ -27,6 +27,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
+import { TestStatusBadges } from '../components/test-status-badges';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { opensLabel } from '../lib/schedule-format';
@@ -129,6 +130,19 @@ function testColumns(
       header: 'Opens',
       className: 'max-w-56',
       cell: (row) => <TruncatedText>{opensLabel(row.unlockAt)}</TruncatedText>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      className: 'max-w-48',
+      cell: (row) => <TestStatusBadges status={row.status} isLocked={row.isLocked} />,
+    },
+    {
+      key: 'sat',
+      header: 'Sat',
+      numeric: true,
+      className: 'max-w-24',
+      cell: (row) => row.attemptCount,
     },
     {
       key: 'actions',

@@ -14,7 +14,6 @@ import {
 } from '@iace/contracts';
 import { useListScreen } from '@iace/app-kit/browser';
 import {
-  Badge,
   ConfirmDialog,
   DropdownMenuItem,
   ListView,
@@ -26,6 +25,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
+import { TestStatusBadges } from '../components/test-status-badges';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES, TEST_STATUS_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
@@ -104,7 +104,11 @@ function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Te
       numeric: true,
       cell: (test) => durationLabel(test.durationSec),
     },
-    { key: 'status', header: 'Status', cell: (test) => <TestStatusBadges test={test} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (test) => <TestStatusBadges status={test.status} isLocked={test.isLocked} />,
+    },
     {
       key: 'actions',
       className: 'text-right',
@@ -144,17 +148,6 @@ export function TestsList() {
       empty={{ title: 'No tests yet', hint: 'Open a series and build the first one inside it.' }}
       emptyFiltered="No tests match those filters"
     />
-  );
-}
-
-function TestStatusBadges({ test }: Readonly<{ test: Test }>) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      {test.isLocked ? <Badge variant="warning">Finalized</Badge> : null}
-      <Badge variant={test.status === TEST_STATUS.ACTIVE ? 'success' : 'neutral'}>
-        {TEST_STATUS_LABELS[test.status]}
-      </Badge>
-    </span>
   );
 }
 

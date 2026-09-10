@@ -267,10 +267,11 @@ describe('OfferingService — offering a test', () => {
 });
 
 describe('OfferingService — a series and the tests it holds', () => {
-  it('lists what a series holds, with the times and whether it has been sat', async () => {
-    const { service } = serviceWith(inSeries({ title: 'Mock 1', opensAt: OPENS_AT }), [
-      { testId: 'tst_1' },
-    ]);
+  it('lists what a series holds — its times, its state and whether it has been sat', async () => {
+    const { service } = serviceWith(
+      inSeries({ title: 'Mock 1', opensAt: OPENS_AT, isLocked: true, status: TEST_STATUS.ACTIVE }),
+      [{ testId: 'tst_1' }],
+    );
 
     const rows = await service.testsIn('srs_1');
 
@@ -280,6 +281,8 @@ describe('OfferingService — a series and the tests it holds', () => {
         title: 'Mock 1',
         order: 1,
         unlockAt: OPENS_AT.toISOString(),
+        status: TEST_STATUS.ACTIVE,
+        isLocked: true,
         attemptCount: 1,
       },
     ]);

@@ -43,6 +43,8 @@ const SERIES_TEST_SELECT = {
   title: true,
   seriesOrder: true,
   opensAt: true,
+  status: true,
+  isLocked: true,
   _count: { select: { attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
@@ -178,6 +180,8 @@ export class OfferingService {
       title: row.title,
       order: row.seriesOrder,
       unlockAt: row.opensAt?.toISOString() ?? null,
+      status: row.status,
+      isLocked: row.isLocked,
       attemptCount: row._count.attempts,
     }));
   }
