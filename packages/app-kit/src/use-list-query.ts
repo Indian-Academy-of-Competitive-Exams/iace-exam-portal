@@ -24,6 +24,9 @@ export interface ListQueryResult<TItem> {
   isLoading: boolean;
   /** Whether a page has ever arrived — the footer stays hidden until one has. */
   hasLoaded: boolean;
+  /** A page that did not arrive. Without it a failed list renders as an empty one. */
+  isError: boolean;
+  retry: () => void;
   setPage: (page: number) => void;
   setPageSize: (size: number) => void;
   /** Spread straight onto `<Pagination />`. */
@@ -87,6 +90,8 @@ export function useListQuery<TItem, TFilters extends object>(options: {
     pageSize,
     isLoading: query.isLoading,
     hasLoaded: query.data !== undefined,
+    isError: query.isError,
+    retry: () => void query.refetch(),
     setPage,
     setPageSize,
     pagination: {

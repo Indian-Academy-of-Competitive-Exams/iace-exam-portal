@@ -129,8 +129,8 @@ function Body({
           filters={[STATUS_FILTER]}
           columns={columns}
           rowKey={(row) => row.questionId}
-          empty="This paper served no questions."
-          emptyFiltered="No question matches that filter."
+          empty="This paper served no questions"
+          emptyFiltered="No question matches that filter"
           expand={
             split
               ? {

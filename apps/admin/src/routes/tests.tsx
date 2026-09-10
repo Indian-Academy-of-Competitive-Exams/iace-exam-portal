@@ -141,8 +141,8 @@ export function TestsList() {
       filters={TEST_FILTERS}
       columns={columns}
       rowKey={(test) => test.id}
-      empty="No tests yet. Open a series and build the first one inside it."
-      emptyFiltered="No tests match those filters."
+      empty={{ title: 'No tests yet', hint: 'Open a series and build the first one inside it.' }}
+      emptyFiltered="No tests match those filters"
     />
   );
 }

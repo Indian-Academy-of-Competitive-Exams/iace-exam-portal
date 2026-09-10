@@ -42,7 +42,7 @@ const PANELS = {
 
 type Panel = (typeof PANELS)[keyof typeof PANELS];
 
-const NO_TEST = 'Choose a test to watch.';
+const NO_TEST = 'Choose a test to watch';
 
 const STATUS_VARIANT = {
   IN_PROGRESS: 'info',
@@ -104,7 +104,7 @@ export function LiveOpsPage() {
                 total={counts?.active}
                 columns={sittingColumns}
                 isLoading={board.isLoading}
-                empty="Nobody is sitting this test right now."
+                empty="Nobody is sitting this test right now"
               />
             ),
           },
@@ -118,7 +118,7 @@ export function LiveOpsPage() {
                 total={counts?.stuck}
                 columns={sittingColumns}
                 isLoading={board.isLoading}
-                empty="Nothing is waiting to be swept."
+                empty="Nothing is waiting to be swept"
               />
             ),
           },
@@ -131,7 +131,7 @@ export function LiveOpsPage() {
                 rows={board.data?.recent ?? []}
                 rowKey={(row) => row.attemptId}
                 isLoading={board.isLoading}
-                empty={testId === '' ? NO_TEST : 'No sitting has landed in the last half hour.'}
+                empty={testId === '' ? NO_TEST : 'No sitting has landed in the last half hour'}
                 footer={
                   <ShowingSome
                     shown={board.data?.recent.length ?? 0}

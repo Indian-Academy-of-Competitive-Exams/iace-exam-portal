@@ -136,7 +136,7 @@ export function AdminsPage() {
             refresh();
           }}
         />
-        <ListView list={admins} columns={columns} rowKey={(a) => a.id} empty="No admins yet." />
+        <ListView list={admins} columns={columns} rowKey={(a) => a.id} empty="No admins yet" />
       </TableFrame>
     </SuperAdminOnly>
   );

@@ -235,7 +235,7 @@ function Items({
         rows={items}
         rowKey={(item) => item.paperQuestionId}
         isLoading={false}
-        empty="No questions folded yet."
+        empty="No questions folded yet"
         expand={{
           label: (item) => `Option spread for question ${item.order}`,
           render: (item) => <ItemPanel item={item} />,

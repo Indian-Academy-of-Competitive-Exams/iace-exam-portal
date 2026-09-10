@@ -359,11 +359,15 @@ function seriesColumns(
 function SeriesList({
   series,
   isLoading,
+  isError,
+  onRetry,
   busy,
   onRevoke,
 }: Readonly<{
   series: readonly StudentSeriesAccess[];
   isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
   busy: boolean;
   onRevoke: (row: StudentSeriesAccess) => void;
 }>) {
@@ -375,9 +379,12 @@ function SeriesList({
       rows={series}
       rowKey={(row) => row.id}
       isLoading={isLoading}
+      isError={isError}
+      error="This student's series did not load."
+      onRetry={onRetry}
       skeletonRows={3}
       scroll={{}}
-      empty={<Alert variant="info">Nothing reaches this student yet.</Alert>}
+      empty="Nothing reaches this student yet"
     />
   );
 }
@@ -447,7 +454,7 @@ function EventsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         rowKey={(event) => event.id}
         isLoading={false}
         scroll={{}}
-        empty={<Alert variant="info">This student is not a candidate on any event.</Alert>}
+        empty="This student is not a candidate on any event"
       />
 
       <ConfirmDialog
@@ -549,6 +556,8 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         <SeriesList
           series={series.data ?? []}
           isLoading={series.isLoading}
+          isError={series.isError}
+          onRetry={() => void series.refetch()}
           busy={revoke.isPending}
           onRevoke={setRevoking}
         />

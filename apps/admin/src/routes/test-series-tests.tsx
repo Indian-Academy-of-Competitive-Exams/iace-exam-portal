@@ -78,7 +78,10 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
-        empty="No test in this series yet. Build the first one here; its Offer step moves it to another series later."
+        empty={{
+          title: 'No test in this series yet',
+          hint: 'Build the first one here; its Offer step moves it to another series later.',
+        }}
       />
 
       {opening ? (

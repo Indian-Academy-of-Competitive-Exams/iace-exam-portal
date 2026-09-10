@@ -163,8 +163,11 @@ export function ProgramsList({
             </Alert>
           )
         }
-        empty="No programs yet. Add the first one — a series can then be aimed at it."
-        emptyFiltered="No programs match those filters."
+        empty={{
+          title: 'No programs yet',
+          hint: 'Add the first one — a series can then be aimed at it.',
+        }}
+        emptyFiltered="No programs match those filters"
       />
     </>
   );

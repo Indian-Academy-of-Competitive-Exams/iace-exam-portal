@@ -148,8 +148,11 @@ export function BaseConfigsPage() {
         filters={CONFIG_FILTERS}
         columns={columns}
         rowKey={(config) => config.id}
-        empty="No base configurations yet. Build the first one — every test hangs its shape off one."
-        emptyFiltered="No configurations match those filters."
+        empty={{
+          title: 'No base configurations yet',
+          hint: 'Build the first one — every test hangs its shape off one.',
+        }}
+        emptyFiltered="No configurations match those filters"
       />
     </TableFrame>
   );

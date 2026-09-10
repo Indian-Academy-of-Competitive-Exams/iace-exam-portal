@@ -94,7 +94,7 @@ export function AnnouncementsPage() {
           render: (row) => <AnnouncementPanel announcement={row} />,
           label: () => 'Delivery',
         }}
-        empty="No announcements yet."
+        empty="No announcements yet"
       />
     </TableFrame>
   );

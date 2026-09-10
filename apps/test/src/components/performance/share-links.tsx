@@ -14,7 +14,6 @@ import {
 } from '@iace/contracts';
 import { absoluteUrl } from '@iace/app-kit/browser';
 import {
-  Alert,
   Badge,
   Button,
   Combobox,
@@ -166,8 +165,6 @@ export function ShareLinks() {
     <div className="flex flex-col gap-4">
       <SectionHeading title="Shared links" />
 
-      {held.isError ? <Alert variant="danger">Your shared links did not load.</Alert> : null}
-
       <div className="flex flex-wrap items-end gap-3">
         <Field htmlFor="shareSitting" label="Sitting" className="min-w-56 flex-1">
           {({ id, 'aria-describedby': describedBy }) => (
@@ -217,9 +214,12 @@ export function ShareLinks() {
         rows={held.data?.shares ?? []}
         rowKey={(share) => share.id}
         isLoading={held.isLoading}
+        isError={held.isError}
+        error="Your shared links did not load."
+        onRetry={() => void held.refetch()}
         skeletonRows={2}
         scroll={{}}
-        empty={<Alert variant="info">You have not shared a report yet.</Alert>}
+        empty="You have not shared a report yet"
       />
 
       <ConfirmDialog

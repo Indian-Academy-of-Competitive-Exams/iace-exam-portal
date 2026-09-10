@@ -141,7 +141,7 @@ export function BranchesPage() {
         rows={branches}
         rowKey={(branch) => branch.id}
         isLoading={false}
-        empty="No branches yet."
+        empty="No branches yet"
       />
     </TableFrame>
   );

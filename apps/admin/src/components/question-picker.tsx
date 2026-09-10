@@ -265,8 +265,8 @@ export function QuestionChooser({
         columns={columns}
         rowKey={(question) => question.id}
         selection={selection}
-        empty="The bank holds no live question for this section yet."
-        emptyFiltered="No question matches those filters."
+        empty="The bank holds no live question for this section yet"
+        emptyFiltered="No question matches those filters"
       />
 
       {scrolled ? (

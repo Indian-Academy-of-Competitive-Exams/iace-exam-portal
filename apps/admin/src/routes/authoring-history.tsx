@@ -206,8 +206,8 @@ export function AuthoringHistoryPage() {
         filters={filterSpec}
         columns={columns}
         rowKey={(question) => question.id}
-        empty="You have not written a question yet."
-        emptyFiltered="None of your questions match those filters."
+        empty="You have not written a question yet"
+        emptyFiltered="None of your questions match those filters"
       />
     </TableFrame>
   );

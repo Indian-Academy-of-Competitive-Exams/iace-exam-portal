@@ -183,8 +183,11 @@ export function SeriesList() {
       filters={filterSpec}
       columns={columns}
       rowKey={(row) => row.id}
-      empty="No series yet. Build the first one — a test reaches a student only through one."
-      emptyFiltered="No series match those filters."
+      empty={{
+        title: 'No series yet',
+        hint: 'Build the first one — a test reaches a student only through one.',
+      }}
+      emptyFiltered="No series match those filters"
     />
   );
 }

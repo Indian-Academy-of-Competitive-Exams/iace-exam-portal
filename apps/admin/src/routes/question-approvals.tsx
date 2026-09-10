@@ -242,8 +242,8 @@ export function QuestionApprovalsPage() {
         columns={columns}
         rowKey={(question) => question.id}
         selection={{ selected: chosen, onChange: setSelected, label: 'Select every draft shown' }}
-        empty="Nothing waiting for review."
-        emptyFiltered="No drafts match those filters."
+        empty="Nothing waiting for review"
+        emptyFiltered="No drafts match those filters"
       />
     </TableFrame>
   );

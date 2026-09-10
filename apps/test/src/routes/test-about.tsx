@@ -132,7 +132,7 @@ export function TestAboutPage() {
                   rows={brief.data.sections}
                   rowKey={(row) => row.id}
                   isLoading={brief.isLoading}
-                  empty="This paper has no sections."
+                  empty="This paper has no sections"
                 />
               </SurfaceCard>
 
@@ -156,7 +156,7 @@ export function TestAboutPage() {
                   rows={past}
                   rowKey={(row) => row.attemptId}
                   isLoading={trend.isLoading}
-                  empty="You have not sat this test yet."
+                  empty="You have not sat this test yet"
                 />
               </Section>
             ) : null}

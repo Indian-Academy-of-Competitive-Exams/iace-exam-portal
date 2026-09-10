@@ -1,6 +1,13 @@
-import { type ReactNode } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { Avatar, Card, DataTable, TruncatedText, cn, type DataTableColumn } from '@iace/ui';
+import {
+  Avatar,
+  Card,
+  DataTable,
+  TruncatedText,
+  cn,
+  type DataTableColumn,
+  type EmptyMessage,
+} from '@iace/ui';
 import {
   LEADERBOARD_MEASURES,
   type Leaderboard,
@@ -69,7 +76,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
   );
 }
 
-export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty: ReactNode }>) {
+export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty: EmptyMessage }>) {
   return (
     <DataTable
       columns={standingColumns(board.measure)}

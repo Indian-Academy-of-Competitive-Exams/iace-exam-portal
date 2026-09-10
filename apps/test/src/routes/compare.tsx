@@ -65,7 +65,7 @@ export function ComparePanel() {
           {board.data ? (
             <>
               <Podium rows={board.data.podium} />
-              <Standings board={board.data} empty="Nobody has been ranked on this paper yet." />
+              <Standings board={board.data} empty="Nobody has been ranked on this paper yet" />
             </>
           ) : null}
         </Section>

@@ -55,7 +55,7 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
           rows={report.sections}
           rowKey={(row) => row.baseConfigSectionId}
           isLoading={false}
-          empty="This paper had no sections."
+          empty="This paper had no sections"
         />
       </Section>
 

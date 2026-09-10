@@ -275,7 +275,7 @@ export function ProfilePage() {
             name="profile.educationDetails"
             title="Education"
             addLabel="Add a qualification"
-            empty="No qualifications added yet."
+            empty="No qualifications added yet"
             columns={[
               { key: 'level', label: 'Qualification', span: 3 },
               { key: 'board', label: 'Board / University', span: 3 },
@@ -291,7 +291,7 @@ export function ProfilePage() {
             name="profile.pastExamHistory"
             title="Exams sat elsewhere"
             addLabel="Add an exam"
-            empty="No previous exams added yet."
+            empty="No previous exams added yet"
             columns={[
               { key: 'exam', label: 'Exam', span: 3 },
               { key: 'year', label: 'Year', type: 'number', span: 1.4 },

@@ -16,7 +16,6 @@ import {
 } from '@iace/contracts';
 import { absoluteUrl } from '@iace/app-kit/browser';
 import {
-  Alert,
   Badge,
   Button,
   Combobox,
@@ -240,9 +239,12 @@ export function SharedReportsCard({
           rows={held.data?.shares ?? []}
           rowKey={(share) => share.id}
           isLoading={held.isLoading}
+          isError={held.isError}
+          error="This student's shared links did not load."
+          onRetry={() => void held.refetch()}
           skeletonRows={2}
           scroll={{}}
-          empty={<Alert variant="info">No report of this student has been shared.</Alert>}
+          empty="No report of this student has been shared"
         />
       </div>
 

@@ -335,8 +335,8 @@ export function StudentsPage() {
         banner={banner}
         columns={columns}
         rowKey={(student) => student.id}
-        empty="No students yet. Add one, or import a roster."
-        emptyFiltered="No students match those filters."
+        empty={{ title: 'No students yet', hint: 'Add one, or import a roster.' }}
+        emptyFiltered="No students match those filters"
       />
     </TableFrame>
   );

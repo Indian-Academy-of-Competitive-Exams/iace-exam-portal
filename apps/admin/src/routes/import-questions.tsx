@@ -139,8 +139,11 @@ export function ImportQuestionsPage() {
             colSpan={5}
             empty={
               plan === null
-                ? 'Choose an Excel file to see exactly what it would do. Nothing is written until you press Import.'
-                : 'No question rows in that file.'
+                ? {
+                    title: 'Nothing to preview yet',
+                    hint: 'Choose an Excel file. Nothing is written until you press Import.',
+                  }
+                : 'No question rows in that file'
             }
           >
             {plan?.rows.map((row) => (

@@ -68,8 +68,8 @@ const view = (over: Partial<ListState<Row>> = {}, props = {}) =>
         filters={FILTERS}
         columns={columns}
         rowKey={(r) => r.id}
-        empty="No rows yet. Add the first one."
-        emptyFiltered="No rows match those filters."
+        empty="No rows yet"
+        emptyFiltered="No rows match those filters"
         {...props}
       />
     </TooltipProvider>,
@@ -79,15 +79,45 @@ describe('ListView', () => {
   it('says nothing matched when a filter is set, not that there are none', () => {
     view({ values: { q: 'ram' } });
 
-    assert.ok(screen.getByText('No rows match those filters.'));
-    assert.equal(screen.queryByText('No rows yet. Add the first one.'), null);
+    assert.ok(screen.getByText('No rows match those filters'));
+    assert.equal(screen.queryByText('No rows yet'), null);
   });
 
   it('says there are none when no filter is set', () => {
     view();
 
-    assert.ok(screen.getByText('No rows yet. Add the first one.'));
-    assert.equal(screen.queryByText('No rows match those filters.'), null);
+    assert.ok(screen.getByText('No rows yet'));
+    assert.equal(screen.queryByText('No rows match those filters'), null);
+  });
+
+  it('says the rows did not load rather than that there are none', () => {
+    view({ isError: true, retry: () => {} });
+
+    assert.ok(screen.getByText('Could not load this list.'));
+    assert.equal(screen.queryByText('No rows yet'), null);
+    assert.ok(screen.getByRole('button', { name: 'Retry' }));
+  });
+
+  it('offers the retry back to the caller', () => {
+    let tried = 0;
+    view({ isError: true, retry: () => (tried += 1) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    assert.equal(tried, 1);
+  });
+
+  it('keeps the rows a failed refetch could not replace', () => {
+    view({ rows: [{ id: '1', name: 'Ramesh' }], isError: true, retry: () => {} });
+
+    assert.ok(screen.getByText('Ramesh'));
+    assert.equal(screen.queryByText('Could not load this list.'), null);
+  });
+
+  it('says it did not load even while a filter is set, never that none match', () => {
+    view({ values: { q: 'ram' }, isError: true, retry: () => {} });
+
+    assert.ok(screen.getByText('Could not load this list.'));
+    assert.equal(screen.queryByText('No rows match those filters'), null);
   });
 
   it('holds the pager back until a page has arrived', () => {
@@ -118,7 +148,7 @@ describe('ListView', () => {
 
   it('draws no filter bar for a list nobody filters', () => {
     render(
-      <ListView list={state()} columns={columns} rowKey={(r) => r.id} empty="No admins yet." />,
+      <ListView list={state()} columns={columns} rowKey={(r) => r.id} empty="No admins yet" />,
     );
 
     assert.equal(screen.queryByRole('button', { name: /Filters/ }), null);
@@ -155,14 +185,14 @@ describe('ListView — a multi filter', () => {
     view({ values: { difficulty: [] } });
 
     assert.equal(screen.queryByRole('button', { name: /Clear filters/ }), null);
-    assert.ok(screen.getByText('No rows yet. Add the first one.'));
+    assert.ok(screen.getByText('No rows yet'));
   });
 
   it('counts as one active filter once something is chosen', () => {
     view({ values: { difficulty: ['LOW', 'HIGH'] } });
 
     assert.ok(screen.getByRole('button', { name: /Clear filters/ }));
-    assert.ok(screen.getByText('No rows match those filters.'));
+    assert.ok(screen.getByText('No rows match those filters'));
   });
 
   it('hands a set back, never a joined string', () => {

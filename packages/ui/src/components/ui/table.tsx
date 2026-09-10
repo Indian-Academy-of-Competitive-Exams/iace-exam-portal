@@ -1,6 +1,14 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Skeleton } from './skeleton';
+import { Button } from './button';
+import {
+  EmptyState,
+  emptyCopy,
+  EMPTY_STATE_KINDS,
+  type EmptyMessage,
+  type EmptyStateKind,
+} from './empty-state';
 import { useOnCard } from './card';
 import { useInTableFrame } from './table-frame';
 
@@ -166,23 +174,57 @@ function TableSkeleton({ rows, columns }: Readonly<{ rows: number; columns: numb
   );
 }
 
-/**
- * Loading, empty, or rows. `empty` is the caller's — only they know if a filter is set.
- * Loading draws skeleton rows; pass `loading` to show a message instead.
- */
+const DID_NOT_LOAD = 'Could not load this list.';
+
+/** A dead end without the retry: the reader's only other move is reloading the page. */
+function TableFailure({
+  colSpan,
+  error,
+  onRetry,
+}: Readonly<{ colSpan: number; error?: EmptyMessage; onRetry?: () => void }>) {
+  const copy = emptyCopy(error ?? DID_NOT_LOAD);
+  const retry = onRetry ? (
+    <Button variant="outline" size="sm" onClick={onRetry}>
+      Retry
+    </Button>
+  ) : null;
+
+  return (
+    <TableEmpty colSpan={colSpan}>
+      <EmptyState
+        size="sm"
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        {...copy}
+        action={copy.action ?? retry}
+      />
+    </TableEmpty>
+  );
+}
+
+/** Loading, failed, empty, or rows — in that order, so a failure never reads as an absence. */
 export function TableState({
   isLoading,
   isEmpty,
+  isError = false,
   colSpan,
   empty,
+  emptyKind = EMPTY_STATE_KINDS.EMPTY,
+  error,
+  onRetry,
   loading,
   skeletonRows = 5,
   children,
 }: Readonly<{
   isLoading: boolean;
   isEmpty: boolean;
+  /** Only replaces the rows when there are none: a refetch that failed keeps the good ones. */
+  isError?: boolean;
   colSpan: number;
-  empty: React.ReactNode;
+  empty: EmptyMessage;
+  emptyKind?: EmptyStateKind;
+  error?: EmptyMessage;
+  onRetry?: () => void;
+  /** Overrides the loading skeleton with a message. Rarely what you want. */
   loading?: React.ReactNode;
   /** Roughly what the list usually holds — enough to fill the fold, not more. */
   skeletonRows?: number;
@@ -195,6 +237,14 @@ export function TableState({
       <TableEmpty colSpan={colSpan}>{loading}</TableEmpty>
     );
   }
-  if (isEmpty) return <TableEmpty colSpan={colSpan}>{empty}</TableEmpty>;
+
+  if (isError && isEmpty) return <TableFailure colSpan={colSpan} error={error} onRetry={onRetry} />;
+  if (isEmpty) {
+    return (
+      <TableEmpty colSpan={colSpan}>
+        <EmptyState size="sm" kind={emptyKind} {...emptyCopy(empty)} />
+      </TableEmpty>
+    );
+  }
   return <>{children}</>;
 }

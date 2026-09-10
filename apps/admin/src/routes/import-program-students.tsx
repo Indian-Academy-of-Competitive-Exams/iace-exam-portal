@@ -109,8 +109,11 @@ export function ImportProgramStudentsPage() {
             colSpan={4}
             empty={
               plan === null
-                ? 'Choose a file to see exactly what it would do. Nothing is written until you press Import.'
-                : 'No rows in that file.'
+                ? {
+                    title: 'Nothing to preview yet',
+                    hint: 'Choose a file. Nothing is written until you press Import.',
+                  }
+                : 'No rows in that file'
             }
           >
             {plan?.rows.map((row) => (

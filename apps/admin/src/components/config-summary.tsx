@@ -116,7 +116,7 @@ export function ConfigSummaryButton({ config }: Readonly<{ config: BaseConfigDet
                 rows={config.sections}
                 rowKey={(section) => section.id}
                 isLoading={false}
-                empty="This configuration has no sections."
+                empty="This configuration has no sections"
               />
             </section>
           </DialogBody>

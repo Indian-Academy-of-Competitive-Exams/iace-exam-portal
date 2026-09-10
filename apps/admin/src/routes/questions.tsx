@@ -214,8 +214,8 @@ export function QuestionsPage() {
         filters={filterSpec}
         columns={columns}
         rowKey={(question) => question.id}
-        empty="No questions yet. Import a sheet, or add one."
-        emptyFiltered="No questions match those filters."
+        empty={{ title: 'No questions yet', hint: 'Import a sheet, or add one.' }}
+        emptyFiltered="No questions match those filters"
       />
     </TableFrame>
   );

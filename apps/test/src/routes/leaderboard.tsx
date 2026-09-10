@@ -238,7 +238,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
       </Section>
 
       <Section title="Ranks" meta={plural(board.cohortSize, 'student')}>
-        <Standings board={board} empty="Everyone on this board is on the podium." />
+        <Standings board={board} empty="Everyone on this board is on the podium" />
       </Section>
     </div>
   );

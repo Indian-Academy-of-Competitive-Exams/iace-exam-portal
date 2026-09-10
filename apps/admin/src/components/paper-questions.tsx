@@ -175,7 +175,10 @@ export function PaperQuestions({
           editable ? { selected: picked, onChange: setPicked, label: 'Select question' } : undefined
         }
         isLoading={isLoading}
-        empty="Nothing chosen for this section yet. Tick questions in the bank and add them."
+        empty={{
+          title: 'Nothing chosen for this section yet',
+          hint: 'Tick questions in the bank and add them.',
+        }}
       />
 
       <ConfirmDialog

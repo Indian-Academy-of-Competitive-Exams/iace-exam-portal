@@ -287,8 +287,8 @@ export function AuditActivityPage() {
             </span>
           </Alert>
         }
-        empty={`No activity in the last ${AUDIT_WINDOW_DAYS} days.`}
-        emptyFiltered={`No activity matches those filters in the last ${AUDIT_WINDOW_DAYS} days.`}
+        empty={`No activity in the last ${AUDIT_WINDOW_DAYS} days`}
+        emptyFiltered={`No activity matches those filters in the last ${AUDIT_WINDOW_DAYS} days`}
       />
     </TableFrame>
   );
@@ -316,7 +316,7 @@ export function AuditImportsPage() {
         list={imports}
         columns={columns}
         rowKey={(row) => row.id}
-        empty="No import runs yet."
+        empty="No import runs yet"
       />
     </TableFrame>
   );

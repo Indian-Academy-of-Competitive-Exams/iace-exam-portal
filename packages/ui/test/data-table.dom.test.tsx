@@ -67,7 +67,7 @@ describe('DataTable', () => {
     render(table({ rows: [] }));
 
     assert.equal(
-      screen.getByText('No students yet.').getAttribute('colspan'),
+      screen.getByText('No students yet.').closest('td')?.getAttribute('colspan'),
       String(columns.length),
     );
   });

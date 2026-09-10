@@ -132,7 +132,7 @@ export function SeriesPage() {
                 rows={series.tests}
                 rowKey={(row) => row.id}
                 isLoading={catalog.isLoading}
-                empty="Nothing has been put in this series yet."
+                empty="Nothing has been put in this series yet"
               />
             </Section>
           </>

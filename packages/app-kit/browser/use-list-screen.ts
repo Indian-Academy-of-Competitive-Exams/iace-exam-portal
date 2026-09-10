@@ -43,6 +43,8 @@ export function useListScreen<
     total: list.total,
     isLoading: list.isLoading,
     hasLoaded: list.hasLoaded,
+    isError: list.isError,
+    retry: list.retry,
     pagination: list.pagination,
     values: spec.values,
     setFilter: spec.setFilter,

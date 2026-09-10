@@ -8,6 +8,7 @@ import {
   type DataTableSelection,
 } from './data-table';
 import { DatePicker } from './date-picker';
+import { EMPTY_STATE_KINDS, type EmptyMessage } from './empty-state';
 import { Field } from './field';
 import { NotchedField } from './notched-field';
 import { FilterBar } from './filter-bar';
@@ -83,6 +84,9 @@ export interface ListState<TRow> extends FilterState {
   isLoading: boolean;
   /** Whether a page has ever arrived — the pager stays hidden until one has. */
   hasLoaded: boolean;
+  /** A page that did not arrive. Without it a failed list says there is nothing to list. */
+  isError?: boolean;
+  retry?: () => void;
   /** Absent for a list that loads in full. */
   pagination?: PaginationProps;
   /** The other way a long list ends: it scrolls and pages itself, so there is no pager. */
@@ -95,9 +99,11 @@ export interface ListViewProps<TRow> {
   filters?: readonly ListFilter[];
   columns: readonly DataTableColumn<TRow>[];
   rowKey: (row: TRow) => string;
-  empty: React.ReactNode;
+  empty: EmptyMessage;
   /** Shown instead of `empty` when a filter is set — "none match" sends the reader elsewhere. */
-  emptyFiltered?: React.ReactNode;
+  emptyFiltered?: EmptyMessage;
+  /** Shown instead of either when the page did not load. Defaults to a retry. */
+  error?: EmptyMessage;
   /** Above the filters: what this list is pinned to, when a link arrived carrying it. */
   banner?: React.ReactNode;
   /** First in the filter row: a mandatory scope the list is read through, never one of its filters. */
@@ -258,6 +264,7 @@ export function ListView<TRow>({
   rowKey,
   empty,
   emptyFiltered,
+  error,
   banner,
   leading,
   skeletonRows,
@@ -269,6 +276,9 @@ export function ListView<TRow>({
   const activeCount = activeFilterCount(list.values, spec);
   const bar =
     spec.length > 0 || leading ? <FilterRow state={list} filters={spec} leading={leading} /> : null;
+
+  const narrowed = activeCount > 0 && emptyFiltered !== undefined;
+  const message = narrowed ? emptyFiltered : empty;
 
   const head =
     banner || bar ? (
@@ -288,7 +298,11 @@ export function ListView<TRow>({
       selection={selection}
       expand={expand}
       scroll={list.scroll}
-      empty={activeCount > 0 && emptyFiltered ? emptyFiltered : empty}
+      isError={list.isError}
+      error={error}
+      onRetry={list.retry}
+      empty={message}
+      emptyKind={narrowed ? EMPTY_STATE_KINDS.FILTERED : EMPTY_STATE_KINDS.EMPTY}
       footer={list.hasLoaded && list.pagination ? <Pagination {...list.pagination} /> : null}
     />
   );

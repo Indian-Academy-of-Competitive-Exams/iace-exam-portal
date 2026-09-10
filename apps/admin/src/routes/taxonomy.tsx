@@ -195,8 +195,11 @@ function SubjectsList() {
       filters={SUBJECT_FILTERS}
       columns={columns}
       rowKey={(row) => row.id}
-      empty="No subjects yet. Add the first one — questions are filed under it."
-      emptyFiltered="No subjects match that search."
+      empty={{
+        title: 'No subjects yet',
+        hint: 'Add the first one — questions are filed under it.',
+      }}
+      emptyFiltered="No subjects match that search"
     />
   );
 }
@@ -291,8 +294,8 @@ function TopicsList() {
       filters={TOPIC_FILTERS}
       columns={columns}
       rowKey={(row) => row.id}
-      empty="No topics here yet."
-      emptyFiltered="No topics match those filters."
+      empty="No topics here yet"
+      emptyFiltered="No topics match those filters"
     />
   );
 }

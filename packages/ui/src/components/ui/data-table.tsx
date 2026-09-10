@@ -5,6 +5,7 @@ import { nearTheEnd } from '../../lib/scroll';
 import { Checkbox } from './checkbox';
 import { useInTableFrame } from './table-frame';
 import { Spinner } from './spinner';
+import { EMPTY_STATE_KINDS, type EmptyMessage, type EmptyStateKind } from './empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableState } from './table';
 
 export interface DataTableColumn<TRow> {
@@ -23,8 +24,14 @@ export interface DataTableProps<TRow> {
   rows: readonly TRow[];
   rowKey: (row: TRow) => string;
   isLoading: boolean;
-  /** Shown when there are no rows. The caller writes it — see below. */
-  empty: React.ReactNode;
+  /** Shown when there are no rows. A bare string is its title; `EmptyState` draws it. */
+  empty: EmptyMessage;
+  /** Which absence `empty` is. `ListView` sets it; a bare table only ever has the one. */
+  emptyKind?: EmptyStateKind;
+  /** The rows did not load. Without this a failed fetch renders as an empty list. */
+  isError?: boolean;
+  error?: EmptyMessage;
+  onRetry?: () => void;
   /** Overrides the loading skeleton with a message. Rarely what you want. */
   loading?: React.ReactNode;
   /** Roughly how many rows this list usually shows. */
@@ -76,6 +83,10 @@ export function DataTable<TRow>({
   rowKey,
   isLoading,
   empty,
+  emptyKind = EMPTY_STATE_KINDS.EMPTY,
+  isError,
+  error,
+  onRetry,
   loading,
   skeletonRows,
   footer,
@@ -149,8 +160,12 @@ export function DataTable<TRow>({
           <TableState
             isLoading={isLoading}
             isEmpty={rows.length === 0}
+            isError={isError}
             colSpan={span}
             empty={empty}
+            emptyKind={emptyKind}
+            error={error}
+            onRetry={onRetry}
             loading={loading}
             skeletonRows={skeletonRows}
           >

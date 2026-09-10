@@ -196,8 +196,8 @@ export function ExamsPage() {
         filters={EXAM_FILTERS}
         columns={columns}
         rowKey={(exam) => exam.id}
-        empty="No exams yet. Add the first one — every stage hangs off it."
-        emptyFiltered="No exams match those filters."
+        empty={{ title: 'No exams yet', hint: 'Add the first one — every stage hangs off it.' }}
+        emptyFiltered="No exams match those filters"
         expand={{
           render: (exam) => <ExamStages exam={exam} canWrite={canWrite} />,
           label: (exam) => `Show the stages under ${exam.name}`,
@@ -608,7 +608,10 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
         list={stages}
         columns={columns}
         rowKey={(stage) => stage.id}
-        empty="No stages here yet. A base config, a series and a test all hang off one."
+        empty={{
+          title: 'No stages here yet',
+          hint: 'A base config, a series and a test all hang off one.',
+        }}
       />
     </div>
   );
