@@ -55,7 +55,7 @@ export function AttemptCompare({
       max: latest.maxMarks,
       display: String(latest.score),
       segments: marksAgainst(latest.score, latest.maxMarks),
-      caption: `${percentLabel(latest.percentage)} · ${percentLabel(latest.accuracy)} accuracy`,
+      caption: percentLabel(latest.percentage),
       tone: 'current',
     },
     {
@@ -66,7 +66,7 @@ export function AttemptCompare({
       max: best.maxMarks,
       display: String(best.score),
       segments: marksAgainst(best.score, best.maxMarks),
-      caption: `${percentLabel(best.percentage)} · ${percentLabel(best.accuracy)} accuracy`,
+      caption: percentLabel(best.percentage),
     },
   ];
 
