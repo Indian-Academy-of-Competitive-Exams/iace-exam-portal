@@ -143,8 +143,11 @@ export class QuestionsService {
   }
 
   /** The same page in FULL, images signed together — a document to read, not a table to scan. */
-  async page(query: QuestionListQuery): Promise<Paginated<QuestionDetail>> {
-    const [rows, total] = await this.pageOf(query);
+  async page(
+    query: QuestionListQuery,
+    scope?: Prisma.QuestionWhereInput,
+  ): Promise<Paginated<QuestionDetail>> {
+    const [rows, total] = await this.pageOf(query, scope);
     const items = await this.signedAll(rows.map(toDetail));
     return { items, page: query.page, pageSize: query.pageSize, total };
   }

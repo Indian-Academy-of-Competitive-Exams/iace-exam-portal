@@ -105,6 +105,42 @@ describe('ProofreadingService.document', () => {
     assert.equal(page.total, 1);
     assert.equal(page.items[0]?.status, QUESTION_STATUS.DRAFT);
   });
+
+  /** A reader's flags gate ACTIVATION, so a live question is past the point their reading changes. */
+  it('leaves a live question out even when nothing was filtered', async () => {
+    const { proofreading, questions } = build();
+    await questions.create(draft(), AUTHOR);
+    await questions.create(
+      draft({
+        status: QUESTION_STATUS.ACTIVE,
+        stem: { en: 'What is 25% of 200?', hi: '200 का 25% कितना है?' },
+      }),
+      AUTHOR,
+    );
+
+    const page = await proofreading.document(anyQuestion);
+
+    assert.equal(page.total, 1);
+    assert.equal(page.items[0]?.status, QUESTION_STATUS.DRAFT);
+  });
+
+  /** Forced rather than filtered: a hand-edited URL must not widen the document. */
+  it('leaves a live question out even when the query asks for one', async () => {
+    const { proofreading, questions } = build();
+    await questions.create(
+      draft({
+        status: QUESTION_STATUS.ACTIVE,
+        stem: { en: 'What is 25% of 200?', hi: '200 का 25% कितना है?' },
+      }),
+      AUTHOR,
+    );
+
+    const page = await proofreading.document(
+      questionListQuerySchema.parse({ status: QUESTION_STATUS.ACTIVE }),
+    );
+
+    assert.equal(page.total, 0);
+  });
 });
 
 describe('ProofreadingService — raising and settling', () => {
@@ -121,29 +157,6 @@ describe('ProofreadingService — raising and settling', () => {
     assert.equal(flag.status, QUESTION_FLAG_STATUS.OPEN);
     assert.equal(flag.onCurrentVersion, true);
     assert.equal(prisma.flags[0]?.versionId, prisma.questions[0]?.currentVersionId);
-  });
-
-  /** The failure this prevents: an edited question hiding that the flag was raised on older words. */
-  it('reads as raised against an older version once the question is published and edited', async () => {
-    const { proofreading, questions } = build();
-    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), AUTHOR);
-    await proofreading.raise(
-      created.id,
-      { category: QUESTION_FLAG_CATEGORY.AWKWARD, comment: 'Reads badly.' },
-      REVIEWER,
-    );
-
-    await questions.update(
-      created.id,
-      draft({
-        status: QUESTION_STATUS.ACTIVE,
-        stem: { en: 'What is 25% of 200?', hi: '200 का 25% कितना है?' },
-      }),
-      AUTHOR,
-    );
-    const page = await proofreading.document(anyQuestion);
-
-    assert.equal(page.items[0]?.flags[0]?.onCurrentVersion, false);
   });
 
   it('records who settled it and when', async () => {

@@ -42,6 +42,8 @@ export interface PageFrameProps {
   tabs?: TableFrameTabs;
   /** Hands the scrolling to the children — for a body whose table should scroll, not the page. */
   fills?: boolean;
+  /** Pinned under the body, drawing no rule of its own: a `Pagination` brings its own edge. */
+  footer?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
 }
@@ -53,6 +55,7 @@ export function PageFrame({
   filtersBesideTitle = false,
   tabs,
   fills = false,
+  footer,
   children,
   className,
 }: Readonly<PageFrameProps>) {
@@ -102,6 +105,7 @@ export function PageFrame({
     <div data-page-frame className={FILLS}>
       {top}
       {body}
+      {footer ? <div className="shrink-0">{footer}</div> : null}
     </div>
   );
 

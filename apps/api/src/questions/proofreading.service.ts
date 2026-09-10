@@ -4,6 +4,7 @@ import {
   AppException,
   ErrorCodes,
   QUESTION_FLAG_STATUS,
+  QUESTION_STATUS,
   type CreateQuestionFlagBody,
   type Paginated,
   type ProofreadQuestion,
@@ -46,7 +47,8 @@ export class ProofreadingService {
 
   /** A filtered selection, read top to bottom: every question in full, with what has been said about it. */
   async document(query: QuestionListQuery): Promise<Paginated<ProofreadQuestion>> {
-    const page = await this.questions.page(query);
+    // Forced, not filtered: proof-reading gates ACTIVATION, so a live question is past reading (§11).
+    const page = await this.questions.page(query, { status: QUESTION_STATUS.DRAFT });
     const ids = page.items.map((question) => question.id);
 
     const [rows, versions] = await Promise.all([

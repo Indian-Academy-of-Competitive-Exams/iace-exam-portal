@@ -281,6 +281,10 @@ sitting pin exactly what it served while the bank carries on moving underneath.
   question nobody has drawn stays version 1 however often it is saved. Otherwise the edit inserts a
   new immutable version and repoints `currentVersionId`, so what a paper pinned never moves under
   it.
+- **Proof-reading reads DRAFTS and nothing else.** A reader's flags gate ACTIVATION, so a question
+  that is already live is past the point their reading changes, and an archived one is past caring.
+  The server forces `status: DRAFT` rather than filtering on it, so a hand-edited URL cannot widen
+  the document; the screen has no Status control, because there is no longer a choice to offer.
 - **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion`,
   `AttemptQuestion` or `TestQuestionStat` references may be returned to DRAFT or deleted; the rule
   counts those three tables before it allows the move, so it refuses before a foreign key does.
