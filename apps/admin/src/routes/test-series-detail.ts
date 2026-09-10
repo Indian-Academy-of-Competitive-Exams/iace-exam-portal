@@ -52,6 +52,8 @@ export const SERVER_FIELDS = [
   'eventId',
   'kind',
   'evaluationMode',
+  'sequentialTests',
+  'progressive',
 ] as const;
 
 export const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({

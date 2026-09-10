@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, Clock, Plus, SquarePen } from 'lucide-react';
+import { ArrowRightLeft, Clock, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import {
@@ -24,10 +24,12 @@ import {
   FormSection,
   RowActions,
   TruncatedText,
+  linkVariants,
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
 import { TestStatusBadges } from '../components/test-status-badges';
+import { durationLabel } from '../lib/duration';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { opensLabel } from '../lib/schedule-format';
@@ -108,6 +110,8 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
   );
 }
 
+const UNTITLED = 'Untitled test';
+
 function testColumns(
   options: Readonly<{
     canWrite: boolean;
@@ -122,8 +126,19 @@ function testColumns(
     {
       key: 'title',
       header: 'Test',
-      className: 'w-full max-w-0',
-      cell: (row) => <TruncatedText>{row.title}</TruncatedText>,
+      className: 'w-full max-w-0 font-medium',
+      cell: (row) => (
+        <Link to={ROUTES.TEST(row.testId)} className={linkVariants()}>
+          <TruncatedText>{row.title ?? UNTITLED}</TruncatedText>
+        </Link>
+      ),
+    },
+    { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.totalQuestions },
+    {
+      key: 'duration',
+      header: 'Duration',
+      numeric: true,
+      cell: (row) => durationLabel(row.durationSec),
     },
     {
       key: 'opens',
@@ -134,28 +149,15 @@ function testColumns(
     {
       key: 'status',
       header: 'Status',
-      className: 'max-w-48',
       cell: (row) => <TestStatusBadges status={row.status} isLocked={row.isLocked} />,
     },
-    {
-      key: 'sat',
-      header: 'Sat',
-      numeric: true,
-      className: 'max-w-24',
-      cell: (row) => row.attemptCount,
-    },
+    { key: 'sat', header: 'Sat', numeric: true, cell: (row) => row.attemptCount },
     {
       key: 'actions',
       className: 'text-right',
       cell: (row) =>
         canWrite ? (
-          <RowActions label={`Actions for ${row.title ?? 'this test'}`}>
-            <DropdownMenuItem asChild>
-              <Link to={ROUTES.TEST(row.testId)}>
-                <SquarePen aria-hidden />
-                Open
-              </Link>
-            </DropdownMenuItem>
+          <RowActions label={`Actions for ${row.title ?? UNTITLED}`}>
             <DropdownMenuItem onSelect={() => onOpening(row)}>
               <Clock aria-hidden />
               Set when it opens

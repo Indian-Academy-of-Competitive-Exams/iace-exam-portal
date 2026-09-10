@@ -283,6 +283,8 @@ describe('OfferingService — a series and the tests it holds', () => {
         unlockAt: OPENS_AT.toISOString(),
         status: TEST_STATUS.ACTIVE,
         isLocked: true,
+        totalQuestions: 100,
+        durationSec: 3600,
         attemptCount: 1,
       },
     ]);

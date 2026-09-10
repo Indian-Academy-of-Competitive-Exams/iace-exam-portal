@@ -7,7 +7,11 @@ import {
   TEST_STATUS,
   allowsCohortScheduling,
   type EvaluationMode,
+  scopedDurationSec,
+  scopedQuestionCount,
+  TEST_SCOPE,
   type SeriesTestRow,
+  type TestScopeRef,
   type SetSeriesTestUnlockBody,
   type SetProgramUnlockBody,
   type SetTestSeriesBody,
@@ -45,6 +49,24 @@ const SERIES_TEST_SELECT = {
   opensAt: true,
   status: true,
   isLocked: true,
+  // A test's questions and clock are DERIVED: a scoped paper is its own sections' worth, not the config's.
+  scope: true,
+  scopeRef: true,
+  baseConfig: {
+    select: {
+      totalQuestions: true,
+      durationSec: true,
+      sections: {
+        select: {
+          id: true,
+          moduleId: true,
+          questionCount: true,
+          durationSec: true,
+          perQuestionSec: true,
+        },
+      },
+    },
+  },
   _count: { select: { attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
@@ -182,6 +204,16 @@ export class OfferingService {
       unlockAt: row.opensAt?.toISOString() ?? null,
       status: row.status,
       isLocked: row.isLocked,
+      totalQuestions:
+        row.scope === TEST_SCOPE.FULL
+          ? row.baseConfig.totalQuestions
+          : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRefOf(row)),
+      durationSec: scopedDurationSec(
+        row.baseConfig.sections,
+        row.baseConfig,
+        row.scope,
+        scopeRefOf(row),
+      ),
       attemptCount: row._count.attempts,
     }));
   }
@@ -283,4 +315,9 @@ export class OfferingService {
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }
+}
+
+/** Prisma hands JSON back as `JsonValue`; the shape it holds is the scope's own. */
+function scopeRefOf(row: { scopeRef: Prisma.JsonValue }): TestScopeRef | null {
+  return (row.scopeRef as TestScopeRef | null) ?? null;
 }
