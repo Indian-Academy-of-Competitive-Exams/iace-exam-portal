@@ -111,7 +111,7 @@ export function SeriesPage() {
           </>
         ) : null}
         {catalog.data && !series ? (
-          <Alert variant="warning">This series is not one you reach.</Alert>
+          <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="This series is not one you reach" />
         ) : null}
 
         {series && progress ? (

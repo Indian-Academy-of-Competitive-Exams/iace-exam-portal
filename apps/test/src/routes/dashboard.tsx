@@ -172,17 +172,16 @@ function NextUp({
   const row = waiting[0];
   if (!row) {
     return (
-      /* ui-copy-ok: rule */
-      <Alert variant="info">
-        <span className="flex flex-wrap items-center justify-between gap-3">
-          <span>
-            Nothing is open for you to sit. Your branch opens the next one when it is ready.
-          </span>
+      <EmptyState
+        title="Nothing open"
+        /* ui-copy-ok: rule */
+        hint="Your branch opens the next one when it is ready."
+        action={
           <Button asChild size="sm" variant="outline">
             <Link to={ROUTES.TESTS}>Go to your tests</Link>
           </Button>
-        </span>
-      </Alert>
+        }
+      />
     );
   }
 
