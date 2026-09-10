@@ -209,7 +209,7 @@ function TestBuilder({
   const finish = (event: MouseEvent<HTMLAnchorElement>) => {
     if (unsavedOffer === 0) return;
     event.preventDefault();
-    setAsking(true);
+    if (!offer.recheck()) setAsking(true);
   };
 
   const done = doneSteps(detail);

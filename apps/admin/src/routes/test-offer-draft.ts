@@ -1,4 +1,4 @@
-import { TEST_STATUS, type TestDetail } from '@iace/contracts';
+import { TEST_STATUS, testIsOpen, type TestDetail } from '@iace/contracts';
 import {
   changesOf,
   instantOf,
@@ -59,6 +59,30 @@ export function offerChangesOf(saved: OfferDraft, held: OfferDraft): OfferChange
     count: schedule.count + Number(offering || retiring),
   };
 }
+
+export interface PassedOpenings {
+  opening: boolean;
+  programs: ReadonlySet<string>;
+}
+
+export const NONE_PASSED: PassedOpenings = { opening: false, programs: new Set() };
+
+/** Only what Done would write is judged: a saved opening that has since passed is history. */
+export function passedOpenings(saved: OfferDraft, held: OfferDraft, now: Date): PassedOpenings {
+  const changes = changesOf(saved.schedule, held.schedule);
+  const passed = (wall: string) => testIsOpen(instantOf(wall), now);
+  const { opensAt } = held.schedule;
+
+  return {
+    opening: changes.opening && opensAt !== '' && passed(opensAt),
+    programs: new Set(
+      changes.written.filter((row) => passed(row.opensAt)).map((row) => row.programCode),
+    ),
+  };
+}
+
+export const anyPassed = (passed: PassedOpenings): boolean =>
+  passed.opening || passed.programs.size > 0;
 
 /** Retired first and offered last, so no student reaches a test on a half-written offer. */
 export async function applyOffer(

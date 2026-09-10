@@ -158,6 +158,12 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   for a candidate who needs it folds in.
 - `TestProgramUnlock` staggers one test's opening for one program. A student in two programs takes
   the **earliest**, so the slower cohort never holds them back.
+- **An opening being set lies ahead of now**, for the test and for a program alike. A time already
+  passed would open the test the moment it saved, so `OfferingService` refuses it
+  (`OPENING_HAS_PASSED`, judged by the same `testIsOpen` the catalog reads) and the Offer step says
+  so under the field before Done asks. Only a NEW time is judged: an opening that has since passed
+  is history, and saving anything else on the test never asks it again. Blank stays allowed on the
+  test's own opening, and opens it as soon as a student reaches it.
 - **All three of those are `RANKED` only: a practice test's whole schedule is `opensAt`.** Each
   answers to a rank and to nothing else — a cutoff so a cohort sits together, an allowance so a
   candidate who needs longer is not ranked as though they did not, a stagger to put one cohort

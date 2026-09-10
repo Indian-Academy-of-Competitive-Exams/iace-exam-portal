@@ -378,6 +378,10 @@ export function testIsOpen(opensAt: string | null, now: Date): boolean {
   return opensAt === null || Date.parse(opensAt) <= now.getTime();
 }
 
+/** A new opening `testIsOpen` already calls open would open the test the moment it saved. */
+export const OPENING_HAS_PASSED =
+  'That time has already passed. An opening has to be in the future.';
+
 // ============================================================================
 // The student's catalog — every series they reach, resolved from exam, program,
 // grant and branch. A series has no window; each TEST carries its own, and

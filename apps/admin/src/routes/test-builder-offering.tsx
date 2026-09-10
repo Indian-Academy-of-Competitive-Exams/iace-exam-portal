@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
+  OPENING_HAS_PASSED,
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
+  todayISO,
   type TestDetail,
 } from '@iace/contracts';
 import {
@@ -25,6 +27,7 @@ import {
   type OfferChanges,
   type OfferDraft,
   type OfferWrites,
+  type PassedOpenings,
 } from './test-offer-draft';
 import type { OfferHold, ProgramRefusal } from './use-offer-draft';
 
@@ -50,7 +53,13 @@ export function OfferStep({ detail, offer }: Readonly<{ detail: TestDetail; offe
   return (
     <>
       <SeriesSection detail={detail} />
-      <ScheduleSection detail={detail} held={held} refused={offer.refused} onEdit={edit} />
+      <ScheduleSection
+        detail={detail}
+        held={held}
+        passed={offer.passed}
+        refused={offer.refused}
+        onEdit={edit}
+      />
       <OfferSection detail={detail} saved={saved} held={held} onEdit={edit} />
     </>
   );
@@ -90,17 +99,25 @@ function SeriesSection({ detail }: Readonly<{ detail: TestDetail }>) {
 function ScheduleSection({
   detail,
   held,
+  passed,
   refused,
   onEdit,
 }: Readonly<{
   detail: TestDetail;
   held: OfferDraft;
+  passed: PassedOpenings;
   refused: ProgramRefusal | null;
   onEdit: EditOffer;
 }>) {
   const { schedule } = held;
   const ranked = allowsCohortScheduling(detail.evaluationMode);
   const sat = detail.attemptCount > 0;
+  const today = todayISO();
+
+  const programError = (programCode: string): string | undefined => {
+    if (refused?.programCode === programCode) return refused.message;
+    return passed.programs.has(programCode) ? OPENING_HAS_PASSED : undefined;
+  };
 
   const setSchedule = (next: Partial<ScheduleDraft>) =>
     onEdit({ schedule: { ...schedule, ...next } });
@@ -130,6 +147,7 @@ function ScheduleSection({
               ? 'A test stops opening again once anybody has sat it.'
               : 'Blank opens it the moment a student reaches it.'
           }
+          error={passed.opening ? OPENING_HAS_PASSED : undefined}
         >
           {(control) => (
             <DateTimePicker
@@ -138,6 +156,7 @@ function ScheduleSection({
               aria-describedby={control['aria-describedby']}
               value={schedule.opensAt}
               onChange={(opensAt) => setSchedule({ opensAt })}
+              minDate={today}
               disabled={sat}
             />
           )}
@@ -155,7 +174,8 @@ function ScheduleSection({
               key={row.programCode}
               row={row}
               index={index}
-              error={refused?.programCode === row.programCode ? refused.message : undefined}
+              minDate={today}
+              error={programError(row.programCode)}
               onChange={(next) => setProgram(row.programCode, next)}
             />
           ))}
@@ -181,11 +201,13 @@ function ScheduleSection({
 function ProgramOpeningRow({
   row,
   index,
+  minDate,
   error,
   onChange,
 }: Readonly<{
   row: ProgramOpening;
   index: number;
+  minDate: string;
   error?: string;
   onChange: (opensAt: string) => void;
 }>) {
@@ -205,6 +227,7 @@ function ProgramOpeningRow({
           aria-describedby={control['aria-describedby']}
           value={row.opensAt}
           onChange={onChange}
+          minDate={minDate}
         />
       )}
     </Field>

@@ -1,7 +1,13 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, EVALUATION_MODE, TEST_STATUS } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  EVALUATION_MODE,
+  OPENING_HAS_PASSED,
+  TEST_STATUS,
+} from '@iace/contracts';
 import { OfferingService } from '../src/tests/offering.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { AuditContext } from '../src/audit';
@@ -37,6 +43,8 @@ const inSeries = (over: Parameters<typeof makeTest>[0] = {}) =>
   makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1, ...over });
 
 const OPENS_AT = new Date('2026-09-01T04:30:00.000Z');
+/** Before every instant these tests set, so no opening is refused for having passed by accident. */
+const NOW = new Date('2026-08-01T00:00:00.000Z');
 
 describe('OfferingService — a test belongs to one series', () => {
   it('replaces the series on the test itself and names the new one back', async () => {
@@ -203,9 +211,12 @@ describe('OfferingService — a re-save cannot wipe the clock', () => {
   it('leaves the program openings the test had alone', async () => {
     const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));
     prisma.programCatalog.push({ code: 'FOUNDATION' });
-    await service.setProgramUnlock('tst_1', 'FOUNDATION', {
-      opensAt: new Date(OPENS_AT.getTime() - 3_600_000).toISOString(),
-    });
+    await service.setProgramUnlock(
+      'tst_1',
+      'FOUNDATION',
+      { opensAt: new Date(OPENS_AT.getTime() - 3_600_000).toISOString() },
+      NOW,
+    );
 
     await service.moveToSeries('tst_1', { testSeriesId: 'srs_2' });
 
@@ -293,12 +304,30 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('sets when a test opens inside a series, and busts that catalog', async () => {
     const { service, events } = serviceWith(inSeries());
 
-    const rows = await service.setUnlock('srs_1', 'tst_1', {
-      unlockAt: OPENS_AT.toISOString(),
-    });
+    const rows = await service.setUnlock(
+      'srs_1',
+      'tst_1',
+      { unlockAt: OPENS_AT.toISOString() },
+      NOW,
+    );
 
     assert.equal(rows[0]?.unlockAt, OPENS_AT.toISOString());
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [{ testSeriesId: 'srs_1' }]);
+  });
+
+  /** The failure this prevents: a time already gone is saved, and the test opens the moment it lands. */
+  it('refuses an opening that is not ahead of now, down to the instant', async () => {
+    const { service, prisma, events } = serviceWith(inSeries());
+
+    const error = await service
+      .setUnlock('srs_1', 'tst_1', { unlockAt: OPENS_AT.toISOString() }, OPENS_AT)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.deepEqual(error.fieldErrors?.unlockAt, [OPENING_HAS_PASSED]);
+    assert.equal(prisma.tests[0]?.opensAt, null);
+    assert.equal(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).length, 0);
   });
 
   /** `Test.opensAt` is a frozen field; this endpoint is its other door and must refuse the same. */
@@ -306,7 +335,7 @@ describe('OfferingService — a series and the tests it holds', () => {
     const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }), [{ testId: 'tst_1' }]);
 
     const error = await service
-      .setUnlock('srs_1', 'tst_1', { unlockAt: '2026-10-01T04:30:00.000Z' })
+      .setUnlock('srs_1', 'tst_1', { unlockAt: '2026-10-01T04:30:00.000Z' }, NOW)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -372,7 +401,7 @@ describe('OfferingService — a practice test opens once, for everybody', () => 
     const earlier = new Date(OPENS_AT.getTime() - 3_600_000).toISOString();
 
     await assert.rejects(
-      () => service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: earlier }),
+      () => service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: earlier }, NOW),
       refusedField('opensAt'),
     );
     assert.equal(prisma.programUnlocks.length, 0);
@@ -391,12 +420,32 @@ describe('OfferingService — a program opens a test earlier, never later', () =
   it('stores an unlock that opens the test earlier for one program', async () => {
     const { service, prisma } = unlockService();
 
-    const rows = await service.setProgramUnlock('tst_1', 'FOUNDATION', {
-      opensAt: EARLIER.toISOString(),
-    });
+    const rows = await service.setProgramUnlock(
+      'tst_1',
+      'FOUNDATION',
+      { opensAt: EARLIER.toISOString() },
+      NOW,
+    );
 
     assert.deepEqual(rows, [{ programCode: 'FOUNDATION', opensAt: EARLIER.toISOString() }]);
     assert.equal(prisma.programUnlocks.length, 1);
+  });
+
+  it('refuses a program opening that has already passed', async () => {
+    const { service, prisma } = unlockService();
+
+    const error = await service
+      .setProgramUnlock(
+        'tst_1',
+        'FOUNDATION',
+        { opensAt: EARLIER.toISOString() },
+        new Date(EARLIER.getTime() + 60_000),
+      )
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.deepEqual(error.fieldErrors?.opensAt, [OPENING_HAS_PASSED]);
+    assert.equal(prisma.programUnlocks.length, 0);
   });
 
   /** Entry closes at one instant for everyone, so a later opening only shortens this cohort's window. */
@@ -405,7 +454,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     const later = new Date(OPENS_AT.getTime() + 1000).toISOString();
 
     const error = await service
-      .setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: later })
+      .setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: later }, NOW)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -418,7 +467,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     const { service } = unlockService(null);
 
     const error = await service
-      .setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() })
+      .setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() }, NOW)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -429,7 +478,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     const { service } = unlockService();
 
     const error = await service
-      .setProgramUnlock('tst_1', 'NO SUCH PROGRAM', { opensAt: EARLIER.toISOString() })
+      .setProgramUnlock('tst_1', 'NO SUCH PROGRAM', { opensAt: EARLIER.toISOString() }, NOW)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -439,22 +488,28 @@ describe('OfferingService — a program opens a test earlier, never later', () =
   /** The rule inverts if nothing revalidates: 03:30 was an hour EARLY, and is an hour LATE at 02:30. */
   it('drops an unlock the series opening overtakes when the test is moved earlier', async () => {
     const { service, prisma } = unlockService();
-    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() }, NOW);
 
-    await service.setUnlock('srs_1', 'tst_1', {
-      unlockAt: new Date(EARLIER.getTime() - 3_600_000).toISOString(),
-    });
+    await service.setUnlock(
+      'srs_1',
+      'tst_1',
+      { unlockAt: new Date(EARLIER.getTime() - 3_600_000).toISOString() },
+      NOW,
+    );
 
     assert.deepEqual(prisma.programUnlocks, []);
   });
 
   it('leaves it alone when the test is moved LATER and it still opens the cohort early', async () => {
     const { service, prisma } = unlockService();
-    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() }, NOW);
 
-    await service.setUnlock('srs_1', 'tst_1', {
-      unlockAt: new Date(OPENS_AT.getTime() + 3_600_000).toISOString(),
-    });
+    await service.setUnlock(
+      'srs_1',
+      'tst_1',
+      { unlockAt: new Date(OPENS_AT.getTime() + 3_600_000).toISOString() },
+      NOW,
+    );
 
     assert.equal(prisma.programUnlocks.length, 1);
   });
@@ -462,7 +517,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
   /** `setProgramUnlock` refuses to CREATE a row against a cleared opening, so none may survive one. */
   it('leaves no orphan behind when the opening is cleared entirely', async () => {
     const { service, prisma } = unlockService();
-    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() }, NOW);
 
     await service.setUnlock('srs_1', 'tst_1', { unlockAt: null });
 
@@ -472,7 +527,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
 
   it('takes the unlock back, leaving the cohort with the test’s own opening', async () => {
     const { service, prisma } = unlockService();
-    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() }, NOW);
 
     const rows = await service.clearProgramUnlock('tst_1', 'FOUNDATION');
 

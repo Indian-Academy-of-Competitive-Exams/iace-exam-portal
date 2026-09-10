@@ -4,8 +4,10 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  OPENING_HAS_PASSED,
   TEST_STATUS,
   allowsCohortScheduling,
+  testIsOpen,
   type EvaluationMode,
   scopedDurationSec,
   scopedQuestionCount,
@@ -99,6 +101,15 @@ function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date):
   const message = testOpensAt === null ? TEST_HAS_NO_OPENING : OPENS_BEFORE_THE_TEST_DOES;
   throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
     fieldErrors: { opensAt: [message] },
+  });
+}
+
+/** Only a new time is judged: what is already saved never passes through here again. */
+function assertOpeningAhead(opensAt: Date, now: Date, field: string): void {
+  if (!testIsOpen(opensAt.toISOString(), now)) return;
+
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, OPENING_HAS_PASSED, {
+    fieldErrors: { [field]: [OPENING_HAS_PASSED] },
   });
 }
 
@@ -223,11 +234,13 @@ export class OfferingService {
     testSeriesId: string,
     testId: string,
     input: SetSeriesTestUnlockBody,
+    now: Date = new Date(),
   ): Promise<SeriesTestRow[]> {
     const test = await this.requireTestIn(testSeriesId, testId);
     // `Test.opensAt` is a frozen field, and this is its other door — see TEST_UNFROZEN_FIELDS.
     this.assertNotOpened(test);
     const opensAt = dateOrNull(input.unlockAt);
+    if (opensAt !== null) assertOpeningAhead(opensAt, now, 'unlockAt');
 
     await this.prisma.$transaction(async (tx) => {
       await tx.test.update({ where: { id: testId }, data: { opensAt } });
@@ -255,11 +268,13 @@ export class OfferingService {
     testId: string,
     programCode: string,
     input: SetProgramUnlockBody,
+    now: Date = new Date(),
   ): Promise<TestProgramUnlock[]> {
     const test = await this.requireTest(testId);
     assertStaggerIsRanked(test.evaluationMode);
     await this.requireProgram(programCode);
     const opensAt = new Date(input.opensAt);
+    assertOpeningAhead(opensAt, now, 'opensAt');
     assertOpensNoLaterThanTheTest(test.opensAt, opensAt);
 
     await this.prisma.testProgramUnlock.upsert({
