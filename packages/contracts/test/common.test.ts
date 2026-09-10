@@ -9,6 +9,8 @@ import {
   newPinSchema,
   pinSchema,
   PIN_LENGTH,
+  searchQuery,
+  SEARCH_QUERY_MAX,
 } from '../src/index';
 
 const parse = (
@@ -136,5 +138,30 @@ describe('csvQuery', () => {
       read(ids, tooMany.split(',').slice(0, CSV_QUERY_MAX).join(','))?.length,
       CSV_QUERY_MAX,
     );
+  });
+});
+
+describe('searchQuery', () => {
+  const parse = (q: string) => z.object({ q: searchQuery() }).parse({ q }).q;
+
+  it('carries a term short enough to run as it was typed', () => {
+    assert.equal(parse('AP POLICE'), 'AP POLICE');
+  });
+
+  /** A pasted series name is longer than the cap; refusing the READ over it is disproportionate. */
+  it('cuts an over-long term to the cap instead of refusing the request', () => {
+    const pasted = 'AP POLICE CONSTABLE PC CIVIL APSLPRB Preliminary Written Test — Free Mocks';
+
+    assert.ok(pasted.length > SEARCH_QUERY_MAX);
+    assert.equal(parse(pasted), pasted.slice(0, SEARCH_QUERY_MAX));
+  });
+
+  it('reads a blank box as no search at all, never a search for nothing', () => {
+    assert.equal(parse(''), undefined);
+    assert.equal(parse('   '), undefined);
+  });
+
+  it('is absent when the key never came', () => {
+    assert.equal(z.object({ q: searchQuery() }).parse({}).q, undefined);
   });
 });

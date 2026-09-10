@@ -228,13 +228,16 @@ export const matchModeQuery = () => z.enum(MATCH_MODE_VALUES).optional().default
 /** The free-text box every list carries. Blank is absent, not a search for "". */
 export const SEARCH_QUERY_MAX = 64;
 
+/** A long paste is not a bad request: bound what it costs and search with what fits. */
 export const searchQuery = () =>
   z
     .string()
     .trim()
-    .max(SEARCH_QUERY_MAX)
     .optional()
-    .transform((v) => (v === '' ? undefined : v));
+    .transform((v) => {
+      const held = v?.slice(0, SEARCH_QUERY_MAX) ?? '';
+      return held === '' ? undefined : held;
+    });
 
 // The failure shape lives in ./envelope — there is one response envelope for
 // the whole API, and NestJS's default error body is not it.
