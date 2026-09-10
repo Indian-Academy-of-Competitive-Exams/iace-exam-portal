@@ -58,6 +58,8 @@ function answerFor(held: LiveAnswer | undefined, change: AnswerChange, now: Date
     timeSpentSec: timeFor(held, change),
     // The moment it was first given, kept across later saves so a flush is the same write twice.
     answeredAt: answered ? (held?.answeredAt ?? now.toISOString()) : null,
+    // The EARLIEST wins, whichever side it came from: a first touch cannot happen twice.
+    firstActionAt: earliest(held?.firstActionAt, change.firstActionAt) ?? now.toISOString(),
   };
 }
 
@@ -92,3 +94,10 @@ export function isInTime(held: HeldState, now: Date): boolean {
 }
 
 const MILLISECONDS_PER_SECOND = 1000;
+
+/** The first of two instants, either of which may be absent. A missing one never wins. */
+function earliest(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a < b ? a : b;
+}

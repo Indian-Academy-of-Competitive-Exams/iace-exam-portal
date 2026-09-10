@@ -25,6 +25,8 @@ export interface AttemptStateHandle {
   answer: (questionId: string, next: AnswerIntent) => void;
   /** Which question is on screen now, so the time on the last one can be banked. */
   open: (questionId: string | null) => void;
+  /** Banks the open question's seconds without moving off it — before a flush that must be whole. */
+  bankOpen: () => void;
   closeSection: (sectionId: string, remainingSec: number) => void;
   /** Pushes whatever is pending now — on a section change, and before submitting. */
   flush: () => Promise<void>;
@@ -36,6 +38,8 @@ const answerOf = (change: AnswerChange, held: LiveAnswer | undefined): LiveAnswe
   typedAnswer: change.typedAnswer ?? null,
   timeSpentSec: Math.max(held?.timeSpentSec ?? 0, change.timeSpentSec),
   answeredAt: held?.answeredAt ?? null,
+  // Earliest wins: a later touch is not a first one, however many times this is recomputed.
+  firstActionAt: held?.firstActionAt ?? change.firstActionAt ?? null,
 });
 
 /** What the bottom bar can say. Absent means "leave that half as it was". */
@@ -54,8 +58,16 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
   const pending = useRef(new Map<string, AnswerChange>());
   const pendingSections = useRef<Record<string, SectionProgress>>({});
   const openedAt = useRef(0);
+  const openQuestion = useRef<string | null>(null);
   const revision = useRef(0);
   const inFlight = useRef(false);
+
+  // Kept level with the state by every writer below, so banking never waits for a re-render.
+  const answersNow = useRef<Record<string, LiveAnswer>>({});
+  const remember = (next: Record<string, LiveAnswer>): Record<string, LiveAnswer> => {
+    answersNow.current = next;
+    return next;
+  };
 
   // Seeded once from the server: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
@@ -63,7 +75,7 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     void api.me.attemptState(attemptId).then((held) => {
       if (!live) return;
       // Merged under, never over: an answer given while this flew is the newer one.
-      setAnswers((mine) => ({ ...held.answers, ...mine }));
+      setAnswers((mine) => remember({ ...held.answers, ...mine }));
       setSections((mine) => ({ ...held.sections, ...mine }));
       // Never backwards: a flush racing this GET may already have moved the counter on.
       revision.current = seedRevision(revision.current, held.revision);
@@ -131,19 +143,41 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     openedAt.current = Date.now();
   }, []);
 
-  const open = useCallback((_questionId: string | null) => {
-    openedAt.current = Date.now();
+  /** Banks the seconds the open question has cost so far, and starts its clock again from now. */
+  const bankOpen = useCallback(() => {
+    const questionId = openQuestion.current;
+    if (questionId === null) return;
+
+    const now = Date.now();
+    const spent = Math.max(0, Math.round((now - openedAt.current) / 1000));
+    // The instant it came on screen, not the instant it left: that is what "first" means.
+    const change = visitFor(questionId, answersNow.current[questionId], spent, seenAtOf(openedAt));
+    openedAt.current = now;
+
+    pending.current.set(questionId, change);
+    setAnswers((held) => remember({ ...held, [questionId]: answerOf(change, held[questionId]) }));
   }, []);
+
+  const open = useCallback(
+    (questionId: string | null) => {
+      bankOpen();
+      openQuestion.current = questionId;
+      openedAt.current = Date.now();
+    },
+    [bankOpen],
+  );
 
   const answer = useCallback(
     (questionId: string, next: AnswerIntent) => {
       const spent = Math.max(0, Math.round((Date.now() - openedAt.current) / 1000));
+      const seenAt = seenAtOf(openedAt);
+      openedAt.current = Date.now();
 
       setAnswers((held) => {
-        const change = changeFor(questionId, held[questionId], next, spent);
+        const change = changeFor(questionId, held[questionId], next, spent, seenAt);
         pending.current.set(questionId, change);
         if (shouldFlushNow(pending.current.size)) void flush();
-        return { ...held, [questionId]: answerOf(change, held[questionId]) };
+        return remember({ ...held, [questionId]: answerOf(change, held[questionId]) });
       });
     },
     [flush],
@@ -162,6 +196,7 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     hasUnsaved,
     answer,
     open,
+    bankOpen,
     closeSection,
     flush,
   };
@@ -173,6 +208,7 @@ function changeFor(
   held: LiveAnswer | undefined,
   next: AnswerIntent,
   spentSec: number,
+  seenAt: string,
 ): AnswerChange {
   const option =
     next.selectedOptionId === undefined ? held?.selectedOptionId : next.selectedOptionId;
@@ -184,6 +220,28 @@ function changeFor(
     selectedOptionId: option ?? null,
     typedAnswer: null,
     timeSpentSec: (held?.timeSpentSec ?? 0) + spentSec,
+    firstActionAt: held?.firstActionAt ?? seenAt,
+  };
+}
+
+/** Leaving a question banks what it cost. It never touches the answer — only the clock and the visit. */
+function visitFor(
+  questionId: string,
+  held: LiveAnswer | undefined,
+  spentSec: number,
+  seenAt: string,
+): AnswerChange {
+  return {
+    questionId,
+    // Seen and left blank is a real state; every other state already outranks it.
+    state:
+      held?.state === undefined || held.state === ANSWER_STATE.NOT_VISITED
+        ? ANSWER_STATE.NOT_ANSWERED
+        : held.state,
+    selectedOptionId: held?.selectedOptionId ?? null,
+    typedAnswer: held?.typedAnswer ?? null,
+    timeSpentSec: (held?.timeSpentSec ?? 0) + spentSec,
+    firstActionAt: held?.firstActionAt ?? seenAt,
   };
 }
 
@@ -195,3 +253,7 @@ function stateFor(option: string | null, marked: boolean): AnswerState {
   if (option !== null) return marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED;
   return marked ? ANSWER_STATE.MARKED_REVIEW : ANSWER_STATE.NOT_ANSWERED;
 }
+
+/** An epoch ref as an instant. Zero means the clock never started, which is not a time to record. */
+const seenAtOf = (at: { current: number }): string =>
+  new Date(at.current === 0 ? Date.now() : at.current).toISOString();

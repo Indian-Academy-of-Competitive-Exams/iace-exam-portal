@@ -190,6 +190,7 @@ export class AttemptStateService {
         typedAnswer: true,
         timeSpentSec: true,
         answeredAt: true,
+        firstActionAt: true,
       },
     });
 

@@ -7,7 +7,14 @@ const FULL = 1;
 /** Empty to full while held. Long enough that a click cannot do it, short enough not to be a chore. */
 export const FILL_BUBBLE_HOLD_MS = 900;
 
+/** Under this a press is a CLICK, not a hold — it reports nothing, rather than half an answer. */
+export const FILL_BUBBLE_MIN_HOLD_MS = 200;
+
 const FILL_LABELS = ['not filled', 'partly filled', 'filled'] as const;
+
+/** Pencil strokes, not a growing dot: rings reveal outward so shading it reads as shading it. */
+const SCRIBBLE =
+  'repeating-radial-gradient(circle at 50% 50%, var(--exam-option-selected-border) 0 1.5px, transparent 1.5px 3.5px)';
 
 const describe = (fill: number): string => {
   if (fill >= FULL) return FILL_LABELS[2];
@@ -23,17 +30,28 @@ export interface FillBubbleProps {
   label: string;
   disabled?: boolean;
   holdMs?: number;
+  /** How long a press must last to count as a hold at all. */
+  minHoldMs?: number;
   className?: string;
 }
 
 /** A bubble that fills while held. It reports a number and never learns what filling one means. */
 export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
   (
-    { fill, onFillChange, label, disabled = false, holdMs = FILL_BUBBLE_HOLD_MS, className },
+    {
+      fill,
+      onFillChange,
+      label,
+      disabled = false,
+      holdMs = FILL_BUBBLE_HOLD_MS,
+      minHoldMs = FILL_BUBBLE_MIN_HOLD_MS,
+      className,
+    },
     ref,
   ) => {
     const [held, setHeld] = React.useState<number | null>(null);
     const frame = React.useRef<number | null>(null);
+    const pressedFrom = React.useRef(0);
 
     const shown = held ?? fill;
 
@@ -46,6 +64,7 @@ export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
     const start = () => {
       if (disabled || fill >= FULL || held !== null) return;
       const from = fill;
+      pressedFrom.current = from;
       const began = performance.now();
 
       const tick = (now: number) => {
@@ -68,6 +87,8 @@ export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
       stop();
       const reached = held;
       setHeld(null);
+      // Measured from the ink, not the clock: the accrual IS the elapsed time, at 1/holdMs per ms.
+      if ((reached - pressedFrom.current) * holdMs < minHoldMs) return;
       onFillChange(reached);
     };
 
@@ -87,9 +108,13 @@ export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
           shown > 0 && 'border-exam-option-selected-border',
           className,
         )}
-        onPointerDown={start}
+        onPointerDown={(event) => {
+          // Captured so a scribble that wanders off the 28px circle keeps filling instead of committing.
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+          start();
+        }}
         onPointerUp={release}
-        onPointerLeave={release}
+        onPointerCancel={release}
         onKeyDown={(event) => {
           // Space would scroll the page and Enter would fire a click; holding is the whole gesture.
           if (event.key !== ' ' || event.repeat) return;
@@ -98,10 +123,14 @@ export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
         }}
         onKeyUp={(event) => event.key === ' ' && release()}
       >
+        {/* Solid once it is full: a shaded bubble on paper has no gaps left in it. */}
         <span
           aria-hidden
-          className="size-full rounded-full bg-exam-option-selected-border transition-transform"
-          style={{ transform: `scale(${shown})` }}
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: shown >= FULL ? 'var(--exam-option-selected-border)' : SCRIBBLE,
+            clipPath: `circle(${shown * 50}% at 50% 50%)`,
+          }}
         />
       </button>
     );

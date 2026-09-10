@@ -28,6 +28,7 @@ export interface SatQuestion {
   order: number;
   baseConfigSectionId: string;
   state: QuestionReportRow['state'];
+  timeToRespondSec: number | null;
   selectedOptionId: string | null;
   typedAnswer: string | null;
   isCorrect: boolean | null;

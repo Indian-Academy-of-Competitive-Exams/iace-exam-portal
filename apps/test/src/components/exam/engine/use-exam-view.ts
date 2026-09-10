@@ -72,9 +72,13 @@ export function useExamView({
     paper.questions.map((row) => row.questionId),
     state.answers,
   );
+  // One tally, read live by the section bar and handed on unchanged when the paper goes in.
+  const effort = sectionEffort(paper.sections, paper.questions, state.answers);
 
   const submit = useMutation({
     mutationFn: async () => {
+      // The question still on screen has cost time too; bank it before the last save goes.
+      state.bankOpen();
       await state.flush();
       return api.me.submitAttempt(paper.attemptId);
     },
@@ -85,7 +89,7 @@ export function useExamView({
       await fullscreen.exit();
       onEnded({
         attemptId: submitted.attemptId,
-        sections: sectionEffort(paper.sections, paper.questions, state.answers),
+        sections: effort,
         answered: counts[ANSWER_STATE.ANSWERED] + counts[ANSWER_STATE.ANSWERED_MARKED],
         unanswered: counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED],
         markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
@@ -105,6 +109,7 @@ export function useExamView({
 
   // Moving between sections is a save point: a batch left behind is a section's worth of answers.
   const openSection = (next: string) => {
+    state.bankOpen();
     void state.flush();
     setSectionId(next);
     move(null);
@@ -148,6 +153,7 @@ export function useExamView({
     testUi: paper.testUi,
 
     sections: paper.sections,
+    effort,
     sectionId,
     section,
     reachable,
@@ -174,6 +180,8 @@ export function useExamView({
     chooseOption: (optionId) => record({ selectedOptionId: optionId }),
     bubbleAnswer: (optionId, fill) => {
       const state = omrStateFor(fill);
+      // A smudge is not an answer, so it must not pick the option either — only stop flagging it.
+      if (state === ANSWER_STATE.NOT_ANSWERED) return;
       record({ selectedOptionId: optionId, marked: state === ANSWER_STATE.ANSWERED_MARKED });
       // A full bubble IS Save & Next — the gesture does what the button used to.
       if (state === ANSWER_STATE.ANSWERED) nextQuestion();

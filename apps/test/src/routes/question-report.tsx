@@ -208,6 +208,12 @@ function columnsFor(): DataTableColumn<QuestionReportRow>[] {
       cell: (row) => seconds(row.timeSpentSec),
     },
     {
+      key: 'timeToRespond',
+      header: 'To answer',
+      numeric: true,
+      cell: (row) => (row.timeToRespondSec === null ? DASH : seconds(row.timeToRespondSec)),
+    },
+    {
       key: 'attemptRate',
       header: 'Attempted',
       numeric: true,

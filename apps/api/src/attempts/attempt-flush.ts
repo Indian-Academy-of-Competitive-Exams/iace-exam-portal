@@ -11,6 +11,7 @@ export interface FlushRow {
     state: AnswerState;
     timeSpentSec: number;
     answeredAt: Date | null;
+    firstActionAt: Date | null;
   };
 }
 
@@ -24,6 +25,7 @@ export function rowsToFlush(held: HeldState): FlushRow[] {
       state: answer.state,
       timeSpentSec: answer.timeSpentSec,
       answeredAt: answer.answeredAt === null ? null : new Date(answer.answeredAt),
+      firstActionAt: answer.firstActionAt === null ? null : new Date(answer.firstActionAt),
     },
   }));
 }
@@ -37,6 +39,7 @@ export function answersFromRows(
     typedAnswer: string | null;
     timeSpentSec: number;
     answeredAt: Date | null;
+    firstActionAt: Date | null;
   }[],
 ): Record<string, LiveAnswer> {
   const answers: Record<string, LiveAnswer> = {};
@@ -47,6 +50,7 @@ export function answersFromRows(
       typedAnswer: row.typedAnswer,
       timeSpentSec: row.timeSpentSec,
       answeredAt: row.answeredAt?.toISOString() ?? null,
+      firstActionAt: row.firstActionAt?.toISOString() ?? null,
     };
   }
   return answers;

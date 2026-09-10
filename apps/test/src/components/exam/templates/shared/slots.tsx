@@ -4,8 +4,20 @@
  * Nothing here holds state: every value and every callback comes off the view.
  */
 import { Flag, Eraser, Send } from 'lucide-react';
-import { TEST_UI } from '@iace/contracts';
-import { Alert, Badge, Button, Spinner, TabsList, TabsTrigger, Watermark, cn } from '@iace/ui';
+import { TEST_UI, type SectionEffort } from '@iace/contracts';
+import {
+  Alert,
+  Badge,
+  Button,
+  Spinner,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  Watermark,
+  cn,
+} from '@iace/ui';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
@@ -45,20 +57,37 @@ export function Timer({ view, config }: Readonly<ExamSlotProps>) {
   );
 }
 
+/** What a section costs so far, without opening it — the one thing its tab cannot show. */
+function sectionTally(effort: SectionEffort | undefined): string | null {
+  if (!effort) return null;
+  return `${effort.attempted} attempted · ${effort.unattempted} unattempted`;
+}
+
 export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
   return (
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-exam-border px-exam">
       <TabsList className="border-exam-border">
-        {view.sections.map((section) => (
-          <TabsTrigger
-            key={section.id}
-            value={section.id}
-            disabled={!view.reachable.includes(section.id)}
-            className={SWITCH[config.sectionSwitch]}
-          >
-            {section.name}
-          </TabsTrigger>
-        ))}
+        {view.sections.map((section) => {
+          const tally = sectionTally(view.effort.find((row) => row.id === section.id));
+          const trigger = (
+            <TabsTrigger
+              value={section.id}
+              disabled={!view.reachable.includes(section.id)}
+              className={SWITCH[config.sectionSwitch]}
+            >
+              {section.name}
+            </TabsTrigger>
+          );
+
+          if (!tally) return <span key={section.id}>{trigger}</span>;
+
+          return (
+            <Tooltip key={section.id}>
+              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipContent>{tally}</TooltipContent>
+            </Tooltip>
+          );
+        })}
       </TabsList>
 
       <div className="flex items-center gap-3">

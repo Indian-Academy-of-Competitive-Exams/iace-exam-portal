@@ -75,6 +75,7 @@ describe('rowsToFlush', () => {
         typedAnswer: null,
         timeSpentSec: 40,
         answeredAt: '2026-09-01T05:01:00.000Z',
+        firstActionAt: '2026-09-01T05:00:20.000Z',
       },
       q2: {
         state: ANSWER_STATE.NOT_ANSWERED,
@@ -82,6 +83,7 @@ describe('rowsToFlush', () => {
         typedAnswer: null,
         timeSpentSec: 8,
         answeredAt: null,
+        firstActionAt: '2026-09-01T05:02:00.000Z',
       },
     },
   };

@@ -112,6 +112,34 @@ describe('applyBatch', () => {
     assert.equal(cleared.answers.q1?.state, ANSWER_STATE.NOT_ANSWERED);
   });
 
+  /** A first touch happens once: a later save carrying a later stamp must not move it. */
+  it('keeps the earliest first action, whichever save carries it', () => {
+    const first = applyBatch(held(), {
+      revision: 1,
+      answers: [change({ firstActionAt: '2026-09-01T05:00:20.000Z' })],
+    });
+    const later = applyBatch(first, {
+      revision: 2,
+      answers: [change({ firstActionAt: '2026-09-01T05:09:00.000Z' })],
+    });
+
+    assert.equal(later.answers.q1?.firstActionAt, '2026-09-01T05:00:20.000Z');
+  });
+
+  /** A reloaded screen re-stamps from when IT opened the question; the older stamp still wins. */
+  it('takes an earlier first action from a later save', () => {
+    const first = applyBatch(held(), {
+      revision: 1,
+      answers: [change({ firstActionAt: '2026-09-01T05:09:00.000Z' })],
+    });
+    const earlier = applyBatch(first, {
+      revision: 2,
+      answers: [change({ firstActionAt: '2026-09-01T05:00:20.000Z' })],
+    });
+
+    assert.equal(earlier.answers.q1?.firstActionAt, '2026-09-01T05:00:20.000Z');
+  });
+
   /** Time is a TOTAL: a screen that reloads and counts from zero must not shorten the record. */
   it('never lets time spent go backwards', () => {
     const first = applyBatch(held(), { revision: 1, answers: [change({ timeSpentSec: 90 })] });

@@ -644,6 +644,8 @@ model AttemptQuestion {
   isCorrect           Boolean?
   marksAwarded        Decimal?    @db.Decimal(6, 2)
   answeredAt          DateTime?   @db.Timestamptz(3)
+  // The first touch of any kind, opening it included. `answeredAt` is the LAST answer, not the first.
+  firstActionAt       DateTime?   @db.Timestamptz(3)
 
   attempt           Attempt           @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   question          Question          @relation(fields: [questionId], references: [id])

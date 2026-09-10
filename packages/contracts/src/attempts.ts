@@ -129,6 +129,7 @@ export const attemptQuestionSchema = z.object({
   isCorrect: z.boolean().nullable(),
   marksAwarded: z.number().nullable(),
   answeredAt: z.string().nullable(),
+  firstActionAt: z.string().nullable(),
 });
 export type AttemptQuestion = z.infer<typeof attemptQuestionSchema>;
 
@@ -168,6 +169,8 @@ export const answerChangeSchema = z.object({
   typedAnswer: z.string().nullish(),
   /** Total seconds on this question so far, as the screen has counted them. */
   timeSpentSec: z.number().int().min(0),
+  /** When this student first touched it. Sent every time; the server keeps only the earliest. */
+  firstActionAt: z.string().nullish(),
 });
 export type AnswerChange = z.infer<typeof answerChangeSchema>;
 
@@ -198,6 +201,8 @@ export const liveAnswerSchema = z.object({
   timeSpentSec: z.number().int(),
   /** When the answer was GIVEN. Held here so a flush writes the same row however often it runs. */
   answeredAt: z.string().nullable(),
+  /** The first touch of any kind — opening it counts, which is what `answeredAt` cannot say. */
+  firstActionAt: z.string().nullable(),
 });
 export type LiveAnswer = z.infer<typeof liveAnswerSchema>;
 

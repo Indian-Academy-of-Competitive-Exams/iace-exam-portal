@@ -988,6 +988,8 @@ export const questionReportRowSchema = z.object({
   negativeMarks: z.number(),
   disposition: paperQuestionStatusSchema,
   timeSpentSec: z.number().int(),
+  /** Seconds from first seeing it to answering it. Null where it was never answered, or never measured. */
+  timeToRespondSec: z.number().int().nullable(),
   /** As authored. The cohort's own verdict on the same question is `systemDifficulty`. */
   predefinedDifficulty: difficultyLevelSchema.nullable(),
   // -------------------------------------------------------------------------

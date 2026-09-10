@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { FillBubble, FILL_BUBBLE_HOLD_MS } from '../src/components/ui/fill-bubble';
+import {
+  FillBubble,
+  FILL_BUBBLE_HOLD_MS,
+  FILL_BUBBLE_MIN_HOLD_MS,
+} from '../src/components/ui/fill-bubble';
 
 /** Frames are driven by hand: real rAF timing would make "released at half" a number that flakes. */
 
@@ -55,17 +59,39 @@ describe('FillBubble — holding fills it', () => {
     assert.equal(onFillChange.mock.calls[0]?.arguments[0], 1);
   });
 
-  /** The failure this prevents: a click committing an answer that cannot be taken back. */
-  it('does not fill on a press with no hold', () => {
+  /** The failure this prevents: a CLICK leaving half an answer nobody meant to give. */
+  it('reports nothing at all on a press too short to be a hold', () => {
     const onFillChange = mock.fn();
     render(bubble({ onFillChange }));
 
     fireEvent.pointerDown(screen.getByRole('radio'));
-    holdFor(1);
+    holdFor(FILL_BUBBLE_MIN_HOLD_MS - 1);
     fireEvent.pointerUp(screen.getByRole('radio'));
 
-    const reported = onFillChange.mock.calls[0]?.arguments[0] as number;
-    assert.ok(reported < 0.01, `a 1ms press reported ${reported}`);
+    assert.equal(onFillChange.mock.callCount(), 0);
+  });
+
+  it('reports a press held just past the threshold', () => {
+    const onFillChange = mock.fn();
+    render(bubble({ onFillChange }));
+
+    fireEvent.pointerDown(screen.getByRole('radio'));
+    holdFor(FILL_BUBBLE_MIN_HOLD_MS);
+    fireEvent.pointerUp(screen.getByRole('radio'));
+
+    assert.equal(onFillChange.mock.callCount(), 1);
+  });
+
+  /** The same rule when there is ink already: a click must not nudge a partial bubble either. */
+  it('reports nothing when a short press only tops up a partly filled bubble', () => {
+    const onFillChange = mock.fn();
+    render(bubble({ fill: 0.5, onFillChange }));
+
+    fireEvent.pointerDown(screen.getByRole('radio'));
+    holdFor(FILL_BUBBLE_MIN_HOLD_MS - 1);
+    fireEvent.pointerUp(screen.getByRole('radio'));
+
+    assert.equal(onFillChange.mock.callCount(), 0);
   });
 
   it('accrues from where a partly filled bubble stopped', () => {
@@ -79,7 +105,8 @@ describe('FillBubble — holding fills it', () => {
     assert.equal(onFillChange.mock.calls[0]?.arguments[0], 0.75);
   });
 
-  it('leaving the control while held reports, rather than filling forever', () => {
+  /** Scribbling a 28px circle wanders off it; the pointer is captured so that keeps filling. */
+  it('keeps filling when a scribble wanders off the control', () => {
     const onFillChange = mock.fn();
     render(bubble({ onFillChange }));
 
@@ -87,7 +114,20 @@ describe('FillBubble — holding fills it', () => {
     holdFor(FILL_BUBBLE_HOLD_MS / 2);
     fireEvent.pointerLeave(screen.getByRole('radio'));
 
+    assert.equal(onFillChange.mock.callCount(), 0);
+  });
+
+  /** The gesture taken away — the OS claiming it, say — still has to end the hold. */
+  it('reports where it stopped when the gesture is cancelled', () => {
+    const onFillChange = mock.fn();
+    render(bubble({ onFillChange }));
+
+    fireEvent.pointerDown(screen.getByRole('radio'));
+    holdFor(FILL_BUBBLE_HOLD_MS / 2);
+    fireEvent.pointerCancel(screen.getByRole('radio'));
+
     assert.equal(onFillChange.mock.callCount(), 1);
+    assert.equal(onFillChange.mock.calls[0]?.arguments[0], 0.5);
   });
 });
 

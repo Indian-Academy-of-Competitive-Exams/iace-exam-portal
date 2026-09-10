@@ -62,6 +62,8 @@ const REPORT_SELECT = {
       isCorrect: true,
       marksAwarded: true,
       timeSpentSec: true,
+      answeredAt: true,
+      firstActionAt: true,
       paperItem: { select: { marks: true, negativeMarks: true, status: true } },
       question: { select: { difficulty: true } },
     },
@@ -229,8 +231,15 @@ function toSat(row: ReportRow['questions'][number]): SatQuestion {
     negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
     disposition: row.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
     timeSpentSec: row.timeSpentSec,
+    timeToRespondSec: secondsBetween(row.firstActionAt, row.answeredAt),
     predefinedDifficulty: row.question.difficulty,
   };
+}
+
+/** Null unless BOTH instants exist: a sitting from before this was measured has neither. */
+function secondsBetween(from?: Date | null, to?: Date | null): number | null {
+  if (!from || !to) return null;
+  return Math.max(0, Math.round((to.getTime() - from.getTime()) / 1000));
 }
 
 /** The first answer the key accepts. A typed question has no option to point at instead. */

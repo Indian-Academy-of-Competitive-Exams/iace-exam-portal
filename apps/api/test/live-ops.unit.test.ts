@@ -22,6 +22,7 @@ function answer(state: LiveAnswer['state']): LiveAnswer {
     state,
     selectedOptionId: state === ANSWER_STATE.NOT_VISITED ? null : 'o1',
     typedAnswer: null,
+    firstActionAt: null,
     timeSpentSec: 10,
     answeredAt: null,
   };
