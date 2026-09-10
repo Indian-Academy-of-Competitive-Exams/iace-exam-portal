@@ -304,4 +304,5 @@ export const ADMIN_STUDENT_ROUTES = {
   update: (id: string) => `/admin/students/${id}`,
   setActive: (id: string) => `/admin/students/${id}/active`,
   setTestBlocked: (id: string) => `/admin/students/${id}/test-blocked`,
+  erasure: (id: string) => `/admin/students/${id}/erasure`,
 } as const;

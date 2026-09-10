@@ -965,6 +965,13 @@ export function createApiClient(options: ApiClientOptions) {
             schema: studentDetailSchema,
           }),
 
+        /** Anonymises the person. Super admin only, and every sitting they sat is left standing. */
+        erase: (id: string): Promise<ErasureReceipt> =>
+          request(ADMIN_STUDENT_ROUTES.erasure(id), {
+            method: 'POST',
+            schema: erasureReceiptSchema,
+          }),
+
         /** Any student's analytics, behind STUDENT_PERFORMANCE. Same payload the student reads. */
         performance: (id: string, query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
           request(`${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`, {
