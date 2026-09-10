@@ -155,23 +155,18 @@ function testColumns(
     {
       key: 'actions',
       className: 'text-right',
+      // Both actions are unsat-only: a sat test's series and opening are part of the record.
       cell: (row) =>
-        canWrite ? (
+        canWrite && row.attemptCount === 0 ? (
           <RowActions label={`Actions for ${row.title ?? UNTITLED}`}>
-            {/* Left out rather than disabled: a sat test's opening is part of the record. */}
-            {row.attemptCount === 0 ? (
-              <DropdownMenuItem onSelect={() => onOpening(row)}>
-                <Clock aria-hidden />
-                Set when it opens
-              </DropdownMenuItem>
-            ) : null}
-            {/* Left out rather than disabled: a sat test belongs to the series it was sat in. */}
-            {row.attemptCount === 0 ? (
-              <DropdownMenuItem onSelect={() => onMoving(row)}>
-                <ArrowRightLeft aria-hidden />
-                Move to another series
-              </DropdownMenuItem>
-            ) : null}
+            <DropdownMenuItem onSelect={() => onOpening(row)}>
+              <Clock aria-hidden />
+              Set when it opens
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onMoving(row)}>
+              <ArrowRightLeft aria-hidden />
+              Move to another series
+            </DropdownMenuItem>
           </RowActions>
         ) : null,
     },

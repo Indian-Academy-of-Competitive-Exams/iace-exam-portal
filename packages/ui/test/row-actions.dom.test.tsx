@@ -20,6 +20,37 @@ describe('RowActions', () => {
     assert.equal(screen.queryByText('Delete'), null);
   });
 
+  /** The failure this prevents: a trigger on every row that opens on an empty list. */
+  it('draws nothing at all when the row can do nothing', () => {
+    render(<RowActions label="Actions for AMEERPET">{null}</RowActions>);
+
+    assert.equal(screen.queryByRole('button'), null);
+  });
+
+  /** Call sites filter items inline, so every one of them can come back false. */
+  it('draws nothing when every item was filtered out', () => {
+    const canWrite = false;
+    render(
+      <RowActions label="Actions for AMEERPET">
+        {canWrite ? <DropdownMenuItem>Retire</DropdownMenuItem> : null}
+        {canWrite ? <DropdownMenuItem destructive>Delete</DropdownMenuItem> : null}
+      </RowActions>,
+    );
+
+    assert.equal(screen.queryByRole('button'), null);
+  });
+
+  it('still draws where one item survives the filter', () => {
+    render(
+      <RowActions label="Actions for AMEERPET">
+        {null}
+        <DropdownMenuItem>Retire</DropdownMenuItem>
+      </RowActions>,
+    );
+
+    assert.equal(screen.getAllByRole('button').length, 1);
+  });
+
   /** The glyph says nothing, so the row it belongs to has to be in the name. */
   it('names the row it acts on', () => {
     render(

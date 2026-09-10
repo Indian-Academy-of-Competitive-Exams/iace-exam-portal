@@ -18,6 +18,9 @@ export function RowActions({
   children,
   className,
 }: Readonly<RowActionsProps>) {
+  // A trigger opening on nothing is a promise the row cannot keep; callers filter items inline.
+  if (React.Children.toArray(children).length === 0) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
