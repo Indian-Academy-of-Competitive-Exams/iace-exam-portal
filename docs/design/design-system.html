@@ -649,32 +649,48 @@
 
     <!-- ===== Empty state ===== -->
     <section>
-      <div class="sec-title">Empty state — an empty screen is an invitation to act</div>
-      <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px">
+      <div class="sec-title">Empty state — three absences, three glyphs</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:14px">
         <div class="card">
           <div class="empty">
-            <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+            <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.5-6.9A2 2 0 0016.8 4H7.2a2 2 0 00-1.7 1.1z"/></svg></div>
             <div class="empty__title">No tests yet</div>
-            <div class="empty__body">Tests you create appear here. Start from an exam-type base config — SSC CGL Tier 1 is seeded and ready.</div>
-            <div class="empty__actions">
-              <button class="btn btn-primary">Create a test</button>
-              <button class="btn btn-outline">Import questions</button>
-            </div>
+            <div class="empty__body">Every test hangs its shape off a base configuration — SSC CGL Tier 1 is seeded and ready.</div>
+            <div class="empty__actions"><button class="btn btn-primary">Create a test</button></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="empty">
+            <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5M9 9l4 4M13 9l-4 4"/></svg></div>
+            <div class="empty__title">No students match those filters</div>
+            <div class="empty__body">Branch is Ameerpet and Status is Blocked. Clearing either widens it.</div>
+            <div class="empty__actions"><button class="btn btn-outline">Clear filters</button></div>
           </div>
         </div>
         <div class="card">
           <div class="empty empty--error">
             <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
             <div class="empty__title">Could not load the question bank</div>
-            <div class="empty__body">The request timed out after 30 seconds. Your filters are still applied — retrying will not lose them.</div>
+            <div class="empty__body">Your filters are still applied — retrying will not lose them.</div>
             <div class="empty__actions"><button class="btn btn-primary">Retry</button></div>
           </div>
         </div>
       </div>
       <div class="note">
-        Every empty state carries exactly three things: <b>what is missing</b>, <b>why</b>, and <b>the one
-        action that fixes it</b>. Never ship one without a primary action. The error variant reuses the same
-        frame — errors say what happened and how to recover; they do not apologise and they are never vague.
+        <b>An empty state is for a region with nothing to show; an alert is for data that IS there and needs
+        attention.</b> A blue box saying "no events yet" is the wrong instrument — it reads as something to act
+        on, and the reader looks for the action.
+        <br><br>
+        There are exactly three absences, and the glyph names which one before a word is read:
+        <b>nothing yet</b> (inbox), <b>nothing matches</b> (struck-through search), <b>it did not load</b>
+        (crimson cross). A per-screen glyph is decoration — it restates the heading, which the heading already
+        said — so <code>kind</code> picks the icon and a call site overrides it only where the absence means
+        something else ("No mistakes recorded" is a good outcome, and takes a check).
+        <br><br>
+        Each one carries <b>what is missing</b> and, where the reader could not infer it, <b>the one action that
+        fixes it</b> — Retry on a failure, Clear on a filter. A failure without a retry is a dead end; the only
+        move left is reloading the page. <code>size="sm"</code> is the density for a table body or a panel,
+        where the region is already padded.
       </div>
     </section>
 

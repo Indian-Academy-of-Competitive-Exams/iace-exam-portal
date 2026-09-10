@@ -30,7 +30,16 @@ export {
 export { Accordion, type AccordionProps } from './components/ui/accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 export { Alert, alertVariants, type AlertProps } from './components/ui/alert';
-export { EmptyState, type EmptyStateProps } from './components/ui/empty-state';
+export {
+  EmptyState,
+  emptyCopy,
+  EMPTY_STATE_KINDS,
+  type EmptyCopy,
+  type EmptyMessage,
+  type EmptyStateKind,
+  type EmptyStateProps,
+  type EmptyStateSize,
+} from './components/ui/empty-state';
 export { Brandmark, type BrandmarkProps } from './components/ui/brandmark';
 export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';

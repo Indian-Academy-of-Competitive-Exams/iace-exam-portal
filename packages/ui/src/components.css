@@ -162,6 +162,26 @@
   background: color-mix(in srgb, var(--destructive) 10%, transparent);
 }
 
+/* The density for a table body or a panel, where the region is already padded. */
+.empty--sm {
+  padding: 0;
+}
+.empty--sm .empty__icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: var(--space-2);
+}
+.empty--sm .empty__icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.empty--sm .empty__title {
+  font-size: var(--text-sm);
+}
+.empty--sm .empty__body {
+  margin-bottom: var(--space-3);
+}
+
 /* ============================================================================
    4. MODAL / DIALOG — moved to dialog.tsx
    The CSS that was here could not trap focus, and an untrapped modal is worse
