@@ -167,7 +167,8 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
           <Metric label="Delivered" value={detail.data.stats.delivered} />
           <Metric label="Failed" value={detail.data.stats.failed} />
           <Metric label="Read" value={detail.data.stats.readCount} />
-          <Metric label="Not bought" value={detail.data.stats.savedByRead} />
+          {/* Paid sends the grace window made unnecessary — an email, SMS or WhatsApp not spent. */}
+          <Metric label="Paid sends saved" value={detail.data.stats.savedByRead} />
         </MetricGroup>
       ) : (
         <Skeleton variant="row" className="h-16" />

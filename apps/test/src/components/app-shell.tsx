@@ -1,10 +1,12 @@
+import { useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Avatar, PageFrame, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import {
   NAV_ITEMS,
+  notificationsQueryKey,
   PROFILE_QUERY_KEY,
   ROUTES,
   UNREAD_POLL_MS,
@@ -17,6 +19,7 @@ import { ChangePinCard } from '../routes/account';
 /** The student's shell. Same width as the admin's, so neither wastes the screen it is on. */
 export function AppShell() {
   const { identity: student, signOut } = useAuth();
+  const queryClient = useQueryClient();
   // Shared cache entry with the profile screens, so a new photo shows in the
   // header the moment it uploads rather than on the next reload.
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
@@ -26,6 +29,19 @@ export function AppShell() {
     queryFn: () => api.me.notifications({ unreadOnly: 'true', page: 1, pageSize: 1 }),
     refetchInterval: UNREAD_POLL_MS,
   });
+
+  // The poll only ever refreshed the COUNT, so the bell climbed while the list behind it did not.
+  const total = unread.data?.total ?? null;
+  const counted = useRef<number | null>(null);
+  useEffect(() => {
+    if (total === null) return;
+    const moved = counted.current !== null && total !== counted.current;
+    counted.current = total;
+    if (!moved) return;
+    for (const unreadOnly of [true, false]) {
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey(unreadOnly) });
+    }
+  }, [total, queryClient]);
 
   return (
     <Shell

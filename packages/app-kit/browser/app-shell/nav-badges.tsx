@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { cn } from '@iace/ui';
 
 /** Counts a nav row carries, keyed by its route — a number, so `nav.ts` stays DOM-free. */
 export type NavBadges = Readonly<Record<string, number>>;
@@ -28,11 +29,13 @@ export function NavBadge({ count, collapsed }: Readonly<{ count: number; collaps
   return (
     <span
       aria-hidden
-      className={
+      className={cn(
+        'flex items-center justify-center rounded-full bg-primary font-medium leading-none text-primary-foreground',
+        // Superscript: `h-4` was the size of the very glyph it sat on, so it covered it.
         collapsed
-          ? 'absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[0.625rem] font-medium leading-none text-primary-foreground'
-          : 'ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[0.625rem] font-medium leading-none text-primary-foreground'
-      }
+          ? 'absolute -end-2 -top-2 h-3.5 min-w-3.5 px-1 text-[0.5625rem] ring-2 ring-surface'
+          : 'ms-auto h-4 min-w-4 px-1 text-[0.625rem]',
+      )}
     >
       {shown}
     </span>
