@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, type LiveAnswer } from '@iace/contracts';
-import { answeredCountOf, sittingsFrom, type SittingRow } from '../src/attempts/live-ops';
+import { ANSWER_STATE, EVALUATION_MODE, TEST_STATUS, type LiveAnswer } from '@iace/contracts';
+import {
+  answeredCountOf,
+  sittingsFrom,
+  watchableTestsWhere,
+  type SittingRow,
+} from '../src/attempts/live-ops';
 import { type HeldState } from '../src/attempts/attempt-state';
 
 const STARTED_AT = new Date('2026-09-09T09:30:00.000Z');
@@ -86,5 +91,30 @@ describe('live ops — what a sitting looks like from the outside', () => {
     assert.equal(row?.endsAt, extended.toISOString());
     assert.equal(row?.answeredCount, 1);
     assert.equal(row?.questionCount, QUESTION_COUNT);
+  });
+});
+
+describe('which tests the ops picker offers', () => {
+  /** A practice sitting has no hall, no invigilation and no ranked slot to protect (§7). */
+  it('offers ranked tests only, never practice ones', () => {
+    const where = watchableTestsWhere(undefined);
+
+    assert.equal(where.evaluationMode, EVALUATION_MODE.RANKED);
+  });
+
+  it('offers active tests only, whether or not a search narrows them', () => {
+    assert.equal(watchableTestsWhere(undefined).status, TEST_STATUS.ACTIVE);
+    assert.equal(watchableTestsWhere('cgl').status, TEST_STATUS.ACTIVE);
+  });
+
+  it('keeps the ranked rule when a search is typed, rather than replacing the filter', () => {
+    const where = watchableTestsWhere('cgl');
+
+    assert.equal(where.evaluationMode, EVALUATION_MODE.RANKED);
+    assert.equal(where.OR?.length, 2);
+  });
+
+  it('asks nothing about titles when nothing was typed', () => {
+    assert.equal(watchableTestsWhere(undefined).OR, undefined);
   });
 });

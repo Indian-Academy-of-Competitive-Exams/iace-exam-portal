@@ -203,6 +203,10 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   `profileCompleted` only drives a nudge. Neither blocks a sitting.
 - The in-exam screen replicates the government CBT faithfully; it is the one thing students expect to
   match. Everything around it is this repo's own design system.
+- **Only a RANKED test is watched live.** The ops screen exists to verify who is in a hall and to
+  reach into a sitting that went wrong — a practice sitting has no hall, no invigilation and no slot
+  to protect, so it is not offered there. The picker asks the server for ranked active tests; the
+  actions themselves (§8) still handle either mode, because a test's series can hold only one.
 
 ## 8. Results, ranking and solutions
 

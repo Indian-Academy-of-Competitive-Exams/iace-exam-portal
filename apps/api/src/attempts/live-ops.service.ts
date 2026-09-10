@@ -10,7 +10,6 @@ import {
   ErrorCodes,
   LIVE_OPS_RECENT_MINUTES,
   LIVE_OPS_ROW_CAP,
-  TEST_STATUS,
   type LiveOpsBoard,
   type LiveOpsTest,
   type LiveOpsTestQuery,
@@ -19,7 +18,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttemptStateService } from './attempt-state.service';
-import { sittingsFrom } from './live-ops';
+import { sittingsFrom, watchableTestsWhere } from './live-ops';
 
 /** Both panels come off one read, so the stuck ones are simply the first rows it returns. */
 const SITTING_SELECT = {
@@ -56,18 +55,7 @@ export class LiveOpsService {
 
   /** The picker's list. On this feature's own key, so an ops admin needs nothing else granted. */
   async tests(query: LiveOpsTestQuery): Promise<Paginated<LiveOpsTest>> {
-    const where: Prisma.TestWhereInput = {
-      status: TEST_STATUS.ACTIVE,
-      // Both, because a test with no title of its own is shown by the series it sits in.
-      ...(query.q
-        ? {
-            OR: [
-              { title: { contains: query.q, mode: 'insensitive' as const } },
-              { testSeries: { name: { contains: query.q, mode: 'insensitive' as const } } },
-            ],
-          }
-        : {}),
-    };
+    const where = watchableTestsWhere(query.q) as Prisma.TestWhereInput;
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.test.findMany({

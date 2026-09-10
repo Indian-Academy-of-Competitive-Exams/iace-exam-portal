@@ -1,5 +1,32 @@
-import { ANSWERED_STATES, type AnswerState, type LiveSitting } from '@iace/contracts';
+import {
+  ANSWERED_STATES,
+  EVALUATION_MODE,
+  TEST_STATUS,
+  type AnswerState,
+  type LiveSitting,
+} from '@iace/contracts';
 import { type HeldState } from './attempt-state';
+
+/** Which tests the ops picker may offer. Ranked only: a practice sitting has no hall (§7). */
+export function watchableTestsWhere(q: string | undefined): {
+  status: string;
+  evaluationMode: string;
+  OR?: unknown[];
+} {
+  return {
+    status: TEST_STATUS.ACTIVE,
+    evaluationMode: EVALUATION_MODE.RANKED,
+    // Both, because a test with no title of its own is shown by the series it sits in.
+    ...(q
+      ? {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' as const } },
+            { testSeries: { name: { contains: q, mode: 'insensitive' as const } } },
+          ],
+        }
+      : {}),
+  };
+}
 
 /** What the ops board shows, worked out without a database so the split can be read as a table. */
 
