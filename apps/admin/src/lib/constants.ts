@@ -514,7 +514,6 @@ export const QUERY_KEYS = {
   TEST_ANALYTICS: [ADMIN, 'test-analytics'],
   TEST_PAPER: [ADMIN, 'test-paper'],
   TEST_SERIES: [ADMIN, 'test-series'],
-  TEST_SERIES_LINKS: [ADMIN, 'test-series-links'],
   TESTS: [ADMIN, 'tests'],
   TOPICS: [ADMIN, 'topics'],
 } as const;

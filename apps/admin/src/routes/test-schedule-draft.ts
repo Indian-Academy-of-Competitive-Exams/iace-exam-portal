@@ -20,13 +20,6 @@ export interface ScheduleChanges {
   count: number;
 }
 
-/** Held by the builder rather than the Offer step, so no move off it can quietly drop a pending time. */
-export interface ScheduleHold {
-  draft: ScheduleDraft | null;
-  onDraft: (next: ScheduleDraft | null) => void;
-  unsaved: number;
-}
-
 export type ScheduleSource = Pick<TestDetail, 'opensAt' | 'programUnlocks'>;
 
 export const wallOf = (at: string | null): string => (at ? instituteWallTime(new Date(at)) : '');

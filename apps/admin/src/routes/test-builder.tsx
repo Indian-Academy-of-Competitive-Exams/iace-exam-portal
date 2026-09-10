@@ -48,13 +48,8 @@ import {
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
 import { PaperStep } from './test-builder-paper-step';
-import { OfferStep } from './test-builder-offering';
-import {
-  changesOf,
-  savedSchedule,
-  type ScheduleDraft,
-  type ScheduleHold,
-} from './test-schedule-draft';
+import { OfferSaveDialog, OfferStep } from './test-builder-offering';
+import { useOfferDraft, type OfferHold } from './use-offer-draft';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
@@ -182,23 +177,20 @@ function TestBuilder({
     onError: (error) => applyServerErrors(error, form, scope),
   });
 
-  const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft | null>(null);
+  const offer = useOfferDraft(detail);
+  const unsavedOffer = offer.changes?.count ?? 0;
+  const [asking, setAsking] = useState(false);
   const [discarding, setDiscarding] = useState<{ count: number; move: () => void } | null>(null);
-  const schedule: ScheduleHold = {
-    draft: scheduleDraft,
-    onDraft: setScheduleDraft,
-    unsaved: detail && scheduleDraft ? changesOf(savedSchedule(detail), scheduleDraft).count : 0,
-  };
 
   const saveThenOpen = (target: TestBuilderStep) =>
     form.handleSubmit((values) => save.mutate({ values, target }))();
 
-  const leaveSchedule = (move: () => void) => {
-    if (schedule.unsaved > 0) {
-      setDiscarding({ count: schedule.unsaved, move });
+  const leaveOffer = (move: () => void) => {
+    if (unsavedOffer > 0) {
+      setDiscarding({ count: unsavedOffer, move });
       return;
     }
-    setScheduleDraft(null);
+    offer.discard();
     move();
   };
 
@@ -210,13 +202,14 @@ function TestBuilder({
       saveThenOpen(target);
       return;
     }
-    leaveSchedule(() => setStep(target));
+    leaveOffer(() => setStep(target));
   };
 
+  /** Done is the Offer step's one action: with nothing changed it just leaves. */
   const finish = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (schedule.unsaved === 0) return;
+    if (unsavedOffer === 0) return;
     event.preventDefault();
-    setDiscarding({ count: schedule.unsaved, move: () => navigate(ROUTES.TESTS) });
+    setAsking(true);
   };
 
   const done = doneSteps(detail);
@@ -278,18 +271,28 @@ function TestBuilder({
         fromSeries={fromSeries}
         config={config}
         sat={sat}
-        schedule={schedule}
+        offer={offer}
       />
+
+      {detail ? (
+        <OfferSaveDialog
+          detail={detail}
+          offer={offer}
+          open={asking}
+          onOpenChange={setAsking}
+          onSaved={() => navigate(ROUTES.TESTS)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={discarding !== null}
         onOpenChange={(isOpen) => !isOpen && setDiscarding(null)}
         destructive
-        title="Discard the schedule changes?"
-        description={`${plural(discarding?.count ?? 0, 'unsaved change')} to when this test opens will be dropped. The test keeps the schedule already saved.`}
+        title="Discard the offer changes?"
+        description={`${plural(discarding?.count ?? 0, 'unsaved change')} on this step will be dropped. The test keeps what is already saved.`}
         confirmLabel="Discard changes"
         onConfirm={() => {
-          setScheduleDraft(null);
+          offer.discard();
           discarding?.move();
           setDiscarding(null);
         }}
@@ -351,7 +354,7 @@ function StepBody({
   fromSeries,
   config,
   sat,
-  schedule,
+  offer,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
@@ -359,7 +362,7 @@ function StepBody({
   fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
   sat: boolean;
-  schedule: ScheduleHold;
+  offer: OfferHold;
 }>) {
   return (
     <>
@@ -376,7 +379,7 @@ function StepBody({
 
       {step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} config={config} /> : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
-        <OfferStep detail={detail} schedule={schedule} />
+        <OfferStep detail={detail} offer={offer} />
       ) : null}
     </>
   );

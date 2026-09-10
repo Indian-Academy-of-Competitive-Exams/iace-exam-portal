@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Power, X } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
   EVALUATION_MODE_LABELS,
-  OFFER_REQUIREMENT,
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
@@ -13,249 +10,130 @@ import {
   type TestDetail,
 } from '@iace/contracts';
 import {
-  Alert,
-  Button,
   Checkbox,
   ConfirmDialog,
   DateTimePicker,
   Field,
   FormSection,
   SectionHeading,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ProgramPicker, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
-import { QUERY_KEYS, ROUTES } from '../lib/constants';
+import { QUERY_KEYS } from '../lib/constants';
+import { opensLabel } from '../lib/schedule-format';
+import { instantOf, type ProgramOpening, type ScheduleDraft } from './test-schedule-draft';
 import {
-  changesOf,
-  instantOf,
-  savedSchedule,
-  type ProgramOpening,
-  type ScheduleDraft,
-  type ScheduleHold,
-} from './test-schedule-draft';
+  applyOffer,
+  type OfferChanges,
+  type OfferDraft,
+  type OfferWrites,
+} from './test-offer-draft';
+import type { OfferHold, ProgramRefusal } from './use-offer-draft';
 
-/** Who is offered the test: the series carrying it, and the freeze that lets students sit it. */
+/** Who is offered the test, when it opens, and whether it is offered — all written by Done. */
 
-const SERIES_LINK_KEY = (testId: string) => [...QUERY_KEYS.TEST_SERIES_LINKS, testId] as const;
+const PROGRAM_RULE = 'A program opening lets that cohort start earlier than everybody else.';
 
-function useOfferingRefresh(testId: string) {
-  const queryClient = useQueryClient();
-  return async () => {
-    await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.TEST, testId] });
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
-  };
-}
+const PRACTICE_RULE =
+  'A practice test opens at its time for everybody. A program opening answers to a rank, so it belongs to a ranked test only.';
 
-/** The series it leaves may not exist yet, and then nobody loses the test on the way out. */
-const moveConsequence = (to: string, from: string | undefined): string => {
-  const leaving =
-    from === undefined ? '' : `Students reached through ${from} stop being offered this test. `;
-  return `${leaving}It is offered through ${to} from now on. Its paper and its opening time are untouched.`;
-};
+const OVERTAKEN_PROGRAMS_DROPPED = "A program opening later than the test's own is dropped.";
 
-export function OfferStep({
-  detail,
-  schedule,
-}: Readonly<{ detail: TestDetail; schedule: ScheduleHold }>) {
+const EVERY_PROGRAM_DROPPED = 'Every program opening is dropped with it.';
+
+type EditOffer = (next: Partial<OfferDraft>) => void;
+
+export function OfferStep({ detail, offer }: Readonly<{ detail: TestDetail; offer: OfferHold }>) {
+  const { saved, held } = offer;
+  if (!saved || !held) return null;
+
+  const edit: EditOffer = (next) => offer.edit({ ...held, ...next });
+
   return (
     <>
-      <SeriesStep detail={detail} />
-      <ScheduleStep detail={detail} draft={schedule.draft} onDraft={schedule.onDraft} />
-      <PublishStep detail={detail} unsavedSchedule={schedule.unsaved} />
+      <SeriesSection detail={detail} held={held} onEdit={edit} />
+      <ScheduleSection detail={detail} held={held} refused={offer.refused} onEdit={edit} />
+      <OfferSection detail={detail} saved={saved} held={held} onEdit={edit} />
     </>
   );
 }
 
-function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
-  const queryClient = useQueryClient();
-  const refresh = useOfferingRefresh(detail.id);
-  const [moving, setMoving] = useState<ChosenSeries | null>(null);
+function SeriesSection({
+  detail,
+  held,
+  onEdit,
+}: Readonly<{ detail: TestDetail; held: OfferDraft; onEdit: EditOffer }>) {
   const [refused, setRefused] = useState<string | null>(null);
   const mode = EVALUATION_MODE_LABELS[detail.evaluationMode];
+  const sat = detail.attemptCount > 0;
 
-  const link = useQuery({
-    queryKey: SERIES_LINK_KEY(detail.id),
-    queryFn: () => api.admin.tests.series(detail.id),
-  });
-
-  const move = useMutation({
-    meta: { success: 'Test moved.' },
-    mutationFn: (testSeriesId: string) => api.admin.tests.moveToSeries(detail.id, { testSeriesId }),
-    onSuccess: async (next) => {
-      setMoving(null);
-      queryClient.setQueryData(SERIES_LINK_KEY(detail.id), next);
-      await refresh();
-    },
-    onError: () => setMoving(null),
-  });
-
-  /** The server refuses this too; asking first keeps the confirm from promising a move it cannot make. */
+  /** The server refuses this too; asking first keeps Done from promising a move it cannot make. */
   const choose = (chosen: ChosenSeries) => {
-    if (chosen.id === '' || chosen.id === link.data?.testSeriesId) {
-      setRefused(null);
-      return;
-    }
-
     const issue = seriesModeMismatch(chosen.name, chosen.evaluationMode, detail.evaluationMode);
     setRefused(issue);
-    if (issue === null) setMoving(chosen);
+    if (issue === null) onEdit({ series: { id: chosen.id, name: chosen.name } });
   };
 
   return (
     <FormSection title="Series">
-      <Alert variant="info">
+      <p className="text-sm text-muted-foreground">
         {`A test is judged the way its series is, so this one can only move to another ${mode} series.`}
-      </Alert>
+      </p>
 
       <Field
         htmlFor="test-series"
         label="Series"
         className="max-w-lg"
         // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
-        hint={detail.attemptCount > 0 ? 'A test stops moving once anybody has sat it.' : undefined}
+        hint={sat ? 'A test stops moving once anybody has sat it.' : undefined}
         error={refused ?? undefined}
       >
         {(control) => (
           <TestSeriesPicker
             {...control}
             clearable={false}
-            value={link.data?.testSeriesId ?? ''}
-            selectedLabel={link.data?.name}
-            disabled={detail.attemptCount > 0 || move.isPending}
+            value={held.series.id}
+            selectedLabel={held.series.name}
+            disabled={sat}
             forExamStageId={detail.examStageId}
             onChange={choose}
           />
         )}
       </Field>
-
-      <ConfirmDialog
-        open={moving !== null}
-        onOpenChange={(open) => !open && setMoving(null)}
-        title={`Move ${detail.title ?? 'this test'} to ${moving?.name ?? ''}?`}
-        description={moveConsequence(moving?.name ?? '', link.data?.name)}
-        confirmLabel="Move it"
-        loading={move.isPending}
-        onConfirm={() => moving && move.mutate(moving.id)}
-      />
     </FormSection>
   );
 }
 
-/** When the test opens, how late a student may still begin, and which programs open it sooner. */
-
-interface ProgramRefusal {
-  programCode: string;
-  message: string;
-}
-
-const PROGRAM_RULE =
-  'A program opening lets that cohort start earlier. Entry still closes at the same instant for everyone, so their window is longer rather than moved.';
-
-const PRACTICE_RULE =
-  'A practice test opens at its time and nothing else. Late entry, extra time and a program opening all answer to a rank, so they belong to a ranked test only.';
-
-const RANKED_RULES =
-  "Late entry is counted from the opening, extra time is added to every student's clock, and a program opening left later than the test's own is dropped.";
-
-/** The confirm names only what this test carries, so practice is never warned about a clock it lacks. */
-const scheduleConsequence = (count: number, ranked: boolean): string =>
-  [`${plural(count, 'change')} to when this test can be started.`, ranked && RANKED_RULES]
-    .filter(Boolean)
-    .join(' ');
-
-/** The server owns the rule; this only puts its refusal under the row that caused it. */
-const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null => {
-  const message = AppException.is(error) ? error.fieldErrors?.opensAt?.[0] : undefined;
-  return message ? { programCode, message } : null;
-};
-
-/** The test's own clock, and the programs that reach it ahead of everybody else. */
-function ScheduleStep({
+function ScheduleSection({
   detail,
-  draft,
-  onDraft,
+  held,
+  refused,
+  onEdit,
 }: Readonly<{
   detail: TestDetail;
-  draft: ScheduleDraft | null;
-  onDraft: (next: ScheduleDraft | null) => void;
+  held: OfferDraft;
+  refused: ProgramRefusal | null;
+  onEdit: EditOffer;
 }>) {
-  const refresh = useOfferingRefresh(detail.id);
-  const [asking, setAsking] = useState(false);
-  const [refused, setRefused] = useState<ProgramRefusal | null>(null);
-  const seriesId = detail.testSeriesId;
+  const { schedule } = held;
+  const ranked = allowsCohortScheduling(detail.evaluationMode);
+  const sat = detail.attemptCount > 0;
 
-  const saved = savedSchedule(detail);
-  const held = draft ?? saved;
-  const changes = changesOf(saved, held);
-
-  const save = useMutation({
-    meta: { success: 'Schedule saved.', fields: ['opensAt'] },
-    mutationFn: async () => {
-      if (changes.opening && seriesId) {
-        await api.admin.testSeries.setTestUnlock(seriesId, detail.id, {
-          unlockAt: held.opensAt ? instantOf(held.opensAt) : null,
-        });
-      }
-      for (const row of changes.written) {
-        try {
-          await api.admin.tests.setProgramUnlock(detail.id, row.programCode, {
-            opensAt: instantOf(row.opensAt),
-          });
-        } catch (error) {
-          setRefused(refusalOf(row.programCode, error));
-          throw error;
-        }
-      }
-
-      for (const programCode of changes.cleared) {
-        await api.admin.tests.clearProgramUnlock(detail.id, programCode);
-      }
-    },
-    onMutate: () => setRefused(null),
-    onSuccess: () => onDraft(null),
-    // An opening deletes every program row it overtakes, so what stuck is read back, never assumed.
-    onSettled: async () => {
-      setAsking(false);
-      await refresh();
-    },
-  });
-
-  const setOpensAt = (opensAt: string) => onDraft({ ...held, opensAt });
+  const setSchedule = (next: Partial<ScheduleDraft>) =>
+    onEdit({ schedule: { ...schedule, ...next } });
 
   const setProgram = (programCode: string, opensAt: string) =>
-    onDraft({
-      ...held,
-      programs: held.programs.map((row) =>
+    setSchedule({
+      programs: schedule.programs.map((row) =>
         row.programCode === programCode ? { ...row, opensAt } : row,
       ),
     });
 
   const addProgram = (programCode: string) => {
-    if (held.programs.some((row) => row.programCode === programCode)) return;
-    onDraft({ ...held, programs: [...held.programs, { programCode, opensAt: held.opensAt }] });
+    if (schedule.programs.some((row) => row.programCode === programCode)) return;
+    setSchedule({ programs: [...schedule.programs, { programCode, opensAt: schedule.opensAt }] });
   };
-
-  const dropProgram = (programCode: string) =>
-    onDraft({
-      ...held,
-      programs: held.programs.filter((row) => row.programCode !== programCode),
-    });
-
-  if (!seriesId) {
-    return (
-      <Alert variant="info">
-        A test reaches a student only through a series. This one is in none, so it cannot be offered
-        and has no opening of its own. Choose one above and its clock can be set here.
-      </Alert>
-    );
-  }
-
-  const ranked = allowsCohortScheduling(detail.evaluationMode);
-  const sat = detail.attemptCount > 0;
 
   return (
     <FormSection title="Schedule">
@@ -276,8 +154,8 @@ function ScheduleStep({
               id={control.id}
               aria-label="Opens"
               aria-describedby={control['aria-describedby']}
-              value={held.opensAt}
-              onChange={setOpensAt}
+              value={schedule.opensAt}
+              onChange={(opensAt) => setSchedule({ opensAt })}
               disabled={sat}
             />
           )}
@@ -288,16 +166,15 @@ function ScheduleStep({
         <>
           <SectionHeading level={3} title="Program openings" />
 
-          <Alert variant="info">{PROGRAM_RULE}</Alert>
+          <p className="text-sm text-muted-foreground">{PROGRAM_RULE}</p>
 
-          {held.programs.map((row, index) => (
+          {schedule.programs.map((row, index) => (
             <ProgramOpeningRow
               key={row.programCode}
               row={row}
               index={index}
               error={refused?.programCode === row.programCode ? refused.message : undefined}
               onChange={(next) => setProgram(row.programCode, next)}
-              onRemove={() => dropProgram(row.programCode)}
             />
           ))}
 
@@ -312,27 +189,8 @@ function ScheduleStep({
           </div>
         </>
       ) : (
-        <Alert variant="info">{PRACTICE_RULE}</Alert>
+        <p className="text-sm text-muted-foreground">{PRACTICE_RULE}</p>
       )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" disabled={changes.count === 0} onClick={() => setAsking(true)}>
-          Save schedule
-        </Button>
-        {changes.count > 0 ? (
-          <p className="text-sm text-muted-foreground">{`${plural(changes.count, 'change')} pending`}</p>
-        ) : null}
-      </div>
-
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={(open) => !open && setAsking(false)}
-        title="Save the schedule?"
-        description={scheduleConsequence(changes.count, ranked)}
-        confirmLabel="Save schedule"
-        loading={save.isPending}
-        onConfirm={() => save.mutate()}
-      />
     </FormSection>
   );
 }
@@ -343,168 +201,207 @@ function ProgramOpeningRow({
   index,
   error,
   onChange,
-  onRemove,
 }: Readonly<{
   row: ProgramOpening;
   index: number;
   error?: string;
   onChange: (opensAt: string) => void;
-  onRemove: () => void;
 }>) {
   return (
     <Field
       htmlFor={`program-opens-${index}`}
       label={`${row.programCode} opens (IST)`}
       className="max-w-lg"
+      // ui-copy-ok: rule
+      hint="Blank drops this opening"
       error={error}
     >
       {(control) => (
-        <div className="flex items-center gap-2">
-          <DateTimePicker
-            id={control.id}
-            aria-label={`${row.programCode} opens`}
-            aria-describedby={control['aria-describedby']}
-            className="flex-1"
-            value={row.opensAt}
-            onChange={onChange}
-          />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Remove ${row.programCode}`}
-                onClick={onRemove}
-              >
-                <X aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Remove {row.programCode}</TooltipContent>
-          </Tooltip>
-        </div>
+        <DateTimePicker
+          id={control.id}
+          aria-label={`${row.programCode} opens`}
+          aria-describedby={control['aria-describedby']}
+          value={row.opensAt}
+          onChange={onChange}
+        />
       )}
     </Field>
   );
 }
 
-/** Offering never saves the schedule, so a time still pending would be offered as no time at all. */
-const scheduleSaved = (unsaved: number) => ({
-  key: 'SCHEDULE_SAVED',
-  met: unsaved === 0,
-  label: 'The schedule is saved',
-  owed: unsaved === 0 ? null : `${plural(unsaved, 'change')} pending`,
-});
-
-function PublishStep({
+function OfferSection({
   detail,
-  unsavedSchedule,
-}: Readonly<{ detail: TestDetail; unsavedSchedule: number }>) {
-  const [retiring, setRetiring] = useState(false);
-  const refresh = useOfferingRefresh(detail.id);
-
-  const offer = useMutation({
-    meta: { success: 'Test offered to students.' },
-    // One call: the freeze and the opening are one transaction, so neither lands without the other.
-    mutationFn: () => api.admin.tests.offer(detail.id),
-    onSuccess: refresh,
-  });
-
-  const retire = useMutation({
-    meta: { success: 'Test retired.' },
-    mutationFn: () => api.admin.tests.setStatus(detail.id, { status: TEST_STATUS.INACTIVE }),
-    onSuccess: async () => {
-      setRetiring(false);
-      await refresh();
-    },
-    onError: () => setRetiring(false),
-  });
-
-  const offered = detail.status === TEST_STATUS.ACTIVE;
-  const requirements = [...offerRequirements(detail), scheduleSaved(unsavedSchedule)];
-  const ready = requirements.every((requirement) => requirement.met);
-
-  if (offered) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Alert variant="success">
-          Students reached through its series are being offered this test. Its paper is frozen —
-          editing it takes the test back out until it is offered again.
-        </Alert>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            loading={retire.isPending}
-            onClick={() => setRetiring(true)}
-          >
-            <Power aria-hidden />
-            Retire
-          </Button>
-        </div>
-
-        <ConfirmDialog
-          open={retiring}
-          onOpenChange={(open) => !open && setRetiring(false)}
-          destructive
-          title={`Retire ${detail.title ?? 'this test'}?`}
-          description="Every student reached through its series stops being offered this test. Attempts already sat keep their results, and you can offer it again later."
-          confirmLabel="Retire test"
-          loading={retire.isPending}
-          onConfirm={() => retire.mutate()}
-        />
-      </div>
-    );
-  }
+  saved,
+  held,
+  onEdit,
+}: Readonly<{ detail: TestDetail; saved: OfferDraft; held: OfferDraft; onEdit: EditOffer }>) {
+  const ready = offerRequirements(detail).every((requirement) => requirement.met);
 
   return (
-    <div className="flex flex-col gap-4">
-      <Alert variant={ready ? 'info' : 'warning'}>
-        {ready
-          ? offerEffect(detail)
-          : 'This test cannot be offered yet. What it still owes is ticked off below.'}
-      </Alert>
-
-      <ul className="flex flex-col gap-1">
-        {requirements.map((requirement) => (
-          <li key={requirement.key} className="flex items-center justify-between gap-3">
-            <Checkbox
-              checked={requirement.met}
-              readOnly
-              tabIndex={-1}
-              label={requirement.label}
-              /* ui-copy-ok: rule */ hint={requirement.owed ?? undefined}
-            />
-            {requirement.key === OFFER_REQUIREMENT.PAPER ? (
-              <Button size="sm" variant="outline" asChild>
-                <Link to={ROUTES.TEST_PAPER(detail.id)}>Open paper</Link>
-              </Button>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          disabled={!ready}
-          loading={offer.isPending}
-          onClick={() => offer.mutate()}
-        >
-          <Power aria-hidden />
-          Freeze and offer
-        </Button>
-      </div>
-    </div>
+    <FormSection title="Offer">
+      <Checkbox
+        id="test-offered"
+        checked={held.offered}
+        disabled={!held.offered && !ready}
+        onChange={(event) => onEdit({ offered: event.target.checked })}
+        label="Offered to students"
+        /* ui-copy-ok: consequence */ hint={offerNote(detail, saved, held)}
+      />
+    </FormSection>
   );
 }
 
-/** The button is the last step, so what it will do is said on the page rather than in a dialog. */
-function offerEffect(detail: TestDetail): string {
-  const freeze = detail.isLocked
-    ? ''
-    : `Its ${plural(detail.totalQuestions, 'question')} freeze, and every student sits exactly them. `;
-  return `${freeze}Every student reached through its series is offered it from now on. Editing the paper afterwards takes the test back out until it is offered again.`;
+/** What the switch means right now, said beside it because Done is the only thing that acts on it. */
+function offerNote(detail: TestDetail, saved: OfferDraft, held: OfferDraft): string {
+  if (held.offered && saved.offered) {
+    return `Offered to every student reached through ${held.series.name}. Its paper is frozen, and editing it takes the test back out until it is offered again.`;
+  }
+  if (held.offered) {
+    const freeze = detail.isLocked
+      ? ''
+      : `freezes its ${plural(detail.totalQuestions, 'question')} and `;
+    return `Pressing Done ${freeze}offers it to every student reached through ${held.series.name}.`;
+  }
+  if (saved.offered) {
+    return `Pressing Done stops offering it to students reached through ${saved.series.name}. Attempts already sat keep their results.`;
+  }
+
+  const unmet = offerRequirements(detail).find((requirement) => !requirement.met);
+  if (!unmet) return 'No student is offered it yet.';
+  const owed = unmet.owed ? ` (${unmet.owed})` : '';
+  return `It can be offered once ${unmet.label.charAt(0).toLowerCase()}${unmet.label.slice(1)}${owed}.`;
+}
+
+const whenOf = (wall: string): string => `${opensLabel(instantOf(wall))} IST`;
+
+/** The server clears program rows an opening overtakes, and every one of them when it is cleared. */
+function openingLines(detail: TestDetail, saved: OfferDraft, held: OfferDraft): string[] {
+  const { opensAt } = held.schedule;
+  const lines = [opensAt ? `Opens ${whenOf(opensAt)}.` : 'Opens the moment a student reaches it.'];
+
+  const staggered =
+    allowsCohortScheduling(detail.evaluationMode) && saved.schedule.programs.length > 0;
+  if (staggered) lines.push(opensAt ? OVERTAKEN_PROGRAMS_DROPPED : EVERY_PROGRAM_DROPPED);
+  return lines;
+}
+
+/** Every write Done is about to make, in plain words, so the one confirm names each of them. */
+function changeLines(
+  detail: TestDetail,
+  saved: OfferDraft,
+  held: OfferDraft,
+  changes: OfferChanges,
+): string[] {
+  const lines: string[] = [];
+  const { schedule } = changes;
+
+  if (changes.retiring) {
+    lines.push(`Stops offering it to students reached through ${saved.series.name}.`);
+  }
+  if (changes.moved) lines.push(`Moves from ${saved.series.name} to ${held.series.name}.`);
+  if (schedule.opening) lines.push(...openingLines(detail, saved, held));
+  for (const row of schedule.written) {
+    lines.push(`${row.programCode} opens ${whenOf(row.opensAt)}.`);
+  }
+  for (const programCode of schedule.cleared) {
+    lines.push(`${programCode} no longer opens early.`);
+  }
+  if (changes.offering) {
+    lines.push(`Offers it to every student reached through ${held.series.name}.`);
+  }
+
+  return lines;
+}
+
+/** The server owns the rule; this only puts its refusal under the row that caused it. */
+const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null => {
+  const message = AppException.is(error) ? error.fieldErrors?.opensAt?.[0] : undefined;
+  return message ? { programCode, message } : null;
+};
+
+function writesFor(
+  testId: string,
+  onRefused: (refusal: ProgramRefusal | null) => void,
+): OfferWrites {
+  return {
+    retire: () => api.admin.tests.setStatus(testId, { status: TEST_STATUS.INACTIVE }),
+    moveTo: (testSeriesId) => api.admin.tests.moveToSeries(testId, { testSeriesId }),
+    setOpening: (testSeriesId, unlockAt) =>
+      api.admin.testSeries.setTestUnlock(testSeriesId, testId, { unlockAt }),
+    setProgramOpening: async (programCode, opensAt) => {
+      try {
+        return await api.admin.tests.setProgramUnlock(testId, programCode, { opensAt });
+      } catch (error) {
+        onRefused(refusalOf(programCode, error));
+        throw error;
+      }
+    },
+    clearProgramOpening: (programCode) => api.admin.tests.clearProgramUnlock(testId, programCode),
+    // One call: the freeze and the opening are one transaction, so neither lands without the other.
+    offer: () => api.admin.tests.offer(testId),
+  };
+}
+
+const savedMessage = (changes: OfferChanges | null): string => {
+  if (changes?.offering) return 'Test offered to students.';
+  if (changes?.retiring) return 'Test retired.';
+  return 'Test saved.';
+};
+
+/** Done's one confirm, and the only place the Offer step writes anything. */
+export function OfferSaveDialog({
+  detail,
+  offer,
+  open,
+  onOpenChange,
+  onSaved,
+}: Readonly<{
+  detail: TestDetail;
+  offer: OfferHold;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}>) {
+  const queryClient = useQueryClient();
+  const { saved, held, changes } = offer;
+
+  const save = useMutation({
+    meta: { success: savedMessage(changes), fields: ['opensAt'] },
+    mutationFn: async () => {
+      if (held && changes) await applyOffer(held, changes, writesFor(detail.id, offer.refuse));
+    },
+    onMutate: () => offer.refuse(null),
+    onSuccess: () => {
+      offer.discard();
+      onSaved();
+    },
+    // Closed so a refusal under its row can be read; the draft stays for another try.
+    onError: () => onOpenChange(false),
+    // An opening deletes every program row it overtakes, so what stuck is read back, never assumed.
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
+    },
+  });
+
+  if (!saved || !held || !changes) return null;
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      destructive={changes.retiring}
+      title={`Save ${plural(changes.count, 'change')}?`}
+      description="They are saved together, and you return to the tests list."
+      confirmLabel="Save changes"
+      loading={save.isPending}
+      onConfirm={() => save.mutate()}
+    >
+      <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
+        {changeLines(detail, saved, held, changes).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </ConfirmDialog>
+  );
 }
