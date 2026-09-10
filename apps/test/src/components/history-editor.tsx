@@ -1,7 +1,7 @@
 import { useFieldArray, type Control, type FieldValues, type Path } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
-import { Button, FormSection, Input, Label } from '@iace/ui';
+import { Button, EmptyState, FormSection, Input, Label } from '@iace/ui';
 
 /**
  * Rows a student adds to: schooling, or exams sat elsewhere. Every field but the first
@@ -36,7 +36,7 @@ export function HistoryEditor<T extends FieldValues>({
   return (
     <FormSection title={title}>
       <div className="flex flex-col gap-4">
-        {fields.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : null}
+        {fields.length === 0 ? <EmptyState level={3} size="sm" title={empty} /> : null}
 
         {fields.map((field, index) => (
           <div

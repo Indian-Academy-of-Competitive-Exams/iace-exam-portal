@@ -14,7 +14,6 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Checkbox,
   ConfirmDialog,
   PageFrame,
@@ -119,9 +118,7 @@ export function PermissionsPage() {
           ))}
         </div>
 
-        {!isLoading && rows.length === 0 ? (
-          <Card className="p-4 text-sm text-muted-foreground">No active admins.</Card>
-        ) : null}
+        {!isLoading && rows.length === 0 ? <EmptyState title="No active admins" /> : null}
       </PageFrame>
     </SuperAdminOnly>
   );

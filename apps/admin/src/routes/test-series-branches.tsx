@@ -10,6 +10,7 @@ import { Power } from 'lucide-react';
 import {
   Alert,
   Button,
+  EmptyState,
   Checkbox,
   ConfirmDialog,
   FormSection,
@@ -149,7 +150,13 @@ function BranchScheduleList({
   }
 
   if (rows.length === 0) {
-    return <Alert variant="warning">There are no branches yet, so nothing runs this series.</Alert>;
+    return (
+      <EmptyState
+        title="No branches yet"
+        /* ui-copy-ok: consequence */
+        hint="Nothing runs this series until one exists."
+      />
+    );
   }
 
   return (

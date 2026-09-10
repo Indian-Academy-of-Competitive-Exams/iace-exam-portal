@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { scopedSections, type BaseConfigDetail, type TestDetail } from '@iace/contracts';
-import { Alert, Badge, Button, Skeleton, TruncatedText, plural } from '@iace/ui';
+import { Alert, Badge, Button, EmptyState, Skeleton, TruncatedText, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { framingOf, hasPaper, sectionFullness, sectionTally } from './test-paper-view';
@@ -27,15 +27,19 @@ export function PaperStep({
   });
 
   if (!detail || !config) {
-    return <Alert variant="info">Save this test to build its paper.</Alert>;
+    return (
+      <EmptyState title="No paper yet" /* ui-copy-ok: rule */ hint="Save this test to build one." />
+    );
   }
 
   const sections = scopedSections(config.sections, detail.scope, detail.scopeRef);
   if (sections.length === 0) {
     return (
-      <Alert variant="warning">
-        This test&rsquo;s configuration has no sections, so there is no paper to build.
-      </Alert>
+      <EmptyState
+        title="No sections"
+        /* ui-copy-ok: consequence */
+        hint="This test's configuration has none, so there is no paper to build."
+      />
     );
   }
 
