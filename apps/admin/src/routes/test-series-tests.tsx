@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, Clock, Plus } from 'lucide-react';
+import { ArrowRightLeft, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import {
   FEATURE_KEYS,
   EVALUATION_MODE_LABELS,
   PERMISSION_LEVELS,
   type SeriesTestRow,
   type TestSeriesSummary,
-  fromInstituteWallTime,
-  instituteWallTime,
   seriesModeMismatch,
 } from '@iace/contracts';
 import {
   Button,
   ConfirmDialog,
   DataTable,
-  DateTimePicker,
   DropdownMenuItem,
   FormDialog,
   FormField,
@@ -37,19 +34,12 @@ import { useAuth } from '../providers/auth';
 import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { testsKey } from './test-series-detail';
 
-/** The instant an exam starts, said in the institute's clock wherever the admin is sitting. */
-
-interface UnlockFormValues {
-  unlockAt: string;
-}
-
 interface MoveFormValues {
   testSeriesId: string;
 }
 export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [opening, setOpening] = useState<SeriesTestRow | null>(null);
   const [moving, setMoving] = useState<SeriesTestRow | null>(null);
 
   const tests = useQuery({
@@ -77,25 +67,15 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
       ) : null}
 
       <DataTable
-        columns={testColumns({ canWrite, onOpening: setOpening, onMoving: setMoving })}
+        columns={testColumns({ canWrite, onMoving: setMoving })}
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
         empty={{
           title: 'No test in this series yet',
-          hint: 'Build the first one here; its Offer step moves it to another series later.',
+          hint: 'Build the first one here; its Offer step sets when it opens.',
         }}
       />
-
-      {opening ? (
-        <UnlockDialog
-          key={opening.testId}
-          series={series}
-          row={opening}
-          onClose={() => setOpening(null)}
-          onSaved={held}
-        />
-      ) : null}
 
       {moving ? (
         <MoveDialog
@@ -115,11 +95,10 @@ const UNTITLED = 'Untitled test';
 function testColumns(
   options: Readonly<{
     canWrite: boolean;
-    onOpening: (row: SeriesTestRow) => void;
     onMoving: (row: SeriesTestRow) => void;
   }>,
 ): DataTableColumn<SeriesTestRow>[] {
-  const { canWrite, onOpening, onMoving } = options;
+  const { canWrite, onMoving } = options;
 
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
@@ -155,14 +134,10 @@ function testColumns(
     {
       key: 'actions',
       className: 'text-right',
-      // Both actions are unsat-only: a sat test's series and opening are part of the record.
+      // Unsat-only: a sat test's series is part of the record.
       cell: (row) =>
         canWrite && row.attemptCount === 0 ? (
           <RowActions label={`Actions for ${row.title ?? UNTITLED}`}>
-            <DropdownMenuItem onSelect={() => onOpening(row)}>
-              <Clock aria-hidden />
-              Set when it opens
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onMoving(row)}>
               <ArrowRightLeft aria-hidden />
               Move to another series
@@ -171,62 +146,6 @@ function testColumns(
         ) : null,
     },
   ];
-}
-
-/** Wall time in, an instant out: `packages/ui` holds no zone, so the conversion is the app's. */
-function UnlockDialog({
-  series,
-  row,
-  onClose,
-  onSaved,
-}: Readonly<{
-  series: TestSeriesSummary;
-  row: SeriesTestRow;
-  onClose: () => void;
-  onSaved: (next: SeriesTestRow[]) => void;
-}>) {
-  const form = useForm<UnlockFormValues>({
-    defaultValues: { unlockAt: row.unlockAt ? instituteWallTime(new Date(row.unlockAt)) : '' },
-  });
-  const unlockAt = useWatch({ control: form.control, name: 'unlockAt' });
-
-  const save = useMutation({
-    meta: { success: 'Opening time saved.' },
-    mutationFn: (wall: string) =>
-      api.admin.testSeries.setTestUnlock(series.id, row.testId, {
-        unlockAt: wall ? fromInstituteWallTime(wall).toISOString() : null,
-      }),
-    onSuccess: (next) => {
-      onClose();
-      onSaved(next);
-    },
-    onError: (error) => applyFieldErrors(error, form.setError, ['unlockAt']),
-  });
-
-  return (
-    <FormDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
-      form={form}
-      onSubmit={(values) => save.mutate(values.unlockAt)}
-      title={`When does ${row.title ?? 'this test'} open?`}
-      description={`Every branch running ${series.name} sits it from that instant. Leave it empty and it opens as soon as a student reaches the series.`}
-      submitLabel="Save the time"
-      loading={save.isPending}
-    >
-      <FormField form={form} name="unlockAt" label="Opens (IST)">
-        {(control) => (
-          <DateTimePicker
-            id={control.id}
-            aria-label="Opens"
-            aria-describedby={control['aria-describedby']}
-            value={unlockAt}
-            onChange={(next) => form.setValue('unlockAt', next, { shouldDirty: true })}
-          />
-        )}
-      </FormField>
-    </FormDialog>
-  );
 }
 
 /** Every test here is judged the way this series is, so the row's mode is the series' own. */
