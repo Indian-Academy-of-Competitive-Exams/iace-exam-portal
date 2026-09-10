@@ -50,6 +50,21 @@ export function filterNavBy<T extends NavItem & { children?: T[] }>(
   }, []);
 }
 
+/** A submenu offering one choice is a click asking a question with one answer; run it AFTER filtering. */
+export function collapseLoneSections(items: readonly NavItem[]): NavItem[] {
+  return items.map((item) => {
+    if (!isNavSection(item)) return item;
+
+    const children = collapseLoneSections(item.children ?? []);
+    const only = children.length === 1 ? children[0] : undefined;
+    // A section that navigates in its own right keeps its route rather than borrowing its child's.
+    if (item.to !== undefined || only?.to === undefined) return { ...item, children };
+
+    const { children: _dropped, ...leaf } = item;
+    return { ...leaf, to: only.to };
+  });
+}
+
 /**
  * Drop what this user may not see, at every depth. No `can` or no `featureKey` means
  * visible — hiding nav is not the security boundary. An emptied section goes with its children.

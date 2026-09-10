@@ -7,6 +7,7 @@ import {
   filterNavBy,
   filterNavByPermission,
   activeNavPath,
+  collapseLoneSections,
   isNavItemActive,
   isNavSection,
   navTrail,
@@ -308,5 +309,82 @@ describe('filterNavBy', () => {
       filterNavBy(NAV, () => false),
       NAV,
     );
+  });
+});
+
+describe('collapseLoneSections', () => {
+  const proofreading: NavItem = {
+    label: 'Proof-reading',
+    featureKey: FEATURE_KEYS.QUESTION_PROOFREAD,
+    children: [leaf('Reader', { to: '/proofreading' })],
+  };
+
+  it('makes a one-child section a link straight to that child', () => {
+    const [only] = collapseLoneSections([proofreading]);
+
+    assert.equal(only?.to, '/proofreading');
+    assert.equal(only?.children, undefined);
+  });
+
+  /** "Proof-reading" is the word the nav showed; "Reader" is a sub-label nobody navigates by. */
+  it('keeps the SECTION label, not the child it collapsed onto', () => {
+    const [only] = collapseLoneSections([proofreading]);
+
+    assert.equal(only?.label, 'Proof-reading');
+  });
+
+  it('leaves a section with a real choice in it alone', () => {
+    const section = leaf('Students', { children: kids(2) });
+
+    assert.deepEqual(collapseLoneSections([section]), [section]);
+  });
+
+  it('leaves a leaf exactly as it found it', () => {
+    const row = leaf('Audit', { to: '/audit' });
+
+    assert.deepEqual(collapseLoneSections([row]), [row]);
+  });
+
+  /** The point of running it AFTER the permission filter, not instead of it. */
+  it('collapses a section a reader may see only one row of', () => {
+    const bank: NavItem[] = [
+      {
+        label: 'Question bank',
+        children: [
+          leaf('All questions', { to: '/questions', featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT }),
+          leaf('Drafts', { to: '/drafts', featureKey: FEATURE_KEYS.QUESTION_PROOFREAD }),
+        ],
+      },
+    ];
+
+    const [only] = collapseLoneSections(
+      filterNavByPermission(bank, (key) => key === FEATURE_KEYS.QUESTION_MANAGEMENT),
+    );
+
+    assert.equal(only?.label, 'Question bank');
+    assert.equal(only?.to, '/questions');
+  });
+
+  it('collapses a lone child that is itself a lone section, all the way down', () => {
+    const nested: NavItem[] = [
+      { label: 'Outer', children: [{ label: 'Inner', children: [leaf('Leaf', { to: '/deep' })] }] },
+    ];
+
+    const [only] = collapseLoneSections(nested);
+
+    assert.equal(only?.label, 'Outer');
+    assert.equal(only?.to, '/deep');
+  });
+
+  /** A section that is a destination itself keeps its own route rather than borrowing a child's. */
+  it('leaves a one-child section that already navigates', () => {
+    const both: NavItem[] = [
+      { label: 'Tests', to: '/tests', children: [leaf('Series', { to: '/tests/series' })] },
+    ];
+
+    const [only] = collapseLoneSections(both);
+
+    assert.equal(only?.to, '/tests');
+    assert.equal(only?.children?.length, 1);
   });
 });

@@ -14,7 +14,7 @@ import {
   ThemeToggle,
   cn,
 } from '@iace/ui';
-import { filterNavByPermission, type NavItem } from '../src';
+import { collapseLoneSections, filterNavByPermission, type NavItem } from '../src';
 import { SidebarNav } from './app-shell/sidebar-nav';
 import { NavBadgeProvider, type NavBadges } from './app-shell/nav-badges';
 import { NavPanel } from './app-shell/nav-panel';
@@ -80,7 +80,7 @@ export function AppShell({
   const [workspace, setWorkspace] = useState<boolean | null>(null);
   const { pathname } = useLocation();
 
-  const items = useMemo(() => filterNavByPermission(nav, can), [nav, can]);
+  const items = useMemo(() => collapseLoneSections(filterNavByPermission(nav, can)), [nav, can]);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
   const immersive = workspace === true;

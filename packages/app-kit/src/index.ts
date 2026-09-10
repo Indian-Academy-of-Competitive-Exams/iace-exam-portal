@@ -34,6 +34,7 @@ export {
   filterNavBy,
   filterNavByPermission,
   activeNavPath,
+  collapseLoneSections,
   isNavItemActive,
   isNavSection,
   navTrail,
