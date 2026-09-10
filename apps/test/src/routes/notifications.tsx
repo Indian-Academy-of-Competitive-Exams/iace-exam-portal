@@ -100,7 +100,6 @@ export function NotificationsPage() {
         />
       }
       filters={{ spec: FILTERS, state: filters }}
-      filtersBesideTitle
     >
       <FeedRegion list={list} rows={list.items} unreadOnly={unreadOnly} />
     </PanelFrame>
