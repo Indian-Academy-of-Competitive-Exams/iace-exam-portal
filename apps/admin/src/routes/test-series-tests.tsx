@@ -146,10 +146,13 @@ function testColumns(
               <Clock aria-hidden />
               Set when it opens
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onMoving(row)}>
-              <ArrowRightLeft aria-hidden />
-              Move to another series
-            </DropdownMenuItem>
+            {/* Left out rather than disabled: a sat test belongs to the series it was sat in. */}
+            {row.attemptCount === 0 ? (
+              <DropdownMenuItem onSelect={() => onMoving(row)}>
+                <ArrowRightLeft aria-hidden />
+                Move to another series
+              </DropdownMenuItem>
+            ) : null}
           </RowActions>
         ) : null,
     },

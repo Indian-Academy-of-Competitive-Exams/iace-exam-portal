@@ -160,12 +160,9 @@ function TestStatusBadges({ test }: Readonly<{ test: Test }>) {
 
 const UNTITLED = 'this test';
 
-/** Names what deleting costs. Only having been SAT refuses it, and that one is said outright. */
+/** Names what deleting costs. Only an unsat test is ever offered it, so nothing here refuses. */
 function deleteDescription(test: Test): string {
   const name = test.title ?? UNTITLED;
-  if (test.attemptCount > 0) {
-    return `${plural(test.attemptCount, 'attempt')} were sat on ${name}, and deleting it will be refused. Retire it instead — it keeps its results and is simply no longer offered.`;
-  }
 
   const costs = [
     test.paperQuestionCount > 0
@@ -228,7 +225,8 @@ function TestRowActions({
             </Link>
           </DropdownMenuItem>
         ) : null}
-        {canWrite ? (
+        {/* A sat test is never deleted, so Delete is left out rather than offered and refused. */}
+        {canWrite && test.attemptCount === 0 ? (
           <DropdownMenuItem
             destructive
             disabled={remove.isPending}

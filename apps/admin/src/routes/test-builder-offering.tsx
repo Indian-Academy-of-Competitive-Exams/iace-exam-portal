@@ -97,7 +97,14 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
         {`A test is judged the way its series is, so this one can only move to another ${mode} series.`}
       </Alert>
 
-      <Field htmlFor="test-series" label="Series" className="max-w-lg" error={refused ?? undefined}>
+      <Field
+        htmlFor="test-series"
+        label="Series"
+        className="max-w-lg"
+        // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
+        hint={detail.attemptCount > 0 ? 'A test stops moving once anybody has sat it.' : undefined}
+        error={refused ?? undefined}
+      >
         {(control) => (
           <TestSeriesPicker
             {...control}
