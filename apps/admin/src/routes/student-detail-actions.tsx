@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ErasureReceipt, type StudentDetail } from '@iace/contracts';
-import { Button, ConfirmDialog, FormSection, plural } from '@iace/ui';
+import { Button, ConfirmDialog, SectionHeading, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
@@ -62,45 +62,54 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
 
   return (
     <>
-      <FormSection title="Tests">
-        <Button
-          type="button"
-          variant={isTestBlocked ? 'secondary' : 'destructive'}
-          className="self-start"
-          loading={setTestBlocked.isPending}
-          onClick={() => setBlockConfirm(true)}
-        >
-          {isTestBlocked ? 'Allow tests' : 'Block from tests'}
-        </Button>
-      </FormSection>
-
-      {isSuperAdmin ? (
-        <FormSection title="Sign-in">
+      <SectionHeading
+        title="Tests"
+        action={
           <Button
             type="button"
-            variant="outline"
-            className="self-start"
-            loading={setActive.isPending}
-            onClick={() => setSignInConfirm(true)}
+            size="sm"
+            variant={isTestBlocked ? 'secondary' : 'destructive'}
+            loading={setTestBlocked.isPending}
+            onClick={() => setBlockConfirm(true)}
           >
-            {isActive ? 'Suspend sign-in' : 'Restore sign-in'}
+            {isTestBlocked ? 'Allow tests' : 'Block from tests'}
           </Button>
-        </FormSection>
+        }
+      />
+
+      {isSuperAdmin ? (
+        <SectionHeading
+          title="Sign-in"
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              loading={setActive.isPending}
+              onClick={() => setSignInConfirm(true)}
+            >
+              {isActive ? 'Suspend sign-in' : 'Restore sign-in'}
+            </Button>
+          }
+        />
       ) : null}
 
       {/* Irreversible and unwinds nothing, so it is the one action kept to a super admin. */}
       {isSuperAdmin ? (
-        <FormSection title="Erasure">
-          <Button
-            type="button"
-            variant="destructive"
-            className="self-start"
-            loading={erase.isPending}
-            onClick={() => setEraseConfirm(true)}
-          >
-            Erase personal data
-          </Button>
-        </FormSection>
+        <SectionHeading
+          title="Erasure"
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              loading={erase.isPending}
+              onClick={() => setEraseConfirm(true)}
+            >
+              Erase personal data
+            </Button>
+          }
+        />
       ) : null}
 
       {/* Both directions ask, so a control that changes whether somebody can sit

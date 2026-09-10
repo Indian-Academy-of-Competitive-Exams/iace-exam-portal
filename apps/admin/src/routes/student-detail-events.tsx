@@ -3,11 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserMinus } from 'lucide-react';
 import { type StudentDetail, type StudentEvent } from '@iace/contracts';
 import {
-  Badge,
   ConfirmDialog,
   DataTable,
   DropdownMenuItem,
-  EmptyState,
   FormSection,
   RowActions,
   TruncatedText,
@@ -43,21 +41,27 @@ function studentEventColumns(
   ];
 }
 
+const PROGRAM_COLUMNS: DataTableColumn<string>[] = [
+  {
+    key: 'code',
+    header: 'Program',
+    className: 'max-w-[20rem] font-medium',
+    cell: (code) => <TruncatedText>{code}</TruncatedText>,
+  },
+];
+
 /** Read-only: a program reaches a student through the roster import, never by hand from here. */
 function Programs({ codes }: Readonly<{ codes: readonly string[] }>) {
   return (
     <FormSection title="Programs">
-      {codes.length === 0 ? (
-        <EmptyState level={3} size="sm" title="On no program" />
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {codes.map((code) => (
-            <Badge key={code} variant="neutral">
-              {code}
-            </Badge>
-          ))}
-        </div>
-      )}
+      <DataTable
+        columns={PROGRAM_COLUMNS}
+        rows={codes}
+        rowKey={(code) => code}
+        isLoading={false}
+        scroll={{}}
+        empty="This student is on no program"
+      />
     </FormSection>
   );
 }

@@ -50,7 +50,6 @@ import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
-import { SharedReportsCard } from '../components/shared-reports';
 import { StudentPerformancePanel } from '../components/student-performance';
 import { ActionsTab } from './student-detail-actions';
 import { EventsTab } from './student-detail-events';
@@ -409,12 +408,7 @@ const TAB_CONTENT: Readonly<Record<StudentTab, (props: TabProps) => React.ReactN
   [STUDENT_TABS.DETAILS]: ({ form, detail }) => <DetailsTab form={form} detail={detail} />,
   [STUDENT_TABS.SERIES]: ({ detail }) => <SeriesTab detail={detail} />,
   [STUDENT_TABS.EVENTS]: ({ detail }) => <EventsTab detail={detail} />,
-  [STUDENT_TABS.PERFORMANCE]: ({ detail }) => (
-    <>
-      <StudentPerformancePanel studentId={detail.id} />
-      <SharedReportsCard studentId={detail.id} name={detail.fullName ?? detail.mobile} />
-    </>
-  ),
+  [STUDENT_TABS.PERFORMANCE]: ({ detail }) => <StudentPerformancePanel studentId={detail.id} />,
   [STUDENT_TABS.ACTIONS]: ({ detail }) => <ActionsTab detail={detail} />,
 };
 
