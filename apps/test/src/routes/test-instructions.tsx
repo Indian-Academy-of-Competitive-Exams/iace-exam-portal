@@ -62,8 +62,9 @@ export function TestInstructionsPage() {
 
   const paper = brief.data;
   const dual = paper.languageMode === LANGUAGE_MODE.DUAL;
-  const picked = dual || paper.languages.length <= 1 || language !== '';
-  const ready = declared && picked;
+  // A paper offering one language has nothing to choose, so it arrives chosen rather than skippable.
+  const chosen = language || (paper.languages.length === 1 ? (paper.languages[0] ?? '') : '');
+  const ready = declared && (dual || chosen !== '');
 
   return (
     <PageFrame
@@ -112,7 +113,7 @@ export function TestInstructionsPage() {
                 {...control}
                 clearable={false}
                 placeholder="Choose a language"
-                value={language}
+                value={chosen}
                 onChange={(next) => setLanguage(next as LanguageCode)}
                 items={paper.languages.map((code) => ({
                   value: code,
@@ -145,7 +146,7 @@ export function TestInstructionsPage() {
             // Asked for HERE because entering needs a gesture, and this click is the only one.
             void fullscreen.enter();
             navigate(ROUTES.EXAM(testId), {
-              state: { languages: dual ? paper.languages : [language] },
+              state: { languages: dual ? paper.languages : [chosen] },
             });
           }}
         >

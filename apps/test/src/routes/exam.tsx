@@ -3,10 +3,10 @@
  * chosen template draw it — the screen itself decides nothing about how a
  * sitting behaves, and a skin decides nothing about what it saves.
  */
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { type ExamPaper, type LanguageCode } from '@iace/contracts';
-import { Alert, LoadingState } from '@iace/ui';
+import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
@@ -45,9 +45,17 @@ export function ExamPage() {
   if (attempt.isError) {
     return (
       <div className="p-6">
-        <Alert variant="danger">
-          This test cannot be started right now. Go back to your tests and check when it opens.
-        </Alert>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="This test could not be started"
+          /* ui-copy-ok: rule — when it opens is the one thing that decides whether they can */
+          hint="Check when it opens on your tests."
+          action={
+            <Button asChild variant="outline">
+              <Link to={ROUTES.TESTS}>Go to your tests</Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
