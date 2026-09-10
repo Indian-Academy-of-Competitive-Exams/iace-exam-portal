@@ -1,12 +1,9 @@
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
-  EVALUATION_MODE_LABELS,
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
-  seriesModeMismatch,
   type TestDetail,
 } from '@iace/contracts';
 import {
@@ -19,7 +16,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ProgramPicker, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
+import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
 import { QUERY_KEYS } from '../lib/constants';
 import { opensLabel } from '../lib/schedule-format';
 import { instantOf, type ProgramOpening, type ScheduleDraft } from './test-schedule-draft';
@@ -52,52 +49,37 @@ export function OfferStep({ detail, offer }: Readonly<{ detail: TestDetail; offe
 
   return (
     <>
-      <SeriesSection detail={detail} held={held} onEdit={edit} />
+      <SeriesSection detail={detail} />
       <ScheduleSection detail={detail} held={held} refused={offer.refused} onEdit={edit} />
       <OfferSection detail={detail} saved={saved} held={held} onEdit={edit} />
     </>
   );
 }
 
-function SeriesSection({
-  detail,
-  held,
-  onEdit,
-}: Readonly<{ detail: TestDetail; held: OfferDraft; onEdit: EditOffer }>) {
-  const [refused, setRefused] = useState<string | null>(null);
-  const mode = EVALUATION_MODE_LABELS[detail.evaluationMode];
-  const sat = detail.attemptCount > 0;
-
-  /** The server refuses this too; asking first keeps Done from promising a move it cannot make. */
-  const choose = (chosen: ChosenSeries) => {
-    const issue = seriesModeMismatch(chosen.name, chosen.evaluationMode, detail.evaluationMode);
-    setRefused(issue);
-    if (issue === null) onEdit({ series: { id: chosen.id, name: chosen.name } });
-  };
-
+/** Shown, never changed here: a test moves from its series page, which confirms the move itself. */
+function SeriesSection({ detail }: Readonly<{ detail: TestDetail }>) {
   return (
     <FormSection title="Series">
-      <p className="text-sm text-muted-foreground">
-        {`A test is judged the way its series is, so this one can only move to another ${mode} series.`}
-      </p>
-
       <Field
         htmlFor="test-series"
         label="Series"
         className="max-w-lg"
         // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
-        hint={sat ? 'A test stops moving once anybody has sat it.' : undefined}
-        error={refused ?? undefined}
+        hint={
+          detail.attemptCount > 0
+            ? 'A test stops moving once anybody has sat it.'
+            : 'A test moves to another series from its series page.'
+        }
       >
         {(control) => (
           <TestSeriesPicker
             {...control}
             clearable={false}
-            value={held.series.id}
-            selectedLabel={held.series.name}
-            disabled={sat}
+            value={detail.testSeriesId}
+            selectedLabel={detail.testSeriesName}
+            disabled
             forExamStageId={detail.examStageId}
-            onChange={choose}
+            onChange={() => undefined}
           />
         )}
       </Field>
@@ -298,7 +280,6 @@ function changeLines(
   if (changes.retiring) {
     lines.push(`Stops offering it to students reached through ${saved.series.name}.`);
   }
-  if (changes.moved) lines.push(`Moves from ${saved.series.name} to ${held.series.name}.`);
   if (schedule.opening) lines.push(...openingLines(detail, saved, held));
   for (const row of schedule.written) {
     lines.push(`${row.programCode} opens ${whenOf(row.opensAt)}.`);
@@ -325,7 +306,6 @@ function writesFor(
 ): OfferWrites {
   return {
     retire: () => api.admin.tests.setStatus(testId, { status: TEST_STATUS.INACTIVE }),
-    moveTo: (testSeriesId) => api.admin.tests.moveToSeries(testId, { testSeriesId }),
     setOpening: (testSeriesId, unlockAt) =>
       api.admin.testSeries.setTestUnlock(testSeriesId, testId, { unlockAt }),
     setProgramOpening: async (programCode, opensAt) => {

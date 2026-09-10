@@ -21,7 +21,6 @@ export interface OfferDraft {
 }
 
 export interface OfferChanges {
-  moved: boolean;
   schedule: ScheduleChanges;
   offering: boolean;
   retiring: boolean;
@@ -31,7 +30,6 @@ export interface OfferChanges {
 /** The writes Done makes, named for what they do rather than the endpoints behind them. */
 export interface OfferWrites {
   retire: () => Promise<unknown>;
-  moveTo: (testSeriesId: string) => Promise<unknown>;
   setOpening: (testSeriesId: string, unlockAt: string | null) => Promise<unknown>;
   setProgramOpening: (programCode: string, opensAt: string) => Promise<unknown>;
   clearProgramOpening: (programCode: string) => Promise<unknown>;
@@ -50,17 +48,15 @@ export const savedOffer = (detail: OfferSource): OfferDraft => ({
 });
 
 export function offerChangesOf(saved: OfferDraft, held: OfferDraft): OfferChanges {
-  const moved = held.series.id !== saved.series.id;
   const schedule = changesOf(saved.schedule, held.schedule);
   const offering = held.offered && !saved.offered;
   const retiring = saved.offered && !held.offered;
 
   return {
-    moved,
     schedule,
     offering,
     retiring,
-    count: Number(moved) + schedule.count + Number(offering || retiring),
+    count: schedule.count + Number(offering || retiring),
   };
 }
 
@@ -71,7 +67,6 @@ export async function applyOffer(
   writes: OfferWrites,
 ): Promise<void> {
   if (changes.retiring) await writes.retire();
-  if (changes.moved) await writes.moveTo(held.series.id);
 
   const { opensAt } = held.schedule;
   if (changes.schedule.opening) {

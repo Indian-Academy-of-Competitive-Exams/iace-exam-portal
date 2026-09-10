@@ -28,7 +28,6 @@ function recordedWrites(refuse?: keyof OfferWrites) {
 
   const writes: OfferWrites = {
     retire: write('retire'),
-    moveTo: write('moveTo'),
     setOpening: write('setOpening'),
     setProgramOpening: write('setProgramOpening'),
     clearProgramOpening: write('clearProgramOpening'),
@@ -87,22 +86,13 @@ describe('what Done writes, and in what order', () => {
     assert.deepEqual(calls, []);
   });
 
-  it('sets the opening on the series the test is moving to', async () => {
-    const held = draftTest({
-      series: { id: 'srs_2', name: 'SSC CHSL Mocks' },
-      schedule: { opensAt: '2026-09-11T18:00', programs: [] },
-    });
-
-    assert.deepEqual(await done(draftTest(), held), [
-      'moveTo srs_2',
-      'setOpening srs_2 2026-09-11T12:30:00.000Z',
-    ]);
-  });
-
-  it('retires a test before anything else about it moves', async () => {
+  it('retires a test before its opening moves', async () => {
     const saved = draftTest({ offered: true });
-    const held = draftTest({ series: { id: 'srs_2', name: 'SSC CHSL Mocks' }, offered: false });
+    const held = draftTest({ schedule: { opensAt: '2026-09-11T18:00', programs: [] } });
 
-    assert.deepEqual(await done(saved, held), ['retire', 'moveTo srs_2']);
+    assert.deepEqual(await done(saved, held), [
+      'retire',
+      'setOpening srs_1 2026-09-11T12:30:00.000Z',
+    ]);
   });
 });
