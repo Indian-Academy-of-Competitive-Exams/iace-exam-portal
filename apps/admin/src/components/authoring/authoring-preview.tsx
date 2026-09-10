@@ -1,6 +1,6 @@
 import { Check, CircleAlert, CircleDot, Circle, TriangleAlert } from 'lucide-react';
 import { QUESTION_TYPE, previewTextOf, type QuestionLanguage } from '@iace/contracts';
-import { RichContent, cn } from '@iace/ui';
+import { Badge, RichContent, cn } from '@iace/ui';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
 
 /** One rule, and how the question stands against it. */
@@ -77,6 +77,13 @@ const TONE = {
   fail: 'text-destructive',
 } as const;
 
+/** Colour alone does not say which rows stop a save, so the row that does says it in a word. */
+const STANDING = {
+  pass: null,
+  warn: { label: 'Optional', variant: 'warning' },
+  fail: { label: 'Required', variant: 'danger' },
+} as const;
+
 export function AuthoringChecks({ checks }: Readonly<{ checks: readonly Check[] }>) {
   return (
     <section className="rounded-md border border-border bg-surface">
@@ -84,6 +91,7 @@ export function AuthoringChecks({ checks }: Readonly<{ checks: readonly Check[] 
       <ul>
         {checks.map((check) => {
           const Icon = ICON[check.state];
+          const standing = STANDING[check.state];
           return (
             <li
               key={check.key}
@@ -91,6 +99,11 @@ export function AuthoringChecks({ checks }: Readonly<{ checks: readonly Check[] 
             >
               <Icon className={cn('size-4 shrink-0', TONE[check.state])} aria-hidden />
               <span className="min-w-0 flex-1">{check.label}</span>
+              {standing ? (
+                <Badge variant={standing.variant} className="shrink-0">
+                  {standing.label}
+                </Badge>
+              ) : null}
               {check.meta ? (
                 <span className="shrink-0 text-xs text-muted-foreground">{check.meta}</span>
               ) : null}
