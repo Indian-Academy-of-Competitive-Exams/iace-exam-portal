@@ -649,8 +649,8 @@
 
     <!-- ===== Empty state ===== -->
     <section>
-      <div class="sec-title">Empty state — three absences, three glyphs</div>
-      <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:14px">
+      <div class="sec-title">Empty state — four absences, four glyphs</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px">
         <div class="card">
           <div class="empty">
             <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.5-6.9A2 2 0 0016.8 4H7.2a2 2 0 00-1.7 1.1z"/></svg></div>
@@ -675,17 +675,28 @@
             <div class="empty__actions"><button class="btn btn-primary">Retry</button></div>
           </div>
         </div>
+        <div class="card">
+          <div class="empty empty--refused">
+            <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 118 0v4"/></svg></div>
+            <div class="empty__title">Only a super admin can open this</div>
+            <div class="empty__body">Ask one to grant you super admin.</div>
+          </div>
+        </div>
       </div>
       <div class="note">
         <b>An empty state is for a region with nothing to show; an alert is for data that IS there and needs
         attention.</b> A blue box saying "no events yet" is the wrong instrument — it reads as something to act
         on, and the reader looks for the action.
         <br><br>
-        There are exactly three absences, and the glyph names which one before a word is read:
+        There are exactly four absences, and the glyph names which one before a word is read:
         <b>nothing yet</b> (inbox), <b>nothing matches</b> (struck-through search), <b>it did not load</b>
-        (crimson cross). A per-screen glyph is decoration — it restates the heading, which the heading already
-        said — so <code>kind</code> picks the icon and a call site overrides it only where the absence means
-        something else ("No mistakes recorded" is a good outcome, and takes a check).
+        (crimson cross), <b>you may not see it</b> (amber padlock). A per-screen glyph is decoration — it
+        restates the heading, which the heading already said — so <code>kind</code> picks the icon and a call
+        site overrides it only where the absence means something else ("No mistakes recorded" is a good
+        outcome, and takes a check).
+        <br><br>
+        <b>A refusal is not a failure.</b> Nothing is broken and retrying changes nothing, so it is amber
+        rather than crimson and carries no Retry — what it carries is the way to be allowed in.
         <br><br>
         Each one carries <b>what is missing</b> and, where the reader could not infer it, <b>the one action that
         fixes it</b> — Retry on a failure, Clear on a filter. A failure without a retry is a dead end; the only

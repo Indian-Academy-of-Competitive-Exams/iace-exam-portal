@@ -162,6 +162,12 @@
   background: color-mix(in srgb, var(--destructive) 10%, transparent);
 }
 
+/* Refused is not broken: nothing went wrong, the reader simply cannot pass. */
+.empty--refused .empty__icon {
+  color: var(--warning-ink);
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+}
+
 /* The density for a table body or a panel, where the region is already padded. */
 .empty--sm {
   padding: 0;

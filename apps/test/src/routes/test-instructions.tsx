@@ -8,6 +8,8 @@ import {
   Button,
   Checkbox,
   Combobox,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Field,
   Metric,
   PageFrame,
@@ -53,7 +55,7 @@ export function TestInstructionsPage() {
       <PageFrame
         header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Instructions" />}
       >
-        <Alert variant="danger">This test is not open to you.</Alert>
+        <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This test is not open to you" />
       </PageFrame>
     );
   }

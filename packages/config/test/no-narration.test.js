@@ -35,12 +35,15 @@ ruleTester.run('no-narration', noNarration, {
     screen('return <Spinner label="Checking your system" />;'),
     screen('return <Stepper label="Building this test" />;'),
 
-    // A failure names an EVENT, not a region, so its heading is necessarily a sentence.
+    // A failure or a refusal names an EVENT, not a region, so its heading is a sentence.
     screen(
       'return <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="Could not load this test" />;',
     ),
     screen(
       'return <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="Your tests did not load" hint="It is safe — open it from your performance." />;',
+    ),
+    screen(
+      'return <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This test is not open to you" />;',
     ),
   ],
 

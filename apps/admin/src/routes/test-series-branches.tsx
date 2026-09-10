@@ -11,6 +11,7 @@ import {
   Alert,
   Button,
   EmptyState,
+  EMPTY_STATE_KINDS,
   Checkbox,
   ConfirmDialog,
   FormSection,
@@ -129,12 +130,11 @@ function BranchScheduleList({
 }>) {
   if (!canRead) {
     return (
-      <Alert variant="info">
-        <span>
-          Branch scheduling is a permission of its own. You can see how far this series reaches, but
-          not change it.
-        </span>
-      </Alert>
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.REFUSED}
+        title="Branch scheduling is a permission of its own"
+        hint="Ask a super admin for it to see and set how far this series reaches."
+      />
     );
   }
 

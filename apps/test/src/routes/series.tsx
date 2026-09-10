@@ -111,7 +111,7 @@ export function SeriesPage() {
           </>
         ) : null}
         {catalog.data && !series ? (
-          <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="This series is not one you reach" />
+          <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This series is not one you reach" />
         ) : null}
 
         {series && progress ? (

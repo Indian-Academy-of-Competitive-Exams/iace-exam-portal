@@ -63,27 +63,28 @@ const HEADING_ATTRS = new Set(['title', 'heading']);
 /** A Field's label NAMES the value. A Checkbox label is a proposition and a Spinner's is a state. */
 const FIELD_ELEMENTS = new Set(['Field', 'FormField']);
 
-/** A failure is an event, not a region: "Could not load this test" IS its name. */
-const namesAFailure = (opening) =>
+/** An EVENT names itself in a sentence: "Could not load this test", "Not open to you". */
+const EVENT_KINDS = new Set(['FAILURE', 'REFUSED']);
+const namesAnEvent = (opening) =>
   (opening?.attributes ?? []).some(
     (a) =>
       a.type === 'JSXAttribute' &&
       a.name?.name === 'kind' &&
       a.value?.type === 'JSXExpressionContainer' &&
       a.value.expression?.type === 'MemberExpression' &&
-      a.value.expression.property?.name === 'FAILURE',
+      EVENT_KINDS.has(a.value.expression.property?.name),
   );
 
 /** The two attributes whose exemption is carried by the element they sit on. */
 const carriesItsOwnExemption = (name, opening) =>
   name === 'description'
     ? DIALOG_ELEMENTS.has(elementName(opening) ?? '')
-    : name === 'hint' && namesAFailure(opening);
+    : name === 'hint' && namesAnEvent(opening);
 
 /** Which narration a string attribute would be, or null where it is not one at all. */
 const narrationOf = (name, opening) => {
   if (name === 'label') return FIELD_ELEMENTS.has(elementName(opening)) ? 'narrativeLabel' : null;
-  return HEADING_ATTRS.has(name) && !namesAFailure(opening) ? 'narrativeHeading' : null;
+  return HEADING_ATTRS.has(name) && !namesAnEvent(opening) ? 'narrativeHeading' : null;
 };
 
 const word = (w) => w.toLowerCase().replace(/[^a-z]/g, '');

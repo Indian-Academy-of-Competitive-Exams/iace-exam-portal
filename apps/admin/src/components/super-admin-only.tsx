@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Alert, PageHeader } from '@iace/ui';
+import { EmptyState, EMPTY_STATE_KINDS, PageHeader } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 
 /**
@@ -16,11 +16,11 @@ export function SuperAdminOnly({
     return (
       <>
         <PageHeader title={title} />
-        <Alert variant="warning">
-          <span>
-            Only a super admin can open this. If you need it, ask one to grant you super admin.
-          </span>
-        </Alert>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.REFUSED}
+          title="Only a super admin can open this"
+          hint="Ask one to grant you super admin."
+        />
       </>
     );
   }

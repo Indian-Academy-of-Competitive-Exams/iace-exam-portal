@@ -1,13 +1,14 @@
 import * as React from 'react';
-import { CircleX, Inbox, SearchX, type LucideIcon } from 'lucide-react';
+import { CircleX, Inbox, Lock, SearchX, type LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
-/** The three absences a region can have. The glyph says which one before a word is read. */
+/** The four absences a region can have. The glyph says which one before a word is read. */
 export const EMPTY_STATE_KINDS = {
   EMPTY: 'EMPTY',
   FILTERED: 'FILTERED',
   FAILURE: 'FAILURE',
+  REFUSED: 'REFUSED',
 } as const;
 
 export type EmptyStateKind = (typeof EMPTY_STATE_KINDS)[keyof typeof EMPTY_STATE_KINDS];
@@ -16,14 +17,16 @@ const KIND_ICON: Readonly<Record<EmptyStateKind, LucideIcon>> = {
   EMPTY: Inbox,
   FILTERED: SearchX,
   FAILURE: CircleX,
+  REFUSED: Lock,
 };
 
-/** Failure is the one absence with a tone, matching `.empty--error` in components.css. */
+/** The two that are not "nothing yet" carry a tone, mirrored by `.empty--error`/`--refused`. */
 const NEUTRAL_DISC = 'bg-[var(--empty-icon-bg)] text-[var(--empty-icon)]';
 const KIND_DISC: Readonly<Record<EmptyStateKind, string>> = {
   EMPTY: NEUTRAL_DISC,
   FILTERED: NEUTRAL_DISC,
   FAILURE: 'bg-destructive/10 text-destructive',
+  REFUSED: 'bg-warning/15 text-warning-ink',
 };
 
 const SIZES = {
@@ -41,7 +44,7 @@ export interface EmptyCopy {
   title: string;
   /** A rule or consequence they cannot read off the screen; never advice for a button they can see. */
   hint?: string;
-  /** The one action that resolves it — Retry on a failure, Clear on a filter. */
+  /** The one action that resolves it — Retry on a failure, a way onward from a refusal. */
   action?: React.ReactNode;
   /** Only where the kind's own glyph would misstate the absence. */
   icon?: LucideIcon;

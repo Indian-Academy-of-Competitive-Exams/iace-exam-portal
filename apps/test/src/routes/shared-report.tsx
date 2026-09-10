@@ -78,7 +78,7 @@ function Body({
     const refusal = AppException.is(query.error) ? query.error : null;
     return refusal?.code === ErrorCodes.NOT_FOUND ? (
       <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
+        kind={EMPTY_STATE_KINDS.REFUSED}
         title="This link has been revoked or has expired"
         hint="Ask the student for a new one."
       />

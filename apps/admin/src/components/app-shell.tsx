@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Alert, Badge, PageHeader } from '@iace/ui';
+import { Badge, EmptyState, EMPTY_STATE_KINDS, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
@@ -48,13 +48,11 @@ function DeactivatedNotice() {
   return (
     <>
       <PageHeader title="Access removed" />
-      <Alert variant="warning">
-        <span>
-          Every section and action across the platform is closed to you, including anything you were
-          granted before. Nothing you created has been deleted. A super admin can restore your
-          access — until then there is nothing here to do.
-        </span>
-      </Alert>
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.REFUSED}
+        title="Every section is closed to you"
+        hint="Nothing you created has been deleted; a super admin can restore your access."
+      />
     </>
   );
 }
