@@ -85,10 +85,13 @@ import {
   SAVED_ROUTES,
   bookmarkedInAttemptSchema,
   savedQuestionSchema,
+  savedFacetsSchema,
   type BookmarkQuestionInput,
   type BookmarkedInAttempt,
   type SavedListQueryInput,
   type SavedQuestion,
+  type SavedFacets,
+  type SavedFacetsQueryInput,
 } from './saved';
 import {
   ADMIN_BRANCH_ROUTES,
@@ -854,6 +857,12 @@ export function createApiClient(options: ApiClientOptions) {
         }),
 
       /** Drops one saved row. A dismissed mistake comes back only if they get it wrong again. */
+      /** Every choice both saved-list filters can offer, off their own set — never the whole catalog. */
+      savedFacets: (query: SavedFacetsQueryInput): Promise<SavedFacets> =>
+        request(`${SAVED_ROUTES.facets}${queryString({ ...query })}`, {
+          schema: savedFacetsSchema,
+        }),
+
       removeSavedQuestion: (id: string): Promise<NoContent> =>
         request(SAVED_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
 

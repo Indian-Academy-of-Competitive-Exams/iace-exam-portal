@@ -1,25 +1,27 @@
 /**
  * The two lists a student keeps of the bank: BOOKMARKS they starred in a review, and MISTAKES the
- * fold wrote for them. A feed parted by hairlines rather than a ListView, for the reason
- * `notifications.tsx` gives — this is something a student reads, not an admin data table.
+ * fold wrote for them. A LIST screen rather than the feed the rest of this portal uses — these are
+ * long, filtered and paged, which is the one job `TableFrame` and `ListView` already do.
  */
-import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CircleCheck, Trash2 } from 'lucide-react';
-import { useInfinitePages } from '@iace/app-kit';
-import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BookOpenText, CircleCheck, Trash2 } from 'lucide-react';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
-  EMPTY_STATE_KINDS,
   Alert,
   Badge,
-  Button,
-  EmptyState,
+  DropdownMenuItem,
+  ListView,
+  MultiCombobox,
   PageHeader,
-  PanelFrame,
-  Skeleton,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
+  RowActions,
+  TableFrame,
+  TruncatedText,
+  cn,
+  linkVariants,
+  type DataTableColumn,
+  type ListFilter,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import {
   INSTITUTE_TIME_ZONE,
@@ -30,10 +32,12 @@ import {
   type SavedQuestionKind,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, SAVED_PAGE_SIZE, savedQueryKey } from '../lib/constants';
+import { SavedQuestionDialog } from '../components/review/saved-question-dialog';
+import { NAV_ITEMS, savedFacetsQueryKey, savedQueryKey } from '../lib/constants';
 
 const KIND_KEY = 'list';
-const SKELETON_KEYS = ['a', 'b', 'c', 'd'];
+const SUBJECT_KEY = 'subjectId';
+const TEST_KEY = 'testId';
 
 /** What each list is for, said once at the top rather than on every row. */
 const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
@@ -43,16 +47,18 @@ const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
 };
 
 export function SavedPage() {
-  const filters = useFilters<typeof KIND_KEY>();
+  const filters = useFilters<typeof KIND_KEY | typeof SUBJECT_KEY | typeof TEST_KEY>();
   const chosen = filters.get(KIND_KEY);
   const kind: SavedQuestionKind = isKind(chosen) ? chosen : SAVED_QUESTION_KIND.BOOKMARK;
 
   return (
-    <PanelFrame
+    <TableFrame
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Saved questions" />}
       tabs={{
         value: kind,
-        onValueChange: (next) => filters.set({ [KIND_KEY]: next }),
+        // Each list spans its own subjects, so the other's choice would filter this one to nothing.
+        onValueChange: (next) =>
+          filters.set({ [KIND_KEY]: next, [SUBJECT_KEY]: '', [TEST_KEY]: '' }),
         items: SAVED_QUESTION_KINDS.map((value) => ({
           value,
           label: SAVED_QUESTION_KIND_LABELS[value],
@@ -66,111 +72,177 @@ export function SavedPage() {
 const isKind = (value: string): value is SavedQuestionKind =>
   (SAVED_QUESTION_KINDS as readonly string[]).includes(value);
 
-function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
-  const list = useInfinitePages({
-    queryKey: savedQueryKey(kind),
-    fetchPage: (page) => api.me.savedQuestions({ kind, page, pageSize: SAVED_PAGE_SIZE }),
+/** Only what their own set spans: a filter must offer no choice that finds nothing. */
+function FacetPicker({
+  kind,
+  facet,
+  placeholder,
+  control,
+}: Readonly<{
+  kind: SavedQuestionKind;
+  facet: 'subjects' | 'tests';
+  placeholder: string;
+  control: ListFilterMultiControl;
+}>) {
+  const facets = useQuery({
+    queryKey: savedFacetsQueryKey(kind),
+    queryFn: () => api.me.savedFacets({ kind }),
   });
 
-  if (list.isLoading) {
-    return (
-      <div className="flex flex-col gap-3">
-        {SKELETON_KEYS.map((key) => (
-          <Skeleton key={key} variant="row" className="h-20 rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-  if (list.isError) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Your saved questions did not load"
-        onRetry={list.retry}
-      />
-    );
-  }
-  if (list.items.length === 0) return <Empty kind={kind} />;
+  return (
+    <MultiCombobox
+      {...control}
+      chips={false}
+      placeholder={placeholder}
+      emptyLabel="Nothing matches that"
+      items={(facets.data?.[facet] ?? []).map((row) => ({ value: row.id, label: row.name }))}
+    />
+  );
+}
+
+function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
+  const queryClient = useQueryClient();
+  const [reading, setReading] = useState<SavedQuestion | null>(null);
+
+  const drop = useMutation({
+    meta: { success: 'Removed from your list.' },
+    mutationFn: (id: string) => api.me.removeSavedQuestion(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueryKey(kind) }),
+  });
+
+  const filterSpec = [
+    {
+      key: SUBJECT_KEY,
+      kind: 'customMulti',
+      label: 'Subject',
+      primary: true,
+      render: (control: ListFilterMultiControl) => (
+        <FacetPicker kind={kind} facet="subjects" placeholder="Any subject" control={control} />
+      ),
+    },
+    {
+      key: TEST_KEY,
+      kind: 'customMulti',
+      label: 'Test',
+      primary: true,
+      render: (control: ListFilterMultiControl) => (
+        <FacetPicker kind={kind} facet="tests" placeholder="Any test" control={control} />
+      ),
+    },
+  ] as const satisfies readonly ListFilter[];
+
+  const list = useListScreen({
+    queryKey: savedQueryKey(kind),
+    filters: filterSpec,
+    toQuery: (values) => ({ kind, subjectId: values.subjectId, testId: values.testId }),
+    fetchPage: (params) => api.me.savedQuestions(params),
+  });
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ui-copy-ok: rule */}
-      <Alert variant="info">{KIND_NOTE[kind]}</Alert>
-
-      {/* The rule is on the WRAPPER and full width; the row inside keeps its radius and its hover. */}
-      <div className="flex flex-col divide-y divide-border">
-        {list.items.map((row) => (
-          <div key={row.id} className="py-1">
-            <SavedRow saved={row} />
-          </div>
-        ))}
-      </div>
-
-      {list.hasMore ? (
-        <Button
-          variant="outline"
-          className="self-center"
-          onClick={list.loadMore}
-          disabled={list.isLoadingMore}
-        >
-          Show older
-        </Button>
-      ) : null}
-    </div>
+    <ListView
+      list={list}
+      filters={filterSpec}
+      columns={savedColumns(drop.isPending, (id) => drop.mutate(id), setReading)}
+      rowKey={(row) => row.id}
+      empty={emptyFor(kind)}
+      emptyFiltered="Nothing matches"
+      banner={
+        <>
+          {/* ui-copy-ok: rule */}
+          <Alert variant="info" className="mb-4">
+            {KIND_NOTE[kind]}
+          </Alert>
+          {reading ? (
+            <SavedQuestionDialog saved={reading} onClose={() => setReading(null)} />
+          ) : null}
+        </>
+      }
+    />
   );
 }
 
 /** Nothing starred and nothing missed are different facts, and only one of them is good news. */
-const Empty = ({ kind }: Readonly<{ kind: SavedQuestionKind }>) =>
-  kind === SAVED_QUESTION_KIND.BOOKMARK ? (
-    <EmptyState title="No bookmarks yet" />
-  ) : (
-    <EmptyState icon={CircleCheck} title="No mistakes recorded" />
-  );
+const emptyFor = (kind: SavedQuestionKind) =>
+  kind === SAVED_QUESTION_KIND.BOOKMARK
+    ? { title: 'No bookmarks yet' }
+    : { title: 'No mistakes recorded', icon: CircleCheck };
 
-/** A row in one panel, never its own card: a card inside the frame's card is a card in a card. */
-function SavedRow({ saved }: Readonly<{ saved: SavedQuestion }>) {
-  const queryClient = useQueryClient();
-  const drop = useMutation({
-    meta: { success: 'Removed from your list.' },
-    mutationFn: () => api.me.removeSavedQuestion(saved.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueryKey(saved.kind) }),
-  });
-
-  return (
-    <div className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-md p-4 transition-colors hover:bg-muted/50">
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <Badge variant="neutral">{saved.subject}</Badge>
-          {saved.topic ? <Badge variant="neutral">{saved.topic}</Badge> : null}
-        </span>
-        <span className="text-sm text-foreground">{saved.stemPreview}</span>
-        <span className="text-xs text-muted-foreground">{whenItWasSaved(saved.createdAt)}</span>
-      </span>
-
-      <span className="flex shrink-0 items-center gap-2">
-        {saved.attemptId ? (
-          <Button asChild size="sm" variant="outline">
-            <Link to={ROUTES.REPORT_TAB(saved.attemptId, 'solutions')}>Open solution</Link>
-          </Button>
-        ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              loading={drop.isPending}
-              onClick={() => drop.mutate()}
-            >
-              <Trash2 aria-hidden />
-              <span className="sr-only">Remove from this list</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Remove from this list</TooltipContent>
-        </Tooltip>
-      </span>
-    </div>
-  );
+function savedColumns(
+  busy: boolean,
+  onDrop: (id: string) => void,
+  onRead: (saved: SavedQuestion) => void,
+): DataTableColumn<SavedQuestion>[] {
+  return [
+    {
+      key: 'question',
+      header: 'Question',
+      className: 'w-full max-w-0',
+      // Opens where it is, rather than sending them to a different paper's report to find it.
+      cell: (row) => (
+        <button
+          type="button"
+          className={cn(linkVariants(), 'block min-w-0 max-w-full text-left')}
+          onClick={() => onRead(row)}
+        >
+          <TruncatedText>{row.stemPreview}</TruncatedText>
+        </button>
+      ),
+    },
+    {
+      key: 'test',
+      header: 'Test',
+      className: 'max-w-56',
+      cell: (row) => <TruncatedText>{row.testTitle}</TruncatedText>,
+    },
+    {
+      key: 'time',
+      header: 'Your time',
+      numeric: true,
+      className: 'max-w-32',
+      cell: (row) => (
+        <TruncatedText>{row.timeSpentSec === null ? null : `${row.timeSpentSec}s`}</TruncatedText>
+      ),
+    },
+    {
+      key: 'subject',
+      header: 'Subject',
+      className: 'max-w-48',
+      // `min-w-0 shrink` is what gives the badge a bound for `TruncatedText` to cut against.
+      cell: (row) => (
+        <Badge variant="neutral" className="min-w-0 shrink">
+          <TruncatedText>{row.subject}</TruncatedText>
+        </Badge>
+      ),
+    },
+    {
+      key: 'topic',
+      header: 'Topic',
+      className: 'max-w-48',
+      cell: (row) => <TruncatedText>{row.topic}</TruncatedText>,
+    },
+    {
+      key: 'saved',
+      header: 'Saved',
+      className: 'max-w-40',
+      cell: (row) => <TruncatedText>{whenItWasSaved(row.createdAt)}</TruncatedText>,
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (row) => (
+        <RowActions label="Actions for this question">
+          <DropdownMenuItem onSelect={() => onRead(row)}>
+            <BookOpenText aria-hidden />
+            Read it
+          </DropdownMenuItem>
+          <DropdownMenuItem destructive disabled={busy} onSelect={() => onDrop(row.id)}>
+            <Trash2 aria-hidden />
+            Remove from this list
+          </DropdownMenuItem>
+        </RowActions>
+      ),
+    },
+  ];
 }
 
 /** The institute's clock, never the device's — a student in another zone reads the same day. */

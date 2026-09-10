@@ -116,3 +116,47 @@ describe('SavedQuestionsService — the two lists', () => {
     assert.deepEqual(stars.bookmarks, [{ questionId: 'q_1', savedId: 'svq_seed' }]);
   });
 });
+
+describe('SavedQuestionsService — what a revision list is filtered and read by', () => {
+  it('carries the paper each row was met on, and what it cost there', async () => {
+    const { saved } = build(
+      [bookmark({ attemptId: 'att_1' })],
+      [makeSavedAttempt({ id: 'att_1', testTitle: 'Mock 1', timeByQuestion: { q_1: 47 } })],
+    );
+
+    const page = await saved.list('stu_1', {
+      kind: SAVED_QUESTION_KIND.BOOKMARK,
+      page: 1,
+      pageSize: 20,
+    });
+
+    assert.equal(page.items[0]?.testTitle, 'Mock 1');
+    assert.equal(page.items[0]?.timeSpentSec, 47);
+  });
+
+  /** A sitting that has been erased leaves the question on the list with nothing behind it. */
+  it('reads a row whose sitting is gone without inventing a paper for it', async () => {
+    const { saved } = build([bookmark({ attemptId: null })], []);
+
+    const page = await saved.list('stu_1', {
+      kind: SAVED_QUESTION_KIND.BOOKMARK,
+      page: 1,
+      pageSize: 20,
+    });
+
+    assert.equal(page.items[0]?.testId, null);
+    assert.equal(page.items[0]?.timeSpentSec, null);
+  });
+
+  it('offers only the subjects and tests their own set spans', async () => {
+    const { saved } = build(
+      [bookmark({ id: 'svq_1', attemptId: 'att_1' })],
+      [makeSavedAttempt({ id: 'att_1', testId: 'tst_1', testTitle: 'Mock 1' })],
+    );
+
+    const facets = await saved.facets('stu_1', SAVED_QUESTION_KIND.BOOKMARK);
+
+    assert.deepEqual(facets.tests, [{ id: 'tst_1', name: 'Mock 1' }]);
+    assert.equal(facets.subjects.length, 1);
+  });
+});

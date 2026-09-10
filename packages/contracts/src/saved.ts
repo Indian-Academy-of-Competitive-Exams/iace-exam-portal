@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from './envelope';
+import { csvIdQuery } from './common';
 
 // ============================================================================
 // Two lists in one table, both the signed-in student's own: BOOKMARK is theirs
@@ -32,12 +33,21 @@ export const savedQuestionSchema = z.object({
   topic: z.string().nullable(),
   /** The sitting it came from, so the row can open the solution it belongs to. Null once erased. */
   attemptId: z.string().nullable(),
+  /** Which paper they met it on — the thing a revision list is actually sorted through. */
+  testId: z.string().nullable(),
+  testTitle: z.string().nullable(),
+  /** What that sitting cost them on this question. Null where the sitting is gone. */
+  timeSpentSec: z.number().int().nullable(),
   createdAt: z.string(),
 });
 export type SavedQuestion = z.infer<typeof savedQuestionSchema>;
 
 export const savedListQuerySchema = paginationQuerySchema.extend({
   kind: savedQuestionKindSchema,
+  /** Narrows to what they are revising. An empty choice is every subject, never none. */
+  subjectId: csvIdQuery(),
+  /** The same, by the paper it came from. */
+  testId: csvIdQuery(),
 });
 export type SavedListQuery = z.infer<typeof savedListQuerySchema>;
 export type SavedListQueryInput = z.input<typeof savedListQuerySchema>;
@@ -57,8 +67,24 @@ export const bookmarkedInAttemptSchema = z.object({
 });
 export type BookmarkedInAttempt = z.infer<typeof bookmarkedInAttemptSchema>;
 
+/** One filterable value. Read off the student's OWN set, so no choice can find nothing. */
+export const savedFacetSchema = z.object({ id: z.string(), name: z.string() });
+export type SavedFacet = z.infer<typeof savedFacetSchema>;
+
+/** Every choice both filters can offer, in one read — two pickers are not two round trips. */
+export const savedFacetsSchema = z.object({
+  subjects: z.array(savedFacetSchema),
+  tests: z.array(savedFacetSchema),
+});
+export type SavedFacets = z.infer<typeof savedFacetsSchema>;
+
+export const savedFacetsQuerySchema = z.object({ kind: savedQuestionKindSchema });
+export type SavedFacetsQuery = z.infer<typeof savedFacetsQuerySchema>;
+export type SavedFacetsQueryInput = z.input<typeof savedFacetsQuerySchema>;
+
 export const SAVED_ROUTES = {
   list: '/me/saved',
+  facets: '/me/saved/facets',
   bookmark: '/me/saved/bookmarks',
   /** Drops one row, whichever list it is on — a dismissed mistake returns if they miss it again. */
   remove: (id: string) => `/me/saved/${id}`,

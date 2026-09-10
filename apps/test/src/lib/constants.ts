@@ -107,9 +107,11 @@ export const CHANNEL_LABELS: Readonly<Record<DeliveryChannel, string>> = {
   [DELIVERY_CHANNEL.SMS]: 'SMS',
 };
 /** One page of either saved list. The same feed shape as the bell, so the same page. */
-export const SAVED_PAGE_SIZE = 20;
-
 export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
+
+/** Both filters' options, which span the whole set and so do not move when a page does. */
+export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
+  ['me', 'saved', kind, 'facets'] as const;
 
 /** What the review reads to draw its stars — one read per sitting, not one per question. */
 export const bookmarksInAttemptQueryKey = (attemptId: string) =>

@@ -16,8 +16,11 @@ import {
   type Paginated,
   type SavedListQuery,
   type SavedQuestion,
+  type SavedFacets,
+  type SavedFacetsQuery,
   bookmarkQuestionSchema,
   savedListQuerySchema,
+  savedFacetsQuerySchema,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
@@ -35,6 +38,15 @@ export class SavedController {
     @Query(new ZodQuery(savedListQuerySchema)) query: SavedListQuery,
   ): Promise<Paginated<SavedQuestion>> {
     return this.saved.list(user.id, query);
+  }
+
+  /** What both filters offer. A separate read: the options must span every page, not one. */
+  @Get('facets')
+  facets(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodQuery(savedFacetsQuerySchema)) query: SavedFacetsQuery,
+  ): Promise<SavedFacets> {
+    return this.saved.facets(user.id, query.kind);
   }
 
   /** Offered only on the review surface, and refused until that sitting's solutions have opened. */

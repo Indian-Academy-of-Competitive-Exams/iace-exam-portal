@@ -130,7 +130,8 @@ export function ReviewPaper({
   );
 }
 
-function ReviewQuestion({
+/** Exported so a saved list can show one question in a dialog without a second reader. */
+export function ReviewQuestion({
   question,
   index,
   total,

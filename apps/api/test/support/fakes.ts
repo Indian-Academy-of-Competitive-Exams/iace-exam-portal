@@ -6764,10 +6764,13 @@ export interface FakeSavedAttempt {
   id: string;
   studentId: string;
   testId: string;
+  testTitle: string | null;
   status: AttemptStatus;
   evaluationMode: EvaluationMode;
   durationSec: number;
   questionIds: readonly string[];
+  /** Seconds on each question, for the saved list's own column. Absent reads as never measured. */
+  timeByQuestion?: Readonly<Record<string, number>>;
 }
 
 export function makeSavedAttempt(overrides: Partial<FakeSavedAttempt> = {}): FakeSavedAttempt {
@@ -6775,6 +6778,7 @@ export function makeSavedAttempt(overrides: Partial<FakeSavedAttempt> = {}): Fak
     id: 'att_1',
     studentId: 'stu_1',
     testId: 'tst_1',
+    testTitle: 'Mock 1',
     status: ATTEMPT_STATUS.EVALUATED,
     evaluationMode: EVALUATION_MODE.PRACTICE,
     durationSec: 3_600,
@@ -6807,6 +6811,29 @@ export class FakeSavedPrisma {
     return attempt ?? null;
   }
 
+  /** The saved list reads the paper a row was met on; `SavedQuestion.attemptId` is a scalar. */
+  readonly attempt = {
+    findMany: ({
+      where,
+    }: {
+      where: { id?: { in: string[] }; studentId?: string; testId?: { in: string[] } };
+    }) =>
+      Promise.resolve(
+        this.attempts
+          .filter(
+            (row) =>
+              (where.id === undefined || where.id.in.includes(row.id)) &&
+              (where.studentId === undefined || row.studentId === where.studentId) &&
+              (where.testId === undefined || where.testId.in.includes(row.testId)),
+          )
+          .map((row) => ({
+            id: row.id,
+            testId: row.testId,
+            test: { title: row.testTitle },
+          })),
+      ),
+  };
+
   readonly attemptQuestion = {
     findFirst: ({
       where,
@@ -6828,8 +6855,34 @@ export class FakeSavedPrisma {
       });
     },
 
-    findMany: ({ where }: { where: { attemptId: string; attempt: { studentId: string } } }) => {
-      const attempt = this.served(where.attemptId, where.attempt.studentId);
+    findMany: ({
+      where,
+    }: {
+      where: {
+        attemptId: string | { in: string[] };
+        questionId?: { in: string[] };
+        attempt?: { studentId: string };
+      };
+    }) => {
+      // The saved list asks across several sittings at once; the star gate asks about exactly one.
+      if (typeof where.attemptId !== 'string') {
+        const wanted = where.attemptId.in;
+        return Promise.resolve(
+          this.attempts
+            .filter((row) => wanted.includes(row.id))
+            .flatMap((row) =>
+              row.questionIds
+                .filter((questionId) => where.questionId?.in.includes(questionId) ?? true)
+                .map((questionId) => ({
+                  attemptId: row.id,
+                  questionId,
+                  timeSpentSec: row.timeByQuestion?.[questionId] ?? 0,
+                })),
+            ),
+        );
+      }
+
+      const attempt = this.served(where.attemptId, where.attempt?.studentId);
       return Promise.resolve((attempt?.questionIds ?? []).map((questionId) => ({ questionId })));
     },
   };
