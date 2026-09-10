@@ -34,6 +34,14 @@ ruleTester.run('no-narration', noNarration, {
     screen('return <Checkbox label="Every student must attempt this section" />;'),
     screen('return <Spinner label="Checking your system" />;'),
     screen('return <Stepper label="Building this test" />;'),
+
+    // A failure names an EVENT, not a region, so its heading is necessarily a sentence.
+    screen(
+      'return <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="Could not load this test" />;',
+    ),
+    screen(
+      'return <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="Your tests did not load" hint="It is safe — open it from your performance." />;',
+    ),
   ],
 
   invalid: [
@@ -65,6 +73,12 @@ ruleTester.run('no-narration', noNarration, {
     {
       code: screen('return <FormField label="Bring them in as" />;'),
       errors: [{ messageId: 'narrativeLabel' }],
+    },
+    {
+      code: screen(
+        'return <EmptyState kind={EMPTY_STATE_KINDS.EMPTY} title="This student has not sat a test" />;',
+      ),
+      errors: [{ messageId: 'narrativeHeading' }],
     },
   ],
 });

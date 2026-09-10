@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Skeleton } from './skeleton';
-import { Button } from './button';
 import {
   EmptyState,
   emptyCopy,
@@ -182,20 +181,13 @@ function TableFailure({
   error,
   onRetry,
 }: Readonly<{ colSpan: number; error?: EmptyMessage; onRetry?: () => void }>) {
-  const copy = emptyCopy(error ?? DID_NOT_LOAD);
-  const retry = onRetry ? (
-    <Button variant="outline" size="sm" onClick={onRetry}>
-      Retry
-    </Button>
-  ) : null;
-
   return (
     <TableEmpty colSpan={colSpan}>
       <EmptyState
         size="sm"
         kind={EMPTY_STATE_KINDS.FAILURE}
-        {...copy}
-        action={copy.action ?? retry}
+        onRetry={onRetry}
+        {...emptyCopy(error ?? DID_NOT_LOAD)}
       />
     </TableEmpty>
   );

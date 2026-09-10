@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Layers, Trophy } from 'lucide-react';
 import {
+  EMPTY_STATE_KINDS,
   Alert,
   Button,
   Combobox,
@@ -162,6 +162,7 @@ export function LeaderboardPage() {
 interface QueryState {
   isLoading: boolean;
   isError: boolean;
+  refetch: () => void;
 }
 
 /** Loading, failed and empty are three facts. A failed read must never read as "nobody is here". */
@@ -179,11 +180,18 @@ function Body({
   onSeries: boolean;
 }>) {
   if (trend.isLoading) return <RowsSkeleton rows={6} />;
-  if (trend.isError) return <Alert variant="danger">Your tests did not load.</Alert>;
+  if (trend.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your tests did not load"
+        onRetry={trend.refetch}
+      />
+    );
+  }
   if (tests.length === 0) {
     return (
       <EmptyState
-        icon={ClipboardList}
         title="No ranked test sat yet"
         action={
           <Button asChild>
@@ -195,11 +203,27 @@ function Body({
   }
 
   if (onSeries) {
-    if (series.isError) return <Alert variant="danger">Your test series did not load.</Alert>;
-    if (series.length === 0) return <EmptyState icon={Layers} title="No ranked test series sat" />;
+    if (series.isError) {
+      return (
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Your test series did not load"
+          onRetry={series.refetch}
+        />
+      );
+    }
+    if (series.length === 0) return <EmptyState title="No ranked test series sat" />;
   }
 
-  if (board.isError) return <Alert variant="danger">This leaderboard did not load.</Alert>;
+  if (board.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This leaderboard did not load"
+        onRetry={board.refetch}
+      />
+    );
+  }
   if (!board.data) return <RowsSkeleton rows={6} />;
 
   return <Board board={board.data} />;
@@ -210,7 +234,6 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
   if (board.evaluationMode === EVALUATION_MODE.PRACTICE) {
     return (
       <EmptyState
-        icon={Trophy}
         title="Not ranked"
         // ui-copy-ok: rule
         hint="A practice paper is never ranked."
@@ -223,7 +246,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
     );
   }
   if (board.cohortSize === 0) {
-    return <EmptyState icon={Trophy} title="No ranks yet" />;
+    return <EmptyState title="No ranks yet" />;
   }
 
   return (

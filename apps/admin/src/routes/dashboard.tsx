@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { BookOpen, CalendarClock, History } from 'lucide-react';
 import {
   DIFFICULTY_LEVEL,
   QUESTION_STATUS,
@@ -174,7 +173,7 @@ function BankFigure({ bank }: Readonly<{ bank: DashboardBank }>) {
       }
     >
       {drawn.length === 0 ? (
-        <EmptyState level={3} icon={BookOpen} title="No live questions yet" />
+        <EmptyState level={3} title="No live questions yet" />
       ) : (
         <MeasureBars bars={drawn.map(coverageBar)} max={ceiling} />
       )}
@@ -209,7 +208,7 @@ function SittingsFigure({ sittings }: Readonly<{ sittings: readonly DashboardSit
       figure={<Metric size="md" label="Attempts" value={attempts} />}
     >
       {attempts === 0 ? (
-        <EmptyState level={3} icon={CalendarClock} title="Nothing sat yet" />
+        <EmptyState level={3} title="Nothing sat yet" />
       ) : (
         <LinePlot
           compact
@@ -239,7 +238,7 @@ function ActivityCard({ feed }: Readonly<{ feed: readonly RowAction[] }>) {
         }
       />
       {feed.length === 0 ? (
-        <EmptyState level={3} icon={History} title="No changes yet" />
+        <EmptyState level={3} title="No changes yet" />
       ) : (
         <ul className="flex flex-col gap-2">
           {feed.map((row) => (
@@ -270,9 +269,7 @@ function WindowsCard({ windows }: Readonly<{ windows: DashboardWindows }>) {
   return (
     <Card className="flex flex-col gap-4 p-4">
       <SectionHeading title="Windows" />
-      {bare ? (
-        <EmptyState level={3} icon={CalendarClock} title="No open or upcoming tests" />
-      ) : null}
+      {bare ? <EmptyState level={3} title="No open or upcoming tests" /> : null}
       <WindowList title="Open" rows={windows.open} />
       <WindowList title="Upcoming" rows={windows.upcoming} />
     </Card>

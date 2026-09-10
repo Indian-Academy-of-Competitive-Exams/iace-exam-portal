@@ -241,7 +241,7 @@ export function SharedReportsCard({
           isLoading={held.isLoading}
           isError={held.isError}
           error="This student's shared links did not load."
-          onRetry={() => void held.refetch()}
+          onRetry={held.refetch}
           skeletonRows={2}
           scroll={{}}
           empty="No report of this student has been shared"

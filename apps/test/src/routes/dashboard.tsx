@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Button,
   ChartFigure,
@@ -157,7 +159,15 @@ function NextUp({
   now,
 }: Readonly<{ catalog: QueryState; waiting: readonly Sittable[]; now: Date }>) {
   if (catalog.isLoading) return <Skeleton variant="row" className="h-28 rounded-xl" />;
-  if (catalog.isError) return <Alert variant="danger">Your tests did not load.</Alert>;
+  if (catalog.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your tests did not load"
+        onRetry={catalog.refetch}
+      />
+    );
+  }
 
   const row = waiting[0];
   if (!row) {
@@ -195,7 +205,15 @@ function NextUp({
 /** The standing itself, always on screen — a dash is an answer, and the Alert below says why. */
 function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
   if (overview.isLoading) return <Skeleton variant="row" className="h-24 rounded-xl" />;
-  if (overview.isError) return <Alert variant="danger">Your performance did not load.</Alert>;
+  if (overview.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your performance did not load"
+        onRetry={overview.refetch}
+      />
+    );
+  }
 
   const data = overview.data;
   if (!data || data.standing.testsAttempted === 0) return null;
@@ -295,7 +313,15 @@ function RecentResults({
   recent,
 }: Readonly<{ trend: QueryState; recent: readonly PerformancePoint[] }>) {
   if (trend.isLoading) return <Skeleton variant="row" className="h-40 rounded-xl" />;
-  if (trend.isError) return <Alert variant="danger">Your results did not load.</Alert>;
+  if (trend.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your results did not load"
+        onRetry={trend.refetch}
+      />
+    );
+  }
   if (recent.length === 0) return null;
 
   return (
@@ -402,6 +428,7 @@ function greetingFor(now: Date, name: string | null | undefined): string {
 interface QueryState {
   isLoading: boolean;
   isError: boolean;
+  refetch: () => void;
 }
 
 interface OverviewQuery extends QueryState {

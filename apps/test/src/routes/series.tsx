@@ -2,6 +2,8 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LockKeyhole } from 'lucide-react';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Badge,
   Button,
@@ -157,12 +159,20 @@ function Standing({
   progress,
   sat,
 }: Readonly<{
-  trend: { isLoading: boolean; isError: boolean };
+  trend: { isLoading: boolean; isError: boolean; refetch: () => void };
   progress: SeriesProgress;
   sat: readonly PerformancePoint[];
 }>) {
   if (trend.isLoading) return <Skeleton variant="row" className="h-24 rounded-xl" />;
-  if (trend.isError) return <Alert variant="danger">Your performance did not load.</Alert>;
+  if (trend.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your performance did not load"
+        onRetry={trend.refetch}
+      />
+    );
+  }
 
   const mean = averageAccuracy(sat);
 

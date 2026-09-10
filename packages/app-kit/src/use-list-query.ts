@@ -91,7 +91,7 @@ export function useListQuery<TItem, TFilters extends object>(options: {
     isLoading: query.isLoading,
     hasLoaded: query.data !== undefined,
     isError: query.isError,
-    retry: () => void query.refetch(),
+    retry: query.refetch,
     setPage,
     setPageSize,
     pagination: {

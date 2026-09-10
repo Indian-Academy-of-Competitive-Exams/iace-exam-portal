@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LANGUAGE_LABELS, type QuestionDetail, type QuestionLanguage } from '@iace/contracts';
 import {
-  Alert,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Button,
   Dialog,
   DialogBody,
@@ -83,7 +84,13 @@ export function QuestionViewer({
 
         <DialogBody className="py-5">
           {question.isLoading ? <SkeletonParagraph lines={8} /> : null}
-          {question.error ? <Alert variant="danger">Could not load this question.</Alert> : null}
+          {question.isError ? (
+            <EmptyState
+              kind={EMPTY_STATE_KINDS.FAILURE}
+              title="Could not load this question"
+              onRetry={question.refetch}
+            />
+          ) : null}
           {question.data ? <Body question={question.data} /> : null}
         </DialogBody>
 

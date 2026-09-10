@@ -1,7 +1,18 @@
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import { Alert, Badge, Button, Checkbox, PageHeader, PanelFrame, Skeleton, toast } from '@iace/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  EmptyState,
+  EMPTY_STATE_KINDS,
+  PageHeader,
+  PanelFrame,
+  Skeleton,
+  toast,
+} from '@iace/ui';
 import { DELIVERY_CHANNEL, type NotificationPreference } from '@iace/contracts';
 import { api } from '../lib/api';
 import { CHANNEL_LABELS, NAV_ITEMS, NOTIFICATION_PREFERENCES_QUERY_KEY } from '../lib/constants';
@@ -54,6 +65,7 @@ export function NotificationSettingsPage() {
             publicKey={preferences.data?.webPushPublicKey ?? null}
             isLoading={preferences.isLoading}
             isError={preferences.isError}
+            onRetry={preferences.refetch}
           />
         </Section>
       </PageBody>
@@ -66,11 +78,13 @@ function ChannelRegion({
   publicKey,
   isLoading,
   isError,
+  onRetry,
 }: Readonly<{
   rows: readonly NotificationPreference[] | undefined;
   publicKey: string | null;
   isLoading: boolean;
   isError: boolean;
+  onRetry: () => void;
 }>) {
   if (isLoading) {
     return (
@@ -82,7 +96,13 @@ function ChannelRegion({
     );
   }
   if (isError || !rows) {
-    return <Alert variant="danger">Your notification settings did not load.</Alert>;
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your notification settings did not load"
+        onRetry={onRetry}
+      />
+    );
   }
 
   return (

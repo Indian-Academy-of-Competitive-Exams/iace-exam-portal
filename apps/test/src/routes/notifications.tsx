@@ -8,12 +8,12 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
-import { BellOff, SearchX, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import {
-  Alert,
   Badge,
   Button,
   EmptyState,
+  EMPTY_STATE_KINDS,
   PageHeader,
   PanelFrame,
   Skeleton,
@@ -116,6 +116,7 @@ function FeedRegion({
   list: {
     isLoading: boolean;
     isError: boolean;
+    retry: () => void;
     isLoadingMore: boolean;
     hasMore: boolean;
     loadMore: () => void;
@@ -133,13 +134,19 @@ function FeedRegion({
     );
   }
   if (list.isError) {
-    return <Alert variant="danger">Your notifications did not load.</Alert>;
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your notifications did not load"
+        onRetry={list.retry}
+      />
+    );
   }
   if (rows.length === 0) {
     return unreadOnly ? (
-      <EmptyState icon={SearchX} title="Nothing unread" />
+      <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing unread" />
     ) : (
-      <EmptyState icon={BellOff} title="No notifications yet" />
+      <EmptyState title="No notifications yet" />
     );
   }
 

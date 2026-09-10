@@ -20,7 +20,16 @@ import {
   TimeFigure,
   TrajectoryFigure,
 } from '@iace/app-kit/browser';
-import { Alert, Badge, Combobox, Field, FormSection, Skeleton, plural } from '@iace/ui';
+import {
+  Badge,
+  Combobox,
+  EmptyState,
+  EMPTY_STATE_KINDS,
+  Field,
+  FormSection,
+  Skeleton,
+  plural,
+} from '@iace/ui';
 import { api } from '../lib/api';
 import {
   PERFORMANCE_SCOPE_LABELS,
@@ -114,6 +123,7 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
         <Body
           sittingsLoading={held.isLoading}
           sittingsFailed={held.isError}
+          onRetrySittings={() => void held.refetch()}
           sittingCount={sittings.length}
           report={report}
           onOneSitting={onOneSitting}
@@ -125,6 +135,7 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
 
 interface ReportQueryState {
   isError: boolean;
+  refetch: () => void;
   data?: PerformanceReport;
 }
 
@@ -132,23 +143,39 @@ interface ReportQueryState {
 function Body({
   sittingsLoading,
   sittingsFailed,
+  onRetrySittings,
   sittingCount,
   report,
   onOneSitting,
 }: Readonly<{
   sittingsLoading: boolean;
   sittingsFailed: boolean;
+  onRetrySittings: () => void;
   sittingCount: number;
   report: ReportQueryState;
   onOneSitting: boolean;
 }>) {
   if (sittingsLoading) return <FiguresSkeleton />;
-  if (sittingsFailed) return <Alert variant="danger">This student's sittings did not load.</Alert>;
-  if (sittingCount === 0) {
-    return <Alert variant="info">This student has not sat an evaluated test.</Alert>;
+  if (sittingsFailed) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This student's sittings did not load"
+        onRetry={onRetrySittings}
+      />
+    );
   }
+  if (sittingCount === 0) return <EmptyState title="No evaluated sitting yet" />;
 
-  if (report.isError) return <Alert variant="danger">This report did not load.</Alert>;
+  if (report.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This report did not load"
+        onRetry={report.refetch}
+      />
+    );
+  }
   if (!report.data) return <FiguresSkeleton />;
 
   return <Figures report={report.data} onOneSitting={onOneSitting} />;
@@ -188,9 +215,17 @@ function Standing({
     return <CohortFigure cohort={cohort} youLabel={STUDENT_MARKER} />;
   }
   if (onOneSitting) {
-    return <Alert variant="info">No average has been counted for this paper yet.</Alert>;
+    return <EmptyState level={3} size="sm" title="No cohort average yet" />;
   }
-  return <Alert variant="info">A spread is one paper&apos;s; All time spans several.</Alert>;
+  return (
+    <EmptyState
+      level={3}
+      size="sm"
+      title="No cohort spread"
+      // ui-copy-ok: rule — which scope a spread can exist for, invisible from the figure
+      hint="A spread is one paper's; All time spans several."
+    />
+  );
 }
 
 function ModeBadge({ mode }: Readonly<{ mode: EvaluationMode | null }>) {

@@ -1,6 +1,13 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, PageFrame, PageHeader, Skeleton, SkeletonParagraph } from '@iace/ui';
+import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
+  PageFrame,
+  PageHeader,
+  Skeleton,
+  SkeletonParagraph,
+} from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { StudentPerformancePanel } from '../components/student-performance';
 import { api } from '../lib/api';
@@ -29,7 +36,11 @@ export function StudentPerformancePage() {
   if (student.error || !student.data) {
     return (
       <PageFrame>
-        <Alert variant="danger">Could not load this student.</Alert>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not load this student"
+          onRetry={student.refetch}
+        />
       </PageFrame>
     );
   }

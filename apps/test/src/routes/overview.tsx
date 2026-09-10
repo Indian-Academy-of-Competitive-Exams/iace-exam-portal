@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList } from 'lucide-react';
 import {
+  EMPTY_STATE_KINDS,
   Alert,
   Button,
   Combobox,
@@ -154,7 +154,13 @@ export function OverviewPage() {
             <BlockPairSkeleton />
           </>
         ) : null}
-        {overview.isError ? <Alert variant="danger">Your performance did not load.</Alert> : null}
+        {overview.isError ? (
+          <EmptyState
+            kind={EMPTY_STATE_KINDS.FAILURE}
+            title="Your performance did not load"
+            onRetry={overview.refetch}
+          />
+        ) : null}
         {overview.data ? (
           <Body
             overview={overview.data}
@@ -182,7 +188,6 @@ function Body({
   if (overview.standing.testsAttempted === 0) {
     return (
       <EmptyState
-        icon={ClipboardList}
         title="No tests sat yet"
         action={
           <Button asChild>

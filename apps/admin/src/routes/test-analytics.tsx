@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3 } from 'lucide-react';
 import {
   EVALUATION_MODE,
   ITEM_SIGNALS,
@@ -17,6 +16,7 @@ import {
 } from '@iace/contracts';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  EMPTY_STATE_KINDS,
   Alert,
   Badge,
   ChartFigure,
@@ -83,7 +83,11 @@ export function TestAnalyticsPage() {
   if (analytics.error || !analytics.data) {
     return (
       <PageFrame>
-        <Alert variant="danger">Could not load this test&apos;s results.</Alert>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not load this test's results"
+          onRetry={analytics.refetch}
+        />
       </PageFrame>
     );
   }
@@ -128,7 +132,7 @@ function Body({ report }: Readonly<{ report: TestAnalytics }>) {
             not ranked.
           </Alert>
         )}
-        <EmptyState icon={BarChart3} title="No ranked results folded yet" />
+        <EmptyState title="No ranked results folded yet" />
       </div>
     );
   }
@@ -202,7 +206,7 @@ function Sections({ sections }: Readonly<{ sections: readonly TestSectionAnalyti
   return (
     <ChartFigure title="Section averages" meta={plural(sections.length, 'section')}>
       {bars.length === 0 ? (
-        <EmptyState icon={BarChart3} title="No sections folded yet" level={3} />
+        <EmptyState title="No sections folded yet" level={3} />
       ) : (
         <MeasureBars bars={bars} max={PERCENT} />
       )}

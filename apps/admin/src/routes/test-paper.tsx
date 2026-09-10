@@ -20,6 +20,8 @@ import {
 } from '@iace/contracts';
 import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Badge,
   Button,
@@ -104,7 +106,14 @@ export function TestPaperPage() {
   }
 
   if (test.error || paper.error || !test.data || !paper.data) {
-    return <Alert variant="danger">Could not load this paper.</Alert>;
+    const reload = () => Promise.all([test.refetch(), paper.refetch()]);
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load this paper"
+        onRetry={reload}
+      />
+    );
   }
 
   // Mounted only once both are here, so a refetch cannot throw away a half-edited pool.

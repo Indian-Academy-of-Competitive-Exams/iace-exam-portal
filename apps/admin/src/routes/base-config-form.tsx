@@ -34,6 +34,8 @@ import {
 import { applyFieldErrors, bannerMessage, numberOr, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Button,
   Card,
@@ -324,7 +326,13 @@ export function BaseConfigFormPage() {
   }
 
   if (existing && (config.error || !config.data)) {
-    return <Alert variant="danger">Could not load this configuration.</Alert>;
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load this configuration"
+        onRetry={config.refetch}
+      />
+    );
   }
 
   // Mounted only once the saved config is here, so a refetch cannot throw away a half-typed edit.

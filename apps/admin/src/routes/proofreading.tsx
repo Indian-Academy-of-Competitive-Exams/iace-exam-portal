@@ -1,4 +1,4 @@
-import { FileText, Printer } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import {
   DIFFICULTY_LEVELS,
   FEATURE_KEYS,
@@ -15,6 +15,7 @@ import {
   Alert,
   Button,
   EmptyState,
+  EMPTY_STATE_KINDS,
   PageFrame,
   PageHeader,
   Pagination,
@@ -165,7 +166,7 @@ export function ProofreadingPage() {
 
           {questions.hasLoaded && questions.rows.length === 0 ? (
             <EmptyState
-              icon={FileText}
+              kind={EMPTY_STATE_KINDS.FILTERED}
               title="Nothing matches"
               action={
                 <Button variant="outline" onClick={questions.clearFilters}>

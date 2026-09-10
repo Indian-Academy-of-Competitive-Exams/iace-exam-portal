@@ -16,11 +16,12 @@ import {
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
-  Alert,
   Badge,
   Button,
   Combobox,
   DatePicker,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Field,
   FormPanel,
   FormSection,
@@ -144,7 +145,13 @@ export function ProfilePage() {
       ) : null}
 
       {me.isPending && <SkeletonParagraph lines={8} />}
-      {me.error && <Alert variant="danger">Could not load your details.</Alert>}
+      {me.isError && (
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not load your details"
+          onRetry={me.refetch}
+        />
+      )}
       {ready && me.data && (
         <>
           <FormSection title="Needed before a test">

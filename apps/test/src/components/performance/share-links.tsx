@@ -216,7 +216,7 @@ export function ShareLinks() {
         isLoading={held.isLoading}
         isError={held.isError}
         error="Your shared links did not load."
-        onRetry={() => void held.refetch()}
+        onRetry={held.refetch}
         skeletonRows={2}
         scroll={{}}
         empty="You have not shared a report yet"

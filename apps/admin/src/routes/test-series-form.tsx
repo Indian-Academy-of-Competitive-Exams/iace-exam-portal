@@ -7,6 +7,8 @@ import { AppException, TEST_SERIES_KIND, type TestSeriesSummary } from '@iace/co
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Button,
   Card,
@@ -59,7 +61,13 @@ export function TestSeriesFormPage() {
   }
 
   if (existing && (series.error || !series.data)) {
-    return <Alert variant="danger">Could not load this series.</Alert>;
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load this series"
+        onRetry={series.refetch}
+      />
+    );
   }
 
   // Mounted only once the saved series is here, so a refetch cannot throw away a half-typed edit.

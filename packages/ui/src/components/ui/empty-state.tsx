@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { CircleX, Inbox, SearchX, type LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Button } from './button';
 
 /** The three absences a region can have. The glyph says which one before a word is read. */
 export const EMPTY_STATE_KINDS = {
@@ -53,6 +54,8 @@ export const emptyCopy = (message: EmptyMessage): EmptyCopy =>
 
 export interface EmptyStateProps extends EmptyCopy {
   kind?: EmptyStateKind;
+  /** Draws the Retry when there is no `action` — a failure without one is a dead end. */
+  onRetry?: () => void;
   /** `sm` for a table body or a panel, where the region is already padded. */
   size?: EmptyStateSize;
   /** Set to 3 when nested under a `SectionHeading` — never two `h2`s in one region. */
@@ -67,12 +70,18 @@ export function EmptyState({
   title,
   hint,
   action,
+  onRetry,
   level = 2,
   className,
 }: Readonly<EmptyStateProps>) {
   const Tag = HEADING_TAG[level];
   const Icon = icon ?? KIND_ICON[kind];
   const sizing = SIZES[size];
+  const retry = onRetry ? (
+    <Button variant="outline" size="sm" onClick={onRetry}>
+      Retry
+    </Button>
+  ) : null;
 
   return (
     <div
@@ -94,7 +103,7 @@ export function EmptyState({
       </span>
       <Tag className={cn('font-semibold text-foreground', sizing.title)}>{title}</Tag>
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
-      {action}
+      {action ?? retry}
     </div>
   );
 }

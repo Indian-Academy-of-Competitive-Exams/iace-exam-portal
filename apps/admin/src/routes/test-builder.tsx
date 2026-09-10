@@ -15,6 +15,8 @@ import {
 import { bannerMessage, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Button,
   Card,
@@ -92,7 +94,13 @@ export function TestBuilderPage() {
   }
 
   if (existing && (test.error || !test.data)) {
-    return <Alert variant="danger">Could not load this test.</Alert>;
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load this test"
+        onRetry={test.refetch}
+      />
+    );
   }
 
   // Held until the series is here: `useForm` reads its defaults once, so a late arrival is ignored.

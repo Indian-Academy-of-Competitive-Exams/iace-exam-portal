@@ -63,6 +63,29 @@ const HEADING_ATTRS = new Set(['title', 'heading']);
 /** A Field's label NAMES the value. A Checkbox label is a proposition and a Spinner's is a state. */
 const FIELD_ELEMENTS = new Set(['Field', 'FormField']);
 
+/** A failure is an event, not a region: "Could not load this test" IS its name. */
+const namesAFailure = (opening) =>
+  (opening?.attributes ?? []).some(
+    (a) =>
+      a.type === 'JSXAttribute' &&
+      a.name?.name === 'kind' &&
+      a.value?.type === 'JSXExpressionContainer' &&
+      a.value.expression?.type === 'MemberExpression' &&
+      a.value.expression.property?.name === 'FAILURE',
+  );
+
+/** The two attributes whose exemption is carried by the element they sit on. */
+const carriesItsOwnExemption = (name, opening) =>
+  name === 'description'
+    ? DIALOG_ELEMENTS.has(elementName(opening) ?? '')
+    : name === 'hint' && namesAFailure(opening);
+
+/** Which narration a string attribute would be, or null where it is not one at all. */
+const narrationOf = (name, opening) => {
+  if (name === 'label') return FIELD_ELEMENTS.has(elementName(opening)) ? 'narrativeLabel' : null;
+  return HEADING_ATTRS.has(name) && !namesAFailure(opening) ? 'narrativeHeading' : null;
+};
+
 const word = (w) => w.toLowerCase().replace(/[^a-z]/g, '');
 
 function looksNarrative(text) {
@@ -126,21 +149,15 @@ export const noNarration = {
         if (!name) return;
 
         if (NARRATION_ATTRS.has(name)) {
-          const owner = elementName(node.parent);
-          if (name === 'description' && owner && DIALOG_ELEMENTS.has(owner)) return;
-          report(node, 'narrationAttr', { attr: name });
+          if (!carriesItsOwnExemption(name, node.parent))
+            report(node, 'narrationAttr', { attr: name });
           return;
         }
-        if (name === 'label' && FIELD_ELEMENTS.has(elementName(node.parent))) {
-          const text = literal(node);
-          if (text && looksNarrative(text)) report(node, 'narrativeLabel', { text });
-          return;
-        }
-        if (HEADING_ATTRS.has(name)) {
-          const text = literal(node);
-          if (text && looksNarrative(text)) {
-            report(node, 'narrativeHeading', { text, noun: text.trim().split(/\s+/).at(-1) });
-          }
+
+        const messageId = narrationOf(name, node.parent);
+        const text = messageId ? literal(node) : null;
+        if (text && looksNarrative(text)) {
+          report(node, messageId, { text, noun: text.trim().split(/\s+/).at(-1) });
         }
       },
 

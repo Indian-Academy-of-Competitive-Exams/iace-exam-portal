@@ -4,10 +4,10 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
-import { ClipboardList, SearchX } from 'lucide-react';
 import {
   Alert,
   EmptyState,
+  EMPTY_STATE_KINDS,
   PageFrame,
   PageHeader,
   Skeleton,
@@ -130,7 +130,7 @@ function CatalogRegion({
   now,
   results,
 }: Readonly<{
-  catalog: { isLoading: boolean; isError: boolean };
+  catalog: { isLoading: boolean; isError: boolean; refetch: () => void };
   emptiness: Emptiness;
   series: readonly StudentCatalogSeries[];
   rows: readonly Sittable[];
@@ -146,18 +146,26 @@ function CatalogRegion({
       </div>
     );
   }
-  if (catalog.isError) return <Alert variant="danger">Your tests did not load.</Alert>;
+  if (catalog.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your tests did not load"
+        onRetry={catalog.refetch}
+      />
+    );
+  }
 
   if (emptiness === 'NONE') {
     return (
       <EmptyState
-        icon={ClipboardList}
         title="No tests yet"
         /* ui-copy-ok: rule */ hint="Your branch adds them as they open."
       />
     );
   }
-  if (emptiness === 'FILTERED') return <EmptyState icon={SearchX} title="Nothing matches" />;
+  if (emptiness === 'FILTERED')
+    return <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing matches" />;
 
   return (
     <>

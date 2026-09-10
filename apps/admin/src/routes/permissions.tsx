@@ -9,6 +9,7 @@ import {
   type PermissionLevel,
 } from '@iace/contracts';
 import {
+  EmptyState,
   Accordion,
   Alert,
   Badge,
@@ -328,9 +329,8 @@ function FeatureGrid({
   disabled: boolean;
   onSetLevel: (key: FeatureKey, next: Level) => void;
 }>) {
-  if (features.length === 0) {
-    return <Alert variant="info">No features registered yet.</Alert>;
-  }
+  if (features.length === 0)
+    return <EmptyState level={3} size="sm" title="No features registered yet" />;
 
   return (
     <div className="flex flex-col">

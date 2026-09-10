@@ -5,10 +5,11 @@
  */
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BookmarkX, CircleCheck, Trash2 } from 'lucide-react';
+import { CircleCheck, Trash2 } from 'lucide-react';
 import { useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import {
+  EMPTY_STATE_KINDS,
   Alert,
   Badge,
   Button,
@@ -80,7 +81,15 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
       </div>
     );
   }
-  if (list.isError) return <Alert variant="danger">Your saved questions did not load.</Alert>;
+  if (list.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your saved questions did not load"
+        onRetry={list.retry}
+      />
+    );
+  }
   if (list.items.length === 0) return <Empty kind={kind} />;
 
   return (
@@ -114,7 +123,7 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
 /** Nothing starred and nothing missed are different facts, and only one of them is good news. */
 const Empty = ({ kind }: Readonly<{ kind: SavedQuestionKind }>) =>
   kind === SAVED_QUESTION_KIND.BOOKMARK ? (
-    <EmptyState icon={BookmarkX} title="No bookmarks yet" />
+    <EmptyState title="No bookmarks yet" />
   ) : (
     <EmptyState icon={CircleCheck} title="No mistakes recorded" />
   );

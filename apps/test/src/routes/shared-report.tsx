@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { BadgeCheck } from 'lucide-react';
 import { AppException, ErrorCodes, instituteDayLabel, type SharedReport } from '@iace/contracts';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Avatar,
   Badge,
@@ -62,18 +64,30 @@ export function SharedReportPage() {
 function Body({
   query,
 }: Readonly<{
-  query: { isLoading: boolean; isError: boolean; error: unknown; data?: SharedReport };
+  query: {
+    isLoading: boolean;
+    isError: boolean;
+    error: unknown;
+    data?: SharedReport;
+    refetch: () => void;
+  };
 }>) {
   if (query.isLoading) return <ReportSkeleton />;
 
   if (query.isError || !query.data) {
     const refusal = AppException.is(query.error) ? query.error : null;
     return refusal?.code === ErrorCodes.NOT_FOUND ? (
-      <Alert variant="warning">
-        This link has been revoked or has expired. Ask the student for a new one.
-      </Alert>
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This link has been revoked or has expired"
+        hint="Ask the student for a new one."
+      />
     ) : (
-      <Alert variant="danger">This report did not load. Try again in a moment.</Alert>
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This report did not load"
+        onRetry={query.refetch}
+      />
     );
   }
 

@@ -7,7 +7,14 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppException, ErrorCodes } from '@iace/contracts';
-import { Alert, LoadingState, PageFrame, PageHeader, plural } from '@iace/ui';
+import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
+  LoadingState,
+  PageFrame,
+  PageHeader,
+  plural,
+} from '@iace/ui';
 import { pollDelayMs, shouldKeepPolling } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
@@ -50,9 +57,12 @@ export function SubmittedPage() {
 
         <Section title="Marking">
           {failed ? (
-            <Alert variant="danger">
-              Your score card did not load. It is safe — open it from your performance.
-            </Alert>
+            <EmptyState
+              kind={EMPTY_STATE_KINDS.FAILURE}
+              title="Your score card did not load"
+              hint="It is safe — open it from your performance."
+              onRetry={card.refetch}
+            />
           ) : (
             <LoadingState>Marking your paper</LoadingState>
           )}

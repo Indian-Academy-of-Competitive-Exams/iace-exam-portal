@@ -33,6 +33,7 @@ export function useInfinitePages<T>(options: {
   isLoadingMore: boolean;
   /** "It did not load" and "there are none" are different facts, and read differently. */
   isError: boolean;
+  retry: () => void;
 } {
   const { queryKey, fetchPage, enabled = true } = options;
 
@@ -60,6 +61,7 @@ export function useInfinitePages<T>(options: {
     hasMore: hasNextPage,
     loadMore,
     isError: query.isError,
+    retry: query.refetch,
     isLoading: query.isPending,
     isLoadingMore: isFetchingNextPage,
   };

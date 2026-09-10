@@ -22,6 +22,8 @@ import {
   type StudentType,
 } from '@iace/contracts';
 import {
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Alert,
   Avatar,
   Badge,
@@ -557,7 +559,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
           series={series.data ?? []}
           isLoading={series.isLoading}
           isError={series.isError}
-          onRetry={() => void series.refetch()}
+          onRetry={series.refetch}
           busy={revoke.isPending}
           onRevoke={setRevoking}
         />
@@ -785,7 +787,11 @@ export function StudentDetailPage() {
     // The reason is on the toast; this only has to stop the page being blank.
     return (
       <PageFrame>
-        <Alert variant="danger">Could not load this student.</Alert>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not load this student"
+          onRetry={student.refetch}
+        />
       </PageFrame>
     );
   }
