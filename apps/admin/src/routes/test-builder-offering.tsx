@@ -35,6 +35,7 @@ import {
   savedSchedule,
   type ProgramOpening,
   type ScheduleDraft,
+  type ScheduleHold,
 } from './test-schedule-draft';
 
 /** Who is offered the test: the series carrying it, and the freeze that lets students sit it. */
@@ -56,7 +57,20 @@ const moveConsequence = (to: string, from: string | undefined): string => {
   return `${leaving}It is offered through ${to} from now on. Its paper and its opening time are untouched.`;
 };
 
-export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
+export function OfferStep({
+  detail,
+  schedule,
+}: Readonly<{ detail: TestDetail; schedule: ScheduleHold }>) {
+  return (
+    <>
+      <SeriesStep detail={detail} />
+      <ScheduleStep detail={detail} draft={schedule.draft} onDraft={schedule.onDraft} />
+      <PublishStep detail={detail} unsavedSchedule={schedule.unsaved} />
+    </>
+  );
+}
+
+function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const queryClient = useQueryClient();
   const refresh = useOfferingRefresh(detail.id);
   const [moving, setMoving] = useState<ChosenSeries | null>(null);
@@ -160,9 +174,16 @@ const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null =
 };
 
 /** The test's own clock, and the programs that reach it ahead of everybody else. */
-export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
+function ScheduleStep({
+  detail,
+  draft,
+  onDraft,
+}: Readonly<{
+  detail: TestDetail;
+  draft: ScheduleDraft | null;
+  onDraft: (next: ScheduleDraft | null) => void;
+}>) {
   const refresh = useOfferingRefresh(detail.id);
-  const [draft, setDraft] = useState<ScheduleDraft | null>(null);
   const [asking, setAsking] = useState(false);
   const [refused, setRefused] = useState<ProgramRefusal | null>(null);
   const seriesId = detail.testSeriesId;
@@ -195,7 +216,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
       }
     },
     onMutate: () => setRefused(null),
-    onSuccess: () => setDraft(null),
+    onSuccess: () => onDraft(null),
     // An opening deletes every program row it overtakes, so what stuck is read back, never assumed.
     onSettled: async () => {
       setAsking(false);
@@ -203,10 +224,10 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
     },
   });
 
-  const setOpensAt = (opensAt: string) => setDraft({ ...held, opensAt });
+  const setOpensAt = (opensAt: string) => onDraft({ ...held, opensAt });
 
   const setProgram = (programCode: string, opensAt: string) =>
-    setDraft({
+    onDraft({
       ...held,
       programs: held.programs.map((row) =>
         row.programCode === programCode ? { ...row, opensAt } : row,
@@ -215,11 +236,11 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   const addProgram = (programCode: string) => {
     if (held.programs.some((row) => row.programCode === programCode)) return;
-    setDraft({ ...held, programs: [...held.programs, { programCode, opensAt: held.opensAt }] });
+    onDraft({ ...held, programs: [...held.programs, { programCode, opensAt: held.opensAt }] });
   };
 
   const dropProgram = (programCode: string) =>
-    setDraft({
+    onDraft({
       ...held,
       programs: held.programs.filter((row) => row.programCode !== programCode),
     });
@@ -368,7 +389,18 @@ function ProgramOpeningRow({
   );
 }
 
-export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
+/** Offering never saves the schedule, so a time still pending would be offered as no time at all. */
+const scheduleSaved = (unsaved: number) => ({
+  key: 'SCHEDULE_SAVED',
+  met: unsaved === 0,
+  label: 'The schedule is saved',
+  owed: unsaved === 0 ? null : `${plural(unsaved, 'change')} pending`,
+});
+
+function PublishStep({
+  detail,
+  unsavedSchedule,
+}: Readonly<{ detail: TestDetail; unsavedSchedule: number }>) {
   const [retiring, setRetiring] = useState(false);
   const refresh = useOfferingRefresh(detail.id);
 
@@ -390,7 +422,7 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
   });
 
   const offered = detail.status === TEST_STATUS.ACTIVE;
-  const requirements = offerRequirements(detail);
+  const requirements = [...offerRequirements(detail), scheduleSaved(unsavedSchedule)];
   const ready = requirements.every((requirement) => requirement.met);
 
   if (offered) {

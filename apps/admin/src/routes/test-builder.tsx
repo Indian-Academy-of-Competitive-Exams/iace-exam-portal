@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -20,12 +20,14 @@ import {
   Alert,
   Button,
   Card,
+  ConfirmDialog,
   FormPanel,
   PageHeader,
   Skeleton,
   SkeletonParagraph,
   STEPPER_STATES,
   Stepper,
+  plural,
   type StepperStep,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -46,7 +48,13 @@ import {
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
 import { PaperStep } from './test-builder-paper-step';
-import { PublishStep, ScheduleStep, SeriesStep } from './test-builder-offering';
+import { OfferStep } from './test-builder-offering';
+import {
+  changesOf,
+  savedSchedule,
+  type ScheduleDraft,
+  type ScheduleHold,
+} from './test-schedule-draft';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
@@ -174,10 +182,27 @@ function TestBuilder({
     onError: (error) => applyServerErrors(error, form, scope),
   });
 
+  const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft | null>(null);
+  const [discarding, setDiscarding] = useState<{ count: number; move: () => void } | null>(null);
+  const schedule: ScheduleHold = {
+    draft: scheduleDraft,
+    onDraft: setScheduleDraft,
+    unsaved: detail && scheduleDraft ? changesOf(savedSchedule(detail), scheduleDraft).count : 0,
+  };
+
   const saveThenOpen = (target: TestBuilderStep) =>
     form.handleSubmit((values) => save.mutate({ values, target }))();
 
-  /** Leaving Setup saves it first, so no move can quietly drop what was typed — Offer owns nothing to save. */
+  const leaveSchedule = (move: () => void) => {
+    if (schedule.unsaved > 0) {
+      setDiscarding({ count: schedule.unsaved, move });
+      return;
+    }
+    setScheduleDraft(null);
+    move();
+  };
+
+  /** Leaving Setup saves it first and leaving Offer asks first, so no move quietly drops what was typed. */
   const open = (target: TestBuilderStep) => {
     if (target === step) return;
     const pending = !existing || form.formState.isDirty;
@@ -185,7 +210,13 @@ function TestBuilder({
       saveThenOpen(target);
       return;
     }
-    setStep(target);
+    leaveSchedule(() => setStep(target));
+  };
+
+  const finish = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (schedule.unsaved === 0) return;
+    event.preventDefault();
+    setDiscarding({ count: schedule.unsaved, move: () => navigate(ROUTES.TESTS) });
   };
 
   const done = doneSteps(detail);
@@ -213,6 +244,7 @@ function TestBuilder({
           next={next}
           saving={save.isPending}
           onOpen={open}
+          onDone={finish}
         />
       }
       header={
@@ -246,6 +278,21 @@ function TestBuilder({
         fromSeries={fromSeries}
         config={config}
         sat={sat}
+        schedule={schedule}
+      />
+
+      <ConfirmDialog
+        open={discarding !== null}
+        onOpenChange={(isOpen) => !isOpen && setDiscarding(null)}
+        destructive
+        title="Discard the schedule changes?"
+        description={`${plural(discarding?.count ?? 0, 'unsaved change')} to when this test opens will be dropped. The test keeps the schedule already saved.`}
+        confirmLabel="Discard changes"
+        onConfirm={() => {
+          setScheduleDraft(null);
+          discarding?.move();
+          setDiscarding(null);
+        }}
       />
     </FormPanel>
   );
@@ -262,11 +309,13 @@ function BuilderFooter({
   next,
   saving,
   onOpen,
+  onDone,
 }: Readonly<{
   previous: TestBuilderStep | null;
   next: TestBuilderStep | null;
   saving: boolean;
   onOpen: (target: TestBuilderStep) => void;
+  onDone: (event: MouseEvent<HTMLAnchorElement>) => void;
 }>) {
   return (
     <>
@@ -286,7 +335,9 @@ function BuilderFooter({
         </Button>
       ) : (
         <Button type="button" asChild>
-          <Link to={ROUTES.TESTS}>Done</Link>
+          <Link to={ROUTES.TESTS} onClick={onDone}>
+            Done
+          </Link>
         </Button>
       )}
     </>
@@ -300,6 +351,7 @@ function StepBody({
   fromSeries,
   config,
   sat,
+  schedule,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
@@ -307,6 +359,7 @@ function StepBody({
   fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
   sat: boolean;
+  schedule: ScheduleHold;
 }>) {
   return (
     <>
@@ -323,11 +376,7 @@ function StepBody({
 
       {step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} config={config} /> : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
-        <>
-          <SeriesStep detail={detail} />
-          <ScheduleStep detail={detail} />
-          <PublishStep detail={detail} />
-        </>
+        <OfferStep detail={detail} schedule={schedule} />
       ) : null}
     </>
   );
