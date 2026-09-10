@@ -234,6 +234,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
   }
 
   const ranked = allowsCohortScheduling(detail.evaluationMode);
+  const sat = detail.attemptCount > 0;
 
   return (
     <FormSection title="Schedule">
@@ -242,7 +243,12 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
           htmlFor="test-opens"
           label="Opens (IST)"
           className="min-w-72 flex-1"
-          /* ui-copy-ok: rule */ hint="Blank opens it the moment a student reaches it."
+          /* ui-copy-ok: rule */
+          hint={
+            sat
+              ? 'A test stops opening again once anybody has sat it.'
+              : 'Blank opens it the moment a student reaches it.'
+          }
         >
           {(control) => (
             <DateTimePicker
@@ -251,6 +257,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
               aria-describedby={control['aria-describedby']}
               value={held.opensAt}
               onChange={setOpensAt}
+              disabled={sat}
             />
           )}
         </Field>

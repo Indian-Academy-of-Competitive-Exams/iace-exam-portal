@@ -224,7 +224,9 @@ export class OfferingService {
     testId: string,
     input: SetSeriesTestUnlockBody,
   ): Promise<SeriesTestRow[]> {
-    await this.requireTestIn(testSeriesId, testId);
+    const test = await this.requireTestIn(testSeriesId, testId);
+    // `Test.opensAt` is a frozen field, and this is its other door — see TEST_UNFROZEN_FIELDS.
+    this.assertNotOpened(test);
     const opensAt = dateOrNull(input.unlockAt);
 
     await this.prisma.$transaction(async (tx) => {
@@ -298,6 +300,16 @@ export class OfferingService {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That test is not in this series');
     }
     return test;
+  }
+
+  /** A sat test's opening is history: moving it would say a paper with results has not opened. */
+  private assertNotOpened(test: OfferingRow): void {
+    if (test._count.attempts === 0) return;
+
+    const message = `This test has ${attempts(test._count.attempts)} on it, so when it opens can no longer move.`;
+    throw new AppException(ErrorCodes.CONFLICT, message, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
+    });
   }
 
   private assertNotSat(test: OfferingRow): void {

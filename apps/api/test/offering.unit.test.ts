@@ -301,6 +301,29 @@ describe('OfferingService — a series and the tests it holds', () => {
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [{ testSeriesId: 'srs_1' }]);
   });
 
+  /** `Test.opensAt` is a frozen field; this endpoint is its other door and must refuse the same. */
+  it('refuses to move when a sat test opens', async () => {
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }), [{ testId: 'tst_1' }]);
+
+    const error = await service
+      .setUnlock('srs_1', 'tst_1', { unlockAt: '2026-10-01T04:30:00.000Z' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
+  });
+
+  it('refuses to clear a sat opening either', async () => {
+    const { service } = serviceWith(inSeries({ opensAt: OPENS_AT }), [{ testId: 'tst_1' }]);
+
+    const error = await service
+      .setUnlock('srs_1', 'tst_1', { unlockAt: null })
+      .catch((e: unknown) => e);
+
+    assert.equal(AppException.is(error) ? error.code : null, ErrorCodes.CONFLICT);
+  });
+
   /** The resolver reads `Test.opensAt`, so the series' opening IS the test's own column. */
   it('clears the opening time back to null', async () => {
     const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));
