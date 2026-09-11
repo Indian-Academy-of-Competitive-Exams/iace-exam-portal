@@ -152,7 +152,7 @@ The people reading these screens ran exam centres before they saw them. Write fo
 ## Design system
 
 Tailwind + shadcn/ui, tokens in `packages/ui` — **one set, both portals, never forked.** Brand
-primary `#A8221B`; Cancel neutral grey; destructive crimson `#BE123C`; charts use the
+primary `#BF0D10`; Cancel neutral grey; destructive crimson `#BE123C`; charts use the
 colorblind-safe set, never brand red. Light + dark via CSS variables.
 
 - **[admin]** `docs/design/design-system.html` is the living style guide: dense, data-first.
