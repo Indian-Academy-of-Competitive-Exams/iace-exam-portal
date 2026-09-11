@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { evaluationModeSchema } from './tests';
 
 // ============================================================================
 // The board a signed-in student reads: a podium, their own neighbourhood, and
@@ -84,8 +83,6 @@ export const leaderboardSchema = z.object({
   scopeId: z.string().nullable(),
   label: z.string().nullable(),
   measure: leaderboardMeasureSchema,
-  /** A single paper's mode; null where the board spans papers. PRACTICE is never ranked. */
-  evaluationMode: evaluationModeSchema.nullable(),
   cohortSize: z.number().int(),
   podium: z.array(leaderboardRowSchema),
   /** The seats around the reader, podium seats excluded so no row is drawn twice. */

@@ -1057,7 +1057,6 @@ const REPORT_FIELDS = [
   'count',
   'difficulty',
   'earned',
-  'evaluationMode',
   'first',
   'from',
   'generatedAt',

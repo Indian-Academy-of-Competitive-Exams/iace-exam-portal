@@ -5,7 +5,6 @@ import { Reflector } from '@nestjs/core';
 import { type ExecutionContext } from '@nestjs/common';
 import {
   ActorTypes,
-  EVALUATION_MODE,
   ErrorCodes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -40,7 +39,7 @@ const stat = (over: Partial<FakeStudentStatRow> = {}): FakeStudentStatRow => ({
   totalWrong: 100,
   totalUnattempted: 120,
   sumTimeSec: 18_000,
-  practiceAttempts: 1,
+  retakeCount: 1,
   lastAttemptAt: new Date('2026-08-30T09:00:00.000Z'),
   computedThrough: null,
   computedAt: new Date('2026-08-30T09:05:00.000Z'),
@@ -52,7 +51,6 @@ const row = (over: Partial<FakeOverviewSubjectRow> = {}): FakeOverviewSubjectRow
   subjectId: 'sub_r',
   subjectName: 'Reasoning',
   scope: TEST_SCOPE.FULL,
-  evaluationMode: EVALUATION_MODE.RANKED,
   attempted: 40,
   correct: 30,
   sumTimeSec: 1_600,
@@ -81,7 +79,7 @@ describe('StudentOverviewService standing', () => {
     assert.equal(overview.standing.avgScore, 65);
     assert.equal(overview.standing.bestPercentile, 88.5);
     assert.equal(overview.standing.testsEvaluated, 4);
-    assert.equal(overview.standing.practiceAttempts, 1);
+    assert.equal(overview.standing.retakeCount, 1);
   });
 
   /** Four sittings none of which were graded: dividing by that is the bug this guards. */
@@ -103,7 +101,7 @@ describe('StudentOverviewService standing', () => {
     assert.equal(overview.standing.avgPercentile, null);
     assert.deepEqual(overview.disposition, { correct: 0, wrong: 0, unattempted: 0 });
     assert.deepEqual(overview.subjects, []);
-    assert.equal(overview.byMode[EVALUATION_MODE.RANKED].accuracy, null);
+    assert.equal(overview.measure.accuracy, null);
   });
 
   it('serialises every Decimal and BigInt the two tables hold', async () => {
@@ -128,45 +126,39 @@ describe('StudentOverviewService sourcing', () => {
       sumTimeSec: 3_600,
     }),
     row({
-      evaluationMode: EVALUATION_MODE.PRACTICE,
+      scope: TEST_SCOPE.SECTIONAL,
       attempted: 10,
       correct: 2,
       sumTimeSec: 900,
     }),
   ];
 
-  /** Σcorrect / Σattempted and ΣsumTimeSec / Σattempted, over the rows of that mode and no others. */
-  it('sums byMode straight off the subject rows of that mode', async () => {
+  /** Σcorrect / Σattempted and ΣsumTimeSec / Σattempted, over every subject row of every scope. */
+  it('sums the measure straight off the subject rows', async () => {
     const overview = await serviceFor({ subjects: mixed }).overview(STUDENT);
 
-    const ranked = overview.byMode[EVALUATION_MODE.RANKED];
-    assert.equal(ranked.attempted, 100);
-    assert.equal(ranked.correct, 60);
-    assert.equal(ranked.accuracy, 60);
-    assert.equal(ranked.pace, 52);
-
-    const practice = overview.byMode[EVALUATION_MODE.PRACTICE];
-    assert.equal(practice.attempted, 10);
-    assert.equal(practice.accuracy, 20);
-    assert.equal(practice.pace, 90);
+    assert.equal(overview.measure.attempted, 110);
+    assert.equal(overview.measure.correct, 62);
+    assert.equal(overview.measure.accuracy, 56.36);
+    assert.equal(overview.measure.pace, 55.45);
   });
 
-  /** `StudentStat`'s totals mix the modes, so a ranked tile read off them would be polluted. */
-  it('never sources accuracy from the mixed StudentStat totals', async () => {
+  /** Accuracy has one home, the subject rows, so a tile never disagrees with the subject charts. */
+  it('never sources accuracy from the StudentStat totals', async () => {
     const overview = await serviceFor({ subjects: mixed }).overview(STUDENT);
     const statAccuracy = (200 / 300) * 100;
 
-    assert.notEqual(overview.byMode[EVALUATION_MODE.RANKED].accuracy, statAccuracy);
+    assert.notEqual(overview.measure.accuracy, statAccuracy);
   });
 
-  /** The donut's third slice exists nowhere else, so it is lifetime and carries both modes. */
+  /** The donut's third slice exists nowhere else, so it is lifetime. */
   it('takes the disposition from StudentStat, unattempted included', async () => {
     const overview = await serviceFor({ subjects: mixed }).overview(STUDENT);
 
     assert.deepEqual(overview.disposition, { correct: 200, wrong: 100, unattempted: 120 });
   });
 
-  it('groups every (scope, mode) row under the subject it belongs to', async () => {
+  it('groups every scope row under the subject it belongs to', async () => {
     const overview = await serviceFor({
       subjects: [
         row({ scope: TEST_SCOPE.FULL, attempted: 40, correct: 30, sumTimeSec: 1_600 }),
@@ -176,10 +168,7 @@ describe('StudentOverviewService sourcing', () => {
 
     assert.equal(overview.subjects.length, 1);
     assert.equal(overview.subjects[0]?.tallies.length, 2);
-    assert.deepEqual(scopesSat(overview.subjects, EVALUATION_MODE.RANKED), [
-      TEST_SCOPE.FULL,
-      TEST_SCOPE.SECTIONAL,
-    ]);
+    assert.deepEqual(scopesSat(overview.subjects), [TEST_SCOPE.FULL, TEST_SCOPE.SECTIONAL]);
   });
 });
 

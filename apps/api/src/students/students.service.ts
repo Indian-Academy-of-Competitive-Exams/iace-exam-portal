@@ -141,7 +141,8 @@ export class StudentsService {
         select: {
           id: true,
           submittedAt: true,
-          test: { select: { title: true, evaluationMode: true } },
+          isGraded: true,
+          test: { select: { title: true } },
         },
       }),
       this.prisma.attempt.count({ where }),
@@ -152,7 +153,7 @@ export class StudentsService {
         attemptId: row.id,
         testTitle: row.test.title,
         submittedAt: row.submittedAt?.toISOString() ?? null,
-        evaluationMode: row.test.evaluationMode,
+        isGraded: row.isGraded,
       })),
       page: query.page,
       pageSize: query.pageSize,

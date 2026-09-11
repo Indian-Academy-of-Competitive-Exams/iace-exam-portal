@@ -153,7 +153,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       label: 'Details & access',
       content: (
         <>
-          <SeriesBasics form={form} detail={detail} stage={stage} />
+          <SeriesBasics form={form} stage={stage} />
           <SeriesAccess form={form} detail={detail} onPickStage={setStage} />
         </>
       ),

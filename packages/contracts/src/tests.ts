@@ -41,46 +41,11 @@ export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
   SECTIONAL: 'Sectional',
 };
 
-/** RANKED produces a cohort rank; PRACTICE never ranks. */
-export const EVALUATION_MODE = {
-  RANKED: 'RANKED',
-  PRACTICE: 'PRACTICE',
-} as const;
-export const evaluationModeSchema = z.enum(EVALUATION_MODE);
-export type EvaluationMode = z.infer<typeof evaluationModeSchema>;
-export const EVALUATION_MODES = evaluationModeSchema.options;
-
-export const EVALUATION_MODE_LABELS: Readonly<Record<EvaluationMode, string>> = {
-  RANKED: 'Ranked',
-  PRACTICE: 'Practice',
-};
-
-/** What a test is called by: the part of the paper it covers, or failing that how it is judged. */
-export function testNameKind(input: {
-  scope: TestScope;
-  evaluationMode?: EvaluationMode;
-  scopeName?: string | null;
-}): string {
+/** What a test is called by: the part of the paper it covers, or failing that a mock. */
+export function testNameKind(input: { scope: TestScope; scopeName?: string | null }): string {
   const named = input.scopeName?.trim();
   if (input.scope !== TEST_SCOPE.FULL && named) return named;
-  return input.evaluationMode === EVALUATION_MODE.PRACTICE ? 'Practice' : 'Mock';
-}
-
-/** A cutoff, an allowance and a per-program stagger all serve a cohort; practice just opens. */
-export function allowsCohortScheduling(evaluationMode: EvaluationMode): boolean {
-  return evaluationMode === EVALUATION_MODE.RANKED;
-}
-
-/** One sentence, so the picker refuses a move in the words the server would have refused it in. */
-export function seriesModeMismatch(
-  seriesName: string,
-  seriesMode: EvaluationMode,
-  testMode: EvaluationMode,
-): string | null {
-  if (seriesMode === testMode) return null;
-  const held = EVALUATION_MODE_LABELS[seriesMode];
-  const wanted = EVALUATION_MODE_LABELS[testMode];
-  return `${seriesName} judges its tests as ${held} and this test is judged as ${wanted}. A test is judged the way its series is, so move it to a ${wanted} series instead.`;
+  return 'Mock';
 }
 
 /** The only change a frozen paper permits, and both recompute every score. */
@@ -427,7 +392,6 @@ export const testSchema = z.object({
   examStage: stageRefSchema,
   scope: testScopeSchema,
   scopeRef: testScopeRefSchema.nullable(),
-  evaluationMode: evaluationModeSchema,
   /** This test's own copy — the config's is only what it started from. */
   examTemplate: examTemplateSchema,
   /** What each section is drawn from. Named for the column it has always lived in. */
@@ -442,7 +406,6 @@ export const testSchema = z.object({
   attemptCount: z.number().int(),
   /** The one series carrying it. The column requires one, so this is never absent. */
   testSeriesId: z.string(),
-  /** That series' name, so a screen can say which one decided the mode without a second request. */
   testSeriesName: z.string(),
   /** How much of the paper is drawn, so a screen knows the work left without reading the paper. */
   paperQuestionCount: z.number().int(),
@@ -560,8 +523,8 @@ export type SetPaperQuestionStatusInput = z.input<typeof setPaperQuestionStatusS
 export type SetPaperQuestionStatusBody = z.infer<typeof setPaperQuestionStatusSchema>;
 
 // ============================================================================
-// Writing. A test owns only what it covers, how it is judged and where its
-// questions come from — every shape field is read through its config.
+// Writing. A test owns only what it covers and where its questions come
+// from — every shape field is read through its config.
 // ============================================================================
 
 export const TEST_TITLE_MAX = 140;
@@ -585,7 +548,6 @@ const testOwnFieldsSchema = z.object({
 export const createTestSchema = testOwnFieldsSchema.extend({
   title: testTitleSchema,
   baseConfigId: z.string().min(1, 'Choose a config'),
-  /** `evaluationMode` is absent for the same reason: the series decides it, and the body cannot. */
   testSeriesId: z.string().min(1, 'Choose a series'),
 });
 export type CreateTestInput = z.input<typeof createTestSchema>;

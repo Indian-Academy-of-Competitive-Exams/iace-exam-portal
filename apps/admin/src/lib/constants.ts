@@ -28,7 +28,6 @@ import {
   BRANCH_TYPE,
   type BranchType,
   type DifficultyLevel,
-  type EvaluationMode,
   type ExamTemplate,
   FEATURE_KEYS,
   type Gender,
@@ -349,11 +348,6 @@ export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
   EN: 'English',
   HI: 'Hindi',
   TE: 'Telugu',
-};
-
-export const EVALUATION_MODE_HINTS: Readonly<Record<EvaluationMode, string>> = {
-  RANKED: 'Scored against the cohort, with a rank and percentile',
-  PRACTICE: 'Scored, never ranked',
 };
 
 /** The phases of building a test. The order is the contract's; these are only the words. */

@@ -5,11 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
   FEATURE_KEYS,
-  EVALUATION_MODE_LABELS,
   PERMISSION_LEVELS,
   type SeriesTestRow,
   type TestSeriesSummary,
-  seriesModeMismatch,
 } from '@iace/contracts';
 import {
   Button,
@@ -57,7 +55,7 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
       {canWrite ? (
         <div className="flex justify-end">
           <Button size="sm" asChild>
-            {/* The series goes with it, so the builder opens knowing the mode and often the stage. */}
+            {/* The series goes with it, so the builder opens knowing it and often the stage. */}
             <Link to={`${ROUTES.TEST_NEW}?series=${series.id}`}>
               <Plus aria-hidden />
               New test
@@ -148,7 +146,6 @@ function testColumns(
   ];
 }
 
-/** Every test here is judged the way this series is, so the row's mode is the series' own. */
 function MoveDialog({
   series,
   row,
@@ -181,16 +178,11 @@ function MoveDialog({
     },
   });
 
-  /** Refused here rather than at the server, so the confirm never promises a move that cannot happen. */
+  /** A new pick clears whatever the server refused the last one with. */
   const choose = (next: ChosenSeries) => {
     setChosen(next);
     form.setValue('testSeriesId', next.id, { shouldDirty: true });
-    const issue =
-      next.id === ''
-        ? null
-        : seriesModeMismatch(next.name, next.evaluationMode, series.evaluationMode);
-    if (issue) form.setError('testSeriesId', { type: 'validate', message: issue });
-    else form.clearErrors('testSeriesId');
+    form.clearErrors('testSeriesId');
   };
 
   return (
@@ -201,7 +193,7 @@ function MoveDialog({
         form={form}
         onSubmit={() => chosen.id !== '' && setConfirming(chosen)}
         title={`Move ${row.title ?? 'this test'} to another series`}
-        description={`It is offered through ${series.name} today. A test is judged the way its series is, so it can only move to another ${EVALUATION_MODE_LABELS[series.evaluationMode]} series.`}
+        description={`It is offered through ${series.name} today.`}
         submitLabel="Choose it"
         loading={move.isPending}
       >

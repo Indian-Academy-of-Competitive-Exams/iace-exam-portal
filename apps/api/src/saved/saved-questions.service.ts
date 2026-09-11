@@ -237,7 +237,7 @@ export class SavedQuestionsService {
             testId: true,
             status: true,
             test: {
-              select: { evaluationMode: true, baseConfig: { select: { durationSec: true } } },
+              select: { baseConfig: { select: { durationSec: true } } },
             },
           },
         },

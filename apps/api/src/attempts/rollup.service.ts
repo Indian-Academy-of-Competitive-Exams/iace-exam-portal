@@ -5,7 +5,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS, EVALUATION_MODE, SAVED_QUESTION_KIND } from '@iace/contracts';
+import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { cohortShapeOf } from './performance-analytics';
@@ -48,7 +48,7 @@ const FOLD_SELECT = {
   evaluatedAt: true,
   lastPercentile: true,
   sectionScores: true,
-  test: { select: { scope: true, evaluationMode: true } },
+  test: { select: { scope: true } },
   questions: {
     select: {
       paperQuestionId: true,
@@ -119,7 +119,7 @@ export class RollupService {
     );
   }
 
-  /** One student's two tables, over every evaluated sitting of theirs — practice included. */
+  /** One student's two tables, over every evaluated sitting of theirs — retakes included. */
   async rebuildStudent(studentId: string): Promise<void> {
     await this.prisma.$transaction(
       async (tx) => {
@@ -142,8 +142,6 @@ export class RollupService {
 
   /** Every table from scratch, which is also how sittings scored before this worker are counted. */
   async rebuildAll(): Promise<void> {
-    await this.honestGrading();
-
     const tests = await this.prisma.attempt.findMany({
       where: { status: ATTEMPT_STATUS.EVALUATED, isGraded: true },
       distinct: ['testId'],
@@ -159,48 +157,6 @@ export class RollupService {
     for (const row of students) await this.rebuildStudent(row.studentId);
 
     this.logger.log(`Rebuilt ${tests.length} tests and ${students.length} students`);
-  }
-
-  /** `isGraded` gates every cohort, so rows that hold a slot they should not are fixed first. */
-  private async honestGrading(): Promise<void> {
-    const corrected = await this.prisma.attempt.updateMany({
-      where: { isGraded: true, test: { evaluationMode: EVALUATION_MODE.PRACTICE } },
-      data: { isGraded: false },
-    });
-    const wrong = corrected.count + (await this.demoteSpareRankedSittings());
-    if (wrong > 0) {
-      this.logger.warn(`Corrected ${wrong} sittings that were graded but should not be`);
-    }
-  }
-
-  /** At most one ranked sitting per (student, test), the earliest keeping it — not "attempt 1". */
-  private async demoteSpareRankedSittings(): Promise<number> {
-    // Scoped to a RETAKE: the earliest sitting keeps the slot, so only a later one can be spare.
-    const later = await this.prisma.attempt.findMany({
-      where: { isGraded: true, attemptNo: { gt: 1 } },
-      orderBy: { attemptNo: 'asc' },
-      select: { id: true, testId: true, studentId: true, attemptNo: true },
-    });
-
-    const spare: string[] = [];
-    for (const row of later) {
-      const earlier = await this.prisma.attempt.count({
-        where: {
-          testId: row.testId,
-          studentId: row.studentId,
-          isGraded: true,
-          attemptNo: { lt: row.attemptNo },
-        },
-      });
-      if (earlier > 0) spare.push(row.id);
-    }
-    if (spare.length === 0) return 0;
-
-    const { count } = await this.prisma.attempt.updateMany({
-      where: { id: { in: spare } },
-      data: { isGraded: false },
-    });
-    return count;
   }
 
   private async foldable(attemptId: string): Promise<FoldableAttempt | null> {
@@ -248,7 +204,7 @@ export class RollupService {
           totalWrong: totals.totalWrong,
           totalUnattempted: totals.totalUnattempted,
           sumTimeSec: BigInt(totals.sumTimeSec),
-          practiceAttempts: totals.practiceAttempts,
+          retakeCount: totals.retakeCount,
           computedAt: now,
         },
         update: {
@@ -261,7 +217,7 @@ export class RollupService {
           totalWrong: { increment: totals.totalWrong },
           totalUnattempted: { increment: totals.totalUnattempted },
           sumTimeSec: { increment: BigInt(totals.sumTimeSec) },
-          practiceAttempts: { increment: totals.practiceAttempts },
+          retakeCount: { increment: totals.retakeCount },
           computedAt: now,
         },
       });
@@ -284,18 +240,16 @@ export class RollupService {
       for (const subject of totals.subjects.values()) {
         await tx.studentSubjectStat.upsert({
           where: {
-            studentId_subjectId_scope_evaluationMode: {
+            studentId_subjectId_scope: {
               studentId: attempt.studentId,
               subjectId: subject.subjectId,
               scope: subject.scope,
-              evaluationMode: subject.evaluationMode,
             },
           },
           create: {
             studentId: attempt.studentId,
             subjectId: subject.subjectId,
             scope: subject.scope,
-            evaluationMode: subject.evaluationMode,
             attempted: subject.attempted,
             correct: subject.correct,
             wrong: subject.wrong,
@@ -547,7 +501,7 @@ export class RollupService {
         totalWrong: totals.totalWrong,
         totalUnattempted: totals.totalUnattempted,
         sumTimeSec: BigInt(totals.sumTimeSec),
-        practiceAttempts: totals.practiceAttempts,
+        retakeCount: totals.retakeCount,
         lastAttemptAt: totals.lastAttemptAt,
         computedThrough: totals.computedThrough,
         computedAt: now,
@@ -560,7 +514,6 @@ export class RollupService {
         studentId,
         subjectId: subject.subjectId,
         scope: subject.scope,
-        evaluationMode: subject.evaluationMode,
         attempted: subject.attempted,
         correct: subject.correct,
         wrong: subject.wrong,
@@ -660,7 +613,6 @@ function toFoldable(row: FoldRow): FoldableAttempt {
     evaluatedAt: row.evaluatedAt,
     lastPercentile: numberOrNull(row.lastPercentile),
     scope: row.test.scope,
-    evaluationMode: row.test.evaluationMode,
     sections: sectionScoresIn(row.sectionScores) ?? [],
     questions: row.questions.map((question) => ({
       paperQuestionId: question.paperQuestionId,

@@ -135,7 +135,7 @@ const GATE_SELECT = {
   id: true,
   testId: true,
   status: true,
-  test: { select: { evaluationMode: true, baseConfig: { select: { durationSec: true } } } },
+  test: { select: { baseConfig: { select: { durationSec: true } } } },
 } as const satisfies Prisma.AttemptSelect;
 
 /** The KEY. Reached only past `solutionsAreOpen`, which is why it is a second read and not a join. */
@@ -476,7 +476,7 @@ const TREND_SELECT = {
   wrongCount: true,
   lastRank: true,
   lastPercentile: true,
-  test: { select: { title: true, evaluationMode: true } },
+  test: { select: { title: true } },
   // The PAPER's own marks, so one sitting cannot read one percentage here and another on its card.
   questions: { select: { paperItem: { select: { marks: true } } } },
 } as const satisfies Prisma.AttemptSelect;
@@ -494,7 +494,6 @@ function toPerformancePoint(row: TrendRow): PerformancePoint {
     attemptNo: row.attemptNo,
     testId: row.testId,
     testTitle: row.test.title,
-    evaluationMode: row.test.evaluationMode,
     submittedAt: row.submittedAt?.toISOString() ?? null,
     score,
     maxMarks,

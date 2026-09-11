@@ -2,7 +2,6 @@ import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-rou
 import { useQuery } from '@tanstack/react-query';
 import { Info } from 'lucide-react';
 import {
-  Badge,
   Button,
   Combobox,
   PageFrame,
@@ -13,22 +12,13 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { REPORT_TABS, newestFirst, reportTabOf } from '@iace/app-kit';
-import {
-  EVALUATION_MODE,
-  EVALUATION_MODE_LABELS,
-  INSTITUTE_TIME_ZONE,
-  PERFORMANCE_SCOPES,
-  type EvaluationMode,
-  type PerformancePoint,
-  type ScoreCard,
-} from '@iace/contracts';
+import { INSTITUTE_TIME_ZONE, type PerformancePoint, type ScoreCard } from '@iace/contracts';
 import { api } from '../lib/api';
 import {
   NAV_ITEMS,
   PERFORMANCE_QUERY_KEY,
   PICKER_WIDTH,
   ROUTES,
-  performanceReportQueryKey,
   scoreCardQueryKey,
 } from '../lib/constants';
 
@@ -107,27 +97,9 @@ function Standing({ attemptId }: Readonly<{ attemptId: string }>) {
     queryKey: scoreCardQueryKey(attemptId),
     queryFn: () => api.me.scoreCard(attemptId),
   });
-  const report = useQuery({
-    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
-    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
-  });
-
-  const mode = report.data?.evaluationMode ?? null;
   const notices = card.data ? noticesFor(card.data) : [];
-
-  return (
-    <>
-      {mode === null ? null : <ModeBadge mode={mode} />}
-      {notices.length === 0 ? null : <Notices notices={notices} />}
-    </>
-  );
+  return notices.length === 0 ? null : <Notices notices={notices} />;
 }
-
-const ModeBadge = ({ mode }: Readonly<{ mode: EvaluationMode }>) => (
-  <Badge variant={mode === EVALUATION_MODE.RANKED ? 'primary' : 'neutral'}>
-    {EVALUATION_MODE_LABELS[mode]}
-  </Badge>
-);
 
 function Notices({ notices }: Readonly<{ notices: readonly string[] }>) {
   return (

@@ -2,12 +2,10 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
 import {
-  EVALUATION_MODE,
   LEADERBOARD_SCOPES,
   PERFORMANCE_SCOPES,
   percentLabel,
   type CohortCurve,
-  type EvaluationMode,
   type PerformanceReport,
 } from '@iace/contracts';
 import { api } from '../lib/api';
@@ -35,9 +33,7 @@ export function ComparePanel() {
     report.data?.cohort?.testId ??
     points.find((point) => point.attemptId === attemptId)?.testId ??
     '';
-  // A crowd is not a ranking: a practice paper has sittings and no board, so the MODE decides.
-  const mode = report.data?.evaluationMode ?? null;
-  const placed = mode === EVALUATION_MODE.RANKED && (report.data?.cohort?.cohortSize ?? 0) > 0;
+  const placed = (report.data?.cohort?.cohortSize ?? 0) > 0;
   const board = useQuery({
     queryKey: leaderboardQueryKey(LEADERBOARD_SCOPES.TEST, testId),
     queryFn: () => api.me.leaderboard({ scope: LEADERBOARD_SCOPES.TEST, testId }),
@@ -57,7 +53,7 @@ export function ComparePanel() {
         <AttemptCompare sittings={sittings} cohort={report.data.cohort} />
       )}
 
-      <Standing mode={mode} placed={placed} />
+      <Standing placed={placed} />
 
       {placed ? (
         <Section title="Leaderboard">
@@ -74,9 +70,9 @@ export function ComparePanel() {
   );
 }
 
-/** Only the ranked-but-unplaced case: a practice paper says its own piece inside the comparison. */
-function Standing({ mode, placed }: Readonly<{ mode: EvaluationMode | null; placed: boolean }>) {
-  if (placed || mode !== EVALUATION_MODE.RANKED) return null;
+/** A paper nobody has been ranked on yet stands against the student's own attempts. */
+function Standing({ placed }: Readonly<{ placed: boolean }>) {
+  if (placed) return null;
 
   return (
     /* ui-copy-ok: consequence */

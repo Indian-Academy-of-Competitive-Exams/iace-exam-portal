@@ -56,7 +56,6 @@ export {
 export {
   BlindSpots,
   DispositionFigure,
-  ModeGapFigure,
   ModeTiles,
   ScopeGapFigure,
   ScoreTrendFigure,

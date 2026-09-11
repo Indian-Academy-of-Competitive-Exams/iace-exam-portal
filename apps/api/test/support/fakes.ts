@@ -12,12 +12,10 @@ import {
   DIFFICULTY_LEVEL,
   type DifficultyLevel,
   type DrawSpec,
-  EVALUATION_MODE,
   EXAM_COURSE,
   EXAM_MODE,
   EXAM_TEMPLATE,
   ErrorCodes,
-  type EvaluationMode,
   type ExamCourse,
   type ExamMode,
   type ExamTemplate,
@@ -807,14 +805,14 @@ function sortByKeys<T extends Record<string, unknown>>(
   });
 }
 
-/** A sitting as the admin report's picker reads it, with its test's title and mode on the row. */
+/** A sitting as the admin report's picker reads it, with its test's title on the row. */
 export interface FakeReportSitting {
   id: string;
   studentId: string;
   status: AttemptStatus;
   submittedAt: Date | null;
   title: string | null;
-  evaluationMode: EvaluationMode;
+  isGraded: boolean;
 }
 
 export function makeReportSitting(overrides: Partial<FakeReportSitting> = {}): FakeReportSitting {
@@ -824,7 +822,7 @@ export function makeReportSitting(overrides: Partial<FakeReportSitting> = {}): F
     status: ATTEMPT_STATUS.EVALUATED,
     submittedAt: new Date('2026-08-20T06:00:00.000Z'),
     title: 'SSC CGL Tier 1 — Mock 1',
-    evaluationMode: EVALUATION_MODE.RANKED,
+    isGraded: true,
     ...overrides,
   };
 }
@@ -1236,7 +1234,8 @@ export class FakePrisma {
           .map((row) => ({
             id: row.id,
             submittedAt: row.submittedAt,
-            test: { title: row.title, evaluationMode: row.evaluationMode },
+            isGraded: row.isGraded,
+            test: { title: row.title },
           })),
       ),
 
@@ -1587,7 +1586,6 @@ export interface FakeTestModelRow {
   examStageId: string;
   scope: TestScope;
   scopeRef: TestScopeRef | null;
-  evaluationMode: EvaluationMode;
   maxRetakes: number | null;
   questionPoolFilter: DrawSpec | null;
   status: TestStatus;
@@ -1612,7 +1610,6 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     examStageId: 'stage_1',
     scope: TEST_SCOPE.FULL,
     scopeRef: null,
-    evaluationMode: EVALUATION_MODE.RANKED,
     maxRetakes: null,
     questionPoolFilter: null,
     status: TEST_STATUS.DRAFT,
@@ -3512,7 +3509,6 @@ export interface FakeSeriesRow {
   programCode: string | null;
   sequentialTests: boolean;
   kind: TestSeriesKind;
-  evaluationMode: EvaluationMode;
   eventId: string | null;
   branchIds: string[];
   isEnabled: boolean;
@@ -3552,7 +3548,6 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     programCode: null,
     sequentialTests: false,
     kind: TEST_SERIES_KIND.STANDARD,
-    evaluationMode: EVALUATION_MODE.RANKED,
     eventId: null,
     branchIds: [],
     isEnabled: true,
@@ -5029,7 +5024,6 @@ export function makeServedAnswer(
 /** The blueprint a scored sitting is read back against — the shape, not this student's marks. */
 export interface FakeScoredTest {
   title: string | null;
-  evaluationMode: EvaluationMode;
   shuffleOptions: boolean;
   durationSec: number;
   totalQuestions: number;
@@ -5047,7 +5041,6 @@ export interface FakeScoredTest {
 export function makeScoredTest(overrides: Partial<FakeScoredTest> = {}): FakeScoredTest {
   return {
     title: 'SSC CGL Tier 1 — Mock 1',
-    evaluationMode: EVALUATION_MODE.RANKED,
     shuffleOptions: false,
     durationSec: 3600,
     totalQuestions: 3,
@@ -5080,7 +5073,6 @@ export class FakeScoringPrisma {
       ...row,
       test: {
         title: this.shape.title,
-        evaluationMode: this.shape.evaluationMode,
         baseConfig: {
           durationSec: this.shape.durationSec,
           totalQuestions: this.shape.totalQuestions,
@@ -5379,7 +5371,6 @@ export class FakePerformancePrisma {
       ...row,
       test: {
         title: this.data.shape.title,
-        evaluationMode: this.data.shape.evaluationMode,
         baseConfig: {
           durationSec: this.data.shape.durationSec,
           sections: [...this.data.shape.sections].sort((a, b) => a.order - b.order),
@@ -5640,7 +5631,6 @@ export function makeBoardSitting(overrides: Partial<FakeBoardSitting> = {}): Fak
 export interface FakeBoardTest {
   id: string;
   title: string | null;
-  evaluationMode: EvaluationMode;
 }
 
 export interface FakeBoardSeries {
@@ -5673,13 +5663,7 @@ export class FakeBoardPrisma {
   rawReads = 0;
 
   private testOf(testId: string): FakeBoardTest {
-    return (
-      this.tests.find((row) => row.id === testId) ?? {
-        id: testId,
-        title: null,
-        evaluationMode: EVALUATION_MODE.RANKED,
-      }
-    );
+    return this.tests.find((row) => row.id === testId) ?? { id: testId, title: null };
   }
 
   readonly attempt = {
@@ -5700,7 +5684,7 @@ export class FakeBoardPrisma {
       return Promise.resolve({
         id: row.id,
         lastRank: row.lastRank,
-        test: { title: test.title, evaluationMode: test.evaluationMode },
+        test: { title: test.title },
       });
     },
 
@@ -5960,7 +5944,7 @@ export interface FakeStudentStatRow {
   totalWrong: number;
   totalUnattempted: number;
   sumTimeSec: number;
-  practiceAttempts: number;
+  retakeCount: number;
   lastAttemptAt: Date | null;
   computedThrough: Date | null;
   computedAt: Date | null;
@@ -5970,7 +5954,6 @@ export interface FakeStudentSubjectStatRow {
   studentId: string;
   subjectId: string;
   scope: TestScope;
-  evaluationMode: EvaluationMode;
   attempted: number;
   correct: number;
   wrong: number;
@@ -5984,7 +5967,6 @@ export interface FakeOverviewSubjectRow {
   subjectId: string;
   subjectName: string;
   scope: TestScope;
-  evaluationMode: EvaluationMode;
   attempted: number;
   correct: number;
   sumTimeSec: number;
@@ -6022,7 +6004,6 @@ export class FakeOverviewPrisma {
           .map((row) => ({
             subjectId: row.subjectId,
             scope: row.scope,
-            evaluationMode: row.evaluationMode,
             attempted: row.attempted,
             correct: row.correct,
             sumTimeSec: BigInt(row.sumTimeSec),
@@ -6106,14 +6087,12 @@ export interface FakeSavedQuestionRow {
 export interface FakeRollupTest {
   id: string;
   scope: TestScope;
-  evaluationMode: EvaluationMode;
 }
 
 export function makeRollupTest(overrides: Partial<FakeRollupTest> = {}): FakeRollupTest {
   return {
     id: 'tst_1',
     scope: TEST_SCOPE.FULL,
-    evaluationMode: EVALUATION_MODE.RANKED,
     ...overrides,
   };
 }
@@ -6256,7 +6235,6 @@ interface FakeRollupAttemptWhere {
   status?: AttemptStatus | { in: AttemptStatus[] };
   attemptNo?: { lt?: number; gt?: number };
   evaluatedAt?: Date | { lt: Date } | null;
-  test?: { evaluationMode: EvaluationMode };
   OR?: FakeRollupAttemptWhere[];
 }
 
@@ -6294,14 +6272,14 @@ export class FakeRollupPrisma {
     totalWrong: 0,
     totalUnattempted: 0,
     sumTimeSec: 0,
-    practiceAttempts: 0,
+    retakeCount: 0,
     lastAttemptAt: null,
     computedThrough: null,
     computedAt: null,
   });
 
   readonly studentSubjectStat = new FakeStatTable<FakeStudentSubjectStatRow>(
-    ['studentId', 'subjectId', 'scope', 'evaluationMode'],
+    ['studentId', 'subjectId', 'scope'],
     { attempted: 0, correct: 0, wrong: 0, sumTimeSec: 0, computedAt: null },
   );
 
@@ -6442,7 +6420,7 @@ export class FakeRollupPrisma {
     const test = this.tests.find((candidate) => candidate.id === row.testId) ?? makeRollupTest();
     return {
       ...row,
-      test: { scope: test.scope, evaluationMode: test.evaluationMode },
+      test: { scope: test.scope },
       questions: this.served
         .filter((served) => served.attemptId === row.id)
         .sort((a, b) => a.order - b.order)
@@ -6459,13 +6437,12 @@ export class FakeRollupPrisma {
     return typeof id === 'string' ? row.id === id : id.in.includes(row.id);
   }
 
-  /** The clauses that are a plain equals, the mode among them because the test carries it. */
+  /** The clauses that are a plain equals. */
   private sameColumns(row: FakeAttemptRow, where: FakeRollupAttemptWhere): boolean {
     const asked: [unknown, unknown][] = [
       [where.testId, row.testId],
       [where.studentId, row.studentId],
       [where.isGraded, row.isGraded],
-      [where.test?.evaluationMode, this.modeOf(row)],
     ];
     if (!asked.every(([wanted, held]) => wanted === undefined || wanted === held)) return false;
     if (where.status === undefined) return true;
@@ -6482,11 +6459,6 @@ export class FakeRollupPrisma {
       return false;
     }
     return where.OR === undefined || where.OR.some((clause) => this.matches(row, clause));
-  }
-
-  private modeOf(row: FakeAttemptRow): EvaluationMode {
-    const test = this.tests.find((candidate) => candidate.id === row.testId);
-    return test?.evaluationMode ?? EVALUATION_MODE.RANKED;
   }
 
   readonly attempt = {
@@ -6813,7 +6785,6 @@ export interface FakeSavedAttempt {
   testId: string;
   testTitle: string | null;
   status: AttemptStatus;
-  evaluationMode: EvaluationMode;
   durationSec: number;
   questionIds: readonly string[];
   /** Seconds on each question, for the saved list's own column. Absent reads as never measured. */
@@ -6827,7 +6798,6 @@ export function makeSavedAttempt(overrides: Partial<FakeSavedAttempt> = {}): Fak
     testId: 'tst_1',
     testTitle: 'Mock 1',
     status: ATTEMPT_STATUS.EVALUATED,
-    evaluationMode: EVALUATION_MODE.PRACTICE,
     durationSec: 3_600,
     questionIds: ['q_1', 'q_2'],
     ...overrides,
@@ -6894,10 +6864,7 @@ export class FakeSavedPrisma {
         attempt: {
           testId: attempt.testId,
           status: attempt.status,
-          test: {
-            evaluationMode: attempt.evaluationMode,
-            baseConfig: { durationSec: attempt.durationSec },
-          },
+          test: { baseConfig: { durationSec: attempt.durationSec } },
         },
       });
     },

@@ -81,7 +81,7 @@ describe('the ranked slot — spent unless a void hands it back', () => {
   it('frees the slot only when a ranked sitting is voided with the regrant asked for', () => {
     assert.equal(regrantsRankedSlot(true, true), true);
     assert.equal(regrantsRankedSlot(true, false), false);
-    // Nothing to hand back: a practice sitting never held the slot in the first place.
+    // Nothing to hand back: a retake never held the slot in the first place.
     assert.equal(regrantsRankedSlot(false, true), false);
   });
 
@@ -99,7 +99,7 @@ describe('the ranked slot — spent unless a void hands it back', () => {
     assert.equal(slots.attemptNo, 2);
   });
 
-  /** A void without the regrant: they may sit again, but that sitting is practice. */
+  /** A void without the regrant: they may sit again, but that sitting is a retake. */
   it('keeps the slot spent when a voided sitting still carries it', () => {
     const slots = slotsAfter([{ status: ATTEMPT_STATUS.VOIDED, isGraded: true }]);
 

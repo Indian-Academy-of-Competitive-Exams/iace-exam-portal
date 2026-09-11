@@ -1,13 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  AppException,
-  ErrorCodes,
-  EVALUATION_MODE,
-  OPENING_HAS_PASSED,
-  TEST_STATUS,
-} from '@iace/contracts';
+import { AppException, ErrorCodes, OPENING_HAS_PASSED, TEST_STATUS } from '@iace/contracts';
 import { OfferingService } from '../src/tests/offering.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { AuditContext } from '../src/audit';
@@ -133,42 +127,6 @@ describe('OfferingService — a test belongs to one series', () => {
     await service.moveToSeries('tst_1', { testSeriesId: 'srs_free' });
 
     assert.equal(prisma.tests[0]?.testSeriesId, 'srs_free');
-  });
-
-  /** The failure this prevents: a driver error where the composite key refuses the write. */
-  it('refuses a series that judges its tests the other way, naming both modes', async () => {
-    const { service, prisma } = serviceWith(inSeries());
-    prisma.series.push(
-      makeSeries({
-        id: 'srs_drills',
-        name: 'SSC CGL 2026 — Drills',
-        evaluationMode: EVALUATION_MODE.PRACTICE,
-      }),
-    );
-
-    const error = await service
-      .moveToSeries('tst_1', { testSeriesId: 'srs_drills' })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.match(error.message, /Practice/);
-    assert.match(error.message, /Ranked/);
-    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
-  });
-
-  it('carries a practice test into another practice series', async () => {
-    const { service, prisma } = serviceWith(
-      inSeries({ evaluationMode: EVALUATION_MODE.PRACTICE, testSeriesId: 'srs_drills' }),
-    );
-    prisma.series.push(
-      makeSeries({ id: 'srs_drills', evaluationMode: EVALUATION_MODE.PRACTICE }),
-      makeSeries({ id: 'srs_more_drills', evaluationMode: EVALUATION_MODE.PRACTICE }),
-    );
-
-    await service.moveToSeries('tst_1', { testSeriesId: 'srs_more_drills' });
-
-    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_more_drills');
   });
 
   /** Moving a sat test would take it out of a series students' results already point through. */
@@ -387,24 +345,19 @@ describe('OfferingService — a series and the tests it holds', () => {
   });
 });
 
-describe('OfferingService — a practice test opens once, for everybody', () => {
-  const practice = () =>
-    makeTest({ id: 'tst_1', opensAt: OPENS_AT, evaluationMode: EVALUATION_MODE.PRACTICE });
-
-  const refusedField = (field: string) => (error: unknown) =>
-    AppException.is(error) && error.fieldErrors?.[field] !== undefined;
-
-  /** The failure this prevents: one cohort put ahead of another on a paper that ranks neither. */
-  it('refuses a program opening on a practice test', async () => {
-    const { service, prisma } = serviceWith(practice());
-    prisma.programCatalog.push({ code: 'FOUNDATION' });
+describe('OfferingService — a program opening is set on any test', () => {
+  /** The failure this prevents: a test that opens once for everybody because of the series holding it. */
+  it('stores a program opening whichever series the test sits in', async () => {
     const earlier = new Date(OPENS_AT.getTime() - 3_600_000).toISOString();
 
-    await assert.rejects(
-      () => service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: earlier }, NOW),
-      refusedField('opensAt'),
-    );
-    assert.equal(prisma.programUnlocks.length, 0);
+    for (const testSeriesId of ['srs_1', 'srs_2']) {
+      const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT, testSeriesId }));
+      prisma.programCatalog.push({ code: 'FOUNDATION' });
+
+      const rows = await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: earlier }, NOW);
+
+      assert.deepEqual(rows, [{ programCode: 'FOUNDATION', opensAt: earlier }], testSeriesId);
+    }
   });
 });
 

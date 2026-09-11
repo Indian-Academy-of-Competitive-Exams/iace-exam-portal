@@ -6,9 +6,7 @@ import {
   FORM_LEVEL_FIELD,
   OPENING_HAS_PASSED,
   TEST_STATUS,
-  allowsCohortScheduling,
   testIsOpen,
-  type EvaluationMode,
   scopedDurationSec,
   scopedQuestionCount,
   TEST_SCOPE,
@@ -37,7 +35,6 @@ const OFFERING_SELECT = {
   isLocked: true,
   examStageId: true,
   opensAt: true,
-  evaluationMode: true,
   testSeriesId: true,
   seriesOrder: true,
   testSeries: { select: { name: true } },
@@ -113,18 +110,6 @@ function assertOpeningAhead(opensAt: Date, now: Date, field: string): void {
   });
 }
 
-const STAGGER_IS_RANKED_ONLY =
-  'A program opening staggers one cohort ahead of another, which only means something where a rank compares them. This test is practice, so it opens once for everybody.';
-
-/** A CHECK only ever sees its own row, so unlike the pair above this rule cannot live on the table. */
-function assertStaggerIsRanked(evaluationMode: EvaluationMode): void {
-  if (allowsCohortScheduling(evaluationMode)) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, STAGGER_IS_RANKED_ONLY, {
-    fieldErrors: { opensAt: [STAGGER_IS_RANKED_ONLY] },
-  });
-}
-
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
 const linkOf = (test: OfferingRow): TestSeriesLink => ({
@@ -188,11 +173,11 @@ export class OfferingService {
     return status;
   }
 
-  /** A series must exist, be built for this test's stage, and judge it the way it is judged. */
+  /** A series must exist and be built for this test's stage. */
   private async assertSeriesUsable(test: OfferingRow, testSeriesId: string): Promise<void> {
     const series = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
-      select: { name: true, examStageId: true, evaluationMode: true },
+      select: { name: true, examStageId: true },
     });
     if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
 
@@ -271,7 +256,6 @@ export class OfferingService {
     now: Date = new Date(),
   ): Promise<TestProgramUnlock[]> {
     const test = await this.requireTest(testId);
-    assertStaggerIsRanked(test.evaluationMode);
     await this.requireProgram(programCode);
     const opensAt = new Date(input.opensAt);
     assertOpeningAhead(opensAt, now, 'opensAt');

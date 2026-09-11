@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  EVALUATION_MODE,
   ITEM_SIGNALS,
   SYSTEM_DIFFICULTY,
   distractorThatWon,
@@ -122,20 +121,7 @@ function Body({ report }: Readonly<{ report: TestAnalytics }>) {
   const { summary, sections, items } = report;
   const flagged = items.filter((item) => worthInspecting(item)).length;
 
-  if (summary.evaluatedCount === 0) {
-    return (
-      <div className="flex flex-col gap-4">
-        {report.evaluationMode === EVALUATION_MODE.RANKED ? null : (
-          /* ui-copy-ok: rule */
-          <Alert variant="info">
-            Only a student&apos;s first ranked sitting folds into these figures, and this test is
-            not ranked.
-          </Alert>
-        )}
-        <EmptyState title="No ranked results folded yet" />
-      </div>
-    );
-  }
+  if (summary.evaluatedCount === 0) return <EmptyState title="No ranked results folded yet" />;
 
   return (
     <div className="flex flex-col gap-8">

@@ -3,7 +3,6 @@ import {
   AppException,
   OPENING_HAS_PASSED,
   TEST_STATUS,
-  allowsCohortScheduling,
   offerRequirements,
   todayISO,
   type TestDetail,
@@ -34,9 +33,6 @@ import type { OfferHold, ProgramRefusal } from './use-offer-draft';
 /** Who is offered the test, when it opens, and whether it is offered — all written by Done. */
 
 const PROGRAM_RULE = 'A program opening lets that cohort start earlier than everybody else.';
-
-const PRACTICE_RULE =
-  'A practice test opens at its time for everybody. A program opening answers to a rank, so it belongs to a ranked test only.';
 
 const OVERTAKEN_PROGRAMS_DROPPED = "A program opening later than the test's own is dropped.";
 
@@ -110,7 +106,6 @@ function ScheduleSection({
   onEdit: EditOffer;
 }>) {
   const { schedule } = held;
-  const ranked = allowsCohortScheduling(detail.evaluationMode);
   const sat = detail.attemptCount > 0;
   const today = todayISO();
 
@@ -163,36 +158,30 @@ function ScheduleSection({
         </Field>
       </div>
 
-      {ranked ? (
-        <>
-          <SectionHeading level={3} title="Program openings" />
+      <SectionHeading level={3} title="Program openings" />
 
-          <p className="text-sm text-muted-foreground">{PROGRAM_RULE}</p>
+      <p className="text-sm text-muted-foreground">{PROGRAM_RULE}</p>
 
-          {schedule.programs.map((row, index) => (
-            <ProgramOpeningRow
-              key={row.programCode}
-              row={row}
-              index={index}
-              minDate={today}
-              error={programError(row.programCode)}
-              onChange={(next) => setProgram(row.programCode, next)}
-            />
-          ))}
+      {schedule.programs.map((row, index) => (
+        <ProgramOpeningRow
+          key={row.programCode}
+          row={row}
+          index={index}
+          minDate={today}
+          error={programError(row.programCode)}
+          onChange={(next) => setProgram(row.programCode, next)}
+        />
+      ))}
 
-          <div className="w-72">
-            <ProgramPicker
-              value=""
-              clearable={false}
-              placeholder="Add a program"
-              aria-label="Add a program"
-              onChange={addProgram}
-            />
-          </div>
-        </>
-      ) : (
-        <p className="text-sm text-muted-foreground">{PRACTICE_RULE}</p>
-      )}
+      <div className="w-72">
+        <ProgramPicker
+          value=""
+          clearable={false}
+          placeholder="Add a program"
+          aria-label="Add a program"
+          onChange={addProgram}
+        />
+      </div>
     </FormSection>
   );
 }
@@ -280,30 +269,25 @@ function offerNote(detail: TestDetail, saved: OfferDraft, held: OfferDraft): str
 const whenOf = (wall: string): string => `${opensLabel(instantOf(wall))} IST`;
 
 /** The server clears program rows an opening overtakes, and every one of them when it is cleared. */
-function openingLines(detail: TestDetail, saved: OfferDraft, held: OfferDraft): string[] {
+function openingLines(saved: OfferDraft, held: OfferDraft): string[] {
   const { opensAt } = held.schedule;
   const lines = [opensAt ? `Opens ${whenOf(opensAt)}.` : 'Opens the moment a student reaches it.'];
 
-  const staggered =
-    allowsCohortScheduling(detail.evaluationMode) && saved.schedule.programs.length > 0;
-  if (staggered) lines.push(opensAt ? OVERTAKEN_PROGRAMS_DROPPED : EVERY_PROGRAM_DROPPED);
+  if (saved.schedule.programs.length > 0) {
+    lines.push(opensAt ? OVERTAKEN_PROGRAMS_DROPPED : EVERY_PROGRAM_DROPPED);
+  }
   return lines;
 }
 
 /** Every write Done is about to make, in plain words, so the one confirm names each of them. */
-function changeLines(
-  detail: TestDetail,
-  saved: OfferDraft,
-  held: OfferDraft,
-  changes: OfferChanges,
-): string[] {
+function changeLines(saved: OfferDraft, held: OfferDraft, changes: OfferChanges): string[] {
   const lines: string[] = [];
   const { schedule } = changes;
 
   if (changes.retiring) {
     lines.push(`Stops offering it to students reached through ${saved.series.name}.`);
   }
-  if (schedule.opening) lines.push(...openingLines(detail, saved, held));
+  if (schedule.opening) lines.push(...openingLines(saved, held));
   for (const row of schedule.written) {
     lines.push(`${row.programCode} opens ${whenOf(row.opensAt)}.`);
   }
@@ -401,7 +385,7 @@ export function OfferSaveDialog({
       onConfirm={() => save.mutate()}
     >
       <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-        {changeLines(detail, saved, held, changes).map((line) => (
+        {changeLines(saved, held, changes).map((line) => (
           <li key={line}>{line}</li>
         ))}
       </ul>

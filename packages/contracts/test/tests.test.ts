@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  EVALUATION_MODE,
   TEST_SCOPE,
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
@@ -11,7 +10,6 @@ import {
   scopedQuestionCount,
   scopedMarks,
   scopedDurationSec,
-  seriesModeMismatch,
   testBuilderStepOf,
   owesAPaper,
   paperQuestionSchema,
@@ -22,34 +20,6 @@ import {
   type TestScope,
   type TestScopeRef,
 } from '../src/index';
-
-/** One sentence for both sides: the picker refuses the move in the server's own words. */
-describe('seriesModeMismatch', () => {
-  /** The failure this prevents: a confirm promising a move the server is about to refuse. */
-  it('names both modes when a ranked test is offered a practice series', () => {
-    const issue = seriesModeMismatch(
-      'SSC CGL 2026 — Drills',
-      EVALUATION_MODE.PRACTICE,
-      EVALUATION_MODE.RANKED,
-    );
-
-    assert.ok(issue);
-    assert.match(issue, /SSC CGL 2026 — Drills/);
-    assert.match(issue, /Practice/);
-    assert.match(issue, /Ranked/);
-  });
-
-  it('says nothing when the series judges the test the way it is judged', () => {
-    assert.equal(
-      seriesModeMismatch(
-        'SSC CGL 2026 — Drills',
-        EVALUATION_MODE.PRACTICE,
-        EVALUATION_MODE.PRACTICE,
-      ),
-      null,
-    );
-  });
-});
 
 describe('paperQuestionSchema', () => {
   /** A paper row pins a version, which is what makes a past result reproducible. */
@@ -97,7 +67,7 @@ describe('a test is named when it is created', () => {
     assert.equal(parsed.success, true);
   });
 
-  /** A test reaches a student only through a series, and that series is what decides its mode. */
+  /** A test reaches a student only through a series. */
   it('refuses a create that names no series', () => {
     const parsed = createTestSchema.safeParse({
       baseConfigId: 'cfg_1',
@@ -106,19 +76,6 @@ describe('a test is named when it is created', () => {
 
     assert.equal(parsed.success, false);
     assert.deepEqual(parsed.error?.issues[0]?.path, ['testSeriesId']);
-  });
-
-  /** The failure this prevents: a PRACTICE series holding the RANKED test a client asked for. */
-  it('drops an evaluation mode a client sends rather than judging it', () => {
-    const parsed = createTestSchema.safeParse({
-      baseConfigId: 'cfg_1',
-      testSeriesId: 'srs_1',
-      title: 'SSC CGL — Mock 1',
-      evaluationMode: 'PRACTICE',
-    });
-
-    assert.equal(parsed.success, true);
-    assert.equal('evaluationMode' in (parsed.data ?? {}), false);
   });
 
   /** An edit that is not about the name leaves it alone rather than sending it back. */

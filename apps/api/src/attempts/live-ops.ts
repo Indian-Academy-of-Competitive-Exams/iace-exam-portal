@@ -1,21 +1,13 @@
-import {
-  ANSWERED_STATES,
-  EVALUATION_MODE,
-  TEST_STATUS,
-  type AnswerState,
-  type LiveSitting,
-} from '@iace/contracts';
+import { ANSWERED_STATES, TEST_STATUS, type AnswerState, type LiveSitting } from '@iace/contracts';
 import { type HeldState } from './attempt-state';
 
-/** Which tests the ops picker may offer. Ranked only: a practice sitting has no hall (§7). */
+/** Which tests the ops picker may offer. */
 export function watchableTestsWhere(q: string | undefined): {
   status: string;
-  evaluationMode: string;
   OR?: unknown[];
 } {
   return {
     status: TEST_STATUS.ACTIVE,
-    evaluationMode: EVALUATION_MODE.RANKED,
     // Both, because a test with no title of its own is shown by the series it sits in.
     ...(q
       ? {

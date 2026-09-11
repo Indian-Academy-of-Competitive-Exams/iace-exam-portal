@@ -4,7 +4,6 @@ import {
   ANSWER_STATE,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
-  EVALUATION_MODE,
   QUESTION_TYPE,
   SYSTEM_DIFFICULTY,
   questionReportSchema,
@@ -272,19 +271,6 @@ describe('QuestionReportService — the answer key it carries', () => {
     const payload = JSON.stringify(await service.forAttempt(STUDENT, ATTEMPT));
 
     assert.equal(payload.includes('answerKey'), false);
-  });
-
-  it('reads the same on a practice paper as on a ranked one', async () => {
-    const { service } = bench({
-      shape: makeScoredTest({
-        evaluationMode: EVALUATION_MODE.PRACTICE,
-        sections: SHAPE.sections,
-      }),
-    });
-
-    const report = await service.forAttempt(STUDENT, ATTEMPT);
-
-    assert.equal(report.questions[0]?.correctOptionId, 'o1');
   });
 });
 

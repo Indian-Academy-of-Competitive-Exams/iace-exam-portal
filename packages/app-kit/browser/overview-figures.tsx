@@ -21,16 +21,13 @@ import {
   dispositionRates,
   measureOf,
   percentLabel,
-  overallModeGap,
   rankSubjectsByWeakness,
   scopeComparison,
   scopesNotSat,
-  subjectModeGaps,
   subjectShares,
   untouchedSubjects,
   type Disposition,
   type EffortPerSitting,
-  type EvaluationMode,
   type PerformancePoint,
   type SubjectMeasure,
   type SubjectStanding,
@@ -43,17 +40,16 @@ const PLOT_HEIGHT = 300;
 /** A subject's name is long where a section's is short: 'General Intelligence and Reasoning'. */
 const SUBJECT_LABEL_WIDTH = 210;
 
-/** Which mode and scope a subject figure is being read in. Both are the reader's own choice. */
+/** Which scope a subject figure is being read in, which is the reader's own choice. */
 export interface SubjectView {
   subjects: readonly SubjectStanding[];
-  mode: EvaluationMode;
   /** Null is every scope summed, which is what the subject charts open on. */
   scope: TestScope | null;
   /** How wide the caller lays it out; a scatter needs more of a row than a bar list does. */
   className?: string;
 }
 
-/** What the toggle moves, summed off the subject rows that key on the mode. */
+/** Time, pace and accuracy, summed off every subject row. */
 export function ModeTiles({ measure }: Readonly<{ measure: SubjectMeasure }>) {
   return (
     <div className="flex items-start gap-6">
@@ -113,14 +109,12 @@ export function ScoreTrendFigure({
 /** A short paper proves knowledge; a long one proves it survives. This is the difference. */
 export function ScopeGapFigure({
   subjects,
-  mode,
   className,
 }: Readonly<{
   subjects: readonly SubjectStanding[];
-  mode: EvaluationMode;
   className?: string;
 }>) {
-  const compared = scopeComparison(subjects, mode);
+  const compared = scopeComparison(subjects);
   const items: DivergingItem[] =
     compared?.subjects.map((row) => ({
       key: row.subjectId,
@@ -161,15 +155,13 @@ const titleFor = (first: TestScope, second: TestScope) =>
 /** A subject a paper asked about and never got an answer to, and a kind of paper never sat. */
 export function BlindSpots({
   subjects,
-  mode,
   scope,
 }: Readonly<{
   subjects: readonly SubjectStanding[];
-  mode: EvaluationMode;
   scope: TestScope | null;
 }>) {
-  const untouched = untouchedSubjects(subjects, mode, scope);
-  const missing = scopesNotSat(subjects, mode);
+  const untouched = untouchedSubjects(subjects, scope);
+  const missing = scopesNotSat(subjects);
   if (untouched.length === 0 && missing.length === 0) return null;
 
   return (
@@ -185,19 +177,10 @@ export function BlindSpots({
   );
 }
 
-/** Seconds a question slower or faster when it counts — the clock half of the same gap. */
-function paceNote(paceGap: number | null): string {
-  if (paceGap === null || Math.round(paceGap) === 0) return '';
-  const seconds = Math.abs(Math.round(paceGap));
-  return ` · ${seconds}s ${paceGap > 0 ? 'slower' : 'faster'} when ranked`;
-}
-
-const signed = (value: number) => (value > 0 ? `+${value}` : String(value));
-
 /** Nothing sat and one sitting are different facts: only one of them is asking for a retake. */
 const NoTrend = ({ sittings }: Readonly<{ sittings: number }>) =>
   sittings === 0 ? (
-    <Alert variant="info">No sitting in this mode has been marked yet.</Alert>
+    <Alert variant="info">No sitting has been marked yet.</Alert>
   ) : (
     /* ui-copy-ok: rule */
     <Alert variant="info">One sitting is a dot, not a trend. Sit the paper again.</Alert>
@@ -210,7 +193,7 @@ function spent(seconds: number): string {
   return whole < 60 ? `${whole}m` : `${Math.round(whole / 60)}h`;
 }
 
-/** LIFETIME: no per-mode unattempted exists to bind it to, so the toggle must not seem to. */
+/** LIFETIME: no per-scope unattempted exists, so it ignores the scope the other figures read. */
 export function DispositionFigure({
   disposition,
   effort,
@@ -227,7 +210,7 @@ export function DispositionFigure({
   return (
     <ChartFigure
       title="Questions"
-      meta={`${total} across every sitting, ranked and practice`}
+      meta={`${total} across every sitting`}
       className={cn('min-w-0', className)}
     >
       <DonutPlot
@@ -260,62 +243,9 @@ export function DispositionFigure({
   );
 }
 
-/** Ranked minus practice: a subject that drops when it counts is nerve or clock, not knowledge. */
-export function ModeGapFigure({
-  subjects,
-  scope,
-  className,
-}: Readonly<{
-  subjects: readonly SubjectStanding[];
-  scope: TestScope | null;
-  className?: string;
-}>) {
-  const gaps = subjectModeGaps(subjects, scope).filter((gap) => gap.accuracyGap !== null);
-  const overall = overallModeGap(subjects, scope);
-  const items: DivergingItem[] = gaps.map((gap) => ({
-    key: gap.subjectId,
-    label: gap.name,
-    value: gap.accuracyGap === null ? null : Math.round(gap.accuracyGap),
-    caption: `${percentLabel(gap.ranked.accuracy, UNMEASURED)} ranked · ${percentLabel(gap.practice.accuracy, UNMEASURED)} practice${paceNote(gap.paceGap)}`,
-  }));
-
-  return (
-    <ChartFigure
-      title="Ranked against practice"
-      meta={plural(items.length, 'subject')}
-      figure={
-        overall.accuracyGap === null ? undefined : (
-          <Metric
-            size="sm"
-            label="Overall"
-            value={signed(Math.round(overall.accuracyGap))}
-            unit="points"
-          />
-        )
-      }
-      className={cn('min-w-0', className)}
-    >
-      {items.length === 0 ? (
-        /* ui-copy-ok: rule */
-        <Alert variant="info">
-          A gap needs both sides. Sit a subject ranked and in practice to see one.
-        </Alert>
-      ) : (
-        <DivergingBars
-          items={items}
-          labelWidth={SUBJECT_LABEL_WIDTH}
-          belowLabel="Drops when ranked"
-          aboveLabel="Holds when ranked"
-          aria-label="Each subject's ranked accuracy against its practice accuracy"
-        />
-      )}
-    </ChartFigure>
-  );
-}
-
 /** Share of the marks minus share of the clock: below the line a subject is not paying its way. */
-export function TimeReturnFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
-  const shares = subjectShares(subjects, mode, scope).filter((share) => share.sumTimeSec > 0);
+export function TimeReturnFigure({ subjects, scope, className }: Readonly<SubjectView>) {
+  const shares = subjectShares(subjects, scope).filter((share) => share.sumTimeSec > 0);
   const items: DivergingItem[] = shares.map((share) => ({
     key: share.subjectId,
     label: share.name,
@@ -345,8 +275,8 @@ export function TimeReturnFigure({ subjects, mode, scope, className }: Readonly<
 }
 
 /** Strongest to weakest, each bar carrying the n it was measured over. No cohort, so no rank. */
-export function SubjectStrengthFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
-  const measured = measuredSubjects(subjects, mode, scope).sort(
+export function SubjectStrengthFigure({ subjects, scope, className }: Readonly<SubjectView>) {
+  const measured = measuredSubjects(subjects, scope).sort(
     (a, b) => (b.measure.accuracy ?? 0) - (a.measure.accuracy ?? 0),
   );
 
@@ -374,8 +304,8 @@ export function SubjectStrengthFigure({ subjects, mode, scope, className }: Read
 const WEAKEST_SHOWN = 5;
 
 /** Weakest first, off the pre-folded rows. Insight only: it offers no paper, and cannot. */
-export function WeakestSubjectsFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
-  const ranking = rankSubjectsByWeakness(subjects, mode, scope);
+export function WeakestSubjectsFigure({ subjects, scope, className }: Readonly<SubjectView>) {
+  const ranking = rankSubjectsByWeakness(subjects, scope);
   const shown = ranking.weakest.slice(0, WEAKEST_SHOWN);
 
   const bars: MeasureBar[] = shown.map((row) => ({
@@ -417,8 +347,8 @@ const NothingRanked = ({ thin }: Readonly<{ thin: number }>) =>
   );
 
 /** Where each subject sits against the median of the reader's OWN subjects, never a cohort's. */
-export function SpeedAccuracyFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
-  const measured = measuredSubjects(subjects, mode, scope);
+export function SpeedAccuracyFigure({ subjects, scope, className }: Readonly<SubjectView>) {
+  const measured = measuredSubjects(subjects, scope);
   const points: QuadrantPoint[] = measured.map(({ subject, measure }) => ({
     key: subject.subjectId,
     label: subject.name,
@@ -466,14 +396,13 @@ interface MeasuredSubject {
   measure: SubjectMeasure;
 }
 
-/** A subject with nothing attempted in this mode and scope has said nothing, so it is left out. */
+/** A subject with nothing attempted in this scope has said nothing, so it is left out. */
 function measuredSubjects(
   subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
   scope: TestScope | null,
 ): MeasuredSubject[] {
   return subjects
-    .map((subject) => ({ subject, measure: measureOf(subject.tallies, mode, scope) }))
+    .map((subject) => ({ subject, measure: measureOf(subject.tallies, scope) }))
     .filter(({ measure }) => measure.attempted > 0);
 }
 
@@ -486,7 +415,7 @@ function medianOf(values: readonly number[]): number {
 }
 
 const NothingMeasured = () => (
-  <Alert variant="info">No question in this mode and scope has been marked yet.</Alert>
+  <Alert variant="info">No question in this scope has been marked yet.</Alert>
 );
 
 /** Nothing measured and one subject are different facts; a median needs two either way. */

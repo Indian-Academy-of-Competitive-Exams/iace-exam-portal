@@ -40,7 +40,7 @@ export function ScoreCardPanel() {
 function Result({ card, report }: Readonly<{ card: ScoreCard; report: PerformanceReport | null }>) {
   const attempted = card.correctCount + card.wrongCount;
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
-  // A curve exists only where a cohort drew one; a retake or a practice paper has none to show.
+  // A curve exists only where a cohort drew one; a retake has none to show.
   const curve = report?.cohort && report.cohort.bands.length > 0 ? report.cohort : null;
   const trajectory = report?.trajectory ?? [];
 

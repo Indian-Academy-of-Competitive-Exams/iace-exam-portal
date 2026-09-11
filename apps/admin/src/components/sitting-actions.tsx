@@ -184,7 +184,7 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
             {asking === ACTIONS.VOID && sitting.isGraded ? (
               <Checkbox
                 label="Give the ranked attempt back"
-                // ui-copy-ok: consequence — without it the slot stays spent and a re-sit is practice.
+                // ui-copy-ok: consequence — without it the slot stays spent and a re-sit is a retake.
                 hint="Their next sitting on this test is ranked again"
                 {...form.register('regrantRanked')}
               />

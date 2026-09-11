@@ -1,14 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  AppException,
-  EXAM_TEMPLATE,
-  ErrorCodes,
-  EVALUATION_MODE,
-  TEST_SCOPE,
-  TEST_STATUS,
-} from '@iace/contracts';
+import { AppException, EXAM_TEMPLATE, ErrorCodes, TEST_SCOPE, TEST_STATUS } from '@iace/contracts';
 import { TestsService } from '../src/tests/tests.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
@@ -39,12 +32,6 @@ const SECTIONS: FakeSectionRow[] = [
 /** Stage-agnostic, so only the tests that are ABOUT the stage rule have to think about it. */
 const SERIES: FakeSeriesRow[] = [
   makeSeries({ id: 'srs_1', name: 'SSC CGL Tier 1 mocks', examStageId: null }),
-  makeSeries({
-    id: 'srs_practice',
-    name: 'SSC CGL Tier 1 drills',
-    examStageId: null,
-    evaluationMode: EVALUATION_MODE.PRACTICE,
-  }),
 ];
 
 function serviceWith(
@@ -168,7 +155,7 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(prisma.tests[0]?.examStageId, 'stage_2');
   });
 
-  it('defaults to a full, ranked test', async () => {
+  it('defaults to a full test', async () => {
     const { service } = serviceWith();
 
     const created = await service.create(
@@ -177,21 +164,6 @@ describe('TestsService — creating a draft from a config', () => {
     );
 
     assert.equal(created.scope, TEST_SCOPE.FULL);
-    assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
-  });
-
-  /** The failure this prevents: a practice series holding a test the leaderboard then ranks. */
-  it('takes the mode off the series it is created in', async () => {
-    const { service, prisma } = serviceWith();
-
-    const created = await service.create(
-      { baseConfigId: 'cfg_1', title: 'Speed drill 1', testSeriesId: 'srs_practice' },
-      ADMIN,
-    );
-
-    assert.equal(created.evaluationMode, EVALUATION_MODE.PRACTICE);
-    assert.equal(created.testSeriesId, 'srs_practice');
-    assert.equal(prisma.tests[0]?.evaluationMode, EVALUATION_MODE.PRACTICE);
   });
 
   it('refuses a test in a series that is not there', async () => {

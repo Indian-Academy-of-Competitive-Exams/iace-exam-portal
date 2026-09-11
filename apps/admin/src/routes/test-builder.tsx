@@ -70,7 +70,7 @@ export function TestBuilderPage() {
   const [search] = useSearchParams();
   const existing = id !== undefined;
   const testId = id ?? '';
-  // Built from inside a series: it names the series, and with it the mode and often the stage.
+  // Built from inside a series: it names the series, and with it often the stage.
   const fromSeriesId = existing ? null : search.get('series');
 
   const test = useQuery({

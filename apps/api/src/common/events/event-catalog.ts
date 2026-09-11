@@ -58,7 +58,7 @@ export interface ScoringCompletedEvent {
   attemptId: string;
   testId: string;
   studentId: string;
-  /** Which rollups it lands in: a practice sitting never reaches the cohort's three. */
+  /** Which rollups it lands in: a retake never reaches the cohort's three. */
   isGraded: boolean;
 }
 

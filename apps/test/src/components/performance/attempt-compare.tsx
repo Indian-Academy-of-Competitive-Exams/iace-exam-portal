@@ -1,6 +1,4 @@
-import { Info } from 'lucide-react';
 import {
-  Alert,
   ChartFigure,
   ComparisonCards,
   LinePlot,
@@ -37,7 +35,7 @@ function marksAgainst(score: number, maxMarks: number): CompositionSegment[] {
   ];
 }
 
-/** A practice paper stands against what does mean something: your best, the average, the topper. */
+/** A paper nobody is ranked on yet stands against your best, the average and the topper. */
 export function AttemptCompare({
   sittings,
   cohort,
@@ -70,7 +68,7 @@ export function AttemptCompare({
     },
   ];
 
-  // A practice paper is not ranked, but everyone who sat it still averages to something.
+  // Shown only where the field has already averaged to something.
   if (cohort?.averageScore != null) {
     items.push({
       key: 'average',
@@ -98,14 +96,6 @@ export function AttemptCompare({
 
   return (
     <div className="flex flex-col gap-8">
-      <Alert variant="info">
-        <Info />
-        <span>
-          A practice paper is not ranked. It is measured against your own best, the average across
-          the test, and the paper topper where one is on record.
-        </span>
-      </Alert>
-
       <section className="flex flex-col gap-3">
         <SectionHeading title="Attempts" />
         <ComparisonCards items={items} />

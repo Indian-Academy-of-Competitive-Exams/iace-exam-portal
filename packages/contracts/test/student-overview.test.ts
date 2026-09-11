@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  EVALUATION_MODE,
   SUBJECT_SAMPLE_FLOOR,
   TEST_SCOPE,
   measureOf,
@@ -16,7 +15,6 @@ import {
   shiftCivilDate,
   startOfLastMonth,
   effortPerSitting,
-  overallModeGap,
   placeInSpread,
   scopeComparison,
   scopesNotSat,
@@ -24,43 +22,21 @@ import {
   questionReportInsights,
   scopesSat,
   standingTiles,
-  subjectModeGaps,
   subjectShares,
   type OverviewStanding,
-  type SubjectMeasure,
   type QuestionReportRow,
-  type EvaluationMode,
   type SubjectStanding,
   type TestScope,
 } from '../src';
 
 describe('measureOf', () => {
   const tallies = [
-    {
-      scope: TEST_SCOPE.FULL,
-      evaluationMode: EVALUATION_MODE.RANKED,
-      attempted: 40,
-      correct: 30,
-      sumTimeSec: 1_600,
-    },
-    {
-      scope: TEST_SCOPE.SECTIONAL,
-      evaluationMode: EVALUATION_MODE.RANKED,
-      attempted: 20,
-      correct: 5,
-      sumTimeSec: 1_000,
-    },
-    {
-      scope: TEST_SCOPE.FULL,
-      evaluationMode: EVALUATION_MODE.PRACTICE,
-      attempted: 10,
-      correct: 9,
-      sumTimeSec: 200,
-    },
+    { scope: TEST_SCOPE.FULL, attempted: 40, correct: 30, sumTimeSec: 1_600 },
+    { scope: TEST_SCOPE.SECTIONAL, attempted: 20, correct: 5, sumTimeSec: 1_000 },
   ];
 
   it('sums every scope when none is named', () => {
-    const measure = measureOf(tallies, EVALUATION_MODE.RANKED);
+    const measure = measureOf(tallies);
 
     assert.equal(measure.attempted, 60);
     assert.equal(measure.accuracy, 58.33);
@@ -68,25 +44,15 @@ describe('measureOf', () => {
   });
 
   it('narrows to one scope when one is named', () => {
-    const measure = measureOf(tallies, EVALUATION_MODE.RANKED, TEST_SCOPE.SECTIONAL);
+    const measure = measureOf(tallies, TEST_SCOPE.SECTIONAL);
 
     assert.equal(measure.attempted, 20);
     assert.equal(measure.accuracy, 25);
   });
 
-  /** The toggle has to move something real, or it is a control that lies. */
-  it('answers the two modes with different readings', () => {
-    const ranked = measureOf(tallies, EVALUATION_MODE.RANKED);
-    const practice = measureOf(tallies, EVALUATION_MODE.PRACTICE);
-
-    assert.equal(practice.accuracy, 90);
-    assert.notEqual(ranked.accuracy, practice.accuracy);
-    assert.notEqual(ranked.pace, practice.pace);
-  });
-
   /** Nothing attempted is not nought per cent, which would read as every answer wrong. */
   it('reads an unattempted set as unmeasured, never as zero', () => {
-    const measure = measureOf(tallies, EVALUATION_MODE.PRACTICE, TEST_SCOPE.SECTIONAL);
+    const measure = measureOf(tallies, TEST_SCOPE.MODULE);
 
     assert.equal(measure.attempted, 0);
     assert.equal(measure.accuracy, null);
@@ -95,18 +61,9 @@ describe('measureOf', () => {
 
   /** A four-question subject must never draw the same bar as a four-hundred-question one. */
   it('leaves a low sample visible in its own n', () => {
-    const measure = measureOf(
-      [
-        {
-          scope: TEST_SCOPE.SECTIONAL,
-          evaluationMode: EVALUATION_MODE.RANKED,
-          attempted: 4,
-          correct: 4,
-          sumTimeSec: 100,
-        },
-      ],
-      EVALUATION_MODE.RANKED,
-    );
+    const measure = measureOf([
+      { scope: TEST_SCOPE.SECTIONAL, attempted: 4, correct: 4, sumTimeSec: 100 },
+    ]);
 
     assert.equal(measure.accuracy, 100);
     assert.ok(measure.attempted < SUBJECT_SAMPLE_FLOOR);
@@ -118,39 +75,22 @@ describe('scopesSat', () => {
     {
       subjectId: 'sub_r',
       name: 'Reasoning',
-      tallies: [
-        {
-          scope: TEST_SCOPE.SECTIONAL,
-          evaluationMode: EVALUATION_MODE.RANKED,
-          attempted: 8,
-          correct: 8,
-          sumTimeSec: 80,
-        },
-      ],
+      tallies: [{ scope: TEST_SCOPE.SECTIONAL, attempted: 8, correct: 8, sumTimeSec: 80 }],
     },
     {
       subjectId: 'sub_q',
       name: 'Quantitative Aptitude',
-      tallies: [
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-          attempted: 30,
-          correct: 27,
-          sumTimeSec: 300,
-        },
-      ],
+      tallies: [{ scope: TEST_SCOPE.FULL, attempted: 30, correct: 27, sumTimeSec: 300 }],
     },
   ];
 
   /** A filter offering a scope the student has never sat narrows to an empty chart. */
-  it('offers only the scopes sat in the mode being read', () => {
-    assert.deepEqual(scopesSat(subjects, EVALUATION_MODE.RANKED), [TEST_SCOPE.SECTIONAL]);
-    assert.deepEqual(scopesSat(subjects, EVALUATION_MODE.PRACTICE), [TEST_SCOPE.FULL]);
+  it('offers only the scopes the student has sat', () => {
+    assert.deepEqual(scopesSat(subjects), [TEST_SCOPE.FULL, TEST_SCOPE.SECTIONAL]);
   });
 
   it('offers nothing where nothing has been folded', () => {
-    assert.deepEqual(scopesSat([], EVALUATION_MODE.RANKED), []);
+    assert.deepEqual(scopesSat([]), []);
   });
 
   /** A scope with rows but nothing answered in them would open on an empty ranking. */
@@ -159,19 +99,11 @@ describe('scopesSat', () => {
       {
         subjectId: 'sub_r',
         name: 'Reasoning',
-        tallies: [
-          {
-            scope: TEST_SCOPE.SECTIONAL,
-            evaluationMode: EVALUATION_MODE.RANKED,
-            attempted: 0,
-            correct: 0,
-            sumTimeSec: 90,
-          },
-        ],
+        tallies: [{ scope: TEST_SCOPE.SECTIONAL, attempted: 0, correct: 0, sumTimeSec: 90 }],
       },
     ];
 
-    assert.deepEqual(scopesSat(untouched, EVALUATION_MODE.RANKED), []);
+    assert.deepEqual(scopesSat(untouched), []);
   });
 });
 
@@ -179,23 +111,16 @@ describe('standingTiles', () => {
   const STANDING: OverviewStanding = {
     testsAttempted: 5,
     testsEvaluated: 4,
-    practiceAttempts: 1,
+    retakeCount: 1,
     avgPercentile: 63.3,
     bestPercentile: 88.5,
     avgScore: 65,
     sumTimeSec: 7_200,
     lastAttemptAt: '2026-08-30T09:00:00.000Z',
   };
-  const MEASURE: SubjectMeasure = {
-    attempted: 50,
-    correct: 31,
-    accuracy: 62,
-    sumTimeSec: 700,
-    pace: 14,
-  };
 
-  it('leads on score and marking when the reader is on ranked', () => {
-    const tiles = standingTiles(STANDING, MEASURE, EVALUATION_MODE.RANKED);
+  it('leads on score and marking, then counts every sitting', () => {
+    const tiles = standingTiles(STANDING);
 
     assert.deepEqual(
       tiles.map((tile) => [tile.label, tile.value]),
@@ -207,56 +132,10 @@ describe('standingTiles', () => {
     );
   });
 
-  /** A practice sitting is never evaluated against a board, so restating its score would be a lie. */
-  it('answers with what practice counted, never a ranked figure under another name', () => {
-    const tiles = standingTiles(STANDING, MEASURE, EVALUATION_MODE.PRACTICE);
-
-    assert.deepEqual(
-      tiles.map((tile) => [tile.label, tile.value]),
-      [
-        ['Practice sittings', 1],
-        ['Questions answered', 50],
-        ['Correct', 31],
-      ],
-    );
-    assert.ok(!tiles.some((tile) => tile.value === STANDING.avgScore));
-    assert.ok(!tiles.some((tile) => tile.value === STANDING.avgPercentile));
-  });
-
   it('leaves an unmarked score null, for the screen to dash rather than read as zero', () => {
-    const tiles = standingTiles({ ...STANDING, avgScore: null }, MEASURE, EVALUATION_MODE.RANKED);
+    const tiles = standingTiles({ ...STANDING, avgScore: null });
 
     assert.equal(tiles[0]?.value, null);
-  });
-});
-
-/** `testsAttempted` is every sitting, so under practice it would restate `practiceAttempts`. */
-describe('standingTiles never shows one number twice', () => {
-  it('gives practice three distinct counts when nothing of theirs is ranked', () => {
-    const standing: OverviewStanding = {
-      testsAttempted: 9,
-      testsEvaluated: 0,
-      practiceAttempts: 9,
-      avgPercentile: null,
-      bestPercentile: null,
-      avgScore: null,
-      sumTimeSec: 3_600,
-      lastAttemptAt: null,
-    };
-    const measure: SubjectMeasure = {
-      attempted: 48,
-      correct: 8,
-      accuracy: 16.67,
-      sumTimeSec: 373,
-      pace: 7.77,
-    };
-
-    const values = standingTiles(standing, measure, EVALUATION_MODE.PRACTICE).map(
-      (tile) => tile.value,
-    );
-
-    assert.deepEqual(values, [9, 48, 8]);
-    assert.equal(new Set(values).size, values.length);
   });
 });
 
@@ -288,92 +167,22 @@ describe('dispositionRates', () => {
   });
 });
 
-describe('subjectModeGaps', () => {
-  const subjects: SubjectStanding[] = [
-    {
-      subjectId: 'sub_q',
-      name: 'Quantitative Aptitude',
-      tallies: [
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.RANKED,
-          attempted: 50,
-          correct: 20,
-          sumTimeSec: 500,
-        },
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-          attempted: 50,
-          correct: 35,
-          sumTimeSec: 1_000,
-        },
-      ],
-    },
-    {
-      subjectId: 'sub_g',
-      name: 'General Awareness',
-      tallies: [
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-          attempted: 20,
-          correct: 10,
-          sumTimeSec: 100,
-        },
-      ],
-    },
-  ];
-
-  it('measures the drop from practice to ranked, in accuracy points', () => {
-    const [quant] = subjectModeGaps(subjects);
-
-    assert.equal(quant?.name, 'Quantitative Aptitude');
-    assert.equal(quant?.accuracyGap, -30);
-    assert.equal(quant?.paceGap, -10);
-  });
-
-  /** One side measured is not a gap: reporting it as zero would invent a subject that holds up. */
-  it('drops a subject sat in only one mode rather than calling it level', () => {
-    const gaps = subjectModeGaps(subjects);
-
-    assert.equal(gaps.length, 1);
-    assert.ok(!gaps.some((gap) => gap.name === 'General Awareness'));
-  });
-});
-
 describe('subjectShares', () => {
   const subjects: SubjectStanding[] = [
     {
       subjectId: 'sub_q',
       name: 'Quantitative Aptitude',
-      tallies: [
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-          attempted: 40,
-          correct: 10,
-          sumTimeSec: 900,
-        },
-      ],
+      tallies: [{ scope: TEST_SCOPE.FULL, attempted: 40, correct: 10, sumTimeSec: 900 }],
     },
     {
       subjectId: 'sub_r',
       name: 'Reasoning',
-      tallies: [
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-          attempted: 40,
-          correct: 30,
-          sumTimeSec: 300,
-        },
-      ],
+      tallies: [{ scope: TEST_SCOPE.FULL, attempted: 40, correct: 30, sumTimeSec: 300 }],
     },
   ];
 
   it('marks the subject that eats the clock without paying it back', () => {
-    const [quant, reasoning] = subjectShares(subjects, EVALUATION_MODE.PRACTICE);
+    const [quant, reasoning] = subjectShares(subjects);
 
     assert.equal(quant?.timeShare, 75);
     assert.equal(quant?.correctShare, 25);
@@ -382,8 +191,8 @@ describe('subjectShares', () => {
     assert.equal(reasoning?.payoff, 50);
   });
 
-  it('leaves out a subject with nothing attempted in this mode', () => {
-    assert.deepEqual(subjectShares(subjects, EVALUATION_MODE.RANKED), []);
+  it('leaves out a subject with nothing attempted in this scope', () => {
+    assert.deepEqual(subjectShares(subjects, TEST_SCOPE.SECTIONAL), []);
   });
 });
 
@@ -391,7 +200,7 @@ describe('effortPerSitting', () => {
   const standing: OverviewStanding = {
     testsAttempted: 9,
     testsEvaluated: 0,
-    practiceAttempts: 9,
+    retakeCount: 9,
     avgPercentile: null,
     bestPercentile: null,
     avgScore: null,
@@ -513,63 +322,26 @@ describe('distractorThatWon', () => {
   });
 });
 
-describe('overallModeGap', () => {
-  const subjects: SubjectStanding[] = [
-    {
-      subjectId: 'sub_q',
-      name: 'Quantitative Aptitude',
-      tallies: [
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.RANKED,
-          attempted: 100,
-          correct: 40,
-          sumTimeSec: 1_000,
-        },
-        {
-          scope: TEST_SCOPE.FULL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-          attempted: 100,
-          correct: 70,
-          sumTimeSec: 500,
-        },
-      ],
-    },
-  ];
-
-  it('measures the whole reader, not one subject at a time', () => {
-    const gap = overallModeGap(subjects);
-
-    assert.equal(gap.ranked.accuracy, 40);
-    assert.equal(gap.practice.accuracy, 70);
-    assert.equal(gap.accuracyGap, -30);
-    assert.equal(gap.paceGap, 5);
-  });
-
-  /** Nothing sat in one mode leaves no gap: a missing side is not a side that scored zero. */
-  it('reports no gap where one mode was never sat', () => {
-    assert.equal(overallModeGap([]).accuracyGap, null);
-  });
-});
-
 describe('standingTiles names the split behind the sitting count', () => {
-  it('says how many of the sittings were practice', () => {
-    const tiles = standingTiles(
-      {
-        testsAttempted: 9,
-        testsEvaluated: 2,
-        practiceAttempts: 7,
-        avgPercentile: 50,
-        bestPercentile: 60,
-        avgScore: 40,
-        sumTimeSec: 100,
-        lastAttemptAt: null,
-      },
-      { attempted: 10, correct: 5, accuracy: 50, sumTimeSec: 100, pace: 10 },
-      EVALUATION_MODE.RANKED,
-    );
+  const sittingsFoot = (retakeCount: number) =>
+    standingTiles({
+      testsAttempted: 9,
+      testsEvaluated: 9 - retakeCount,
+      retakeCount,
+      avgPercentile: 50,
+      bestPercentile: 60,
+      avgScore: 40,
+      sumTimeSec: 100,
+      lastAttemptAt: null,
+    }).at(-1)?.foot;
 
-    assert.equal(tiles.at(-1)?.foot, '7 in practice');
+  it('says how many of the sittings were retakes', () => {
+    assert.equal(sittingsFoot(2), '2 retakes');
+    assert.equal(sittingsFoot(1), '1 retake');
+  });
+
+  it('says nothing under the count when every sitting held the ranked slot', () => {
+    assert.equal(sittingsFoot(0), undefined);
   });
 });
 
@@ -593,9 +365,8 @@ describe('placeInSpread', () => {
 });
 
 describe('the blind spots every other figure filters out', () => {
-  const tally = (scope: TestScope, mode: EvaluationMode, attempted: number, sumTimeSec = 0) => ({
+  const tally = (scope: TestScope, attempted: number, sumTimeSec = 0) => ({
     scope,
-    evaluationMode: mode,
     attempted,
     correct: 0,
     sumTimeSec,
@@ -605,18 +376,18 @@ describe('the blind spots every other figure filters out', () => {
     {
       subjectId: 'sub_e',
       name: 'English Comprehension',
-      tallies: [tally(TEST_SCOPE.FULL, EVALUATION_MODE.PRACTICE, 0, 40)],
+      tallies: [tally(TEST_SCOPE.FULL, 0, 40)],
     },
     {
       subjectId: 'sub_q',
       name: 'Quantitative Aptitude',
-      tallies: [tally(TEST_SCOPE.FULL, EVALUATION_MODE.PRACTICE, 12)],
+      tallies: [tally(TEST_SCOPE.FULL, 12)],
     },
   ];
 
   /** The row exists because a paper asked; the zero is the answer that never came. */
   it('names a subject served and never answered', () => {
-    const untouched = untouchedSubjects(subjects, EVALUATION_MODE.PRACTICE);
+    const untouched = untouchedSubjects(subjects);
 
     assert.deepEqual(
       untouched.map((subject) => subject.name),
@@ -624,12 +395,12 @@ describe('the blind spots every other figure filters out', () => {
     );
   });
 
-  it('holds nothing against a mode that was never sat at all', () => {
-    assert.deepEqual(untouchedSubjects(subjects, EVALUATION_MODE.RANKED), []);
+  it('holds nothing against a scope that was never sat at all', () => {
+    assert.deepEqual(untouchedSubjects(subjects, TEST_SCOPE.SECTIONAL), []);
   });
 
-  it('lists the kinds of paper this mode has never asked for', () => {
-    const missing = scopesNotSat(subjects, EVALUATION_MODE.PRACTICE);
+  it('lists the kinds of paper never sat', () => {
+    const missing = scopesNotSat(subjects);
 
     assert.ok(!missing.includes(TEST_SCOPE.FULL));
     assert.ok(missing.includes(TEST_SCOPE.SECTIONAL));
@@ -639,7 +410,6 @@ describe('the blind spots every other figure filters out', () => {
 describe('scopeComparison', () => {
   const tally = (scope: TestScope, attempted: number, correct: number) => ({
     scope,
-    evaluationMode: EVALUATION_MODE.RANKED,
     attempted,
     correct,
     sumTimeSec: 100,
@@ -654,7 +424,7 @@ describe('scopeComparison', () => {
   ];
 
   it('sets the two busiest kinds of paper against each other', () => {
-    const compared = scopeComparison(subjects, EVALUATION_MODE.RANKED);
+    const compared = scopeComparison(subjects);
 
     assert.equal(compared?.first, TEST_SCOPE.FULL);
     assert.equal(compared?.second, TEST_SCOPE.SECTIONAL);
@@ -671,8 +441,8 @@ describe('scopeComparison', () => {
       },
     ];
 
-    assert.equal(scopeComparison(one, EVALUATION_MODE.RANKED), null);
-    assert.equal(scopeComparison([], EVALUATION_MODE.RANKED), null);
+    assert.equal(scopeComparison(one), null);
+    assert.equal(scopeComparison([]), null);
   });
 });
 
@@ -682,32 +452,16 @@ describe('subjectShares names the share of answers too', () => {
       {
         subjectId: 'a',
         name: 'A',
-        tallies: [
-          {
-            scope: TEST_SCOPE.FULL,
-            evaluationMode: EVALUATION_MODE.PRACTICE,
-            attempted: 30,
-            correct: 10,
-            sumTimeSec: 100,
-          },
-        ],
+        tallies: [{ scope: TEST_SCOPE.FULL, attempted: 30, correct: 10, sumTimeSec: 100 }],
       },
       {
         subjectId: 'b',
         name: 'B',
-        tallies: [
-          {
-            scope: TEST_SCOPE.FULL,
-            evaluationMode: EVALUATION_MODE.PRACTICE,
-            attempted: 10,
-            correct: 10,
-            sumTimeSec: 300,
-          },
-        ],
+        tallies: [{ scope: TEST_SCOPE.FULL, attempted: 10, correct: 10, sumTimeSec: 300 }],
       },
     ];
 
-    const [a, b] = subjectShares(subjects, EVALUATION_MODE.PRACTICE);
+    const [a, b] = subjectShares(subjects);
 
     assert.equal(a?.attemptedShare, 75);
     assert.equal(b?.attemptedShare, 25);
@@ -727,7 +481,6 @@ describe('rankSubjectsByWeakness', () => {
     tallies: [
       {
         scope: TEST_SCOPE.FULL,
-        evaluationMode: EVALUATION_MODE.RANKED,
         attempted,
         correct,
         sumTimeSec: attempted * 30,
@@ -742,7 +495,7 @@ describe('rankSubjectsByWeakness', () => {
   ];
 
   it('puts the weakest first, which is the whole point of the panel', () => {
-    const { weakest } = rankSubjectsByWeakness(subjects, EVALUATION_MODE.RANKED);
+    const { weakest } = rankSubjectsByWeakness(subjects);
 
     assert.deepEqual(
       weakest.map((row) => row.name),
@@ -754,7 +507,7 @@ describe('rankSubjectsByWeakness', () => {
   /** The failure this prevents: two questions and one miss branding a subject as somebody's worst. */
   it('holds a subject under the floor out of the ranking rather than ranking it bottom', () => {
     const thin = subject('sub_e', 'English', SUBJECT_SAMPLE_FLOOR - 1, 0);
-    const ranking = rankSubjectsByWeakness([...subjects, thin], EVALUATION_MODE.RANKED);
+    const ranking = rankSubjectsByWeakness([...subjects, thin]);
 
     assert.ok(!ranking.weakest.some((row) => row.name === 'English'));
     assert.deepEqual(
@@ -766,16 +519,13 @@ describe('rankSubjectsByWeakness', () => {
 
   /** Served and never answered is a blind spot, not a weakness — it has no accuracy to rank on. */
   it('leaves out a subject nothing was answered in', () => {
-    const ranking = rankSubjectsByWeakness(
-      [...subjects, subject('sub_e', 'English', 0, 0)],
-      EVALUATION_MODE.RANKED,
-    );
+    const ranking = rankSubjectsByWeakness([...subjects, subject('sub_e', 'English', 0, 0)]);
 
     assert.equal(ranking.weakest.length + ranking.thin.length, 3);
   });
 
-  it('reads the mode the dashboard is showing, never both at once', () => {
-    const ranking = rankSubjectsByWeakness(subjects, EVALUATION_MODE.PRACTICE);
+  it('reads the scope the dashboard is showing, never every scope at once', () => {
+    const ranking = rankSubjectsByWeakness(subjects, TEST_SCOPE.SECTIONAL);
 
     assert.deepEqual(ranking, { weakest: [], thin: [] });
   });

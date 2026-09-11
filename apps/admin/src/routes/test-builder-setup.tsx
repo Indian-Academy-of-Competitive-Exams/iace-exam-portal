@@ -1,7 +1,5 @@
 import { useWatch } from 'react-hook-form';
 import {
-  EVALUATION_MODE_LABELS,
-  EVALUATION_MODES,
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
   TEST_SCOPE,
@@ -22,7 +20,7 @@ import {
   RadioGroupItem,
   plural,
 } from '@iace/ui';
-import { EVALUATION_MODE_HINTS, EXAM_TEMPLATE_LABELS } from '../lib/constants';
+import { EXAM_TEMPLATE_LABELS } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { ExamTemplatePreview } from '../components/exam-template-preview';
@@ -30,13 +28,10 @@ import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/ac
 import { useSuggestedTestName } from '../lib/use-suggested-name';
 import { type TestForm, type TestFormValues } from './test-builder-form';
 
-/** Everything a test writes itself: the blueprint it is built on, and how it is judged. */
+/** Everything a test writes itself: the blueprint it is built on, and what it covers. */
 
 // Only a dirty form makes leaving Setup save before it moves, so every pick here must mark one.
 const DIRTY = { shouldDirty: true } as const;
-
-// A disabled control never fires, but the prop is required.
-const noop = () => undefined;
 
 export function SetupStep({
   form,
@@ -58,7 +53,6 @@ export function SetupStep({
     configName: config?.name,
     examStageId: config?.examStageId,
     scope: values.scope,
-    evaluationMode: values.evaluationMode || undefined,
     scopeName: scopeNameOf(values, config),
   });
 
@@ -115,11 +109,9 @@ function Blueprint({
   // Unchosen shows what the blueprint would give, which is exactly what the server would store.
   const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.DEFAULT;
 
-  /** The series decides the mode. */
   const pickSeries = (series: ChosenSeries) => {
     form.setValue('testSeriesId', series.id, DIRTY);
     form.setValue('testSeriesName', series.name, DIRTY);
-    form.setValue('evaluationMode', series.id === '' ? '' : series.evaluationMode, DIRTY);
   };
 
   /** A cascade: a stage belongs to one exam, and both a configuration and a series to one stage. */
@@ -289,33 +281,9 @@ function Rules({
   sat: boolean;
 }>) {
   const scope = useWatch({ control: form.control, name: 'scope' });
-  const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <FormField
-        form={form}
-        name="evaluationMode"
-        label="Evaluation"
-        /* ui-copy-ok: rule */ hint="Set by the series this test belongs to"
-      >
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={evaluationMode}
-            placeholder="Set by its series"
-            clearable={false}
-            disabled
-            onChange={noop}
-            items={EVALUATION_MODES.map((value) => ({
-              value,
-              label: EVALUATION_MODE_LABELS[value],
-              hint: EVALUATION_MODE_HINTS[value],
-            }))}
-          />
-        )}
-      </FormField>
-
       <FormField form={form} name="scope" label="Covers">
         {(control) => (
           <Combobox

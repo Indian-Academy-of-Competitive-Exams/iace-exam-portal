@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { bestSitting, sittingsOf, testsSat } from '../src/stats';
 import { type PerformancePoint } from '../src/attempts';
-import { EVALUATION_MODE } from '../src/tests';
 
 /** The API hands the trend back oldest sitting first, so every fixture here is in that order. */
 function sitting(overrides: Partial<PerformancePoint> & { attemptId: string }): PerformancePoint {
@@ -10,7 +9,6 @@ function sitting(overrides: Partial<PerformancePoint> & { attemptId: string }): 
     attemptNo: 1,
     testId: 'tst_1',
     testTitle: 'SSC CGL Mock 01',
-    evaluationMode: EVALUATION_MODE.RANKED,
     submittedAt: '2026-08-01T04:30:00.000Z',
     score: 100,
     maxMarks: 200,

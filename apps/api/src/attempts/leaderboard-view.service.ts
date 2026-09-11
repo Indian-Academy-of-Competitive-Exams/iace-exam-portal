@@ -1,8 +1,7 @@
 /**
  * The board a signed-in student reads. ONE paper comes off the live Redis ranking with no
  * regenerate step; two or more rank on percentile, because papers do not compare on marks.
- * Every read is first-sitting (`isGraded`) AND ranked (`evaluationMode`) — `isGraded` alone
- * is true on a practice paper. No select here reaches a mobile, an email or a question.
+ * Every read is a graded sitting. No select here reaches a mobile, an email or a question.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -10,13 +9,11 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  EVALUATION_MODE,
   LEADERBOARD_MEASURE_BY_SCOPE,
   LEADERBOARD_NEIGHBOURS,
   LEADERBOARD_PODIUM,
   LEADERBOARD_SCOPES,
   LEADERBOARD_SCOPE_FIELD,
-  type EvaluationMode,
   type Leaderboard,
   type LeaderboardQuery,
   type LeaderboardRow,
@@ -59,16 +56,12 @@ export class LeaderboardViewService {
       select: {
         id: true,
         lastRank: true,
-        test: { select: { title: true, evaluationMode: true } },
+        test: { select: { title: true } },
       },
     });
     if (!mine) throw new AppException(ErrorCodes.NOT_FOUND, NO_BOARD);
 
-    const frame = emptyBoard(LEADERBOARD_SCOPES.TEST, testId, mine.test.title, {
-      evaluationMode: mine.test.evaluationMode,
-    });
-    if (mine.test.evaluationMode !== EVALUATION_MODE.RANKED) return frame;
-
+    const frame = emptyBoard(LEADERBOARD_SCOPES.TEST, testId, mine.test.title);
     const standing = await this.leaderboard.liveStanding(testId, mine.id);
     if (standing === null) return frame;
 
@@ -167,13 +160,11 @@ function pointsSql(studentId: string, testIds: readonly string[] | null): Prisma
              a."lastPercentile" AS percentile,
              a."submittedAt"    AS submitted_at
       FROM "Attempt" a
-      JOIN "Test" t ON t."id" = a."testId"
       JOIN "Student" s ON s."id" = a."studentId"
       WHERE a."isGraded" = TRUE
         AND a."attemptNo" = 1
         AND a."status" = 'EVALUATED'
         AND a."lastPercentile" IS NOT NULL
-        AND t."evaluationMode" = 'RANKED'
         AND s."deletedAt" IS NULL
         ${inScope}
     ),
@@ -235,19 +226,17 @@ function scopeIdOf(query: LeaderboardQuery): string | null {
   return field === null ? null : (query[field] ?? null);
 }
 
-/** A board with nobody on it yet — a cold Redis, a practice paper, a series nobody has finished. */
+/** A board with nobody on it yet — a cold Redis, or a series nobody has finished. */
 function emptyBoard(
   scope: LeaderboardScope,
   scopeId: string | null,
   label: string | null,
-  over: { evaluationMode?: EvaluationMode } = {},
 ): Leaderboard {
   return {
     scope,
     scopeId,
     label,
     measure: LEADERBOARD_MEASURE_BY_SCOPE[scope],
-    evaluationMode: over.evaluationMode ?? null,
     cohortSize: 0,
     podium: [],
     neighbourhood: [],

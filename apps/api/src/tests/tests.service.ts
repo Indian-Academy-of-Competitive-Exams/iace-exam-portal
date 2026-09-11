@@ -119,7 +119,7 @@ export class TestsService {
     };
   }
 
-  /** The stage comes off the CONFIG and the mode off the SERIES, never the body. */
+  /** The stage comes off the CONFIG, never the body. */
   async create(input: CreateTestBody, createdById: string): Promise<TestDetail> {
     const config = await this.configs.assertUsable(input.baseConfigId);
     const series = await this.seriesCarrying(input.testSeriesId, config.examStageId);
@@ -138,7 +138,6 @@ export class TestsService {
         examTemplate: input.examTemplate ?? config.examTemplate,
         scope,
         scopeRef: toJson(scopeRef),
-        evaluationMode: series.evaluationMode,
         questionPoolFilter: toJson(input.questionPoolFilter ?? null),
         createdById,
       },
@@ -147,15 +146,15 @@ export class TestsService {
     return this.detail(created.id);
   }
 
-  /** The series a test is born into: it decides the mode, so it is read before anything is written. */
+  /** The series a test is born into, read before anything is written. */
   private async seriesCarrying(testSeriesId: string, examStageId: string) {
     const series = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
-      select: { id: true, name: true, examStageId: true, evaluationMode: true },
+      select: { id: true, name: true, examStageId: true },
     });
     if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
 
-    const issue = seriesFitIssue(series, { examStageId, evaluationMode: undefined });
+    const issue = seriesFitIssue(series, { examStageId });
     if (issue) throw seriesRefused(issue);
 
     return series;
@@ -279,7 +278,6 @@ function toTest(row: TestRow): Test {
     examStage: row.examStage,
     scope: row.scope,
     scopeRef: scopeRefOf(row),
-    evaluationMode: row.evaluationMode,
     examTemplate: row.examTemplate,
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     status: row.status,

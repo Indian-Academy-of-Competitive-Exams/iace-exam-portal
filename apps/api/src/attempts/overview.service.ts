@@ -7,7 +7,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
-  EVALUATION_MODE,
   ErrorCodes,
   measureOf,
   type StudentOverview,
@@ -23,7 +22,7 @@ const NO_STUDENT = 'No such student';
 const NO_SITTINGS: StudentOverview['standing'] = {
   testsAttempted: 0,
   testsEvaluated: 0,
-  practiceAttempts: 0,
+  retakeCount: 0,
   avgPercentile: null,
   bestPercentile: null,
   avgScore: null,
@@ -40,7 +39,6 @@ const NOTHING_ANSWERED: StudentOverview['disposition'] = {
 const SUBJECT_SELECT = {
   subjectId: true,
   scope: true,
-  evaluationMode: true,
   attempted: true,
   correct: true,
   sumTimeSec: true,
@@ -82,7 +80,7 @@ export class StudentOverviewService {
           : {
               testsAttempted: stat.testsAttempted,
               testsEvaluated: stat.testsEvaluated,
-              practiceAttempts: stat.practiceAttempts,
+              retakeCount: stat.retakeCount,
               avgPercentile: perSitting(Number(stat.sumPercentile), stat.testsEvaluated),
               bestPercentile: numberOrNull(stat.bestPercentile),
               avgScore: perSitting(Number(stat.sumScore), stat.testsEvaluated),
@@ -97,10 +95,7 @@ export class StudentOverviewService {
               wrong: stat.totalWrong,
               unattempted: stat.totalUnattempted,
             },
-      byMode: {
-        [EVALUATION_MODE.RANKED]: measureOf(tallies, EVALUATION_MODE.RANKED),
-        [EVALUATION_MODE.PRACTICE]: measureOf(tallies, EVALUATION_MODE.PRACTICE),
-      },
+      measure: measureOf(tallies),
       subjects,
     };
   }
@@ -109,14 +104,13 @@ export class StudentOverviewService {
 type SubjectStatRow = {
   subjectId: string;
   scope: SubjectTally['scope'];
-  evaluationMode: SubjectTally['evaluationMode'];
   attempted: number;
   correct: number;
   sumTimeSec: bigint;
   subject: { name: string };
 };
 
-/** One entry per subject carrying its (scope, mode) rows, so a scope filter costs no second call. */
+/** One entry per subject carrying its scope rows, so a scope filter costs no second call. */
 function subjectsOf(rows: readonly SubjectStatRow[]): SubjectStanding[] {
   const held = new Map<string, SubjectStanding>();
 
@@ -128,7 +122,6 @@ function subjectsOf(rows: readonly SubjectStatRow[]): SubjectStanding[] {
     };
     standing.tallies.push({
       scope: row.scope,
-      evaluationMode: row.evaluationMode,
       attempted: row.attempted,
       correct: row.correct,
       sumTimeSec: Number(row.sumTimeSec),

@@ -9,13 +9,11 @@ import {
   EmptyState,
   PageFrame,
   PageHeader,
-  SegmentedControl,
   plural,
 } from '@iace/ui';
 import {
   BlindSpots,
   DispositionFigure,
-  ModeGapFigure,
   ModeTiles,
   PageCrumbs,
   ScopeGapFigure,
@@ -27,19 +25,14 @@ import {
 } from '@iace/app-kit/browser';
 import { newestFirst } from '@iace/app-kit';
 import {
-  EVALUATION_MODE,
-  EVALUATION_MODE_LABELS,
-  EVALUATION_MODES,
   INSTITUTE_TIME_ZONE,
   TEST_SCOPE_LABELS,
   civilDate,
   todayISO,
-  bestSitting,
   effortPerSitting,
   scopesSat,
   volumeByScope,
   standingTiles,
-  type EvaluationMode,
   type PerformancePoint,
   type StudentOverview,
   type TestScope,
@@ -71,24 +64,18 @@ const WHEN = new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium',
 });
 
-const MODE_ITEMS = EVALUATION_MODES.map((mode) => ({
-  value: mode,
-  label: EVALUATION_MODE_LABELS[mode],
-}));
-
 /** Three bands wide, not eight blocks tall: the standing, its counts, then the figures in one row. */
 export function OverviewPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<EvaluationMode>(EVALUATION_MODE.RANKED);
   const [scope, setScope] = useState<TestScope | null>(null);
   const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
 
   const sat = newestFirst(trend.data?.points ?? []);
-  const scopes = overview.data ? scopesSat(overview.data.subjects, mode) : [];
+  const scopes = overview.data ? scopesSat(overview.data.subjects) : [];
   const chosen = scope !== null && scopes.includes(scope) ? scope : null;
   const volume = new Map(
-    (overview.data ? volumeByScope(overview.data.subjects, mode) : []).map((row) => [
+    (overview.data ? volumeByScope(overview.data.subjects) : []).map((row) => [
       row.scope,
       row.attempted,
     ]),
@@ -104,12 +91,6 @@ export function OverviewPage() {
           meta={overview.data ? satOn(overview.data) : undefined}
           action={
             <span className="flex flex-wrap items-center gap-3">
-              <SegmentedControl
-                value={mode}
-                onChange={(next) => setMode(next as EvaluationMode)}
-                items={MODE_ITEMS}
-                aria-label="Evaluation mode"
-              />
               {scopes.length > 1 ? (
                 <Combobox
                   aria-label="Scope"
@@ -162,12 +143,7 @@ export function OverviewPage() {
           />
         ) : null}
         {overview.data ? (
-          <Body
-            overview={overview.data}
-            mode={mode}
-            scope={chosen}
-            sittings={(trend.data?.points ?? []).filter((point) => point.evaluationMode === mode)}
-          />
+          <Body overview={overview.data} scope={chosen} sittings={trend.data?.points ?? []} />
         ) : null}
       </PageBody>
     </PageFrame>
@@ -176,12 +152,10 @@ export function OverviewPage() {
 
 function Body({
   overview,
-  mode,
   scope,
   sittings,
 }: Readonly<{
   overview: StudentOverview;
-  mode: EvaluationMode;
   scope: TestScope | null;
   sittings: readonly PerformancePoint[];
 }>) {
@@ -198,10 +172,10 @@ function Body({
     );
   }
 
-  const view = { subjects: overview.subjects, mode, scope };
-  const headline = headlineOf(overview, mode, sittings);
-  const measured = overview.byMode[mode].attempted > 0;
-  const pace = <ModeTiles measure={overview.byMode[mode]} />;
+  const view = { subjects: overview.subjects, scope };
+  const headline = headlineOf(overview);
+  const measured = overview.measure.attempted > 0;
+  const pace = <ModeTiles measure={overview.measure} />;
 
   return (
     <>
@@ -210,21 +184,20 @@ function Body({
         <Hero tone="accent" figure={headline ?? pace} aside={headline ? pace : undefined} />
       ) : null}
 
-      {mode === EVALUATION_MODE.RANKED && overview.standing.testsEvaluated === 0 ? (
+      {overview.standing.testsEvaluated === 0 ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
-          No ranked test of yours has been marked yet, so there is no percentile or score to stand
-          on. Switch to Practice for what your practice has counted.
+          No test of yours has been marked yet, so there is no percentile or score to stand on.
         </Alert>
       ) : null}
 
       <TileGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
-        {standingTiles(overview.standing, overview.byMode[mode], mode).map((tile) => (
+        {standingTiles(overview.standing).map((tile) => (
           <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} foot={tile.foot} />
         ))}
       </TileGrid>
 
-      <BlindSpots subjects={overview.subjects} mode={mode} scope={scope} />
+      <BlindSpots subjects={overview.subjects} scope={scope} />
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <WeakestSubjectsFigure {...view} className="lg:col-span-2" />
@@ -235,12 +208,7 @@ function Body({
         />
         <SubjectStrengthFigure {...view} />
         <TimeReturnFigure {...view} className="lg:col-span-2" />
-        <ModeGapFigure subjects={overview.subjects} scope={scope} className="lg:col-span-2" />
-        <ScopeGapFigure
-          subjects={overview.subjects}
-          mode={mode}
-          className="lg:col-span-2 xl:col-span-4"
-        />
+        <ScopeGapFigure subjects={overview.subjects} className="lg:col-span-2 xl:col-span-4" />
       </div>
 
       {/* Full width: its dot labels collide with the quadrant corners in anything narrower. */}
@@ -249,24 +217,8 @@ function Body({
   );
 }
 
-/** Percentile is a RANKED standing; practice has no placing, so its best sitting is the target. */
-function headlineOf(
-  overview: StudentOverview,
-  mode: EvaluationMode,
-  sittings: readonly PerformancePoint[],
-) {
-  if (mode === EVALUATION_MODE.PRACTICE) {
-    const best = bestSitting(sittings);
-    if (best === null) return null;
-    return (
-      <HeroFigure
-        value={Math.round(best.percentage)}
-        unit="%"
-        caption={`best of ${plural(sittings.length, 'practice sitting')} · ${best.score} of ${best.maxMarks}`}
-      />
-    );
-  }
-
+/** The standing is a percentile, so until a sitting is marked there is no headline. */
+function headlineOf(overview: StudentOverview) {
   if (overview.standing.testsEvaluated === 0) return null;
   return (
     <HeroFigure

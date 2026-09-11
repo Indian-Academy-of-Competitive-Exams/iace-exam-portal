@@ -8,7 +8,6 @@ import {
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   ErrorCodes,
-  EVALUATION_MODE,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
 } from '@iace/contracts';
@@ -66,7 +65,6 @@ const PUBLIC_FIELDS = [
 
 const SHAPE = makeScoredTest({
   title: 'SSC CGL Tier 1 — Mock 8',
-  evaluationMode: EVALUATION_MODE.RANKED,
   sections: [
     {
       id: 'sec_1',

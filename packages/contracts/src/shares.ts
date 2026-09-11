@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { civilDate, instituteDayLabel } from './common';
 import { cohortCurveBandSchema } from './stats';
 import { dateOnlySchema } from './students';
-import { evaluationModeSchema } from './tests';
 
 // ============================================================================
 // A revocable public link onto ONE student's own report.
@@ -73,10 +72,8 @@ export const shareableSittingSchema = z.object({
 });
 export type ShareableSitting = z.infer<typeof shareableSittingSchema>;
 
-/** A sitting a student's report can open on, and whether its paper ranked. */
-export const reportSittingSchema = shareableSittingSchema.extend({
-  evaluationMode: evaluationModeSchema,
-});
+/** A sitting a student's report can open on, and whether it holds the ranked slot. */
+export const reportSittingSchema = shareableSittingSchema.extend({ isGraded: z.boolean() });
 export type ReportSitting = z.infer<typeof reportSittingSchema>;
 
 const UNTITLED_TEST = 'Untitled test';

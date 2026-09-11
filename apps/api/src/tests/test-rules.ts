@@ -1,10 +1,8 @@
 import {
   AppException,
   ErrorCodes,
-  seriesModeMismatch,
   TEST_SCOPE,
   TEST_STATUS,
-  type EvaluationMode,
   type TestScope,
   type TestScopeRef,
   type UpdateTestBody,
@@ -12,7 +10,7 @@ import {
 
 /** The rules that keep a test honest — pure, so they are testable without a database. */
 
-/** What a test is when the admin says nothing. The mode is absent: its series decides that. */
+/** What a test is when the admin says nothing. */
 export const TEST_DEFAULTS = {
   scope: TEST_SCOPE.FULL,
 } as const;
@@ -28,17 +26,15 @@ export const seriesRefused = (message: string): AppException =>
 const stageMismatch = (seriesName: string): string =>
   `${seriesName} is built for a different exam stage, and a test reaches students through the series carrying it.`;
 
-/** A series carries a test only if it is built for its stage and judges it the way it is judged. */
+/** A series carries a test only if it is built for its stage. */
 export function seriesFitIssue(
-  series: { name: string; examStageId: string | null; evaluationMode: EvaluationMode },
-  test: { examStageId: string; evaluationMode: EvaluationMode | undefined },
+  series: { name: string; examStageId: string | null },
+  test: { examStageId: string },
 ): string | null {
   if (series.examStageId !== null && series.examStageId !== test.examStageId) {
     return stageMismatch(series.name);
   }
-  // A test being created has no mode of its own yet: the series it is born into decides it.
-  if (test.evaluationMode === undefined) return null;
-  return seriesModeMismatch(series.name, series.evaluationMode, test.evaluationMode);
+  return null;
 }
 
 const SCOPE_REFERENCE_REQUIRED: Record<TestScope, keyof TestScopeRef | null> = {

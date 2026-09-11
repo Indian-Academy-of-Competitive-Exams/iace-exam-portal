@@ -233,7 +233,6 @@ async function writePaper(prisma, stageId, assigned) {
       baseConfigId: IDS.config,
       examStageId: stageId,
       testSeriesId: IDS.series,
-      evaluationMode: 'RANKED',
       seriesOrder: 1,
       opensAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
       lateEntrySec: LATE_ENTRY_SEC,

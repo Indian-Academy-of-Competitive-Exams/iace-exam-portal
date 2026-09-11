@@ -238,7 +238,7 @@ function liveColumns(canResolve: boolean): DataTableColumn<LiveSitting>[] {
       header: 'Sitting',
       cell: (row) => (
         <Badge variant={row.isGraded ? 'info' : 'neutral'}>
-          {row.isGraded ? 'Ranked' : `Practice · ${row.attemptNo}`}
+          {row.isGraded ? 'Ranked' : `Retake · ${row.attemptNo}`}
         </Badge>
       ),
     },
@@ -301,7 +301,7 @@ function submissionColumns(canResolve: boolean): DataTableColumn<RecentSubmissio
       header: 'Sitting',
       cell: (row) => (
         <Badge variant={row.isGraded ? 'info' : 'neutral'}>
-          {row.isGraded ? 'Ranked' : `Practice · ${row.attemptNo}`}
+          {row.isGraded ? 'Ranked' : `Retake · ${row.attemptNo}`}
         </Badge>
       ),
     },

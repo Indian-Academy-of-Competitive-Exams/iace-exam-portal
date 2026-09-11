@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  ANSWER_STATE,
-  ATTEMPT_STATUS,
-  EVALUATION_MODE,
-  ErrorCodes,
-  type AppException,
-} from '@iace/contracts';
+import { ANSWER_STATE, ATTEMPT_STATUS, ErrorCodes, type AppException } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
@@ -157,18 +151,6 @@ describe('the Solution Report', () => {
 
     assert.ok(shown.includes('What is 7'), 'the English stem must be there');
     assert.ok(!shown.includes('saat guna chhah'), 'a language nobody sat must not be');
-  });
-
-  it('serves a practice paper the moment it is marked', async () => {
-    const attempt = scored();
-    const practice = makeScoredTest({
-      ...SHAPE,
-      evaluationMode: EVALUATION_MODE.PRACTICE,
-    });
-
-    const report = await review(attempt, practice).solutions(STUDENT, attempt.id);
-
-    assert.equal(report.questions[0]?.options.find((option) => option.isCorrect)?.id, RIGHT);
   });
 
   /** Nothing shuts a test, so the student's own marked sitting is the whole of the gate. */

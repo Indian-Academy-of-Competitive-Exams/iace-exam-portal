@@ -38,7 +38,6 @@ const REPORT_SELECT = {
   test: {
     select: {
       title: true,
-      evaluationMode: true,
       baseConfig: {
         select: {
           durationSec: true,

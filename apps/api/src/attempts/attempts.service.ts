@@ -4,7 +4,6 @@ import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   AppException,
-  EVALUATION_MODE,
   ErrorCodes,
   type LanguageCode,
   type LiveAttempt,
@@ -127,8 +126,8 @@ export class AttemptsService {
           testId: test.id,
           studentId,
           attemptNo: slots.attemptNo,
-          // Counts toward a cohort: the one sitting holding the ranked slot, never on a practice paper.
-          isGraded: slots.ranksAgain && test.evaluationMode === EVALUATION_MODE.RANKED,
+          // Counts toward a cohort: the one sitting holding the ranked slot.
+          isGraded: slots.ranksAgain,
           startedAt,
           endsAt: deadlineFrom(startedAt, sittingSeconds(test)),
           shuffleSeed: randomInt(SEED_CEILING),

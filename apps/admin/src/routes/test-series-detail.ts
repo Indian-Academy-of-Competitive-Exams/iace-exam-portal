@@ -1,21 +1,12 @@
 import { type UseFormReturn } from 'react-hook-form';
 import {
   type CreateTestSeriesBody,
-  EVALUATION_MODE,
-  EVALUATION_MODES,
-  EVALUATION_MODE_LABELS,
-  type EvaluationMode,
   TEST_SERIES_KIND,
   TEST_SERIES_KINDS,
   type TestSeriesKind,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import {
-  EVALUATION_MODE_HINTS,
-  QUERY_KEYS,
-  TEST_SERIES_KIND_HINTS,
-  TEST_SERIES_KIND_LABELS,
-} from '../lib/constants';
+import { QUERY_KEYS, TEST_SERIES_KIND_HINTS, TEST_SERIES_KIND_LABELS } from '../lib/constants';
 
 /** One series read four ways. What more than one of its tabs needs lives here, and only that. */
 
@@ -36,7 +27,6 @@ export interface SeriesFormValues {
   sequentialTests: boolean;
   progressive: boolean;
   kind: TestSeriesKind;
-  evaluationMode: EvaluationMode;
 }
 
 export const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
@@ -51,7 +41,6 @@ export const SERVER_FIELDS = [
   'programCode',
   'eventId',
   'kind',
-  'evaluationMode',
   'sequentialTests',
   'progressive',
 ] as const;
@@ -60,12 +49,6 @@ export const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({
   value,
   label: TEST_SERIES_KIND_LABELS[value],
   hint: TEST_SERIES_KIND_HINTS[value],
-}));
-
-export const EVALUATION_ITEMS = EVALUATION_MODES.map((value) => ({
-  value,
-  label: EVALUATION_MODE_LABELS[value],
-  hint: EVALUATION_MODE_HINTS[value],
 }));
 
 /** A program and an event each belong to one kind, so both leave with the kind that carried them. */
@@ -85,7 +68,6 @@ export function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     sequentialTests: detail?.sequentialTests ?? false,
     progressive: detail?.progressive ?? false,
     kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
-    evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
   };
 }
 
@@ -101,6 +83,5 @@ export function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     sequentialTests: values.sequentialTests,
     progressive: values.progressive,
     kind: values.kind,
-    evaluationMode: values.evaluationMode,
   };
 }

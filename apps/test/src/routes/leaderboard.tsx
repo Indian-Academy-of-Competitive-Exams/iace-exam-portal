@@ -13,14 +13,12 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useFilters, useFilterSpec } from '@iace/app-kit/browser';
 import {
-  EVALUATION_MODE,
   LEADERBOARD_SCOPES,
   leaderboardScopeSchema,
   testsSat,
   type Leaderboard,
   type LeaderboardQueryInput,
   type LeaderboardScope,
-  type EvaluationMode,
   type SatTest,
 } from '@iace/contracts';
 import { api } from '../lib/api';
@@ -45,9 +43,6 @@ const SCOPE_ITEMS = [
 
 const UNTITLED = 'Untitled test';
 
-const isRanked = (row: Readonly<{ evaluationMode: EvaluationMode }>) =>
-  row.evaluationMode === EVALUATION_MODE.RANKED;
-
 function scopeIdFor(scope: LeaderboardScope, testId: string, seriesId: string): string {
   if (scope === LEADERBOARD_SCOPES.TEST) return testId;
   if (scope === LEADERBOARD_SCOPES.SERIES) return seriesId;
@@ -62,8 +57,7 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
 
 export function LeaderboardPage() {
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
-  // A practice paper is never ranked, so offering one here promises a board that cannot exist.
-  const sat = testsSat(trend.data?.points ?? []).filter(isRanked);
+  const sat = testsSat(trend.data?.points ?? []);
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
   const scopeParam = useFilters<'scope'>();
@@ -76,7 +70,7 @@ export function LeaderboardPage() {
     queryFn: () => api.me.performanceSeries(),
     enabled: onSeries,
   });
-  const seriesRows = (series.data ?? []).filter(isRanked);
+  const seriesRows = series.data ?? [];
 
   // The empty row falls back to sat[0] (testsSat sorts most-recent-first), so it wears that title.
   const TEST_FILTER = {
@@ -192,7 +186,7 @@ function Body({
   if (tests.length === 0) {
     return (
       <EmptyState
-        title="No ranked test sat yet"
+        title="No test sat yet"
         action={
           <Button asChild>
             <Link to={ROUTES.TESTS}>Go to your tests</Link>
@@ -212,7 +206,7 @@ function Body({
         />
       );
     }
-    if (series.length === 0) return <EmptyState title="No ranked test series sat" />;
+    if (series.length === 0) return <EmptyState title="No test series sat" />;
   }
 
   if (board.isError) {
@@ -230,21 +224,6 @@ function Body({
 }
 
 function Board({ board }: Readonly<{ board: Leaderboard }>) {
-  // Only a hand-typed URL reaches here now, but a practice paper still has no board to draw.
-  if (board.evaluationMode === EVALUATION_MODE.PRACTICE) {
-    return (
-      <EmptyState
-        title="Not ranked"
-        // ui-copy-ok: rule
-        hint="A practice paper is never ranked."
-        action={
-          <Button asChild>
-            <Link to={ROUTES.PERFORMANCE}>Go to your performance</Link>
-          </Button>
-        }
-      />
-    );
-  }
   if (board.cohortSize === 0) {
     return <EmptyState title="No ranks yet" />;
   }
@@ -252,8 +231,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
   return (
     <div className="flex flex-col gap-6 pb-8">
       <Alert variant="info">
-        Only a first sitting is ranked. A retake and a practice paper are marked, but they are not
-        on this board.
+        Only a first sitting is ranked. A retake is marked, but it is not on this board.
       </Alert>
 
       <Section title="Podium">

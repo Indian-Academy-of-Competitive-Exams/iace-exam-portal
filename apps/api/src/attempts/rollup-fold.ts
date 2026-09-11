@@ -7,7 +7,6 @@ import {
   scoreHistogramSchema,
   type AttemptSectionScore,
   type CohortBand,
-  type EvaluationMode,
   type QuestionOption,
   type TestScope,
 } from '@iace/contracts';
@@ -31,7 +30,7 @@ export const COHORT_ROLLUP_TYPES = [
   ROLLUP_TYPE.TEST_QUESTION,
 ] as const;
 
-/** The student's two, which a practice sitting feeds and the cohort's three never see. */
+/** The student's two, which a retake feeds and the cohort's three never see. */
 export const STUDENT_ROLLUP_TYPES = [ROLLUP_TYPE.STUDENT, ROLLUP_TYPE.STUDENT_SUBJECT] as const;
 
 /** One served question, already scored. `isCorrect` is the scorer's verdict: null means untouched. */
@@ -59,7 +58,6 @@ export interface FoldableAttempt {
   evaluatedAt: Date | null;
   lastPercentile: number | null;
   scope: TestScope;
-  evaluationMode: EvaluationMode;
   sections: AttemptSectionScore[];
   questions: FoldableQuestion[];
 }
@@ -67,7 +65,6 @@ export interface FoldableAttempt {
 export interface SubjectTotals {
   subjectId: string;
   scope: TestScope;
-  evaluationMode: EvaluationMode;
   attempted: number;
   correct: number;
   wrong: number;
@@ -85,7 +82,7 @@ export interface StudentTotals {
   totalWrong: number;
   totalUnattempted: number;
   sumTimeSec: number;
-  practiceAttempts: number;
+  retakeCount: number;
   lastAttemptAt: Date | null;
   computedThrough: Date | null;
   subjects: Map<string, SubjectTotals>;
@@ -133,7 +130,7 @@ export function emptyStudentTotals(): StudentTotals {
     totalWrong: 0,
     totalUnattempted: 0,
     sumTimeSec: 0,
-    practiceAttempts: 0,
+    retakeCount: 0,
     lastAttemptAt: null,
     computedThrough: null,
     subjects: new Map(),
@@ -154,7 +151,7 @@ export function emptyCohortTotals(): CohortTotals {
   };
 }
 
-/** Every evaluated sitting counts here — a practice paper is still practice a student did. */
+/** Every evaluated sitting counts here — a retake is still work a student did. */
 export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttempt): StudentTotals {
   totals.testsAttempted += 1;
   totals.totalCorrect += attempt.correctCount;
@@ -171,7 +168,7 @@ export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttem
     totals.sumPercentile += attempt.lastPercentile ?? 0;
     totals.bestPercentile = higherOf(totals.bestPercentile, attempt.lastPercentile);
   } else {
-    totals.practiceAttempts += 1;
+    totals.retakeCount += 1;
   }
 
   for (const question of attempt.questions) {
@@ -279,8 +276,7 @@ export function mergedQuestion(held: QuestionTotals | null, delta: QuestionTotal
 }
 
 /** Whatever `StudentSubjectStat` is keyed by, minus the student a whole totals map already is. */
-const subjectKey = (subjectId: string, scope: TestScope, mode: EvaluationMode) =>
-  [subjectId, scope, mode].join('\u0000');
+const subjectKey = (subjectId: string, scope: TestScope) => [subjectId, scope].join('\u0000');
 
 function addToSubject(
   subjects: Map<string, SubjectTotals>,
@@ -288,11 +284,10 @@ function addToSubject(
   question: FoldableQuestion,
 ): void {
   if (question.subjectId === null) return;
-  const key = subjectKey(question.subjectId, attempt.scope, attempt.evaluationMode);
+  const key = subjectKey(question.subjectId, attempt.scope);
   const held = subjects.get(key) ?? {
     subjectId: question.subjectId,
     scope: attempt.scope,
-    evaluationMode: attempt.evaluationMode,
     attempted: 0,
     correct: 0,
     wrong: 0,

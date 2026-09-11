@@ -3,8 +3,6 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Pencil, Trash2 } from 'lucide-react';
 import {
-  EVALUATION_MODE,
-  EVALUATION_MODE_LABELS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   TEST_SCOPE_LABELS,
@@ -88,14 +86,7 @@ function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Te
     {
       key: 'coverage',
       header: 'Coverage',
-      cell: (test) => (
-        <span className="flex flex-col">
-          <span className="text-sm">{TEST_SCOPE_LABELS[test.scope]}</span>
-          <span className="text-xs text-muted-foreground">
-            {EVALUATION_MODE_LABELS[test.evaluationMode]}
-          </span>
-        </span>
-      ),
+      cell: (test) => TEST_SCOPE_LABELS[test.scope],
     },
     { key: 'questions', header: 'Questions', numeric: true, cell: (test) => test.totalQuestions },
     {
@@ -195,21 +186,15 @@ function TestRowActions({
     onError: close,
   });
 
-  // Only a ranked test folds a cohort, so on any other one the report would have nothing to read.
-  const ranked = test.evaluationMode === EVALUATION_MODE.RANKED;
-  if (!canWrite && !ranked) return null;
-
   return (
     <>
       <RowActions label={`Actions for ${test.title ?? UNTITLED}`}>
-        {ranked ? (
-          <DropdownMenuItem asChild>
-            <Link to={ROUTES.TEST_ANALYTICS(test.id)}>
-              <BarChart3 aria-hidden />
-              Analytics
-            </Link>
-          </DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.TEST_ANALYTICS(test.id)}>
+            <BarChart3 aria-hidden />
+            Analytics
+          </Link>
+        </DropdownMenuItem>
         {canWrite ? (
           <DropdownMenuItem asChild>
             <Link to={ROUTES.TEST(test.id)}>

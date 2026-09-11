@@ -2,7 +2,6 @@ import { type UseFormReturn } from 'react-hook-form';
 import {
   AppException,
   TEST_SCOPE,
-  type EvaluationMode,
   type ExamTemplate,
   type TestDetail,
   type TestSeriesSummary,
@@ -24,8 +23,6 @@ export interface TestFormValues {
   scope: TestScope;
   moduleId: string;
   sectionId: string;
-  /** Read off the chosen series and never sent: the server derives it from that series too. */
-  evaluationMode: EvaluationMode | '';
   /** Null until the admin picks one — the config's default stands in until they do. */
   examTemplate: ExamTemplate | null;
 }
@@ -48,7 +45,6 @@ export function valuesOf(
     scope: detail?.scope ?? TEST_SCOPE.FULL,
     moduleId: scopeRef?.moduleId ?? '',
     sectionId: scopeRef?.sectionId ?? '',
-    evaluationMode: detail?.evaluationMode ?? fromSeries?.evaluationMode ?? '',
     examTemplate: detail?.examTemplate ?? null,
   };
 }

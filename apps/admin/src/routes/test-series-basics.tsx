@@ -1,32 +1,16 @@
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import {
-  EVALUATION_MODE_LABELS,
-  type EvaluationMode,
-  type TestSeriesSummary,
-} from '@iace/contracts';
-import {
-  Alert,
-  Checkbox,
-  Combobox,
-  FormField,
-  FormSection,
-  Input,
-  Textarea,
-  plural,
-} from '@iace/ui';
+import { Checkbox, FormField, FormSection, Input, Textarea } from '@iace/ui';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
-import { EVALUATION_ITEMS, type SeriesFormValues } from './test-series-detail';
+import { type SeriesFormValues } from './test-series-detail';
 import { type StageChoice } from '../components/exam-picker';
 
-/** What the series is called, how its tests are judged, and the two rules it opens them under. */
+/** What the series is called, and the two rules it opens its tests under. */
 
 export function SeriesBasics({
   form,
-  detail,
   stage,
 }: Readonly<{
   form: UseFormReturn<SeriesFormValues>;
-  detail: TestSeriesSummary | null;
   stage: StageChoice | null;
 }>) {
   const name = useWatch({ control: form.control, name: 'name' });
@@ -67,8 +51,6 @@ export function SeriesBasics({
           {(control) => <Textarea {...control} />}
         </FormField>
 
-        <SeriesEvaluation form={form} detail={detail} />
-
         <div className="flex flex-col gap-3 sm:col-span-2">
           <SeriesToggle
             form={form}
@@ -85,44 +67,6 @@ export function SeriesBasics({
         </div>
       </div>
     </FormSection>
-  );
-}
-
-/** A series decides how its tests are judged, so it can only decide while it holds none. */
-function SeriesEvaluation({
-  form,
-  detail,
-}: Readonly<{ form: UseFormReturn<SeriesFormValues>; detail: TestSeriesSummary | null }>) {
-  const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
-  const held = detail?.testCount ?? 0;
-
-  return (
-    <>
-      <FormField form={form} name="evaluationMode" label="Evaluation">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            disabled={held > 0}
-            value={evaluationMode}
-            onChange={(next) =>
-              form.setValue('evaluationMode', next as EvaluationMode, { shouldDirty: true })
-            }
-            items={EVALUATION_ITEMS}
-          />
-        )}
-      </FormField>
-
-      {detail && held > 0 ? (
-        <Alert variant="info" className="sm:col-span-2">
-          Its {plural(held, 'test')} {held === 1 ? 'is' : 'are'} built as{' '}
-          {EVALUATION_MODE_LABELS[detail.evaluationMode]} and judged the way the series says, so it
-          cannot change while the series holds {held === 1 ? 'it' : 'them'}.
-        </Alert>
-      ) : null}
-    </>
   );
 }
 

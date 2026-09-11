@@ -3,11 +3,9 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
-  EVALUATION_MODE_LABELS,
   fieldDiff,
   TEST_SERIES_KIND,
   type CreateTestSeriesBody,
-  type EvaluationMode,
   type Paginated,
   type SeriesBranch,
   type TestSeriesListQuery,
@@ -44,9 +42,6 @@ const branchesAreStandardOnly = (count: number) =>
 
 const NO_SUCH_BRANCH_MESSAGE = 'One of those branches does not exist.';
 
-const modeIsSettledBy = (count: number, mode: EvaluationMode) =>
-  `This series holds ${count} ${count === 1 ? 'test' : 'tests'} built as ${EVALUATION_MODE_LABELS[mode]}, and its tests are judged the way it says. Move them to another series first, or make a new one.`;
-
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
   _count: { select: { tests: true } },
@@ -63,7 +58,6 @@ export const AUDITED_SERIES_FIELDS = [
   'sequentialTests',
   'progressive',
   'kind',
-  'evaluationMode',
   'eventId',
   'isEnabled',
 ] as const;
@@ -173,7 +167,6 @@ export class TestSeriesService {
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesSummary> {
     const series = await this.requireSeries(id);
     await this.assertTargetsUsable(input);
-    this.assertModeIsStillOpen(series, input.evaluationMode);
     // `branchIds` is untouched here — only `setBranches` moves it, so this reads what it already holds.
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
@@ -242,16 +235,6 @@ export class TestSeriesService {
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return this.branches(id);
-  }
-
-  /** A series decides how its tests are judged, so it can only decide while it holds none. */
-  private assertModeIsStillOpen(series: SeriesRow, next: EvaluationMode | undefined): void {
-    const held = series._count.tests;
-    if (next === undefined || next === series.evaluationMode || held === 0) return;
-    const message = modeIsSettledBy(held, series.evaluationMode);
-    throw new AppException(ErrorCodes.CONFLICT, message, {
-      fieldErrors: { evaluationMode: [message] },
-    });
   }
 
   /** Answered here so a form marks the field: a raw CHECK violation can only leave as a 500. */
@@ -344,7 +327,6 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
     ...(input.sequentialTests === undefined ? {} : { sequentialTests: input.sequentialTests }),
     ...(input.progressive === undefined ? {} : { progressive: input.progressive }),
     ...(input.kind === undefined ? {} : { kind: input.kind }),
-    ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
     ...(input.eventId === undefined ? {} : { eventId: input.eventId ?? null }),
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
@@ -362,7 +344,6 @@ function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
     sequentialTests: row.sequentialTests,
     progressive: row.progressive,
     kind: row.kind,
-    evaluationMode: row.evaluationMode,
     branchIds: row.branchIds,
     isEnabled: row.isEnabled,
     eventId: row.eventId,

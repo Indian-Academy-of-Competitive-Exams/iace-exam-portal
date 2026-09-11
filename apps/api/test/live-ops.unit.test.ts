@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, EVALUATION_MODE, TEST_STATUS, type LiveAnswer } from '@iace/contracts';
+import { ANSWER_STATE, TEST_STATUS, type LiveAnswer } from '@iace/contracts';
 import {
   answeredCountOf,
   sittingsFrom,
@@ -96,11 +96,9 @@ describe('live ops — what a sitting looks like from the outside', () => {
 });
 
 describe('which tests the ops picker offers', () => {
-  /** A practice sitting has no hall, no invigilation and no ranked slot to protect (§7). */
-  it('offers ranked tests only, never practice ones', () => {
-    const where = watchableTestsWhere(undefined);
-
-    assert.equal(where.evaluationMode, EVALUATION_MODE.RANKED);
+  /** Every test ranks, so the picker narrows by status and by nothing else about the test. */
+  it('offers every active test, whatever series it sits in', () => {
+    assert.deepEqual(watchableTestsWhere(undefined), { status: TEST_STATUS.ACTIVE });
   });
 
   it('offers active tests only, whether or not a search narrows them', () => {
@@ -108,10 +106,10 @@ describe('which tests the ops picker offers', () => {
     assert.equal(watchableTestsWhere('cgl').status, TEST_STATUS.ACTIVE);
   });
 
-  it('keeps the ranked rule when a search is typed, rather than replacing the filter', () => {
+  it('adds a typed search beside the status rule, rather than replacing it', () => {
     const where = watchableTestsWhere('cgl');
 
-    assert.equal(where.evaluationMode, EVALUATION_MODE.RANKED);
+    assert.deepEqual(Object.keys(where).toSorted(), ['OR', 'status']);
     assert.equal(where.OR?.length, 2);
   });
 

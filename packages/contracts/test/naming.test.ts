@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  EVALUATION_MODE,
   TEST_SCOPE,
   TEST_SERIES_KIND,
   nameStem,
@@ -124,30 +123,21 @@ describe('suggestedSeriesName', () => {
 });
 
 describe('testNameKind', () => {
-  it('calls a ranked full paper a mock, and a practice one practice', () => {
-    const full = { scope: TEST_SCOPE.FULL, scopeName: 'ignored' };
-    assert.equal(testNameKind({ ...full, evaluationMode: EVALUATION_MODE.RANKED }), 'Mock');
-    assert.equal(testNameKind({ ...full, evaluationMode: EVALUATION_MODE.PRACTICE }), 'Practice');
+  it('calls a full paper a mock', () => {
+    assert.equal(testNameKind({ scope: TEST_SCOPE.FULL, scopeName: 'ignored' }), 'Mock');
   });
 
   /** A sectional test is known by its section, never by the word "sectional". */
   it('names a narrowed test after the part it covers', () => {
     assert.equal(
-      testNameKind({
-        scope: TEST_SCOPE.SECTIONAL,
-        evaluationMode: EVALUATION_MODE.RANKED,
-        scopeName: 'Quantitative Aptitude',
-      }),
+      testNameKind({ scope: TEST_SCOPE.SECTIONAL, scopeName: 'Quantitative Aptitude' }),
       'Quantitative Aptitude',
     );
   });
 
   /** The scope is chosen before the section it points at, so the name cannot wait for one. */
   it('falls back while the section is still unchosen', () => {
-    assert.equal(
-      testNameKind({ scope: TEST_SCOPE.SECTIONAL, evaluationMode: EVALUATION_MODE.RANKED }),
-      'Mock',
-    );
+    assert.equal(testNameKind({ scope: TEST_SCOPE.SECTIONAL }), 'Mock');
   });
 });
 

@@ -2,15 +2,12 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
 import {
-  EVALUATION_MODE,
-  EVALUATION_MODE_LABELS,
   FEATURE_KEYS,
   PAGE_SIZE_MAX,
   PERFORMANCE_SCOPES,
   paperCounts,
   sittingLabel,
   type CohortCurve,
-  type EvaluationMode,
   type PerformanceReport,
   type PerformanceReportQueryInput,
   type PerformanceScope,
@@ -25,7 +22,6 @@ import {
   TrajectoryFigure,
 } from '@iace/app-kit/browser';
 import {
-  Badge,
   Combobox,
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -114,7 +110,7 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
                   items={found.items.map((row) => ({
                     value: row.attemptId,
                     label: sittingLabel(row),
-                    hint: EVALUATION_MODE_LABELS[row.evaluationMode],
+                    hint: row.isGraded ? undefined : 'Retake',
                   }))}
                   search={search}
                   onSearchChange={setSearch}
@@ -140,8 +136,6 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
               />
             )}
           </Field>
-
-          <ModeBadge mode={report.data?.evaluationMode ?? null} />
         </div>
 
         <Body
@@ -250,12 +244,6 @@ function Standing({
       hint="A spread is one paper's; All time spans several."
     />
   );
-}
-
-function ModeBadge({ mode }: Readonly<{ mode: EvaluationMode | null }>) {
-  if (mode === null) return null;
-  const ranked = mode === EVALUATION_MODE.RANKED;
-  return <Badge variant={ranked ? 'success' : 'neutral'}>{EVALUATION_MODE_LABELS[mode]}</Badge>;
 }
 
 function FiguresSkeleton() {

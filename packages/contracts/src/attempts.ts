@@ -14,7 +14,7 @@ import {
   questionOptionSchema,
   questionTypeSchema,
 } from './questions';
-import { evaluationModeSchema, paperQuestionStatusSchema } from './tests';
+import { paperQuestionStatusSchema } from './tests';
 
 // ============================================================================
 // Attempts. One row holds the live state and the scored result — there is no
@@ -114,7 +114,7 @@ export type Attempt = z.infer<typeof attemptSchema>;
 export const attemptQuestionSchema = z.object({
   attemptId: z.string(),
   questionId: z.string(),
-  /** Always set: a GENERATED test's variants are real paper rows, so marks have one home. */
+  /** Always set: every served question is a row on the test's one paper, so marks have one home. */
   paperQuestionId: z.string().nullable(),
   /** Always present, so the row reproduces without a join. */
   questionVersionId: z.string(),
@@ -600,8 +600,6 @@ export const performancePointSchema = z.object({
   attemptNo: z.number().int(),
   testId: z.string(),
   testTitle: z.string().nullable(),
-  /** Ranked or practice: only a ranked paper has a board, so a picker for one filters on it. */
-  evaluationMode: evaluationModeSchema,
   submittedAt: z.string().nullable(),
   score: z.number(),
   maxMarks: z.number(),

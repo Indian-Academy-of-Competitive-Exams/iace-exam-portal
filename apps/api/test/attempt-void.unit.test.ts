@@ -169,7 +169,7 @@ describe('voiding a sitting — archived, and taken out of everything that count
     assert.equal(resolved.rankedRegranted, true);
   });
 
-  it('has nothing to hand back on a practice sitting, whatever was ticked', async () => {
+  it('has nothing to hand back on a retake, whatever was ticked', async () => {
     const { service, row } = build({ isGraded: false });
 
     const resolved = await service.void('att_1', { reason: REASON, regrantRanked: true }, ADMIN);

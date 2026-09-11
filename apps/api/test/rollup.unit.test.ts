@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  ATTEMPT_STATUS,
-  EVALUATION_MODE,
-  PAPER_QUESTION_STATUS,
-  TEST_SCOPE,
-} from '@iace/contracts';
+import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS, TEST_SCOPE } from '@iace/contracts';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
@@ -182,10 +177,6 @@ describe('RollupService — folding one sitting in', () => {
         ['sub_maths', 1, 1, 0],
       ],
     );
-    assert.equal(
-      subjects.every((row) => row.evaluationMode === EVALUATION_MODE.RANKED),
-      true,
-    );
   });
 });
 
@@ -211,29 +202,53 @@ describe('RollupService — who the cohort is', () => {
     assert.equal(built.prisma.studentStat.rows[0]?.testsEvaluated, 2);
   });
 
-  it('keeps a practice sitting out of the cohort and inside the student it belongs to', async () => {
+  it('keeps a retake out of the cohort and inside the student it belongs to', async () => {
     const built = world(
-      [sitting('att_1', { isGraded: false })],
-      paper('att_1', [RIGHT, WRONG, null, RIGHT]),
-      [makeRollupTest({ evaluationMode: EVALUATION_MODE.PRACTICE, scope: TEST_SCOPE.SECTIONAL })],
+      [sitting('att_2', { attemptNo: 2, isGraded: false })],
+      paper('att_2', [RIGHT, WRONG, null, RIGHT]),
+      [makeRollupTest({ scope: TEST_SCOPE.SECTIONAL })],
     );
 
-    await counted(built, 'att_1');
+    await counted(built, 'att_2');
 
     assert.equal(built.prisma.testStat.rows.length, 0);
     assert.equal(built.prisma.testSectionStat.rows.length, 0);
     assert.equal(built.prisma.testQuestionStat.rows.length, 0);
-    assert.equal(built.prisma.studentStat.rows[0]?.practiceAttempts, 1);
+    assert.equal(built.prisma.studentStat.rows[0]?.retakeCount, 1);
     assert.equal(built.prisma.studentStat.rows[0]?.testsEvaluated, 0);
-    assert.equal(
-      built.prisma.studentSubjectStat.rows.every(
-        (row) => row.evaluationMode === EVALUATION_MODE.PRACTICE,
-      ),
-      true,
-    );
     assert.deepEqual(
       built.prisma.processedRollups.map((row) => row.rollupType),
       [ROLLUP_TYPE.STUDENT, ROLLUP_TYPE.STUDENT_SUBJECT],
+    );
+  });
+
+  /** One subject tally per scope, so a retake's answers land beside the first sitting's. */
+  it('adds a retake to the same subject tallies as the first sitting of the paper', async () => {
+    const built = world(
+      [sitting('att_1'), sitting('att_2', { attemptNo: 2, isGraded: false })],
+      [
+        ...paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]),
+        ...paper('att_2', [RIGHT, WRONG, null, RIGHT]),
+      ],
+    );
+
+    await counted(built, 'att_1');
+    await counted(built, 'att_2');
+
+    assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 1);
+    assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 2);
+    assert.equal(built.prisma.studentStat.rows[0]?.retakeCount, 1);
+    assert.deepEqual(
+      built.prisma.studentSubjectStat.rows.map((row) => [
+        row.subjectId,
+        row.scope,
+        row.attempted,
+        row.correct,
+      ]),
+      [
+        ['sub_reasoning', TEST_SCOPE.FULL, 4, 3],
+        ['sub_maths', TEST_SCOPE.FULL, 3, 3],
+      ],
     );
   });
 });
@@ -383,22 +398,6 @@ describe('RollupService — rebuilding a scope', () => {
     );
     assert.equal(backfilled.prisma.processedRollups.length, 15);
   });
-
-  it('stops counting a practice paper that an older rule had marked graded', async () => {
-    const built = world(
-      [sitting('att_1', { isGraded: true })],
-      paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]),
-      [makeRollupTest({ evaluationMode: EVALUATION_MODE.PRACTICE })],
-    );
-    await built.scoring.score('att_1');
-    built.queue.jobs.length = 0;
-
-    await built.rollup.rebuildAll();
-
-    assert.equal(built.prisma.attempts[0]?.isGraded, false);
-    assert.equal(built.prisma.testStat.rows.length, 0);
-    assert.equal(built.prisma.studentStat.rows[0]?.practiceAttempts, 1);
-  });
 });
 
 describe('RollupOutbox — getting the fold asked for', () => {
@@ -439,24 +438,14 @@ describe('RollupOutbox — getting the fold asked for', () => {
 
 describe('RollupService — rebuilding a student who sits more than one kind of paper', () => {
   /** One totals map replays every sitting, so a subject-only key merges the kinds of paper. */
-  it('keeps one row per scope and mode rather than merging them into whichever came first', async () => {
+  it('keeps one row per scope rather than merging them into whichever came first', async () => {
     const built = world(
-      [
-        sitting('att_full', { testId: 'tst_1' }),
-        sitting('att_sec', { testId: 'tst_2', isGraded: false }),
-      ],
+      [sitting('att_full', { testId: 'tst_1' }), sitting('att_sec', { testId: 'tst_2' })],
       [
         ...paper('att_full', [RIGHT, RIGHT, RIGHT, RIGHT]),
         ...paper('att_sec', [WRONG, WRONG, null, null]),
       ],
-      [
-        makeRollupTest(),
-        makeRollupTest({
-          id: 'tst_2',
-          scope: TEST_SCOPE.SECTIONAL,
-          evaluationMode: EVALUATION_MODE.PRACTICE,
-        }),
-      ],
+      [makeRollupTest(), makeRollupTest({ id: 'tst_2', scope: TEST_SCOPE.SECTIONAL })],
     );
 
     await counted(built, 'att_full');
@@ -468,20 +457,15 @@ describe('RollupService — rebuilding a student who sits more than one kind of 
 
     assert.equal(reasoning.length, 2, 'one row for each kind of paper the subject was sat on');
 
-    const ranked = reasoning.find(
-      (row) => row.scope === TEST_SCOPE.FULL && row.evaluationMode === EVALUATION_MODE.RANKED,
-    );
-    const practice = reasoning.find(
-      (row) =>
-        row.scope === TEST_SCOPE.SECTIONAL && row.evaluationMode === EVALUATION_MODE.PRACTICE,
-    );
+    const full = reasoning.find((row) => row.scope === TEST_SCOPE.FULL);
+    const sectional = reasoning.find((row) => row.scope === TEST_SCOPE.SECTIONAL);
 
     assert.deepEqual(
-      { attempted: ranked?.attempted, correct: ranked?.correct, wrong: ranked?.wrong },
+      { attempted: full?.attempted, correct: full?.correct, wrong: full?.wrong },
       { attempted: 2, correct: 2, wrong: 0 },
     );
     assert.deepEqual(
-      { attempted: practice?.attempted, correct: practice?.correct, wrong: practice?.wrong },
+      { attempted: sectional?.attempted, correct: sectional?.correct, wrong: sectional?.wrong },
       { attempted: 2, correct: 0, wrong: 2 },
     );
   });
@@ -490,22 +474,12 @@ describe('RollupService — rebuilding a student who sits more than one kind of 
   it('lands a rebuild on the same rows the fold left behind', async () => {
     const build = () =>
       world(
-        [
-          sitting('att_full', { testId: 'tst_1' }),
-          sitting('att_sec', { testId: 'tst_2', isGraded: false }),
-        ],
+        [sitting('att_full', { testId: 'tst_1' }), sitting('att_sec', { testId: 'tst_2' })],
         [
           ...paper('att_full', [RIGHT, WRONG, RIGHT, null]),
           ...paper('att_sec', [WRONG, RIGHT, null, RIGHT]),
         ],
-        [
-          makeRollupTest(),
-          makeRollupTest({
-            id: 'tst_2',
-            scope: TEST_SCOPE.SECTIONAL,
-            evaluationMode: EVALUATION_MODE.PRACTICE,
-          }),
-        ],
+        [makeRollupTest(), makeRollupTest({ id: 'tst_2', scope: TEST_SCOPE.SECTIONAL })],
       );
 
     const folded = build();
@@ -517,13 +491,9 @@ describe('RollupService — rebuilding a student who sits more than one kind of 
     await counted(rebuilt, 'att_sec');
     await rebuilt.rollup.rebuildStudent('stu_1');
 
-    const order = <T extends { subjectId: string; scope: string; evaluationMode: string }>(
-      rows: readonly T[],
-    ) =>
+    const order = <T extends { subjectId: string; scope: string }>(rows: readonly T[]) =>
       [...rows].sort((a, b) =>
-        `${a.subjectId}${a.scope}${a.evaluationMode}`.localeCompare(
-          `${b.subjectId}${b.scope}${b.evaluationMode}`,
-        ),
+        `${a.subjectId}${a.scope}`.localeCompare(`${b.subjectId}${b.scope}`),
       );
 
     assert.deepEqual(

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  type EvaluationMode,
   PAGE_SIZE_MAX,
   type TestScope,
   type TestSeriesKind,
@@ -21,8 +20,6 @@ export interface TestNameSource {
   configName?: string;
   examStageId?: string;
   scope: TestScope;
-  /** Absent until a series is chosen, which is what decides it — an unnamed mode is a Mock. */
-  evaluationMode?: EvaluationMode;
   scopeName?: string | null;
 }
 

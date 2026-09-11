@@ -7,7 +7,6 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
-  EVALUATION_MODE,
   LEADERBOARD_MEASURES,
   LEADERBOARD_MEASURE_BY_SCOPE,
   LEADERBOARD_SCOPES,
@@ -107,7 +106,7 @@ describe('splitBoard', () => {
 
 const ME = 'stu_me';
 const TEST_ID = 'tst_1';
-const PRACTICE_ID = 'tst_practice';
+const DRILL_ID = 'tst_drill';
 const START = new Date('2026-09-01T05:00:00.000Z');
 
 const NAMES = [
@@ -207,23 +206,19 @@ describe('the leaderboard for one paper', () => {
     assert.equal(board.you?.rank, 8);
   });
 
-  /** `isGraded` is true on a practice sitting too; the paper's own mode is what decides. */
-  it('places nobody against a practice paper, graded though every sitting on it is', async () => {
-    const practice = cohort().map((row, index) =>
-      makeBoardSitting({ ...row, id: `prac_${index}`, testId: PRACTICE_ID }),
+  /** Every test ranks, so no paper a reader holds a graded sitting on is left without a board. */
+  it('builds a board for any test the reader holds a graded sitting on', async () => {
+    const drill = cohort().map((row, index) =>
+      makeBoardSitting({ ...row, id: `drill_${index}`, testId: DRILL_ID }),
     );
-    const { view } = await bench(practice, {
-      tests: [
-        { id: PRACTICE_ID, title: 'Speed drill 3', evaluationMode: EVALUATION_MODE.PRACTICE },
-      ],
-    });
+    const { view } = await bench(drill, { tests: [{ id: DRILL_ID, title: 'Speed drill 3' }] });
 
-    const board = await view.board(ME, paper(PRACTICE_ID));
+    const board = await view.board(ME, paper(DRILL_ID));
 
-    assert.equal(board.evaluationMode, EVALUATION_MODE.PRACTICE);
-    assert.equal(board.cohortSize, 0);
-    assert.deepEqual(board.podium, []);
-    assert.equal(board.you, null);
+    assert.equal(board.label, 'Speed drill 3');
+    assert.equal(board.cohortSize, 10);
+    assert.equal(board.podium[0]?.name, 'Sai Teja Reddy');
+    assert.equal(board.you?.rank, 8);
   });
 
   it('refuses a cohort the reader never sat in', async () => {

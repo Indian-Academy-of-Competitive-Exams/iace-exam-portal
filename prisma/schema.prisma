@@ -131,11 +131,6 @@ enum TestScope {
   SECTIONAL
 }
 
-enum EvaluationMode {
-  RANKED
-  PRACTICE
-}
-
 enum PaperQuestionStatus {
   ACTIVE
   DROPPED
@@ -485,36 +480,34 @@ model QuestionVersion {
 
 // ============================================================================
 // Tests & papers — a Test inherits shape from its BaseConfig and adds only
-// scope, evaluation mode and how the paper is drawn.
+// scope and how the paper is drawn.
 // ============================================================================
 
 model Test {
-  id                 String         @id @default(cuid())
+  id                 String       @id @default(cuid())
   title              String?
   baseConfigId       String
   // Denormalised from BaseConfig so the composite FK below is always enforced.
   examStageId        String
-  scope              TestScope      @default(FULL)
+  scope              TestScope    @default(FULL)
   scopeRef           Json?
-  // Denormalised from TestSeries so the composite FK below is always enforced.
-  evaluationMode     EvaluationMode
   questionPoolFilter Json?
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
-  examTemplate       ExamTemplate   @default(DEFAULT)
-  status             TestStatus     @default(DRAFT)
-  isLocked           Boolean        @default(false)
+  examTemplate       ExamTemplate @default(DEFAULT)
+  status             TestStatus   @default(DRAFT)
+  isLocked           Boolean      @default(false)
   // Optimistic lock — finalize is a conditional UPDATE ... WHERE version = $n.
-  version            Int            @default(0)
-  finalizedAt        DateTime?      @db.Timestamptz(3)
+  version            Int          @default(0)
+  finalizedAt        DateTime?    @db.Timestamptz(3)
   createdById        String?
-  createdAt          DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
   testSeriesId       String
   seriesOrder        Int?
   // A test opens and never shuts, and that instant is the whole of its timing.
-  opensAt            DateTime?      @db.Timestamptz(3)
+  opensAt            DateTime?    @db.Timestamptz(3)
   // When students were told it had opened. The sweep's watermark: set once, never read as a date.
-  announcedAt        DateTime?      @db.Timestamptz(3)
+  announcedAt        DateTime?    @db.Timestamptz(3)
 
   baseConfig     BaseConfig          @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
   examStage      ExamStage           @relation(fields: [examStageId], references: [id])
@@ -525,7 +518,7 @@ model Test {
   sectionStats   TestSectionStat[]
   questionStats  TestQuestionStat[]
   programUnlocks TestProgramUnlock[]
-  testSeries     TestSeries          @relation(fields: [testSeriesId, evaluationMode], references: [id, evaluationMode], onDelete: Restrict, onUpdate: NoAction)
+  testSeries     TestSeries          @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -849,8 +842,6 @@ model TestSeries {
   progressive     Boolean        @default(false)
   // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
   kind            TestSeriesKind @default(STANDARD)
-  // What its tests are judged as; every test it holds carries the same value.
-  evaluationMode  EvaluationMode @default(RANKED)
   eventId         String?
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -864,7 +855,6 @@ model TestSeries {
   grants        StudentGrant[]
   notifications Notification[]
 
-  @@unique([id, evaluationMode])
   @@index([examStageId])
   @@index([programCode])
   @@index([eventId])
@@ -1110,7 +1100,7 @@ model StudentStat {
   totalWrong       Int       @default(0)
   totalUnattempted Int       @default(0)
   sumTimeSec       BigInt    @default(0)
-  practiceAttempts Int       @default(0)
+  retakeCount      Int       @default(0)
   lastAttemptAt    DateTime? @db.Timestamptz(3)
   // Watermark for drift detection and targeted rebuilds.
   computedThrough  DateTime? @db.Timestamptz(3)
@@ -1119,23 +1109,21 @@ model StudentStat {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
-// Bucketed by test type so the strength map filters by kind; "overall" sums the
-// buckets on read. Practice attempts feed this but never the cohort rollups.
+// Bucketed by scope; "overall" sums the buckets on read. Retakes feed it, the cohort rollups never.
 model StudentSubjectStat {
-  studentId      String
-  subjectId      String
-  scope          TestScope
-  evaluationMode EvaluationMode
-  attempted      Int            @default(0)
-  correct        Int            @default(0)
-  wrong          Int            @default(0)
-  sumTimeSec     BigInt         @default(0)
-  computedAt     DateTime       @db.Timestamptz(3)
+  studentId  String
+  subjectId  String
+  scope      TestScope
+  attempted  Int       @default(0)
+  correct    Int       @default(0)
+  wrong      Int       @default(0)
+  sumTimeSec BigInt    @default(0)
+  computedAt DateTime  @db.Timestamptz(3)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject Subject @relation(fields: [subjectId], references: [id])
 
-  @@id([studentId, subjectId, scope, evaluationMode])
+  @@id([studentId, subjectId, scope])
   @@index([subjectId])
 }
 

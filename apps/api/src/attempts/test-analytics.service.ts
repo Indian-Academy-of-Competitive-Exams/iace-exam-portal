@@ -58,7 +58,7 @@ export class TestAnalyticsService {
   async forTest(testId: string): Promise<TestAnalytics> {
     const test = await this.prisma.test.findUnique({
       where: { id: testId },
-      select: { id: true, title: true, evaluationMode: true },
+      select: { id: true, title: true },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NO_TEST);
 
@@ -71,7 +71,6 @@ export class TestAnalyticsService {
     return {
       testId: test.id,
       title: test.title,
-      evaluationMode: test.evaluationMode,
       summary: summaryOf(stat, await this.topperOf(stat?.topperAttemptId ?? null)),
       sections: sectionsOf(sections),
       items: itemsOf(items),

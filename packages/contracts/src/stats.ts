@@ -1,14 +1,6 @@
 import { z } from 'zod';
 import { DIFFICULTY_LEVEL, difficultyLevelSchema, type DifficultyLevel } from './questions';
-import {
-  EVALUATION_MODE,
-  TEST_SCOPES,
-  evaluationModeSchema,
-  paperQuestionStatusSchema,
-  testScopeSchema,
-  type EvaluationMode,
-  type TestScope,
-} from './tests';
+import { TEST_SCOPES, paperQuestionStatusSchema, testScopeSchema, type TestScope } from './tests';
 import { todayISO } from './students';
 import {
   analyticsBucketSchema,
@@ -42,22 +34,18 @@ export const studentStatSchema = z.object({
   totalWrong: z.number().int(),
   totalUnattempted: z.number().int(),
   sumTimeSec: z.number().int(),
-  /** A count only. The detail lives in the per-subject buckets. */
-  practiceAttempts: z.number().int(),
+  /** Sittings past the ranked slot, as a count only. The detail lives in the per-subject buckets. */
+  retakeCount: z.number().int(),
   lastAttemptAt: z.string().nullable(),
   computedAt: z.string(),
 });
 export type StudentStat = z.infer<typeof studentStatSchema>;
 
-/**
- * The strength map, bucketed by kind of test so it can be filtered to full-length
- * or sectional, ranked or practice. Overall is the sum across buckets.
- */
+/** The strength map, bucketed by scope so it can be filtered to full-length or sectional. */
 export const studentSubjectStatSchema = z.object({
   studentId: z.string(),
   subjectId: z.string(),
   scope: testScopeSchema,
-  evaluationMode: evaluationModeSchema,
   attempted: z.number().int(),
   correct: z.number().int(),
   wrong: z.number().int(),
@@ -72,10 +60,10 @@ export type StudentSubjectStat = z.infer<typeof studentSubjectStatSchema>;
 // on the way out and nothing new is stored.
 //
 // The two tables answer different questions and must not be crossed:
-// `StudentStat`'s totals count EVERY sitting, ranked and practice together, so
-// only its ranked-gated fields (percentile, score, testsEvaluated) are safe to
-// read per mode. Accuracy and pace per mode come from `StudentSubjectStat`,
-// which keys on the mode. The disposition donut has no per-mode source at all —
+// `StudentStat`'s totals count EVERY sitting, retakes included, and only its
+// graded fields (percentile, score, testsEvaluated) speak for the ranked slot.
+// Accuracy and pace per scope come from `StudentSubjectStat`, which keys on the
+// scope. The disposition donut has no per-scope source at all —
 // `StudentSubjectStat` never counted an unattempted question — so it stays
 // lifetime and says so on screen.
 // ============================================================================
@@ -85,21 +73,21 @@ export const SUBJECT_SAMPLE_FLOOR = 20;
 
 /** The ranked standing, off `StudentStat`. Every average is null at a zero denominator. */
 export const overviewStandingSchema = z.object({
-  /** Every folded sitting, ranked and practice — zero means nothing has been sat at all. */
+  /** Every folded sitting, retakes included — zero means nothing has been sat at all. */
   testsAttempted: z.number().int(),
   testsEvaluated: z.number().int(),
-  practiceAttempts: z.number().int(),
+  retakeCount: z.number().int(),
   /** Provisional: each sitting's percentile was captured against the cohort of that moment. */
   avgPercentile: z.number().nullable(),
   bestPercentile: z.number().nullable(),
   avgScore: z.number().nullable(),
-  /** Every sitting's clock, ranked and practice alike — the denominator of per-sitting effort. */
+  /** Every sitting's clock, retakes included — the denominator of per-sitting effort. */
   sumTimeSec: z.number().int(),
   lastAttemptAt: z.string().nullable(),
 });
 export type OverviewStanding = z.infer<typeof overviewStandingSchema>;
 
-/** LIFETIME, across ranked and practice alike: `StudentStat` is the only place these three live. */
+/** LIFETIME, across every sitting: `StudentStat` is the only place these three live. */
 export const dispositionSchema = z.object({
   correct: z.number().int(),
   wrong: z.number().int(),
@@ -110,7 +98,6 @@ export type Disposition = z.infer<typeof dispositionSchema>;
 /** One `StudentSubjectStat` row as the dashboard reads it — counts only, no derived figure. */
 export const subjectTallySchema = z.object({
   scope: testScopeSchema,
-  evaluationMode: evaluationModeSchema,
   attempted: z.number().int(),
   correct: z.number().int(),
   sumTimeSec: z.number().int(),
@@ -133,25 +120,19 @@ export type SubjectMeasure = z.infer<typeof subjectMeasureSchema>;
 export const subjectStandingSchema = z.object({
   subjectId: z.string(),
   name: z.string(),
-  /** One per (scope, mode) the student has sat, so a scope filter needs no second call. */
+  /** One per scope the student has sat, so a scope filter needs no second call. */
   tallies: z.array(subjectTallySchema),
 });
 export type SubjectStanding = z.infer<typeof subjectStandingSchema>;
-
-export const modeMeasuresSchema = z.object({
-  [EVALUATION_MODE.RANKED]: subjectMeasureSchema,
-  [EVALUATION_MODE.PRACTICE]: subjectMeasureSchema,
-});
-export type ModeMeasures = z.infer<typeof modeMeasuresSchema>;
 
 export const studentOverviewSchema = z.object({
   studentId: z.string(),
   generatedAt: z.string(),
   standing: overviewStandingSchema,
-  /** Not toggle-bound: there is no per-mode unattempted anywhere to bind it to. */
+  /** Not scope-bound: there is no per-scope unattempted anywhere to bind it to. */
   disposition: dispositionSchema,
-  /** What the accuracy and pace tiles read, summed off the subject rows of each mode. */
-  byMode: modeMeasuresSchema,
+  /** What the accuracy and pace tiles read, summed off every subject row. */
+  measure: subjectMeasureSchema,
   subjects: z.array(subjectStandingSchema),
 });
 export type StudentOverview = z.infer<typeof studentOverviewSchema>;
@@ -159,12 +140,9 @@ export type StudentOverview = z.infer<typeof studentOverviewSchema>;
 /** The ONE way tallies become a reading; a null scope sums every one, which is the default. */
 export function measureOf(
   tallies: readonly SubjectTally[],
-  mode: EvaluationMode,
   scope: TestScope | null = null,
 ): SubjectMeasure {
-  const counted = tallies.filter(
-    (tally) => tally.evaluationMode === mode && (scope === null || tally.scope === scope),
-  );
+  const counted = tallies.filter((tally) => scope === null || tally.scope === scope);
   const attempted = counted.reduce((sum, tally) => sum + tally.attempted, 0);
   const correct = counted.reduce((sum, tally) => sum + tally.correct, 0);
   const sumTimeSec = counted.reduce((sum, tally) => sum + tally.sumTimeSec, 0);
@@ -187,20 +165,8 @@ export interface StandingTile {
   foot?: string;
 }
 
-/** Percentile, score and marking need an evaluated RANKED sitting; practice answers differently. */
-export function standingTiles(
-  standing: OverviewStanding,
-  measure: SubjectMeasure,
-  mode: EvaluationMode,
-): StandingTile[] {
-  if (mode === EVALUATION_MODE.PRACTICE) {
-    return [
-      { key: 'sittings', label: 'Practice sittings', value: standing.practiceAttempts },
-      { key: 'answered', label: 'Questions answered', value: measure.attempted },
-      { key: 'correct', label: 'Correct', value: measure.correct },
-    ];
-  }
-
+/** Score and marking come from the sittings that held the ranked slot; every sitting is counted. */
+export function standingTiles(standing: OverviewStanding): StandingTile[] {
   return [
     { key: 'score', label: 'Average score', value: standing.avgScore },
     { key: 'marked', label: 'Tests marked', value: standing.testsEvaluated },
@@ -209,10 +175,15 @@ export function standingTiles(
       key: 'sittings',
       label: 'Sittings',
       value: standing.testsAttempted,
-      foot: standing.practiceAttempts > 0 ? `${standing.practiceAttempts} in practice` : undefined,
+      foot: retakesFoot(standing.retakeCount),
     },
   ];
 }
+
+const retakesFoot = (count: number): string | undefined => {
+  if (count <= 0) return undefined;
+  return count === 1 ? '1 retake' : `${count} retakes`;
+};
 
 // ============================================================================
 // Practice days. A civil date, never an instant: a sitting submitted at 04:00
@@ -295,7 +266,7 @@ export function longestStreak(sat: readonly PracticeDay[]): number {
 const daysWithSittings = (sat: readonly PracticeDay[]) =>
   new Set(sat.filter((day) => day.sittings > 0).map((day) => day.date));
 
-/** The three shares the disposition can answer. LIFETIME: it never split ranked from practice. */
+/** The three shares the disposition can answer. LIFETIME: `StudentStat` holds no scope to split by. */
 export interface DispositionRates {
   served: number;
   answered: number;
@@ -342,45 +313,14 @@ export function effortPerSitting(
   };
 }
 
-/** One subject read in BOTH modes: whether it survives the paper that counts is the whole point. */
-export interface SubjectModeGap {
-  subjectId: string;
-  name: string;
-  ranked: SubjectMeasure;
-  practice: SubjectMeasure;
-  /** Ranked minus practice. Null unless BOTH sides were measured — a gap needs two ends. */
-  accuracyGap: number | null;
-  paceGap: number | null;
-}
-
-export function subjectModeGaps(
-  subjects: readonly SubjectStanding[],
-  scope: TestScope | null = null,
-): SubjectModeGap[] {
-  return subjects
-    .map((subject) => {
-      const ranked = measureOf(subject.tallies, EVALUATION_MODE.RANKED, scope);
-      const practice = measureOf(subject.tallies, EVALUATION_MODE.PRACTICE, scope);
-      return {
-        subjectId: subject.subjectId,
-        name: subject.name,
-        ranked,
-        practice,
-        accuracyGap: gapBetween(ranked.accuracy, practice.accuracy),
-        paceGap: gapBetween(ranked.pace, practice.pace),
-      };
-    })
-    .filter((gap) => gap.accuracyGap !== null || gap.paceGap !== null);
-}
-
-/** Where the hours went against what they bought back, each as a share of the mode's own total. */
+/** Where the hours went against what they bought back, each as a share of the whole. */
 export interface SubjectShare {
   subjectId: string;
   name: string;
   attempted: number;
   correct: number;
   sumTimeSec: number;
-  /** Of everything answered in this mode, the share this subject took. */
+  /** Of everything answered, the share this subject took. */
   attemptedShare: number;
   timeShare: number;
   correctShare: number;
@@ -390,11 +330,10 @@ export interface SubjectShare {
 
 export function subjectShares(
   subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
   scope: TestScope | null = null,
 ): SubjectShare[] {
   const measured = subjects
-    .map((subject) => ({ subject, measure: measureOf(subject.tallies, mode, scope) }))
+    .map((subject) => ({ subject, measure: measureOf(subject.tallies, scope) }))
     .filter((row) => row.measure.attempted > 0);
 
   const totalTime = measured.reduce((sum, row) => sum + row.measure.sumTimeSec, 0);
@@ -418,7 +357,7 @@ export function subjectShares(
   });
 }
 
-/** One subject read at one mode and scope, which is the unit every ranking below sorts. */
+/** One subject read at one scope, which is the unit every ranking below sorts. */
 export interface RankedSubject {
   subjectId: string;
   name: string;
@@ -436,7 +375,6 @@ export interface SubjectRanking {
 /** The weakest-first read of the rollup. Nothing here proposes a paper — a student cannot sit one they made. */
 export function rankSubjectsByWeakness(
   subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
   scope: TestScope | null = null,
   floor: number = SUBJECT_SAMPLE_FLOOR,
 ): SubjectRanking {
@@ -444,7 +382,7 @@ export function rankSubjectsByWeakness(
     .map((subject) => ({
       subjectId: subject.subjectId,
       name: subject.name,
-      measure: measureOf(subject.tallies, mode, scope),
+      measure: measureOf(subject.tallies, scope),
     }))
     .filter((row) => row.measure.attempted > 0);
 
@@ -462,23 +400,17 @@ export function rankSubjectsByWeakness(
 /** Served and never answered — the rows every other figure filters out, which is what hides them. */
 export function untouchedSubjects(
   subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
   scope: TestScope | null = null,
 ): SubjectStanding[] {
   return subjects.filter((subject) => {
-    const served = subject.tallies.some(
-      (tally) => tally.evaluationMode === mode && (scope === null || tally.scope === scope),
-    );
-    return served && measureOf(subject.tallies, mode, scope).attempted === 0;
+    const served = subject.tallies.some((tally) => scope === null || tally.scope === scope);
+    return served && measureOf(subject.tallies, scope).attempted === 0;
   });
 }
 
-/** The kinds of paper this mode has never asked for. The enum IS the catalogue; nothing to fetch. */
-export const scopesNotSat = (
-  subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
-): TestScope[] => {
-  const sat = new Set(scopesSat(subjects, mode));
+/** The kinds of paper never sat. The enum IS the catalogue; nothing to fetch. */
+export const scopesNotSat = (subjects: readonly SubjectStanding[]): TestScope[] => {
+  const sat = new Set(scopesSat(subjects));
   return TEST_SCOPES.filter((scope) => !sat.has(scope));
 };
 
@@ -495,12 +427,9 @@ export interface ScopeComparison {
   }[];
 }
 
-/** The two scopes this mode has the most behind it — a comparison needs volume on both sides. */
-export function scopeComparison(
-  subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
-): ScopeComparison | null {
-  const busiest = volumeByScope(subjects, mode)
+/** The two scopes with the most behind them — a comparison needs volume on both sides. */
+export function scopeComparison(subjects: readonly SubjectStanding[]): ScopeComparison | null {
+  const busiest = volumeByScope(subjects)
     .filter((row) => row.attempted > 0)
     .sort((a, b) => b.attempted - a.attempted);
   const first = busiest[0]?.scope;
@@ -508,8 +437,8 @@ export function scopeComparison(
   if (first === undefined || second === undefined) return null;
   const compared = subjects
     .map((subject) => {
-      const one = measureOf(subject.tallies, mode, first);
-      const two = measureOf(subject.tallies, mode, second);
+      const one = measureOf(subject.tallies, first);
+      const two = measureOf(subject.tallies, second);
       return {
         subjectId: subject.subjectId,
         name: subject.name,
@@ -523,50 +452,26 @@ export function scopeComparison(
   return compared.length === 0 ? null : { first, second, subjects: compared };
 }
 
-/** How much of each kind of paper has been sat in this mode. A scope missing here is a blind spot. */
+/** How much of each kind of paper has been sat. A scope missing here is a blind spot. */
 export function volumeByScope(
   subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
 ): { scope: TestScope; attempted: number }[] {
   return TEST_SCOPES.map((scope) => ({
     scope,
     attempted: subjects.reduce(
-      (sum, subject) => sum + measureOf(subject.tallies, mode, scope).attempted,
+      (sum, subject) => sum + measureOf(subject.tallies, scope).attempted,
       0,
     ),
   }));
 }
 
-/** The same gap over every subject at once: how the whole reader changes when the paper counts. */
-export function overallModeGap(
-  subjects: readonly SubjectStanding[],
-  scope: TestScope | null = null,
-) {
-  const tallies = subjects.flatMap((subject) => subject.tallies);
-  const ranked = measureOf(tallies, EVALUATION_MODE.RANKED, scope);
-  const practice = measureOf(tallies, EVALUATION_MODE.PRACTICE, scope);
-
-  return {
-    ranked,
-    practice,
-    accuracyGap: gapBetween(ranked.accuracy, practice.accuracy),
-    paceGap: gapBetween(ranked.pace, practice.pace),
-  };
-}
-
 const gapBetween = (mine: number | null, theirs: number | null): number | null =>
   mine === null || theirs === null ? null : round2(mine - theirs);
 
-/** Every scope sat IN THIS MODE: one sat only in practice must not be offered to a ranked chart. */
-export const scopesSat = (
-  subjects: readonly SubjectStanding[],
-  mode: EvaluationMode,
-): TestScope[] =>
+export const scopesSat = (subjects: readonly SubjectStanding[]): TestScope[] =>
   TEST_SCOPES.filter((scope) =>
     subjects.some((subject) =>
-      subject.tallies.some(
-        (tally) => tally.scope === scope && tally.evaluationMode === mode && tally.attempted > 0,
-      ),
+      subject.tallies.some((tally) => tally.scope === scope && tally.attempted > 0),
     ),
   );
 
@@ -842,8 +747,6 @@ export const satSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
   progressive: z.boolean(),
-  /** A composite FK ties every test to its series' mode, so this speaks for all of them. */
-  evaluationMode: evaluationModeSchema,
 });
 export type SatSeries = z.infer<typeof satSeriesSchema>;
 export const satSeriesListSchema = z.array(satSeriesSchema);
@@ -857,8 +760,6 @@ export const performanceReportSchema = z.object({
   /** The id the scope was asked about. Null for ALL_TIME. */
   scopeId: z.string().nullable(),
   label: z.string().nullable(),
-  /** The ANCHOR test's mode, which is what decides whether a cohort standing means anything. */
-  evaluationMode: evaluationModeSchema.nullable(),
   /** Evaluated sittings in scope — what the trajectory plots, and only that. */
   attemptsCounted: z.number().int(),
   generatedAt: z.string(),
@@ -885,7 +786,6 @@ export type PerformanceReport = z.infer<typeof performanceReportSchema>;
 export interface SatTest {
   testId: string;
   title: string | null;
-  evaluationMode: EvaluationMode;
   /** The most recent sitting of it — what the picker orders by and defaults to. */
   lastAttemptId: string;
   lastSatAt: string | null;
@@ -899,7 +799,6 @@ export function testsSat(points: readonly PerformancePoint[]): SatTest[] {
     seen.set(point.testId, {
       testId: point.testId,
       title: point.testTitle,
-      evaluationMode: point.evaluationMode,
       lastAttemptId: point.attemptId,
       lastSatAt: point.submittedAt,
     });
@@ -1102,8 +1001,8 @@ export const PERFORMANCE_ROUTES = {
 // ============================================================================
 // The test's own view of its cohort. One read of each of the three rollups
 // above, keyed by `testId` — nothing here scans attempts, and nothing new is
-// folded for it. Only ranked first sittings fold at all, so every figure below
-// describes the RANKED cohort by construction.
+// folded for it. Only graded first sittings fold at all, so every figure below
+// describes the ranked cohort by construction.
 // ============================================================================
 
 /** Who topped the paper, off `TestStat.topperAttemptId`. Null until a first sitting is evaluated. */
@@ -1178,7 +1077,6 @@ export type TestItemAnalytics = z.infer<typeof testItemAnalyticsSchema>;
 export const testAnalyticsSchema = z.object({
   testId: z.string(),
   title: z.string().nullable(),
-  evaluationMode: evaluationModeSchema,
   summary: testAnalyticsSummarySchema,
   sections: z.array(testSectionAnalyticsSchema),
   items: z.array(testItemAnalyticsSchema),

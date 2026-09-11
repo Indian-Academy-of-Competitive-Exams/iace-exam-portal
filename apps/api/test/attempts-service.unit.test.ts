@@ -6,7 +6,6 @@ import {
   AppException,
   ATTEMPT_STATUS,
   ErrorCodes,
-  EVALUATION_MODE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
   TEST_STATUS,
@@ -186,7 +185,7 @@ describe('AttemptsService — starting a sitting', () => {
     );
   });
 
-  /** The whole of what ranked and practice differ by: WHICH sitting counts, never how many. */
+  /** WHICH sitting counts, never how many: the first ranks and a retake does not. */
   it('marks the first sitting graded, and a later one not', async () => {
     const { service, prisma } = serviceWith(sittable());
 
@@ -200,16 +199,6 @@ describe('AttemptsService — starting a sitting', () => {
     const second = await service.start(STUDENT, 'tst_1', {});
     assert.equal(second.attemptNo, 2);
     assert.equal(second.isGraded, false);
-  });
-
-  /** PRACTICE never ranks, so the first sitting of one is not the cohort's either. */
-  it('leaves a practice paper ungraded, first sitting or not', async () => {
-    const { service } = serviceWith(sittable({ evaluationMode: EVALUATION_MODE.PRACTICE }));
-
-    const first = await service.start(STUDENT, 'tst_1', {});
-
-    assert.equal(first.attemptNo, 1);
-    assert.equal(first.isGraded, false);
   });
 
   it('sits a SINGLE paper in the language the student picked', async () => {
