@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
@@ -30,6 +30,8 @@ export const AUDITED_PROFILE_FIELDS = [
 /** The student's own account. */
 @Injectable()
 export class MeService {
+  private readonly logger = new Logger(MeService.name);
+
   constructor(
     private readonly students: StudentsService,
     private readonly storage: StorageService,
@@ -51,7 +53,15 @@ export class MeService {
   async catalog(studentId: string): Promise<StudentCatalog> {
     const catalog = await this.access.catalog(studentId);
     const tests = catalog.series.flatMap((series) => series.tests);
-    const counts = await this.leaderboard.sittingCounts(tests.map((test) => test.id));
+    const counts = await this.leaderboard
+      .sittingCounts(tests.map((test) => test.id))
+      .catch((error: unknown) => {
+        this.logger.error(
+          'Reading the sitting counts failed; the catalog stands without them',
+          error,
+        );
+        return new Map<string, number>();
+      });
 
     return {
       ...catalog,

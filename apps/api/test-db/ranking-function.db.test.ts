@@ -15,6 +15,11 @@ interface PlanRow {
   'QUERY PLAN': string;
 }
 
+interface DeclarationRow {
+  volatility: string;
+  parallel: string;
+}
+
 interface PercentileCase {
   name: string;
   outscored: number;
@@ -61,6 +66,15 @@ describe('sitting_percentile', () => {
       assert.equal(await sittingPercentile(asked), asked.expected);
     });
   }
+
+  it('is declared immutable and safe inside a parallel plan', async () => {
+    const declared = await prisma.$queryRaw<DeclarationRow[]>(Prisma.sql`
+      SELECT provolatile::text AS volatility, proparallel::text AS parallel
+      FROM pg_proc WHERE proname = 'sitting_percentile'
+    `);
+
+    assert.deepEqual(declared, [{ volatility: 'i', parallel: 's' }]);
+  });
 });
 
 describe('Attempt_ranking_idx', () => {

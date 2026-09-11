@@ -582,7 +582,7 @@ export const percentilePointSchema = z.object({
   submittedAt: z.string().nullable(),
   percentile: z.number().nullable(),
   rank: z.number().int().nullable(),
-  /** The n behind the percentile. Null where no rollup has counted the cohort yet. */
+  /** The n behind the percentile: its live cohort where ranked, else the rollup's, else null. */
   cohortSize: z.number().int().nullable(),
 });
 export type PercentilePoint = z.infer<typeof percentilePointSchema>;

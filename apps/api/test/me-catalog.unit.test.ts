@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { Logger } from '@nestjs/common';
 import { type StudentCatalog, type StudentCatalogTest } from '@iace/contracts';
 import { MeService } from '../src/me/me.service';
 import { type AccessResolverService } from '../src/access';
@@ -37,13 +38,13 @@ const catalogOf = (...testIds: string[]): StudentCatalog => ({
   ],
 });
 
-function build(counts: ReadonlyMap<string, number>, catalog: StudentCatalog) {
+function build(counts: ReadonlyMap<string, number> | Error, catalog: StudentCatalog) {
   const asked: string[][] = [];
   const access = { catalog: () => Promise.resolve(catalog) } as unknown as AccessResolverService;
   const leaderboard = {
     sittingCounts: (ids: readonly string[]) => {
       asked.push([...ids]);
-      return Promise.resolve(counts);
+      return counts instanceof Error ? Promise.reject(counts) : Promise.resolve(counts);
     },
   } as unknown as LeaderboardService;
 
@@ -83,5 +84,21 @@ describe('MeService.catalog — the crowd read live onto a cached catalog', () =
     await me.catalog('stu_1');
 
     assert.deepEqual(asked, [['tst_a', 'tst_b', 'tst_c']]);
+  });
+
+  it('still lists every test, with no counts, when the count read fails', async (t) => {
+    const logged = t.mock.method(Logger.prototype, 'error', () => undefined);
+    const { me } = build(new Error('connection lost'), catalogOf('tst_a', 'tst_b'));
+
+    const tests = (await me.catalog('stu_1')).series[0]?.tests ?? [];
+
+    assert.equal(logged.mock.callCount(), 1);
+    assert.deepEqual(
+      tests.map((row) => [row.id, row.sittingCount]),
+      [
+        ['tst_a', null],
+        ['tst_b', null],
+      ],
+    );
   });
 });

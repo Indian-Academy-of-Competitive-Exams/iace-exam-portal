@@ -177,7 +177,7 @@ export class PerformanceAnalyticsService {
     const rolled = testStats.get(anchor.testId) ?? null;
     const score = Number(anchor.score ?? 0);
     const rolledBands = curveBandsOf(rolled?.scoreHistogram, score);
-    // The rollup wins field by field; the live count fills in whatever no job has written yet.
+    // The rollup wins field by field, bar a live rank's n; the live count fills what no job wrote.
     const live = rolledBands.length === 0 ? await this.liveCohort(anchor.testId) : null;
     const counted = rolled?.evaluatedCount ?? 0;
 
@@ -188,7 +188,7 @@ export class PerformanceAnalyticsService {
       averageScore: averageOf(rolled) ?? live?.averageScore ?? null,
       rank: standing?.rank ?? null,
       percentile: standing?.percentile ?? null,
-      cohortSize: counted === 0 ? (standing?.cohortSize ?? live?.size ?? 0) : counted,
+      cohortSize: standing?.cohortSize ?? (counted === 0 ? (live?.size ?? 0) : counted),
       bands: rolledBands.length > 0 ? rolledBands : flagYours(live?.bands ?? [], score),
     };
   }
@@ -382,7 +382,7 @@ function scopeIdOf(query: PerformanceReportQuery): string | null {
 function toPoint(
   row: ReportRow,
   standing: Standing | undefined,
-  cohortSize: number | null,
+  rolledCohortSize: number | null,
 ): PercentilePoint {
   return {
     attemptId: row.id,
@@ -391,7 +391,7 @@ function toPoint(
     submittedAt: row.submittedAt?.toISOString() ?? null,
     percentile: standing?.percentile ?? null,
     rank: standing?.rank ?? null,
-    cohortSize,
+    cohortSize: standing?.cohortSize ?? rolledCohortSize,
   };
 }
 

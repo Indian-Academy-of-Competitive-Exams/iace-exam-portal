@@ -50,6 +50,23 @@ export function standingsSql(where: { attemptId: string } | { studentId: string 
   `;
 }
 
+/** One paper's cohort size: the "N sat" its card shows. */
+export interface SittingCountRow {
+  test_id: string;
+  sat: number;
+}
+
+/** Many papers' cohort sizes in one read. A paper nobody ranks on returns no row, never a zero. */
+export function sittingCountsSql(testIds: readonly string[]): Prisma.Sql {
+  return Prisma.sql`
+    SELECT a."testId" AS test_id, COUNT(*)::int AS sat
+    FROM "Attempt" a
+    WHERE a."testId" = ANY(${[...testIds]}::text[])
+      AND a."isGraded" AND a."status" = 'EVALUATED' AND a."score" IS NOT NULL
+    GROUP BY a."testId"
+  `;
+}
+
 /** A seat on one test's board: the podium and the reader's neighbourhood, ranked in SQL. */
 export interface TestBoardRow {
   attempt_id: string;

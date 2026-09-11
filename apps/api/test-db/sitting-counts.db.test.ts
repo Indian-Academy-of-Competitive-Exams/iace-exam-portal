@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
+import { Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { sittingCountsSql, type SittingCountRow } from '../src/attempts/ranking-sql';
 import {
   makeCatalog,
   makeSitting,
   makeStudent,
   makeTest,
   testPrisma,
+  uid,
   type SittingInput,
 } from './support/database';
 
@@ -17,6 +20,10 @@ const leaderboard = new LeaderboardService(prisma);
 after(() => prisma.$disconnect());
 
 type Sat = Omit<SittingInput, 'testId' | 'studentId' | 'score'>;
+
+interface PlanRow {
+  'QUERY PLAN': string;
+}
 
 async function paper(): Promise<string> {
   return (await makeTest(prisma, await makeCatalog(prisma))).id;
@@ -70,5 +77,34 @@ describe('sittingCounts', () => {
 
   it('asks nothing of a list with no papers on it', async () => {
     assert.equal((await leaderboard.sittingCounts([])).size, 0);
+  });
+});
+
+describe('sittingCountsSql', () => {
+  it('returns an integer count per ranked paper, and no row for a paper nobody ranks on', async () => {
+    const [busy, unsat] = [await paper(), await paper()];
+    await sitter(busy, 120);
+    await sitter(busy, 90);
+    await sitter(unsat, 60, { status: ATTEMPT_STATUS.VOIDED });
+
+    const rows = await prisma.$queryRaw<SittingCountRow[]>(sittingCountsSql([busy, unsat]));
+
+    assert.deepEqual(rows, [{ test_id: busy, sat: 2 }]);
+  });
+
+  it('can be answered from Attempt_ranking_idx alone, because its cohort filter is literal', async () => {
+    const plan = await prisma.$transaction(async (tx) => {
+      // A table this small reads cheaper whole or by bitmap, which says nothing about the index.
+      await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
+      await tx.$executeRaw`SET LOCAL enable_bitmapscan = off`;
+      return tx.$queryRaw<PlanRow[]>(
+        Prisma.sql`EXPLAIN ${sittingCountsSql([uid('test'), uid('test')])}`,
+      );
+    });
+
+    assert.match(
+      plan.map((row) => row['QUERY PLAN']).join('\n'),
+      /Index Only Scan using "Attempt_ranking_idx"/,
+    );
   });
 });

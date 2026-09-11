@@ -545,7 +545,6 @@ describe('the performance report — one sitting', () => {
     );
 
     assert.equal(performanceReportSchema.safeParse(report).success, true);
-    assert.equal(report.cohort?.cohortSize, 40);
     assert.equal(report.cohort?.topperScore, 6);
     assert.equal(report.cohort?.averageScore, 3);
     assert.deepEqual(
@@ -573,13 +572,33 @@ describe('the performance report — one sitting', () => {
       query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_1' }),
     );
 
-    assert.equal(report.cohort?.cohortSize, 40);
     assert.equal(report.cohort?.topperScore, 6);
     assert.equal(
       report.cohort?.bands.reduce((sum, band) => sum + band.count, 0),
       2,
     );
     assert.equal(report.cohort?.bands.filter((band) => band.isYours).length, 1);
+  });
+
+  it('names the cohort the live rank was counted in, however far behind the rollup is', async () => {
+    const { service } = bench({
+      testStats: [
+        {
+          testId: 'tst_1',
+          evaluatedCount: 1,
+          sumScore: new Prisma.Decimal(5.5),
+          maxScore: new Prisma.Decimal(5.5),
+          scoreHistogram: [{ from: 0, to: 6, count: 1 }],
+        },
+      ],
+    });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_1' }),
+    );
+
+    assert.deepEqual([report.cohort?.rank, report.cohort?.cohortSize], [2, 2]);
   });
 
   /** The one guarantee that must hold at every scope and on both paths. */
@@ -681,6 +700,33 @@ describe('the performance report — one paper sat more than once', () => {
     assert.deepEqual([report.cohort?.rank, report.cohort?.percentile], [null, null]);
   });
 
+  it('keeps the rollup’s n for a retake, which no live count ranks', async () => {
+    const { service } = bench({
+      attempts: [...sittings(), retake()],
+      testStats: [
+        { testId: 'tst_1', evaluatedCount: 40, sumScore: 120, maxScore: 6, scoreHistogram: null },
+      ],
+    });
+
+    const paper = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.TEST, testId: 'tst_1' }),
+    );
+    const retaken = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_3' }),
+    );
+
+    assert.deepEqual(
+      paper.trajectory.map((point) => [point.attemptId, point.cohortSize]),
+      [
+        ['att_1', 2],
+        ['att_3', 40],
+      ],
+    );
+    assert.equal(retaken.cohort?.cohortSize, 40);
+  });
+
   /** Postgres puts NULLs first on a descending sort, which made an unsubmitted sitting the newest. */
   it('never takes a sitting that was never submitted for the newest one', async () => {
     const abandoned = makeAttempt({
@@ -733,18 +779,21 @@ describe('the performance report — the wider scopes', () => {
     );
   });
 
-  it('carries the n behind each percentile once a rollup has counted the cohort', async () => {
+  it('carries the live n behind each ranked percentile, never a lagging rollup’s', async () => {
     const { service } = bench({
       testStats: [
-        { testId: 'tst_1', evaluatedCount: 40, sumScore: 120, maxScore: 6, scoreHistogram: null },
+        { testId: 'tst_1', evaluatedCount: 1, sumScore: 5.5, maxScore: 5.5, scoreHistogram: null },
       ],
     });
 
     const report = await service.report(STUDENT, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
 
     assert.deepEqual(
-      report.trajectory.map((point) => point.cohortSize),
-      [40, null],
+      report.trajectory.map((point) => [point.rank, point.cohortSize]),
+      [
+        [2, 2],
+        [1, 1],
+      ],
     );
   });
 
