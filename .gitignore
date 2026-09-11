@@ -118,3 +118,6 @@ docs/05-question-bank-follow-ups.md
 # Local patches to the installed superpowers plugin — this machine's tooling,
 # not the platform's source.
 docs/superpowers/patches/
+
+# Read-only audit output: findings, repro scripts and evidence for one review, not source.
+audit/
