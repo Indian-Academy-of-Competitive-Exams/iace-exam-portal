@@ -42,9 +42,8 @@ Do not break these — they are why the live test holds at 4–5K:
 
 - Timer is client-side; the server owns `startedAt`/`endsAt`.
 - Autosave answers to Redis every ~20–30s. Never write Postgres per keystroke.
-- On submit, enqueue a BullMQ scoring job. Workers evaluate, update the Redis leaderboard, write
-  durable scored fields.
-- Read rank/percentile live from Redis. There is no "regenerate" step.
+- On submit, enqueue a BullMQ scoring job. Workers evaluate and write durable scored fields.
+- Rank and percentile are counted live from Postgres. There is no "regenerate" step.
 
 </scaling-rules>
 

@@ -13,7 +13,7 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 
 ## Stack
 
-TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live leaderboards, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
+TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
 
 `apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
@@ -100,12 +100,12 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs:
 
-| Job            | What it proves                                                                                          | Needs                              |
-| -------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **Verify**     | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                 | nothing — no Postgres, Redis or S3 |
-| **Migrations** | every migration applies to an **empty** database and `prisma/migrations` still produces `schema.prisma` | a Postgres service container       |
+| Job          | What it proves                                                                                                                                   | Needs                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| **Verify**   | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                                                          | nothing — no Postgres, Redis or S3 |
+| **Database** | every migration applies to an **empty** database, `prisma/migrations` still produces `schema.prisma`, and `pnpm test:db` passes against Postgres | a Postgres service container       |
 
-The split is the point: the test suite is deliberately infrastructure-free, so the job that gates every PR stays fast, and the one database that CI does start exists only to check the migrations — the one thing that genuinely cannot be verified without one.
+The split is the point: the test suite is deliberately infrastructure-free, so the job that gates every PR stays fast, and the one database that CI does start exists only for what genuinely cannot be verified without one: the migrations and the hand-written SQL.
 
 Steps in Verify use `if: '!cancelled()'`, so a run reports _every_ failure rather than stopping at the first.
 

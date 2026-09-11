@@ -197,14 +197,17 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 
 ## 8. Results, ranking and solutions
 
-- **Ranking is always live**, from a Redis sorted set. There is no generate and no regenerate step.
-- A sorted-set member holds one number and a rank is two facts, so both are packed into it: marks
-  scaled past every possible time, plus a time term counted down. More marks always outranks fewer,
-  and at equal marks less time wins. An unfinished sitting reads as the slowest there is.
-- Percentile counts a tie as half. A field of one is its own top — reporting the median of a field of
-  one reads as a failure.
-- Marks are durable and a rank is a cache, so a Redis that is down must not fail the scoring. The
-  rank and percentile on the attempt are snapshots; the live figures are read from Redis.
+- **Ranking is always live**, counted from Postgres. There is no generate, no regenerate and no
+  rebuild step.
+- A test's cohort is its graded, evaluated, scored sittings, and "N sat" is its size. Rank orders it
+  by marks, then time taken, then id: more marks always outranks fewer, at equal marks less time
+  wins, and the id parts an exact tie so no two sittings share a place. An unfinished sitting, or
+  one with no time recorded, reads as the slowest there is.
+- Percentile counts a tie on marks as half, and time does not enter it. A field of one is its own
+  top — reporting the median of a field of one reads as a failure.
+- **Nothing saves a rank or a percentile.** Scoring writes the marks and the time taken; every rank
+  and percentile is the sitting's standing at the moment it is read, so a first sitter's percentile
+  moves as others sit.
 - **The answer key is a second read past one gate, never a join,** so a refusal never held it. The
   gate is the student's own sitting: its solutions open as soon as it is evaluated. A test never
   shuts, so there is no moment when everyone has sat it to wait for.
@@ -215,8 +218,8 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - **A void is an archive, never a delete.** The support console stands a sitting down — `VOIDED`,
   with who did it and why — and it then counts nowhere: every fold, board and cohort read selects
   `EVALUATED`, which the status no longer is. Voiding one already marked asks for the test's cohort
-  rollup, that student's own rollup and the board to be built again, so ranks and percentiles
-  re-settle without it.
+  rollup and that student's own rollup to be built again; ranks and percentiles need nothing, since
+  the next count leaves it out.
 - **The ranked slot is spent unless it is handed back.** `isGraded` stays on the voided sitting, so
   a re-sit is a retake; voiding with "Give the ranked attempt back" clears it, and the next sitting
   ranks because no sitting holds the slot. Either way at most one sitting per (student, test) is
@@ -231,10 +234,12 @@ guard, so a redelivered evaluation cannot double-count an attempt into any of th
 maintained one attempt at a time.
 
 Every evaluated sitting feeds `StudentStat` and `StudentSubjectStat`, retakes included, because a
-retake is still work a student did; `StudentStat.retakeCount` counts them, and its score and
-percentile sums leave them out. Only the graded sitting feeds `TestStat`, `TestSectionStat` and
-`TestQuestionStat`, so a cohort is one row per student. `StudentSubjectStat` is keyed by student,
-subject and scope, and a subject's overall figure is the sum of its scopes, taken on read.
+retake is still work a student did; `StudentStat.retakeCount` counts them, and its score sum leaves
+them out. No rollup holds a percentile: a student's average and best are counted live from their
+graded sittings' standings (§8), because a percentile moves as others sit. Only the graded sitting
+feeds `TestStat`, `TestSectionStat` and `TestQuestionStat`, so a cohort is one row per student.
+`StudentSubjectStat` is keyed by student, subject and scope, and a subject's overall figure is the
+sum of its scopes, taken on read.
 
 What each is for: `StudentStat` backs the dashboard header; `StudentSubjectStat` the subject report,
 which is where a student is weak; `TestStat` the cohort comparison; `TestSectionStat` section-level

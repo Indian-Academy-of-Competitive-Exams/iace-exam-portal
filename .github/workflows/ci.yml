@@ -90,7 +90,7 @@ jobs:
 
   # Everything that needs a database: migrations against the schema, then SQL against Postgres.
   database:
-    name: Migrations
+    name: Database
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10

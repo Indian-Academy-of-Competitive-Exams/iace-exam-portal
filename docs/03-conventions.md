@@ -90,6 +90,9 @@ A module is a **bounded context**. Six rules make it extraction-ready:
   plus a deferred `module.require`. A student's programs and enrolments are validated against
   catalogs those modules own, and both catalogs must refuse a delete a student still depends on. The
   cycle closes only when one direction becomes an event.
+- `students` ↔ `attempts` is a true cycle held open the same way. A student's copy of their own data
+  carries each sitting's live percentile, which only `LeaderboardService` counts, and `attempts`
+  imports modules that import `students` back.
 - `auth` reads `Admin` rows directly for the login and `me` paths. The grant lookup already routes
   through `AdminsService`, which is the pattern; the two identity reads predate the split.
 - `configs` counts a stage's and a base config's `Test` rows through `_count` to block a delete.
@@ -233,7 +236,7 @@ Rule: any cross-module _reaction_ goes through this catalog as an event, not a d
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | **Core / admin** (one deployable)     | auth, admins, students, branches, access, events, imports, questions, configs, tests, audit, me, dashboard, notifications | admin traffic, modest  |
 | **Exam service** (autoscale)          | attempts — the sitting engine only                                                                                        | concurrent test-takers |
-| **Worker service(s)** (autoscale)     | scoring, rollups, import processing, leaderboard, drop/bonus recompute                                                    | BullMQ queue depth     |
+| **Worker service(s)** (autoscale)     | scoring, rollups, import processing, drop/bonus recompute                                                                 | BullMQ queue depth     |
 | **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                                  | —                      |
 
 Today everything ships as core plus the worker. Attempts is the first extraction candidate: its
@@ -341,7 +344,8 @@ push is a worse version of a check that takes five seconds before the commit exi
   `react-conventions.js` hold the UI rules that types cannot.
 - **CI gates** — format → deps:check → lint → typecheck → test → build, each running even if an
   earlier one failed, so one push reports every problem. A second job applies every migration to a
-  scratch database from scratch and then checks the result still matches `schema.prisma`.
+  scratch database from scratch, checks the result still matches `schema.prisma`, and then runs
+  `pnpm test:db` against a database of its own.
 - **Doc drift** — `pnpm docs:check`: a name a doc backticks must exist in the schema or the
   TypeScript source, and a `docs/03 §N` citation must land on a section that exists. It is the one
   item here that is **not** a gate: it runs on a weekly schedule and blocks no commit and no push,

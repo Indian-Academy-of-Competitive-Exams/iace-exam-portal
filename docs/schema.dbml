@@ -469,8 +469,7 @@ Table Attempt {
   wrongCount integer
   unattemptedCount integer
   sectionScores jsonb
-  lastRank integer
-  lastPercentile decimal(5, 2)
+  timeTakenSec integer
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   voidedAt timestamptz(3)
@@ -822,8 +821,6 @@ Table StudentStat {
   testsAttempted integer [not null, default: 0]
   testsEvaluated integer [not null, default: 0]
   sumScore decimal(16, 2) [not null, default: 0]
-  sumPercentile decimal(16, 2) [not null, default: 0]
-  bestPercentile decimal(5, 2)
   totalAnswered integer [not null, default: 0]
   totalCorrect integer [not null, default: 0]
   totalWrong integer [not null, default: 0]

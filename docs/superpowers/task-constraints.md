@@ -13,7 +13,7 @@ Green before commit:
 Schema tasks also: `pnpm db:migrate:deploy` from scratch + `pnpm db:check`.
 Tasks that add or change SQL or the schema also: `pnpm test:db`.
 
-**A migration that MOVES data is not proved by either.** From scratch the table is empty, so the
+**A migration that MOVES data is proved by none of them.** From scratch the table is empty, so the
 statement matches no rows and never runs — it passes on a migration that cannot work. Seed a
 scratch database at the PREVIOUS revision, reproduce what makes the move hard (a locked row, a
 trigger, a constraint the real data trips), apply it there, and check what moved AND that whatever
@@ -77,7 +77,8 @@ Never break these:
 - Mobile editable by **ADMIN only**. Aadhaar/PAN images **not stored** (verified booleans only).
 - Feature keys are **code-owned** (`FEATURE_KEYS`), never UI-registered; super admin assigns
   permissions only.
-- Live-test hot path off Postgres: client timer, autosave to Redis, BullMQ scoring, Redis leaderboard.
+- Live-test writes stay off Postgres: client timer, autosave to Redis, BullMQ scoring. Rank and
+  percentile are indexed live counts in Postgres.
 
 </invariants>
 
@@ -203,8 +204,8 @@ freely on UI and copy.
 
 `node:test` + `node:assert/strict`, named after the unit (`auth-pin.unit.test.ts`,
 `envelope.e2e.test.ts`), no Postgres/Redis/S3 (extend `apps/api/test/support/fakes.ts`).
-Those are unit tests (`pnpm test`); every `$queryRaw` query is also covered in `apps/api/test-db`
-against a real Postgres, by `pnpm test:db`.
+Those are unit tests (`pnpm test`); every `$queryRaw` query added or changed is also covered in
+`apps/api/test-db` against a real Postgres, by `pnpm test:db`.
 
 **Tests are for FEATURES and the invariants above — not for every fix.** A feature, a rule the data
 model depends on, or logic with branches worth naming gets a test in the same commit, covering the

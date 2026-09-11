@@ -32,7 +32,7 @@ TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API s
 | **Design**                | Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark                      | One source for colour, type, spacing and components — never redefined per screen. Charts are Recharts on `--series-*`.      |
 | **Client state**          | Zustand, only where React Query does not fit                                     | Server data is not client state; keeping the two apart is what stops cache drift.                                           |
 | **Database**              | PostgreSQL via Prisma                                                            | Highly relational. `prisma/schema.prisma` is the target of record.                                                          |
-| **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, leaderboards, OTP, sessions, device binding, rate limiting; scoring, flush, sweep and rollup jobs.      |
+| **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, OTP, sessions, device binding, rate limiting; scoring, flush, sweep and rollup jobs.                    |
 | **Auth**                  | Self-built JWT + refresh; students mobile-OTP then 4-digit PIN, admins email-OTP | OTP, sessions and device binding live in Redis, never the DB.                                                               |
 | **OTP transport**         | `OTP_SENDER` selects console or SMS                                              | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.                |
 | **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                     |
@@ -137,13 +137,16 @@ a failed run costs the copy a minute, not the answers.
 **Submit is buffered through a queue.** On submit — or auto-submit at time-up — the scoring request
 is inserted in the same transaction that flips the sitting to `SUBMITTED`, so no crash can strand an
 attempt nobody scores. Handing it to BullMQ is a separate, repeatable step, deduplicated by job id.
-The worker evaluates (marks and negative marks), updates the Redis leaderboard, and writes the
-durable scored fields. Thousands of simultaneous submits become a queue that drains in seconds
+The worker evaluates (marks and negative marks) and writes the durable scored fields, the time the
+sitting took among them. Thousands of simultaneous submits become a queue that drains in seconds
 instead of thousands of synchronous transactions fighting each other.
 
-**Rank and percentile are read live from Redis.** One sorted set per test: `ZADD` on score,
-`ZREVRANK` for position, O(log n), and never a Postgres read on that path. **There is no regenerate
-step** — no batch that rebuilds results, and no state where a rank is stale until someone runs it.
+**Rank and percentile are counted live from Postgres.** A test's cohort is its graded, evaluated,
+scored sittings, ordered by marks, then time taken, then id, and the partial index
+`Attempt_ranking_idx` serves every count over it. A rank is counted each time it is read and saved
+nowhere, so it is always the standing now, and no count sits on the path that starts, saves or
+submits a sitting. **There is no regenerate step** — no batch that rebuilds results, and no state
+where a rank is stale until someone runs it.
 
 The result: a stateless API, Postgres taking a trickle of writes instead of a tidal wave, and one
 small Postgres plus one Redis plus a few API containers carrying the load.
@@ -156,7 +159,7 @@ A handful of managed services, containerised so nothing is tied to a single host
 | ---------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
 | App Runner _or_ ECS Fargate  | Runs the API container                    | App Runner first for simplicity; Fargate when finer control is needed. |
 | RDS (PostgreSQL)             | Durable data                              | Single instance. A read replica only when reads actually strain it.    |
-| ElastiCache (Redis)          | Live sitting state, queues, leaderboards  | Single node. Losing it loses in-flight sittings, not scored results.   |
+| ElastiCache (Redis)          | Live sitting state, queues, sessions      | Single node. Losing it loses in-flight sittings, not scored results.   |
 | S3                           | Question images, content, import files    | Private buckets, presigned URLs. Same SDK path as MinIO locally.       |
 | CloudFront                   | CDN for static assets and question images | In front of S3 and the SPAs.                                           |
 | Amplify _or_ S3 + CloudFront | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                            |
