@@ -24,12 +24,12 @@ import {
   type CreateStudentBody,
   type ErasureReceipt,
   type Paginated,
-  type PaginationQuery,
+  type ReportSitting,
   type SetStudentActiveBody,
-  type ShareableSitting,
   type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentListQuery,
+  type StudentSittingsQuery,
   type StudentSummary,
   type UpdateStudentBody,
 } from '@iace/contracts';
@@ -71,8 +71,8 @@ export class StudentsController {
   @Get(':id/sittings')
   sittings(
     @Param('id') id: string,
-    @Query(new ZodQuery(studentSittingsQuerySchema)) query: PaginationQuery,
-  ): Promise<Paginated<ShareableSitting>> {
+    @Query(new ZodQuery(studentSittingsQuerySchema)) query: StudentSittingsQuery,
+  ): Promise<Paginated<ReportSitting>> {
     return this.students.sittings(id, query);
   }
 

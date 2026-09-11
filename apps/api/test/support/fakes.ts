@@ -809,6 +809,34 @@ function sortByKeys<T extends Record<string, unknown>>(
   });
 }
 
+/** A sitting as the admin report's picker reads it, with its test's title and mode on the row. */
+export interface FakeReportSitting {
+  id: string;
+  studentId: string;
+  status: AttemptStatus;
+  submittedAt: Date | null;
+  title: string | null;
+  evaluationMode: EvaluationMode;
+}
+
+export function makeReportSitting(overrides: Partial<FakeReportSitting> = {}): FakeReportSitting {
+  return {
+    id: 'att_1',
+    studentId: 'stu_1',
+    status: ATTEMPT_STATUS.EVALUATED,
+    submittedAt: new Date('2026-08-20T06:00:00.000Z'),
+    title: 'SSC CGL Tier 1 — Mock 1',
+    evaluationMode: EVALUATION_MODE.RANKED,
+    ...overrides,
+  };
+}
+
+interface ReportSittingWhere {
+  studentId: string;
+  status: AttemptStatus;
+  test?: { title: { contains: string } };
+}
+
 /** Just enough Prisma for the auth service: find by unique key, and upsert. */
 export class FakePrisma {
   private readonly outbox = fakeOutboxTable();
@@ -1178,6 +1206,44 @@ export class FakePrisma {
           (row) => where.actorId === undefined || row.actorId === where.actorId,
         ).length,
       ),
+  };
+
+  readonly reportSittings: FakeReportSitting[] = [];
+
+  private reportSittingsWhere(where: ReportSittingWhere): FakeReportSitting[] {
+    const needle = where.test?.title.contains.toLowerCase();
+    return this.reportSittings.filter(
+      (row) =>
+        row.studentId === where.studentId &&
+        row.status === where.status &&
+        // Postgres never matches NULL against `contains`, so an untitled test drops out of a search.
+        (needle === undefined || (row.title?.toLowerCase().includes(needle) ?? false)),
+    );
+  }
+
+  readonly attempt = {
+    findMany: ({
+      where,
+      skip = 0,
+      take,
+    }: {
+      where: ReportSittingWhere;
+      skip?: number;
+      take?: number;
+    }) =>
+      Promise.resolve(
+        this.reportSittingsWhere(where)
+          .toSorted((a, b) => (b.submittedAt?.getTime() ?? 0) - (a.submittedAt?.getTime() ?? 0))
+          .slice(skip, take === undefined ? undefined : skip + take)
+          .map((row) => ({
+            id: row.id,
+            submittedAt: row.submittedAt,
+            test: { title: row.title, evaluationMode: row.evaluationMode },
+          })),
+      ),
+
+    count: ({ where }: { where: ReportSittingWhere }) =>
+      Promise.resolve(this.reportSittingsWhere(where).length),
   };
 
   /** Both forms: the array a paged read uses, and the callback a write-plus-request runs in. */

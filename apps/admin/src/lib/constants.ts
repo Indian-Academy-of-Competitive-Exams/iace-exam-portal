@@ -528,8 +528,8 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
 export const studentSharesQueryKey = (studentId: string) =>
   [...QUERY_KEYS.STUDENT, studentId, 'shares'] as const;
 
-export const studentSittingsQueryKey = (studentId: string) =>
-  [...QUERY_KEYS.STUDENT, studentId, 'sittings'] as const;
+export const studentSittingsQueryKey = (studentId: string, search: string) =>
+  [...QUERY_KEYS.STUDENT, studentId, 'sittings', search] as const;
 
 /** Keyed by what the report is OF, so switching sitting or scope never reads a stale one. */
 export const studentReportQueryKey = (

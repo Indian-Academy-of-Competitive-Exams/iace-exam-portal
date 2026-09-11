@@ -231,12 +231,12 @@ import {
   PERFORMANCE_SHARE_ROUTES,
   performanceShareSchema,
   performanceSharesSchema,
-  shareableSittingSchema,
+  reportSittingSchema,
   sharedReportSchema,
   type CreatePerformanceShareInput,
   type PerformanceShare,
   type PerformanceShares,
-  type ShareableSitting,
+  type ReportSitting,
   type SharedReport,
 } from './shares';
 import {
@@ -981,9 +981,9 @@ export function createApiClient(options: ApiClientOptions) {
         sittings: (
           id: string,
           query: StudentSittingsQueryInput,
-        ): Promise<Paginated<ShareableSitting>> =>
+        ): Promise<Paginated<ReportSitting>> =>
           requestPaginated(`${ADMIN_STUDENT_ROUTES.sittings(id)}${queryString({ ...query })}`, {
-            schema: shareableSittingSchema.array(),
+            schema: reportSittingSchema.array(),
           }),
 
         /** Anonymises the person. Super admin only, and every sitting they sat is left standing. */

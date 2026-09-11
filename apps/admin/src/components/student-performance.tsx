@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
 import {
   EVALUATION_MODE,
+  EVALUATION_MODE_LABELS,
   FEATURE_KEYS,
   PAGE_SIZE_MAX,
   PERFORMANCE_SCOPES,
@@ -13,6 +14,7 @@ import {
   type PerformanceReport,
   type PerformanceReportQueryInput,
   type PerformanceScope,
+  type ReportSitting,
 } from '@iace/contracts';
 import {
   CohortFigure,
@@ -47,29 +49,37 @@ const SCOPE_ITEMS = Object.entries(PERFORMANCE_SCOPE_LABELS).map(([value, label]
 
 const STUDENT_MARKER = 'This student';
 
+const NO_SEARCH = '';
+
 function queryFor(scope: PerformanceScope, scopeId: string): PerformanceReportQueryInput {
   if (scope === PERFORMANCE_SCOPES.ATTEMPT) return { scope, attemptId: scopeId };
   return { scope: PERFORMANCE_SCOPES.ALL_TIME };
+}
+
+// Its own list, paged: the share endpoint caps at what a LINK may open, which is a different rule.
+function useSittings(studentId: string, search: string, enabled: boolean) {
+  return useInfinitePages({
+    queryKey: studentSittingsQueryKey(studentId, search),
+    fetchPage: (page) =>
+      api.admin.students.sittings(studentId, { page, pageSize: PAGE_SIZE_MAX, q: search }),
+    enabled,
+  });
 }
 
 /** The same figures the student reads, over the same payload, for a student an admin may see. */
 export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: string }>) {
   const { can } = useAuth();
   const [scope, setScope] = useState<PerformanceScope>(PERFORMANCE_SCOPES.ATTEMPT);
-  const [picked, setPicked] = useState('');
+  const [search, setSearch] = useState(NO_SEARCH);
+  const [picked, setPicked] = useState<ReportSitting | null>(null);
 
   const canRead = can(FEATURE_KEYS.STUDENT_PERFORMANCE);
 
-  // Its own list, paged: the share endpoint caps at what a LINK may open, which is a different rule.
-  const held = useInfinitePages({
-    queryKey: studentSittingsQueryKey(studentId),
-    fetchPage: (page) => api.admin.students.sittings(studentId, { page, pageSize: PAGE_SIZE_MAX }),
-    enabled: canRead,
-  });
-  const sittings = held.items;
-  const attemptId = sittings.some((row) => row.attemptId === picked)
-    ? picked
-    : (sittings[0]?.attemptId ?? '');
+  // Unsearched, so typing in the picker never swaps the open report or reads as "no sitting yet".
+  const held = useSittings(studentId, NO_SEARCH, canRead);
+  const found = useSittings(studentId, search, canRead);
+  const sitting = picked ?? held.items[0] ?? null;
+  const attemptId = sitting?.attemptId ?? '';
 
   const onOneSitting = scope === PERFORMANCE_SCOPES.ATTEMPT;
   const scopeId = onOneSitting ? attemptId : '';
@@ -96,16 +106,23 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
                   aria-describedby={describedBy}
                   clearable={false}
                   value={attemptId}
-                  onChange={setPicked}
+                  selectedLabel={sitting ? sittingLabel(sitting) : undefined}
+                  onChange={(next) =>
+                    setPicked(found.items.find((row) => row.attemptId === next) ?? null)
+                  }
                   placeholder="Choose a sitting"
-                  items={sittings.map((row) => ({
+                  items={found.items.map((row) => ({
                     value: row.attemptId,
                     label: sittingLabel(row),
+                    hint: EVALUATION_MODE_LABELS[row.evaluationMode],
                   }))}
-                  hasMore={held.hasMore}
-                  onLoadMore={held.loadMore}
-                  isLoading={held.isLoading}
-                  isLoadingMore={held.isLoadingMore}
+                  search={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Search tests"
+                  hasMore={found.hasMore}
+                  onLoadMore={found.loadMore}
+                  isLoading={found.isLoading}
+                  isLoadingMore={found.isLoadingMore}
                 />
               )}
             </Field>
@@ -131,7 +148,7 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
           sittingsLoading={held.isLoading}
           sittingsFailed={held.isError}
           onRetrySittings={held.retry}
-          sittingCount={sittings.length}
+          sittingCount={held.items.length}
           report={report}
           onOneSitting={onOneSitting}
         />
@@ -238,7 +255,7 @@ function Standing({
 function ModeBadge({ mode }: Readonly<{ mode: EvaluationMode | null }>) {
   if (mode === null) return null;
   const ranked = mode === EVALUATION_MODE.RANKED;
-  return <Badge variant={ranked ? 'success' : 'neutral'}>{ranked ? 'Ranked' : 'Practice'}</Badge>;
+  return <Badge variant={ranked ? 'success' : 'neutral'}>{EVALUATION_MODE_LABELS[mode]}</Badge>;
 }
 
 function FiguresSkeleton() {

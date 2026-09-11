@@ -298,8 +298,12 @@ export type SetStudentTestBlockedBody = z.infer<typeof setStudentTestBlockedSche
 
 /** Admin routes are namespaced so a future student-facing `/students` cannot collide. */
 /** Paged, because the report scope picker must reach a sitting older than any cap would keep. */
-export const studentSittingsQuerySchema = paginationQuerySchema;
+export const studentSittingsQuerySchema = paginationQuerySchema.extend({
+  /** Matches the test's title, case-insensitively. */
+  q: searchQuery(),
+});
 export type StudentSittingsQueryInput = z.input<typeof studentSittingsQuerySchema>;
+export type StudentSittingsQuery = z.infer<typeof studentSittingsQuerySchema>;
 
 export const ADMIN_STUDENT_ROUTES = {
   list: '/admin/students',

@@ -408,7 +408,9 @@ const TAB_CONTENT: Readonly<Record<StudentTab, (props: TabProps) => React.ReactN
   [STUDENT_TABS.DETAILS]: ({ form, detail }) => <DetailsTab form={form} detail={detail} />,
   [STUDENT_TABS.SERIES]: ({ detail }) => <SeriesTab detail={detail} />,
   [STUDENT_TABS.EVENTS]: ({ detail }) => <EventsTab detail={detail} />,
-  [STUDENT_TABS.PERFORMANCE]: ({ detail }) => <StudentPerformancePanel studentId={detail.id} />,
+  [STUDENT_TABS.PERFORMANCE]: ({ detail }) => (
+    <StudentPerformancePanel key={detail.id} studentId={detail.id} />
+  ),
   [STUDENT_TABS.ACTIONS]: ({ detail }) => <ActionsTab detail={detail} />,
 };
 

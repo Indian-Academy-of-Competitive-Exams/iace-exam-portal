@@ -13,10 +13,10 @@ import {
   type Gender,
   type CreateStudentBody,
   type Paginated,
-  type PaginationQuery,
-  type ShareableSitting,
+  type ReportSitting,
   type StudentDetail,
   type StudentListQuery,
+  type StudentSittingsQuery,
   type StudentSummary,
   type StudentType,
   type UpdateStudentBody,
@@ -122,8 +122,15 @@ export class StudentsService {
   }
 
   /** Evaluated only, newest first, PAGED — the report's scope picker must reach the oldest one. */
-  async sittings(studentId: string, query: PaginationQuery): Promise<Paginated<ShareableSitting>> {
-    const where = { studentId, status: ATTEMPT_STATUS.EVALUATED };
+  async sittings(
+    studentId: string,
+    query: StudentSittingsQuery,
+  ): Promise<Paginated<ReportSitting>> {
+    const where: Prisma.AttemptWhereInput = {
+      studentId,
+      status: ATTEMPT_STATUS.EVALUATED,
+      ...(query.q ? { test: { title: { contains: query.q, mode: 'insensitive' } } } : {}),
+    };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.attempt.findMany({
@@ -131,7 +138,11 @@ export class StudentsService {
         orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
-        select: { id: true, submittedAt: true, test: { select: { title: true } } },
+        select: {
+          id: true,
+          submittedAt: true,
+          test: { select: { title: true, evaluationMode: true } },
+        },
       }),
       this.prisma.attempt.count({ where }),
     ]);
@@ -141,6 +152,7 @@ export class StudentsService {
         attemptId: row.id,
         testTitle: row.test.title,
         submittedAt: row.submittedAt?.toISOString() ?? null,
+        evaluationMode: row.test.evaluationMode,
       })),
       page: query.page,
       pageSize: query.pageSize,
