@@ -10,8 +10,8 @@ import {
 } from '@iace/ui';
 import {
   LEADERBOARD_MEASURES,
+  LEADERBOARD_SCOPES,
   type Leaderboard,
-  type LeaderboardMeasure,
   type LeaderboardRow,
 } from '@iace/contracts';
 import { LEADERBOARD_MEASURE_LABELS, PODIUM_LABELS } from '../../lib/constants';
@@ -79,7 +79,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
 export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty: EmptyMessage }>) {
   return (
     <DataTable
-      columns={standingColumns(board.measure)}
+      columns={standingColumns(board)}
       rows={board.neighbourhood}
       rowKey={(row) => String(row.rank)}
       rowClassName={(row) => (row.isYou ? '[&>td]:bg-primary-subtle' : undefined)}
@@ -89,11 +89,27 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
   );
 }
 
-function standingColumns(measure: LeaderboardMeasure): DataTableColumn<LeaderboardRow>[] {
+function standingColumns({
+  scope,
+  measure,
+}: Pick<Leaderboard, 'scope' | 'measure'>): DataTableColumn<LeaderboardRow>[] {
   const papers: DataTableColumn<LeaderboardRow>[] =
     measure === LEADERBOARD_MEASURES.PERCENTILE_POINTS
       ? [{ key: 'papers', header: 'Papers', numeric: true, cell: (row) => row.sittings }]
       : [];
+  // A test board keeps no earlier standing, so its change is never anything but a dash.
+  const change: DataTableColumn<LeaderboardRow>[] =
+    scope === LEADERBOARD_SCOPES.TEST
+      ? []
+      : [
+          {
+            key: 'delta',
+            header: 'Change',
+            numeric: true,
+            className: 'w-24',
+            cell: (row) => <Delta seats={row.deltaRank} />,
+          },
+        ];
 
   return [
     {
@@ -118,13 +134,7 @@ function standingColumns(measure: LeaderboardMeasure): DataTableColumn<Leaderboa
       numeric: true,
       cell: (row) => <span className="font-semibold">{row.value}</span>,
     },
-    {
-      key: 'delta',
-      header: 'Change',
-      numeric: true,
-      className: 'w-24',
-      cell: (row) => <Delta seats={row.deltaRank} />,
-    },
+    ...change,
   ];
 }
 
