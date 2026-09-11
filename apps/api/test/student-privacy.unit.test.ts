@@ -122,8 +122,8 @@ describe('the copy a student may take away', () => {
       {
         students: [makeStudent({ id: 'stu_1' })],
         attempts: [
-          { id: 'att_1', studentId: 'stu_1', testId: 'tst_1', score: 42, lastPercentile: 99 },
-          { id: 'att_2', studentId: 'stu_1', testId: 'tst_1', score: 50, lastPercentile: 99 },
+          { id: 'att_1', studentId: 'stu_1', testId: 'tst_1', score: 42 },
+          { id: 'att_2', studentId: 'stu_1', testId: 'tst_1', score: 50 },
         ],
       },
       new FakeLeaderboard([

@@ -1569,8 +1569,6 @@ export interface FakeAttemptRow {
   unattemptedCount: number | null;
   sectionScores: AttemptSectionScore[] | null;
   timeTakenSec: number | null;
-  lastRank: number | null;
-  lastPercentile: number | null;
   createdAt: Date;
 }
 
@@ -1609,8 +1607,6 @@ export function makeAttempt(overrides: Partial<FakeAttemptRow> = {}): FakeAttemp
     unattemptedCount: null,
     sectionScores: null,
     timeTakenSec: null,
-    lastRank: null,
-    lastPercentile: null,
     createdAt: startedAt,
     ...overrides,
   };
@@ -5887,8 +5883,6 @@ export interface FakeStudentStatRow {
   testsAttempted: number;
   testsEvaluated: number;
   sumScore: number;
-  sumPercentile: number;
-  bestPercentile: number | null;
   totalAnswered: number;
   totalCorrect: number;
   totalWrong: number;
@@ -5939,8 +5933,6 @@ export class FakeOverviewPrisma {
       return Promise.resolve({
         ...row,
         sumScore: new Prisma.Decimal(row.sumScore),
-        sumPercentile: new Prisma.Decimal(row.sumPercentile),
-        bestPercentile: row.bestPercentile === null ? null : new Prisma.Decimal(row.bestPercentile),
         sumTimeSec: BigInt(row.sumTimeSec),
       });
     },
@@ -6215,8 +6207,6 @@ export class FakeRollupPrisma {
     testsAttempted: 0,
     testsEvaluated: 0,
     sumScore: 0,
-    sumPercentile: 0,
-    bestPercentile: null,
     totalAnswered: 0,
     totalCorrect: 0,
     totalWrong: 0,
@@ -6570,7 +6560,6 @@ export interface FakePrivacyAttempt {
   startedAt?: Date | null;
   submittedAt?: Date | null;
   score?: number | null;
-  lastPercentile?: number | null;
   createdAt?: Date;
 }
 
@@ -6673,7 +6662,6 @@ export class FakePrivacyPrisma {
             status: 'EVALUATED',
             startedAt: null,
             submittedAt: null,
-            lastPercentile: null,
             createdAt: new Date(),
             ...row,
             test: { title: `Test ${row.testId}` },

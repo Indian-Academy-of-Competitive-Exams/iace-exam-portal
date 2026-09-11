@@ -18,8 +18,8 @@ import { paperQuestionStatusSchema } from './tests';
 
 // ============================================================================
 // Attempts. One row holds the live state and the scored result — there is no
-// separate result. Live rank and percentile are read from Redis; what is here
-// is the last persisted snapshot.
+// separate result. Rank and percentile are never stored: they move as others
+// sit the test, so they are counted from its cohort whenever they are read.
 // ============================================================================
 
 export const ATTEMPT_STATUS = {
@@ -103,9 +103,6 @@ export const attemptSchema = z.object({
   wrongCount: z.number().int().nullable(),
   unattemptedCount: z.number().int().nullable(),
   sectionScores: z.array(attemptSectionScoreSchema).nullable(),
-  /** Snapshots. The live values are always read from Redis. */
-  lastRank: z.number().int().nullable(),
-  lastPercentile: z.number().nullable(),
   createdAt: z.string(),
 });
 export type Attempt = z.infer<typeof attemptSchema>;

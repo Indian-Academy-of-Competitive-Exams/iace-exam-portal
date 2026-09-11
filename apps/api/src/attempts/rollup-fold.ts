@@ -56,7 +56,6 @@ export interface FoldableAttempt {
   unattemptedCount: number;
   submittedAt: Date | null;
   evaluatedAt: Date | null;
-  lastPercentile: number | null;
   scope: TestScope;
   sections: AttemptSectionScore[];
   questions: FoldableQuestion[];
@@ -75,8 +74,6 @@ export interface StudentTotals {
   testsAttempted: number;
   testsEvaluated: number;
   sumScore: number;
-  sumPercentile: number;
-  bestPercentile: number | null;
   totalAnswered: number;
   totalCorrect: number;
   totalWrong: number;
@@ -123,8 +120,6 @@ export function emptyStudentTotals(): StudentTotals {
     testsAttempted: 0,
     testsEvaluated: 0,
     sumScore: 0,
-    sumPercentile: 0,
-    bestPercentile: null,
     totalAnswered: 0,
     totalCorrect: 0,
     totalWrong: 0,
@@ -165,8 +160,6 @@ export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttem
   if (attempt.isGraded) {
     totals.testsEvaluated += 1;
     totals.sumScore += attempt.score;
-    totals.sumPercentile += attempt.lastPercentile ?? 0;
-    totals.bestPercentile = higherOf(totals.bestPercentile, attempt.lastPercentile);
   } else {
     totals.retakeCount += 1;
   }

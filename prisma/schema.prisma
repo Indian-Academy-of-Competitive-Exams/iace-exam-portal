@@ -584,9 +584,6 @@ model Attempt {
   sectionScores    Json?
   // Less time wins a tie on marks: seconds from start to submit, capped at a day, a day if unsubmitted.
   timeTakenSec     Int?
-  // Snapshots. The live rank and percentile are always read from Redis.
-  lastRank         Int?
-  lastPercentile   Decimal?            @db.Decimal(5, 2)
   createdAt        DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   // Void (support console): archive, never delete. When set, excluded from rollups/leaderboard/cohort reads.
@@ -1095,8 +1092,6 @@ model StudentStat {
   testsAttempted   Int       @default(0)
   testsEvaluated   Int       @default(0)
   sumScore         Decimal   @default(0) @db.Decimal(16, 2)
-  sumPercentile    Decimal   @default(0) @db.Decimal(16, 2)
-  bestPercentile   Decimal?  @db.Decimal(5, 2)
   totalAnswered    Int       @default(0)
   totalCorrect     Int       @default(0)
   totalWrong       Int       @default(0)

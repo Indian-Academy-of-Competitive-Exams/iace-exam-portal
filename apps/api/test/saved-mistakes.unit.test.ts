@@ -42,7 +42,6 @@ function world(chosen: readonly (string | null)[]) {
     id: 'att_1',
     status: ATTEMPT_STATUS.SUBMITTED,
     submittedAt: new Date('2026-09-09T05:00:00.000Z'),
-    lastPercentile: 80,
   });
   const prisma = new FakeRollupPrisma([attempt], paper('att_1', chosen), [makeRollupTest()]);
   const queue = new FakeQueue();

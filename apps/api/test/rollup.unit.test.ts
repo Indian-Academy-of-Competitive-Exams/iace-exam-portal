@@ -48,7 +48,6 @@ function sitting(id: string, overrides: Partial<FakeAttemptRow> = {}): FakeAttem
     id,
     status: ATTEMPT_STATUS.SUBMITTED,
     submittedAt: new Date('2026-08-24T05:00:00.000Z'),
-    lastPercentile: 80,
     ...overrides,
   });
 }
@@ -129,7 +128,6 @@ describe('RollupService — folding one sitting in', () => {
     );
     assert.equal(student?.totalAnswered, 3);
     assert.equal(student?.sumTimeSec, 120);
-    assert.equal(student?.bestPercentile, 80);
     assert.notEqual(student?.computedThrough, null);
   });
 

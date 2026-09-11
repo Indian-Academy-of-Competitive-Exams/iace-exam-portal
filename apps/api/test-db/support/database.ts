@@ -41,7 +41,6 @@ export interface SittingInput {
   attemptNo?: number;
   submittedAt?: Date;
   timeTakenSec?: number;
-  lastPercentile?: number | null;
 }
 
 /** Run any other way, Prisma falls back to `.env` and the dev database. */
@@ -143,7 +142,6 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
       shuffleSeed: 1,
       score: input.score,
       timeTakenSec,
-      lastPercentile: input.lastPercentile ?? null,
     },
     select: { id: true },
   });

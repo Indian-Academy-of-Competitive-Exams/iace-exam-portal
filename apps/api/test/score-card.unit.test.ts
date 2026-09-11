@@ -194,9 +194,9 @@ describe('the Score Card', () => {
     assert.deepEqual([card.rank, card.percentile, card.cohortSize], [2, 25, 2]);
   });
 
-  /** The failure this prevents: a retake quoting a rank saved on the row, which drifts as others sit. */
-  it('shows no rank for a sitting outside the cohort, whatever the row once saved', async () => {
-    const attempt = scored({ isGraded: false, attemptNo: 2, lastRank: 7, lastPercentile: 62.5 });
+  /** The failure this prevents: a retake quoting a rank, when only the ranked sitting has a standing. */
+  it('shows no rank for a sitting outside the cohort', async () => {
+    const attempt = scored({ isGraded: false, attemptNo: 2 });
     const { service } = report([attempt]);
 
     const card = await service.scoreCard(STUDENT, attempt.id);

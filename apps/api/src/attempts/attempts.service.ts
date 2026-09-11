@@ -216,8 +216,6 @@ function toLiveAttempt(
     wrongCount: attempt.wrongCount,
     unattemptedCount: attempt.unattemptedCount,
     sectionScores: sectionScoresIn(attempt.sectionScores),
-    lastRank: attempt.lastRank,
-    lastPercentile: attempt.lastPercentile === null ? null : Number(attempt.lastPercentile),
     createdAt: attempt.createdAt.toISOString(),
     startedByThisCall,
     testTitle: test.title,

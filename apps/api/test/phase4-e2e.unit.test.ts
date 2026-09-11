@@ -157,8 +157,8 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
     assert.equal(report.questions[0]?.options.find((option) => option.isCorrect)?.id, 'o2');
   });
 
-  /** The acceptance for the whole run: one dropped question moves every affected score AND rank. */
-  it('moves every score and every rank when one question is dropped', async () => {
+  /** The acceptance for the whole run: one dropped question rescores every sitting that attempted it. */
+  it('moves every affected score, and keeps each sitting’s time, when one question is dropped', async () => {
     const { scoring, rows, attempts } = platform();
     await scoreEveryone(scoring);
 
@@ -177,7 +177,7 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
         ['att_last', 1.5],
       ],
     );
-    // The rank genuinely MOVES: level on marks, the time written beside them puts the sooner first.
+    // Level on marks now, so the time written beside each score is what ranking separates them on.
     assert.deepEqual(
       attempts.map((row) => [row.id, row.timeTakenSec]),
       [

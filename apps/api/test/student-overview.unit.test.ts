@@ -35,8 +35,6 @@ const stat = (over: Partial<FakeStudentStatRow> = {}): FakeStudentStatRow => ({
   testsAttempted: 5,
   testsEvaluated: 4,
   sumScore: 260,
-  sumPercentile: 253.2,
-  bestPercentile: 88.5,
   totalAnswered: 300,
   totalCorrect: 200,
   totalWrong: 100,
@@ -60,7 +58,7 @@ const row = (over: Partial<FakeOverviewSubjectRow> = {}): FakeOverviewSubjectRow
   ...over,
 });
 
-/** Three graded sittings as the live ranking counts them now; the stat row's saved sums disagree. */
+/** Three graded sittings, each at the percentile the live ranking counts for it now. */
 const STANDINGS: FakeStanding[] = [
   makeStanding({ attemptId: 'att_1', testId: 'tst_1', percentile: 70 }),
   makeStanding({ attemptId: 'att_2', testId: 'tst_2', percentile: 80.5 }),
@@ -101,7 +99,7 @@ describe('StudentOverviewService standing', () => {
   /** Four sittings none of which were graded: dividing by that is the bug this guards. */
   it('reads an unevaluated career as a dash rather than a division by zero', async () => {
     const overview = await serviceFor(
-      { stats: [stat({ testsEvaluated: 0, sumScore: 0, sumPercentile: 0, bestPercentile: null })] },
+      { stats: [stat({ testsEvaluated: 0, sumScore: 0 })] },
       [],
     ).overview(STUDENT);
 
@@ -263,9 +261,9 @@ describe('AdminOverviewController guard', () => {
   });
 });
 
-/** Nothing on this screen re-derives from an attempt what the two rollup tables already hold. */
+/** The tallies come off the two rollup tables; a sitting is read only through the live standings. */
 describe('StudentOverviewService reads', () => {
-  it('touches only StudentStat, StudentSubjectStat and the student it was asked about', async () => {
+  it('queries only StudentStat, StudentSubjectStat and the student, and ranks through the leaderboard', async () => {
     const touched: string[] = [];
     const prisma = new FakeOverviewPrisma({
       stats: [stat()],
@@ -285,6 +283,7 @@ describe('StudentOverviewService reads', () => {
     ).forStudent(STUDENT);
 
     assert.equal(overview.studentId, STUDENT);
+    assert.equal(overview.standing.avgPercentile, 70.17);
     assert.deepEqual(new Set(touched), new Set(['student', 'studentStat', 'studentSubjectStat']));
   });
 });

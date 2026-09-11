@@ -16,8 +16,8 @@ import {
 // report are O(1) reads that never scan attempts. They store sums and counts;
 // averages, accuracy and difficulty are derived when read.
 //
-// Live in-exam rank and percentile stay in Redis. These are the durable
-// aggregates that outlive it.
+// Rank and percentile are not among them: a sitting's standing moves as others
+// sit the test, so it is counted live from the cohort instead.
 // ============================================================================
 
 /** One row per student — the dashboard header. */
@@ -27,8 +27,6 @@ export const studentStatSchema = z.object({
   testsEvaluated: z.number().int(),
   /** Divide by testsEvaluated for the average. */
   sumScore: z.number(),
-  sumPercentile: z.number(),
-  bestPercentile: z.number().nullable(),
   totalAnswered: z.number().int(),
   totalCorrect: z.number().int(),
   totalWrong: z.number().int(),
@@ -61,7 +59,7 @@ export type StudentSubjectStat = z.infer<typeof studentSubjectStatSchema>;
 //
 // The two tables answer different questions and must not be crossed:
 // `StudentStat`'s totals count EVERY sitting, retakes included, and only its
-// graded fields (percentile, score, testsEvaluated) speak for the ranked slot.
+// graded fields (score, testsEvaluated) speak for the ranked slot.
 // Accuracy and pace per scope come from `StudentSubjectStat`, which keys on the
 // scope. The disposition donut has no per-scope source at all —
 // `StudentSubjectStat` never counted an unattempted question — so it stays
@@ -71,13 +69,13 @@ export type StudentSubjectStat = z.infer<typeof studentSubjectStatSchema>;
 /** Below this many questions a subject is a rumour, not a reading — every screen greys it. */
 export const SUBJECT_SAMPLE_FLOOR = 20;
 
-/** The ranked standing, off `StudentStat`. Every average is null at a zero denominator. */
+/** Tallies off `StudentStat`, percentiles live. Every average is null at a zero denominator. */
 export const overviewStandingSchema = z.object({
   /** Every folded sitting, retakes included — zero means nothing has been sat at all. */
   testsAttempted: z.number().int(),
   testsEvaluated: z.number().int(),
   retakeCount: z.number().int(),
-  /** Provisional: each sitting's percentile was captured against the cohort of that moment. */
+  /** Over every graded sitting, at the percentile its cohort gives it now — it moves as others sit. */
   avgPercentile: z.number().nullable(),
   bestPercentile: z.number().nullable(),
   avgScore: z.number().nullable(),

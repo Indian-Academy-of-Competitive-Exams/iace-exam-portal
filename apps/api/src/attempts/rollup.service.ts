@@ -46,7 +46,6 @@ const FOLD_SELECT = {
   unattemptedCount: true,
   submittedAt: true,
   evaluatedAt: true,
-  lastPercentile: true,
   sectionScores: true,
   test: { select: { scope: true } },
   questions: {
@@ -198,7 +197,6 @@ export class RollupService {
           testsAttempted: totals.testsAttempted,
           testsEvaluated: totals.testsEvaluated,
           sumScore: totals.sumScore,
-          sumPercentile: totals.sumPercentile,
           totalAnswered: totals.totalAnswered,
           totalCorrect: totals.totalCorrect,
           totalWrong: totals.totalWrong,
@@ -211,7 +209,6 @@ export class RollupService {
           testsAttempted: { increment: totals.testsAttempted },
           testsEvaluated: { increment: totals.testsEvaluated },
           sumScore: { increment: totals.sumScore },
-          sumPercentile: { increment: totals.sumPercentile },
           totalAnswered: { increment: totals.totalAnswered },
           totalCorrect: { increment: totals.totalCorrect },
           totalWrong: { increment: totals.totalWrong },
@@ -224,12 +221,11 @@ export class RollupService {
 
       const held = await tx.studentStat.findUniqueOrThrow({
         where: { studentId: attempt.studentId },
-        select: { bestPercentile: true, lastAttemptAt: true, computedThrough: true },
+        select: { lastAttemptAt: true, computedThrough: true },
       });
       await tx.studentStat.update({
         where: { studentId: attempt.studentId },
         data: {
-          bestPercentile: higherOf(numberOrNull(held.bestPercentile), totals.bestPercentile),
           lastAttemptAt: laterOf(held.lastAttemptAt, totals.lastAttemptAt),
           computedThrough: laterOf(held.computedThrough, totals.computedThrough),
         },
@@ -494,8 +490,6 @@ export class RollupService {
         testsAttempted: totals.testsAttempted,
         testsEvaluated: totals.testsEvaluated,
         sumScore: totals.sumScore,
-        sumPercentile: totals.sumPercentile,
-        bestPercentile: totals.bestPercentile,
         totalAnswered: totals.totalAnswered,
         totalCorrect: totals.totalCorrect,
         totalWrong: totals.totalWrong,
@@ -611,7 +605,6 @@ function toFoldable(row: FoldRow): FoldableAttempt {
     unattemptedCount: row.unattemptedCount ?? 0,
     submittedAt: row.submittedAt,
     evaluatedAt: row.evaluatedAt,
-    lastPercentile: numberOrNull(row.lastPercentile),
     scope: row.test.scope,
     sections: sectionScoresIn(row.sectionScores) ?? [],
     questions: row.questions.map((question) => ({
