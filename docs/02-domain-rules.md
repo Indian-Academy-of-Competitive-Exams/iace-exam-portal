@@ -56,10 +56,9 @@ there is no per-test duration, marks or timing. The way to change a shape is to 
 
 Setup, then paper, then offer. There is no certificate step.
 
-- `RANKED` forces `FIXED`. A rank only means something if the cohort sat the same paper.
-- A `GENERATED` test needs enough papers to be worth drawing; too few and a cohort is back to
-  sitting one, which `FIXED` already does better. A `FIXED` test is held at one paper rather than
-  refused when something asks for more.
+- **A test is one paper, and every sitting is served it.** A rank only means something if the
+  cohort sat the same questions, and because the paper is built before anyone sits it, no sitting
+  ever runs a pool query.
 - Scope decides what is in play, and building, drawing, reading, the duration, the question count
   and the marks are all over the scoped sections alone. `FULL` names no part of the paper; `MODULE`
   and `SECTIONAL` must each name theirs, or there is nothing to build a paper from.
@@ -67,17 +66,17 @@ Setup, then paper, then offer. There is no certificate step.
   difficulty. An absent difficulty mix is not "no mix": it is the section drawing across every
   difficulty, so one optional field carries both modes and there is no toggle to keep in step. Absent
   topics mean the whole subject. **There is no test-wide difficulty default.**
-- A `FIXED` paper is **picked by hand** from the pool its section's own spec describes. The draw only
-  ever ADDS, topping a hand-picked section up to its count; it never withdraws a choice.
+- The paper is **picked by hand** from the pool its section's own spec describes. Filling a section
+  draws the rest from that spec, and the draw only ever ADDS, topping a hand-picked section up to
+  its count; it never withdraws a choice.
 - **A hand-pick is capped per difficulty bucket, not only per section.** Once a section already holds
   as many of one difficulty as its mix allows, the next pick of that difficulty is refused and the
   admin is told to take one off first — otherwise the draw could only ever top up a section the hand
   had already made impossible to balance.
 - Only an ACTIVE question carrying a current version is drawable, because a paper pins a version.
-- Finalize freezes rows that already exist. A `FIXED` paper must hold every section at its exact
-  count or the freeze rolls back naming the shortfall — a paper that is not whole leaves the test
-  unlocked. A `GENERATED` test draws its `Test.variantCount` papers here, before the freeze, so no
-  sitting ever runs a pool query.
+- Finalize freezes rows that already exist and draws nothing. The paper must hold every section at
+  its exact count or the freeze rolls back naming the shortfall — a paper that is not whole leaves
+  the test unlocked.
 - Finalize is a conditional update on the test's version. Two finalizes cannot both win, and a
   request that lost writes nothing.
 - Finalize increments `Question.fixedUseCount` for every question it served. Thawing decrements it,
@@ -95,8 +94,8 @@ The first sitting freezes both the paper and the blueprint it came from.
 
 - The **only** permitted post-start change is moving a `PaperQuestion` to `DROPPED` or `BONUS`, and
   it is refused on a paper that is not frozen.
-- It moves the question across **every variant** of the test, not one row, and enqueues a re-score
-  for every ended sitting that served it.
+- The move and a re-score for every ended sitting that served the question commit together, so no
+  drop or bonus lands without the marks following it.
 - `DROPPED` pays its marks to everyone who attempted it and takes back the negative; a student who
   left it alone gets zero. `BONUS` pays the whole cohort.
 - `isCorrect` stays the answer key's verdict either way. A drop or a bonus moves the marks, never the
@@ -145,55 +144,38 @@ public rollout unchanged.
 
 Scheduling belongs to the **test**, and a series has no availability of its own.
 
-- **A series declares `evaluationMode`, and every test it holds carries the same one.** A test never
-  chooses its own: it takes the series' mode at creation, and a move into a series that judges its
-  tests the other way is refused. **A series' mode is fixed once it holds a test.** The composite
-  foreign key does not cascade, so Postgres refuses to rewrite a mode a test still points at —
-  editing the series would otherwise reinterpret sittings already scored the other way, silently.
-  `TestSeriesService` refuses it first and names the count, so an admin reads a sentence rather than
-  a constraint error. An empty series may still change.
-- `Test.opensAt` is one instant for the whole institute. `Test.lateEntrySec` counts **from that
-  opening** and is what shuts entry. `Test.extraTimeSec` is added to the duration once, where the
-  server computes the deadline — an allowance rather than a separate flow, which is where extra time
-  for a candidate who needs it folds in.
-- `TestProgramUnlock` staggers one test's opening for one program. A student in two programs takes
-  the **earliest**, so the slower cohort never holds them back.
+- `Test.opensAt` is one instant for the whole institute, and nothing shuts a test once it opens: a
+  student sits it whenever they reach it.
+- `TestProgramUnlock` opens one test **earlier** for one program, never later. A student in two
+  programs takes the **earliest**, so the slower cohort never holds them back. The rule spans two
+  tables, so `OfferingService` holds it alone: it refuses a program opening later than the test's
+  own or on a test with no opening (which is already open), moving the test's opening earlier drops
+  every program opening now later than it, and clearing it drops them all.
 - **An opening being set lies ahead of now**, for the test and for a program alike. A time already
   passed would open the test the moment it saved, so `OfferingService` refuses it
   (`OPENING_HAS_PASSED`, judged by the same `testIsOpen` the catalog reads) and the Offer step says
   so under the field before Done asks. Only a NEW time is judged: an opening that has since passed
   is history, and saving anything else on the test never asks it again. Blank stays allowed on the
   test's own opening, and opens it as soon as a student reaches it.
-- **All three of those are `RANKED` only: a practice test's whole schedule is `opensAt`.** Each
-  answers to a rank and to nothing else — a cutoff so a cohort sits together, an allowance so a
-  candidate who needs longer is not ranked as though they did not, a stagger to put one cohort
-  ahead of another. A practice attempt is never graded, so none of them separates or compensates
-  for anything. The pair on `Test` is held by `Test_practice_has_no_window_check`; the stagger
-  spans two tables, so `OfferingService` holds it alone — as the "earlier, never later" rule beside
-  it already does. **Nothing flips a test from ranked to practice**, so none of the three is ever
-  cleared out from under an admin: the mode arrives with the series, and a test only moves to a
-  series that judges it the same way.
-- Late entry is still counted from the test's **own** opening, never the program-shifted one: a
-  program cohort gets a longer window, not a shifted one.
 - `canStart` is derived from the clock on **every read** and never stored, so a test opens on time
   with nothing having to bust a cache key.
-- Late entry blocks **starting** a test, never seeing one, and a refusal names which fact refused it:
-  not opened yet, entry closed, or no access at all.
+- The opening blocks **starting** a test, never seeing one, and a refusal names which fact refused
+  it: not opened yet, or no access at all.
 
 ## 7. The sitting
 
 - The server owns `startedAt` and `endsAt`; the client clock only counts down to it. The deadline is
   computed once at start and never recomputed.
-- **Resume is not a start.** A live sitting is re-entered without asking the start gate again.
-  `Test.maxRetakes` caps separate sittings and null is unlimited; nothing counts or caps re-entries
-  into one. Two racing starts resolve to one sitting.
-- `Attempt.shuffleSeed` decides which of a generated test's papers this sitting gets **and** the
-  order the student sees. Sections keep the config's order; questions shuffle within a section.
+- **Resume is not a start.** A live sitting is re-entered without asking the start gate again. A
+  test may be sat again any number of times, and nothing counts or caps re-entries into one sitting.
+  Two racing starts resolve to one sitting.
+- `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
+  Sections keep the config's order; questions shuffle within a section.
 - The whole served paper is written as `AttemptQuestion` rows at start, not only what the student
   touches, so scoring reads its marks from the paper row it already has.
-- `Attempt.isGraded` marks the **one sitting holding the student's ranked slot** on a `RANKED` test —
-  normally the first, and a later one only where a void handed the slot back (§8). A practice sitting
-  and a retake never enter a cohort.
+- `Attempt.isGraded` marks the **one sitting holding the student's ranked slot** on a test —
+  normally the first, and a later one only where a void handed the slot back (§8). Any other
+  sitting is a retake: marked, never ranked, and never in a cohort.
 - `SINGLE` serves the one language picked, narrowed to what the config actually offers; `DUAL` serves
   every language it offers and there is nothing to toggle.
 - **Live state lives in Redis, and the key existing is what "this sitting is open" means.** Autosave
@@ -209,10 +191,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   `profileCompleted` only drives a nudge. Neither blocks a sitting.
 - The in-exam screen replicates the government CBT faithfully; it is the one thing students expect to
   match. Everything around it is this repo's own design system.
-- **Only a RANKED test is watched live.** The ops screen exists to verify who is in a hall and to
-  reach into a sitting that went wrong — a practice sitting has no hall, no invigilation and no slot
-  to protect, so it is not offered there. The picker asks the server for ranked active tests; the
-  actions themselves (§8) still handle either mode, because a test's series can hold only one.
+- **Every active test is watched live.** The ops screen exists to verify who is in a hall and to
+  reach into a sitting that went wrong. A retake is on the board beside the ranked sittings and
+  labelled as one, and the actions themselves (§8) handle either.
 
 ## 8. Results, ranking and solutions
 
@@ -224,11 +205,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   one reads as a failure.
 - Marks are durable and a rank is a cache, so a Redis that is down must not fail the scoring. The
   rank and percentile on the attempt are snapshots; the live figures are read from Redis.
-- **The answer key is a second read past one gate, never a join,** so a refusal never held it. A
-  practice test opens solutions immediately: there is no cohort it could spoil. A ranked test waits
-  until entry has shut everywhere **and** the last sitting that could have started has ended. Where
-  entry never shuts — no opening, or no cutoff on one — the key never opens, and the student is told
-  so without being promised a date the gate cannot keep.
+- **The answer key is a second read past one gate, never a join,** so a refusal never held it. The
+  gate is the student's own sitting: its solutions open as soon as it is evaluated. A test never
+  shuts, so there is no moment when everyone has sat it to wait for.
 - Answer-level detail is captured from day one — option chosen, verdict, marked-for-review state, and
   time per question and per section — so analytics derive later without re-instrumenting.
 - `PerformanceShare` is the only unauthenticated door onto a report: a random token rather than a
@@ -237,11 +216,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   with who did it and why — and it then counts nowhere: every fold, board and cohort read selects
   `EVALUATED`, which the status no longer is. Voiding one already marked asks for the test's cohort
   rollup, that student's own rollup and the board to be built again, so ranks and percentiles
-  re-settle without it. Voiding is also what un-blocks a re-sit: the retake cap does not count a
-  sitting that was stood down.
+  re-settle without it.
 - **The ranked slot is spent unless it is handed back.** `isGraded` stays on the voided sitting, so
-  a re-sit is practice; voiding with "regrant ranked attempt" clears it, and the next sitting ranks
-  because no sitting holds the slot. Either way at most one sitting per (student, test) is graded.
+  a re-sit is a retake; voiding with "Give the ranked attempt back" clears it, and the next sitting
+  ranks because no sitting holds the slot. Either way at most one sitting per (student, test) is
+  graded.
 
 ## 9. Rollups
 
@@ -249,13 +228,18 @@ Every aggregate stores **sums and counts, never averages**, so a fold is increme
 cheap; averages are derived on read. `ProcessedRollup` is not analytics — it is the exactly-once
 guard, so a redelivered evaluation cannot double-count an attempt into any of the others.
 `discrimination` is **batch-only**: it compares a top group against a bottom group and cannot be
-maintained one attempt at a time. Practice sittings feed `StudentSubjectStat`, which is keyed by
-evaluation mode so practice never pollutes ranked, and never feed a cohort rollup.
+maintained one attempt at a time.
+
+Every evaluated sitting feeds `StudentStat` and `StudentSubjectStat`, retakes included, because a
+retake is still work a student did; `StudentStat.retakeCount` counts them, and its score and
+percentile sums leave them out. Only the graded sitting feeds `TestStat`, `TestSectionStat` and
+`TestQuestionStat`, so a cohort is one row per student. `StudentSubjectStat` is keyed by student,
+subject and scope, and a subject's overall figure is the sum of its scopes, taken on read.
 
 What each is for: `StudentStat` backs the dashboard header; `StudentSubjectStat` the subject report,
 which is where a student is weak; `TestStat` the cohort comparison; `TestSectionStat` section-level
 comparison and time utilisation; `TestQuestionStat` classical item analysis — difficulty index,
-discrimination and distractor counts — for fixed papers only.
+discrimination and distractor counts.
 
 ## 10. Render modes and skins
 

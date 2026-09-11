@@ -105,16 +105,6 @@ Enum TestScope {
   SECTIONAL
 }
 
-Enum EvaluationMode {
-  RANKED
-  PRACTICE
-}
-
-Enum PaperBinding {
-  FIXED
-  GENERATED
-}
-
 Enum PaperQuestionStatus {
   ACTIVE
   DROPPED
@@ -143,6 +133,9 @@ Enum NotificationType {
   ENROLLMENT_ADDED
   GRANT_ADDED
   GENERIC
+  RESULT_UPDATED
+  PIN_CHANGED
+  WELCOME
 }
 
 Enum DeliveryChannel {
@@ -413,12 +406,8 @@ Table Test {
   examStageId text [not null]
   scope TestScope [not null, default: 'FULL']
   scopeRef jsonb
-  evaluationMode EvaluationMode [not null]
-  paperBinding PaperBinding [not null, default: 'FIXED']
-  maxRetakes integer
   questionPoolFilter jsonb
   examTemplate ExamTemplate [not null, default: 'DEFAULT']
-  variantCount integer [not null, default: 1]
   status TestStatus [not null, default: 'DRAFT']
   isLocked boolean [not null, default: false]
   version integer [not null, default: 0]
@@ -429,8 +418,7 @@ Table Test {
   testSeriesId text [not null]
   seriesOrder integer
   opensAt timestamptz(3)
-  lateEntrySec integer
-  extraTimeSec integer
+  announcedAt timestamptz(3)
   indexes {
     (id, baseConfigId) [unique]
     (baseConfigId)
@@ -447,14 +435,13 @@ Table PaperQuestion {
   baseConfigSectionId text [not null]
   questionId text [not null]
   questionVersionId text [not null]
-  variant integer [not null, default: 0]
   order integer [not null]
   marks decimal(6, 2) [not null]
   negativeMarks decimal(6, 2) [not null]
   status PaperQuestionStatus [not null, default: 'ACTIVE']
   indexes {
-    (testId, variant, questionId) [unique]
-    (testId, variant, order) [unique]
+    (testId, questionId) [unique]
+    (testId, order) [unique]
     (id, questionId, questionVersionId) [unique]
     (id, baseConfigSectionId) [unique]
     (questionId)
@@ -511,6 +498,7 @@ Table AttemptQuestion {
   isCorrect boolean
   marksAwarded decimal(6, 2)
   answeredAt timestamptz(3)
+  firstActionAt timestamptz(3)
   indexes {
     (attemptId, questionId) [pk]
     (questionId)
@@ -650,14 +638,12 @@ Table TestSeries {
   sequentialTests boolean [not null, default: false]
   progressive boolean [not null, default: false]
   kind TestSeriesKind [not null, default: 'STANDARD']
-  evaluationMode EvaluationMode [not null, default: 'RANKED']
   eventId text
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   branchIds text [not null, note: 'array']
   isEnabled boolean [not null, default: false]
   indexes {
-    (id, evaluationMode) [unique]
     (examStageId)
     (programCode)
     (eventId)
@@ -843,7 +829,7 @@ Table StudentStat {
   totalWrong integer [not null, default: 0]
   totalUnattempted integer [not null, default: 0]
   sumTimeSec bigint [not null, default: 0]
-  practiceAttempts integer [not null, default: 0]
+  retakeCount integer [not null, default: 0]
   lastAttemptAt timestamptz(3)
   computedThrough timestamptz(3)
   computedAt timestamptz(3) [not null]
@@ -853,14 +839,13 @@ Table StudentSubjectStat {
   studentId text [not null]
   subjectId text [not null]
   scope TestScope [not null]
-  evaluationMode EvaluationMode [not null]
   attempted integer [not null, default: 0]
   correct integer [not null, default: 0]
   wrong integer [not null, default: 0]
   sumTimeSec bigint [not null, default: 0]
   computedAt timestamptz(3) [not null]
   indexes {
-    (studentId, subjectId, scope, evaluationMode) [pk]
+    (studentId, subjectId, scope) [pk]
     (subjectId)
   }
 }
@@ -988,7 +973,7 @@ Ref: Question.(id, currentVersionId) > QuestionVersion.(questionId, id) [delete:
 Ref: QuestionVersion.questionId > Question.id
 Ref: Test.(baseConfigId, examStageId) > BaseConfig.(id, examStageId) [delete: restrict]
 Ref: Test.examStageId > ExamStage.id
-Ref: Test.(testSeriesId, evaluationMode) > TestSeries.(id, evaluationMode) [delete: restrict]
+Ref: Test.testSeriesId > TestSeries.id [delete: restrict]
 Ref: PaperQuestion.(testId, baseConfigId) > Test.(id, baseConfigId) [delete: cascade]
 Ref: PaperQuestion.(baseConfigId, baseConfigSectionId) > BaseConfigSection.(baseConfigId, id) [delete: restrict]
 Ref: PaperQuestion.questionId > Question.id

@@ -56,8 +56,8 @@ adaptive practice, certificates.
 - **Sectional structure with sectional timing.** Marks, negative marking, timing and
   merit/qualifying are per section — one paper may mix them.
 - **Question bank** with Excel/CSV bulk import plus a manual editor.
-- **Test builder:** a base config is the blueprint a test inherits; the paper is hand-picked
-  (`FIXED`) or drawn at finalize into variants (`GENERATED`).
+- **Test builder:** a base config is the blueprint a test inherits; each test is one paper, picked
+  by hand, and a section can be filled from its own spec.
 - **The live test engine:** client timer, server-authoritative start and end, autosave, safe submit
   under load, one engine behind every `ExamTemplate` skin.
 - **Instant results:** score, correct/wrong/unattempted, full solutions per question, and cohort
@@ -69,11 +69,11 @@ adaptive practice, certificates.
   GIN-indexed array) must hold the student's current branch _and_ the stage's exam course must be
   one of their `enrolledCourses`, so a student carrying neither reaches no `STANDARD` series. A
   series is reached or it is not — there is no unlock, no prerequisite, and no queue to ask in.
-- **Scheduling belongs to the test:** `Test.opensAt`, `Test.lateEntrySec` (counted from the
-  opening), `Test.extraTimeSec`. It blocks _starting_ a test, never seeing one, and `canStart` is
-  derived from the clock on every read rather than stored. Series to test is one-to-many:
-  `Test.testSeriesId` (required) with `seriesOrder`; there is no join table, no standalone test and
-  no standalone sitting.
+- **Scheduling belongs to the test:** `Test.opensAt`, and optionally an earlier opening per program
+  (`TestProgramUnlock`); nothing shuts a test once it opens. It blocks _starting_ a test, never
+  seeing one, and `canStart` is derived from the clock on every read rather than stored. Series to
+  test is one-to-many: `Test.testSeriesId` (required) with `seriesOrder`; there is no join table, no
+  standalone test and no standalone sitting.
 - **Admin panel:** questions, tests, series, students, branches, grants, and an operational
   overview. Admins are scoped by feature key only — there is no branch scoping on an admin.
 
