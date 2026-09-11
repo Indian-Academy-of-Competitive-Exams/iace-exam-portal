@@ -225,7 +225,8 @@ function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
       {standing.testsEvaluated === 0 ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
-          No test of yours has been marked yet, so there is no percentile or score to stand on.
+          No ranked test of yours has been marked yet, so there is no percentile or score to stand
+          on.
         </Alert>
       ) : null}
 

@@ -229,7 +229,7 @@ export class PaperService {
     });
     if (!result.ok) {
       throw new AppException(ErrorCodes.DRAW_SHORTFALL, SECTION_TOO_THIN_MESSAGE, {
-        fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)),
+        fieldErrors: shortfallErrors(result.shortfalls),
       });
     }
 
@@ -520,25 +520,12 @@ function topicWhere(spec: DrawSpec | null): Prisma.QuestionWhereInput {
   return { topicId: { in: topicIds } };
 }
 
-/** The engine's own shortfall, in the shape the shared message builder reads. */
-function sectionShortfalls(
-  gaps: readonly {
-    baseConfigSectionId: string;
-    sectionName: string;
-    needed: number;
-    available: number;
-  }[],
-): DrawShortfall[] {
-  return gaps.map((gap) => ({ ...gap, difficulty: null }));
-}
-
-/** One message per short bucket, keyed by section so the form puts it beside the right one. */
+/** One message per short section, keyed by section so the form puts it beside the right one. */
 function shortfallErrors(gaps: readonly DrawShortfall[]): Record<string, string[]> {
   const errors: Record<string, string[]> = {};
   for (const gap of gaps) {
-    const what = gap.difficulty ? `${gap.needed} ${gap.difficulty.toLowerCase()}` : `${gap.needed}`;
     const held = (errors[gap.baseConfigSectionId] ??= []);
-    held.push(`${gap.sectionName} needs ${what}, and the bank holds ${gap.available}.`);
+    held.push(`${gap.sectionName} needs ${gap.needed}, and the bank holds ${gap.available}.`);
   }
   return errors;
 }

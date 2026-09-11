@@ -785,7 +785,7 @@ export function createApiClient(options: ApiClientOptions) {
       scoreCard: (attemptId: string): Promise<ScoreCard> =>
         request(ME_ATTEMPT_ROUTES.scoreCard(attemptId), { schema: scoreCardSchema }),
 
-      /** The worked solutions. Refused until the test has closed for everyone sitting it. */
+      /** The worked solutions. Refused until the paper has been marked. */
       solutions: (attemptId: string): Promise<SolutionReport> =>
         request(ME_ATTEMPT_ROUTES.solutions(attemptId), { schema: solutionReportSchema }),
 

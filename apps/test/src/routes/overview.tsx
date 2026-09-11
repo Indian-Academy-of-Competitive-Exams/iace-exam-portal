@@ -14,7 +14,7 @@ import {
 import {
   BlindSpots,
   DispositionFigure,
-  ModeTiles,
+  MeasureTiles,
   PageCrumbs,
   ScopeGapFigure,
   ScoreTrendFigure,
@@ -175,7 +175,7 @@ function Body({
   const view = { subjects: overview.subjects, scope };
   const headline = headlineOf(overview);
   const measured = overview.measure.attempted > 0;
-  const pace = <ModeTiles measure={overview.measure} />;
+  const pace = <MeasureTiles measure={overview.measure} />;
 
   return (
     <>
@@ -187,7 +187,8 @@ function Body({
       {overview.standing.testsEvaluated === 0 ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
-          No test of yours has been marked yet, so there is no percentile or score to stand on.
+          No ranked test of yours has been marked yet, so there is no percentile or score to stand
+          on.
         </Alert>
       ) : null}
 

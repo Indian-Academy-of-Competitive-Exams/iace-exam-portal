@@ -11,7 +11,7 @@ import {
 } from '@iace/contracts';
 import {
   DispositionFigure,
-  ModeTiles,
+  MeasureTiles,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
 } from '../browser/overview-figures';
@@ -51,7 +51,7 @@ const everyTally = SUBJECTS.flatMap((subject) => subject.tallies);
 function Dashboard({ scope }: Readonly<{ scope: TestScope | null }>) {
   return (
     <>
-      <ModeTiles measure={measureOf(everyTally)} />
+      <MeasureTiles measure={measureOf(everyTally)} />
       <DispositionFigure disposition={DISPOSITION} />
       <SubjectStrengthFigure subjects={SUBJECTS} scope={scope} />
     </>

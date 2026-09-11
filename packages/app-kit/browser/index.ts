@@ -56,7 +56,7 @@ export {
 export {
   BlindSpots,
   DispositionFigure,
-  ModeTiles,
+  MeasureTiles,
   ScopeGapFigure,
   ScoreTrendFigure,
   SpeedAccuracyFigure,

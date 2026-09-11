@@ -401,7 +401,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     assert.equal(prisma.programUnlocks.length, 0);
   });
 
-  /** Entry closes at one instant for everyone, so a later opening only shortens this cohort's window. */
+  /** A later opening would hold this program's students back after the test opened for everyone. */
   it('refuses a program unlock later than the test opens', async () => {
     const { service, prisma } = unlockService();
     const later = new Date(OPENS_AT.getTime() + 1000).toISOString();

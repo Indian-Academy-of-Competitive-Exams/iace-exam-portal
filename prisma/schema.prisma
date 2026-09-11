@@ -432,7 +432,7 @@ model Question {
   // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
   stemHash         String?
-  // Times used in a FIXED paper; incremented atomically at finalize.
+  // Times used on a paper; incremented atomically at finalize.
   fixedUseCount    Int             @default(0)
   createdById      String?
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
@@ -1162,7 +1162,7 @@ model TestSectionStat {
   @@index([baseConfigSectionId])
 }
 
-// Item analysis and distractor counts for FIXED papers.
+// Item analysis and distractor counts for a test's paper, from its graded sittings.
 model TestQuestionStat {
   testId          String
   paperQuestionId String

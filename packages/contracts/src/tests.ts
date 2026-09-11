@@ -326,58 +326,12 @@ function offTopic(pick: PickedQuestion, spec: SectionDrawSpec | undefined): bool
   return pick.topicId === null || !spec.topicIds.includes(pick.topicId);
 }
 
-/** What the bank holds for one section once its own subject and its chosen topics are applied. */
-export interface SectionAvailability {
-  total: number;
-  byDifficulty: Partial<Record<DifficultyLevel, number>>;
-}
-
-/** `difficulty` is null when the section draws across all of them: the shortfall is its own. */
+/** A section the bank is too thin to fill, and by how many questions. */
 export interface DrawShortfall {
   baseConfigSectionId: string;
   sectionName: string;
-  difficulty: DifficultyLevel | null;
   needed: number;
   available: number;
-}
-
-/** Whether the bank can fill this paper. Here, not the server: the form shows the same numbers. */
-export function paperFeasibility(
-  sections: readonly FeasibilitySection[],
-  spec: DrawSpec | null | undefined,
-  available: Readonly<Record<string, SectionAvailability>>,
-): DrawShortfall[] {
-  return sections.flatMap((section) => {
-    const held = available[section.id] ?? { total: 0, byDifficulty: {} };
-    const mix = spec?.sections?.[section.id]?.mix;
-
-    if (!mix) {
-      return held.total >= section.questionCount
-        ? []
-        : [shortfallOf(section, null, section.questionCount, held.total)];
-    }
-
-    return DIFFICULTY_LEVELS.flatMap((level) => {
-      const want = mix[level];
-      const has = held.byDifficulty[level] ?? 0;
-      return want === 0 || has >= want ? [] : [shortfallOf(section, level, want, has)];
-    });
-  });
-}
-
-function shortfallOf(
-  section: FeasibilitySection,
-  difficulty: DifficultyLevel | null,
-  needed: number,
-  available: number,
-): DrawShortfall {
-  return {
-    baseConfigSectionId: section.id,
-    sectionName: section.name,
-    difficulty,
-    needed,
-    available,
-  };
 }
 
 export const testSchema = z.object({
@@ -413,7 +367,7 @@ export const testSchema = z.object({
 });
 export type Test = z.infer<typeof testSchema>;
 
-/** A stagger on top of the series' own unlock, for one program sitting inside it. */
+/** An earlier opening of one test, for the students of one program. */
 export const testProgramUnlockSchema = z.object({
   programCode: z.string(),
   opensAt: z.string(),
@@ -427,7 +381,7 @@ export const testDetailSchema = testSchema.extend({
   seriesOrder: z.number().int().nullable(),
   /** When this test opens. Null opens with the series it sits in. */
   opensAt: z.string().nullable(),
-  /** Per-program staggers on top of `opensAt`. Empty is no program-specific delay. */
+  /** Per-program openings earlier than `opensAt`. Empty opens every program with the test. */
   programUnlocks: z.array(testProgramUnlockSchema),
 });
 export type TestDetail = z.infer<typeof testDetailSchema>;

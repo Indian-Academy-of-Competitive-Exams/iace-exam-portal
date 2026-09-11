@@ -48,7 +48,7 @@ const SITTABLE_INCLUDE = {
   },
 } as const satisfies Prisma.TestInclude;
 
-/** The clock this test is actually sat on, which a scope narrows and the branch's extra time widens. */
+/** The clock this test is actually sat on: its sections' time, narrowed to what its scope covers. */
 function sittingSeconds(test: SittableTest): number {
   return scopedDurationSec(
     test.baseConfig.sections,

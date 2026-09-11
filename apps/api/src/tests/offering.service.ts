@@ -75,7 +75,7 @@ const dateOrNull = (value: string | null | undefined): Date | null =>
 const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
 const OPENS_BEFORE_THE_TEST_DOES =
-  'A program opens a test earlier, never later — entry closes at the same instant for everyone, so a later opening would only shorten this cohort’s window.';
+  'A program opens a test earlier, never later — a later opening would hold this program’s students back after the test has opened for everyone else.';
 
 const TEST_HAS_NO_OPENING =
   'This test has no opening time of its own, so it is already open. Give the test an opening time before letting a program in ahead of it.';
@@ -248,7 +248,7 @@ export class OfferingService {
     }));
   }
 
-  /** A program opens a test EARLIER. Later would narrow its cohort — the closing time is shared. */
+  /** A program opens a test EARLIER. Later would hold its students back behind everyone else. */
   async setProgramUnlock(
     testId: string,
     programCode: string,
