@@ -62,6 +62,9 @@ export const redisKeys = {
   /** Held while one worker puts a board back, so a wiped Redis is rebuilt once and not per reader. */
   testLeaderboardRebuild: (testId: string) => `test:leaderboard:${testId}:rebuilding`,
 
+  /** The board a rebuild fills aside and renames over the live one once every page is in. */
+  testLeaderboardStaging: (testId: string) => `test:leaderboard:${testId}:building`,
+
   /** One public report, keyed by a DIGEST of its link — a key name must never carry a credential. */
   sharedReport: (linkDigest: string) => `share:report:${linkDigest}`,
 

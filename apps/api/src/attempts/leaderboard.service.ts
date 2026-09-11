@@ -58,11 +58,13 @@ export class LeaderboardService {
   async record(attempt: RankedAttempt): Promise<void> {
     if (!attempt.isGraded || attempt.score === null) return;
     const key = redisKeys.testLeaderboard(attempt.testId);
-    await this.redis.client.zadd(
-      key,
-      compositeScore(attempt.score, timeTakenSec(attempt.startedAt, attempt.submittedAt)),
-      attempt.id,
+    const composite = compositeScore(
+      attempt.score,
+      timeTakenSec(attempt.startedAt, attempt.submittedAt),
     );
+    // Staged BEFORE the live write, so a rebuild swapping in between the two cannot drop it.
+    await this.stageDuringRebuild(attempt.testId, composite, attempt.id);
+    await this.redis.client.zadd(key, composite, attempt.id);
     await this.redis.client.expire(key, BOARD_TTL_SEC);
   }
 
@@ -76,7 +78,8 @@ export class LeaderboardService {
     await this.rebuilds.add(
       QUEUE_NAMES.LEADERBOARD_REBUILD,
       { testId },
-      { jobId: leaderboardRebuildJobId(testId), removeOnComplete: true },
+      // A failed job kept under its id would swallow every rebuild of this test until it aged out.
+      { jobId: leaderboardRebuildJobId(testId), removeOnComplete: true, removeOnFail: true },
     );
   }
 
@@ -145,7 +148,7 @@ export class LeaderboardService {
     );
     if (!held) return 0;
 
-    const staging = `${key}:building`;
+    const staging = redisKeys.testLeaderboardStaging(testId);
     await this.redis.del(staging);
     let written = 0;
     let after: string | undefined;
@@ -169,7 +172,8 @@ export class LeaderboardService {
 
     if (written === 0) {
       await this.redis.del(key);
-      return 0;
+      // A sitting scored while this ran is staged even when the durable marks had none to give.
+      if ((await this.redis.client.exists(staging)) === 0) return 0;
     }
     await this.redis.client.rename(staging, key);
     await this.redis.client.expire(key, BOARD_TTL_SEC);
@@ -200,6 +204,19 @@ export class LeaderboardService {
       this.logger.error(`Ranking attempt ${attempt.id} failed; its marks are still durable`, error);
       return null;
     }
+  }
+
+  /** A running rebuild may have read past this sitting already, so it is staged as well. */
+  private async stageDuringRebuild(
+    testId: string,
+    composite: number,
+    attemptId: string,
+  ): Promise<void> {
+    if ((await this.redis.client.exists(redisKeys.testLeaderboardRebuild(testId))) === 0) return;
+    const staging = redisKeys.testLeaderboardStaging(testId);
+    await this.redis.client.zadd(staging, composite, attemptId);
+    // The lock outlives the swap, so what is staged after it must not stay behind for good.
+    await this.redis.client.expire(staging, REBUILD_LOCK_SEC);
   }
 
   /** True when the board was empty — a wiped or expired Redis, repaired by a job and not by a read. */

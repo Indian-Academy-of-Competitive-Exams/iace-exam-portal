@@ -1718,7 +1718,13 @@ export interface FakeAttemptQuestionRow {
 
 /** A queue that only remembers. Every add is recorded, so two hand-offs never read as one. */
 export class FakeQueue {
-  readonly jobs: { name: string; data: unknown; jobId?: string; removeOnComplete?: boolean }[] = [];
+  readonly jobs: {
+    name: string;
+    data: unknown;
+    jobId?: string;
+    removeOnComplete?: boolean;
+    removeOnFail?: boolean;
+  }[] = [];
 
   /** Set to make the next add throw: the crash between a commit and the queue. */
   failNext = false;
@@ -1726,7 +1732,7 @@ export class FakeQueue {
   add(
     name: string,
     data: unknown,
-    options?: { jobId?: string; removeOnComplete?: boolean },
+    options?: { jobId?: string; removeOnComplete?: boolean; removeOnFail?: boolean },
   ): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
@@ -1738,7 +1744,9 @@ export class FakeQueue {
     }
     const removeOnComplete =
       options?.removeOnComplete === undefined ? {} : { removeOnComplete: options.removeOnComplete };
-    this.jobs.push({ name, data, jobId: options?.jobId, ...removeOnComplete });
+    const removeOnFail =
+      options?.removeOnFail === undefined ? {} : { removeOnFail: options.removeOnFail };
+    this.jobs.push({ name, data, jobId: options?.jobId, ...removeOnComplete, ...removeOnFail });
     return Promise.resolve();
   }
 

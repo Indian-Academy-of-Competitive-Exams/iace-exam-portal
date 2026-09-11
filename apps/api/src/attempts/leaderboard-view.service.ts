@@ -162,7 +162,6 @@ function pointsSql(studentId: string, testIds: readonly string[] | null): Prisma
       FROM "Attempt" a
       JOIN "Student" s ON s."id" = a."studentId"
       WHERE a."isGraded" = TRUE
-        AND a."attemptNo" = 1
         AND a."status" = 'EVALUATED'
         AND a."lastPercentile" IS NOT NULL
         AND s."deletedAt" IS NULL

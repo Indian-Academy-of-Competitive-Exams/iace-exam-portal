@@ -133,6 +133,21 @@ function sat(id: string, marks: number, minutes: number, over: Partial<FakeAttem
   });
 }
 
+/** Scores a sitting after the rebuild has read its page and before it swaps the board in. */
+function scoreDuringTheRead(
+  prisma: FakeScoringPrisma,
+  leaderboard: LeaderboardService,
+  late: FakeAttemptRow,
+): void {
+  const readPage = prisma.attempt.findMany;
+  prisma.attempt.findMany = async (args) => {
+    const page = await readPage(args);
+    prisma.attempts.push(late);
+    await leaderboard.record(late);
+    return page;
+  };
+}
+
 function board(attempts: FakeAttemptRow[]) {
   const prisma = new FakeScoringPrisma(attempts, []);
   const redis = new FakeRedis();
@@ -332,6 +347,31 @@ describe('LeaderboardService.sittingCounts — the crowd a catalog quotes', () =
   });
 });
 
+describe('a board rebuilt while sittings are still being scored', () => {
+  /** The failure this prevents: a sitting scored after its page was read, dropped by the swap. */
+  it('keeps a sitting recorded while the rebuild was reading', async () => {
+    const { prisma, redis, leaderboard } = board([sat('att_a', 90, 20), sat('att_b', 60, 15)]);
+    scoreDuringTheRead(prisma, leaderboard, sat('att_late', 75, 18));
+
+    await leaderboard.rebuild(TEST_ID);
+
+    assert.deepEqual(redis.descending(redisKeys.testLeaderboard(TEST_ID)), [
+      'att_a',
+      'att_late',
+      'att_b',
+    ]);
+  });
+
+  it('keeps it when the durable marks had nobody to give the rebuild', async () => {
+    const { prisma, redis, leaderboard } = board([]);
+    scoreDuringTheRead(prisma, leaderboard, sat('att_late', 75, 18));
+
+    await leaderboard.rebuild(TEST_ID);
+
+    assert.deepEqual(redis.descending(redisKeys.testLeaderboard(TEST_ID)), ['att_late']);
+  });
+});
+
 describe('a board nobody has warmed yet', () => {
   /** The bug this prevents: 5,000 readers of a cold board creating 5,000 identical rebuild jobs. */
   it('asks for the same rebuild however many readers find it cold', async () => {
@@ -352,5 +392,14 @@ describe('a board nobody has warmed yet', () => {
     await leaderboard.standing(TEST_ID, 'att_a');
 
     assert.equal(rebuilds.jobs[0]?.removeOnComplete, true);
+  });
+
+  /** The bug this prevents: a failed rebuild's jobId kept a week, swallowing every rebuild after it. */
+  it('asks the queue to drop the job if it fails, so one failed rebuild does not block the next', async () => {
+    const { rebuilds, leaderboard } = board([]);
+
+    await leaderboard.standing(TEST_ID, 'att_a');
+
+    assert.equal(rebuilds.jobs[0]?.removeOnFail, true);
   });
 });
