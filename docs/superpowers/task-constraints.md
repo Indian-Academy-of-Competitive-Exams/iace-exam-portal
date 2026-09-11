@@ -77,8 +77,8 @@ Never break these:
 - Mobile editable by **ADMIN only**. Aadhaar/PAN images **not stored** (verified booleans only).
 - Feature keys are **code-owned** (`FEATURE_KEYS`), never UI-registered; super admin assigns
   permissions only.
-- Live-test writes stay off Postgres: client timer, autosave to Redis, BullMQ scoring. Rank and
-  percentile are indexed live counts in Postgres.
+- Live-test hot path off Postgres: client timer, autosave to Redis, BullMQ scoring. Rank and
+  percentile are indexed live counts in Postgres, never on the start/save/submit path.
 
 </invariants>
 

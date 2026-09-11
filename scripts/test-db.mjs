@@ -2,13 +2,14 @@
  * The database test tier: apply every migration to the database TEST_DATABASE_URL names, then run
  * apps/api/test-db against it one file at a time. `.env` is parsed like scripts/db-check.mjs.
  *
- * It refuses a missing URL or the DATABASE_URL database, which the tests would fill with rows.
+ * It refuses a missing URL, the DATABASE_URL database, and any database not named `*_test`.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const TEST_DATABASE_SUFFIX = '_test';
 
 function fromEnvFile(variable) {
   try {
@@ -28,6 +29,8 @@ function databaseOf(url) {
   const { hostname, port, pathname } = new URL(url);
   return `${hostname}:${port || '5432'}${pathname}`;
 }
+
+const databaseNameOf = (url) => decodeURIComponent(new URL(url).pathname.slice(1));
 
 function refuse(reason) {
   console.error(`test:db: ${reason}`);
@@ -53,6 +56,11 @@ if (!testUrl) {
 if (devUrl && databaseOf(testUrl) === databaseOf(devUrl)) {
   refuse(
     'TEST_DATABASE_URL names the DATABASE_URL database, and the tests would fill it with rows.',
+  );
+}
+if (!databaseNameOf(testUrl).endsWith(TEST_DATABASE_SUFFIX)) {
+  refuse(
+    `TEST_DATABASE_URL names "${databaseNameOf(testUrl)}"; the tests run only on a database whose name ends in "${TEST_DATABASE_SUFFIX}".`,
   );
 }
 

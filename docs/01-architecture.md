@@ -142,11 +142,23 @@ sitting took among them. Thousands of simultaneous submits become a queue that d
 instead of thousands of synchronous transactions fighting each other.
 
 **Rank and percentile are counted live from Postgres.** A test's cohort is its graded, evaluated,
-scored sittings, ordered by marks, then time taken, then id, and the partial index
-`Attempt_ranking_idx` serves every count over it. A rank is counted each time it is read and saved
-nowhere, so it is always the standing now, and no count sits on the path that starts, saves or
-submits a sitting. **There is no regenerate step** — no batch that rebuilds results, and no state
-where a rank is stale until someone runs it.
+scored sittings, ordered by marks, then time taken, then id. The partial index `Attempt_ranking_idx`
+serves a sitting's standing, an index-only count per sitting, and "N sat": on 200 tests of 5,000
+sittings, counting 20 of them is an index-only scan of about 8 ms, while a table holding only the
+tests asked is read whole. A test board reads its cohort through `Attempt_testId_status_idx`, and
+the points boards through `Attempt_testId_score_idx`. A rank is counted each time it is read and
+saved nowhere, so it is always the standing now, and no count sits on the path that starts, saves
+or submits a sitting. **There is no regenerate step** — no batch that rebuilds results, and no
+state where a rank is stale until someone runs it.
+
+**What the counts cost, and what to do when a board outgrows its budget.** On 20 tests of 5,000
+graded sittings each: a standing 1.5 ms, a test board 5.7 ms, "N sat" 10.8 ms, a student with 50
+sittings 13.1 ms, the series board 128 ms against a budget of 150, and the all-time board 129 ms
+against 300. The points boards scan every graded sitting in their scope on each read and grow about
+1.3 ms per 1,000, so a series of ~40 full mocks crosses its budget first. When a board crosses,
+cache its ranked list per scope for 60 seconds, slice the podium and each reader's neighbourhood
+from it in Node, and count the reader's prior rank against that same cached list. Not a cache per
+reader: that still pays the full scan once for every student who opens the board.
 
 The result: a stateless API, Postgres taking a trickle of writes instead of a tidal wave, and one
 small Postgres plus one Redis plus a few API containers carrying the load.
@@ -166,3 +178,12 @@ A handful of managed services, containerised so nothing is tied to a single host
 | Route 53 + ACM               | DNS and TLS                               | HTTPS everywhere.                                                      |
 | Secrets Manager / SSM        | DB, Redis, S3 and SMS credentials         | No secrets in code or in a committed env file — `.env.example` only.   |
 | SMS provider (external)      | OTP and transactional SMS                 | DLT-compliant, which is what India requires for OTP login.             |
+
+**Deploying the ranking change.** Migration `20260911190000` holds ACCESS EXCLUSIVE on `Attempt`
+through its backfill and its index build, so run it outside a live test window. Code from before
+`db64efc` fails against the columns `20260911220000` drops, so stop the API and the workers,
+migrate, then start the new code. A sitting an old worker scores after `20260911220000`'s refill
+keeps a NULL time and ranks as the slowest, so stop the workers first or re-run that refill. Run
+`VACUUM (ANALYZE) "Attempt"` after the backfill. A Test SPA tab loaded before the deploy cannot
+start a test until it is reloaded, because its live-attempt schema still requires `lastRank` and
+`lastPercentile`.
