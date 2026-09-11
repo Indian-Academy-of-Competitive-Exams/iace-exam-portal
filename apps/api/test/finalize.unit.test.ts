@@ -1,23 +1,10 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  AppException,
-  ErrorCodes,
-  EVALUATION_MODE,
-  PAPER_BINDING,
-  TEST_STATUS,
-} from '@iace/contracts';
+import { AppException, ErrorCodes, TEST_STATUS } from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
-import { PaperService } from '../src/tests/paper.service';
-import { type ScoringOutbox } from '../src/attempts/scoring-outbox';
-import type { PrismaService } from '../src/prisma/prisma.service';
-import { BaseConfigsService } from '../src/configs/base-configs.service';
-import { ExamStagesService } from '../src/configs/exam-stages.service';
-import { AuditContext } from '../src/audit';
 import {
   FakeEventBus,
-  fakeScoringOutbox,
   FakeTestsPrisma,
   makeBaseConfig,
   makeQuestion,
@@ -47,7 +34,6 @@ function wholePaper(testId = 'tst_1'): FakePaperRow[] {
     baseConfigSectionId,
     questionId,
     questionVersionId: `${questionId}_v1`,
-    variant: 0,
     order: index + 1,
     marks: 2,
     negativeMarks: 0.5,
@@ -64,21 +50,13 @@ function serviceWith(
     makeQuestion({ id, currentVersionId: `${id}_v1` }),
   );
   const prisma = new FakeTestsPrisma([test], [config], SECTIONS, [], questions, paper);
-  const stages = new ExamStagesService(prisma.asService(), new AuditContext());
-  const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
-  const paperService = new PaperService(
-    prisma.asService(),
-    configs,
-    fakeScoringOutbox(prisma),
-    new AuditContext(),
-  );
   return {
     prisma,
-    service: new FinalizeService(prisma.asService(), paperService, new FakeEventBus().asService()),
+    service: new FinalizeService(prisma.asService(), new FakeEventBus().asService()),
   };
 }
 
-describe('FinalizeService — freezing a fixed paper', () => {
+describe('FinalizeService — freezing the paper', () => {
   it('locks the test, stamps it, and bumps the optimistic version', async () => {
     const { service, prisma } = serviceWith();
 
@@ -215,127 +193,6 @@ describe('FinalizeService — what it refuses to freeze', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-});
-
-/** A finalize that loses the freeze to another call while it is still drawing. */
-class RacedPaperService extends PaperService {
-  constructor(
-    prisma: PrismaService,
-    configs: BaseConfigsService,
-    outbox: ScoringOutbox,
-    private readonly onDraw: () => void,
-  ) {
-    super(prisma, configs, outbox, new AuditContext());
-  }
-
-  override async drawVariants(testId: string, count: number) {
-    const rows = await super.drawVariants(testId, count);
-    this.onDraw();
-    return rows;
-  }
-}
-
-describe('FinalizeService — a test drawn per student', () => {
-  /** Enough of each subject that three variants can be drawn without repeating within one. */
-  function generated(variantCount: number, onDraw?: () => void) {
-    const bank = [
-      ...Array.from({ length: 9 }, (_, index) =>
-        makeQuestion({
-          id: `r${index + 1}`,
-          subjectId: 'sub_r',
-          currentVersionId: `r${index + 1}_v1`,
-        }),
-      ),
-      ...Array.from({ length: 6 }, (_, index) =>
-        makeQuestion({
-          id: `q${index + 1}`,
-          subjectId: 'sub_q',
-          currentVersionId: `q${index + 1}_v1`,
-        }),
-      ),
-    ];
-    const test = makeTest({
-      id: 'tst_1',
-      paperBinding: PAPER_BINDING.GENERATED,
-      evaluationMode: EVALUATION_MODE.PRACTICE,
-      variantCount,
-    });
-    const prisma = new FakeTestsPrisma(
-      [test],
-      [makeBaseConfig({ id: 'cfg_1', totalQuestions: 5 })],
-      SECTIONS,
-      [],
-      bank,
-      [],
-    );
-    const stages = new ExamStagesService(prisma.asService(), new AuditContext());
-    const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
-    const paper = onDraw
-      ? new RacedPaperService(prisma.asService(), configs, fakeScoringOutbox(prisma), onDraw)
-      : new PaperService(
-          prisma.asService(),
-          configs,
-          fakeScoringOutbox(prisma),
-          new AuditContext(),
-        );
-    return {
-      prisma,
-      paper,
-      service: new FinalizeService(prisma.asService(), paper, new FakeEventBus().asService()),
-    };
-  }
-
-  /** The failure this prevents: a generated test frozen with nothing for a student to open. */
-  it('draws one whole paper per variant before it freezes', async () => {
-    const { service, prisma } = generated(3);
-
-    const result = await service.finalize('tst_1');
-
-    assert.equal(prisma.tests[0]?.isLocked, true);
-    assert.equal(result.frozenQuestions, 15);
-    assert.deepEqual(
-      [0, 1, 2].map(
-        (variant) => prisma.paperQuestions.filter((row) => row.variant === variant).length,
-      ),
-      [5, 5, 5],
-    );
-  });
-
-  it('draws a paper without writing one, so only the freeze can put one down', async () => {
-    const { prisma, paper } = generated(3);
-
-    const rows = await paper.drawVariants('tst_1', 3);
-
-    assert.equal(rows.length, 15);
-    assert.equal(prisma.paperQuestions.length, 0);
-  });
-
-  /** The failure this prevents: a raced finalize redrawing the paper another call just froze. */
-  it('leaves the frozen paper alone when it loses the freeze', async () => {
-    const frozen = wholePaper('tst_1');
-    const built = generated(3, () => {
-      Object.assign(rowAt(built.prisma.tests), {
-        isLocked: true,
-        version: 1,
-        finalizedAt: new Date(),
-      });
-    });
-    built.prisma.paperQuestions.push(...frozen);
-
-    const result = await built.service.finalize('tst_1');
-
-    assert.equal(result.finalizedByThisCall, false);
-    assert.deepEqual(built.prisma.paperQuestions, frozen);
-  });
-
-  /** The lock is the first ATTEMPT, and freezing twenty papers is not somebody sitting one. */
-  it('leaves the config unlocked, the same as a fixed paper does', async () => {
-    const { service, prisma } = generated(2);
-
-    await service.finalize('tst_1');
-
-    assert.equal(prisma.configs[0]?.locked, false);
   });
 });
 

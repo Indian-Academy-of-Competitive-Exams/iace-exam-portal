@@ -44,7 +44,6 @@ function refusalOf(stranded: Readonly<Record<string, PickRefusal>>, questionId: 
 export interface PaperDispositionSpec {
   /** Every sitting on the test, for the confirm to name what it is about to move. */
   attemptCount: number;
-  variantCount: number;
   onRescoring: () => void;
 }
 
@@ -102,7 +101,6 @@ export function PaperQuestions({
   spec,
   editable,
   disposition,
-  isLoading = false,
   action,
   banner,
   onChanged,
@@ -115,8 +113,6 @@ export function PaperQuestions({
   editable: boolean;
   /** Absent on a draft and without TEST_MANAGEMENT write, which is when nothing may be disposed. */
   disposition?: PaperDispositionSpec;
-  /** True while `rows` are last read's, so the table draws its shape instead of another paper's. */
-  isLoading?: boolean;
   /** Beside the heading — filling the rest of this section. */
   action?: ReactNode;
   /** Above the rows — how the last fill was refused. */
@@ -174,7 +170,7 @@ export function PaperQuestions({
         selection={
           editable ? { selected: picked, onChange: setPicked, label: 'Select question' } : undefined
         }
-        isLoading={isLoading}
+        isLoading={false}
         empty={{
           title: 'Nothing chosen for this section yet',
           hint: 'Tick questions in the bank and add them.',

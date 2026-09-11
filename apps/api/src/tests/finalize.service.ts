@@ -4,22 +4,17 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  PAPER_BINDING,
   TEST_STATUS,
   type OfferResult,
-  type PaperBinding,
   type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ALREADY_FINALIZED_MESSAGE, paperCompletenessIssues } from './test-rules';
-import { PaperService } from './paper.service';
 
 const FINALIZE_SELECT = {
   id: true,
   baseConfigId: true,
-  paperBinding: true,
-  variantCount: true,
   isLocked: true,
   status: true,
   version: true,
@@ -28,7 +23,7 @@ const FINALIZE_SELECT = {
 
 type FinalizeRow = Prisma.TestGetPayload<{ select: typeof FINALIZE_SELECT }>;
 
-/** A 50-variant paper is thousands of rows, and Prisma's 5s default is a cliff nobody sees. */
+/** Prisma's 5s default is a cliff nobody sees, so the freeze names its own. */
 const FREEZE_LIMITS = { maxWait: 10_000, timeout: 15_000 } as const;
 
 interface PaperRowRef {
@@ -49,7 +44,6 @@ export interface FinalizeResult {
 export class FinalizeService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paper: PaperService,
     private readonly events: DomainEventBus,
   ) {}
 
@@ -81,23 +75,11 @@ export class FinalizeService {
     const test = await this.requireTest(testId);
     if (test.isLocked) return this.alreadyFinalized(test);
 
-    // Drawn BEFORE the freeze, not per attempt: a pool query per student is the thing to avoid.
-    const drawn = fixed(test.paperBinding)
-      ? null
-      : await this.paper.drawVariants(test.id, test.variantCount);
-
     const finalizedAt = new Date();
     const frozen = await this.prisma.$transaction(async (tx) => {
       // The one gate: the request whose `version` still matches wins, the other writes nothing.
       const claimed = await tx.test.updateMany({
-        // The draw was made from these two, so a call that changed them must lose the freeze.
-        where: {
-          id: test.id,
-          version: test.version,
-          isLocked: false,
-          paperBinding: test.paperBinding,
-          variantCount: test.variantCount,
-        },
+        where: { id: test.id, version: test.version, isLocked: false },
         // The status rides the SAME claim, so the two can never land apart.
         data: {
           isLocked: true,
@@ -108,13 +90,10 @@ export class FinalizeService {
       });
       if (claimed.count === 0) return null;
 
-      // Written behind the gate: a draw that lost this race must not replace a frozen paper.
-      if (drawn) await this.paper.writeVariants(tx, test.id, drawn);
-
       // Behind the gate: a paper counted outside it can be redrawn before the freeze.
-      const paper = drawn ?? (await this.paperOf(tx, test));
+      const paper = await this.paperOf(tx, test);
       // Throwing here rolls the claim back, so a paper that is not whole leaves the test unlocked.
-      if (fixed(test.paperBinding)) await this.assertPaperIsWhole(tx, test, paper);
+      await this.assertPaperIsWhole(tx, test, paper);
 
       const served = [...new Set(paper.map((row) => row.questionId))];
       if (served.length > 0) {
@@ -136,7 +115,7 @@ export class FinalizeService {
     };
   }
 
-  /** Every row the test holds. A GENERATED test has one paper per variant by the time this runs. */
+  /** Every row the test holds, which is the whole of its one paper. */
   private async paperOf(tx: Prisma.TransactionClient, test: FinalizeRow): Promise<PaperRowRef[]> {
     return tx.paperQuestion.findMany({
       where: { testId: test.id },
@@ -189,5 +168,3 @@ export class FinalizeService {
     return test;
   }
 }
-
-const fixed = (binding: PaperBinding) => binding === PAPER_BINDING.FIXED;

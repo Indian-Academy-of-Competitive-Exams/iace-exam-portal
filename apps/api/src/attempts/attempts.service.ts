@@ -63,11 +63,6 @@ type SittableTest = Prisma.TestGetPayload<{ include: typeof SITTABLE_INCLUDE }>;
 
 const LIVE = ATTEMPT_STATUS.IN_PROGRESS;
 
-/** Which of the test's papers this sitting gets. A fixed test has one, so this is always 0. */
-function variantFor(seed: number, variantCount: number): number {
-  return variantCount > 1 ? seed % variantCount : 0;
-}
-
 /** Seeds are an Int on the row, and nothing here guards anything — it only has to be unpredictable. */
 const SEED_CEILING = 2 ** 31;
 
@@ -141,9 +136,8 @@ export class AttemptsService {
         },
       });
 
-      // Read AFTER the seed exists, because the seed is what says which of the papers this is.
       const paper = await tx.paperQuestion.findMany({
-        where: { testId: test.id, variant: variantFor(attempt.shuffleSeed, test.variantCount) },
+        where: { testId: test.id },
         select: { id: true, questionId: true, questionVersionId: true, baseConfigSectionId: true },
         orderBy: { order: 'asc' },
       });

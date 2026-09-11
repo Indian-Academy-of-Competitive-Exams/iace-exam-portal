@@ -2,13 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   EVALUATION_MODE,
-  PAPER_BINDING,
   TEST_SCOPE,
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
-  allowedPaperBindings,
   createTestSchema,
-  isPaperBindingAllowed,
   offerRequirements,
   scopedSections,
   scopedQuestionCount,
@@ -25,43 +22,6 @@ import {
   type TestScope,
   type TestScopeRef,
 } from '../src/index';
-
-/**
- * The same rule the database holds as a CHECK on Test. It lives here too because a form
- * should refuse the combination before a request is made, and both sides must agree on
- * which combination that is.
- */
-describe('isPaperBindingAllowed', () => {
-  /** The failure this prevents: a leaderboard ranking students who sat different papers. */
-  it('refuses a ranked test drawn per attempt', () => {
-    assert.equal(isPaperBindingAllowed(EVALUATION_MODE.RANKED, PAPER_BINDING.GENERATED), false);
-  });
-
-  it('allows a ranked test on a frozen paper', () => {
-    assert.equal(isPaperBindingAllowed(EVALUATION_MODE.RANKED, PAPER_BINDING.FIXED), true);
-  });
-
-  /** Practice never ranks, so either paper is fine. */
-  for (const binding of [PAPER_BINDING.FIXED, PAPER_BINDING.GENERATED]) {
-    it(`allows a practice test on a ${binding.toLowerCase()} paper`, () => {
-      assert.equal(isPaperBindingAllowed(EVALUATION_MODE.PRACTICE, binding), true);
-    });
-  }
-});
-
-describe('allowedPaperBindings', () => {
-  /** The failure this prevents: a picker offering a choice, then the save refusing it. */
-  it('leaves a ranked test only the frozen paper', () => {
-    assert.deepEqual(allowedPaperBindings(EVALUATION_MODE.RANKED), [PAPER_BINDING.FIXED]);
-  });
-
-  it('leaves a practice test both', () => {
-    assert.deepEqual(allowedPaperBindings(EVALUATION_MODE.PRACTICE), [
-      PAPER_BINDING.FIXED,
-      PAPER_BINDING.GENERATED,
-    ]);
-  });
-});
 
 /** One sentence for both sides: the picker refuses the move in the server's own words. */
 describe('seriesModeMismatch', () => {
@@ -100,7 +60,6 @@ describe('paperQuestionSchema', () => {
       baseConfigSectionId: 'sec1',
       baseConfigId: 'c1',
       questionId: 'q1',
-      variant: 0,
       order: 1,
       marks: 2,
       negativeMarks: 0.5,
@@ -185,24 +144,22 @@ describe('TEST_BUILDER_STEP', () => {
 });
 
 describe('offerRequirements', () => {
-  const fixed = {
+  const built = {
     isLocked: false,
-    paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    variantCount: 1,
   };
   const met = (test: Parameters<typeof offerRequirements>[0]) =>
     offerRequirements(test).map((requirement) => requirement.met);
 
   /** A test is created inside a series and cannot leave, so the paper is all that is left to owe. */
   it('is ready when the paper is whole', () => {
-    assert.deepEqual(met(fixed), [true]);
+    assert.deepEqual(met(built), [true]);
   });
 
   /** The failure this prevents: offering a half-picked paper and finding out at the freeze. */
   it('is not ready while the paper is short, and says how far', () => {
-    const [paper] = offerRequirements({ ...fixed, paperQuestionCount: 64 });
+    const [paper] = offerRequirements({ ...built, paperQuestionCount: 64 });
 
     assert.equal(paper?.met, false);
     assert.equal(paper?.owed, '64 chosen so far');
@@ -210,53 +167,31 @@ describe('offerRequirements', () => {
 
   /** A frozen paper is whole by definition — a retired test must be offerable again. */
   it('takes a frozen paper as whole however its rows are counted', () => {
-    assert.deepEqual(met({ ...fixed, isLocked: true, paperQuestionCount: 0 }), [true]);
-  });
-
-  /** A generated test has no paper to check: the draw happens at the freeze, not before it. */
-  it('asks a generated test for nothing at all', () => {
-    const generated = { ...fixed, paperBinding: PAPER_BINDING.GENERATED, paperQuestionCount: 0 };
-
-    assert.deepEqual(met(generated), [true]);
+    assert.deepEqual(met({ ...built, isLocked: true, paperQuestionCount: 0 }), [true]);
   });
 });
 
 describe('testBuilderStepOf', () => {
-  const fixed = {
+  const built = {
     isLocked: false,
-    paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    variantCount: 1,
   };
 
   /** THE failure this prevents: reopening a half-built paper and landing past it, on Offer. */
   it('lands on the paper while it is part built, not only while it is empty', () => {
-    assert.equal(testBuilderStepOf({ ...fixed, paperQuestionCount: 40 }), TEST_BUILDER_STEP.PAPER);
-    assert.equal(testBuilderStepOf({ ...fixed, paperQuestionCount: 0 }), TEST_BUILDER_STEP.PAPER);
+    assert.equal(testBuilderStepOf({ ...built, paperQuestionCount: 40 }), TEST_BUILDER_STEP.PAPER);
+    assert.equal(testBuilderStepOf({ ...built, paperQuestionCount: 0 }), TEST_BUILDER_STEP.PAPER);
   });
 
   it('lands on offer once the paper is whole', () => {
-    assert.equal(testBuilderStepOf(fixed), TEST_BUILDER_STEP.OFFER);
+    assert.equal(testBuilderStepOf(built), TEST_BUILDER_STEP.OFFER);
   });
 
   /** A frozen paper cannot be built further, so there is nothing on that step to send them to. */
   it('lands on offer for a frozen test, however few questions it counted', () => {
     assert.equal(
-      testBuilderStepOf({ ...fixed, isLocked: true, paperQuestionCount: 0 }),
-      TEST_BUILDER_STEP.OFFER,
-    );
-  });
-
-  /** A drawn test owes no paper before it is offered — the draw is what makes one. */
-  it('lands on offer for a test that draws its own papers', () => {
-    assert.equal(
-      testBuilderStepOf({
-        ...fixed,
-        paperBinding: PAPER_BINDING.GENERATED,
-        paperQuestionCount: 0,
-        variantCount: 10,
-      }),
+      testBuilderStepOf({ ...built, isLocked: true, paperQuestionCount: 0 }),
       TEST_BUILDER_STEP.OFFER,
     );
   });
@@ -418,31 +353,29 @@ describe('scopedDurationSec', () => {
 });
 
 describe('owesAPaper', () => {
-  const fixed = {
+  const built = {
     isLocked: false,
-    paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    variantCount: 1,
   };
 
   /** THE failure this prevents: a finished paper whose step never ticks, so it reads as outstanding. */
   it('owes nothing once every question is on the paper', () => {
-    assert.equal(owesAPaper(fixed), false);
+    assert.equal(owesAPaper(built), false);
   });
 
   it('owes a paper while it is part built', () => {
-    assert.equal(owesAPaper({ ...fixed, paperQuestionCount: 40 }), true);
+    assert.equal(owesAPaper({ ...built, paperQuestionCount: 40 }), true);
   });
 
   /** The tick and the landing step are one rule, so they cannot say different things. */
   it('is the same answer the landing step reads', () => {
-    const half = { ...fixed, paperQuestionCount: 40 };
+    const half = { ...built, paperQuestionCount: 40 };
 
     assert.equal(testBuilderStepOf(half), TEST_BUILDER_STEP.PAPER);
     assert.equal(owesAPaper(half), true);
-    assert.equal(testBuilderStepOf(fixed), TEST_BUILDER_STEP.OFFER);
-    assert.equal(owesAPaper(fixed), false);
+    assert.equal(testBuilderStepOf(built), TEST_BUILDER_STEP.OFFER);
+    assert.equal(owesAPaper(built), false);
   });
 });
 

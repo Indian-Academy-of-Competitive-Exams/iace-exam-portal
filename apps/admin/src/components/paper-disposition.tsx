@@ -65,24 +65,18 @@ export function DispositionBadge({ status }: Readonly<{ status: PaperQuestionSta
 }
 
 /** `attemptCount` is every sitting on the test, so it is the ceiling on what re-scores, not the count. */
-function consequenceOf(
-  status: PaperQuestionStatus,
-  attemptCount: number,
-  variantCount: number,
-): string {
-  const spread = variantCount > 1 ? ` It moves on all ${plural(variantCount, 'paper')}.` : '';
+function consequenceOf(status: PaperQuestionStatus, attemptCount: number): string {
   const rescore =
     attemptCount === 0
       ? ' Nobody has sat this test yet, so there is nothing to score again.'
       : ` Every one of the ${plural(attemptCount, 'sitting')} sat so far that served it is scored again and the standings are rebuilt, so scores, ranks and percentiles will change.`;
-  return `${DISPOSITION_PAYS[status]}${spread}${rescore}`;
+  return `${DISPOSITION_PAYS[status]}${rescore}`;
 }
 
 export function PaperDisposition({
   testId,
   row,
   attemptCount,
-  variantCount,
   onChanged,
   onRescoring,
 }: Readonly<{
@@ -90,7 +84,6 @@ export function PaperDisposition({
   row: PaperRow;
   /** Every sitting on the test, for the confirm to name what it is about to move. */
   attemptCount: number;
-  variantCount: number;
   onChanged: (next: TestPaper) => Promise<void>;
   /** Raised only where sittings exist to re-score, so the screen never claims work nobody queued. */
   onRescoring: () => void;
@@ -142,7 +135,7 @@ export function PaperDisposition({
           }}
           destructive
           title={DISPOSITION_TITLE[pending](row.order)}
-          description={consequenceOf(pending, attemptCount, variantCount)}
+          description={consequenceOf(pending, attemptCount)}
           confirmLabel={DISPOSITION_ACTION[pending]}
           loading={set.isPending}
           onConfirm={() => (reason.trim() === '' ? setMissing(true) : set.mutate(pending))}

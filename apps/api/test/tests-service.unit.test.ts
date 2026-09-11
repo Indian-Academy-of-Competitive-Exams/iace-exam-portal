@@ -6,8 +6,6 @@ import {
   EXAM_TEMPLATE,
   ErrorCodes,
   EVALUATION_MODE,
-  MIN_PAPER_VARIANTS,
-  PAPER_BINDING,
   TEST_SCOPE,
   TEST_STATUS,
 } from '@iace/contracts';
@@ -170,7 +168,7 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(prisma.tests[0]?.examStageId, 'stage_2');
   });
 
-  it('defaults to a full, ranked, fixed paper', async () => {
+  it('defaults to a full, ranked test', async () => {
     const { service } = serviceWith();
 
     const created = await service.create(
@@ -180,7 +178,6 @@ describe('TestsService — creating a draft from a config', () => {
 
     assert.equal(created.scope, TEST_SCOPE.FULL);
     assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
-    assert.equal(created.paperBinding, PAPER_BINDING.FIXED);
   });
 
   /** The failure this prevents: a practice series holding a test the leaderboard then ranks. */
@@ -224,44 +221,6 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.match(error.fieldErrors?.testSeriesId?.[0] ?? '', /SSC CHSL Tier 2 mocks/);
     assert.equal(prisma.tests.length, 0);
-  });
-
-  it('refuses a ranked test on a generated paper', async () => {
-    const { service, prisma } = serviceWith();
-
-    // The failure this prevents: a leaderboard built from students who each sat a different paper.
-    const error = await service
-      .create(
-        {
-          baseConfigId: 'cfg_1',
-          title: 'Mock 1',
-          testSeriesId: 'srs_1',
-          paperBinding: PAPER_BINDING.GENERATED,
-        },
-        ADMIN,
-      )
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.match(error.fieldErrors?.paperBinding?.[0] ?? '', /SSC CGL Tier 1 mocks/);
-    assert.equal(prisma.tests.length, 0);
-  });
-
-  it('accepts a generated paper once the test is practice', async () => {
-    const { service } = serviceWith();
-
-    const created = await service.create(
-      {
-        baseConfigId: 'cfg_1',
-        title: 'Mock 1',
-        testSeriesId: 'srs_practice',
-        paperBinding: PAPER_BINDING.GENERATED,
-      },
-      ADMIN,
-    );
-
-    assert.equal(created.paperBinding, PAPER_BINDING.GENERATED);
   });
 
   it('refuses a retired config', async () => {
@@ -348,19 +307,6 @@ describe('TestsService — the scope has to name a part of the config', () => {
 });
 
 describe('TestsService — editing and removing', () => {
-  it('re-checks the pair when only one half of it moves', async () => {
-    const { service } = serviceWith([
-      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.RANKED }),
-    ]);
-
-    const error = await service
-      .update('tst_1', { paperBinding: PAPER_BINDING.GENERATED })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-  });
-
   it('leaves the schedule alone on an edit that keeps the test ranked', async () => {
     const { service, prisma } = serviceWith([
       makeTest({ id: 'tst_1', lateEntrySec: 1800, extraTimeSec: 600 }),
@@ -396,91 +342,6 @@ describe('TestsService — editing and removing', () => {
     assert.equal(renamed.title, 'Mock 1 (revised)');
     // A rename moves no question, so it must not thaw the paper it was allowed to leave alone.
     assert.equal(prisma.tests[0]?.isLocked, true);
-  });
-
-  /** Too few papers and a cohort is back to sitting one, which is what fixed already does better. */
-  it('refuses a paper per student with fewer papers than the floor to draw from', async () => {
-    const { service } = serviceWith([
-      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
-    ]);
-
-    const error = await service
-      .update('tst_1', {
-        paperBinding: PAPER_BINDING.GENERATED,
-        variantCount: MIN_PAPER_VARIANTS - 1,
-      })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.ok(error.fieldErrors?.variantCount?.[0]);
-  });
-
-  it('takes a paper per student at exactly the floor', async () => {
-    const { service, prisma } = serviceWith([
-      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
-    ]);
-
-    await service.update('tst_1', {
-      paperBinding: PAPER_BINDING.GENERATED,
-      variantCount: MIN_PAPER_VARIANTS,
-    });
-
-    assert.equal(prisma.tests[0]?.variantCount, MIN_PAPER_VARIANTS);
-  });
-
-  /** THE failure this prevents: raising the count of a frozen test past the papers it actually holds. */
-  it('leaves a frozen test drawn below the floor on the count its papers were drawn against', async () => {
-    const { service, prisma } = serviceWith([
-      makeTest({
-        id: 'tst_1',
-        evaluationMode: EVALUATION_MODE.PRACTICE,
-        paperBinding: PAPER_BINDING.GENERATED,
-        variantCount: MIN_PAPER_VARIANTS - 3,
-        isLocked: true,
-      }),
-    ]);
-
-    const renamed = await service.update('tst_1', { title: 'Speed drill 3 (revised)' });
-
-    assert.equal(renamed.title, 'Speed drill 3 (revised)');
-    assert.equal(prisma.tests[0]?.variantCount, MIN_PAPER_VARIANTS - 3);
-  });
-
-  /** Switching over carries a count of 1 it never chose, so it starts from the default instead. */
-  it('gives a test only now drawing per student a bank to draw from', async () => {
-    const { service, prisma } = serviceWith([
-      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
-    ]);
-
-    await service.update('tst_1', { paperBinding: PAPER_BINDING.GENERATED });
-
-    assert.ok((prisma.tests[0]?.variantCount ?? 0) > 1);
-  });
-
-  /** The failure this prevents: a generated test built before the count refusing every edit. */
-  it('lets a generated test that predates the count be edited at all', async () => {
-    const { service, prisma } = serviceWith([
-      makeTest({
-        id: 'tst_1',
-        evaluationMode: EVALUATION_MODE.PRACTICE,
-        paperBinding: PAPER_BINDING.GENERATED,
-        variantCount: 1,
-      }),
-    ]);
-
-    await service.update('tst_1', { questionPoolFilter: { sections: {} } });
-
-    assert.ok((prisma.tests[0]?.variantCount ?? 0) > 1);
-  });
-
-  /** One paper is what fixed MEANS, so the count is held there rather than argued about. */
-  it('holds a fixed paper at one, whatever it is sent', async () => {
-    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
-
-    await service.update('tst_1', { variantCount: 12 });
-
-    assert.equal(prisma.tests[0]?.variantCount, 1);
   });
 
   /** THE failure this prevents: a re-skin silently un-finalizing a paper it moves no question in. */
@@ -523,30 +384,6 @@ describe('TestsService — editing and removing', () => {
     assert.equal(test.finalizedAt, null);
     // An unfrozen test cannot be offered, so it stops being offered rather than going incoherent.
     assert.equal(test.status, TEST_STATUS.DRAFT);
-  });
-
-  it('drops the paper when the test stops having one', async () => {
-    const { service, prisma } = serviceWith([
-      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
-    ]);
-    prisma.paperQuestions.push({
-      id: 'pq_1',
-      testId: 'tst_1',
-      baseConfigId: 'cfg_1',
-      baseConfigSectionId: 'sec_1',
-      questionId: 'qst_1',
-      questionVersionId: 'qst_1_v1',
-      variant: 0,
-      order: 1,
-      marks: 2,
-      negativeMarks: 0.5,
-      status: 'ACTIVE',
-    });
-
-    // A paper belongs to a FIXED test; per-attempt draws would leave these rows unread forever.
-    await service.update('tst_1', { paperBinding: PAPER_BINDING.GENERATED });
-
-    assert.equal(prisma.paperQuestions.length, 0);
   });
 
   it('refuses to delete a test students have sat', async () => {

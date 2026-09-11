@@ -1,13 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  AppException,
-  ErrorCodes,
-  EVALUATION_MODE,
-  PAPER_BINDING,
-  TEST_STATUS,
-} from '@iace/contracts';
+import { AppException, ErrorCodes, TEST_STATUS } from '@iace/contracts';
 import { TestsService } from '../src/tests/tests.service';
 import { PaperService } from '../src/tests/paper.service';
 import { FinalizeService } from '../src/tests/finalize.service';
@@ -56,14 +50,7 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
     [],
     questions,
     [],
-    [
-      makeSeries({ id: 'srs_1', name: 'SSC CGL 2026 mocks' }),
-      makeSeries({
-        id: 'srs_2',
-        name: 'SSC CGL 2026 drills',
-        evaluationMode: EVALUATION_MODE.PRACTICE,
-      }),
-    ],
+    [makeSeries({ id: 'srs_1', name: 'SSC CGL 2026 mocks' })],
   );
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
@@ -79,16 +66,12 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
       fakeScoringOutbox(prisma),
       new AuditContext(),
     ),
-    finalizer: new FinalizeService(
-      prisma.asService(),
-      new PaperService(prisma.asService(), configs, fakeScoringOutbox(prisma), new AuditContext()),
-      events.asService(),
-    ),
+    finalizer: new FinalizeService(prisma.asService(), events.asService()),
     offering: new OfferingService(prisma.asService(), events.asService(), new AuditContext()),
   };
 }
 
-/** A FIXED paper is picked by hand, so this is how one is built up to the counts its config asks. */
+/** Picked by hand, so this is how a paper is built up to the counts its config asks. */
 async function pickWholePaper(paper: PaperService, testId: string): Promise<void> {
   const picks: [string, string[]][] = [
     ['sec_1', ['r1', 'r2', 'r3']],
@@ -150,33 +133,6 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
 });
 
 describe('the invariants Phase 2 must not have broken', () => {
-  it('RANKED implies FIXED, at create and at edit', async () => {
-    const { tests } = builder();
-
-    const atCreate = await tests
-      .create(
-        {
-          baseConfigId: 'cfg_1',
-          title: 'Mock 1',
-          testSeriesId: 'srs_1',
-          paperBinding: PAPER_BINDING.GENERATED,
-        },
-        ADMIN,
-      )
-      .catch((e: unknown) => e);
-    assert.ok(AppException.is(atCreate));
-    assert.equal(atCreate.code, ErrorCodes.VALIDATION_ERROR);
-
-    const ranked = await tests.create(
-      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
-      ADMIN,
-    );
-    const atEdit = await tests
-      .update(ranked.id, { paperBinding: PAPER_BINDING.GENERATED })
-      .catch((e: unknown) => e);
-    assert.ok(AppException.is(atEdit));
-  });
-
   it('one paper per sitting: once it is sat it cannot be edited, and a second finalize does nothing', async () => {
     const { tests, paper, finalizer, prisma } = builder();
     const draft = await tests.create(
@@ -277,29 +233,5 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.equal(test.isLocked, false);
     assert.equal(test.finalizedAt, null);
     assert.equal(test.status, TEST_STATUS.DRAFT);
-  });
-
-  it('a bank too thin stops the milestone at the draw, having written nothing', async () => {
-    const { tests, finalizer, prisma } = builder([
-      ...bank(8, 'sub_r', 'r'),
-      ...bank(1, 'sub_q', 'q'),
-    ]);
-    const draft = await tests.create(
-      {
-        baseConfigId: 'cfg_1',
-        title: 'Mock 1',
-        testSeriesId: 'srs_2',
-        paperBinding: PAPER_BINDING.GENERATED,
-      },
-      ADMIN,
-    );
-
-    const error = await finalizer.finalize(draft.id).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
-    assert.equal(prisma.paperQuestions.length, 0);
-    assert.equal(prisma.tests[0]?.isLocked, false);
-    assert.equal(prisma.configs[0]?.locked, false);
   });
 });

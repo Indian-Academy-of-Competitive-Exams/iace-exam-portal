@@ -136,11 +136,6 @@ enum EvaluationMode {
   PRACTICE
 }
 
-enum PaperBinding {
-  FIXED
-  GENERATED
-}
-
 enum PaperQuestionStatus {
   ACTIVE
   DROPPED
@@ -503,12 +498,9 @@ model Test {
   scopeRef           Json?
   // Denormalised from TestSeries so the composite FK below is always enforced.
   evaluationMode     EvaluationMode
-  paperBinding       PaperBinding   @default(FIXED)
   questionPoolFilter Json?
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate   @default(DEFAULT)
-  // How many papers were drawn. One for FIXED; a GENERATED test hands out one per attempt by seed.
-  variantCount       Int            @default(1)
   status             TestStatus     @default(DRAFT)
   isLocked           Boolean        @default(false)
   // Optimistic lock — finalize is a conditional UPDATE ... WHERE version = $n.
@@ -542,10 +534,7 @@ model Test {
   @@index([testSeriesId])
 }
 
-// One paper. A FIXED test has exactly one, at variant 0; a GENERATED test has
-// Test.variantCount of them, drawn when it is offered, and each attempt reads
-// the one its seed lands on. The same question at the same position in two
-// different variants is correct, which is why both uniques carry the variant.
+// One question on a test's paper. A test has exactly one paper, and every sitting is served it.
 model PaperQuestion {
   id                  String              @id @default(cuid())
   testId              String
@@ -553,7 +542,6 @@ model PaperQuestion {
   baseConfigSectionId String
   questionId          String
   questionVersionId   String
-  variant             Int                 @default(0)
   order               Int
   marks               Decimal             @db.Decimal(6, 2)
   negativeMarks       Decimal             @db.Decimal(6, 2)
@@ -567,9 +555,8 @@ model PaperQuestion {
   attemptSections   AttemptQuestion[]  @relation("AttemptItemPaperSection")
   questionStats     TestQuestionStat[]
 
-  @@unique([testId, variant, questionId])
-  @@unique([testId, variant, order])
-  // These two target a ROW, which is still unique on its own — the variant does not belong in them.
+  @@unique([testId, questionId])
+  @@unique([testId, order])
   @@unique([id, questionId, questionVersionId])
   @@unique([id, baseConfigSectionId])
   @@index([questionId])
@@ -625,13 +612,11 @@ model Attempt {
   @@index([testId, score])
 }
 
-// One row per question served in an attempt, plus the student's response.
-// paperQuestionId is always set — a GENERATED test draws real PaperQuestion rows per variant
-// at finalize, so scoring reads its marks from there. The durable row is an
-// idempotent UPSERT flushed by a single writer; Redis holds the live state.
+// One row per question served in an attempt and its response, upserted by one writer; Redis holds the live state.
 model AttemptQuestion {
   attemptId           String
   questionId          String
+  // Always set: scoring reads the question's marks from its paper row.
   paperQuestionId     String?
   questionVersionId   String
   baseConfigSectionId String

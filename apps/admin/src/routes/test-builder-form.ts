@@ -1,12 +1,9 @@
 import { type UseFormReturn } from 'react-hook-form';
 import {
   AppException,
-  DEFAULT_PAPER_VARIANTS,
-  PAPER_BINDING,
   TEST_SCOPE,
   type EvaluationMode,
   type ExamTemplate,
-  type PaperBinding,
   type TestDetail,
   type TestSeriesSummary,
   type TestScope,
@@ -29,10 +26,8 @@ export interface TestFormValues {
   sectionId: string;
   /** Read off the chosen series and never sent: the server derives it from that series too. */
   evaluationMode: EvaluationMode | '';
-  paperBinding: PaperBinding;
   /** Null until the admin picks one — the config's default stands in until they do. */
   examTemplate: ExamTemplate | null;
-  variantCount: string;
 }
 
 export type TestForm = UseFormReturn<TestFormValues>;
@@ -54,9 +49,7 @@ export function valuesOf(
     moduleId: scopeRef?.moduleId ?? '',
     sectionId: scopeRef?.sectionId ?? '',
     evaluationMode: detail?.evaluationMode ?? fromSeries?.evaluationMode ?? '',
-    paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     examTemplate: detail?.examTemplate ?? null,
-    variantCount: String(detail?.variantCount ?? DEFAULT_PAPER_VARIANTS),
   };
 }
 
@@ -72,14 +65,7 @@ export function scopeRefOf(values: TestFormValues): TestScopeRef | null {
 }
 
 /** The keys the server answers with. `scopeRef` has no control of its own — see `SCOPE_FIELDS`. */
-export const SERVER_FIELDS = [
-  'baseConfigId',
-  'testSeriesId',
-  'title',
-  'paperBinding',
-  'variantCount',
-  'scopeRef',
-] as const;
+export const SERVER_FIELDS = ['baseConfigId', 'testSeriesId', 'title', 'scopeRef'] as const;
 
 /** Which control a `scopeRef` error belongs on, since the reference is a different one per scope. */
 const SCOPE_FIELDS: Readonly<Record<TestScope, keyof TestFormValues | null>> = {
@@ -89,13 +75,7 @@ const SCOPE_FIELDS: Readonly<Record<TestScope, keyof TestFormValues | null>> = {
 };
 
 export function applyServerErrors(error: unknown, form: TestForm, scope: TestScope): void {
-  applyFieldErrors(error, form.setError, [
-    'baseConfigId',
-    'testSeriesId',
-    'title',
-    'paperBinding',
-    'variantCount',
-  ]);
+  applyFieldErrors(error, form.setError, ['baseConfigId', 'testSeriesId', 'title']);
   const field = SCOPE_FIELDS[scope];
   if (!field || !AppException.is(error)) return;
   const message = error.fieldErrors?.scopeRef?.[0];

@@ -19,7 +19,7 @@ export const PAPER_NOT_READY_MESSAGE =
 /** What stops a test being sat at all, whatever the student's access says. */
 export function testStartBlocker(test: { status: TestStatus; isLocked: boolean }): string | null {
   if (test.status !== TEST_STATUS.ACTIVE) return TEST_NOT_OFFERED_MESSAGE;
-  // The freeze is what wrote the papers, one for a fixed test and one per variant for a generated one.
+  // Until the freeze the paper can still move, so there is nothing settled to sit.
   if (!test.isLocked) return PAPER_NOT_READY_MESSAGE;
   return null;
 }

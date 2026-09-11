@@ -41,7 +41,7 @@ export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
   SECTIONAL: 'Sectional',
 };
 
-/** RANKED produces a cohort rank and forces a FIXED paper; PRACTICE never ranks. */
+/** RANKED produces a cohort rank; PRACTICE never ranks. */
 export const EVALUATION_MODE = {
   RANKED: 'RANKED',
   PRACTICE: 'PRACTICE',
@@ -55,15 +55,6 @@ export const EVALUATION_MODE_LABELS: Readonly<Record<EvaluationMode, string>> = 
   PRACTICE: 'Practice',
 };
 
-/** FIXED is one paper every student sits; GENERATED is several, drawn at finalize and dealt by seed. */
-export const PAPER_BINDING = {
-  FIXED: 'FIXED',
-  GENERATED: 'GENERATED',
-} as const;
-export const paperBindingSchema = z.enum(PAPER_BINDING);
-export type PaperBinding = z.infer<typeof paperBindingSchema>;
-export const PAPER_BINDINGS = paperBindingSchema.options;
-
 /** What a test is called by: the part of the paper it covers, or failing that how it is judged. */
 export function testNameKind(input: {
   scope: TestScope;
@@ -73,19 +64,6 @@ export function testNameKind(input: {
   const named = input.scopeName?.trim();
   if (input.scope !== TEST_SCOPE.FULL && named) return named;
   return input.evaluationMode === EVALUATION_MODE.PRACTICE ? 'Practice' : 'Mock';
-}
-
-/** A rank only means something if everyone sat the same paper. */
-export function isPaperBindingAllowed(
-  evaluationMode: EvaluationMode,
-  paperBinding: PaperBinding,
-): boolean {
-  return evaluationMode !== EVALUATION_MODE.RANKED || paperBinding === PAPER_BINDING.FIXED;
-}
-
-/** What a picker may offer, so a form cannot present a pair the server is going to refuse. */
-export function allowedPaperBindings(evaluationMode: EvaluationMode): PaperBinding[] {
-  return PAPER_BINDINGS.filter((binding) => isPaperBindingAllowed(evaluationMode, binding));
 }
 
 /** A cutoff, an allowance and a per-program stagger all serve a cohort; practice just opens. */
@@ -450,7 +428,6 @@ export const testSchema = z.object({
   scope: testScopeSchema,
   scopeRef: testScopeRefSchema.nullable(),
   evaluationMode: evaluationModeSchema,
-  paperBinding: paperBindingSchema,
   /** This test's own copy — the config's is only what it started from. */
   examTemplate: examTemplateSchema,
   /** What each section is drawn from. Named for the column it has always lived in. */
@@ -461,8 +438,6 @@ export const testSchema = z.object({
   /** Optimistic lock: finalize is a conditional update against it. */
   version: z.number().int(),
   finalizedAt: z.string().nullable(),
-  /** How many papers were drawn. One for FIXED; a GENERATED test hands one out per attempt. */
-  variantCount: z.number().int(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
   /** The one series carrying it. The column requires one, so this is never absent. */
@@ -521,10 +496,7 @@ export interface OfferRequirement {
 
 /** A full TOTAL is every section full: nothing may exceed a section's own count, so it cannot hide. */
 export function offerRequirements(
-  test: Pick<
-    Test,
-    'isLocked' | 'paperBinding' | 'paperQuestionCount' | 'totalQuestions' | 'variantCount'
-  >,
+  test: Pick<Test, 'isLocked' | 'paperQuestionCount' | 'totalQuestions'>,
 ): OfferRequirement[] {
   return [paperRequirement(test)];
 }
@@ -543,15 +515,6 @@ export function testBuilderStepOf(test: Parameters<typeof offerRequirements>[0])
 }
 
 function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
-  if (test.paperBinding !== PAPER_BINDING.FIXED) {
-    return {
-      key: OFFER_REQUIREMENT.PAPER,
-      met: true,
-      label: `Its ${test.variantCount} papers are drawn the moment it is offered`,
-      owed: null,
-    };
-  }
-
   const met = test.isLocked || test.paperQuestionCount === test.totalQuestions;
   return {
     key: OFFER_REQUIREMENT.PAPER,
@@ -561,7 +524,7 @@ function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferR
   };
 }
 
-/** The frozen shared paper. Only a FIXED test has these. */
+/** A row of the test's one paper, which every sitting is served. */
 export const paperQuestionSchema = z.object({
   id: z.string(),
   testId: z.string(),
@@ -571,8 +534,6 @@ export const paperQuestionSchema = z.object({
   questionId: z.string(),
   /** The version this paper serves, so a result reproduces after the question is edited. */
   questionVersionId: z.string(),
-  /** Which of the test's papers this row belongs to. A FIXED test has one, at 0. */
-  variant: z.number().int(),
   order: z.number().int(),
   marks: z.number(),
   negativeMarks: z.number(),
@@ -611,22 +572,12 @@ export const testTitleSchema = z
   .min(2, 'Give the test a name')
   .max(TEST_TITLE_MAX, `A name cannot be longer than ${TEST_TITLE_MAX} characters`);
 
-/** Each variant is a whole paper on file, so the ceiling is rows in the table, not a preference. */
-export const MAX_PAPER_VARIANTS = 50;
-/** Under this a cohort shares papers too often for drawing them apart to have been worth it. */
-export const MIN_PAPER_VARIANTS = 5;
-/** Enough that two students rarely share a paper, few enough that every one can be looked at. */
-export const DEFAULT_PAPER_VARIANTS = 10;
-
 /** Everything a test owns, shared by create and update. `baseConfigId` is only ever set once. */
 const testOwnFieldsSchema = z.object({
   scope: testScopeSchema.optional(),
   scopeRef: testScopeRefSchema.nullish(),
-  paperBinding: paperBindingSchema.optional(),
   /** Absent on create means take the config's; a test chooses its own screen from then on. */
   examTemplate: examTemplateSchema.optional(),
-  /** How many papers to draw. A fixed test is one, and the server holds it there. */
-  variantCount: z.coerce.number().int().min(1).max(MAX_PAPER_VARIANTS).optional(),
   questionPoolFilter: drawSpecSchema.nullish(),
 });
 
@@ -705,12 +656,6 @@ export const testPaperSchema = z.object({
   sections: z.array(paperSectionSchema),
 });
 export type TestPaper = z.infer<typeof testPaperSchema>;
-
-/** Absent reads the paper every FIXED test has and a GENERATED one drew first. */
-export const readPaperQuerySchema = z.object({
-  variant: z.coerce.number().int().min(0).optional(),
-});
-export type ReadPaperQuery = z.infer<typeof readPaperQuerySchema>;
 
 /** One test as the SERIES reads it: what it is called, when it opens there, and whether it is sat. */
 export const seriesTestRowSchema = z.object({

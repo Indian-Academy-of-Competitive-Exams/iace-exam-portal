@@ -20,7 +20,6 @@ import {
   createTestSchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
-  readPaperQuerySchema,
   setTestSeriesSchema,
   setProgramUnlockSchema,
   setSeriesTestUnlockSchema,
@@ -32,7 +31,6 @@ import {
   type CreateTestBody,
   type FinalizeResult,
   type Paginated,
-  type ReadPaperQuery,
   type SetTestSeriesBody,
   type SetTestStatusBody,
   type Test,
@@ -106,11 +104,8 @@ export class TestsController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/paper')
-  readPaper(
-    @Param('id') id: string,
-    @Query(new ZodQuery(readPaperQuerySchema)) query: ReadPaperQuery,
-  ): Promise<TestPaper> {
-    return this.paper.read(id, query.variant);
+  readPaper(@Param('id') id: string): Promise<TestPaper> {
+    return this.paper.read(id);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)

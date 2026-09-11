@@ -31,9 +31,7 @@ import {
   NAVIGATION_POLICY,
   type NavigationPolicy,
   type NotificationType,
-  PAPER_BINDING,
   PAPER_QUESTION_STATUS,
-  type PaperBinding,
   type PaperQuestionStatus,
   type PermissionLevel,
   QUESTION_TYPE,
@@ -1590,10 +1588,8 @@ export interface FakeTestModelRow {
   scope: TestScope;
   scopeRef: TestScopeRef | null;
   evaluationMode: EvaluationMode;
-  paperBinding: PaperBinding;
   maxRetakes: number | null;
   questionPoolFilter: DrawSpec | null;
-  variantCount: number;
   status: TestStatus;
   isLocked: boolean;
   version: number;
@@ -1617,9 +1613,7 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     scope: TEST_SCOPE.FULL,
     scopeRef: null,
     evaluationMode: EVALUATION_MODE.RANKED,
-    paperBinding: PAPER_BINDING.FIXED,
     maxRetakes: null,
-    variantCount: 1,
     questionPoolFilter: null,
     status: TEST_STATUS.DRAFT,
     isLocked: false,
@@ -1848,7 +1842,6 @@ export interface FakePaperRow {
   baseConfigSectionId: string;
   questionId: string;
   questionVersionId: string;
-  variant: number;
   order: number;
   marks: number;
   negativeMarks: number;
@@ -2240,14 +2233,10 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   };
 
   readonly paperQuestion = {
-    findMany: ({ where }: { where: { testId: string; variant?: number } }) =>
+    findMany: ({ where }: { where: { testId: string } }) =>
       Promise.resolve(
         this.paperQuestions
-          .filter(
-            (row) =>
-              row.testId === where.testId &&
-              (where.variant === undefined || row.variant === where.variant),
-          )
+          .filter((row) => row.testId === where.testId)
           .sort((a, b) => a.order - b.order)
           .map((row) => ({ ...row, question: this.questionRef(row.questionId) })),
       ),
@@ -2264,29 +2253,17 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ count: removed });
     },
 
-    createMany: ({
-      data,
-    }: {
-      data: (Omit<FakePaperRow, 'id' | 'status' | 'variant'> & { variant?: number })[];
-    }) => {
+    createMany: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status'>[] }) => {
       for (const row of data) {
-        const variant = row.variant ?? 0;
-        // The id carries the variant, or two variants' first questions would be the same row.
-        this.paperQuestions.push({
-          ...row,
-          variant,
-          id: `pq_${row.testId}_${variant}_${row.order}`,
-          status: 'ACTIVE',
-        });
+        this.paperQuestions.push({ ...row, id: `pq_${row.testId}_${row.order}`, status: 'ACTIVE' });
       }
       return Promise.resolve({ count: data.length });
     },
 
-    create: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status' | 'variant'> }) => {
+    create: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status'> }) => {
       const created: FakePaperRow = {
         ...data,
-        variant: 0,
-        id: `pq_${data.testId}_0_${data.order}`,
+        id: `pq_${data.testId}_${data.order}`,
         status: 'ACTIVE',
       };
       this.paperQuestions.push(created);
@@ -2320,7 +2297,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ ...row });
     },
 
-    /** Every variant carrying one question, gated on the status it is NOT already in. */
+    /** The row carrying one question, gated on the status it is NOT already in. */
     updateMany: ({
       where,
       data,

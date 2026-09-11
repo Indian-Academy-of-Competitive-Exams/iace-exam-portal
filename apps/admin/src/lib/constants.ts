@@ -38,7 +38,6 @@ import {
   type MeritType,
   type AnswerMode,
   type NavigationPolicy,
-  type PaperBinding,
   type QuestionFlagCategory,
   type QuestionFlagStatus,
   type QuestionStatus,
@@ -355,16 +354,6 @@ export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
 export const EVALUATION_MODE_HINTS: Readonly<Record<EvaluationMode, string>> = {
   RANKED: 'Scored against the cohort, with a rank and percentile',
   PRACTICE: 'Scored, never ranked',
-};
-
-export const PAPER_BINDING_LABELS: Readonly<Record<PaperBinding, string>> = {
-  FIXED: 'Fixed',
-  GENERATED: 'Generated',
-};
-
-export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
-  FIXED: 'Picked by hand and frozen when it is offered; every student sits it',
-  GENERATED: 'Several papers drawn when it is offered; each student is dealt one',
 };
 
 /** The phases of building a test. The order is the contract's; these are only the words. */

@@ -12,7 +12,7 @@ import {
   type TestDetail,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import { bannerMessage, optionalNumber } from '@iace/app-kit';
+import { bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   EmptyState,
@@ -151,10 +151,8 @@ function TestBuilder({
         title,
         scope: values.scope,
         scopeRef: scopeRefOf(values),
-        paperBinding: values.paperBinding,
         // Left out while unchosen, so the server takes the config's rather than guessing here.
         examTemplate: values.examTemplate ?? undefined,
-        variantCount: optionalNumber(values.variantCount),
       };
       return detail
         ? api.admin.tests.update(detail.id, owned)

@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, DIFFICULTY_LEVEL, ErrorCodes, PAPER_BINDING } from '@iace/contracts';
-import { GENERATED_HAS_NO_PAPER_MESSAGE, PaperService } from '../src/tests/paper.service';
+import { AppException, DIFFICULTY_LEVEL, ErrorCodes } from '@iace/contracts';
+import { PaperService } from '../src/tests/paper.service';
 import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
@@ -62,7 +62,7 @@ function serviceWith(
   };
 }
 
-/** A FIXED paper is picked by hand, so this is how one is built up to the counts its config asks. */
+/** Picked by hand, so this is how a paper is built up to the counts its config asks. */
 async function pickWholePaper(service: PaperService): Promise<void> {
   const picks: [string, string[]][] = [
     ['sec_1', ['r1', 'r2', 'r3']],
@@ -293,75 +293,6 @@ describe('PaperService — putting several questions on a section in one request
   });
 });
 
-describe('PaperService — drawing the papers a GENERATED test hands out', () => {
-  it('draws only from ACTIVE questions that carry a version', async () => {
-    const { service } = serviceWith([
-      ...bank(3, 'sub_r', 'r'),
-      ...bank(2, 'sub_q', 'q'),
-      makeQuestion({
-        id: 'draft',
-        subjectId: 'sub_q',
-        currentVersionId: 'draft_v1',
-        status: 'DRAFT',
-      }),
-      makeQuestion({ id: 'unversioned', subjectId: 'sub_q', currentVersionId: null }),
-    ]);
-
-    const rows = await service.drawVariants('tst_1', 1);
-
-    const picked = rows.map((row) => row.questionId);
-    assert.equal(picked.length, 5);
-    // A paper pins a version, so a question without one has nothing to pin.
-    assert.ok(!picked.includes('draft'));
-    assert.ok(!picked.includes('unversioned'));
-  });
-
-  it('reports the exact gap when the bank is too thin, and writes nothing', async () => {
-    const { service, prisma } = serviceWith([...bank(6, 'sub_r', 'r'), ...bank(1, 'sub_q', 'q')]);
-
-    const error = await service.drawVariants('tst_1', 1).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
-    assert.match(error.fieldErrors?.sec_2?.[0] ?? '', /Quant needs 2, and the bank holds 1/);
-    assert.equal(prisma.paperQuestions.length, 0);
-  });
-
-  /** The failure this prevents: "Quant is short" when what is short is its seven hard questions. */
-  it('names the difficulty when a split cannot be filled', async () => {
-    const thin = [
-      ...bank(6, 'sub_r', 'r'),
-      ...bank(6, 'sub_q', 'q').map((question, index) => ({
-        ...question,
-        difficulty: index === 0 ? DIFFICULTY_LEVEL.HIGH : DIFFICULTY_LEVEL.LOW,
-      })),
-    ];
-    const { service, prisma } = serviceWith(
-      thin,
-      makeTest({
-        id: 'tst_1',
-        questionPoolFilter: { sections: { sec_2: { mix: { LOW: 0, MEDIUM: 0, HIGH: 2 } } } },
-      }),
-    );
-
-    const error = await service.drawVariants('tst_1', 1).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
-    assert.match(error.fieldErrors?.sec_2?.[0] ?? '', /needs 2 high, and the bank holds 1/);
-    assert.equal(prisma.paperQuestions.length, 0);
-  });
-
-  it('refuses a drawn test asked for no papers at all', async () => {
-    const { service } = serviceWith();
-
-    const error = await service.drawVariants('tst_1', 0).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-  });
-});
-
 describe('PaperService — filling a section’s remainder from its own spec', () => {
   const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>, sectionId: string) =>
     paper.sections
@@ -381,6 +312,25 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.deepEqual(idsOf(paper, 'sec_2'), ['q1']);
   });
 
+  it('draws only from ACTIVE questions that carry a version', async () => {
+    const kit = serviceWith([
+      ...bank(3, 'sub_r', 'r'),
+      ...bank(2, 'sub_q', 'q'),
+      makeQuestion({
+        id: 'draft',
+        subjectId: 'sub_q',
+        currentVersionId: 'draft_v1',
+        status: 'DRAFT',
+      }),
+      makeQuestion({ id: 'unversioned', subjectId: 'sub_q', currentVersionId: null }),
+    ]);
+
+    const paper = await kit.service.fillSection('tst_1', 'sec_2');
+
+    // A paper pins a version, so a question without one has nothing to pin.
+    assert.deepEqual([...idsOf(paper, 'sec_2')].sort(), ['q1', 'q2']);
+  });
+
   /** The failure this prevents: the engine hands the pins back, so a fill writes them a second time. */
   it('writes a row only for what it drew, never for what was already on the paper', async () => {
     const kit = serviceWith();
@@ -393,7 +343,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.equal(new Set(held).size, 3);
   });
 
-  /** `@@unique([testId, variant, order])`: the engine numbers what it drew from 1, this paper cannot. */
+  /** `@@unique([testId, order])`: the engine numbers what it drew from 1, this paper cannot. */
   it('numbers what it adds from the paper’s highest order', async () => {
     const kit = serviceWith();
     await kit.service.addQuestions('tst_1', {
@@ -408,7 +358,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.deepEqual(orders, [1, 2, 3, 4, 5]);
   });
 
-  /** `@@unique([testId, variant, questionId])`: a question sits on a paper once, whatever section. */
+  /** `@@unique([testId, questionId])`: a question sits on a paper once, whatever section. */
   it('will not take a question another section holds, even to fill its own split', async () => {
     const shared = [
       makeSection({ id: 'sec_a', name: 'Part A', order: 1, subjectId: 'sub_s', questionCount: 3 }),
@@ -526,19 +476,6 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.equal(error.message, SAT_TEST_MESSAGE);
   });
 
-  it('refuses a test that draws a fresh paper per student', async () => {
-    const { service } = serviceWith(
-      undefined,
-      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED }),
-    );
-
-    const error = await service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.equal(error.message, GENERATED_HAS_NO_PAPER_MESSAGE);
-  });
-
   it('refuses a section this paper does not have', async () => {
     const { service } = serviceWith();
 
@@ -565,104 +502,10 @@ describe('PaperService — what it refuses to edit', () => {
     assert.equal(error.code, ErrorCodes.CONFLICT);
   });
 
-  it('refuses a test that draws a fresh paper per student', async () => {
-    const { service } = serviceWith(
-      undefined,
-      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED }),
-    );
-
-    // There is no ONE paper to edit for a test whose paper is drawn per attempt.
-    const error = await addOne(service);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-  });
-
   it('refuses a test that does not exist', async () => {
     const { service } = serviceWith();
 
     const error = await addOne(service, 'tst_gone');
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-});
-
-describe('PaperService — reading one variant of a drawn paper', () => {
-  /** Two variants of a drawn paper, each with its own row in each section. */
-  function twoVariants(prisma: FakeTestsPrisma): void {
-    const rows: [number, string, string][] = [
-      [0, 'sec_1', 'r1'],
-      [0, 'sec_2', 'q1'],
-      [3, 'sec_1', 'r4'],
-      [3, 'sec_2', 'q4'],
-    ];
-    for (const [variant, baseConfigSectionId, questionId] of rows) {
-      prisma.paperQuestions.push({
-        id: `pq_tst_1_${variant}_${baseConfigSectionId}`,
-        testId: 'tst_1',
-        baseConfigId: 'cfg_1',
-        baseConfigSectionId,
-        questionId,
-        questionVersionId: `${questionId}_v1`,
-        variant,
-        order: 1,
-        marks: 2,
-        negativeMarks: 0.5,
-        status: 'ACTIVE',
-      });
-    }
-  }
-
-  const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>) =>
-    paper.sections.flatMap((section) => section.questions.map((row) => row.questionId)).sort();
-
-  it('returns variant 0 when none is asked for, exactly as every existing caller expects', async () => {
-    const kit = serviceWith(
-      undefined,
-      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED, variantCount: 5 }),
-    );
-    twoVariants(kit.prisma);
-
-    const paper = await kit.service.read('tst_1');
-
-    assert.deepEqual(idsOf(paper), ['q1', 'r1']);
-  });
-
-  /** The failure this prevents: an admin reviewing "Paper 4" and being shown Paper 1. */
-  it('returns the asked-for variant’s own rows, not variant 0’s', async () => {
-    const kit = serviceWith(
-      undefined,
-      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED, variantCount: 5 }),
-    );
-    twoVariants(kit.prisma);
-
-    const paper = await kit.service.read('tst_1', 3);
-
-    assert.deepEqual(idsOf(paper), ['q4', 'r4']);
-  });
-
-  it('accepts the last valid variant and refuses the one just past it', async () => {
-    const kit = serviceWith(
-      undefined,
-      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED, variantCount: 5 }),
-    );
-    twoVariants(kit.prisma);
-
-    const paper = await kit.service.read('tst_1', 4);
-    const error = await kit.service.read('tst_1', 5).catch((e: unknown) => e);
-
-    assert.deepEqual(idsOf(paper), []);
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  /** A FIXED test's variantCount is 1, so this is the same bound as above, not a special case. */
-  it('refuses any variant but 0 on a fixed paper', async () => {
-    const kit = serviceWith();
-    await pickWholePaper(kit.service);
-
-    const error = await kit.service.read('tst_1', 1).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);

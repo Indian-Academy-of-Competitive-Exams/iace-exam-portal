@@ -9,7 +9,6 @@ import {
   EVALUATION_MODE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
-  PAPER_BINDING,
   TEST_STATUS,
 } from '@iace/contracts';
 import { AttemptsService } from '../src/attempts/attempts.service';
@@ -43,7 +42,6 @@ function paper(): FakePaperRow[] {
     baseConfigSectionId: 'sec_1',
     questionId: `q${n}`,
     questionVersionId: `q${n}_v1`,
-    variant: 0,
     order: n,
     marks: 2,
     negativeMarks: 0.5,
@@ -136,7 +134,6 @@ describe('AttemptsService — starting a sitting', () => {
         baseConfigSectionId: 'sec_2',
         questionId: `q${n}`,
         questionVersionId: `q${n}_v1`,
-        variant: 0,
         order: n,
       })),
     ];
@@ -386,56 +383,6 @@ describe('AttemptsService — the blueprint stops moving', () => {
     await service.start(STUDENT, 'tst_1', {});
 
     assert.equal(prisma.configs[0]?.locked, false);
-  });
-});
-
-describe('AttemptsService — a test with a paper per student', () => {
-  /** Two whole papers on file, drawn when the test was frozen. */
-  function variants(): FakePaperRow[] {
-    return [0, 1].flatMap((variant) =>
-      [1, 2, 3].map((n) => ({
-        id: `pq_${variant}_${n}`,
-        testId: 'tst_1',
-        baseConfigId: 'cfg_1',
-        baseConfigSectionId: 'sec_1',
-        questionId: `v${variant}q${n}`,
-        questionVersionId: `v${variant}q${n}_v1`,
-        variant,
-        order: n,
-        marks: 2,
-        negativeMarks: 0.5,
-        status: 'ACTIVE' as const,
-      })),
-    );
-  }
-
-  /** The failure this prevents: a generated test a student can be offered but never open. */
-  it('serves one of the papers, whole, rather than refusing to serve any', async () => {
-    const prisma = new FakeTestsPrisma(
-      [sittable({ paperBinding: PAPER_BINDING.GENERATED, variantCount: 2 })],
-      [makeBaseConfig({ id: 'cfg_1', durationSec: 3600, totalQuestions: 3 })],
-      SECTIONS,
-      [],
-      [],
-      variants(),
-      [],
-      [],
-      [],
-    );
-    const service = new AttemptsService(
-      prisma.asService(),
-      resolver(),
-      new AttemptStateService(prisma.asService(), new FakeRedis().asService()),
-    );
-
-    const attempt = await service.start(STUDENT, 'tst_1', {});
-
-    assert.equal(attempt.startedByThisCall, true);
-    const served = prisma.attemptQuestions.map((row) => row.questionId);
-    assert.equal(served.length, 3);
-    // Every question came from ONE of the two papers, never a blend of both.
-    const from = new Set(served.map((id) => id.slice(0, 2)));
-    assert.equal(from.size, 1);
   });
 });
 

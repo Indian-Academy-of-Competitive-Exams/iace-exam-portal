@@ -256,7 +256,6 @@ async function writePaper(prisma, stageId, assigned) {
         baseConfigSectionId: section.id,
         questionId: question.id,
         questionVersionId: question.currentVersionId,
-        variant: 0,
         order,
         marks: section.marks,
         negativeMarks: section.negative,

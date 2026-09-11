@@ -1,29 +1,19 @@
-import { useState } from 'react';
 import { useWatch } from 'react-hook-form';
 import {
-  EVALUATION_MODE,
   EVALUATION_MODE_LABELS,
   EVALUATION_MODES,
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
-  MAX_PAPER_VARIANTS,
-  MIN_PAPER_VARIANTS,
-  PAPER_BINDING,
-  PAPER_BINDINGS,
   TEST_SCOPE,
   TEST_SCOPES,
   TEST_SCOPE_LABELS,
-  allowedPaperBindings,
   type BaseConfigDetail,
-  type EvaluationMode,
   type ExamTemplate,
-  type PaperBinding,
   type TestDetail,
   type TestSeriesSummary,
   type TestScope,
 } from '@iace/contracts';
 import {
-  Alert,
   Combobox,
   FormField,
   FormSection,
@@ -32,12 +22,7 @@ import {
   RadioGroupItem,
   plural,
 } from '@iace/ui';
-import {
-  EVALUATION_MODE_HINTS,
-  EXAM_TEMPLATE_LABELS,
-  PAPER_BINDING_HINTS,
-  PAPER_BINDING_LABELS,
-} from '../lib/constants';
+import { EVALUATION_MODE_HINTS, EXAM_TEMPLATE_LABELS } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { ExamTemplatePreview } from '../components/exam-template-preview';
@@ -127,20 +112,14 @@ function Blueprint({
   const testSeriesId = useWatch({ control: form.control, name: 'testSeriesId' });
   const testSeriesName = useWatch({ control: form.control, name: 'testSeriesName' });
   const chosen = useWatch({ control: form.control, name: 'examTemplate' });
-  const [forcedToFixed, setForcedToFixed] = useState(false);
   // Unchosen shows what the blueprint would give, which is exactly what the server would store.
   const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.DEFAULT;
 
-  /** The series decides the mode, and a ranked one leaves only the frozen paper. */
+  /** The series decides the mode. */
   const pickSeries = (series: ChosenSeries) => {
-    const mode = series.id === '' ? '' : series.evaluationMode;
-    const forced =
-      mode !== '' && !allowedPaperBindings(mode).includes(form.getValues('paperBinding'));
     form.setValue('testSeriesId', series.id, DIRTY);
     form.setValue('testSeriesName', series.name, DIRTY);
-    form.setValue('evaluationMode', mode, DIRTY);
-    if (forced) form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
-    setForcedToFixed(forced);
+    form.setValue('evaluationMode', series.id === '' ? '' : series.evaluationMode, DIRTY);
   };
 
   /** A cascade: a stage belongs to one exam, and both a configuration and a series to one stage. */
@@ -256,12 +235,6 @@ function Blueprint({
         </>
       )}
 
-      {forcedToFixed ? (
-        <Alert variant="warning" className="sm:col-span-2">
-          {`${testSeriesName} is a Ranked series, so Paper changed from Generated to Fixed: a rank only means something if every student sat the same paper.`}
-        </Alert>
-      ) : null}
-
       <FormField form={form} name="title" label="Name">
         {(control) => (
           <Input
@@ -306,10 +279,6 @@ function Blueprint({
   );
 }
 
-/** An unchosen series has no mode to narrow by, so nothing is ruled out until one is picked. */
-const bindingsFor = (evaluationMode: EvaluationMode | ''): readonly PaperBinding[] =>
-  evaluationMode ? allowedPaperBindings(evaluationMode) : PAPER_BINDINGS;
-
 function Rules({
   form,
   config,
@@ -321,7 +290,6 @@ function Rules({
 }>) {
   const scope = useWatch({ control: form.control, name: 'scope' });
   const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
-  const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -362,43 +330,6 @@ function Rules({
       </FormField>
 
       <ScopeReference form={form} scope={scope} config={config} disabled={sat} />
-
-      <FormField
-        form={form}
-        name="paperBinding"
-        label="Paper"
-        /* ui-copy-ok: rule */ hint={
-          evaluationMode === EVALUATION_MODE.RANKED
-            ? 'A ranked test needs one shared paper'
-            : undefined
-        }
-      >
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={paperBinding}
-            clearable={false}
-            disabled={sat}
-            onChange={(value) => form.setValue('paperBinding', value as PaperBinding, DIRTY)}
-            items={bindingsFor(evaluationMode).map((value) => ({
-              value,
-              label: PAPER_BINDING_LABELS[value],
-              hint: PAPER_BINDING_HINTS[value],
-            }))}
-          />
-        )}
-      </FormField>
-
-      {paperBinding === PAPER_BINDING.GENERATED ? (
-        <FormField
-          form={form}
-          name="variantCount"
-          label="Papers"
-          /* ui-copy-ok: limit */ hint={`${MIN_PAPER_VARIANTS} to ${MAX_PAPER_VARIANTS}`}
-        >
-          {(control) => <Input {...control} disabled={sat} inputMode="numeric" />}
-        </FormField>
-      ) : null}
     </div>
   );
 }

@@ -68,7 +68,7 @@ export class ScoringOutbox {
     tx: Prisma.TransactionClient,
     served: { testId: string; questionId: string },
   ): Promise<number> {
-    // By question, not by row: a GENERATED test holds one row per variant for the same question.
+    // By question, which on a test's one paper is the same thing as by its row.
     const sittings = await tx.attemptQuestion.findMany({
       where: {
         questionId: served.questionId,

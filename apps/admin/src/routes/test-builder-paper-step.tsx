@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { scopedSections, type BaseConfigDetail, type TestDetail } from '@iace/contracts';
-import { Alert, Badge, Button, EmptyState, Skeleton, TruncatedText, plural } from '@iace/ui';
+import { Badge, Button, EmptyState, Skeleton, TruncatedText, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
-import { framingOf, hasPaper, sectionFullness, sectionTally } from './test-paper-view';
+import { framingOf, sectionFullness, sectionTally } from './test-paper-view';
 
 /** Amber only where work has started and stalled: an untouched section is not a warning. */
 const CHIP_VARIANT = {
@@ -18,12 +18,10 @@ export function PaperStep({
   detail,
   config,
 }: Readonly<{ detail: TestDetail | null; config: BaseConfigDetail | null }>) {
-  const paperExists = detail ? hasPaper(detail) : false;
-
   const paper = useQuery({
-    queryKey: [...QUERY_KEYS.TEST_PAPER, detail?.id ?? '', 0],
+    queryKey: [...QUERY_KEYS.TEST_PAPER, detail?.id ?? ''],
     queryFn: () => api.admin.tests.readPaper(detail?.id ?? ''),
-    enabled: Boolean(detail?.id) && paperExists,
+    enabled: Boolean(detail?.id),
   });
 
   if (!detail || !config) {
@@ -43,17 +41,10 @@ export function PaperStep({
     );
   }
 
-  const held = paperExists && paper.data ? tallyOf(paper.data) : null;
+  const held = paper.data ? tallyOf(paper.data) : null;
 
   return (
     <div className="flex flex-col gap-3">
-      {paperExists ? null : (
-        <Alert variant="info">
-          This test draws a paper for each student when it is offered, so there are none on it yet.
-          What each section draws from is set on the paper screen.
-        </Alert>
-      )}
-
       {paper.isLoading ? <Skeleton variant="title" /> : null}
 
       <ul className="flex flex-col gap-2">
@@ -83,7 +74,7 @@ export function PaperStep({
                 <Link
                   to={`${ROUTES.TEST_PAPER(detail.id)}?section=${encodeURIComponent(section.id)}`}
                 >
-                  {paperExists ? 'Open' : 'Set up'}
+                  Open
                 </Link>
               </Button>
             </li>

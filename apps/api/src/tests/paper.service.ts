@@ -6,17 +6,13 @@ import {
   DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  PAPER_BINDING,
   QUESTION_STATUS,
   type BaseConfigDetail,
-  paperFeasibility,
   quotaWithPicks,
   sectionQuota,
   type DifficultyMix,
   type DrawShortfall,
   type DrawSpec,
-  type FeasibilitySection,
-  type SectionAvailability,
   type SectionQuota,
   type AddPaperQuestionBody,
   type ReplacePaperQuestionBody,
@@ -36,18 +32,12 @@ import { stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
-/** The one a FIXED test has, and the first a GENERATED test draws. */
-const FIXED_VARIANT = 0;
-
-const NO_SUCH_VARIANT_MESSAGE = 'This test has no paper at that variant.';
 const NOT_DRAWABLE_MESSAGE = 'That question is not live, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
   'Only a finalized paper can have a question dropped or made a bonus. Edit the draft instead.';
 const NO_SUCH_SECTION_MESSAGE = 'No such section on this paper';
-const BANK_TOO_THIN_MESSAGE =
-  'The bank does not hold enough questions to fill every section of this paper.';
 const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
 
@@ -88,10 +78,7 @@ const PAPER_INCLUDE = {
   },
 } as const satisfies Prisma.PaperQuestionInclude;
 
-export const GENERATED_HAS_NO_PAPER_MESSAGE =
-  'This test draws a fresh paper for each student, so there is no one paper to edit. Switch it to a fixed paper first.';
-
-/** A test's paper: read, drawn at finalize, or edited a question at a time until the freeze. */
+/** A test's paper: read, or built a question or a section at a time until the freeze. */
 @Injectable()
 export class PaperService {
   private readonly logger = new Logger(PaperService.name);
@@ -103,73 +90,10 @@ export class PaperService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  async read(testId: string, variant?: number): Promise<TestPaper> {
-    const test = await this.requireTest(testId);
-    const requested = variant ?? FIXED_VARIANT;
-    // No CHECK holds a FIXED test to its one variant — variantCountFor does, on create and update.
-    if (requested >= test.variantCount) {
-      throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_VARIANT_MESSAGE);
-    }
-    const config = await this.configs.detail(test.baseConfigId);
-    return this.paperOf(test.id, this.scopedOf(test, config), requested);
-  }
-
-  /** The papers a GENERATED test hands out. DRAWN only — writing them belongs behind the freeze. */
-  async drawVariants(
-    testId: string,
-    count: number,
-  ): Promise<Prisma.PaperQuestionCreateManyInput[]> {
+  async read(testId: string): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     const config = await this.configs.detail(test.baseConfigId);
-    const scoped = this.scopedOf(test, config);
-    const sections = scoped.map(toDrawSection);
-    const spec = (test.questionPoolFilter as DrawSpec | null) ?? null;
-
-    if (count < 1) {
-      const none = 'A drawn test needs at least one paper to hand out.';
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, none, {
-        fieldErrors: { variantCount: [none] },
-      });
-    }
-
-    const pool = await this.poolFor(sections, spec);
-    this.assertBankCanFill(scoped, spec, pool);
-
-    const papers = Array.from(
-      { length: count },
-      (_, variant): Prisma.PaperQuestionCreateManyInput[] => {
-        const result = drawPaper({
-          sections,
-          pool,
-          spec,
-          // A fresh seed per paper is the whole of what makes one variant differ from the next.
-          seed: freshSeed(),
-        });
-        if (!result.ok) {
-          throw new AppException(ErrorCodes.DRAW_SHORTFALL, BANK_TOO_THIN_MESSAGE, {
-            fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)),
-          });
-        }
-        return result.questions.map((row) => ({
-          ...row,
-          variant,
-          testId,
-          baseConfigId: test.baseConfigId,
-        }));
-      },
-    );
-
-    return papers.flat();
-  }
-
-  /** Takes the caller's transaction because the only safe place to write a paper is behind a gate. */
-  async writeVariants(
-    tx: Prisma.TransactionClient,
-    testId: string,
-    rows: readonly Prisma.PaperQuestionCreateManyInput[],
-  ): Promise<void> {
-    await tx.paperQuestion.deleteMany({ where: { testId } });
-    await tx.paperQuestion.createMany({ data: [...rows] });
+    return this.paperOf(test.id, this.scopedOf(test, config));
   }
 
   /** Several at once, numbered from the section's current highest order; every one resolved and checked before any write. */
@@ -191,7 +115,7 @@ export class PaperService {
     }
 
     const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId, variant: FIXED_VARIANT },
+      where: { testId },
       select: {
         order: true,
         baseConfigSectionId: true,
@@ -247,7 +171,7 @@ export class PaperService {
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
     const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId, variant: FIXED_VARIANT },
+      where: { testId },
       select: HELD_SELECT,
     });
     const spec = sectionSpec((test.questionPoolFilter as DrawSpec | null) ?? null, section.id);
@@ -406,11 +330,7 @@ export class PaperService {
         `Question ${row.questionId} on test ${testId} is ${status} across ${asked.rows} paper rows; ${asked.sittings} sittings to re-score`,
       );
     }
-    return this.paperOf(
-      testId,
-      this.scopedOf(test, await this.configs.detail(test.baseConfigId)),
-      row.variant,
-    );
+    return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
   private async requireRow(testId: string, rowId: string) {
@@ -422,7 +342,6 @@ export class PaperService {
         baseConfigSectionId: true,
         questionId: true,
         status: true,
-        variant: true,
       },
     });
     if (row?.testId !== testId) {
@@ -503,45 +422,20 @@ export class PaperService {
     return rows.filter(hasVersion).map(toCandidate);
   }
 
-  /** The same rule the form shows live, so a draw never refuses something the screen called ready. */
-  private assertBankCanFill(
-    sections: BaseConfigDetail['sections'],
-    spec: DrawSpec | null,
-    pool: readonly DrawCandidate[],
-  ): void {
-    const gaps = paperFeasibility(
-      sections.map(toFeasibilitySection),
-      spec,
-      availabilityOf(sections, spec, pool),
-    );
-    if (gaps.length === 0) return;
-
-    throw new AppException(ErrorCodes.DRAW_SHORTFALL, BANK_TOO_THIN_MESSAGE, {
-      fieldErrors: shortfallErrors(gaps),
-    });
-  }
-
-  private assertAssemblable(test: { attemptCount: number; paperBinding: string }): void {
+  private assertAssemblable(test: { attemptCount: number }): void {
     if (test.attemptCount > 0) {
       throw new AppException(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE, {
         fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
       });
     }
-    if (test.paperBinding === PAPER_BINDING.GENERATED) {
-      throw new AppException(ErrorCodes.CONFLICT, GENERATED_HAS_NO_PAPER_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [GENERATED_HAS_NO_PAPER_MESSAGE] },
-      });
-    }
   }
 
-  /** One paper at a time. A FIXED test has only variant 0; a GENERATED one is read a variant at a time. */
   private async paperOf(
     testId: string,
     sections: BaseConfigDetail['sections'],
-    variant = FIXED_VARIANT,
   ): Promise<TestPaper> {
     const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId, variant },
+      where: { testId },
       include: PAPER_INCLUDE,
       orderBy: { order: 'asc' },
     });
@@ -563,7 +457,6 @@ export class PaperService {
             baseConfigSectionId: row.baseConfigSectionId,
             questionId: row.questionId,
             questionVersionId: row.questionVersionId,
-            variant: row.variant,
             order: row.order,
             marks: Number(row.marks),
             negativeMarks: Number(row.negativeMarks),
@@ -599,11 +492,9 @@ export class PaperService {
         id: true,
         baseConfigId: true,
         isLocked: true,
-        paperBinding: true,
         scope: true,
         scopeRef: true,
         questionPoolFilter: true,
-        variantCount: true,
         _count: { select: { attempts: true } },
       },
     });
@@ -627,35 +518,6 @@ function topicWhere(spec: DrawSpec | null): Prisma.QuestionWhereInput {
 
   const topicIds = [...new Set(sections.flatMap((section) => section.topicIds ?? []))];
   return { topicId: { in: topicIds } };
-}
-
-function toFeasibilitySection(section: BaseConfigDetail['sections'][number]): FeasibilitySection {
-  return { id: section.id, name: section.name, questionCount: section.questionCount };
-}
-
-/** What the pool actually holds per section, once that section's own subject and topics apply. */
-function availabilityOf(
-  sections: BaseConfigDetail['sections'],
-  spec: DrawSpec | null,
-  pool: readonly DrawCandidate[],
-): Record<string, SectionAvailability> {
-  return Object.fromEntries(
-    sections.map((section) => {
-      const topicIds = spec?.sections?.[section.id]?.topicIds;
-      const held = pool.filter(
-        (candidate) =>
-          (section.subjectId === null || candidate.subjectId === section.subjectId) &&
-          (!topicIds?.length ||
-            (candidate.topicId !== null && topicIds.includes(candidate.topicId))),
-      );
-
-      const byDifficulty: SectionAvailability['byDifficulty'] = {};
-      for (const candidate of held) {
-        byDifficulty[candidate.difficulty] = (byDifficulty[candidate.difficulty] ?? 0) + 1;
-      }
-      return [section.id, { total: held.length, byDifficulty }];
-    }),
-  );
 }
 
 /** The engine's own shortfall, in the shape the shared message builder reads. */

@@ -21,7 +21,6 @@ import {
   makeQuestion,
   makeSection,
   makeTest,
-  rowAt,
   type FakeAttemptQuestionRow,
   type FakePaperRow,
 } from './support/fakes';
@@ -29,22 +28,21 @@ import {
 const TEST_ID = 'tst_1';
 const DROPPED_ROW = 'pq_1';
 
-const row = (id: string, questionId: string, variant: number): FakePaperRow => ({
+const row = (id: string, questionId: string, order: number): FakePaperRow => ({
   id,
   testId: TEST_ID,
   baseConfigId: 'cfg_1',
   baseConfigSectionId: 'sec_1',
   questionId,
   questionVersionId: `${questionId}_v1`,
-  variant,
-  order: 1,
+  order,
   marks: 2,
   negativeMarks: 0.5,
   status: PAPER_QUESTION_STATUS.ACTIVE,
 });
 
-/** The same question on two variants of one GENERATED paper, plus an unrelated one. */
-const paper: FakePaperRow[] = [row('pq_1', 'q1', 0), row('pq_1_v1', 'q1', 1), row('pq_2', 'q2', 0)];
+/** The question being dropped, plus one that is not. */
+const paper: FakePaperRow[] = [row('pq_1', 'q1', 1), row('pq_2', 'q2', 2)];
 
 /** Three sittings: two ended and one still running, all of them served the row being dropped. */
 const sittings = () => [
@@ -121,10 +119,9 @@ describe('dropping a question on a paper somebody has already sat', () => {
       reason: A_REASON,
     });
 
-    // Every variant carrying that question, because a faulty question is faulty on all of them.
-    assert.deepEqual(
-      prisma.paperQuestions.filter((paperRow) => paperRow.questionId === 'q1').map((r) => r.status),
-      [PAPER_QUESTION_STATUS.DROPPED, PAPER_QUESTION_STATUS.DROPPED],
+    assert.equal(
+      prisma.paperQuestions.find((paperRow) => paperRow.id === DROPPED_ROW)?.status,
+      PAPER_QUESTION_STATUS.DROPPED,
     );
     assert.deepEqual(
       scoringRequests(prisma)
@@ -181,24 +178,6 @@ describe('dropping a question on a paper somebody has already sat', () => {
       prisma.paperQuestions.find((paperRow) => paperRow.id === DROPPED_ROW)?.status,
       PAPER_QUESTION_STATUS.DROPPED,
     );
-  });
-
-  /** One sitting, two served rows for the same question, is still one re-score. */
-  it('asks once per sitting, however many rows of that question it served', async () => {
-    const { prisma, service } = bench();
-    prisma.attemptQuestions.push({
-      ...rowAt(served()),
-      questionId: 'q1',
-      paperQuestionId: 'pq_1_v1',
-      order: 2,
-    });
-
-    await service.setQuestionStatus(TEST_ID, DROPPED_ROW, {
-      status: PAPER_QUESTION_STATUS.DROPPED,
-      reason: A_REASON,
-    });
-
-    assert.equal(scoringRequests(prisma).length, 2);
   });
 
   it('takes a dropped question back, which is another change and another re-score', async () => {

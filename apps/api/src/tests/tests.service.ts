@@ -4,8 +4,6 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  MIN_PAPER_VARIANTS,
-  PAPER_BINDING,
   TEST_SCOPE,
   fieldDiff,
   scopedQuestionCount,
@@ -14,7 +12,6 @@ import {
   type CreateTestBody,
   type Paginated,
   type DrawSpec,
-  type PaperBinding,
   type Test,
   type TestDetail,
   type TestListQuery,
@@ -30,14 +27,11 @@ import {
   SERIES_GONE_MESSAGE,
   locksOutTestEdit,
   thawsThePaper,
-  paperBindingIssue,
   scopeRefIssue,
   seriesFitIssue,
   seriesRefused,
   TEST_DEFAULTS,
   testDeletionBlocker,
-  variantCountFor,
-  variantCountIssue,
 } from './test-rules';
 import { thaw } from './thaw';
 
@@ -79,7 +73,6 @@ export const AUDITED_TEST_FIELDS = [
   'title',
   'isLocked',
   'scope',
-  'paperBinding',
   'examTemplate',
   'status',
 ] as const;
@@ -132,12 +125,8 @@ export class TestsService {
     const series = await this.seriesCarrying(input.testSeriesId, config.examStageId);
 
     const scope = input.scope ?? TEST_DEFAULTS.scope;
-    const paperBinding = input.paperBinding ?? TEST_DEFAULTS.paperBinding;
     const scopeRef = input.scopeRef ?? null;
-    this.assertJudgeable(series.evaluationMode, paperBinding, series.name);
     this.assertCovers(config, scope, scopeRef);
-    const variantCount = variantCountFor(paperBinding, input.variantCount);
-    this.assertDrawable(paperBinding, variantCount);
 
     const created = await this.prisma.test.create({
       data: {
@@ -150,8 +139,6 @@ export class TestsService {
         scope,
         scopeRef: toJson(scopeRef),
         evaluationMode: series.evaluationMode,
-        paperBinding,
-        variantCount,
         questionPoolFilter: toJson(input.questionPoolFilter ?? null),
         createdById,
       },
@@ -188,28 +175,10 @@ export class TestsService {
     // Judged against what the test WILL hold: either half of the pair may be the one moving.
     const scope = input.scope ?? test.scope;
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
-    const paperBinding = input.paperBinding ?? test.paperBinding;
-    this.assertJudgeable(test.evaluationMode, paperBinding, test.testSeries.name);
     this.assertCovers(config, scope, scopeRef);
 
-    // Papers are already drawn against a frozen count, so only an unfrozen one is raised to the floor.
-    const held =
-      test.isLocked || test.variantCount >= MIN_PAPER_VARIANTS ? test.variantCount : undefined;
-    const variantCount = variantCountFor(paperBinding, input.variantCount ?? held);
-    // The floor judges the ask: a count nobody moved must not refuse the edit that left it alone.
-    if (input.variantCount !== undefined || variantCount !== test.variantCount) {
-      this.assertDrawable(paperBinding, variantCount);
-    }
-
-    const droppingThePaper =
-      input.paperBinding === PAPER_BINDING.GENERATED && test.paperBinding !== input.paperBinding;
-
     const updated = await this.prisma.$transaction(async (tx) => {
-      // Before the paper goes: the thaw reads it to give back what finalizing counted.
       if (thawsThePaper(input)) await thaw(tx, test);
-
-      // A paper belongs to a FIXED test. Per-attempt leaves rows nothing will ever read.
-      if (droppingThePaper) await tx.paperQuestion.deleteMany({ where: { testId: id } });
 
       return tx.test.update({
         where: { id },
@@ -218,8 +187,6 @@ export class TestsService {
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
-          ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
-          ...(variantCount === test.variantCount ? {} : { variantCount }),
           ...(input.questionPoolFilter === undefined
             ? {}
             : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
@@ -244,29 +211,6 @@ export class TestsService {
     await this.prisma.test.delete({ where: { id } });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
-  }
-
-  /** A generated test with one paper is a fixed test wearing the wrong name. */
-  private assertDrawable(paperBinding: PaperBinding, variantCount: number): void {
-    const issue = variantCountIssue(paperBinding, variantCount);
-    if (issue) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, issue, {
-        fieldErrors: { variantCount: [issue] },
-      });
-    }
-  }
-
-  private assertJudgeable(
-    evaluationMode: TestRow['evaluationMode'],
-    paperBinding: TestRow['paperBinding'],
-    seriesName: string | null,
-  ): void {
-    const issue = paperBindingIssue(evaluationMode, paperBinding, seriesName);
-    if (issue) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, issue, {
-        fieldErrors: { paperBinding: [issue] },
-      });
-    }
   }
 
   /** The scope has to name a part of THIS config, or the draw has nothing to narrow to. */
@@ -336,9 +280,7 @@ function toTest(row: TestRow): Test {
     scope: row.scope,
     scopeRef: scopeRefOf(row),
     evaluationMode: row.evaluationMode,
-    paperBinding: row.paperBinding,
     examTemplate: row.examTemplate,
-    variantCount: row.variantCount,
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     status: row.status,
     isLocked: row.isLocked,

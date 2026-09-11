@@ -322,20 +322,6 @@ describe('drawPaper — the seed', () => {
     assert.notDeepEqual(first, other);
   });
 
-  it('gives every variant of a test a different SET of questions, not one paper reordered', () => {
-    const options = { sections: [section({ questionCount: 20 })], pool: pool(200) };
-
-    const papers = Array.from({ length: 10 }, (_, variant) =>
-      questionsOf(draw({ ...options, seed: 1000 + variant }))
-        .map((row) => row.questionId)
-        .sort()
-        .join(','),
-    );
-
-    // The failure this prevents: a rank applied after the shuffle gave every variant one paper.
-    assert.equal(new Set(papers).size, 10);
-  });
-
   it('gives the same paper however the rows arrived', () => {
     const bank = pool(30);
     const options = { sections: [section({ questionCount: 6 })], seed: 7 };

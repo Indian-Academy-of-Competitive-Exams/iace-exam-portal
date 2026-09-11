@@ -142,13 +142,6 @@ describe('the outbox poll', () => {
   });
 });
 
-describe('a ranked test', () => {
-  /** The failure this prevents: a leaderboard ranking students who sat different papers. */
-  it('cannot be scored from a per-attempt paper', () => {
-    assert.match(MIGRATION, /CHECK \("evaluationMode" <> 'RANKED' OR "paperBinding" = 'FIXED'\)/);
-  });
-});
-
 describe('section shape follows the config timer template', () => {
   for (const [template, column] of [
     ['SESSION_MODULE_LOCKED', 'module_id'],

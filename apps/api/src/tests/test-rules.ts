@@ -1,15 +1,10 @@
 import {
   AppException,
-  DEFAULT_PAPER_VARIANTS,
   ErrorCodes,
-  MIN_PAPER_VARIANTS,
   seriesModeMismatch,
-  isPaperBindingAllowed,
-  PAPER_BINDING,
   TEST_SCOPE,
   TEST_STATUS,
   type EvaluationMode,
-  type PaperBinding,
   type TestScope,
   type TestScopeRef,
   type UpdateTestBody,
@@ -20,25 +15,7 @@ import {
 /** What a test is when the admin says nothing. The mode is absent: its series decides that. */
 export const TEST_DEFAULTS = {
   scope: TEST_SCOPE.FULL,
-  paperBinding: PAPER_BINDING.FIXED,
 } as const;
-
-export const RANKED_NEEDS_FIXED_MESSAGE =
-  'A ranked test puts every student on one leaderboard, so they all have to sit the same paper. Choose a fixed paper, or make this a practice test.';
-
-/** The same rule said against the series that decided the mode, since no screen can change it here. */
-export const rankedSeriesNeedsFixed = (seriesName: string): string =>
-  `${seriesName} puts every student on one leaderboard, so its tests all sit the same paper. Choose a fixed paper, or put this test in a practice series.`;
-
-/** A rank only means something if everyone sat the same paper. */
-export function paperBindingIssue(
-  evaluationMode: EvaluationMode,
-  paperBinding: PaperBinding,
-  seriesName: string | null = null,
-): string | null {
-  if (isPaperBindingAllowed(evaluationMode, paperBinding)) return null;
-  return seriesName === null ? RANKED_NEEDS_FIXED_MESSAGE : rankedSeriesNeedsFixed(seriesName);
-}
 
 export const SERIES_GONE_MESSAGE = 'That series no longer exists.';
 
@@ -62,20 +39,6 @@ export function seriesFitIssue(
   // A test being created has no mode of its own yet: the series it is born into decides it.
   if (test.evaluationMode === undefined) return null;
   return seriesModeMismatch(series.name, series.evaluationMode, test.evaluationMode);
-}
-
-export const TOO_FEW_VARIANTS_MESSAGE = `A test that draws a paper per student needs at least ${MIN_PAPER_VARIANTS} to draw from. Give it that many, or make it a fixed paper.`;
-
-/** Too few papers and a cohort is back to sitting one, which is what fixed already does better. */
-export function variantCountIssue(paperBinding: PaperBinding, variantCount: number): string | null {
-  const fixed = paperBinding === PAPER_BINDING.FIXED;
-  return !fixed && variantCount < MIN_PAPER_VARIANTS ? TOO_FEW_VARIANTS_MESSAGE : null;
-}
-
-/** A fixed paper is one paper. Held rather than refused: no screen can ask for anything else. */
-export function variantCountFor(paperBinding: PaperBinding, wanted: number | undefined): number {
-  if (paperBinding === PAPER_BINDING.FIXED) return 1;
-  return wanted ?? DEFAULT_PAPER_VARIANTS;
 }
 
 const SCOPE_REFERENCE_REQUIRED: Record<TestScope, keyof TestScopeRef | null> = {

@@ -115,8 +115,7 @@ export class LiveOpsService {
       awaitingScoring,
       recent,
     ] = await Promise.all([
-      // Every variant holds the whole paper, so the first one's size is every sitting's size.
-      this.prisma.paperQuestion.count({ where: { testId, variant: 0 } }),
+      this.prisma.paperQuestion.count({ where: { testId } }),
       this.sittings(running),
       this.sittings(overdue),
       this.prisma.attempt.count({ where: running }),
