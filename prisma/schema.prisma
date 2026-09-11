@@ -582,6 +582,8 @@ model Attempt {
   wrongCount       Int?
   unattemptedCount Int?
   sectionScores    Json?
+  // Less time wins a tie on marks: seconds from start to submit, capped at a day, a day if unsubmitted.
+  timeTakenSec     Int?
   // Snapshots. The live rank and percentile are always read from Redis.
   lastRank         Int?
   lastPercentile   Decimal?            @db.Decimal(5, 2)

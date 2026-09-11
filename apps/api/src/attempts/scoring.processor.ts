@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { LeaderboardService } from './leaderboard.service';
+import { LEADERBOARD_MAX_TIME_SEC, timeTakenSec } from './leaderboard-score';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { NotificationOutbox } from '../notifications';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
@@ -147,6 +148,10 @@ export class ScoringProcessor extends WorkerHost {
           wrongCount: scored.wrongCount,
           unattemptedCount: scored.unattemptedCount,
           sectionScores: scored.sections,
+          timeTakenSec: Math.min(
+            timeTakenSec(attempt.startedAt, attempt.submittedAt),
+            LEADERBOARD_MAX_TIME_SEC,
+          ),
         },
       });
       if (marked.count === 0) return { applied: false, evaluation: null };

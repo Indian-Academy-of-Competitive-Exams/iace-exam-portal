@@ -1655,6 +1655,7 @@ export interface FakeAttemptRow {
   wrongCount: number | null;
   unattemptedCount: number | null;
   sectionScores: AttemptSectionScore[] | null;
+  timeTakenSec: number | null;
   lastRank: number | null;
   lastPercentile: number | null;
   createdAt: Date;
@@ -1694,6 +1695,7 @@ export function makeAttempt(overrides: Partial<FakeAttemptRow> = {}): FakeAttemp
     wrongCount: null,
     unattemptedCount: null,
     sectionScores: null,
+    timeTakenSec: null,
     lastRank: null,
     lastPercentile: null,
     createdAt: startedAt,

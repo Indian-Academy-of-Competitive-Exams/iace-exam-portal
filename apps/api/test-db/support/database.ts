@@ -11,7 +11,9 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
-const MINUTE_MS = 60_000;
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+const HALF_HOUR_SEC = 30 * 60;
 
 export interface Catalog {
   examStageId: string;
@@ -37,6 +39,7 @@ export interface SittingInput {
   status?: AttemptStatus;
   attemptNo?: number;
   submittedAt?: Date;
+  timeTakenSec?: number;
   lastPercentile?: number | null;
 }
 
@@ -122,7 +125,8 @@ export function makeStudent(
 /** An evaluated, graded first sitting unless told otherwise, submitted half an hour in. */
 export function makeSitting(prisma: PrismaService, input: SittingInput): Promise<{ id: string }> {
   const submittedAt = input.submittedAt ?? new Date();
-  const startedAt = new Date(submittedAt.getTime() - 30 * MINUTE_MS);
+  const timeTakenSec = input.timeTakenSec ?? HALF_HOUR_SEC;
+  const startedAt = new Date(submittedAt.getTime() - timeTakenSec * SECOND_MS);
   return prisma.attempt.create({
     data: {
       id: uid('attempt'),
@@ -137,6 +141,7 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
       evaluatedAt: submittedAt,
       shuffleSeed: 1,
       score: input.score,
+      timeTakenSec,
       lastPercentile: input.lastPercentile ?? null,
     },
     select: { id: true },

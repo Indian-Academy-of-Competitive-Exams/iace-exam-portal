@@ -18,6 +18,8 @@ import {
   fakeNotificationOutbox,
 } from './support/fakes';
 
+const A_DAY_SEC = 24 * 60 * 60;
+
 /** Three questions on one paper: the first right, the second wrong, the third never touched. */
 function sitting(overrides: Partial<FakeAttemptRow> = {}): {
   prisma: FakeScoringPrisma;
@@ -91,6 +93,21 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(prisma.attempts[0]?.sectionScores?.[0]?.score, 1.5);
   });
 
+  it('records the time the sitting took beside its marks, and never more than a day', async () => {
+    const startedAt = new Date('2026-08-24T04:00:00.000Z');
+    const quick = sitting({ startedAt, submittedAt: new Date('2026-08-24T04:20:00.000Z') });
+    const overnight = sitting({ startedAt, submittedAt: new Date('2026-08-25T10:00:00.000Z') });
+    const unsubmitted = sitting({ startedAt, submittedAt: null });
+    const runs = [quick, overnight, unsubmitted];
+
+    for (const run of runs) await run.processor.score(run.attempt.id);
+
+    assert.deepEqual(
+      runs.map((run) => run.attempt.timeTakenSec),
+      [20 * 60, A_DAY_SEC, A_DAY_SEC],
+    );
+  });
+
   /** A first evaluation is RESULT_READY; only a re-score reaches the correction path at all. */
   it('tells a student whose marks a re-score actually moved', async () => {
     const { prisma, attempt, processor } = sitting({
@@ -139,6 +156,7 @@ describe('ScoringProcessor — what it writes', () => {
     wrongCount: attempt.wrongCount,
     unattemptedCount: attempt.unattemptedCount,
     sectionScores: attempt.sectionScores,
+    timeTakenSec: attempt.timeTakenSec,
     evaluatedAt: attempt.evaluatedAt,
     questions: served.map((row) => [row.isCorrect, row.marksAwarded]),
   });
