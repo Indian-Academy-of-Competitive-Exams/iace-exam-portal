@@ -21,7 +21,7 @@ import {
   type ScoreCardSection,
   type SeriesProgression,
   civilDate,
-  type PracticeCalendar,
+  type TestCalendar,
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
@@ -279,7 +279,7 @@ export class PerformanceAnalyticsService {
   }
 
   /** Sitting counts by institute day, since the account opened. No paper is read, ever. */
-  async practiceDays(studentId: string): Promise<PracticeCalendar> {
+  async testDays(studentId: string): Promise<TestCalendar> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null },
       select: { createdAt: true },

@@ -44,7 +44,7 @@ import {
   OVERVIEW_QUERY_KEY,
   PERFORMANCE_QUERY_KEY,
   ROUTES,
-  PRACTICE_DAYS_QUERY_KEY,
+  TEST_DAYS_QUERY_KEY,
 } from '../lib/constants';
 import { continueWith, openNow, sittablesOf, upNext, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
@@ -85,9 +85,9 @@ export function DashboardPage() {
   const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
-  const practice = useQuery({
-    queryKey: PRACTICE_DAYS_QUERY_KEY,
-    queryFn: () => api.me.practiceDays(),
+  const testDays = useQuery({
+    queryKey: TEST_DAYS_QUERY_KEY,
+    queryFn: () => api.me.testDays(),
   });
 
   const now = new Date();
@@ -120,7 +120,7 @@ export function DashboardPage() {
           <div className="min-w-0 xl:col-span-2">
             <Trend trend={trend} points={trend.data?.points ?? []} />
           </div>
-          {practice.data ? <StreakFigure calendar={practice.data} /> : null}
+          {testDays.data ? <StreakFigure calendar={testDays.data} /> : null}
         </div>
 
         {waiting.length > 1 ? (

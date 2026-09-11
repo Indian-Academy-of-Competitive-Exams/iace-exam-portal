@@ -186,25 +186,25 @@ const retakesFoot = (count: number): string | undefined => {
 };
 
 // ============================================================================
-// Practice days. A civil date, never an instant: a sitting submitted at 04:00
+// Test days. A civil date, never an instant: a sitting submitted at 04:00
 // IST belongs to that day, and `getUTC*` on the stored instant would put it on
 // the one before. Every date here is a `YYYY-MM-DD` on the institute's clock.
 // ============================================================================
 
 /** One day on the calendar, and how many sittings landed on it. */
-export const practiceDaySchema = z.object({
+export const testDaySchema = z.object({
   date: z.string(),
   sittings: z.number().int(),
 });
-export type PracticeDay = z.infer<typeof practiceDaySchema>;
-export const practiceDayListSchema = z.array(practiceDaySchema);
+export type TestDay = z.infer<typeof testDaySchema>;
+export const testDayListSchema = z.array(testDaySchema);
 
 /** The window the SERVER chose, with the days inside it — the account decides how far back. */
-export const practiceCalendarSchema = z.object({
+export const testCalendarSchema = z.object({
   from: z.string(),
-  days: practiceDayListSchema,
+  days: testDayListSchema,
 });
-export type PracticeCalendar = z.infer<typeof practiceCalendarSchema>;
+export type TestCalendar = z.infer<typeof testCalendarSchema>;
 
 const DAY_MS = 86_400_000;
 
@@ -225,13 +225,13 @@ export function startOfLastMonth(today: string = todayISO()): string {
 }
 
 /** Every day from `from` to `today` inclusive, oldest first, zeros filled in. */
-export function practiceWindow(
-  sat: readonly PracticeDay[],
+export function testDayWindow(
+  sat: readonly TestDay[],
   from: string,
   today: string = todayISO(),
-): PracticeDay[] {
+): TestDay[] {
   const counted = new Map(sat.map((day) => [day.date, day.sittings]));
-  const days: PracticeDay[] = [];
+  const days: TestDay[] = [];
   for (let date = from; date <= today; date = shiftCivilDate(date, 1)) {
     days.push({ date, sittings: counted.get(date) ?? 0 });
   }
@@ -239,7 +239,7 @@ export function practiceWindow(
 }
 
 /** Consecutive days ending today, or yesterday: a day still in progress cannot break a run. */
-export function currentStreak(sat: readonly PracticeDay[], today: string = todayISO()): number {
+export function currentStreak(sat: readonly TestDay[], today: string = todayISO()): number {
   const days = daysWithSittings(sat);
   let day = days.has(today) ? today : shiftCivilDate(today, -1);
   let run = 0;
@@ -251,7 +251,7 @@ export function currentStreak(sat: readonly PracticeDay[], today: string = today
 }
 
 /** The longest run anywhere in what was counted — the best they have ever kept up. */
-export function longestStreak(sat: readonly PracticeDay[]): number {
+export function longestStreak(sat: readonly TestDay[]): number {
   const days = daysWithSittings(sat);
   let best = 0;
   for (const day of days) {
@@ -263,7 +263,7 @@ export function longestStreak(sat: readonly PracticeDay[]): number {
   return best;
 }
 
-const daysWithSittings = (sat: readonly PracticeDay[]) =>
+const daysWithSittings = (sat: readonly TestDay[]) =>
   new Set(sat.filter((day) => day.sittings > 0).map((day) => day.date));
 
 /** The three shares the disposition can answer. LIFETIME: `StudentStat` holds no scope to split by. */

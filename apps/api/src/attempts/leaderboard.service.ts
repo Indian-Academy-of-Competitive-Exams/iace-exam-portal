@@ -37,7 +37,7 @@ export interface RankedAttempt {
 /** How many sittings one rebuild page reads. A 5K cohort is five round trips, not five thousand. */
 const REBUILD_PAGE = 1000;
 
-/** Long enough that a board is never rebuilt in practice; short enough that a dead one goes away. */
+/** Long enough that a board is never rebuilt in normal use; short enough that a dead one goes away. */
 const BOARD_TTL_SEC = 30 * 24 * 60 * 60;
 
 /** One rebuild at a time per test, and long enough for the biggest cohort to finish. */

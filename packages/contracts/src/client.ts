@@ -194,18 +194,18 @@ import {
   OVERVIEW_ROUTES,
   PERFORMANCE_ROUTES,
   performanceReportSchema,
-  practiceCalendarSchema,
   questionReportSchema,
   satSeriesListSchema,
   studentOverviewSchema,
   testAnalyticsSchema,
+  testCalendarSchema,
   type PerformanceReport,
-  type PracticeCalendar,
   type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
   type StudentOverview,
   type TestAnalytics,
+  type TestCalendar,
 } from './stats';
 import {
   LEADERBOARD_ROUTES,
@@ -802,8 +802,8 @@ export function createApiClient(options: ApiClientOptions) {
         request(ME_ATTEMPT_ROUTES.performance, { schema: performanceTrendSchema }),
 
       /** Sitting counts by institute day, for the calendar the trend's twenty cannot fill. */
-      practiceDays: (): Promise<PracticeCalendar> =>
-        request(ME_ATTEMPT_ROUTES.practiceDays, { schema: practiceCalendarSchema }),
+      testDays: (): Promise<TestCalendar> =>
+        request(ME_ATTEMPT_ROUTES.testDays, { schema: testCalendarSchema }),
 
       /** The cutoff-free metric set for one sitting, one paper, one series or the whole career. */
       performanceReport: (query: PerformanceReportQueryInput): Promise<PerformanceReport> =>

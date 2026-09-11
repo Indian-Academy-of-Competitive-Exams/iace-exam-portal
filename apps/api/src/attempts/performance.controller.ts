@@ -10,8 +10,8 @@ import {
   performanceReportQuerySchema,
   type PerformanceReport,
   type PerformanceReportQuery,
-  type PracticeCalendar,
   type SatSeries,
+  type TestCalendar,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
@@ -31,10 +31,10 @@ export class MePerformanceController {
     return this.performance.report(user.id, query);
   }
 
-  /** Which days were practised since the account opened. The calendar's only read. */
+  /** Which days a test was sat on since the account opened. The calendar's only read. */
   @Get('days')
-  practiceDays(@CurrentUser() user: AuthenticatedUser): Promise<PracticeCalendar> {
-    return this.performance.practiceDays(user.id);
+  testDays(@CurrentUser() user: AuthenticatedUser): Promise<TestCalendar> {
+    return this.performance.testDays(user.id);
   }
 
   /** What the SERIES scope may be asked about — a series they have sat, and whether it is a ramp. */

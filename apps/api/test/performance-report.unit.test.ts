@@ -1146,7 +1146,7 @@ describe('the performance report — the payload whitelist', () => {
   });
 });
 
-describe('the days a student practised on', () => {
+describe('the days a student sat a test on', () => {
   /** 04:00 IST is 22:30 UTC the day before: the calendar files it on the institute's day. */
   it('counts by institute day, not by the UTC one the instant is stored in', async () => {
     const { service } = benchFor([
@@ -1154,7 +1154,7 @@ describe('the days a student practised on', () => {
       sat('att_2', '2026-09-08T04:00:00.000Z'),
     ]);
 
-    const { days } = await service.practiceDays(STUDENT);
+    const { days } = await service.testDays(STUDENT);
 
     assert.deepEqual(days.toSorted(byDate), [{ date: '2026-09-08', sittings: 2 }]);
   });
@@ -1166,7 +1166,7 @@ describe('the days a student practised on', () => {
       sat('att_3', '2026-09-07T09:00:00.000Z'),
     ]);
 
-    const { days } = await service.practiceDays(STUDENT);
+    const { days } = await service.testDays(STUDENT);
 
     assert.deepEqual(days.toSorted(byDate), [
       { date: '2026-09-06', sittings: 2 },
@@ -1178,7 +1178,7 @@ describe('the days a student practised on', () => {
   it('opens the window on the day the account was made', async () => {
     const { service } = benchFor([sat('att_1', '2026-09-06T01:00:00.000Z')], '2026-08-15');
 
-    const calendar = await service.practiceDays(STUDENT);
+    const calendar = await service.testDays(STUDENT);
 
     assert.equal(calendar.from, '2026-08-15');
   });
@@ -1187,7 +1187,7 @@ describe('the days a student practised on', () => {
   it('keeps a sitting made on the opening day itself', async () => {
     const { service } = benchFor([sat('att_1', '2026-09-06T01:00:00.000Z')], '2026-09-06');
 
-    const { days } = await service.practiceDays(STUDENT);
+    const { days } = await service.testDays(STUDENT);
 
     assert.deepEqual(days, [{ date: '2026-09-06', sittings: 1 }]);
   });
@@ -1195,13 +1195,13 @@ describe('the days a student practised on', () => {
   it('answers a student who has sat nothing with no days rather than an error', async () => {
     const { service } = benchFor([]);
 
-    assert.deepEqual((await service.practiceDays(STUDENT)).days, []);
+    assert.deepEqual((await service.testDays(STUDENT)).days, []);
   });
 
   it('refuses to answer for a student who is not there', async () => {
     const { service } = benchFor([]);
 
-    await assert.rejects(() => service.practiceDays('stu_missing'));
+    await assert.rejects(() => service.testDays('stu_missing'));
   });
 });
 

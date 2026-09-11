@@ -4,9 +4,9 @@ import {
   currentStreak,
   instituteDayLabel,
   longestStreak,
-  practiceWindow,
-  type PracticeCalendar,
-  type PracticeDay,
+  testDayWindow,
+  type TestCalendar,
+  type TestDay,
 } from '@iace/contracts';
 
 /** The tint carries the count, so a heavy day and a light one are not the same square. */
@@ -21,9 +21,9 @@ const MONTH = new Intl.DateTimeFormat('en-IN', { month: 'short', timeZone: 'UTC'
 export function StreakFigure({
   calendar,
   className,
-}: Readonly<{ calendar: PracticeCalendar; className?: string }>) {
+}: Readonly<{ calendar: TestCalendar; className?: string }>) {
   const { days } = calendar;
-  const window = practiceWindow(days, calendar.from);
+  const window = testDayWindow(days, calendar.from);
   const weeks = weeksOf(window);
   const sat = window.filter((day) => day.sittings > 0).length;
   const now = currentStreak(days);
@@ -38,7 +38,7 @@ export function StreakFigure({
 
   return (
     <ChartFigure
-      title="Practice days"
+      title="Test days"
       meta={`${sat} of ${window.length}`}
       figure={
         <div className="flex items-start gap-6">
@@ -65,7 +65,7 @@ export function StreakFigure({
   );
 }
 
-function Cell({ day }: Readonly<{ day: PracticeDay | null }>) {
+function Cell({ day }: Readonly<{ day: TestDay | null }>) {
   if (day === null) return <span className="size-4" />;
   const tip = dayTip(day.date, day.sittings);
 
@@ -84,18 +84,18 @@ interface Week {
   /** Named on the first column the month appears in, so the axis is read once per month. */
   month: string | null;
   /** Seven entries, Sunday first; null pads the partial weeks at either end. */
-  days: (PracticeDay | null)[];
+  days: (TestDay | null)[];
 }
 
 const WEEK = 7;
 
 /** Columns of weekdays: a calendar is read down a week and across the weeks, never in one line. */
-function weeksOf(window: readonly PracticeDay[]): Week[] {
+function weeksOf(window: readonly TestDay[]): Week[] {
   const first = window[0];
   if (first === undefined) return [];
 
   const lead = Array.from<null>({ length: weekdayOf(first.date) }).fill(null);
-  const cells: (PracticeDay | null)[] = [...lead, ...window];
+  const cells: (TestDay | null)[] = [...lead, ...window];
   const weeks: Week[] = [];
   let named: string | null = null;
 

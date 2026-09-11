@@ -81,7 +81,7 @@ export const PICKER_WIDTH = { REPORT: 'w-[26rem]', SCOPE: 'w-44' } as const;
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
 
 /** The window is the server's to choose, so the key has nothing to vary on. */
-export const PRACTICE_DAYS_QUERY_KEY = ['me', 'practice-days'] as const;
+export const TEST_DAYS_QUERY_KEY = ['me', 'test-days'] as const;
 
 /** The bell's own count, kept apart from the list so paging never disturbs the header. */
 export const UNREAD_QUERY_KEY = ['me', 'notifications', 'unread'] as const;

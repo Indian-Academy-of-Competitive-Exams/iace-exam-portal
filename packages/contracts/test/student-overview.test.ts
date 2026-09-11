@@ -10,7 +10,7 @@ import {
   dispositionRates,
   distractorThatWon,
   longestStreak,
-  practiceWindow,
+  testDayWindow,
   rankSubjectsByWeakness,
   shiftCivilDate,
   startOfLastMonth,
@@ -531,11 +531,11 @@ describe('rankSubjectsByWeakness', () => {
   });
 });
 
-describe('practiceWindow', () => {
+describe('testDayWindow', () => {
   const sat = (date: string, sittings = 1) => ({ date, sittings });
 
   it('fills every day from the floor to today, zeros included, oldest first', () => {
-    const window = practiceWindow([sat('2026-09-07', 2)], '2026-09-05', '2026-09-08');
+    const window = testDayWindow([sat('2026-09-07', 2)], '2026-09-05', '2026-09-08');
 
     assert.deepEqual(window, [
       { date: '2026-09-05', sittings: 0 },
@@ -546,7 +546,7 @@ describe('practiceWindow', () => {
   });
 
   it('ignores a counted day outside the window it was asked for', () => {
-    const window = practiceWindow([sat('2026-08-01')], '2026-09-07', '2026-09-08');
+    const window = testDayWindow([sat('2026-08-01')], '2026-09-07', '2026-09-08');
 
     assert.equal(
       window.every((day) => day.sittings === 0),
