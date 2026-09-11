@@ -24,7 +24,6 @@ import { type AuthenticatedUser } from '../src/common/security';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
 import { AdminPerformanceController } from '../src/attempts/performance.controller';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
   cohortShapeOf,
   compositionOf,
@@ -37,12 +36,12 @@ import {
   type SatPaper,
 } from '../src/attempts/performance-analytics';
 import {
+  FakeLeaderboard,
   FakePerformancePrisma,
-  FakeQueue,
-  FakeRedis,
   makeAttempt,
   makeScoredTest,
   makeServedAnswer,
+  makeStanding,
   mcqOptions,
   type FakeAttemptRow,
   type FakePerformanceData,
@@ -378,8 +377,6 @@ function sittings(): FakeAttemptRow[] {
     status: ATTEMPT_STATUS.EVALUATED,
     submittedAt: new Date('2026-08-20T06:00:00.000Z'),
     score: 1.5,
-    lastRank: 4,
-    lastPercentile: 60,
     sectionScores: [
       {
         baseConfigSectionId: 'sec_1',
@@ -398,8 +395,6 @@ function sittings(): FakeAttemptRow[] {
     status: ATTEMPT_STATUS.EVALUATED,
     submittedAt: new Date('2026-08-25T06:00:00.000Z'),
     score: 4,
-    lastRank: 2,
-    lastPercentile: 88,
   });
   const theirs = makeAttempt({
     id: 'att_9',
@@ -412,6 +407,34 @@ function sittings(): FakeAttemptRow[] {
 
   return [older, newer, theirs];
 }
+
+/** Where the live ranking puts each graded sitting: under the rival on tst_1, alone on tst_2. */
+const STANDINGS = [
+  makeStanding({
+    attemptId: 'att_1',
+    testId: 'tst_1',
+    studentId: STUDENT,
+    rank: 2,
+    percentile: 25,
+    cohortSize: 2,
+  }),
+  makeStanding({
+    attemptId: 'att_2',
+    testId: 'tst_2',
+    studentId: STUDENT,
+    rank: 1,
+    percentile: 100,
+    cohortSize: 1,
+  }),
+  makeStanding({
+    attemptId: 'att_9',
+    testId: 'tst_1',
+    studentId: RIVAL,
+    rank: 1,
+    percentile: 75,
+    cohortSize: 2,
+  }),
+];
 
 function bench(overrides: Partial<FakePerformanceData> = {}) {
   const attempts = overrides.attempts ?? sittings();
@@ -435,12 +458,11 @@ function bench(overrides: Partial<FakePerformanceData> = {}) {
   };
 
   const prisma = new FakePerformancePrisma(data);
-  const leaderboard = new LeaderboardService(
-    prisma.asService(),
-    new FakeRedis().asService(),
-    new FakeQueue().asQueue(),
-  );
-  return { data, service: new PerformanceAnalyticsService(prisma.asService(), leaderboard) };
+  const leaderboard = new FakeLeaderboard(STANDINGS);
+  return {
+    data,
+    service: new PerformanceAnalyticsService(prisma.asService(), leaderboard.asService()),
+  };
 }
 
 const query = (input: unknown) => performanceReportQuerySchema.parse(input);
@@ -469,6 +491,17 @@ describe('the performance report — one sitting', () => {
     assert.equal(report.composition.penalty, 0.5);
     assert.equal(report.time.totalSec, 95);
     assert.equal(report.sections[0]?.score, 1.5);
+  });
+
+  it('puts the sitting on its curve at the rank and percentile it holds now', async () => {
+    const { service } = bench();
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_1' }),
+    );
+
+    assert.deepEqual([report.cohort?.rank, report.cohort?.percentile], [2, 25]);
   });
 
   /** No job writes a rollup today, so the sittings themselves are what makes the curve true. */
@@ -628,9 +661,24 @@ describe('the performance report — one paper sat more than once', () => {
 
     assert.equal(report.attemptsCounted, 2);
     assert.deepEqual(
-      report.trajectory.map((point) => point.attemptId),
-      ['att_1', 'att_3'],
+      report.trajectory.map((point) => [point.attemptId, point.rank, point.percentile]),
+      [
+        ['att_1', 2, 25],
+        ['att_3', null, null],
+      ],
     );
+  });
+
+  /** A retake is outside the cohort, so its own report ranks it nowhere rather than borrowing a rank. */
+  it('puts a retake on no rank and no percentile', async () => {
+    const { service } = bench({ attempts: [...sittings(), retake()] });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_3' }),
+    );
+
+    assert.deepEqual([report.cohort?.rank, report.cohort?.percentile], [null, null]);
   });
 
   /** Postgres puts NULLs first on a descending sort, which made an unsubmitted sitting the newest. */
@@ -642,7 +690,6 @@ describe('the performance report — one paper sat more than once', () => {
       status: ATTEMPT_STATUS.EVALUATED,
       submittedAt: null,
       score: 6,
-      lastPercentile: 99,
       sectionScores: [
         {
           baseConfigSectionId: 'sec_1',
@@ -676,8 +723,8 @@ describe('the performance report — the wider scopes', () => {
     assert.deepEqual(
       report.trajectory.map((point) => [point.attemptId, point.percentile]),
       [
-        ['att_1', 60],
-        ['att_2', 88],
+        ['att_1', 25],
+        ['att_2', 100],
       ],
     );
     assert.equal(
@@ -972,8 +1019,11 @@ describe('the performance report — a progressive series', () => {
 
     assert.equal(report.progression?.seriesId, 'ser_1');
     assert.deepEqual(
-      report.progression?.steps.map((step) => step.testId),
-      ['tst_1', 'tst_2'],
+      report.progression?.steps.map((step) => [step.testId, step.percentile]),
+      [
+        ['tst_1', 25],
+        ['tst_2', 100],
+      ],
     );
     assert.ok((report.progression?.subjects.length ?? 0) > 0);
     assert.equal(

@@ -1,8 +1,8 @@
 /**
- * The overall dashboard, read from `StudentStat` and `StudentSubjectStat` and nothing else: one
- * keyed row plus a handful of subject rows per student, so it never scans an attempt. The student's
- * own path and the admin's call the same method with a different studentId, exactly as the
- * per-test report does; the only difference is who is allowed to name the student.
+ * The overall dashboard: `StudentStat` and `StudentSubjectStat` for the tallies, and the student's
+ * live standings for the percentiles, which no rollup can hold still. The student's own path and the
+ * admin's call the same method with a different studentId, exactly as the per-test report does; the
+ * only difference is who is allowed to name the student.
  */
 import { Injectable } from '@nestjs/common';
 import {
@@ -14,7 +14,7 @@ import {
   type SubjectTally,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { numberOrNull } from './attempt-report';
+import { LeaderboardService, type SittingStanding } from './leaderboard.service';
 
 const NO_STUDENT = 'No such student';
 
@@ -47,7 +47,10 @@ const SUBJECT_SELECT = {
 
 @Injectable()
 export class StudentOverviewService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderboard: LeaderboardService,
+  ) {}
 
   /** The admin path. The student is named, so an unknown id must read as missing, not as empty. */
   async forStudent(studentId: string): Promise<StudentOverview> {
@@ -60,13 +63,15 @@ export class StudentOverviewService {
   }
 
   async overview(studentId: string): Promise<StudentOverview> {
-    const [stat, rows] = await Promise.all([
+    const [stat, rows, standings] = await Promise.all([
       this.prisma.studentStat.findUnique({ where: { studentId } }),
       this.prisma.studentSubjectStat.findMany({
         where: { studentId },
         select: SUBJECT_SELECT,
       }),
+      this.leaderboard.standingsOfStudent(studentId),
     ]);
+    const percentiles = percentilesOf(standings);
 
     const subjects = subjectsOf(rows);
     const tallies = subjects.flatMap((subject) => subject.tallies);
@@ -76,13 +81,12 @@ export class StudentOverviewService {
       generatedAt: new Date().toISOString(),
       standing:
         stat === null
-          ? NO_SITTINGS
+          ? { ...NO_SITTINGS, ...percentiles }
           : {
               testsAttempted: stat.testsAttempted,
               testsEvaluated: stat.testsEvaluated,
               retakeCount: stat.retakeCount,
-              avgPercentile: perSitting(Number(stat.sumPercentile), stat.testsEvaluated),
-              bestPercentile: numberOrNull(stat.bestPercentile),
+              ...percentiles,
               avgScore: perSitting(Number(stat.sumScore), stat.testsEvaluated),
               sumTimeSec: Number(stat.sumTimeSec),
               lastAttemptAt: stat.lastAttemptAt?.toISOString() ?? null,
@@ -130,6 +134,19 @@ function subjectsOf(rows: readonly SubjectStatRow[]): SubjectStanding[] {
   }
 
   return [...held.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Every graded sitting's current percentile. No standing at all is a dash on screen, not a nought. */
+function percentilesOf(
+  standings: ReadonlyMap<string, SittingStanding>,
+): Pick<StudentOverview['standing'], 'avgPercentile' | 'bestPercentile'> {
+  const held = [...standings.values()].map((standing) => standing.percentile);
+  if (held.length === 0) return { avgPercentile: null, bestPercentile: null };
+  const sum = held.reduce((total, percentile) => total + percentile, 0);
+  return {
+    avgPercentile: Math.round((sum / held.length) * 100) / 100,
+    bestPercentile: Math.max(...held),
+  };
 }
 
 /** Nothing evaluated is nothing to average, which is a dash on screen rather than a nought. */

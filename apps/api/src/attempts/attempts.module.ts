@@ -36,7 +36,6 @@ import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptFlushProcessor } from './attempt-flush.processor';
 import { AttemptSweeperProcessor } from './attempt-sweeper.processor';
-import { LeaderboardRebuildProcessor } from './leaderboard-rebuild.processor';
 import { LeaderboardService } from './leaderboard.service';
 import { RollupOutbox } from './rollup-outbox';
 import { RollupProcessor } from './rollup.processor';
@@ -77,7 +76,6 @@ import { SubmitService } from './submit.service';
     StudentOverviewService,
     QuestionReportService,
     TestAnalyticsService,
-    LeaderboardRebuildProcessor,
     RollupOutbox,
     RollupProcessor,
     RollupService,

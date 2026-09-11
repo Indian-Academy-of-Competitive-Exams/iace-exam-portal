@@ -5,8 +5,10 @@ import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE, anonymizedProfile } from '../src/students/anonymize';
 import {
   FakeConfig,
+  FakeLeaderboard,
   FakePrivacyPrisma,
   makeBranch,
+  makeStanding,
   makeStudent,
   rowAt,
   type FakePrivacyWorld,
@@ -14,11 +16,12 @@ import {
 
 const NOTICE = '2026-09-01';
 
-function build(world: FakePrivacyWorld = {}) {
+function build(world: FakePrivacyWorld = {}, leaderboard = new FakeLeaderboard()) {
   const prisma = new FakePrivacyPrisma(world);
   const service = new StudentPrivacyService(
     prisma.asService(),
     new FakeConfig({ CONSENT_VERSION: NOTICE }).asService(),
+    leaderboard.asService(),
   );
   return { prisma, service };
 }
@@ -114,16 +117,27 @@ describe('the copy a student may take away', () => {
     assert.ok(copy.exportedAt);
   });
 
-  it('lists their sittings with the marks, and refuses somebody else’s id', async () => {
-    const { service } = build({
-      students: [makeStudent({ id: 'stu_1' })],
-      attempts: [{ id: 'att_1', studentId: 'stu_1', testId: 'tst_1', score: 42 }],
-    });
+  it('lists their sittings with the marks and the percentile each holds now, and refuses somebody else’s id', async () => {
+    const { service } = build(
+      {
+        students: [makeStudent({ id: 'stu_1' })],
+        attempts: [
+          { id: 'att_1', studentId: 'stu_1', testId: 'tst_1', score: 42, lastPercentile: 99 },
+          { id: 'att_2', studentId: 'stu_1', testId: 'tst_1', score: 50, lastPercentile: 99 },
+        ],
+      },
+      new FakeLeaderboard([
+        makeStanding({ attemptId: 'att_1', studentId: 'stu_1', percentile: 62.5 }),
+      ]),
+    );
 
     const copy = await service.export('stu_1');
     assert.deepEqual(
-      copy.attempts.map((attempt) => [attempt.id, attempt.score]),
-      [['att_1', 42]],
+      copy.attempts.map((attempt) => [attempt.id, attempt.score, attempt.percentile]),
+      [
+        ['att_1', 42, 62.5],
+        ['att_2', 50, null],
+      ],
     );
 
     await assert.rejects(service.export('stu_missing'), AppException.is);

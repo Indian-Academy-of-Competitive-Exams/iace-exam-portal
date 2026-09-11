@@ -1,7 +1,6 @@
 /** Queue names live here so producers and processors can never disagree. */
 export const QUEUE_NAMES = {
   SCORING: 'scoring',
-  LEADERBOARD_REBUILD: 'leaderboard-rebuild',
   AUDIT_ARCHIVE: 'audit-archive',
   ATTEMPT_FLUSH: 'attempt-flush',
   ATTEMPT_SWEEP: 'attempt-sweep',
@@ -21,8 +20,6 @@ export const QUEUE_POLICY = {
   [QUEUE_NAMES.SCORING]: { concurrency: 8, attempts: 5, backoffMs: 5000 },
   // Folds land on the same test's aggregate rows, so a wide fan-out only buys lock contention.
   [QUEUE_NAMES.ROLLUP]: { concurrency: 2, attempts: 5, backoffMs: 5000 },
-  // Holds its own per-test lock; a second worker is for a second test, never the same one.
-  [QUEUE_NAMES.LEADERBOARD_REBUILD]: { concurrency: 2, attempts: 3, backoffMs: 2000 },
   // Scheduled sweeps over one shared set. Two at once would fight over the same keys.
   [QUEUE_NAMES.ATTEMPT_FLUSH]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.ATTEMPT_SWEEP]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
@@ -141,16 +138,6 @@ export function notificationJobId(eventId: string): string {
 /** The DELIVERY ROW's own, so a re-queued escalation cannot buy the same message twice. */
 export function notificationDeliveryJobId(deliveryId: string): string {
   return `${QUEUE_NAMES.NOTIFICATION_DELIVERY}-${deliveryId}`;
-}
-
-/** The TEST's own board: every cold read of one test asks for the same rebuild. */
-export function leaderboardRebuildJobId(testId: string): string {
-  return `${QUEUE_NAMES.LEADERBOARD_REBUILD}-${testId}`;
-}
-
-/** Payload for a leaderboard rebuild. One test's board, put back from the durable marks. */
-export interface LeaderboardRebuildJobData {
-  testId: string;
 }
 
 /** How often the live sittings are drained to Postgres. A crash costs at most this much. */

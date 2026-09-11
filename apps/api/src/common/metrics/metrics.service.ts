@@ -70,7 +70,7 @@ export class MetricsService implements OnModuleInit {
 
     this.redisMemory = new Gauge({
       name: `${PREFIX}redis_memory_bytes`,
-      help: 'Redis memory in use. Live attempt state, leaderboards, sessions and OTP are all here',
+      help: 'Redis memory in use. Live attempt state, sessions and OTP are all here',
       registers: [this.registry],
     });
 

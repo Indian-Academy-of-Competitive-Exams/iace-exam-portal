@@ -2,19 +2,18 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, PAPER_QUESTION_STATUS } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
-import { redisKeys } from '../src/redis/redis.keys';
 import {
   FakeEventBus,
+  FakeLeaderboard,
   FakeQueue,
   fakeRollupOutbox,
-  FakeRedis,
   FakeScoringPrisma,
   FakeStorage,
   makeAttempt,
   makeScoredTest,
   makeServedAnswer,
+  makeStanding,
   mcqOptions,
   type FakeAttemptRow,
   type FakeServedAnswerRow,
@@ -83,25 +82,30 @@ function platform() {
   const attempts = Object.keys(COHORT).map(sitting);
   const rows = served();
   const prisma = new FakeScoringPrisma(attempts, rows, SHAPE);
-  const redis = new FakeRedis();
-  const leaderboard = new LeaderboardService(
-    prisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
+  const leaderboard = new FakeLeaderboard([
+    makeStanding({
+      attemptId: 'att_middle',
+      studentId: 'stu_att_middle',
+      rank: 2,
+      percentile: 50,
+      cohortSize: 3,
+    }),
+  ]);
   return {
     prisma,
-    redis,
     rows,
     attempts,
     scoring: new ScoringProcessor(
       prisma.asService(),
-      leaderboard,
       fakeRollupOutbox(prisma, new FakeQueue()),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
     ),
-    reports: new AttemptReportService(prisma.asService(), leaderboard, new FakeStorage() as never),
+    reports: new AttemptReportService(
+      prisma.asService(),
+      leaderboard.asService(),
+      new FakeStorage() as never,
+    ),
   };
 }
 
@@ -125,18 +129,6 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
       ],
     );
     assert.ok(attempts.every((row) => row.status === ATTEMPT_STATUS.EVALUATED));
-  });
-
-  it('ranks them off the board, best first', async () => {
-    const { scoring, redis } = platform();
-
-    await scoreEveryone(scoring);
-
-    assert.deepEqual(redis.descending(redisKeys.testLeaderboard(TEST_ID)), [
-      'att_ace',
-      'att_middle',
-      'att_last',
-    ]);
   });
 
   it('reports a score card that carries the rank and no answer key', async () => {
@@ -167,9 +159,8 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
 
   /** The acceptance for the whole run: one dropped question moves every affected score AND rank. */
   it('moves every score and every rank when one question is dropped', async () => {
-    const { scoring, redis, rows, attempts } = platform();
+    const { scoring, rows, attempts } = platform();
     await scoreEveryone(scoring);
-    const before = redis.descending(redisKeys.testLeaderboard(TEST_ID));
 
     // What the admin's change does to the paper, on every row serving that question.
     for (const row of rows.filter((one) => one.questionId === 'q1')) {
@@ -186,13 +177,15 @@ describe('a cohort, end to end: scored, ranked, reported', () => {
         ['att_last', 1.5],
       ],
     );
-    // The rank genuinely MOVES: level on marks, the board settles them on who finished sooner.
-    assert.deepEqual(before, ['att_ace', 'att_middle', 'att_last']);
-    assert.deepEqual(redis.descending(redisKeys.testLeaderboard(TEST_ID)), [
-      'att_middle',
-      'att_ace',
-      'att_last',
-    ]);
+    // The rank genuinely MOVES: level on marks, the time written beside them puts the sooner first.
+    assert.deepEqual(
+      attempts.map((row) => [row.id, row.timeTakenSec]),
+      [
+        ['att_ace', 1500],
+        ['att_middle', 1200],
+        ['att_last', 1800],
+      ],
+    );
   });
 
   it('scores the same cohort the same way however many times it runs', async () => {

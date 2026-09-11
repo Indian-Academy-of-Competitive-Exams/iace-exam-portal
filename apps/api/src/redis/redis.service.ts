@@ -17,10 +17,7 @@ return 1
 const RETRY_STEP_MS = 200;
 const RETRY_CEILING_MS = 5000;
 
-/**
- * The application Redis connection: OTP codes, sessions, device binding, rate limiting, live test
- * state and leaderboards.
- */
+/** The application Redis connection: OTP codes, sessions, device binding, rate limiting, live test state. */
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);

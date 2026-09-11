@@ -20,7 +20,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
-import { LeaderboardService } from './leaderboard.service';
 import { RollupOutbox } from './rollup-outbox';
 import { SubmitService } from './submit.service';
 import {
@@ -53,7 +52,6 @@ export class AttemptResolutionService {
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
     private readonly submit: SubmitService,
-    private readonly leaderboard: LeaderboardService,
     private readonly rollup: RollupOutbox,
     private readonly access: AccessResolverService,
     private readonly audit: AuditContext,
@@ -144,13 +142,11 @@ export class AttemptResolutionService {
     );
   }
 
-  /** What a counted sitting leaves behind: the board at once, and one recount per bounded scope. */
+  /** One recount per bounded scope. Rank needs none: the cohort query already leaves a void out. */
   private async reverse(attempt: ResolvableAttempt): Promise<void> {
     if (attempt.status !== ATTEMPT_STATUS.EVALUATED) return;
 
     await Promise.all([
-      this.leaderboard.forget(attempt.testId, attempt.id),
-      this.leaderboard.askForRebuild(attempt.testId),
       this.rollup.rebuild(attempt.testId),
       this.rollup.rebuildStudent(attempt.studentId),
     ]).catch((error: unknown) => {

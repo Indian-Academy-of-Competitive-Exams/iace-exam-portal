@@ -1,21 +1,8 @@
-/**
- * The live ranking, in Redis. Rank and percentile are READ from the sorted set on every request
- * and never regenerated on a schedule. Postgres holds the durable marks the board is built from
- * and the last snapshot, so a wiped Redis costs one rebuild — off the request path, in a job.
- */
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { type Queue } from 'bullmq';
+/** Rank, percentile and "N sat", counted live from Postgres on every read. Nothing is saved. */
+import { Injectable } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
-import { redisKeys } from '../redis/redis.keys';
-import {
-  QUEUE_NAMES,
-  leaderboardRebuildJobId,
-  type LeaderboardRebuildJobData,
-} from '../queue/queues';
-import { bandOf, compositeScore, percentileOf, timeTakenSec } from './leaderboard-score';
+import { standingsSql, type StandingRow } from './ranking-sql';
 
 /** One sitting's place in its cohort, as of this read. */
 export interface Standing {
@@ -24,215 +11,52 @@ export interface Standing {
   cohortSize: number;
 }
 
-/** What one row of the board needs. Only a GRADED, scored sitting is ever on it. */
-export interface RankedAttempt {
-  id: string;
+/** A standing that says which sitting, on which test, it belongs to. */
+export interface SittingStanding extends Standing {
+  attemptId: string;
   testId: string;
-  isGraded: boolean;
-  score: number | null;
-  startedAt: Date;
-  submittedAt: Date | null;
 }
-
-/** How many sittings one rebuild page reads. A 5K cohort is five round trips, not five thousand. */
-const REBUILD_PAGE = 1000;
-
-/** Long enough that a board is never rebuilt in normal use; short enough that a dead one goes away. */
-const BOARD_TTL_SEC = 30 * 24 * 60 * 60;
-
-/** One rebuild at a time per test, and long enough for the biggest cohort to finish. */
-const REBUILD_LOCK_SEC = 120;
 
 @Injectable()
 export class LeaderboardService {
-  private readonly logger = new Logger(LeaderboardService.name);
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
-    @InjectQueue(QUEUE_NAMES.LEADERBOARD_REBUILD)
-    private readonly rebuilds: Queue<LeaderboardRebuildJobData>,
-  ) {}
-
-  /** Idempotent: the composite is a function of the marks and the clock the row already holds. */
-  async record(attempt: RankedAttempt): Promise<void> {
-    if (!attempt.isGraded || attempt.score === null) return;
-    const key = redisKeys.testLeaderboard(attempt.testId);
-    const composite = compositeScore(
-      attempt.score,
-      timeTakenSec(attempt.startedAt, attempt.submittedAt),
-    );
-    // Staged BEFORE the live write, so a rebuild swapping in between the two cannot drop it.
-    await this.stageDuringRebuild(attempt.testId, composite, attempt.id);
-    await this.redis.client.zadd(key, composite, attempt.id);
-    await this.redis.client.expire(key, BOARD_TTL_SEC);
-  }
-
-  /** A voided sitting leaves the board at once; every other rank re-reads correct on the next look. */
-  async forget(testId: string, attemptId: string): Promise<void> {
-    await this.redis.client.zrem(redisKeys.testLeaderboard(testId), attemptId);
-  }
-
-  /** A rebuild somebody asked for rather than a cold board asking for itself. One job per test. */
-  async askForRebuild(testId: string): Promise<void> {
-    await this.rebuilds.add(
-      QUEUE_NAMES.LEADERBOARD_REBUILD,
-      { testId },
-      // A failed job kept under its id would swallow every rebuild of this test until it aged out.
-      { jobId: leaderboardRebuildJobId(testId), removeOnComplete: true, removeOnFail: true },
-    );
-  }
-
-  /** Null when this sitting is not on the board — ungraded, unscored, or a board being rebuilt. */
+  /** Null for a sitting outside the cohort: a retake, a voided sitting, or one not yet scored. */
   async standing(testId: string, attemptId: string): Promise<Standing | null> {
-    const key = redisKeys.testLeaderboard(testId);
-    if (await this.askForRebuildIfCold(testId)) return null;
-
-    // The member's OWN composite decides its band, so rank and percentile are never two facts.
-    const composite = await this.redis.client.zscore(key, attemptId);
-    if (composite === null) return null;
-    const band = bandOf(Number(composite));
-
-    const [seat, cohortSize, outscored, tied] = await Promise.all([
-      this.redis.client.zrevrank(key, attemptId),
-      this.redis.client.zcard(key),
-      this.redis.client.zcount(key, '-inf', `(${band.floor}`),
-      this.redis.client.zcount(key, band.floor, band.ceiling),
-    ]);
-    if (seat === null) return null;
-
-    return { rank: seat + 1, percentile: percentileOf(outscored, tied, cohortSize), cohortSize };
+    const [row] = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ attemptId }));
+    return row?.test_id === testId ? standingOf(row) : null;
   }
 
-  /** For a SCREEN: a Redis nobody can reach costs the live standing, never the whole page. */
-  async liveStanding(testId: string, attemptId: string): Promise<Standing | null> {
-    return this.standing(testId, attemptId).catch((error: unknown) => {
-      this.logger.error(`Reading the standing for ${attemptId} failed; the snapshot stands`, error);
-      return null;
-    });
-  }
-
-  /** The board's own cardinality, which is what a score card already calls its cohort size. */
-  async sittingCounts(testIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
-    const counts = new Map<string, number>();
-    if (testIds.length === 0) return counts;
-
-    const pipeline = this.redis.client.pipeline();
-    for (const testId of testIds) pipeline.zcard(redisKeys.testLeaderboard(testId));
-
-    const replies = await pipeline.exec().catch((error: unknown) => {
-      this.logger.error(
-        'Reading the sitting counts failed; the catalog stands without them',
-        error,
-      );
-      return null;
-    });
-    if (replies === null) return counts;
-
-    // Zero is left OUT: ZCARD cannot tell a cold board from an unsat paper, and neither is a crowd.
-    testIds.forEach((testId, index) => {
-      const reply = replies[index];
-      if (reply?.[0] === null && typeof reply[1] === 'number' && reply[1] > 0) {
-        counts.set(testId, reply[1]);
-      }
-    });
-    return counts;
-  }
-
-  /** Built aside and swapped in: a rebuild that dies half-way leaves the board cold, not wrong. */
-  async rebuild(testId: string): Promise<number> {
-    const key = redisKeys.testLeaderboard(testId);
-    const held = await this.redis.acquireLock(
-      redisKeys.testLeaderboardRebuild(testId),
-      REBUILD_LOCK_SEC,
+  /** Every graded sitting of one student, each against its own test's cohort, keyed by sitting. */
+  async standingsOfStudent(studentId: string): Promise<ReadonlyMap<string, SittingStanding>> {
+    const rows = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ studentId }));
+    return new Map(
+      rows.map((row) => [
+        row.attempt_id,
+        { attemptId: row.attempt_id, testId: row.test_id, ...standingOf(row) },
+      ]),
     );
-    if (!held) return 0;
-
-    const staging = redisKeys.testLeaderboardStaging(testId);
-    await this.redis.del(staging);
-    let written = 0;
-    let after: string | undefined;
-
-    for (;;) {
-      const page = await this.prisma.attempt.findMany({
-        where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED, score: { not: null } },
-        orderBy: { id: 'asc' },
-        // Keyset, not offset: an OFFSET page re-walks every row before it, once per page.
-        ...(after ? { cursor: { id: after }, skip: 1 } : {}),
-        take: REBUILD_PAGE,
-        select: { id: true, score: true, startedAt: true, submittedAt: true },
-      });
-      if (page.length > 0) {
-        await this.redis.client.zadd(staging, ...page.flatMap(toMember));
-        written += page.length;
-        after = page.at(-1)?.id;
-      }
-      if (page.length < REBUILD_PAGE) break;
-    }
-
-    if (written === 0) {
-      await this.redis.del(key);
-      // A sitting scored while this ran is staged even when the durable marks had none to give.
-      if ((await this.redis.client.exists(staging)) === 0) return 0;
-    }
-    await this.redis.client.rename(staging, key);
-    await this.redis.client.expire(key, BOARD_TTL_SEC);
-    return written;
   }
 
-  /** A second write, not part of scoring: the board cannot be read until the marks are durable. */
-  async snapshot(attemptId: string, standing: Standing): Promise<void> {
-    await this.prisma.attempt.update({
-      where: { id: attemptId },
-      data: { lastRank: standing.rank, lastPercentile: standing.percentile },
+  /** The cohort size a score card names, per test. A test nobody ranks on is left out, never zero. */
+  async sittingCounts(testIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    if (testIds.length === 0) return new Map();
+    const grouped = await this.prisma.attempt.groupBy({
+      by: ['testId'],
+      where: {
+        testId: { in: [...testIds] },
+        isGraded: true,
+        status: ATTEMPT_STATUS.EVALUATED,
+        score: { not: null },
+      },
+      _count: true,
     });
-  }
-
-  /** Marks are durable and a rank is a cache, so a Redis that is down must not fail the scoring. */
-  async rank(attempt: RankedAttempt): Promise<Standing | null> {
-    if (!attempt.isGraded || attempt.score === null) return null;
-    try {
-      // A board mid-rebuild would report a cohort of one, so this run records and takes no reading.
-      const cold = await this.askForRebuildIfCold(attempt.testId);
-      await this.record(attempt);
-      if (cold) return null;
-
-      const standing = await this.standing(attempt.testId, attempt.id);
-      if (standing) await this.snapshot(attempt.id, standing);
-      return standing;
-    } catch (error) {
-      this.logger.error(`Ranking attempt ${attempt.id} failed; its marks are still durable`, error);
-      return null;
-    }
-  }
-
-  /** A running rebuild may have read past this sitting already, so it is staged as well. */
-  private async stageDuringRebuild(
-    testId: string,
-    composite: number,
-    attemptId: string,
-  ): Promise<void> {
-    if ((await this.redis.client.exists(redisKeys.testLeaderboardRebuild(testId))) === 0) return;
-    const staging = redisKeys.testLeaderboardStaging(testId);
-    await this.redis.client.zadd(staging, composite, attemptId);
-    // The lock outlives the swap, so what is staged after it must not stay behind for good.
-    await this.redis.client.expire(staging, REBUILD_LOCK_SEC);
-  }
-
-  /** True when the board was empty — a wiped or expired Redis, repaired by a job and not by a read. */
-  private async askForRebuildIfCold(testId: string): Promise<boolean> {
-    if ((await this.redis.client.zcard(redisKeys.testLeaderboard(testId))) > 0) return false;
-    await this.askForRebuild(testId);
-    return true;
+    return new Map(grouped.map((row) => [row.testId, row._count]));
   }
 }
 
-/** ZADD takes score and member in pairs, so a whole page goes over the wire as one command. */
-function toMember(row: {
-  id: string;
-  score: unknown;
-  startedAt: Date;
-  submittedAt: Date | null;
-}): [number, string] {
-  return [compositeScore(Number(row.score), timeTakenSec(row.startedAt, row.submittedAt)), row.id];
-}
+const standingOf = (row: StandingRow): Standing => ({
+  rank: row.rank,
+  percentile: row.percentile,
+  cohortSize: row.cohort_size,
+});

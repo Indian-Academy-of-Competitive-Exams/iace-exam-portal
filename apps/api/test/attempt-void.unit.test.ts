@@ -34,8 +34,6 @@ function build(over: Partial<Row> = {}) {
   };
 
   const asked = {
-    forgotten: [] as string[],
-    boardRebuilds: [] as string[],
     testRebuilds: [] as string[],
     studentRebuilds: [] as string[],
     stateTaken: [] as string[],
@@ -58,17 +56,6 @@ function build(over: Partial<Row> = {}) {
     take: (id: string) => {
       asked.stateTaken.push(id);
       return Promise.resolve(null);
-    },
-  } as never;
-
-  const leaderboard = {
-    forget: (testId: string, attemptId: string) => {
-      asked.forgotten.push(`${testId}:${attemptId}`);
-      return Promise.resolve();
-    },
-    askForRebuild: (testId: string) => {
-      asked.boardRebuilds.push(testId);
-      return Promise.resolve();
     },
   } as never;
 
@@ -99,15 +86,7 @@ function build(over: Partial<Row> = {}) {
     },
   } as never;
 
-  const service = new AttemptResolutionService(
-    prisma,
-    state,
-    {} as never,
-    leaderboard,
-    rollup,
-    access,
-    audit,
-  );
+  const service = new AttemptResolutionService(prisma, state, {} as never, rollup, access, audit);
   return { service, row, asked };
 }
 
@@ -125,18 +104,16 @@ describe('voiding a sitting — archived, and taken out of everything that count
   });
 
   /** The bug this prevents: a voided sitting that keeps skewing the cohort's percentile. */
-  it('forgets the board row and asks for every aggregate that counted it to be recounted', async () => {
+  it('asks for every aggregate that counted it to be recounted', async () => {
     const { service, asked } = build({ status: ATTEMPT_STATUS.EVALUATED });
 
     await service.void('att_1', { reason: REASON, regrantRanked: false }, ADMIN);
 
-    assert.deepEqual(asked.forgotten, ['tst_1:att_1']);
-    assert.deepEqual(asked.boardRebuilds, ['tst_1']);
     assert.deepEqual(asked.testRebuilds, ['tst_1']);
     assert.deepEqual(asked.studentRebuilds, ['stu_1']);
   });
 
-  /** Nothing counted an unfinished sitting, so there is nothing to recount and no board to touch. */
+  /** Nothing counted an unfinished sitting, so there is nothing to recount. */
   it('asks for no recount when the sitting had never been marked', async () => {
     const { service, asked } = build({ status: ATTEMPT_STATUS.IN_PROGRESS });
 
@@ -144,7 +121,6 @@ describe('voiding a sitting — archived, and taken out of everything that count
 
     assert.deepEqual(asked.testRebuilds, []);
     assert.deepEqual(asked.studentRebuilds, []);
-    assert.deepEqual(asked.forgotten, []);
     // The live key still goes, or the student would keep saving into a sitting that is void.
     assert.deepEqual(asked.stateTaken, ['att_1']);
   });

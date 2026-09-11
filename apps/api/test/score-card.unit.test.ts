@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, ErrorCodes, type AppException } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
-  FakeQueue,
-  FakeRedis,
+  FakeLeaderboard,
   FakeScoringPrisma,
   FakeStorage,
   makeAttempt,
+  makeStanding,
   makeScoredTest,
   makeServedAnswer,
   type FakeAttemptRow,
@@ -125,19 +124,15 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
   });
 }
 
-function report(attempts: FakeAttemptRow[]) {
+function report(attempts: FakeAttemptRow[], leaderboard = new FakeLeaderboard()) {
   const prisma = new FakeScoringPrisma(attempts, answers(), SHAPE);
-  const redis = new FakeRedis();
-  const leaderboard = new LeaderboardService(
-    prisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
   return {
     prisma,
-    redis,
-    leaderboard,
-    service: new AttemptReportService(prisma.asService(), leaderboard, new FakeStorage() as never),
+    service: new AttemptReportService(
+      prisma.asService(),
+      leaderboard.asService(),
+      new FakeStorage() as never,
+    ),
   };
 }
 
@@ -187,50 +182,26 @@ describe('the Score Card', () => {
     assert.equal(card.sections[1]?.maxMarks, 4);
   });
 
-  it('reads a rank and a percentile off the live board', async () => {
+  it('reads the rank, the percentile and the cohort off the live standing', async () => {
     const attempt = scored();
-    const rival = makeAttempt({
-      id: 'att_2',
-      studentId: 'stu_2',
-      testId: 'tst_1',
-      status: ATTEMPT_STATUS.EVALUATED,
-      startedAt: STARTED,
-      submittedAt: new Date(STARTED.getTime() + 30 * 60_000),
-      score: 6,
-    });
-    const { service, leaderboard } = report([attempt, rival]);
-    await leaderboard.record({ ...attempt, score: 1.5 });
-    await leaderboard.record({ ...rival, score: 6 });
+    const leaderboard = new FakeLeaderboard([
+      makeStanding({ attemptId: attempt.id, rank: 2, percentile: 25, cohortSize: 2 }),
+    ]);
+    const { service } = report([attempt], leaderboard);
 
     const card = await service.scoreCard(STUDENT, attempt.id);
 
-    assert.equal(card.rank, 2);
-    assert.equal(card.percentile, 25);
-    assert.equal(card.cohortSize, 2);
+    assert.deepEqual([card.rank, card.percentile, card.cohortSize], [2, 25, 2]);
   });
 
-  /** The failure this prevents: a blank rank on screen while a wiped board is being put back. */
-  it('falls back to the last snapshot when the live board cannot answer', async () => {
-    const attempt = scored({ lastRank: 7, lastPercentile: 62.5 });
+  /** The failure this prevents: a retake quoting a rank saved on the row, which drifts as others sit. */
+  it('shows no rank for a sitting outside the cohort, whatever the row once saved', async () => {
+    const attempt = scored({ isGraded: false, attemptNo: 2, lastRank: 7, lastPercentile: 62.5 });
     const { service } = report([attempt]);
 
     const card = await service.scoreCard(STUDENT, attempt.id);
 
-    assert.equal(card.rank, 7);
-    assert.equal(card.percentile, 62.5);
-    assert.equal(card.cohortSize, null);
-  });
-
-  /** The failure this prevents: a Redis outage taking the whole score card down with it. */
-  it('still answers when the ranking cannot be reached, off the last snapshot', async () => {
-    const attempt = scored({ lastRank: 4, lastPercentile: 80 });
-    const { redis, service } = report([attempt]);
-    redis.client.zcard = () => Promise.reject(new Error('redis unreachable'));
-
-    const card = await service.scoreCard(STUDENT, attempt.id);
-
-    assert.equal(card.rank, 4);
-    assert.equal(card.percentile, 80);
+    assert.deepEqual([card.rank, card.percentile, card.cohortSize], [null, null, null]);
   });
 
   it('refuses a paper nobody has marked yet, and says why', async () => {

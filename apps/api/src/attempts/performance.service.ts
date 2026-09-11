@@ -25,7 +25,7 @@ import {
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
-import { LeaderboardService, type Standing } from './leaderboard.service';
+import { LeaderboardService, type SittingStanding, type Standing } from './leaderboard.service';
 import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
@@ -60,8 +60,6 @@ const REPORT_SELECT = {
   score: true,
   sectionScores: true,
   submittedAt: true,
-  lastRank: true,
-  lastPercentile: true,
   test: {
     select: {
       title: true,
@@ -137,14 +135,15 @@ export class PerformanceAnalyticsService {
     const rows = anchor === null ? [] : toReported(anchor);
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
-    const [testStats, pValues, sectionCohort, topper, standing, series] = await Promise.all([
+    const [testStats, pValues, sectionCohort, topper, standings, series] = await Promise.all([
       this.testStats(testIds),
       this.pValues(anchor === null ? [] : [anchor.testId]),
       this.sectionCohort(anchor),
       anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
-      anchor === null ? null : this.leaderboard.liveStanding(anchor.testId, anchor.id),
+      this.leaderboard.standingsOfStudent(studentId),
       this.seriesOf(studentId, query),
     ]);
+    const standing = anchor === null ? null : (standings.get(anchor.id) ?? null);
 
     return {
       studentId,
@@ -153,14 +152,16 @@ export class PerformanceAnalyticsService {
       label: series?.name ?? anchor?.test.title ?? null,
       attemptsCounted: sat.length,
       generatedAt: new Date().toISOString(),
-      trajectory: sat.map((row) => toPoint(row, testStats.get(row.testId)?.evaluatedCount ?? null)),
+      trajectory: sat.map((row) =>
+        toPoint(row, standings.get(row.id), testStats.get(row.testId)?.evaluatedCount ?? null),
+      ),
       cohort: await this.curveOf(query, anchor, standing, testStats),
       composition: compositionOf(rows),
       sections: sectionalStandingOf(sectionsOf(anchor), sectionCohort, topper.bySection),
       difficulty: difficultyStandingOf(rows, pValues),
       time: timeUseOf(rows),
       paceIndex: paceOf(rows, anchor === null ? null : (testStats.get(anchor.testId) ?? null)),
-      progression: progressionOf(series, sat),
+      progression: progressionOf(series, sat, standings),
     };
   }
 
@@ -185,8 +186,8 @@ export class PerformanceAnalyticsService {
       score,
       topperScore: numberOrNull(rolled?.maxScore ?? null) ?? live?.topperScore ?? null,
       averageScore: averageOf(rolled) ?? live?.averageScore ?? null,
-      rank: standing?.rank ?? anchor.lastRank,
-      percentile: standing?.percentile ?? numberOrNull(anchor.lastPercentile),
+      rank: standing?.rank ?? null,
+      percentile: standing?.percentile ?? null,
       cohortSize: counted === 0 ? (standing?.cohortSize ?? live?.size ?? 0) : counted,
       bands: rolledBands.length > 0 ? rolledBands : flagYours(live?.bands ?? [], score),
     };
@@ -332,13 +333,14 @@ interface ScopedSeries {
 function progressionOf(
   series: ScopedSeries | null,
   sat: readonly ReportRow[],
+  standings: ReadonlyMap<string, SittingStanding>,
 ): SeriesProgression | null {
   if (!series?.progressive) return null;
   const papers: SatPaper[] = sat.map((row) => ({
     testId: row.testId,
     attemptId: row.id,
     title: row.test.title,
-    percentile: numberOrNull(row.lastPercentile),
+    percentile: standings.get(row.id)?.percentile ?? null,
     questions: toReported(row),
   }));
   return seriesProgressionOf(series.id, series.order, papers);
@@ -377,14 +379,18 @@ function scopeIdOf(query: PerformanceReportQuery): string | null {
   return field === null ? null : (query[field] ?? null);
 }
 
-function toPoint(row: ReportRow, cohortSize: number | null): PercentilePoint {
+function toPoint(
+  row: ReportRow,
+  standing: Standing | undefined,
+  cohortSize: number | null,
+): PercentilePoint {
   return {
     attemptId: row.id,
     testId: row.testId,
     testTitle: row.test.title,
     submittedAt: row.submittedAt?.toISOString() ?? null,
-    percentile: numberOrNull(row.lastPercentile),
-    rank: row.lastRank,
+    percentile: standing?.percentile ?? null,
+    rank: standing?.rank ?? null,
     cohortSize,
   };
 }

@@ -10,15 +10,14 @@ import {
   type AnalysedQuestion,
 } from '../src/attempts/attempt-analytics';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
-  FakeQueue,
-  FakeRedis,
+  FakeLeaderboard,
   FakeScoringPrisma,
   FakeStorage,
   makeAttempt,
   makeScoredTest,
   makeServedAnswer,
+  makeStanding,
   rowAt,
 } from './support/fakes';
 
@@ -238,18 +237,30 @@ function bench() {
     }),
   ];
   const prisma = new FakeScoringPrisma([mine, rival], served, SHAPE);
-  const redis = new FakeRedis();
-  const leaderboard = new LeaderboardService(
-    prisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
+  const leaderboard = new FakeLeaderboard([
+    makeStanding({
+      attemptId: mine.id,
+      studentId: STUDENT,
+      rank: 2,
+      percentile: 25,
+      cohortSize: 2,
+    }),
+    makeStanding({
+      attemptId: rival.id,
+      studentId: 'stu_2',
+      rank: 1,
+      percentile: 75,
+      cohortSize: 2,
+    }),
+  ]);
   return {
     prisma,
-    leaderboard,
     mine,
-    rival,
-    service: new AttemptReportService(prisma.asService(), leaderboard, new FakeStorage() as never),
+    service: new AttemptReportService(
+      prisma.asService(),
+      leaderboard.asService(),
+      new FakeStorage() as never,
+    ),
   };
 }
 
@@ -273,16 +284,17 @@ describe('the analytics one sitting can be asked for', () => {
   });
 
   it('sets this sitting against the cohort it was sat in', async () => {
-    const { service, leaderboard, mine, rival } = bench();
-    await leaderboard.record({ ...mine, score: 3.5 });
-    await leaderboard.record({ ...rival, score: 6 });
+    const { service, mine } = bench();
 
     const report = await service.analytics(STUDENT, mine.id);
 
     assert.equal(report.cohort.score, 3.5);
     assert.equal(report.cohort.topperScore, 6);
     assert.equal(report.cohort.averageScore, 4.75);
-    assert.equal(report.cohort.rank, 2);
+    assert.deepEqual(
+      [report.cohort.rank, report.cohort.percentile, report.cohort.cohortSize],
+      [2, 25, 2],
+    );
   });
 
   it('refuses a paper nobody has marked yet', async () => {
@@ -317,6 +329,32 @@ describe('the trend across every test a student has sat', () => {
     );
     assert.equal(trend.testsSat, 2);
     assert.equal(trend.points[0]?.accuracy, 50);
+  });
+
+  it('plots each sitting at its standing now, and a retake at none', async () => {
+    const { service, prisma } = bench();
+    prisma.attempts.push(
+      makeAttempt({
+        id: 'att_retake',
+        studentId: STUDENT,
+        testId: 'tst_1',
+        attemptNo: 2,
+        isGraded: false,
+        status: ATTEMPT_STATUS.EVALUATED,
+        submittedAt: new Date('2026-09-02T05:00:00.000Z'),
+        score: 6,
+      }),
+    );
+
+    const trend = await service.performance(STUDENT);
+
+    assert.deepEqual(
+      trend.points.map((point) => [point.attemptId, point.rank, point.percentile]),
+      [
+        ['att_1', 2, 25],
+        ['att_retake', null, null],
+      ],
+    );
   });
 
   it('leaves another student’s sittings out of it', async () => {

@@ -6,6 +6,7 @@ import { AuthModule } from '../auth';
 import { BranchesModule } from '../branches';
 import { ConfigsModule } from '../configs';
 import { type AccessModule } from '../access';
+import { type AttemptsModule } from '../attempts';
 import { type NotificationsModule } from '../notifications';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
@@ -33,6 +34,11 @@ import { StudentConsentListener } from './student-consent.listener';
       () =>
         (module.require('../notifications') as { NotificationsModule: typeof NotificationsModule })
           .NotificationsModule,
+    ),
+    // Same re-entry, for the live standings a student's own copy of their data carries.
+    forwardRef(
+      () =>
+        (module.require('../attempts') as { AttemptsModule: typeof AttemptsModule }).AttemptsModule,
     ),
   ],
   controllers: [StudentsController],

@@ -40,7 +40,7 @@ import {
 import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { sectionScoresIn } from './score-paper';
-import { LeaderboardService } from './leaderboard.service';
+import { LeaderboardService, type Standing } from './leaderboard.service';
 import {
   elapsedSeconds,
   marksBySection,
@@ -73,8 +73,6 @@ const SCORE_CARD_SELECT = {
   wrongCount: true,
   unattemptedCount: true,
   sectionScores: true,
-  lastRank: true,
-  lastPercentile: true,
   test: {
     select: {
       title: true,
@@ -196,7 +194,7 @@ export class AttemptReportService {
     const questions = attempt.questions.map(toScoreCardQuestion);
     const perSection = marksBySection(questions);
 
-    const standing = await this.leaderboard.liveStanding(attempt.testId, attempt.id);
+    const standing = await this.leaderboard.standing(attempt.testId, attempt.id);
     const score = Number(attempt.score ?? 0);
     const maxMarks = round([...perSection.values()].reduce((sum, marks) => sum + marks, 0));
 
@@ -227,9 +225,8 @@ export class AttemptReportService {
         attempt.test.scope,
         (attempt.test.scopeRef as TestScopeRef | null) ?? null,
       ),
-      // The snapshot only where the live board could not answer, so a screen is never blank.
-      rank: standing?.rank ?? attempt.lastRank,
-      percentile: standing?.percentile ?? numberOrNull(attempt.lastPercentile),
+      rank: standing?.rank ?? null,
+      percentile: standing?.percentile ?? null,
       cohortSize: standing?.cohortSize ?? null,
       sections: sectionsWithScores(
         config.sections.map((section) => ({
@@ -259,7 +256,7 @@ export class AttemptReportService {
     );
     const rows = attempt.questions.map(toAnalysed);
     const [standing, cohort] = await Promise.all([
-      this.leaderboard.liveStanding(attempt.testId, attempt.id),
+      this.leaderboard.standing(attempt.testId, attempt.id),
       this.cohortOf(attempt.testId),
     ]);
 
@@ -285,8 +282,8 @@ export class AttemptReportService {
         score: Number(attempt.score ?? 0),
         topperScore: cohort.topperScore,
         averageScore: cohort.averageScore,
-        rank: standing?.rank ?? attempt.lastRank,
-        percentile: standing?.percentile ?? numberOrNull(attempt.lastPercentile),
+        rank: standing?.rank ?? null,
+        percentile: standing?.percentile ?? null,
         cohortSize: standing?.cohortSize ?? cohort.size,
       },
     };
@@ -294,20 +291,25 @@ export class AttemptReportService {
 
   /** Every test this student has sat, oldest first — the line a trend chart draws. */
   async performance(studentId: string): Promise<PerformanceTrend> {
-    const sat = await this.prisma.attempt.findMany({
-      where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
-      orderBy: { submittedAt: 'desc' },
-      take: TREND_LENGTH,
-      select: TREND_SELECT,
-    });
+    const [sat, tests, standings] = await Promise.all([
+      this.prisma.attempt.findMany({
+        where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+        orderBy: { submittedAt: 'desc' },
+        take: TREND_LENGTH,
+        select: TREND_SELECT,
+      }),
+      this.prisma.attempt.findMany({
+        where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+        distinct: ['testId'],
+        select: { testId: true },
+      }),
+      this.leaderboard.standingsOfStudent(studentId),
+    ]);
 
-    const tests = await this.prisma.attempt.findMany({
-      where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
-      distinct: ['testId'],
-      select: { testId: true },
-    });
-
-    return { testsSat: tests.length, points: [...sat].reverse().map(toPerformancePoint) };
+    return {
+      testsSat: tests.length,
+      points: [...sat].reverse().map((row) => toPerformancePoint(row, standings.get(row.id))),
+    };
   }
 
   /** One indexed aggregate, off the report path's own budget — never off a live sitting's. */
@@ -474,8 +476,6 @@ const TREND_SELECT = {
   score: true,
   correctCount: true,
   wrongCount: true,
-  lastRank: true,
-  lastPercentile: true,
   test: { select: { title: true } },
   // The PAPER's own marks, so one sitting cannot read one percentage here and another on its card.
   questions: { select: { paperItem: { select: { marks: true } } } },
@@ -483,7 +483,8 @@ const TREND_SELECT = {
 
 type TrendRow = Prisma.AttemptGetPayload<{ select: typeof TREND_SELECT }>;
 
-function toPerformancePoint(row: TrendRow): PerformancePoint {
+/** A retake is outside the cohort, so it has no standing and plots no rank or percentile. */
+function toPerformancePoint(row: TrendRow, standing: Standing | undefined): PerformancePoint {
   const score = Number(row.score ?? 0);
   const maxMarks = round(
     row.questions.reduce((sum, question) => sum + Number(question.paperItem?.marks ?? 0), 0),
@@ -499,8 +500,8 @@ function toPerformancePoint(row: TrendRow): PerformancePoint {
     maxMarks,
     percentage: percentageOf(score, maxMarks),
     accuracy: attempted === 0 ? 0 : round(((row.correctCount ?? 0) / attempted) * 100),
-    rank: row.lastRank,
-    percentile: numberOrNull(row.lastPercentile),
+    rank: standing?.rank ?? null,
+    percentile: standing?.percentile ?? null,
   };
 }
 

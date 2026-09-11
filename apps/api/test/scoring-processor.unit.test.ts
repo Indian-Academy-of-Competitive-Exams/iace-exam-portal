@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ATTEMPT_STATUS, NOTIFICATION_TYPE, PAPER_QUESTION_STATUS } from '@iace/contracts';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import {
   FakeEventBus,
   FakeQueue,
-  FakeRedis,
   fakeRollupOutbox,
   FakeScoringPrisma,
   makeAttempt,
@@ -45,19 +43,12 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
   ];
   const prisma = new FakeScoringPrisma([attempt], served);
   const rollups = new FakeQueue();
-  const redis = new FakeRedis();
-  const leaderboard = new LeaderboardService(
-    prisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
   return {
     prisma,
     attempt,
     served,
     processor: new ScoringProcessor(
       prisma.asService(),
-      leaderboard,
       fakeRollupOutbox(prisma, rollups),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(prisma),
@@ -148,7 +139,6 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(rerun.attempt.evaluatedAt, stamped);
   });
 
-  /** The rank snapshot is left out on purpose: a rank moves as the cohort grows, and marks do not. */
   const marksOf = (attempt: FakeAttemptRow, served: FakeServedAnswerRow[]) => ({
     status: attempt.status,
     score: attempt.score,

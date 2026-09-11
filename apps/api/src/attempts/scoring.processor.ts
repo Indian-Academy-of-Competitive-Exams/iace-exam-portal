@@ -14,8 +14,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
-import { LeaderboardService } from './leaderboard.service';
-import { LEADERBOARD_MAX_TIME_SEC, timeTakenSec } from './leaderboard-score';
+import { timeTakenSec } from './leaderboard-score';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { NotificationOutbox } from '../notifications';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
@@ -64,7 +63,6 @@ export class ScoringProcessor extends WorkerHost {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly leaderboard: LeaderboardService,
     private readonly rollup: RollupOutbox,
     private readonly events: DomainEventBus,
     private readonly notifications: NotificationOutbox,
@@ -95,18 +93,10 @@ export class ScoringProcessor extends WorkerHost {
 
     const scored = scorePaper(attempt.questions.map(toScorable));
     const written = await this.persist(attempt, scored);
-    // Stood down while this ran: ranking it now would put a void sitting back on the board.
+    // Stood down while this ran: counting it now would fold a void sitting back in.
     if (!written.applied) return null;
 
     const evaluation = written.evaluation;
-    await this.leaderboard.rank({
-      id: attempt.id,
-      testId: attempt.testId,
-      isGraded: attempt.isGraded,
-      score: scored.score,
-      startedAt: attempt.startedAt,
-      submittedAt: attempt.submittedAt,
-    });
     await this.count(attempt.testId, evaluation);
     // Only a FIRST evaluation: a dropped question re-scores every sitting, and nobody wants that twice.
     if (evaluation !== null) {
@@ -148,10 +138,7 @@ export class ScoringProcessor extends WorkerHost {
           wrongCount: scored.wrongCount,
           unattemptedCount: scored.unattemptedCount,
           sectionScores: scored.sections,
-          timeTakenSec: Math.min(
-            timeTakenSec(attempt.startedAt, attempt.submittedAt),
-            LEADERBOARD_MAX_TIME_SEC,
-          ),
+          timeTakenSec: timeTakenSec(attempt.startedAt, attempt.submittedAt),
         },
       });
       if (marked.count === 0) return { applied: false, evaluation: null };

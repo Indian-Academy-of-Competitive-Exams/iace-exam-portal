@@ -23,7 +23,7 @@ interface PercentileCase {
   expected: number;
 }
 
-/** Each expectation is what leaderboard-score.ts percentileOf returned for the same counts. */
+/** Each expectation is the formula by hand: a tie counts half, and a field of one is 100. */
 const PERCENTILE_CASES: readonly PercentileCase[] = [
   { name: 'a field of one is its own top', outscored: 0, tied: 1, cohort: 1, expected: 100 },
   { name: 'the top of four, nobody tied', outscored: 3, tied: 1, cohort: 4, expected: 87.5 },
@@ -37,6 +37,13 @@ const PERCENTILE_CASES: readonly PercentileCase[] = [
   { name: 'more outscored than the field holds', outscored: 9, tied: 9, cohort: 4, expected: 100 },
   { name: 'more tied than are left', outscored: 1, tied: 7, cohort: 4, expected: 62.5 },
   { name: 'an empty field', outscored: 0, tied: 0, cohort: 0, expected: 100 },
+  {
+    name: 'a half-hundredth rounds up, exactly',
+    outscored: 0,
+    tied: 23,
+    cohort: 80,
+    expected: 14.38,
+  },
 ];
 
 async function sittingPercentile({ outscored, tied, cohort }: PercentileCase): Promise<number> {

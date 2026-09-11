@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import {
   FakeEventBus,
   FakeQueue,
-  FakeRedis,
   FakeRollupPrisma,
   fakeNotificationOutbox,
   fakeRollupOutbox,
@@ -51,11 +49,6 @@ function world(chosen: readonly (string | null)[]) {
   const outbox = fakeRollupOutbox(prisma, queue);
   const scoring = new ScoringProcessor(
     prisma.asService(),
-    new LeaderboardService(
-      prisma.asService(),
-      new FakeRedis().asService(),
-      new FakeQueue().asQueue(),
-    ),
     outbox,
     new FakeEventBus().asService(),
     fakeNotificationOutbox(),

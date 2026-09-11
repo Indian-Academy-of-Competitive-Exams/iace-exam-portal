@@ -1,20 +1,19 @@
 /**
  * Phase 4.5, end to end: one cohort sits one paper, the worker marks it, the report reads off
  * what the worker wrote, a link publishes that report to the open internet, and revoking it shuts
- * the door. Scoring, the board, the report and the share all meet over one set of rows and one
- * Redis, so a leak or a drift between them shows up here rather than in production.
+ * the door. Scoring, the report and the share all meet over one set of rows and one standing, so a
+ * leak or a drift between them shows up here rather than in production.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, ErrorCodes, PERFORMANCE_SCOPES } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
 import { PerformanceShareService } from '../src/attempts/performance-share.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
-import { redisKeys } from '../src/redis/redis.keys';
 import {
   FakeEventBus,
+  FakeLeaderboard,
   FakePerformancePrisma,
   FakeQueue,
   fakeRollupOutbox,
@@ -25,6 +24,7 @@ import {
   makeScoredTest,
   makeServedAnswer,
   makeShareSitting,
+  makeStanding,
   mcqOptions,
   type FakeAttemptRow,
   type FakeServedAnswerRow,
@@ -138,11 +138,16 @@ function platform() {
   const rows = attemptIds.flatMap(served);
   const redis = new FakeRedis();
   const scoringPrisma = new FakeScoringPrisma(attempts, rows, SHAPE);
-  const leaderboard = new LeaderboardService(
-    scoringPrisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
+  // Fourth on 3.5 marks under 8, 6 and 4, over 2 and 0.5: Postgres counts it, the test states it.
+  const leaderboard = new FakeLeaderboard([
+    makeStanding({
+      attemptId: OURS,
+      studentId: OUR_STUDENT,
+      rank: 4,
+      percentile: 41.67,
+      cohortSize: 6,
+    }),
+  ]);
   const reportPrisma = new FakePerformancePrisma({
     attempts,
     served: rows,
@@ -158,7 +163,10 @@ function platform() {
     sectionStats: [],
     questionStats: [],
   });
-  const analytics = new PerformanceAnalyticsService(reportPrisma.asService(), leaderboard);
+  const analytics = new PerformanceAnalyticsService(
+    reportPrisma.asService(),
+    leaderboard.asService(),
+  );
   const sharePrisma = new FakeSharePrisma(
     [],
     attemptIds.map((id) =>
@@ -179,7 +187,6 @@ function platform() {
     analytics,
     scoring: new ScoringProcessor(
       scoringPrisma.asService(),
-      leaderboard,
       fakeRollupOutbox(scoringPrisma, new FakeQueue()),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
@@ -205,27 +212,19 @@ const refused = (error: { code?: string; message?: string }) =>
   error.code === ErrorCodes.NOT_FOUND && error.message === REFUSAL;
 
 describe('a cohort, scored and reported and published', () => {
-  it('marks every sitting off the key and puts the whole cohort on one board', async () => {
-    const { scoring, redis, attempts } = platform();
+  it('marks every sitting off the key, with the time a tie on marks is settled by', async () => {
+    const { scoring, attempts } = platform();
 
     await scoreEveryone(scoring);
 
     assert.deepEqual(
-      attempts.map((row) => [row.id, row.score]),
-      attemptIds.map((id) => [id, MARKS[id]]),
+      attempts.map((row) => [row.id, row.score, row.timeTakenSec]),
+      attemptIds.map((id) => [id, MARKS[id], (MINUTES[id] ?? 0) * 60]),
     );
     assert.ok(attempts.every((row) => row.status === ATTEMPT_STATUS.EVALUATED));
-    assert.deepEqual(redis.descending(redisKeys.testLeaderboard(TEST_ID)), [
-      'att_2',
-      'att_3',
-      'att_4',
-      'att_1',
-      'att_5',
-      'att_6',
-    ]);
   });
 
-  it('reads one student’s report off the rows the worker wrote and the board it built', async () => {
+  it('reads one student’s report off the rows the worker wrote and their live standing', async () => {
     const { scoring, analytics } = platform();
     await scoreEveryone(scoring);
 
@@ -234,6 +233,7 @@ describe('a cohort, scored and reported and published', () => {
     assert.equal(report.composition.net, MARKS[OURS]);
     assert.equal(report.composition.maxMarks, 8);
     assert.equal(report.cohort?.rank, 4);
+    assert.equal(report.cohort?.percentile, 41.67);
     assert.equal(report.cohort?.cohortSize, 6);
     assert.equal(report.cohort?.topperScore, 8);
     assert.equal(report.cohort?.averageScore, 4);

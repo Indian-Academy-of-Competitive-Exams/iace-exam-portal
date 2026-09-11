@@ -61,6 +61,12 @@ import { type RedisService } from '../../src/redis/redis.service';
 import { type MetricsService } from '../../src/common/metrics';
 import { PRISMA_ERROR_CODES } from '../../src/common/prisma-errors';
 import { type PrismaService } from '../../src/prisma/prisma.service';
+import {
+  type LeaderboardService,
+  type SittingStanding,
+  type Standing,
+} from '../../src/attempts/leaderboard.service';
+import { type PointsRow, type TestBoardRow } from '../../src/attempts/ranking-sql';
 import { type StorageService } from '../../src/storage/storage.service';
 import {
   type MessageChannel,
@@ -88,26 +94,13 @@ import { type AccessResolverService, type ProgramsService } from '../../src/acce
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
 interface Entry {
-  value: string | Set<string> | Map<string, number>;
+  value: string | Set<string>;
   expiresAtMs: number | null;
-}
-
-/** `-inf`, `+inf`, a number, or a `(`-prefixed exclusive bound — the ZCOUNT range vocabulary. */
-function zBound(raw: string | number): { at: number; exclusive: boolean } {
-  const text = String(raw);
-  const exclusive = text.startsWith('(');
-  const body = exclusive ? text.slice(1) : text;
-  if (body === '-inf') return { at: Number.NEGATIVE_INFINITY, exclusive };
-  if (body === '+inf' || body === 'inf') return { at: Number.POSITIVE_INFINITY, exclusive };
-  return { at: Number(body), exclusive };
 }
 
 export class FakeRedis {
   private readonly store = new Map<string, Entry>();
   private nowMs = 1_700_000_000_000;
-
-  /** Set to make every pipeline reject, standing in for a Redis nobody can reach. */
-  pipelineFails = false;
 
   /** Move the clock forward; keys past their TTL disappear exactly as Redis would. */
   advanceSeconds(seconds: number): void {
@@ -119,7 +112,6 @@ export class FakeRedis {
     const out: Record<string, string | string[]> = {};
     for (const [key, entry] of this.store) {
       if (this.expired(entry)) continue;
-      if (entry.value instanceof Map) continue;
       out[key] = entry.value instanceof Set ? [...entry.value] : entry.value;
     }
     return out;
@@ -221,86 +213,7 @@ export class FakeRedis {
       const entry = this.live(key);
       return Promise.resolve(entry?.value instanceof Set ? [...entry.value] : []);
     },
-
-    zadd: (key: string, ...pairs: (number | string)[]): Promise<number> => {
-      const entry = this.live(key);
-      const zset = entry?.value instanceof Map ? entry.value : new Map<string, number>();
-      let added = 0;
-      for (let at = 0; at + 1 < pairs.length; at += 2) {
-        const member = String(pairs[at + 1]);
-        if (!zset.has(member)) added += 1;
-        zset.set(member, Number(pairs[at]));
-      }
-      this.store.set(key, { value: zset, expiresAtMs: entry?.expiresAtMs ?? null });
-      return Promise.resolve(added);
-    },
-
-    zscore: (key: string, member: string): Promise<string | null> => {
-      const score = this.zset(key).get(member);
-      return Promise.resolve(score === undefined ? null : String(score));
-    },
-
-    rename: (from: string, to: string): Promise<'OK'> => {
-      const entry = this.live(from);
-      if (!entry) throw new Error(`no such key ${from}`);
-      this.store.set(to, entry);
-      this.store.delete(from);
-      return Promise.resolve('OK');
-    },
-
-    zcard: (key: string): Promise<number> => Promise.resolve(this.zset(key).size),
-
-    /** Highest score is seat 0; Redis orders a tie by member ascending, so REV reverses that too. */
-    zrevrank: (key: string, member: string): Promise<number | null> => {
-      const seat = this.descending(key).indexOf(member);
-      return Promise.resolve(seat === -1 ? null : seat);
-    },
-
-    /** Best first, inclusive at both ends — the slice a board's podium and neighbourhood are cut from. */
-    zrevrange: (key: string, start: number, stop: number): Promise<string[]> =>
-      Promise.resolve(this.descending(key).slice(start, stop < 0 ? undefined : stop + 1)),
-
-    /** Queues the calls and replays them as ioredis does — `[error, value]` per queued command. */
-    pipeline: () => {
-      const queued: (() => Promise<number>)[] = [];
-      const chain = {
-        zcard: (key: string) => {
-          queued.push(() => this.client.zcard(key));
-          return chain;
-        },
-        exec: async (): Promise<[Error | null, unknown][]> => {
-          if (this.pipelineFails) throw new Error('pipeline refused');
-          return Promise.all(
-            queued.map(async (run): Promise<[Error | null, unknown]> => [null, await run()]),
-          );
-        },
-      };
-      return chain;
-    },
-
-    zcount: (key: string, min: string | number, max: string | number): Promise<number> => {
-      const low = zBound(min);
-      const high = zBound(max);
-      const inRange = [...this.zset(key).values()].filter(
-        (score) =>
-          (low.exclusive ? score > low.at : score >= low.at) &&
-          (high.exclusive ? score < high.at : score <= high.at),
-      );
-      return Promise.resolve(inRange.length);
-    },
   };
-
-  private zset(key: string): Map<string, number> {
-    const entry = this.live(key);
-    return entry?.value instanceof Map ? entry.value : new Map<string, number>();
-  }
-
-  /** The board as a reader sees it, best first — and a tie the way ZREVRANGE returns one. */
-  descending(key: string): string[] {
-    return [...this.zset(key).entries()]
-      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? 1 : -1))
-      .map(([member]) => member);
-  }
 
   // --- the typed helpers RedisService adds on top ---------------------------
 
@@ -5602,37 +5515,22 @@ export class FakePerformancePrisma {
 // --------------------------------------------------------------------------- the leaderboard board
 // ---------------------------------------------------------------------------
 
-/** One sitting flattened with the student it belongs to — everything a board row could draw on. */
+/** The reader's own sitting: the gate a one-paper board opens on. Postgres ranks everyone else. */
 export interface FakeBoardSitting {
   id: string;
   testId: string;
   studentId: string;
   isGraded: boolean;
   status: AttemptStatus;
-  score: number | null;
-  lastRank: number | null;
-  startedAt: Date;
-  submittedAt: Date | null;
-  fullName: string | null;
-  branch: string | null;
-  mobile: string;
 }
 
 export function makeBoardSitting(overrides: Partial<FakeBoardSitting> = {}): FakeBoardSitting {
-  const startedAt = overrides.startedAt ?? new Date('2026-09-01T05:00:00.000Z');
   return {
     id: 'att_1',
     testId: 'tst_1',
     studentId: 'stu_1',
     isGraded: true,
     status: ATTEMPT_STATUS.EVALUATED,
-    score: 60,
-    lastRank: null,
-    startedAt,
-    submittedAt: new Date(startedAt.getTime() + 20 * 60_000),
-    fullName: 'Sai Teja Reddy',
-    branch: 'AMEERPET',
-    mobile: '9876500001',
     ...overrides,
   };
 }
@@ -5649,24 +5547,15 @@ export interface FakeBoardSeries {
   testIds: string[];
 }
 
-/** Rows a ranked aggregate would return. Postgres does that ranking, so a test hands it over. */
-export interface FakeBoardPointsRow {
-  rank: number;
-  points: number;
-  sittings: number;
-  cohort: number;
-  name: string | null;
-  branch: string | null;
-  is_you: boolean;
-  prior_rank: number | null;
-}
+/** Rows a ranking query would return. Postgres does that ranking, so a test hands them over. */
+export type FakeBoardRawRow = TestBoardRow | PointsRow;
 
 export class FakeBoardPrisma {
   constructor(
     readonly sittings: FakeBoardSitting[] = [],
     readonly tests: FakeBoardTest[] = [],
     readonly series: FakeBoardSeries[] = [],
-    readonly points: FakeBoardPointsRow[] = [],
+    readonly raw: readonly FakeBoardRawRow[] = [],
   ) {}
 
   /** What the raw ranking query was asked, so a test can prove it ran rather than guessing. */
@@ -5691,28 +5580,8 @@ export class FakeBoardPrisma {
       );
       if (!row) return Promise.resolve(null);
       const test = this.testOf(row.testId);
-      return Promise.resolve({
-        id: row.id,
-        lastRank: row.lastRank,
-        test: { title: test.title },
-      });
+      return Promise.resolve({ id: row.id, test: { title: test.title } });
     },
-
-    /** Hands back only what the select asks for: a leak here would be the code's, not the fake's. */
-    findMany: ({ where }: { where: { id: { in: string[] } } }) =>
-      Promise.resolve(
-        this.sittings
-          .filter((row) => where.id.in.includes(row.id))
-          .map((row) => ({
-            id: row.id,
-            score: row.score,
-            lastRank: row.lastRank,
-            student: {
-              fullName: row.fullName,
-              currentBranch: row.branch === null ? null : { name: row.branch },
-            },
-          })),
-      ),
   };
 
   readonly testSeries = {
@@ -5728,11 +5597,82 @@ export class FakeBoardPrisma {
 
   $queryRaw() {
     this.rawReads += 1;
-    return Promise.resolve(this.points);
+    return Promise.resolve(this.raw);
   }
 
   asService(): PrismaService {
     return this as unknown as PrismaService;
+  }
+}
+
+/** A sitting's standing and the student it belongs to, as the live ranking would count it. */
+export interface FakeStanding extends SittingStanding {
+  studentId: string;
+}
+
+export function makeStanding(overrides: Partial<FakeStanding> = {}): FakeStanding {
+  return {
+    attemptId: 'att_1',
+    testId: 'tst_1',
+    studentId: 'stu_1',
+    rank: 1,
+    percentile: 100,
+    cohortSize: 1,
+    ...overrides,
+  };
+}
+
+/** The live ranking as its consumers see it. Postgres counts it, so a test fills the maps in. */
+export class FakeLeaderboard implements Pick<
+  LeaderboardService,
+  'standing' | 'standingsOfStudent' | 'sittingCounts'
+> {
+  readonly standings = new Map<string, FakeStanding>();
+  readonly counts = new Map<string, number>();
+
+  constructor(standings: readonly FakeStanding[] = [], counts: Record<string, number> = {}) {
+    for (const standing of standings) this.standings.set(standing.attemptId, standing);
+    for (const [testId, count] of Object.entries(counts)) this.counts.set(testId, count);
+  }
+
+  standing(testId: string, attemptId: string): Promise<Standing | null> {
+    const held = this.standings.get(attemptId);
+    if (held?.testId !== testId) return Promise.resolve(null);
+    return Promise.resolve({
+      rank: held.rank,
+      percentile: held.percentile,
+      cohortSize: held.cohortSize,
+    });
+  }
+
+  standingsOfStudent(studentId: string): Promise<ReadonlyMap<string, SittingStanding>> {
+    const mine = [...this.standings.values()].filter((held) => held.studentId === studentId);
+    return Promise.resolve(
+      new Map(
+        mine.map((held) => [
+          held.attemptId,
+          {
+            attemptId: held.attemptId,
+            testId: held.testId,
+            rank: held.rank,
+            percentile: held.percentile,
+            cohortSize: held.cohortSize,
+          },
+        ]),
+      ),
+    );
+  }
+
+  sittingCounts(testIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    const counted = testIds.flatMap((testId) => {
+      const count = this.counts.get(testId);
+      return count === undefined ? [] : [[testId, count] as const];
+    });
+    return Promise.resolve(new Map(counted));
+  }
+
+  asService(): LeaderboardService {
+    return this as unknown as LeaderboardService;
   }
 }
 

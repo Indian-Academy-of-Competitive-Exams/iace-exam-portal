@@ -20,11 +20,10 @@ import {
 } from '../src/attempts/performance-share.controller';
 import { PerformanceShareService } from '../src/attempts/performance-share.service';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { newShareToken, shareExpiresAt, shareIsLive } from '../src/attempts/performance-share';
 import {
+  FakeLeaderboard,
   FakePerformancePrisma,
-  FakeQueue,
   FakeRedis,
   FakeSharePrisma,
   makeAttempt,
@@ -32,6 +31,7 @@ import {
   makeServedAnswer,
   makeShare,
   makeShareSitting,
+  makeStanding,
   mcqOptions,
   type FakeAttemptRow,
   type FakePerformanceData,
@@ -128,8 +128,6 @@ function sittings(crowd: number): FakeAttemptRow[] {
       status: ATTEMPT_STATUS.EVALUATED,
       submittedAt: new Date('2026-08-29T06:00:00.000Z'),
       score: 1.5,
-      lastRank: 58,
-      lastPercentile: 82,
       sectionScores: [
         {
           baseConfigSectionId: 'sec_1',
@@ -175,13 +173,20 @@ function bench(
   };
   const redis = new FakeRedis();
   const reportPrisma = new FakePerformancePrisma(data);
+  // The shared sitting scored lowest, so it sits last in a cohort of the rival, the crowd and itself.
+  const last = crowd + 2;
+  const leaderboard = new FakeLeaderboard([
+    makeStanding({
+      attemptId: 'att_1',
+      studentId: STUDENT,
+      rank: last,
+      percentile: 50 / last,
+      cohortSize: last,
+    }),
+  ]);
   const analytics = new PerformanceAnalyticsService(
     reportPrisma.asService(),
-    new LeaderboardService(
-      reportPrisma.asService(),
-      new FakeRedis().asService(),
-      new FakeQueue().asQueue(),
-    ),
+    leaderboard.asService(),
   );
   const sharePrisma = new FakeSharePrisma(shares, [
     makeShareSitting({ id: 'att_1', studentId: STUDENT, title: SHAPE.title, ...sitting }),
@@ -274,8 +279,8 @@ describe('reading a shared report', () => {
     assert.equal(report.studentName, 'Harshith Diyyala');
     assert.equal(report.branchName, 'AMEERPET');
     assert.equal(report.testTitle, SHAPE.title);
-    assert.equal(report.rank, 58);
-    assert.equal(report.percentile, 82);
+    assert.equal(report.rank, 2);
+    assert.equal(report.percentile, 25);
     assert.equal(report.sections[0]?.name, 'Reasoning');
   });
 
@@ -334,7 +339,7 @@ describe('reading a shared report', () => {
     assert.equal(report.topperScore, null);
     assert.equal(report.averageScore, null);
     assert.deepEqual(report.bands, []);
-    assert.equal(report.rank, 58);
+    assert.equal(report.rank, 2);
   });
 });
 

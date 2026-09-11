@@ -16,62 +16,23 @@ import {
 import { ActorGuard } from '../src/auth/guards/actor.guard';
 import { IS_PUBLIC_KEY, type AuthenticatedUser } from '../src/common/security';
 import { MeLeaderboardController } from '../src/attempts/leaderboard.controller';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { LeaderboardViewService } from '../src/attempts/leaderboard-view.service';
-import {
-  deltaOf,
-  neighbourhoodWindow,
-  seatsOf,
-  splitBoard,
-} from '../src/attempts/leaderboard-board';
+import { deltaOf, splitBoard } from '../src/attempts/leaderboard-board';
+import { type PointsRow, type TestBoardRow } from '../src/attempts/ranking-sql';
 import {
   FakeBoardPrisma,
-  FakeQueue,
-  FakeRedis,
+  FakeLeaderboard,
   makeBoardSitting,
-  type FakeBoardPointsRow,
+  makeStanding,
+  type FakeBoardRawRow,
   type FakeBoardSeries,
   type FakeBoardSitting,
   type FakeBoardTest,
+  type FakeStanding,
 } from './support/fakes';
 
 // --------------------------------------------------------------------------- shaping a board
 // ---------------------------------------------------------------------------
-
-describe('neighbourhoodWindow', () => {
-  it('centres on the reader and takes the same number of seats either side', () => {
-    assert.deepEqual(neighbourhoodWindow(20, 100), { from: 16, to: 22 });
-  });
-
-  it('does not run off either end of a board', () => {
-    assert.deepEqual(neighbourhoodWindow(1, 100), { from: 0, to: 3 });
-    assert.deepEqual(neighbourhoodWindow(100, 100), { from: 96, to: 99 });
-  });
-
-  it('reads a board of one as the single seat it is', () => {
-    assert.deepEqual(neighbourhoodWindow(1, 1), { from: 0, to: 0 });
-  });
-});
-
-describe('seatsOf', () => {
-  it('numbers the podium from the top and the window from where it was cut', () => {
-    const seats = seatsOf(['a', 'b', 'c'], ['e', 'f', 'g'], 4);
-
-    assert.equal(seats.get('a'), 1);
-    assert.equal(seats.get('c'), 3);
-    assert.equal(seats.get('e'), 5);
-    assert.equal(seats.get('g'), 7);
-  });
-
-  /** The failure this prevents: a reader near the top drawn twice, once per read of the board. */
-  it('keeps a member the two reads overlap on in one seat', () => {
-    const seats = seatsOf(['a', 'b', 'c'], ['a', 'b', 'c', 'd'], 0);
-
-    assert.equal(seats.size, 4);
-    assert.equal(seats.get('a'), 1);
-    assert.equal(seats.get('d'), 4);
-  });
-});
 
 describe('deltaOf', () => {
   it('reads a climb as positive and a slide as negative', () => {
@@ -105,9 +66,9 @@ describe('splitBoard', () => {
 // ---------------------------------------------------------------------------
 
 const ME = 'stu_me';
+const MINE = 'att_8';
 const TEST_ID = 'tst_1';
 const DRILL_ID = 'tst_drill';
-const START = new Date('2026-09-01T05:00:00.000Z');
 
 const NAMES = [
   'Sai Teja Reddy',
@@ -122,50 +83,54 @@ const NAMES = [
   'Aditya Rao',
 ];
 
-/** Ten sittings, five marks apart, so the seat a name takes is countable by hand. */
-function cohort(): FakeBoardSitting[] {
-  return NAMES.map((name, index) =>
-    makeBoardSitting({
-      id: `att_${index + 1}`,
-      studentId: index === 7 ? ME : `stu_${index + 1}`,
-      fullName: name,
-      branch: index % 2 === 0 ? 'AMEERPET' : 'KUKATPALLY',
-      score: 100 - index * 5,
-      submittedAt: new Date(START.getTime() + 20 * 60_000),
-      mobile: `98765000${index}`,
-    }),
-  );
+/** What the ranking query hands back to a reader eighth of ten: the podium and three either side. */
+function seats(): TestBoardRow[] {
+  return [1, 2, 3, 5, 6, 7, 8, 9, 10].map((rank) => ({
+    attempt_id: `att_${rank}`,
+    rank,
+    score: 105 - rank * 5,
+    cohort: NAMES.length,
+    name: NAMES[rank - 1] ?? null,
+    branch: rank % 2 === 1 ? 'AMEERPET' : 'KUKATPALLY',
+    is_you: rank === 8,
+  }));
 }
+
+const mine = (testId = TEST_ID) => makeBoardSitting({ id: MINE, studentId: ME, testId });
+
+const MY_STANDING = makeStanding({
+  attemptId: MINE,
+  studentId: ME,
+  rank: 8,
+  percentile: 25,
+  cohortSize: NAMES.length,
+});
 
 interface BenchOptions {
   tests?: FakeBoardTest[];
   series?: FakeBoardSeries[];
-  points?: FakeBoardPointsRow[];
+  raw?: FakeBoardRawRow[];
+  standings?: FakeStanding[];
 }
 
-async function bench(sittings: FakeBoardSitting[], options: BenchOptions = {}) {
+function bench(sittings: FakeBoardSitting[], options: BenchOptions = {}) {
   const prisma = new FakeBoardPrisma(
     sittings,
     options.tests ?? [],
     options.series ?? [],
-    options.points ?? [],
+    options.raw ?? [],
   );
-  const redis = new FakeRedis();
-  const ranking = new LeaderboardService(
-    prisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
-  const view = new LeaderboardViewService(prisma.asService(), redis.asService(), ranking);
-  for (const row of sittings) await ranking.record(row);
-  return { prisma, redis, view };
+  const leaderboard = new FakeLeaderboard(options.standings ?? []);
+  return { prisma, view: new LeaderboardViewService(prisma.asService(), leaderboard.asService()) };
 }
+
+const paperBench = () => bench([mine()], { raw: seats(), standings: [MY_STANDING] });
 
 const paper = (testId = TEST_ID) => ({ scope: LEADERBOARD_SCOPES.TEST, testId }) as const;
 
 describe('the leaderboard for one paper', () => {
-  it('draws a podium off the top of the live ranking and the reader among their neighbours', async () => {
-    const { view } = await bench(cohort());
+  it('draws the podium and the reader among their neighbours from the seats Postgres ranked', async () => {
+    const { view } = paperBench();
 
     const board = await view.board(ME, paper());
 
@@ -187,31 +152,25 @@ describe('the leaderboard for one paper', () => {
     leaderboardSchema.parse(board);
   });
 
-  /** The failure this prevents: a second sitting of the same paper outranking everyone's first. */
-  it('leaves a retake off the board however well it scored', async () => {
-    const retake = makeBoardSitting({
-      id: 'att_retake',
-      studentId: ME,
-      fullName: 'Harshith Diyyala',
-      score: 200,
-      isGraded: false,
-      submittedAt: new Date(START.getTime() + 10 * 60_000),
-    });
-    const { view } = await bench([...cohort(), retake]);
+  /** A places-moved arrow needs a rank saved from some earlier read, and one paper saves none. */
+  it('draws no places-moved arrow on any row', async () => {
+    const { view } = paperBench();
 
     const board = await view.board(ME, paper());
 
-    assert.equal(board.cohortSize, 10);
-    assert.equal(board.podium[0]?.value, 100);
-    assert.equal(board.you?.rank, 8);
+    assert.deepEqual(
+      [...board.podium, ...board.neighbourhood].map((row) => row.deltaRank),
+      Array.from({ length: 9 }, () => null),
+    );
   });
 
   /** Every test ranks, so no paper a reader holds a graded sitting on is left without a board. */
   it('builds a board for any test the reader holds a graded sitting on', async () => {
-    const drill = cohort().map((row, index) =>
-      makeBoardSitting({ ...row, id: `drill_${index}`, testId: DRILL_ID }),
-    );
-    const { view } = await bench(drill, { tests: [{ id: DRILL_ID, title: 'Speed drill 3' }] });
+    const { view } = bench([mine(DRILL_ID)], {
+      tests: [{ id: DRILL_ID, title: 'Speed drill 3' }],
+      raw: seats(),
+      standings: [{ ...MY_STANDING, testId: DRILL_ID }],
+    });
 
     const board = await view.board(ME, paper(DRILL_ID));
 
@@ -222,7 +181,7 @@ describe('the leaderboard for one paper', () => {
   });
 
   it('refuses a cohort the reader never sat in', async () => {
-    const { view } = await bench(cohort());
+    const { view } = paperBench();
 
     await assert.rejects(
       () => view.board(ME, paper('tst_somebody_elses')),
@@ -230,16 +189,15 @@ describe('the leaderboard for one paper', () => {
     );
   });
 
-  it('measures a climb from where the last snapshot left them', async () => {
-    const rows = cohort();
-    const mine = rows[7];
-    if (mine) mine.lastRank = 14;
-    const { view } = await bench(rows);
+  it('draws an empty board for a sitting the cohort does not count', async () => {
+    const { view } = bench([mine()], { raw: seats() });
 
     const board = await view.board(ME, paper());
 
-    assert.equal(board.you?.deltaRank, 6);
-    assert.equal(board.podium[0]?.deltaRank, null);
+    assert.deepEqual(
+      [board.cohortSize, board.podium, board.neighbourhood, board.you],
+      [0, [], [], null],
+    );
   });
 });
 
@@ -260,23 +218,22 @@ const ROW_FIELDS = [
 
 describe('what a leaderboard row is allowed to say about somebody', () => {
   it('carries a name, a branch and a standing, and nothing else that identifies them', async () => {
-    const { view } = await bench(cohort());
+    const { view } = paperBench();
 
     const board = await view.board(ME, paper());
     const other = board.podium[0];
 
     assert.ok(other);
     assert.deepEqual(Object.keys(other).sort(), ROW_FIELDS);
-    assert.equal(JSON.stringify(board).includes('98765000'), false);
     assert.equal(JSON.stringify(board).includes('att_'), false);
   });
 
   it('shows the reader their own percentile and nobody else theirs', async () => {
-    const { view } = await bench(cohort());
+    const { view } = paperBench();
 
     const board = await view.board(ME, paper());
 
-    assert.notEqual(board.you?.percentile, null);
+    assert.equal(board.you?.percentile, 25);
     assert.equal(
       board.podium.every((row) => row.percentile === null),
       true,
@@ -289,7 +246,7 @@ describe('what a leaderboard row is allowed to say about somebody', () => {
 
 const SERIES_ID = 'srs_1';
 
-const point = (over: Partial<FakeBoardPointsRow> = {}): FakeBoardPointsRow => ({
+const point = (over: Partial<PointsRow> = {}): PointsRow => ({
   rank: 1,
   points: 91.2,
   sittings: 8,
@@ -301,7 +258,7 @@ const point = (over: Partial<FakeBoardPointsRow> = {}): FakeBoardPointsRow => ({
   ...over,
 });
 
-const POINTS: FakeBoardPointsRow[] = [
+const POINTS: PointsRow[] = [
   point({ rank: 1, points: 91.2 }),
   point({ rank: 2, points: 88.4, name: 'Vamshi Krishna', branch: 'AMEERPET' }),
   point({ rank: 3, points: 84, name: 'Ananya Rao', branch: 'SR NAGAR' }),
@@ -322,8 +279,8 @@ describe('a leaderboard across papers', () => {
     assert.equal(LEADERBOARD_MEASURE_BY_SCOPE.ALL_TIME, LEADERBOARD_MEASURES.PERCENTILE_POINTS);
   });
 
-  it('ranks a series on the percentile points each sitting already carries', async () => {
-    const { view, prisma } = await bench(cohort(), { series: SERIES, points: POINTS });
+  it('ranks a series on the percentile points Postgres counted', async () => {
+    const { view, prisma } = bench([mine()], { series: SERIES, raw: POINTS });
 
     const board = await view.board(ME, {
       scope: LEADERBOARD_SCOPES.SERIES,
@@ -342,7 +299,7 @@ describe('a leaderboard across papers', () => {
   });
 
   it('moves only the reader against their own previous standing', async () => {
-    const { view } = await bench(cohort(), { series: SERIES, points: POINTS });
+    const { view } = bench([mine()], { series: SERIES, raw: POINTS });
 
     const board = await view.board(ME, {
       scope: LEADERBOARD_SCOPES.SERIES,
@@ -357,7 +314,7 @@ describe('a leaderboard across papers', () => {
   });
 
   it('answers an all-time board without asking about a series at all', async () => {
-    const { view } = await bench(cohort(), { points: POINTS });
+    const { view } = bench([mine()], { raw: POINTS });
 
     const board = await view.board(ME, { scope: LEADERBOARD_SCOPES.ALL_TIME });
 
@@ -368,7 +325,7 @@ describe('a leaderboard across papers', () => {
   });
 
   it('refuses a series the reader has never sat a paper in', async () => {
-    const { view } = await bench(cohort(), { series: SERIES, points: POINTS });
+    const { view } = bench([mine()], { series: SERIES, raw: POINTS });
 
     await assert.rejects(
       () => view.board(ME, { scope: LEADERBOARD_SCOPES.SERIES, seriesId: 'srs_nope' }),

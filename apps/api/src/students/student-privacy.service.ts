@@ -3,7 +3,7 @@
  * what is held, and erasure. All three are about ONE student, and the id is
  * always the caller's or one an admin's branch scope already reaches.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
   AppException,
   CONSENT_PURPOSE,
@@ -18,6 +18,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
 import { fromDateColumn } from '../common/time/institute-day';
+import { type LeaderboardService } from '../attempts';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
 
 const NO_STUDENT = 'No such student';
@@ -31,6 +32,15 @@ export class StudentPrivacyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
+    // `require`, not a static import: `attempts` reaches `configs`, which imports this barrel back.
+    @Inject(
+      forwardRef(
+        () =>
+          (module.require('../attempts') as { LeaderboardService: typeof LeaderboardService })
+            .LeaderboardService,
+      ),
+    )
+    private readonly leaderboard: LeaderboardService,
   ) {}
 
   /** The version of the notice in force. A record older than this is a student worth asking again. */
@@ -102,20 +112,22 @@ export class StudentPrivacyService {
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);
 
-    const attempts = await this.prisma.attempt.findMany({
-      where: { studentId },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        testId: true,
-        status: true,
-        startedAt: true,
-        submittedAt: true,
-        score: true,
-        lastPercentile: true,
-        test: { select: { title: true } },
-      },
-    });
+    const [attempts, standings] = await Promise.all([
+      this.prisma.attempt.findMany({
+        where: { studentId },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          testId: true,
+          status: true,
+          startedAt: true,
+          submittedAt: true,
+          score: true,
+          test: { select: { title: true } },
+        },
+      }),
+      this.leaderboard.standingsOfStudent(studentId),
+    ]);
 
     return {
       exportedAt: new Date().toISOString(),
@@ -152,7 +164,7 @@ export class StudentPrivacyService {
         startedAt: iso(attempt.startedAt),
         submittedAt: iso(attempt.submittedAt),
         score: attempt.score === null ? null : Number(attempt.score),
-        percentile: attempt.lastPercentile === null ? null : Number(attempt.lastPercentile),
+        percentile: standings.get(attempt.id)?.percentile ?? null,
       })),
     };
   }

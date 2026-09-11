@@ -1,4 +1,4 @@
-/** The only policy this platform can run on: a live sitting, its leaderboard, every session and every OTP live in Redis. */
+/** The only policy this platform can run on: a live sitting, every session and every OTP live in Redis. */
 export const NO_EVICTION = 'noeviction';
 
 export interface EvictionRisk {

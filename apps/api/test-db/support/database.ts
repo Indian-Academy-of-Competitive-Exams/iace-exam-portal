@@ -26,6 +26,7 @@ export interface TestOverrides {
 }
 
 export interface StudentOverrides {
+  id?: string;
   fullName?: string | null;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;

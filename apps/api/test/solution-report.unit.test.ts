@@ -2,10 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, ErrorCodes, type AppException } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
-  FakeQueue,
-  FakeRedis,
+  FakeLeaderboard,
   FakeScoringPrisma,
   FakeStorage,
   makeAttempt,
@@ -80,17 +78,15 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
 
 function bench(attempt: FakeAttemptRow, shape: FakeScoredTest = SHAPE) {
   const prisma = new FakeScoringPrisma([attempt], served(), shape);
-  const redis = new FakeRedis();
-  const leaderboard = new LeaderboardService(
-    prisma.asService(),
-    redis.asService(),
-    new FakeQueue().asQueue(),
-  );
   const storage = new FakeStorage();
   return {
     prisma,
     storage,
-    service: new AttemptReportService(prisma.asService(), leaderboard, storage as never),
+    service: new AttemptReportService(
+      prisma.asService(),
+      new FakeLeaderboard().asService(),
+      storage as never,
+    ),
   };
 }
 

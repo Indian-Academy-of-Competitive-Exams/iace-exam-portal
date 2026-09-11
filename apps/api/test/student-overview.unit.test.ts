@@ -18,8 +18,11 @@ import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.gu
 import { AdminOverviewController } from '../src/attempts/overview.controller';
 import { StudentOverviewService } from '../src/attempts/overview.service';
 import {
+  FakeLeaderboard,
   FakeOverviewPrisma,
+  makeStanding,
   type FakeOverviewData,
+  type FakeStanding,
   type FakeOverviewSubjectRow,
   type FakeStudentStatRow,
 } from './support/fakes';
@@ -57,7 +60,14 @@ const row = (over: Partial<FakeOverviewSubjectRow> = {}): FakeOverviewSubjectRow
   ...over,
 });
 
-function serviceFor(over: Partial<FakeOverviewData> = {}) {
+/** Three graded sittings as the live ranking counts them now; the stat row's saved sums disagree. */
+const STANDINGS: FakeStanding[] = [
+  makeStanding({ attemptId: 'att_1', testId: 'tst_1', percentile: 70 }),
+  makeStanding({ attemptId: 'att_2', testId: 'tst_2', percentile: 80.5 }),
+  makeStanding({ attemptId: 'att_3', testId: 'tst_3', percentile: 60.01 }),
+];
+
+function serviceFor(over: Partial<FakeOverviewData> = {}, standings: FakeStanding[] = STANDINGS) {
   const data: FakeOverviewData = {
     stats: [stat()],
     subjects: [row()],
@@ -65,7 +75,7 @@ function serviceFor(over: Partial<FakeOverviewData> = {}) {
     ...over,
   };
   const prisma = new FakeOverviewPrisma(data);
-  return new StudentOverviewService(prisma as never);
+  return new StudentOverviewService(prisma as never, new FakeLeaderboard(standings).asService());
 }
 
 // --------------------------------------------------------------------------- the standing
@@ -75,18 +85,25 @@ describe('StudentOverviewService standing', () => {
   it('divides the stored sums by the sittings behind them', async () => {
     const overview = await serviceFor().overview(STUDENT);
 
-    assert.equal(overview.standing.avgPercentile, 63.3);
     assert.equal(overview.standing.avgScore, 65);
-    assert.equal(overview.standing.bestPercentile, 88.5);
     assert.equal(overview.standing.testsEvaluated, 4);
     assert.equal(overview.standing.retakeCount, 1);
   });
 
+  /** The failure this prevents: a percentile saved at scoring, which drifts as others sit the paper. */
+  it('averages and bests every graded sitting at the percentile it holds now', async () => {
+    const overview = await serviceFor().overview(STUDENT);
+
+    assert.equal(overview.standing.avgPercentile, 70.17);
+    assert.equal(overview.standing.bestPercentile, 80.5);
+  });
+
   /** Four sittings none of which were graded: dividing by that is the bug this guards. */
   it('reads an unevaluated career as a dash rather than a division by zero', async () => {
-    const overview = await serviceFor({
-      stats: [stat({ testsEvaluated: 0, sumScore: 0, sumPercentile: 0, bestPercentile: null })],
-    }).overview(STUDENT);
+    const overview = await serviceFor(
+      { stats: [stat({ testsEvaluated: 0, sumScore: 0, sumPercentile: 0, bestPercentile: null })] },
+      [],
+    ).overview(STUDENT);
 
     assert.equal(overview.standing.avgPercentile, null);
     assert.equal(overview.standing.avgScore, null);
@@ -95,7 +112,7 @@ describe('StudentOverviewService standing', () => {
 
   /** A student the rollup has never folded has no row at all, which is a clean slate. */
   it('answers a student with no stat row with an empty standing, not an error', async () => {
-    const overview = await serviceFor({ stats: [], subjects: [] }).overview(STUDENT);
+    const overview = await serviceFor({ stats: [], subjects: [] }, []).overview(STUDENT);
 
     assert.equal(overview.standing.testsAttempted, 0);
     assert.equal(overview.standing.avgPercentile, null);
@@ -262,9 +279,10 @@ describe('StudentOverviewService reads', () => {
       },
     });
 
-    const overview: StudentOverview = await new StudentOverviewService(watched as never).forStudent(
-      STUDENT,
-    );
+    const overview: StudentOverview = await new StudentOverviewService(
+      watched as never,
+      new FakeLeaderboard(STANDINGS).asService(),
+    ).forStudent(STUDENT);
 
     assert.equal(overview.studentId, STUDENT);
     assert.deepEqual(new Set(touched), new Set(['student', 'studentStat', 'studentSubjectStat']));
