@@ -10,7 +10,11 @@ import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
-import { QUEUE_NAMES, type LeaderboardRebuildJobData } from '../queue/queues';
+import {
+  QUEUE_NAMES,
+  leaderboardRebuildJobId,
+  type LeaderboardRebuildJobData,
+} from '../queue/queues';
 import { bandOf, compositeScore, percentileOf, timeTakenSec } from './leaderboard-score';
 
 /** One sitting's place in its cohort, as of this read. */
@@ -72,7 +76,7 @@ export class LeaderboardService {
     await this.rebuilds.add(
       QUEUE_NAMES.LEADERBOARD_REBUILD,
       { testId },
-      { jobId: rebuildJobId(testId), removeOnComplete: true },
+      { jobId: leaderboardRebuildJobId(testId), removeOnComplete: true },
     );
   }
 
@@ -205,9 +209,6 @@ export class LeaderboardService {
     return true;
   }
 }
-
-/** One id per test, so every reader of a cold board asks for the same rebuild and not its own. */
-export const rebuildJobId = (testId: string) => `${QUEUE_NAMES.LEADERBOARD_REBUILD}:${testId}`;
 
 /** ZADD takes score and member in pairs, so a whole page goes over the wire as one command. */
 function toMember(row: {

@@ -6,6 +6,13 @@ import {
   QUEUE_NAMES,
   QUEUE_POLICY,
   jobOptionsFor,
+  leaderboardRebuildJobId,
+  notificationDeliveryJobId,
+  notificationJobId,
+  rollupJobId,
+  rollupRebuildJobId,
+  rollupRebuildStudentJobId,
+  scoringJobId,
 } from '../src/queue/queues';
 
 describe('queue policy', () => {
@@ -37,5 +44,23 @@ describe('queue policy', () => {
     assert.equal(options.removeOnFail.age, FAILED_JOB_RETENTION.age);
     assert.equal(options.removeOnComplete.age, COMPLETED_JOB_RETENTION.age);
     assert.ok(FAILED_JOB_RETENTION.age > COMPLETED_JOB_RETENTION.age * 24);
+  });
+
+  /** The bug this prevents: a colon id BullMQ 6 threw on, so no cold leaderboard was ever rebuilt. */
+  it('builds every job id without a colon, which BullMQ refuses at add time', () => {
+    const cuid = 'cmfe8x2k70000qv3l9h4d2b1a';
+    const ids = [
+      scoringJobId(cuid),
+      rollupJobId(cuid),
+      rollupRebuildJobId(cuid),
+      rollupRebuildStudentJobId(cuid),
+      notificationJobId(cuid),
+      notificationDeliveryJobId(cuid),
+      leaderboardRebuildJobId(cuid),
+    ];
+
+    for (const id of ids) {
+      assert.doesNotMatch(id, /:/);
+    }
   });
 });

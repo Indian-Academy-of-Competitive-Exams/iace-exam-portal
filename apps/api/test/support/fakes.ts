@@ -1741,6 +1741,10 @@ export class FakeQueue {
       this.failNext = false;
       return Promise.reject(new Error('queue unreachable'));
     }
+    // BullMQ 6 refuses this at add time; a fake that accepted it hid a rebuild that never queued.
+    if (options?.jobId?.includes(':') && options.jobId.split(':').length !== 3) {
+      return Promise.reject(new Error('Custom Id cannot contain :'));
+    }
     const removeOnComplete =
       options?.removeOnComplete === undefined ? {} : { removeOnComplete: options.removeOnComplete };
     this.jobs.push({ name, data, jobId: options?.jobId, ...removeOnComplete });

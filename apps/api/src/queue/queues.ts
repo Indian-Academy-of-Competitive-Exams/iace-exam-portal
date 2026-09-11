@@ -143,6 +143,11 @@ export function notificationDeliveryJobId(deliveryId: string): string {
   return `${QUEUE_NAMES.NOTIFICATION_DELIVERY}-${deliveryId}`;
 }
 
+/** The TEST's own board: every cold read of one test asks for the same rebuild. */
+export function leaderboardRebuildJobId(testId: string): string {
+  return `${QUEUE_NAMES.LEADERBOARD_REBUILD}-${testId}`;
+}
+
 /** Payload for a leaderboard rebuild. One test's board, put back from the durable marks. */
 export interface LeaderboardRebuildJobData {
   testId: string;
