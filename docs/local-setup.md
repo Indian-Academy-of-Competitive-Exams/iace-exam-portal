@@ -68,6 +68,7 @@ cp .env.example .env
 The defaults in `.env.example` are wired to the docker‑compose services, so **it runs as‑is locally** — you don't have to change anything to start. Worth knowing:
 
 - **Database / Redis / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
+- **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs the SQL tests against, and the script refuses the one `DATABASE_URL` names. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db`. It keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
 - **JWT secrets & `PIN_PEPPER`** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
 - **OTP delivery is `console`** — in dev, OTP codes are **printed to the API log**, not sent by SMS/email. That's how you log in locally (see §6).
 - **`SMS_PROVIDER_*` / `MAIL_*`** are blank (the real SMS and Gmail credentials — leave empty locally).
@@ -168,6 +169,7 @@ To run just one: `pnpm --filter @iace/api dev` (or `@iace/test`, `@iace/admin`).
 | `pnpm typecheck`                                  | TS typecheck across the monorepo            |
 | `pnpm lint`                                       | ESLint across the monorepo                  |
 | `pnpm test`                                       | run all package/app tests                   |
+| `pnpm test:db`                                    | migrate `TEST_DATABASE_URL`, run SQL tests  |
 | `pnpm test:coverage`                              | tests with coverage                         |
 | `pnpm format` / `pnpm format:check`               | Prettier write / check                      |
 | `pnpm deps:check` / `pnpm deps:fix`               | syncpack — keep shared dep versions aligned |

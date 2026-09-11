@@ -88,8 +88,7 @@ jobs:
         if: '!cancelled()'
         run: pnpm build
 
-  # The one thing that genuinely needs a database: proving the migrations in the
-  # repo still produce the schema in the repo. Nothing else here touches Postgres.
+  # Everything that needs a database: migrations against the schema, then SQL against Postgres.
   database:
     name: Migrations
     if: github.event_name != 'schedule'
@@ -141,6 +140,23 @@ jobs:
       # database" true rather than aspirational.
       - name: Check migrations still match the schema
         run: pnpm db:check
+
+      - name: Create test database
+        run: |
+          PGPASSWORD=ci psql -h localhost -U ci -d iace_ci \
+            -c 'CREATE DATABASE iace_ci_test;'
+
+      # pnpm test gets these from turbo; the database tier runs outside it, so it needs them first.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build contracts
+        run: pnpm --filter @iace/contracts build
+
+      - name: Test the SQL against Postgres
+        run: pnpm test:db
+        env:
+          TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/iace_ci_test
 
   # Doc drift, and the one check here that gates nothing (docs/03 §12). It judges
   # the whole doc set against the whole schema, so as a commit gate it would fail

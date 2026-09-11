@@ -11,6 +11,7 @@ Green before commit:
 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 Schema tasks also: `pnpm db:migrate:deploy` from scratch + `pnpm db:check`.
+Tasks that add or change SQL or the schema also: `pnpm test:db`.
 
 **A migration that MOVES data is not proved by either.** From scratch the table is empty, so the
 statement matches no rows and never runs — it passes on a migration that cannot work. Seed a
@@ -202,6 +203,8 @@ freely on UI and copy.
 
 `node:test` + `node:assert/strict`, named after the unit (`auth-pin.unit.test.ts`,
 `envelope.e2e.test.ts`), no Postgres/Redis/S3 (extend `apps/api/test/support/fakes.ts`).
+Those are unit tests (`pnpm test`); every `$queryRaw` query is also covered in `apps/api/test-db`
+against a real Postgres, by `pnpm test:db`.
 
 **Tests are for FEATURES and the invariants above — not for every fix.** A feature, a rule the data
 model depends on, or logic with branches worth naming gets a test in the same commit, covering the
