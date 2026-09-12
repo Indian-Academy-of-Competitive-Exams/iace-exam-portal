@@ -2120,8 +2120,8 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       Promise.resolve(this.series.find((row) => row.id === where.id) ?? null),
   };
 
-  private seriesNameOf(testSeriesId: string): string {
-    return this.series.find((row) => row.id === testSeriesId)?.name ?? '';
+  private seriesOf(testSeriesId: string): FakeSeriesRow | undefined {
+    return this.series.find((row) => row.id === testSeriesId);
   }
 
   readonly question = {
@@ -2393,7 +2393,10 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         attempts: this.attempts.filter((attempt) => attempt.testId === row.id).length,
         paperQuestions: this.paperQuestions.filter((paper) => paper.testId === row.id).length,
       },
-      testSeries: { name: this.seriesNameOf(row.testSeriesId) },
+      testSeries: {
+        name: this.seriesOf(row.testSeriesId)?.name ?? '',
+        sequentialTests: this.seriesOf(row.testSeriesId)?.sequentialTests ?? false,
+      },
       baseConfig: {
         name: config?.name ?? '',
         totalQuestions: config?.totalQuestions ?? 0,

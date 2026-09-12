@@ -47,7 +47,7 @@ export function SeriesBasics({
             form={form}
             name="sequentialTests"
             label="Open the tests in order"
-            /* ui-copy-ok: rule */ hint="Off opens every test in the series together."
+            /* ui-copy-ok: rule */ hint="Each test opens after the one before it; off opens them all together."
           />
           <SeriesToggle
             form={form}

@@ -37,7 +37,7 @@ const OFFERING_SELECT = {
   opensAt: true,
   testSeriesId: true,
   seriesOrder: true,
-  testSeries: { select: { name: true } },
+  testSeries: { select: { name: true, sequentialTests: true } },
   _count: { select: { attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
@@ -77,6 +77,18 @@ const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' 
 const OPENS_BEFORE_THE_TEST_DOES =
   'A program opens a test earlier, never later — a later opening would hold this program’s students back after the test has opened for everyone else.';
 
+const UNLOCK_FIELD = 'unlockAt';
+
+const UNTITLED_TEST = 'An untitled test';
+
+const OPENS_IN_ORDER = 'This series opens its tests in order.';
+
+const opensBeforeItsTurn = (title: string) =>
+  `${OPENS_IN_ORDER} ${title} comes before it and opens no earlier, so this opening has to be after that one.`;
+
+const opensAfterItsTurn = (title: string) =>
+  `${OPENS_IN_ORDER} ${title} comes after it and opens no later, so this opening has to be before that one.`;
+
 const TEST_HAS_NO_OPENING =
   'This test has no opening time of its own, so it is already open. Give the test an opening time before letting a program in ahead of it.';
 
@@ -99,6 +111,52 @@ function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date):
   throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
     fieldErrors: { opensAt: [message] },
   });
+}
+
+/** An unpositioned test sorts last, exactly as the student catalog sorts it. */
+const ORDERED_LAST = Number.MAX_SAFE_INTEGER;
+
+const byOrderThenId = (left: SeriesPosition, right: SeriesPosition): number =>
+  (left.seriesOrder ?? ORDERED_LAST) - (right.seriesOrder ?? ORDERED_LAST) ||
+  left.id.localeCompare(right.id);
+
+interface SeriesPosition {
+  id: string;
+  seriesOrder: number | null;
+}
+
+interface SeriesSibling extends SeriesPosition {
+  title: string | null;
+  opensAt: Date | null;
+}
+
+/** In order means the openings ascend with it — one row judged against every other row of its series. */
+function orderClash(
+  test: SeriesPosition,
+  opensAt: Date,
+  siblings: readonly SeriesSibling[],
+): string | null {
+  for (const sibling of siblings) {
+    if (sibling.opensAt === null || sibling.id === test.id) continue;
+
+    const title = sibling.title ?? UNTITLED_TEST;
+    const place = byOrderThenId(sibling, test);
+    if (place < 0 && sibling.opensAt >= opensAt) return opensBeforeItsTurn(title);
+    if (place > 0 && sibling.opensAt <= opensAt) return opensAfterItsTurn(title);
+  }
+
+  return null;
+}
+
+/** A test arrives unpositioned and so sorts last: nothing already in the series may open after it. */
+function arrivalClash(opensAt: Date, siblings: readonly SeriesSibling[]): string | null {
+  for (const sibling of siblings) {
+    if (sibling.opensAt !== null && sibling.opensAt >= opensAt) {
+      return opensBeforeItsTurn(sibling.title ?? UNTITLED_TEST);
+    }
+  }
+
+  return null;
 }
 
 /** Only a new time is judged: what is already saved never passes through here again. */
@@ -138,7 +196,13 @@ export class OfferingService {
     if (next === test.testSeriesId) return linkOf(test);
 
     this.assertNotSat(test);
-    await this.assertSeriesUsable(test, next);
+    const series = await this.assertSeriesUsable(test, next);
+    const opensAt = test.opensAt;
+    if (series.sequentialTests && opensAt !== null) {
+      await this.assertOpeningFitsOrder(next, FORM_LEVEL_FIELD, (siblings) =>
+        arrivalClash(opensAt, siblings),
+      );
+    }
 
     const moved = await this.prisma.test.update({
       where: { id: testId },
@@ -173,16 +237,21 @@ export class OfferingService {
     return status;
   }
 
-  /** A series must exist and be built for this test's stage. */
-  private async assertSeriesUsable(test: OfferingRow, testSeriesId: string): Promise<void> {
+  /** A series must exist and be built for this test's stage, and it says how it opens what it holds. */
+  private async assertSeriesUsable(
+    test: OfferingRow,
+    testSeriesId: string,
+  ): Promise<{ sequentialTests: boolean }> {
     const series = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
-      select: { name: true, examStageId: true },
+      select: { name: true, examStageId: true, sequentialTests: true },
     });
     if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
 
     const issue = seriesFitIssue(series, test);
     if (issue) throw seriesRefused(issue);
+
+    return series;
   }
 
   /** The tests one series holds, in the order it holds them. */
@@ -225,7 +294,14 @@ export class OfferingService {
     // `Test.opensAt` is a frozen field, and this is its other door — see TEST_UNFROZEN_FIELDS.
     this.assertNotOpened(test);
     const opensAt = dateOrNull(input.unlockAt);
-    if (opensAt !== null) assertOpeningAhead(opensAt, now, 'unlockAt');
+    if (opensAt !== null) {
+      assertOpeningAhead(opensAt, now, UNLOCK_FIELD);
+      if (test.testSeries.sequentialTests) {
+        await this.assertOpeningFitsOrder(testSeriesId, UNLOCK_FIELD, (siblings) =>
+          orderClash(test, opensAt, siblings),
+        );
+      }
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.test.update({ where: { id: testId }, data: { opensAt } });
@@ -234,6 +310,25 @@ export class OfferingService {
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
+  }
+
+  /** A series holds a handful of tests, so the whole set is read and compared here rather than in SQL. */
+  private async assertOpeningFitsOrder(
+    testSeriesId: string,
+    field: string,
+    clashOf: (siblings: readonly SeriesSibling[]) => string | null,
+  ): Promise<void> {
+    const siblings = await this.prisma.test.findMany({
+      where: { testSeriesId },
+      select: { id: true, title: true, seriesOrder: true, opensAt: true },
+    });
+
+    const clash = clashOf(siblings);
+    if (clash === null) return;
+
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, clash, {
+      fieldErrors: { [field]: [clash] },
+    });
   }
 
   /** Which programs open this test ahead of everyone else, and when. */

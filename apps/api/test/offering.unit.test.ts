@@ -1,7 +1,13 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, OPENING_HAS_PASSED, TEST_STATUS } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  FORM_LEVEL_FIELD,
+  OPENING_HAS_PASSED,
+  TEST_STATUS,
+} from '@iace/contracts';
 import { OfferingService } from '../src/tests/offering.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { AuditContext } from '../src/audit';
@@ -37,6 +43,14 @@ const inSeries = (over: Parameters<typeof makeTest>[0] = {}) =>
   makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1, ...over });
 
 const OPENS_AT = new Date('2026-09-01T04:30:00.000Z');
+const A_DAY_LATER_DATE = new Date('2026-09-02T04:30:00.000Z');
+const A_DAY_LATER = A_DAY_LATER_DATE.toISOString();
+
+/** The series' own switch, which is what makes the openings a sequence rather than a set. */
+function inOrder(prisma: FakeTestsPrisma, seriesId = 'srs_1'): void {
+  const series = prisma.series.find((row) => row.id === seriesId);
+  if (series) series.sequentialTests = true;
+}
 /** Before every instant these tests set, so no opening is refused for having passed by accident. */
 const NOW = new Date('2026-08-01T00:00:00.000Z');
 
@@ -311,6 +325,83 @@ describe('OfferingService — a series and the tests it holds', () => {
     assert.equal(AppException.is(error) ? error.code : null, ErrorCodes.CONFLICT);
   });
 
+  it('opens a test after the one it follows, in a series that opens them in order', async () => {
+    const { service, prisma } = serviceWith(inSeries({ seriesOrder: 2 }));
+    inOrder(prisma);
+    prisma.tests.push(
+      makeTest({ id: 'tst_0', testSeriesId: 'srs_1', seriesOrder: 1, opensAt: OPENS_AT }),
+    );
+
+    const rows = await service.setUnlock('srs_1', 'tst_1', { unlockAt: A_DAY_LATER }, NOW);
+
+    assert.equal(rows.find((row) => row.testId === 'tst_1')?.unlockAt, A_DAY_LATER);
+  });
+
+  /** The failure this prevents: paper 2 opens before paper 1, and the order the series promises is a lie. */
+  it('refuses an opening no later than a test earlier in the order', async () => {
+    const { service, prisma, events } = serviceWith(inSeries({ seriesOrder: 2 }));
+    inOrder(prisma);
+    prisma.tests.push(
+      makeTest({
+        id: 'tst_0',
+        title: 'Mock 1',
+        testSeriesId: 'srs_1',
+        seriesOrder: 1,
+        opensAt: OPENS_AT,
+      }),
+    );
+
+    const error = await service
+      .setUnlock('srs_1', 'tst_1', { unlockAt: OPENS_AT.toISOString() }, NOW)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.match(error.fieldErrors?.unlockAt?.[0] ?? '', /Mock 1 comes before it/);
+    assert.equal(prisma.tests[0]?.opensAt, null);
+    assert.equal(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).length, 0);
+  });
+
+  it('refuses an opening no earlier than a test later in the order', async () => {
+    const { service, prisma } = serviceWith(inSeries({ seriesOrder: 2 }));
+    inOrder(prisma);
+    prisma.tests.push(
+      makeTest({
+        id: 'tst_2',
+        title: 'Mock 3',
+        testSeriesId: 'srs_1',
+        seriesOrder: 3,
+        opensAt: OPENS_AT,
+      }),
+    );
+
+    const error = await service
+      .setUnlock('srs_1', 'tst_1', { unlockAt: A_DAY_LATER }, NOW)
+      .catch((e: unknown) => e);
+
+    assert.match(
+      AppException.is(error) ? (error.fieldErrors?.unlockAt?.[0] ?? '') : '',
+      /Mock 3 comes after it/,
+    );
+  });
+
+  /** Together is the other rule: without the order, the openings are each the admin's own business. */
+  it('lets a series that opens its tests together put them in any order', async () => {
+    const { service, prisma } = serviceWith(inSeries({ seriesOrder: 2 }));
+    prisma.tests.push(
+      makeTest({ id: 'tst_0', testSeriesId: 'srs_1', seriesOrder: 1, opensAt: A_DAY_LATER_DATE }),
+    );
+
+    const rows = await service.setUnlock(
+      'srs_1',
+      'tst_1',
+      { unlockAt: OPENS_AT.toISOString() },
+      NOW,
+    );
+
+    assert.equal(rows.find((row) => row.testId === 'tst_1')?.unlockAt, OPENS_AT.toISOString());
+  });
+
   /** The resolver reads `Test.opensAt`, so the series' opening IS the test's own column. */
   it('clears the opening time back to null', async () => {
     const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));
@@ -319,6 +410,29 @@ describe('OfferingService — a series and the tests it holds', () => {
 
     assert.equal(rows[0]?.unlockAt, null);
     assert.equal(prisma.tests[0]?.opensAt, null);
+  });
+
+  /** The failure this prevents: an opening walks into an ordered series behind one already there. */
+  it('refuses a move that would land an opening before one the ordered series already holds', async () => {
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));
+    inOrder(prisma, 'srs_2');
+    prisma.tests.push(
+      makeTest({
+        id: 'tst_9',
+        title: 'Mock 1',
+        testSeriesId: 'srs_2',
+        seriesOrder: 1,
+        opensAt: A_DAY_LATER_DATE,
+      }),
+    );
+
+    const error = await service
+      .moveToSeries('tst_1', { testSeriesId: 'srs_2' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.fieldErrors?.[FORM_LEVEL_FIELD]?.[0] ?? '', /Mock 1 comes before it/);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
   /** The failure this prevents: a sat test detached, and a student's result with nowhere to sit. */
