@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
+import { ROLLUP_REQUEST } from '../src/attempts/rollup-outbox';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import {
   FakeEventBus,
@@ -62,10 +63,6 @@ type World = ReturnType<typeof world>;
 async function counted(built: World): Promise<void> {
   await built.scoring.score('att_1');
   for (const job of built.queue.jobs.splice(0)) {
-    const data = job.data as { attemptId?: string };
-    if (job.name === ROLLUP_JOBS.FOLD && data.attemptId !== undefined) {
-      await built.rollup.fold(data.attemptId);
-    }
     if (job.name === ROLLUP_JOBS.FOLD_PENDING) {
       await built.rollup.foldPending();
     }
@@ -109,12 +106,20 @@ describe('the fold collects a sitting’s mistakes', () => {
     assert.equal(mistakes(built).length, 0);
   });
 
-  /** A re-score of a dropped question replays the fold; the unique guard is what stops a second row. */
+  /** A redelivered request replays the fold; the unique guard is what stops a second row. */
   it('counts a question once however many times the fold runs', async () => {
     const built = world([RIGHT, WRONG, WRONG, RIGHT]);
 
     await counted(built);
-    await built.rollup.fold('att_1');
+    await built.prisma.outboxEvent.create({
+      data: {
+        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
+        aggregateId: 'att_1',
+        eventType: ROLLUP_REQUEST.EVENT_TYPE,
+        payload: {},
+      },
+    });
+    assert.equal(await built.rollup.foldPending(), 1);
     await built.rollup.rebuildStudent('stu_1');
 
     assert.equal(mistakes(built).length, 2);

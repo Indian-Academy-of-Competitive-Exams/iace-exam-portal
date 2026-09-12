@@ -87,10 +87,7 @@ type World = ReturnType<typeof world>;
 async function drain(built: World): Promise<number> {
   const jobs = built.queue.jobs.splice(0);
   for (const job of jobs) {
-    const data = job.data as { attemptId?: string; testId?: string };
-    if (job.name === ROLLUP_JOBS.FOLD && data.attemptId !== undefined) {
-      await built.rollup.fold(data.attemptId);
-    }
+    const data = job.data as { testId?: string };
     if (job.name === ROLLUP_JOBS.FOLD_PENDING) {
       await built.rollup.foldPending();
     }
@@ -113,12 +110,10 @@ function withoutStamps<T extends { computedAt: Date | null }>(rows: readonly T[]
 }
 
 describe('RollupService — folding one sitting in', () => {
-  it('counts a sitting once however many times its job is delivered', async () => {
+  it('counts one sitting into every aggregate it belongs to, and guards each', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, WRONG, null, RIGHT]));
 
     await counted(built, 'att_1');
-    await built.rollup.fold('att_1');
-    await built.rollup.fold('att_1');
 
     assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 1);
     assert.equal(built.prisma.testStat.rows[0]?.sumScore, 3.5);
@@ -224,13 +219,15 @@ describe('RollupService — folding a pending batch', () => {
     assert.deepEqual(withoutStamps(built.prisma.testStat.rows), moved);
   });
 
-  it('counts a sitting once when the same page is folded twice', async () => {
+  /** Stamped only once counted, and a stamped row is never claimed again: the second pass idles. */
+  it('claims nothing from a page it has already stamped', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]));
     await built.scoring.score('att_1');
 
-    await built.rollup.foldPending();
+    assert.equal(await built.rollup.foldPending(), 1);
     const once = withoutStamps(structuredClone(built.prisma.testStat.rows));
-    await built.rollup.foldPending();
+
+    assert.equal(await built.rollup.foldPending(), 0);
 
     assert.deepEqual(withoutStamps(built.prisma.testStat.rows), once);
     assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
@@ -538,7 +535,7 @@ describe('RollupService — rebuilding a scope', () => {
 });
 
 describe('RollupProcessor — dispatching a job to the service', () => {
-  /** The per-attempt cohort path must stay unreachable from a job: it deadlocks racing a pass. */
+  /** A fold-attempt job queued before the deploy still has to drain, and it drains as a pass. */
   it('asks for a pass on a legacy FOLD job too, never a fold of the one attempt it names', async () => {
     const calls: string[] = [];
     const rollup = {
@@ -546,7 +543,6 @@ describe('RollupProcessor — dispatching a job to the service', () => {
         calls.push('foldPending');
         return 0;
       },
-      fold: async () => calls.push('fold'),
     } as unknown as RollupService;
     const processor = new RollupProcessor(rollup);
 

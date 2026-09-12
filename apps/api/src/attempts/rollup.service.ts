@@ -81,19 +81,6 @@ export class RollupService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** One evaluated sitting into the aggregates it belongs to. Folding twice counts it once. */
-  async fold(attemptId: string): Promise<void> {
-    const attempt = await this.foldable(attemptId);
-    if (attempt === null) {
-      this.logger.warn(`Rollup asked for attempt ${attemptId}, which is not evaluated`);
-      return;
-    }
-    await this.foldStudent(attempt);
-    if (attempt.isGraded && (await this.isFirstSitting(attempt))) {
-      await this.foldCohort(attempt);
-    }
-  }
-
   /** A full page means more is waiting, and this job holds the id a re-ask would collapse onto. */
   async foldPending(): Promise<number> {
     let counted = 0;
@@ -394,13 +381,6 @@ export class RollupService {
     });
   }
 
-  private async foldCohort(attempt: FoldableAttempt): Promise<void> {
-    const totals = cohortDeltaOf(attempt);
-    await this.guarded(attempt.id, COHORT_ROLLUP_TYPES, async (tx) => {
-      await this.writeCohortDelta(tx, attempt.testId, totals, new Date());
-    });
-  }
-
   /** Counts move by increment; the curve, the extremes and the topper are read back and set. */
   private async writeCohortDelta(
     tx: Prisma.TransactionClient,
@@ -695,10 +675,6 @@ export class RollupService {
 
 function studentDeltaOf(attempt: FoldableAttempt): StudentTotals {
   return addToStudentTotals(emptyStudentTotals(), attempt);
-}
-
-function cohortDeltaOf(attempt: FoldableAttempt): CohortTotals {
-  return addToCohortTotals(emptyCohortTotals(), attempt);
 }
 
 function toFoldable(row: FoldRow): FoldableAttempt {
