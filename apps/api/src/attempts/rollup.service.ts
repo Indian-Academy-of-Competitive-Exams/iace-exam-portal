@@ -15,7 +15,7 @@ import {
   STUDENT_ROLLUP_TYPES,
   addToCohortTotals,
   addToStudentTotals,
-  bandsHolding,
+  bandsAfterBatch,
   bandsIn,
   emptyCohortTotals,
   emptyStudentTotals,
@@ -287,49 +287,21 @@ export class RollupService {
   private async foldCohort(attempt: FoldableAttempt): Promise<void> {
     const totals = cohortDeltaOf(attempt);
     await this.guarded(attempt.id, COHORT_ROLLUP_TYPES, async (tx) => {
-      const now = new Date();
-      await this.foldTestStat(tx, attempt, totals, now);
-
-      for (const section of totals.sections.values()) {
-        await tx.testSectionStat.upsert({
-          where: {
-            testId_baseConfigSectionId: {
-              testId: attempt.testId,
-              baseConfigSectionId: section.baseConfigSectionId,
-            },
-          },
-          create: {
-            testId: attempt.testId,
-            baseConfigSectionId: section.baseConfigSectionId,
-            attempted: section.attempted,
-            sumScore: section.sumScore,
-            sumTimeSec: BigInt(section.sumTimeSec),
-            computedAt: now,
-          },
-          update: {
-            attempted: { increment: section.attempted },
-            sumScore: { increment: section.sumScore },
-            sumTimeSec: { increment: BigInt(section.sumTimeSec) },
-            computedAt: now,
-          },
-        });
-      }
-
-      await this.foldQuestionStats(tx, attempt.testId, totals, now);
+      await this.writeCohortDelta(tx, attempt.testId, totals, new Date());
     });
   }
 
   /** Counts move by increment; the curve, the extremes and the topper are read back and set. */
-  private async foldTestStat(
+  private async writeCohortDelta(
     tx: Prisma.TransactionClient,
-    attempt: FoldableAttempt,
+    testId: string,
     totals: CohortTotals,
     now: Date,
   ): Promise<void> {
     await tx.testStat.upsert({
-      where: { testId: attempt.testId },
+      where: { testId },
       create: {
-        testId: attempt.testId,
+        testId,
         attemptCount: totals.attempts,
         evaluatedCount: totals.attempts,
         sumScore: totals.sumScore,
@@ -348,23 +320,50 @@ export class RollupService {
     });
 
     const held = await tx.testStat.findUniqueOrThrow({
-      where: { testId: attempt.testId },
+      where: { testId },
       select: { maxScore: true, minScore: true, scoreHistogram: true, topperAttemptId: true },
     });
     const maxScore = numberOrNull(held.maxScore);
     const minScore = numberOrNull(held.minScore);
-    const moved = bandsHolding(bandsIn(held.scoreHistogram), minScore, maxScore, attempt.score);
+    const scores = scoreCountsOf(totals).flatMap((row) =>
+      new Array<number>(row.count).fill(row.score),
+    );
+    const moved = bandsAfterBatch(bandsIn(held.scoreHistogram), minScore, maxScore, scores);
+    const raised = totals.maxScore !== null && (maxScore === null || totals.maxScore > maxScore);
 
     await tx.testStat.update({
-      where: { testId: attempt.testId },
+      where: { testId },
       data: {
-        maxScore: higherOf(maxScore, attempt.score),
-        minScore: minScore === null ? attempt.score : Math.min(minScore, attempt.score),
-        topperAttemptId:
-          maxScore === null || attempt.score > maxScore ? attempt.id : held.topperAttemptId,
-        scoreHistogram: asJson(moved ?? (await this.rebandOf(tx, attempt.testId))),
+        maxScore: higherOf(maxScore, totals.maxScore),
+        minScore: lowerOf(minScore, totals.minScore),
+        topperAttemptId: raised ? totals.topperAttemptId : held.topperAttemptId,
+        scoreHistogram: asJson(moved ?? (await this.rebandOf(tx, testId))),
       },
     });
+
+    for (const section of totals.sections.values()) {
+      await tx.testSectionStat.upsert({
+        where: {
+          testId_baseConfigSectionId: { testId, baseConfigSectionId: section.baseConfigSectionId },
+        },
+        create: {
+          testId,
+          baseConfigSectionId: section.baseConfigSectionId,
+          attempted: section.attempted,
+          sumScore: section.sumScore,
+          sumTimeSec: BigInt(section.sumTimeSec),
+          computedAt: now,
+        },
+        update: {
+          attempted: { increment: section.attempted },
+          sumScore: { increment: section.sumScore },
+          sumTimeSec: { increment: BigInt(section.sumTimeSec) },
+          computedAt: now,
+        },
+      });
+    }
+
+    await this.foldQuestionStats(tx, testId, totals, now);
   }
 
   /** The edges moved, so the curve is cut again over the cohort's SCORES — no paper is re-read. */
@@ -657,6 +656,11 @@ function questionColumns(question: QuestionTotals, now: Date) {
 
 function numberOrNull(value: Prisma.Decimal | null): number | null {
   return value === null ? null : Number(value);
+}
+
+function lowerOf(held: number | null, found: number | null): number | null {
+  if (held === null) return found;
+  return found === null ? held : Math.min(held, found);
 }
 
 const asJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
