@@ -71,6 +71,9 @@ const REBUILD_PAGE = 200;
 /** A hall of 5K at a page each, and then the pass lets go: no one job may run for ever. */
 const FOLD_PAGES_PER_PASS = 25;
 
+/** Enough ids to go looking with, and few enough that one bad page cannot fill the log. */
+const WARNED_IDS = 20;
+
 /** A fold is a handful of statements; a rebuild is a page at a time and may take a while. */
 const FOLD_TIMEOUT_MS = 15_000;
 const REBUILD_TIMEOUT_MS = 120_000;
@@ -103,14 +106,16 @@ export class RollupService {
     if (rows.length === 0) return 0;
 
     const attempts: FoldableAttempt[] = [];
+    const retired: string[] = [];
     for (const row of rows) {
       const attempt = await this.foldable(row.aggregateId);
-      if (attempt !== null) attempts.push(attempt);
+      if (attempt === null) retired.push(row.aggregateId);
+      else attempts.push(attempt);
     }
     // Marked all the same below: a request for a sitting nobody evaluated must not jam the page.
-    if (attempts.length < rows.length) {
+    if (retired.length > 0) {
       this.logger.warn(
-        `${rows.length - attempts.length} of ${rows.length} folds are not evaluated`,
+        `${retired.length} of ${rows.length} folds are not evaluated, and are retired: ${named(retired)}`,
       );
     }
 
@@ -144,7 +149,7 @@ export class RollupService {
     await this.prisma.$transaction(
       async (tx) => {
         const now = new Date();
-        // A REAL update first: an empty one is Prisma's findOrCreate and takes no row lock to hold.
+        // A REAL update: Prisma's empty-update findOrCreate cannot be relied on to lock the row.
         await tx.testStat.upsert({
           where: { testId },
           create: { testId, computedAt: now },
@@ -174,6 +179,7 @@ export class RollupService {
     tx: Prisma.TransactionClient,
     sittings: readonly FoldableAttempt[],
   ): Promise<FoldableAttempt[]> {
+    // READ COMMITTED only: a REPEATABLE READ snapshot predates the lock, and would count twice.
     const held = await tx.processedRollup.findMany({
       where: {
         rollupType: ROLLUP_TYPE.TEST,
@@ -738,6 +744,11 @@ function questionColumns(question: QuestionTotals, now: Date) {
     pValue: pValueOf(question.correctCount, question.attemptedCount),
     computedAt: now,
   };
+}
+
+function named(ids: readonly string[]): string {
+  const shown = ids.slice(0, WARNED_IDS).join(', ');
+  return ids.length > WARNED_IDS ? `${shown}, and ${ids.length - WARNED_IDS} more` : shown;
 }
 
 function numberOrNull(value: Prisma.Decimal | null): number | null {
