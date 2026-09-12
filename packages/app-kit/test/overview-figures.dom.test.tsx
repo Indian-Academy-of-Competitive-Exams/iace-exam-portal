@@ -93,7 +93,7 @@ describe('SubjectStrengthFigure', () => {
   it('says nothing was measured rather than drawing an empty ranking', () => {
     const { view } = shown(TEST_SCOPE.MODULE);
 
-    assert.ok(view.getByText('No question in this scope has been marked yet.'));
+    assert.ok(view.getByText('Nothing marked yet'));
   });
 });
 
@@ -115,7 +115,7 @@ describe('SpeedAccuracyFigure', () => {
     );
     const view = within(container);
 
-    assert.ok(view.getByText('No question in this scope has been marked yet.'));
+    assert.ok(view.getByText('Nothing marked yet'));
     assert.equal(view.queryByText(/no median to sit against/), null);
   });
 
@@ -127,6 +127,6 @@ describe('SpeedAccuracyFigure', () => {
     const view = within(container);
 
     assert.equal(view.queryByText('Fast and accurate'), null);
-    assert.ok(view.getByText('One subject has no median to sit against. Sit a wider paper.'));
+    assert.ok(view.getByText('One subject, no middle'));
   });
 });

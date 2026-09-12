@@ -1,5 +1,5 @@
 import {
-  Alert,
+  EmptyState,
   ChartFigure,
   DonutPlot,
   MeasureBars,
@@ -23,9 +23,7 @@ import {
   percentLabel,
   rankSubjectsByWeakness,
   scopeComparison,
-  scopesNotSat,
   subjectShares,
-  untouchedSubjects,
   type Disposition,
   type EffortPerSitting,
   type PerformancePoint,
@@ -132,10 +130,12 @@ export function ScopeGapFigure({
       className={cn('min-w-0', className)}
     >
       {compared === null ? (
-        /* ui-copy-ok: rule */
-        <Alert variant="info">
-          Two kinds of paper are needed to compare them. Sit a second kind to see this.
-        </Alert>
+        <EmptyState
+          size="sm"
+          title="Only one kind of paper"
+          /* ui-copy-ok: rule */
+          hint="Two kinds are needed to compare them."
+        />
       ) : (
         <DivergingBars
           items={items}
@@ -152,38 +152,17 @@ export function ScopeGapFigure({
 const titleFor = (first: TestScope, second: TestScope) =>
   `${TEST_SCOPE_LABELS[first]} against ${TEST_SCOPE_LABELS[second].toLowerCase()}`;
 
-/** A subject a paper asked about and never got an answer to, and a kind of paper never sat. */
-export function BlindSpots({
-  subjects,
-  scope,
-}: Readonly<{
-  subjects: readonly SubjectStanding[];
-  scope: TestScope | null;
-}>) {
-  const untouched = untouchedSubjects(subjects, scope);
-  const missing = scopesNotSat(subjects);
-  if (untouched.length === 0 && missing.length === 0) return null;
-
-  return (
-    /* ui-copy-ok: consequence */
-    <Alert variant="warning">
-      {untouched.length > 0
-        ? `Served and never answered: ${untouched.map((subject) => subject.name).join(', ')}. `
-        : ''}
-      {missing.length > 0
-        ? `Never sat: ${missing.map((value) => TEST_SCOPE_LABELS[value].toLowerCase()).join(', ')}.`
-        : ''}
-    </Alert>
-  );
-}
-
 /** Nothing sat and one sitting are different facts: only one of them is asking for a retake. */
 const NoTrend = ({ sittings }: Readonly<{ sittings: number }>) =>
   sittings === 0 ? (
-    <Alert variant="info">No sitting has been marked yet.</Alert>
+    <EmptyState size="sm" title="No marked sitting yet" />
   ) : (
-    /* ui-copy-ok: rule */
-    <Alert variant="info">One sitting is a dot, not a trend. Sit the paper again.</Alert>
+    <EmptyState
+      size="sm"
+      title="One sitting, no trend"
+      /* ui-copy-ok: rule */
+      hint="A line needs two."
+    />
   );
 
 /** Minutes once there is a minute to show; below that the seconds are the honest number. */
@@ -324,13 +303,6 @@ export function WeakestSubjectsFigure({ subjects, scope, className }: Readonly<S
     >
       {bars.length === 0 ? <NothingRanked thin={ranking.thin.length} /> : null}
       {bars.length > 0 ? <MeasureBars bars={bars} max={100} /> : null}
-      {bars.length > 0 && ranking.thin.length > 0 ? (
-        /* ui-copy-ok: rule */
-        <Alert variant="info">
-          Not enough data yet on {ranking.thin.map((row) => row.name).join(', ')} — a subject is
-          ranked once {SUBJECT_SAMPLE_FLOOR} of its questions have been marked.
-        </Alert>
-      ) : null}
     </ChartFigure>
   );
 }
@@ -340,10 +312,12 @@ const NothingRanked = ({ thin }: Readonly<{ thin: number }>) =>
   thin === 0 ? (
     <NothingMeasured />
   ) : (
-    /* ui-copy-ok: rule */
-    <Alert variant="info">
-      No subject has {SUBJECT_SAMPLE_FLOOR} marked questions behind it yet, so none is ranked.
-    </Alert>
+    <EmptyState
+      size="sm"
+      title="No subject ranked yet"
+      /* ui-copy-ok: limit */
+      hint={`A subject is ranked once ${SUBJECT_SAMPLE_FLOOR} of its questions have been marked.`}
+    />
   );
 
 /** Where each subject sits against the median of the reader's OWN subjects, never a cohort's. */
@@ -414,14 +388,17 @@ function medianOf(values: readonly number[]): number {
   return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
 }
 
-const NothingMeasured = () => (
-  <Alert variant="info">No question in this scope has been marked yet.</Alert>
-);
+const NothingMeasured = () => <EmptyState size="sm" title="Nothing marked yet" />;
 
 /** Nothing measured and one subject are different facts; a median needs two either way. */
 const TooFewToPlot = ({ measured }: Readonly<{ measured: number }>) =>
   measured === 0 ? (
     <NothingMeasured />
   ) : (
-    <Alert variant="info">One subject has no median to sit against. Sit a wider paper.</Alert>
+    <EmptyState
+      size="sm"
+      title="One subject, no middle"
+      /* ui-copy-ok: rule */
+      hint="A median needs two."
+    />
   );

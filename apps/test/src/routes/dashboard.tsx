@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   EmptyState,
   EMPTY_STATE_KINDS,
-  Alert,
   Button,
   ChartFigure,
   LinePlot,
@@ -221,24 +220,20 @@ function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
   const rates = dispositionRates(disposition);
 
   return (
-    <>
-      {standing.testsEvaluated === 0 ? (
+    <StatBand>
+      <Metric
+        label="Average percentile"
+        value={standing.avgPercentile ?? '—'}
         /* ui-copy-ok: consequence */
-        <Alert variant="info">
-          No ranked test of yours has been marked yet, so there is no percentile or score to stand
-          on.
-        </Alert>
-      ) : null}
-
-      <StatBand>
-        <Metric label="Average percentile" value={standing.avgPercentile ?? '—'} size="sm" />
-        <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
-        <Metric label="Average score" value={standing.avgScore ?? '—'} size="sm" />
-        <Metric label="Sittings" value={standing.testsAttempted} size="sm" />
-        <Metric label="Accuracy" value={percentLabel(rates.accuracy, '—')} size="sm" />
-        <Metric label="Attempted" value={percentLabel(rates.attemptRate, '—')} size="sm" />
-      </StatBand>
-    </>
+        unit={standing.testsEvaluated === 0 ? 'nothing marked yet' : undefined}
+        size="sm"
+      />
+      <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
+      <Metric label="Average score" value={standing.avgScore ?? '—'} size="sm" />
+      <Metric label="Sittings" value={standing.testsAttempted} size="sm" />
+      <Metric label="Accuracy" value={percentLabel(rates.accuracy, '—')} size="sm" />
+      <Metric label="Attempted" value={percentLabel(rates.attemptRate, '—')} size="sm" />
+    </StatBand>
   );
 }
 

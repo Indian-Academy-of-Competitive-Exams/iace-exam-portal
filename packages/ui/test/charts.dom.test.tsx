@@ -193,6 +193,26 @@ describe('DivergingBars', () => {
     assert.ok(view.getByText('Above the cohort'));
   });
 
+  /** The failure this prevents: the longest bar's reading printed on top of the name beside it. */
+  it('keeps the furthest bar\u2019s reading clear of the names', () => {
+    const view = mount(
+      <DivergingBars
+        items={[
+          { key: 'reasoning', label: 'Reasoning', value: 4 },
+          { key: 'quant', label: 'Quantitative Aptitude', value: -18 },
+        ]}
+        aria-label={LABEL}
+      />,
+    );
+
+    const endOf = (text: string) => Number(view.getByText(text).getAttribute('x'));
+
+    assert.ok(
+      endOf('\u221218') > endOf('Quantitative Aptitude'),
+      'the reading sits to the right of the name it belongs to',
+    );
+  });
+
   it('carries the pair behind the difference in its hover', async () => {
     const view = mount(<DivergingBars items={ITEMS} aria-label={LABEL} />);
 

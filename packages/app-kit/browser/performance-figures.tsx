@@ -1,6 +1,6 @@
 import {
-  Alert,
   ChartFigure,
+  EmptyState,
   ColumnPlot,
   CompositionBar,
   DistributionPlot,
@@ -250,18 +250,12 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
           aria-label="Each section's marks against the average"
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          <Alert variant="info">No average has been counted for this paper yet.</Alert>
-          <div className="flex flex-col gap-2">
-            {sections.map((section) => (
-              <StatRow
-                key={section.baseConfigSectionId}
-                label={section.name}
-                value={`${section.score} of ${section.maxMarks}`}
-              />
-            ))}
-          </div>
-        </div>
+        <EmptyState
+          size="sm"
+          title="No average yet"
+          /* ui-copy-ok: consequence */
+          hint="Nothing has been counted for this paper, so there is no middle to measure against."
+        />
       )}
     </ChartFigure>
   );

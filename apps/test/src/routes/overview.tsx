@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   EMPTY_STATE_KINDS,
-  Alert,
   Button,
   Combobox,
   EmptyState,
@@ -12,7 +11,6 @@ import {
   plural,
 } from '@iace/ui';
 import {
-  BlindSpots,
   DispositionFigure,
   MeasureTiles,
   PageCrumbs,
@@ -184,21 +182,11 @@ function Body({
         <Hero tone="accent" figure={headline ?? pace} aside={headline ? pace : undefined} />
       ) : null}
 
-      {overview.standing.testsEvaluated === 0 ? (
-        /* ui-copy-ok: consequence */
-        <Alert variant="info">
-          No ranked test of yours has been marked yet, so there is no percentile or score to stand
-          on.
-        </Alert>
-      ) : null}
-
       <TileGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
         {standingTiles(overview.standing).map((tile) => (
           <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} foot={tile.foot} />
         ))}
       </TileGrid>
-
-      <BlindSpots subjects={overview.subjects} scope={scope} />
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <WeakestSubjectsFigure {...view} className="lg:col-span-2" />

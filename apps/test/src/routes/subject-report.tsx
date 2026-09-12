@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
+import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
 import {
   PERFORMANCE_SCOPES,
@@ -37,18 +37,8 @@ export function SubjectPanel() {
 }
 
 function Body({ report }: Readonly<{ report: PerformanceReport }>) {
-  const measured = report.sections.some((section) => section.cohortSampleSize > 0);
-
   return (
     <PageBody>
-      {measured ? null : (
-        /* ui-copy-ok: consequence */
-        <Alert variant="info">
-          No average has been counted for this paper yet, so the columns comparing you to everyone
-          else are empty.
-        </Alert>
-      )}
-
       <Section title="Sections" meta={plural(report.sections.length, 'section')}>
         <DataTable
           columns={COLUMNS}
@@ -59,7 +49,7 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
         />
       </Section>
 
-      {measured ? <SectionsFigure sections={report.sections} /> : null}
+      <SectionsFigure sections={report.sections} />
     </PageBody>
   );
 }

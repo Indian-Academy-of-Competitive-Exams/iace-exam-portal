@@ -52,6 +52,8 @@ export interface DivergingBarsProps {
 }
 
 const LABEL_WIDTH = 132;
+/** Room between the names and the plot, so a bar at full reach has somewhere to put its reading. */
+const VALUE_GUTTER = 56;
 const ROW_HEIGHT = 34;
 const TOP = 8;
 const FOOT = 24;
@@ -81,7 +83,7 @@ export function DivergingBars({
       layout="vertical"
       data={[...items]}
       height={height}
-      margin={{ top: TOP, right: 56, bottom: FOOT, left: 0 }}
+      margin={{ top: TOP, right: VALUE_GUTTER, bottom: FOOT, left: 0 }}
       style={{ width: '100%', height }}
       className={className}
       {...props}
@@ -90,7 +92,7 @@ export function DivergingBars({
       <YAxis
         type="category"
         dataKey="key"
-        width={labelWidth}
+        width={labelWidth + VALUE_GUTTER}
         axisLine={false}
         tickLine={false}
         tick={<ItemTick items={items} labelWidth={labelWidth} />}
@@ -213,7 +215,7 @@ function ItemTick({ x, y, payload, items, labelWidth }: Readonly<ItemTickProps>)
 
   return (
     <PlotTickText
-      x={Number(x)}
+      x={Number(x) - VALUE_GUTTER}
       y={Number(y)}
       width={labelWidth - LABEL_GAP}
       anchor="end"

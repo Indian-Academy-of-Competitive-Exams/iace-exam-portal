@@ -164,9 +164,16 @@ export interface StandingTile {
 }
 
 /** Score and marking come from the sittings that held the ranked slot; every sitting is counted. */
+const NOT_MARKED = 'Nothing marked yet';
+
 export function standingTiles(standing: OverviewStanding): StandingTile[] {
   return [
-    { key: 'score', label: 'Average score', value: standing.avgScore },
+    {
+      key: 'score',
+      label: 'Average score',
+      value: standing.avgScore,
+      foot: standing.avgScore === null ? NOT_MARKED : undefined,
+    },
     { key: 'marked', label: 'Tests marked', value: standing.testsEvaluated },
     // Sittings, not tests: `testsAttempted` counts every one, so six retakes of a paper are six.
     {

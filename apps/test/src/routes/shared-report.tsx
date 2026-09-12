@@ -102,9 +102,12 @@ function Report({ report }: Readonly<{ report: SharedReport }>) {
       {report.bands.length > 0 ? (
         <Cohort report={report} />
       ) : (
-        <Alert variant="info">
-          Too few sittings to show the spread without naming another student.
-        </Alert>
+        <EmptyState
+          size="sm"
+          title="No spread to show"
+          /* ui-copy-ok: rule */
+          hint="Too few sittings to draw it without naming another student."
+        />
       )}
       {report.sections.length > 0 ? <Sections report={report} /> : null}
       <Alert variant="info">
