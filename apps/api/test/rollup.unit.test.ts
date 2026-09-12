@@ -467,10 +467,7 @@ describe('RollupService — rebuilding a scope', () => {
 
     assert.deepEqual(
       built.queue.jobs.map((job) => [job.name, job.jobId]),
-      [
-        [ROLLUP_JOBS.REBUILD_TEST, 'rollup-rebuild-tst_1'],
-        [ROLLUP_JOBS.REBUILD_TEST, 'rollup-rebuild-tst_1'],
-      ],
+      [[ROLLUP_JOBS.REBUILD_TEST, 'rollup-rebuild-tst_1']],
     );
     // By type: scoring writes a notification request into the same table, and that is not a fold.
     const folds = built.prisma.outboxEvents.filter(
@@ -572,11 +569,8 @@ describe('RollupOutbox — getting the fold asked for', () => {
     await built.scoring.score('a2');
 
     const folds = built.queue.jobs.filter((job) => job.name === ROLLUP_JOBS.FOLD_PENDING);
-    assert.ok(folds.length > 0, 'at least one fold pass was asked for');
-    assert.ok(
-      folds.every((job) => job.jobId === FOLD_PENDING_JOB_ID),
-      'every fold pass carries the one id BullMQ collapses a burst on',
-    );
+    assert.equal(folds.length, 1);
+    assert.equal(folds[0]?.jobId, FOLD_PENDING_JOB_ID);
   });
 
   /** A queue that refuses the hand-off leaves the sitting pending, not lost: the next ask still counts it. */
@@ -594,7 +588,7 @@ describe('RollupOutbox — getting the fold asked for', () => {
     assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
   });
 
-  /** The scorer's own hand-off and a sweep's re-ask both land in the queue; draining folds it once. */
+  /** The scorer's hand-off and a sweep's re-ask share the pass's id, so they collapse onto one job. */
   it('folds a sitting once, whether the scorer or a sweep asked for the pass', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, RIGHT, null, null]));
 
@@ -602,7 +596,7 @@ describe('RollupOutbox — getting the fold asked for', () => {
     await built.outbox.relay();
     const delivered = await drain(built);
 
-    assert.equal(delivered, 2);
+    assert.equal(delivered, 1);
     assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 1);
     assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
   });

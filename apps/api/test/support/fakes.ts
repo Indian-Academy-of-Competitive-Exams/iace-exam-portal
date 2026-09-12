@@ -1627,7 +1627,7 @@ export interface FakeAttemptQuestionRow {
   answeredAt?: Date | null;
 }
 
-/** A queue that only remembers. Every add is recorded, so two hand-offs never read as one. */
+/** A queue that only remembers, and collapses a held job id the way BullMQ silently does. */
 export class FakeQueue {
   readonly jobs: {
     name: string;
@@ -1652,6 +1652,10 @@ export class FakeQueue {
     // BullMQ 6 refuses this at add time; a fake that accepted it hid a rebuild that never queued.
     if (options?.jobId?.includes(':') && options.jobId.split(':').length !== 3) {
       return Promise.reject(new Error('Custom Id cannot contain :'));
+    }
+    // BullMQ drops an add whose job hash still exists, and resolves as though it had queued it.
+    if (options?.jobId !== undefined && this.jobs.some((job) => job.jobId === options.jobId)) {
+      return Promise.resolve();
     }
     const removeOnComplete =
       options?.removeOnComplete === undefined ? {} : { removeOnComplete: options.removeOnComplete };
