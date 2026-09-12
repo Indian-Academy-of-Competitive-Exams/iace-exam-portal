@@ -3,8 +3,10 @@ import { describe, it } from 'node:test';
 import {
   COMPLETED_JOB_RETENTION,
   FAILED_JOB_RETENTION,
+  FOLD_PENDING_JOB_ID,
   QUEUE_NAMES,
   QUEUE_POLICY,
+  ROLLUP_FOLD_DELAY_MS,
   jobOptionsFor,
   notificationDeliveryJobId,
   notificationJobId,
@@ -60,5 +62,12 @@ describe('queue policy', () => {
     for (const id of ids) {
       assert.doesNotMatch(id, /:/);
     }
+  });
+
+  /** The fold pass has ONE id, so a burst of evaluations asks for one pass and not five thousand. */
+  it('gives the fold pass a fixed id with no colon in it', () => {
+    assert.equal(typeof FOLD_PENDING_JOB_ID, 'string');
+    assert.doesNotMatch(FOLD_PENDING_JOB_ID, /:/);
+    assert.ok(ROLLUP_FOLD_DELAY_MS > 0);
   });
 });

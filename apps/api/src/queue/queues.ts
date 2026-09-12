@@ -74,12 +74,19 @@ export const RELAY_GRACE_SEC = 30;
 /** What a rollup job is: one sitting to fold in, one test or student to rebuild, or every table. */
 export const ROLLUP_JOBS = {
   FOLD: 'fold-attempt',
+  FOLD_PENDING: 'fold-pending',
   REBUILD_TEST: 'rebuild-test',
   REBUILD_STUDENT: 'rebuild-student',
   REBUILD_ALL: 'rebuild-all',
 } as const;
 
 export type RollupJob = (typeof ROLLUP_JOBS)[keyof typeof ROLLUP_JOBS];
+
+/** One id for the whole pass: a burst of evaluations asks for one fold, not one each. */
+export const FOLD_PENDING_JOB_ID = `${QUEUE_NAMES.ROLLUP}-fold-pending`;
+
+/** Long enough to collect a burst, short enough that a result is counted while it is news. */
+export const ROLLUP_FOLD_DELAY_MS = 5 * 1000;
 
 /** Ids only, like every other job: the worker re-reads whatever it is about to fold. */
 export interface RollupJobData {
