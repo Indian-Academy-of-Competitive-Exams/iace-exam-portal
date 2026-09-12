@@ -228,7 +228,6 @@ export {
   type ComparisonCardsProps,
   type ComparisonItem,
 } from './components/charts/comparison-cards';
-export { AlignedPlots, type AlignedPlotsProps } from './components/charts/aligned-plots';
 export { PageHeader, type PageHeaderSize } from './components/ui/page-header';
 export { SectionHeading, type SectionHeadingProps } from './components/ui/section-heading';
 export {
