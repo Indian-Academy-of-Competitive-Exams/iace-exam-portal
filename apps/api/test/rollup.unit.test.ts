@@ -199,6 +199,26 @@ describe('RollupService — folding a pending batch', () => {
     assert.deepEqual(withoutStamps(built.prisma.testStat.rows), batched);
     assert.deepEqual(withoutStamps(built.prisma.testSectionStat.rows), sections);
     assert.deepEqual(withoutStamps(built.prisma.testQuestionStat.rows), questions);
+
+    // A second page lands on a populated TestStat, where the batched curve is really moved.
+    built.prisma.attempts.push(
+      sitting('att_3', { studentId: 'stu_3' }),
+      sitting('att_4', { studentId: 'stu_4' }),
+    );
+    built.prisma.served.push(
+      ...paper('att_3', [RIGHT, WRONG, null, null]),
+      ...paper('att_4', [RIGHT, RIGHT, WRONG, WRONG]),
+    );
+    await built.scoring.score('att_3');
+    await built.scoring.score('att_4');
+    unstamped(built);
+
+    await built.rollup.foldPending();
+    const moved = withoutStamps(structuredClone(built.prisma.testStat.rows));
+
+    await built.rollup.rebuildTest('tst_1');
+
+    assert.deepEqual(withoutStamps(built.prisma.testStat.rows), moved);
   });
 
   it('counts a sitting once when the same page is folded twice', async () => {

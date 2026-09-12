@@ -150,6 +150,7 @@ export class RollupService {
           update: { computedAt: now },
         });
 
+        // Guards only under the lock above; every cohort-guard writer must take it first.
         const fresh = await this.uncounted(tx, sittings);
         if (fresh.length === 0) return;
 
