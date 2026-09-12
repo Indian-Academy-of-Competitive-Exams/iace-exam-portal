@@ -278,6 +278,53 @@ describe('TestsService — the scope has to name a part of the config', () => {
   });
 });
 
+describe('TestsService — a name belongs to one test inside its series', () => {
+  /** The failure this prevents: two "Mock 1" rows in one series, and no way to tell them apart. */
+  it('refuses a second test named like one the series already holds, whatever its case', async () => {
+    const { service } = serviceWith([
+      makeTest({ id: 'tst_1', title: 'Mock 1', testSeriesId: 'srs_1' }),
+    ]);
+
+    const error = await service
+      .create({ baseConfigId: 'cfg_1', title: 'MOCK 1', testSeriesId: 'srs_1' }, ADMIN)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.ok(error.fieldErrors?.title);
+  });
+
+  /** Unique WITHIN a series: two series each running their own "Mock 1" is the normal case. */
+  it('lets another series hold a test of the same name', async () => {
+    const { service } = serviceWith(
+      [makeTest({ id: 'tst_1', title: 'Mock 1', testSeriesId: 'srs_1' })],
+      undefined,
+      {},
+      [
+        makeSeries({ id: 'srs_1', name: 'SSC CGL Tier 1 mocks', examStageId: null }),
+        makeSeries({ id: 'srs_2', name: 'SSC CGL Tier 2 mocks', examStageId: null }),
+      ],
+    );
+
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_2' },
+      ADMIN,
+    );
+
+    assert.equal(created.title, 'Mock 1');
+  });
+
+  it('lets a test keep its own name through an edit', async () => {
+    const { service } = serviceWith([
+      makeTest({ id: 'tst_1', title: 'Mock 1', testSeriesId: 'srs_1' }),
+    ]);
+
+    const updated = await service.update('tst_1', { title: 'Mock 1' });
+
+    assert.equal(updated.title, 'Mock 1');
+  });
+});
+
 describe('TestsService — editing and removing', () => {
   it('leaves the schedule alone on an edit that keeps the test ranked', async () => {
     const { service, prisma } = serviceWith([

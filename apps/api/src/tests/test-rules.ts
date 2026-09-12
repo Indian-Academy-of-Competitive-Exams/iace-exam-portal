@@ -23,6 +23,12 @@ export const seriesRefused = (message: string): AppException =>
     fieldErrors: { testSeriesId: [message] },
   });
 
+const TITLE_TAKEN = 'Another test in this series already goes by that name.';
+
+/** Every refusal of a name lands on the field that typed it, wherever the clash was found. */
+export const titleRefused = (): AppException =>
+  new AppException(ErrorCodes.CONFLICT, TITLE_TAKEN, { fieldErrors: { title: [TITLE_TAKEN] } });
+
 const stageMismatch = (seriesName: string): string =>
   `${seriesName} is built for a different exam stage, and a test reaches students through the series carrying it.`;
 

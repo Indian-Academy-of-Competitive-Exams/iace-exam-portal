@@ -30,6 +30,7 @@ import {
   scopeRefIssue,
   seriesFitIssue,
   seriesRefused,
+  titleRefused,
   TEST_DEFAULTS,
   testDeletionBlocker,
 } from './test-rules';
@@ -124,6 +125,8 @@ export class TestsService {
     const config = await this.configs.assertUsable(input.baseConfigId);
     const series = await this.seriesCarrying(input.testSeriesId, config.examStageId);
 
+    await this.assertTitleFree(series.id, input.title);
+
     const scope = input.scope ?? TEST_DEFAULTS.scope;
     const scopeRef = input.scopeRef ?? null;
     this.assertCovers(config, scope, scopeRef);
@@ -168,6 +171,10 @@ export class TestsService {
       throw new AppException(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE, {
         fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
       });
+    }
+
+    if (input.title !== undefined) {
+      await this.assertTitleFree(test.testSeriesId, input.title, id);
     }
 
     const config = await this.configs.detail(test.baseConfigId);
@@ -224,6 +231,25 @@ export class TestsService {
         fieldErrors: { scopeRef: [issue] },
       });
     }
+  }
+
+  /** The unique index is the guarantee; this is so the refusal lands on the field that caused it. */
+  private async assertTitleFree(
+    testSeriesId: string,
+    title: string | null | undefined,
+    exceptId?: string,
+  ): Promise<void> {
+    if (title === null || title === undefined) return;
+
+    const clash = await this.prisma.test.findFirst({
+      where: {
+        testSeriesId,
+        title: { equals: title, mode: 'insensitive' },
+        ...(exceptId === undefined ? {} : { id: { not: exceptId } }),
+      },
+      select: { id: true },
+    });
+    if (clash !== null) throw titleRefused();
   }
 
   private async requireTest(id: string): Promise<TestRow> {

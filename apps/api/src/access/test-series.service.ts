@@ -37,6 +37,8 @@ const KIND_PAIRING_MESSAGES = {
     'A series naming an event is reached only by its candidates, which is what the Event kind is. Choose Event, or clear the event.',
 } as const;
 
+const SERIES_NAME_TAKEN = 'Another series already goes by that name.';
+
 const branchesAreStandardOnly = (count: number) =>
   `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'} and carries a branch list no other kind can hold, so its kind cannot change.`;
 
@@ -136,6 +138,7 @@ export class TestSeriesService {
   /** A new series reaches no branch until an admin names one — `branchIds` starts empty. */
   async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
     await this.assertTargetsUsable(input);
+    await this.assertNameFree(input.name);
     const kind = input.kind ?? TEST_SERIES_KIND.STANDARD;
     this.assertKindHoldsTogether({
       kind,
@@ -165,6 +168,7 @@ export class TestSeriesService {
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesSummary> {
     const series = await this.requireSeries(id);
     await this.assertTargetsUsable(input);
+    if (input.name !== undefined) await this.assertNameFree(input.name, id);
     // `branchIds` is untouched here — only `setBranches` moves it, so this reads what it already holds.
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
@@ -270,6 +274,22 @@ export class TestSeriesService {
   }
 
   /** Out of how many branches could run one — every live branch, the same number for every series. */
+  /** The unique index is the guarantee; this is so the refusal lands on the field that caused it. */
+  private async assertNameFree(name: string, exceptId?: string): Promise<void> {
+    const clash = await this.prisma.testSeries.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+        ...(exceptId === undefined ? {} : { id: { not: exceptId } }),
+      },
+      select: { id: true },
+    });
+    if (clash === null) return;
+
+    throw new AppException(ErrorCodes.CONFLICT, SERIES_NAME_TAKEN, {
+      fieldErrors: { name: [SERIES_NAME_TAKEN] },
+    });
+  }
+
   private async liveBranchCount(): Promise<number> {
     return this.prisma.branch.count({ where: { deletedAt: null } });
   }

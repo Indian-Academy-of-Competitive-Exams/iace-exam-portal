@@ -292,6 +292,39 @@ describe('TestSeriesService — branches are the truth about branches', () => {
   });
 });
 
+describe('TestSeriesService — a name belongs to one series', () => {
+  /** The failure this prevents: two rows reading "SSC CGL Tier 1 mocks" in every picker that lists them. */
+  it('refuses a second series with a name already taken, whatever its case', async () => {
+    const { series } = build();
+    await series.create(draft());
+
+    const error = await series.create(draft({ name: 'ssc cgl TIER 1 MOCKS' })).catch((e) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.ok(error.fieldErrors?.name);
+  });
+
+  it('lets a series keep its own name through an edit that changes something else', async () => {
+    const { series } = build();
+    const created = await series.create(draft());
+
+    const updated = await series.update(created.id, { name: created.name, isEnabled: true });
+
+    assert.equal(updated.name, created.name);
+  });
+
+  it('refuses a rename onto another series', async () => {
+    const { series } = build();
+    await series.create(draft({ name: 'Foundation mocks' }));
+    const second = await series.create(draft({ name: 'Sectional mocks' }));
+
+    const error = await series.update(second.id, { name: 'foundation mocks' }).catch((e) => e);
+
+    assert.equal(AppException.is(error) ? error.code : null, ErrorCodes.CONFLICT);
+  });
+});
+
 describe('TestSeriesService — what a series may point at', () => {
   it('refuses a stage that is retired', async () => {
     const prisma = new FakeAccessPrisma(

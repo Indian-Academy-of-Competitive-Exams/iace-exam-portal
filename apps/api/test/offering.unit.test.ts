@@ -412,6 +412,20 @@ describe('OfferingService — a series and the tests it holds', () => {
     assert.equal(prisma.tests[0]?.opensAt, null);
   });
 
+  /** The failure this prevents: a move smuggles a duplicate name past the check the create path makes. */
+  it('refuses a move into a series that already holds a test of that name', async () => {
+    const { service, prisma } = serviceWith(inSeries({ title: 'Mock 1' }));
+    prisma.tests.push(makeTest({ id: 'tst_9', title: 'mock 1', testSeriesId: 'srs_2' }));
+
+    const error = await service
+      .moveToSeries('tst_1', { testSeriesId: 'srs_2' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.fieldErrors?.testSeriesId?.[0] ?? '', /already has a test called Mock 1/);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
+  });
+
   /** The failure this prevents: an opening walks into an ordered series behind one already there. */
   it('refuses a move that would land an opening before one the ordered series already holds', async () => {
     const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));

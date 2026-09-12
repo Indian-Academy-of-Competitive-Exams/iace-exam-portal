@@ -31,6 +31,7 @@ import {
 
 const OFFERING_SELECT = {
   id: true,
+  title: true,
   status: true,
   isLocked: true,
   examStageId: true,
@@ -78,6 +79,9 @@ const OPENS_BEFORE_THE_TEST_DOES =
   'A program opens a test earlier, never later — a later opening would hold this program’s students back after the test has opened for everyone else.';
 
 const UNLOCK_FIELD = 'unlockAt';
+
+const nameTakenIn = (seriesName: string, title: string) =>
+  `${seriesName} already has a test called ${title}, and a name belongs to one test inside its series.`;
 
 const UNTITLED_TEST = 'An untitled test';
 
@@ -197,6 +201,7 @@ export class OfferingService {
 
     this.assertNotSat(test);
     const series = await this.assertSeriesUsable(test, next);
+    await this.assertTitleFreeIn(next, series.name, test);
     const opensAt = test.opensAt;
     if (series.sequentialTests && opensAt !== null) {
       await this.assertOpeningFitsOrder(next, FORM_LEVEL_FIELD, (siblings) =>
@@ -241,7 +246,7 @@ export class OfferingService {
   private async assertSeriesUsable(
     test: OfferingRow,
     testSeriesId: string,
-  ): Promise<{ sequentialTests: boolean }> {
+  ): Promise<{ name: string; sequentialTests: boolean }> {
     const series = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
       select: { name: true, examStageId: true, sequentialTests: true },
@@ -310,6 +315,21 @@ export class OfferingService {
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
+  }
+
+  /** A name is unique inside a series, so the series it ARRIVES in is the one that judges it. */
+  private async assertTitleFreeIn(
+    testSeriesId: string,
+    seriesName: string,
+    test: OfferingRow,
+  ): Promise<void> {
+    if (test.title === null) return;
+
+    const clash = await this.prisma.test.findFirst({
+      where: { testSeriesId, title: { equals: test.title, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (clash !== null) throw seriesRefused(nameTakenIn(seriesName, test.title));
   }
 
   /** A series holds a handful of tests, so the whole set is read and compared here rather than in SQL. */

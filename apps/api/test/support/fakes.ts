@@ -2300,6 +2300,26 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve(row ? this.hydrateTest(row) : null);
     },
 
+    findFirst: ({
+      where,
+    }: {
+      where: {
+        testSeriesId?: string;
+        title?: { equals: string; mode?: string };
+        id?: { not: string };
+      };
+      select?: unknown;
+    }) => {
+      const wanted = where.title?.equals.toLowerCase();
+      const row = this.tests.find(
+        (test) =>
+          (where.testSeriesId === undefined || test.testSeriesId === where.testSeriesId) &&
+          where.id?.not !== test.id &&
+          (wanted === undefined || (test.title ?? '').toLowerCase() === wanted),
+      );
+      return Promise.resolve(row ? this.hydrateTest(row) : null);
+    },
+
     findMany: ({
       where = {},
       skip = 0,
@@ -3584,6 +3604,11 @@ export class FakeAccessPrisma {
       return Promise.resolve(row ? this.hydrate(row) : null);
     },
 
+    findFirst: ({ where = {} }: { where?: FakeSeriesWhere; select?: unknown } = {}) => {
+      const row = this.series.find((candidate) => matchesSeries(candidate, where));
+      return Promise.resolve(row ? this.hydrate(row) : null);
+    },
+
     findMany: ({
       where = {},
       skip = 0,
@@ -3743,10 +3768,10 @@ export class FakeAccessPrisma {
 interface FakeSeriesWhere {
   AND?: FakeSeriesWhere[];
   NOT?: FakeSeriesWhere;
-  id?: { in: string[] };
+  id?: { in: string[] } | { not: string };
   programCode?: string;
   kind?: TestSeriesKind;
-  name?: { contains: string; mode?: string };
+  name?: { contains: string; mode?: string } | { equals: string; mode?: string };
   examStageId?: { in: string[] };
 }
 
@@ -3758,13 +3783,20 @@ function matchesSeries(row: FakeSeriesRow, where: FakeSeriesWhere): boolean {
 
 /** The series' own columns, apart from the recursion and the join above. */
 function matchesSeriesColumns(row: FakeSeriesRow, where: FakeSeriesWhere): boolean {
-  if (where.id && !where.id.in.includes(row.id)) return false;
+  if (where.id && 'in' in where.id && !where.id.in.includes(row.id)) return false;
+  if (where.id && 'not' in where.id && row.id === where.id.not) return false;
   if (where.programCode !== undefined && row.programCode !== where.programCode) return false;
   if (where.kind !== undefined && row.kind !== where.kind) return false;
-  if (where.name && !row.name.toLowerCase().includes(where.name.contains.toLowerCase())) {
-    return false;
-  }
+  if (where.name && !matchesName(row.name, where.name)) return false;
   return !where.examStageId || where.examStageId.in.includes(row.examStageId ?? '');
+}
+
+/** The two shapes a name filter takes here: the list's search, and the uniqueness check. */
+function matchesName(name: string, where: { contains: string } | { equals: string }): boolean {
+  const held = name.toLowerCase();
+  return 'equals' in where
+    ? held === where.equals.toLowerCase()
+    : held.includes(where.contains.toLowerCase());
 }
 
 export interface FakeEventRow {

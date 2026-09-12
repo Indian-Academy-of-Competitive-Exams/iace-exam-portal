@@ -82,7 +82,7 @@ export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
     select: { id: true },
   });
   const series = await prisma.testSeries.create({
-    data: { id: uid('series'), name: 'Database tier series', examStageId: stage.id },
+    data: { id: uid('series'), name: uid('Database tier series'), examStageId: stage.id },
     select: { id: true },
   });
   return { examStageId: stage.id, baseConfigId: config.id, testSeriesId: series.id };
@@ -96,7 +96,7 @@ export function makeTest(
   return prisma.test.create({
     data: {
       id: uid('test'),
-      title: 'Database tier mock',
+      title: uid('Database tier mock'),
       baseConfigId: catalog.baseConfigId,
       examStageId: catalog.examStageId,
       testSeriesId: catalog.testSeriesId,
