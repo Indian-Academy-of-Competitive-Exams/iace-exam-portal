@@ -8,7 +8,12 @@ import { RollupProcessor } from '../src/attempts/rollup.processor';
 import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
 import { ROLLUP_REQUEST } from '../src/attempts/rollup-outbox';
 import { cohortShapeOf, curveBandsOf, flagYours } from '../src/attempts/performance-analytics';
-import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS, type RollupJobData } from '../src/queue/queues';
+import {
+  FOLD_PENDING_JOB_ID,
+  RELAY_BATCH,
+  ROLLUP_JOBS,
+  type RollupJobData,
+} from '../src/queue/queues';
 import {
   FakeEventBus,
   FakeQueue,
@@ -260,6 +265,21 @@ describe('RollupService — folding a pending batch', () => {
     assert.equal(built.prisma.testStat.rows[0]?.sumScore, 9.5);
     assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
     assert.equal(built.prisma.processedRollups.length, 10);
+  });
+
+  /** Asking for another pass from inside one is a no-op, so the backlog is drained here or not at all. */
+  it('drains a backlog wider than one page without waiting for the next sweep', async () => {
+    const all = Array.from({ length: RELAY_BATCH + 1 }, (_unused, index) => index + 1);
+    const built = world(
+      all.map((at) => sitting(`att_${at}`, { studentId: `stu_${at}` })),
+      all.flatMap((at) => paper(`att_${at}`, [at % 2 === 0 ? RIGHT : WRONG, null, null, null])),
+    );
+    for (const at of all) await built.scoring.score(`att_${at}`);
+
+    assert.equal(await built.rollup.foldPending(), RELAY_BATCH + 1);
+
+    assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, RELAY_BATCH + 1);
+    assert.equal(await built.rollup.foldPending(), 0);
   });
 
   it('folds a retake in the page into the student and never into the cohort', async () => {

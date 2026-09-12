@@ -68,6 +68,9 @@ type FoldRow = Prisma.AttemptGetPayload<{ select: typeof FOLD_SELECT }>;
 /** Sittings replayed per round trip, so a rebuild of a 5K cohort never holds it all in memory. */
 const REBUILD_PAGE = 200;
 
+/** A hall of 5K at a page each, and then the pass lets go: no one job may run for ever. */
+const FOLD_PAGES_PER_PASS = 25;
+
 /** A fold is a handful of statements; a rebuild is a page at a time and may take a while. */
 const FOLD_TIMEOUT_MS = 15_000;
 const REBUILD_TIMEOUT_MS = 120_000;
@@ -91,8 +94,19 @@ export class RollupService {
     }
   }
 
-  /** One pass: claim a page of counting requests, fold them, and mark them only once counted. */
+  /** A full page means more is waiting, and this job holds the id a re-ask would collapse onto. */
   async foldPending(): Promise<number> {
+    let counted = 0;
+    for (let page = 0; page < FOLD_PAGES_PER_PASS; page += 1) {
+      const claimed = await this.foldPage();
+      counted += claimed;
+      if (claimed < RELAY_BATCH) break;
+    }
+    return counted;
+  }
+
+  /** One page: claim a page of counting requests, fold them, and mark them only once counted. */
+  private async foldPage(): Promise<number> {
     const rows = await this.prisma.outboxEvent.findMany({
       where: { eventType: ROLLUP_REQUEST.EVENT_TYPE, processedAt: null },
       orderBy: { createdAt: 'asc' },
