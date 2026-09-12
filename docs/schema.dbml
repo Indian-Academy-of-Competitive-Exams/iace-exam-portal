@@ -631,11 +631,9 @@ Table Program {
 Table TestSeries {
   id text [pk, default: `cuid()`]
   name text [not null]
-  description text
   examStageId text
   programCode text
   sequentialTests boolean [not null, default: false]
-  progressive boolean [not null, default: false]
   kind TestSeriesKind [not null, default: 'STANDARD']
   eventId text
   createdAt timestamptz(3) [not null, default: `now()`]

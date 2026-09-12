@@ -836,8 +836,6 @@ model TestSeries {
   examStageId     String?
   programCode     String?
   sequentialTests Boolean        @default(false)
-  // sequentialTests is ORDER; this is DIFFICULTY -- a graded ramp, and the two move independently.
-  progressive     Boolean        @default(false)
   // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
   kind            TestSeriesKind @default(STANDARD)
   eventId         String?

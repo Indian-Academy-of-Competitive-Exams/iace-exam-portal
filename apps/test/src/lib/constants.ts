@@ -1,12 +1,10 @@
 import { BarChart3, Bell, Bookmark, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import { type BadgeProps } from '@iace/ui';
 import {
   ANSWER_STATE,
   DELIVERY_CHANNEL,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
-  MASTERY_TRENDS,
   PERFORMANCE_SCOPES,
   sharedReportPath,
   type AnswerState,
@@ -14,7 +12,6 @@ import {
   type LanguageCode,
   type LeaderboardMeasure,
   type LeaderboardScope,
-  type MasteryTrend,
   type PerformanceScope,
   type SavedQuestionKind,
 } from '@iace/contracts';
@@ -176,21 +173,6 @@ export const sharedReportQueryKey = (token: string) => ['public', 'report', toke
 
 /** The series the SERIES scope may be asked about, which only a sitting puts on the list. */
 export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as const;
-
-/** Chart series slots run 1..8 and are assigned, never cycled — a ninth subject shares the last. */
-export const SERIES_SLOT_COUNT = 8;
-
-export const MASTERY_TREND_LABELS: Readonly<Record<MasteryTrend, string>> = {
-  [MASTERY_TRENDS.RISING]: 'Rising',
-  [MASTERY_TRENDS.STEADY]: 'Steady',
-  [MASTERY_TRENDS.SLIDING]: 'Sliding',
-};
-
-export const MASTERY_TREND_BADGE: Readonly<Record<MasteryTrend, BadgeProps['variant']>> = {
-  [MASTERY_TRENDS.RISING]: 'success',
-  [MASTERY_TRENDS.STEADY]: 'neutral',
-  [MASTERY_TRENDS.SLIDING]: 'warning',
-};
 
 /** What a test covers, read before the clock starts. */
 export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'];

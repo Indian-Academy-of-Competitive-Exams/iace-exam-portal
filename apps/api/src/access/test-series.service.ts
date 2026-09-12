@@ -55,7 +55,6 @@ export const AUDITED_SERIES_FIELDS = [
   'examStageId',
   'programCode',
   'sequentialTests',
-  'progressive',
   'kind',
   'eventId',
   'isEnabled',
@@ -323,7 +322,6 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
     ...(input.examStageId === undefined ? {} : { examStageId: input.examStageId ?? null }),
     ...(input.programCode === undefined ? {} : { programCode: input.programCode ?? null }),
     ...(input.sequentialTests === undefined ? {} : { sequentialTests: input.sequentialTests }),
-    ...(input.progressive === undefined ? {} : { progressive: input.progressive }),
     ...(input.kind === undefined ? {} : { kind: input.kind }),
     ...(input.eventId === undefined ? {} : { eventId: input.eventId ?? null }),
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
@@ -339,7 +337,6 @@ function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
       : null,
     programCode: row.programCode,
     sequentialTests: row.sequentialTests,
-    progressive: row.progressive,
     kind: row.kind,
     branchIds: row.branchIds,
     isEnabled: row.isEnabled,

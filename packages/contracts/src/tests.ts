@@ -377,7 +377,7 @@ export type TestProgramUnlock = z.infer<typeof testProgramUnlockSchema>;
 /** The test plus the blueprint it reads its shape from, so a screen renders both in one request. */
 export const testDetailSchema = testSchema.extend({
   baseConfig: baseConfigDetailSchema,
-  /** Position inside that series, which is what a progressive ramp is read along. */
+  /** Position inside that series, which is the order an ordered series opens it in. */
   seriesOrder: z.number().int().nullable(),
   /** When this test opens. Null opens with the series it sits in. */
   opensAt: z.string().nullable(),

@@ -17,6 +17,7 @@ export function SeriesBasics({
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const programCode = useWatch({ control: form.control, name: 'programCode' });
   const kind = useWatch({ control: form.control, name: 'kind' });
+  const inOrder = useWatch({ control: form.control, name: 'sequentialTests' });
 
   const suggested = useSuggestedSeriesName({
     examCode: stage?.examCode,
@@ -42,46 +43,20 @@ export function SeriesBasics({
           )}
         </FormField>
 
-        <div className="flex flex-col gap-3 sm:col-span-2">
-          <SeriesToggle
-            form={form}
-            name="sequentialTests"
+        <div className="sm:col-span-2">
+          {/* Controlled, because `register` alone cannot hold a checkbox's state. */}
+          <Checkbox
+            checked={inOrder}
+            onChange={(event) =>
+              form.setValue('sequentialTests', event.target.checked, { shouldDirty: true })
+            }
             label="Open the tests in order"
-            /* ui-copy-ok: rule */ hint="Each test opens after the one before it; off opens them all together."
-          />
-          <SeriesToggle
-            form={form}
-            name="progressive"
-            label="Progressive"
-            /* ui-copy-ok: rule */ hint="Each paper harder than the last; students see the climb against the ramp."
+            /* ui-copy-ok: rule */
+            hint="Each test opens after the one before it; off opens them all together."
           />
         </div>
       </div>
     </FormSection>
-  );
-}
-
-/** A boolean the form owns. Controlled, because `register` alone cannot hold a checkbox's state. */
-function SeriesToggle({
-  form,
-  name,
-  label,
-  hint,
-}: Readonly<{
-  form: UseFormReturn<SeriesFormValues>;
-  name: 'sequentialTests' | 'progressive';
-  label: string;
-  hint?: string;
-}>) {
-  const checked = useWatch({ control: form.control, name });
-
-  return (
-    <Checkbox
-      checked={checked}
-      onChange={(event) => form.setValue(name, event.target.checked, { shouldDirty: true })}
-      label={label}
-      /* ui-copy-ok: rule */ hint={hint}
-    />
   );
 }
 

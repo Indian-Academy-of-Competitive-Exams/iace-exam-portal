@@ -19,13 +19,12 @@ import {
   type PercentilePoint,
   type SatSeries,
   type ScoreCardSection,
-  type SeriesProgression,
   civilDate,
   type TestCalendar,
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
-import { LeaderboardService, type SittingStanding, type Standing } from './leaderboard.service';
+import { LeaderboardService, type Standing } from './leaderboard.service';
 import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
@@ -38,10 +37,8 @@ import {
   difficultyStandingOf,
   flagYours,
   sectionalStandingOf,
-  seriesProgressionOf,
   type CohortShape,
   type ReportedQuestion,
-  type SatPaper,
   type SectionCohort,
 } from './performance-analytics';
 
@@ -161,7 +158,6 @@ export class PerformanceAnalyticsService {
       difficulty: difficultyStandingOf(rows, pValues),
       time: timeUseOf(rows),
       paceIndex: paceOf(rows, anchor === null ? null : (testStats.get(anchor.testId) ?? null)),
-      progression: progressionOf(series, sat, standings),
     };
   }
 
@@ -251,7 +247,7 @@ export class PerformanceAnalyticsService {
     );
   }
 
-  /** What the report is OF, and the ramp it is read along — the owner is in this WHERE too. */
+  /** What the report is OF — the owner is in this WHERE too, so no series is read for somebody else. */
   private async seriesOf(
     studentId: string,
     query: PerformanceReportQuery,
@@ -262,21 +258,10 @@ export class PerformanceAnalyticsService {
         id: query.seriesId,
         tests: { some: { attempts: { some: { studentId } } } },
       },
-      select: {
-        id: true,
-        name: true,
-        progressive: true,
-        tests: { select: { id: true, seriesOrder: true }, orderBy: { seriesOrder: 'asc' } },
-      },
+      select: { id: true, name: true },
     });
     if (!series) throw new AppException(ErrorCodes.NOT_FOUND, NO_SERIES);
-    return {
-      id: series.id,
-      name: series.name,
-      progressive: series.progressive,
-      // A null order is a rung nobody numbered, so it keeps the place the ordered read gave it.
-      order: new Map(series.tests.map((row, index) => [row.id, row.seriesOrder ?? index])),
-    };
+    return series;
   }
 
   /** Sitting counts by institute day, since the account opened. No paper is read, ever. */
@@ -316,7 +301,7 @@ export class PerformanceAnalyticsService {
         },
       },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, progressive: true },
+      select: { id: true, name: true },
     });
     return rows;
   }
@@ -325,25 +310,6 @@ export class PerformanceAnalyticsService {
 interface ScopedSeries {
   id: string;
   name: string;
-  progressive: boolean;
-  order: ReadonlyMap<string, number>;
-}
-
-/** A flat series has no ramp to draw a climb against, so it never carries one. */
-function progressionOf(
-  series: ScopedSeries | null,
-  sat: readonly ReportRow[],
-  standings: ReadonlyMap<string, SittingStanding>,
-): SeriesProgression | null {
-  if (!series?.progressive) return null;
-  const papers: SatPaper[] = sat.map((row) => ({
-    testId: row.testId,
-    attemptId: row.id,
-    title: row.test.title,
-    percentile: standings.get(row.id)?.percentile ?? null,
-    questions: toReported(row),
-  }));
-  return seriesProgressionOf(series.id, series.order, papers);
 }
 
 interface TestStatRow {

@@ -132,7 +132,6 @@ public rollout unchanged.
 - `TestSeries.sequentialTests` orders the tests INSIDE a series: the first not yet finished is open
   and everything after it waits. It counts submitted and evaluated sittings and is read fresh on
   every catalog read, so submitting one opens the next with nothing having to bust a key.
-- `TestSeries.progressive` is a difficulty ramp, not an order. The two move independently.
 - **One function answers all of it** (`AccessResolverService`), and both callers read that one
   answer: the student's catalog and the attempt-start guard, so the two cannot disagree.
   `assertCanStart` refuses a sitting; `assertReachable` still opens the test to read about.

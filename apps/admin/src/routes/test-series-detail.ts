@@ -24,7 +24,6 @@ export interface SeriesFormValues {
   programCode: string;
   eventId: string;
   sequentialTests: boolean;
-  progressive: boolean;
   kind: TestSeriesKind;
 }
 
@@ -40,7 +39,6 @@ export const SERVER_FIELDS = [
   'eventId',
   'kind',
   'sequentialTests',
-  'progressive',
 ] as const;
 
 export const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({
@@ -63,7 +61,6 @@ export function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     programCode: detail?.programCode ?? '',
     eventId: detail?.eventId ?? '',
     sequentialTests: detail?.sequentialTests ?? false,
-    progressive: detail?.progressive ?? false,
     kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
   };
 }
@@ -77,7 +74,6 @@ export function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     programCode: values.kind === TEST_SERIES_KIND.PROGRAM ? values.programCode || null : null,
     eventId: values.kind === TEST_SERIES_KIND.EVENT ? values.eventId || null : null,
     sequentialTests: values.sequentialTests,
-    progressive: values.progressive,
     kind: values.kind,
   };
 }

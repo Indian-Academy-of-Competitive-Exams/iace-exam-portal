@@ -5241,7 +5241,7 @@ export interface FakePerformanceData {
     currentBranchId?: string | null;
     createdAt?: Date;
   }[];
-  series: { id: string; name: string; progressive?: boolean }[];
+  series: { id: string; name: string }[];
   /** Membership is the test's own column, so a rung is a test carrying the series' id. */
   tests: { id: string; testSeriesId: string; seriesOrder?: number | null }[];
   testStats: {
@@ -5412,18 +5412,6 @@ export class FakePerformancePrisma {
     );
   }
 
-  private withRungs(row: { id: string; name: string; progressive?: boolean }) {
-    return {
-      id: row.id,
-      name: row.name,
-      progressive: row.progressive ?? false,
-      tests: this.data.tests
-        .filter((test) => test.testSeriesId === row.id)
-        .map((test) => ({ id: test.id, seriesOrder: test.seriesOrder ?? null }))
-        .toSorted((a, b) => (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0)),
-    };
-  }
-
   readonly testSeries = {
     findFirst: ({
       where,
@@ -5437,7 +5425,7 @@ export class FakePerformancePrisma {
       const held = this.data.series.find(
         (row) => row.id === where.id && this.satBy(row.id, studentId),
       );
-      return Promise.resolve(held === undefined ? null : this.withRungs(held));
+      return Promise.resolve(held ?? null);
     },
 
     findMany: ({
@@ -5451,7 +5439,7 @@ export class FakePerformancePrisma {
       return Promise.resolve(
         this.data.series
           .filter((row) => this.satBy(row.id, studentId))
-          .map((row) => ({ id: row.id, name: row.name, progressive: row.progressive ?? false }))
+          .map((row) => ({ id: row.id, name: row.name }))
           .toSorted((a, b) => a.name.localeCompare(b.name)),
       );
     },
