@@ -209,7 +209,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft());
     await series.update(created.id, { isEnabled: true });
 
-    await series.update(created.id, { description: 'Six papers' });
+    await series.update(created.id, { name: 'Six papers' });
 
     assert.equal(prisma.series[0]?.isEnabled, true, 'no branch runs it, and nobody asked it off');
   });

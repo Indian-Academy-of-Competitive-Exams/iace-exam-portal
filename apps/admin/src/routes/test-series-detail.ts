@@ -20,7 +20,6 @@ export type SeriesTab = (typeof SERIES_TAB)[keyof typeof SERIES_TAB];
 
 export interface SeriesFormValues {
   name: string;
-  description: string;
   examStageId: string;
   programCode: string;
   eventId: string;
@@ -36,7 +35,6 @@ export const testsKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id, 'tests']
 /** Every path the server can name that this form registers, so a failure lands on its own input. */
 export const SERVER_FIELDS = [
   'name',
-  'description',
   'examStageId',
   'programCode',
   'eventId',
@@ -61,7 +59,6 @@ export function chooseKind(form: UseFormReturn<SeriesFormValues>, next: TestSeri
 export function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
   return {
     name: detail?.name ?? '',
-    description: detail?.description ?? '',
     examStageId: detail?.examStageId ?? '',
     programCode: detail?.programCode ?? '',
     eventId: detail?.eventId ?? '',
@@ -75,7 +72,6 @@ export function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
 export function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
   return {
     name: values.name,
-    description: values.description.trim(),
     examStageId: values.examStageId || null,
     // Each target belongs to one kind, so the field it came from cannot outlive that kind.
     programCode: values.kind === TEST_SERIES_KIND.PROGRAM ? values.programCode || null : null,

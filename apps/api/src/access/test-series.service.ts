@@ -52,7 +52,6 @@ type SeriesRow = Prisma.TestSeriesGetPayload<{ include: typeof SERIES_INCLUDE }>
 /** What a series' audit diff covers — every column an edit can change. */
 export const AUDITED_SERIES_FIELDS = [
   'name',
-  'description',
   'examStageId',
   'programCode',
   'sequentialTests',
@@ -321,7 +320,6 @@ function kindPairingErrors(shape: SeriesPairing): Record<string, string[]> {
 function columnsOf(input: Partial<CreateTestSeriesBody>) {
   return {
     ...(input.name === undefined ? {} : { name: input.name }),
-    ...(input.description === undefined ? {} : { description: input.description ?? null }),
     ...(input.examStageId === undefined ? {} : { examStageId: input.examStageId ?? null }),
     ...(input.programCode === undefined ? {} : { programCode: input.programCode ?? null }),
     ...(input.sequentialTests === undefined ? {} : { sequentialTests: input.sequentialTests }),
@@ -335,7 +333,6 @@ function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
   return {
     id: row.id,
     name: row.name,
-    description: row.description,
     examStageId: row.examStageId,
     examStage: row.examStage
       ? { id: row.examStage.id, name: row.examStage.name, examCode: row.examStage.exam.code }

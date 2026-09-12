@@ -3423,7 +3423,6 @@ export interface FakeProgramRow {
 export interface FakeSeriesRow {
   id: string;
   name: string;
-  description: string | null;
   examStageId: string | null;
   programCode: string | null;
   sequentialTests: boolean;
@@ -3462,7 +3461,6 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
   return {
     id: 'srs_1',
     name: 'SSC CGL Tier 1 mocks',
-    description: null,
     examStageId: 'stage_1',
     programCode: null,
     sequentialTests: false,

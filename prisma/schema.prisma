@@ -833,7 +833,6 @@ model Program {
 model TestSeries {
   id              String         @id @default(cuid())
   name            String
-  description     String?
   examStageId     String?
   programCode     String?
   sequentialTests Boolean        @default(false)

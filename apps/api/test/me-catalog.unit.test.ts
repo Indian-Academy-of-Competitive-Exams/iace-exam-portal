@@ -28,7 +28,6 @@ const catalogOf = (...testIds: string[]): StudentCatalog => ({
     {
       id: 'ser_1',
       name: 'SSC CGL Full Mocks',
-      description: null,
       examStage: null,
       programCode: null,
       kind: 'FREE',

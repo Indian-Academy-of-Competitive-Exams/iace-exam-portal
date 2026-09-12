@@ -1,5 +1,5 @@
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import { Checkbox, FormField, FormSection, Input, Textarea } from '@iace/ui';
+import { Checkbox, FormField, FormSection, Input } from '@iace/ui';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { type SeriesFormValues } from './test-series-detail';
 import { type StageChoice } from '../components/exam-picker';
@@ -40,15 +40,6 @@ export function SeriesBasics({
               }
             />
           )}
-        </FormField>
-
-        <FormField
-          form={form}
-          name="description"
-          label="Description"
-          /* ui-copy-ok: rule */ hint="Optional"
-        >
-          {(control) => <Textarea {...control} />}
         </FormField>
 
         <div className="flex flex-col gap-3 sm:col-span-2">

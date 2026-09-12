@@ -151,7 +151,6 @@ export type AddEventCandidatesBody = z.infer<typeof addEventCandidatesSchema>;
 export const testSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string().nullable(),
   examStageId: z.string().nullable(),
   /** Null is exam or course access; set means the student must carry the program. */
   programCode: z.string().nullable(),
@@ -217,7 +216,6 @@ export type TestSeriesListQueryInput = z.input<typeof testSeriesListQuerySchema>
 
 export const createTestSeriesSchema = z.object({
   name: seriesNameSchema,
-  description: z.string().trim().max(500).optional(),
   /** The stage this belongs to. Null is a series that spans a course rather than one paper. */
   examStageId: z.string().nullish(),
   /** Set means program-only: a student without the program never reaches it. */
@@ -406,7 +404,6 @@ export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
 export const studentCatalogSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string().nullable(),
   examStage: z
     .object({
       id: z.string(),

@@ -89,7 +89,6 @@ interface ResolvedTest {
 interface ResolvedSeries {
   id: string;
   name: string;
-  description: string | null;
   examStage: { id: string; name: string; examCode: string; course: ExamCourse } | null;
   programCode: string | null;
   kind: TestSeriesKind;
@@ -330,7 +329,6 @@ function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus
   return {
     id: row.id,
     name: row.name,
-    description: row.description,
     examStage: row.examStage
       ? {
           id: row.examStage.id,
