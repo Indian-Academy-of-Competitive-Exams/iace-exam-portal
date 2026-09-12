@@ -234,6 +234,22 @@ export function bandsHolding(
   return bands.map((band, at) => (at === index ? { ...band, count: band.count + 1 } : band));
 }
 
+/** Null the moment one score leaves the range, which is the caller's cue to re-cut the curve. */
+export function bandsAfterBatch(
+  bands: readonly CohortBand[],
+  minScore: number | null,
+  maxScore: number | null,
+  scores: readonly number[],
+): CohortBand[] | null {
+  let held: CohortBand[] = [...bands];
+  for (const score of scores) {
+    const moved = bandsHolding(held, minScore, maxScore, score);
+    if (moved === null) return null;
+    held = moved;
+  }
+  return held;
+}
+
 /** The `Json?` column read back as counts. Anything that is not a count is not one. */
 export function optionCountsIn(stored: unknown): Record<string, number> {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
