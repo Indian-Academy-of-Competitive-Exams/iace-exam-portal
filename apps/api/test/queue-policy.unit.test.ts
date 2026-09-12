@@ -10,7 +10,6 @@ import {
   jobOptionsFor,
   notificationDeliveryJobId,
   notificationJobId,
-  rollupJobId,
   rollupRebuildJobId,
   rollupRebuildStudentJobId,
   scoringJobId,
@@ -52,7 +51,6 @@ describe('queue policy', () => {
     const cuid = 'cmfe8x2k70000qv3l9h4d2b1a';
     const ids = [
       scoringJobId(cuid),
-      rollupJobId(cuid),
       rollupRebuildJobId(cuid),
       rollupRebuildStudentJobId(cuid),
       notificationJobId(cuid),

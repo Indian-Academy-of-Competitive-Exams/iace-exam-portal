@@ -95,11 +95,6 @@ export interface RollupJobData {
   studentId?: string;
 }
 
-/** The EVENT's own: a redelivered relay is the same job, so one evaluation folds once. */
-export function rollupJobId(eventId: string): string {
-  return `${QUEUE_NAMES.ROLLUP}-${eventId}`;
-}
-
 /** The TEST's own: every re-score of one paper collapses into the single rebuild they all want. */
 export function rollupRebuildJobId(testId: string): string {
   return `${QUEUE_NAMES.ROLLUP}-rebuild-${testId}`;

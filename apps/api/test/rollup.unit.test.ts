@@ -232,6 +232,36 @@ describe('RollupService — folding a pending batch', () => {
     assert.equal(built.prisma.processedRollups.length, 5);
   });
 
+  /** Two passes run at once at concurrency 2, so a later page can hold a sitting already counted. */
+  it('counts a sitting once when a redelivered request lands in a later page', async () => {
+    const built = world(
+      [sitting('att_1', { studentId: 'stu_1' }), sitting('att_2', { studentId: 'stu_2' })],
+      [
+        ...paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]),
+        ...paper('att_2', [RIGHT, WRONG, null, null]),
+      ],
+    );
+    await built.scoring.score('att_1');
+    assert.equal(await built.rollup.foldPending(), 1);
+
+    await built.prisma.outboxEvent.create({
+      data: {
+        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
+        aggregateId: 'att_1',
+        eventType: ROLLUP_REQUEST.EVENT_TYPE,
+        payload: {},
+      },
+    });
+    await built.scoring.score('att_2');
+
+    assert.equal(await built.rollup.foldPending(), 2);
+
+    assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 2);
+    assert.equal(built.prisma.testStat.rows[0]?.sumScore, 9.5);
+    assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
+    assert.equal(built.prisma.processedRollups.length, 10);
+  });
+
   it('folds a retake in the page into the student and never into the cohort', async () => {
     const built = world(
       [sitting('att_1'), sitting('att_2', { attemptNo: 2, isGraded: false })],
