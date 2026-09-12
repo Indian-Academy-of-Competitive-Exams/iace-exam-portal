@@ -544,6 +544,24 @@ describe('RollupProcessor — dispatching a job to the service', () => {
 });
 
 describe('RollupOutbox — getting the fold asked for', () => {
+  /** A job kept under a fixed id is a wedge: BullMQ drops every later add for that id in silence. */
+  it('keeps no job under a fixed id, whether it completed or failed', async () => {
+    const built = world([sitting('att_1')], paper('att_1', [RIGHT, null, null, null]));
+
+    await built.outbox.relay();
+    await built.outbox.rebuild('tst_1');
+    await built.outbox.rebuildStudent('stu_1');
+
+    assert.deepEqual(
+      built.queue.jobs.map((job) => [job.jobId, job.removeOnComplete, job.removeOnFail]),
+      [
+        [FOLD_PENDING_JOB_ID, true, true],
+        ['rollup-rebuild-tst_1', true, true],
+        ['rollup-rebuild-student-stu_1', true, true],
+      ],
+    );
+  });
+
   it('asks for one fold pass however many sittings are evaluated', async () => {
     const built = world(
       [sitting('a1', { studentId: 'stu_1' }), sitting('a2', { studentId: 'stu_2' })],
