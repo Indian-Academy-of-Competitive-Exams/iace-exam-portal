@@ -1,5 +1,6 @@
 import { useState, type MouseEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BarChart3 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
@@ -244,7 +245,21 @@ function TestBuilder({
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={detail?.title ?? (existing ? 'Untitled test' : 'New test')}
             meta={metaOf(detail)}
-            action={config ? <ConfigSummaryButton config={config} /> : undefined}
+            action={
+              config ? (
+                <span className="flex flex-wrap gap-2">
+                  <ConfigSummaryButton config={config} />
+                  {detail ? (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to={ROUTES.TEST_ANALYTICS(detail.id)}>
+                        <BarChart3 aria-hidden />
+                        Analytics
+                      </Link>
+                    </Button>
+                  ) : null}
+                </span>
+              ) : undefined
+            }
           />
 
           <Stepper

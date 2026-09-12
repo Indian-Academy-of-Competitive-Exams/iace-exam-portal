@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, Plus } from 'lucide-react';
+import { ArrowRightLeft, BarChart3, FileText, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
@@ -132,16 +132,29 @@ function testColumns(
     {
       key: 'actions',
       className: 'text-right',
-      // Unsat-only: a sat test's series is part of the record.
-      cell: (row) =>
-        canWrite && row.attemptCount === 0 ? (
-          <RowActions label={`Actions for ${row.title ?? UNTITLED}`}>
+      cell: (row) => (
+        <RowActions label={`Actions for ${row.title ?? UNTITLED}`}>
+          <DropdownMenuItem asChild>
+            <Link to={ROUTES.TEST_ANALYTICS(row.testId)}>
+              <BarChart3 aria-hidden />
+              Analytics
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link to={ROUTES.TEST_PAPER(row.testId)}>
+              <FileText aria-hidden />
+              Paper
+            </Link>
+          </DropdownMenuItem>
+          {/* Unsat-only: a sat test's series is part of the record. */}
+          {canWrite && row.attemptCount === 0 ? (
             <DropdownMenuItem onSelect={() => onMoving(row)}>
               <ArrowRightLeft aria-hidden />
               Move to another series
             </DropdownMenuItem>
-          </RowActions>
-        ) : null,
+          ) : null}
+        </RowActions>
+      ),
     },
   ];
 }
