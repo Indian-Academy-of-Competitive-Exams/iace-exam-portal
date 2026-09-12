@@ -31,7 +31,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
       this.logger.error('Relaying the scoring requests nobody handed on failed', error);
     });
     await this.rollup.relay().catch((error: unknown) => {
-      this.logger.error('Relaying the evaluations nobody counted failed', error);
+      this.logger.error('Asking for the counting pass nobody asked for failed', error);
     });
     await this.askAgainForUnscored().catch((error: unknown) => {
       this.logger.error('Asking again for the sittings nobody scored failed', error);

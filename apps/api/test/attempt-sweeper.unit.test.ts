@@ -7,7 +7,9 @@ import {
   SWEEP_BATCH,
   SWEEP_LANES,
 } from '../src/attempts/attempt-sweeper.processor';
-import { FakeTestsPrisma, makeAttempt } from './support/fakes';
+import { ROLLUP_REQUEST } from '../src/attempts/rollup-outbox';
+import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
+import { FakeQueue, FakeTestsPrisma, fakeRollupOutbox, makeAttempt } from './support/fakes';
 
 const LATE = new Date(Date.now() - 60 * 60 * 1000);
 const NO_MORE_WORK = { relay: () => Promise.resolve(0) } as never;
@@ -31,13 +33,14 @@ function build(count: number, refuse: (attemptId: string) => boolean = () => fal
       return Promise.resolve();
     },
   } as never;
+  const rollupQueue = new FakeQueue();
   const sweeper = new AttemptSweeperProcessor(
     prisma.asService(),
     submit,
     NO_MORE_WORK,
-    NO_MORE_WORK,
+    fakeRollupOutbox(rollupQueue),
   );
-  return { prisma, asked, sweeper };
+  return { prisma, asked, sweeper, rollupQueue };
 }
 
 describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => {
@@ -86,5 +89,32 @@ describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => 
     await sweeper.process();
 
     assert.equal(asked.length, SWEEP_BATCH, 'a second read of the same rows is the loop');
+  });
+});
+
+describe('AttemptSweeperProcessor — backstop for a died counting pass', () => {
+  /** A pass that died leaves its rows pending, and the sweep is what asks for another one. */
+  it('asks for another counting pass while a row is still pending', async () => {
+    const { prisma, sweeper, rollupQueue } = build(0);
+    prisma.outboxEvents.push({
+      id: 'obx_1',
+      aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
+      aggregateId: 'a1',
+      eventType: ROLLUP_REQUEST.EVENT_TYPE,
+      payload: { testId: 'test_1' },
+      createdAt: new Date(1),
+      processedAt: null,
+    });
+
+    await sweeper.process();
+
+    const job = rollupQueue.jobs.find((queued) => queued.name === ROLLUP_JOBS.FOLD_PENDING);
+    assert.ok(job, 'the sweep asks for a fold pass');
+    assert.equal(job?.jobId, FOLD_PENDING_JOB_ID);
+    assert.equal(
+      prisma.outboxEvents.find((row) => row.id === 'obx_1')?.processedAt,
+      null,
+      'asking for the pass is not the same as counting the row',
+    );
   });
 });
