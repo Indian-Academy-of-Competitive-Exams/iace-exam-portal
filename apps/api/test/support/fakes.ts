@@ -6114,6 +6114,9 @@ const fields = (row: object): Record<string, unknown> => row as Record<string, u
 class FakeStatTable<Row extends object> {
   readonly rows: Row[] = [];
 
+  /** Set to make the next upsert throw: the crash between claiming a page and counting it. */
+  failNextUpsert = false;
+
   constructor(
     private readonly key: readonly string[],
     private readonly blank: Record<string, unknown>,
@@ -6156,6 +6159,10 @@ class FakeStatTable<Row extends object> {
     create: Record<string, unknown>;
     update: Record<string, unknown>;
   }) => {
+    if (this.failNextUpsert) {
+      this.failNextUpsert = false;
+      return Promise.reject(new Error('stat table unavailable'));
+    }
     const held = this.held(where);
     if (held === undefined) return Promise.resolve(this.inserted(create));
     applyWrite(fields(held), update);
@@ -6302,6 +6309,18 @@ export class FakeRollupPrisma {
       row.processedAt = data.processedAt;
       return Promise.resolve(row);
     },
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: { in: string[] } };
+      data: { processedAt: Date };
+    }) => {
+      const marked = this.outboxEvents.filter((row) => where.id.in.includes(row.id));
+      for (const row of marked) row.processedAt = data.processedAt;
+      return Promise.resolve({ count: marked.length });
+    },
   };
 
   /** The guard. `createMany` without `skipDuplicates` is how a redelivered fold is refused. */
@@ -6326,10 +6345,14 @@ export class FakeRollupPrisma {
       return Promise.resolve({ count: fresh.length });
     },
 
-    findMany: ({ where = {} }: { where?: { rollupType?: string } } = {}) =>
+    findMany: ({
+      where = {},
+    }: { where?: { rollupType?: string; attemptId?: { in: string[] } } } = {}) =>
       Promise.resolve(
         this.processedRollups.filter(
-          (row) => where.rollupType === undefined || row.rollupType === where.rollupType,
+          (row) =>
+            (where.rollupType === undefined || row.rollupType === where.rollupType) &&
+            (where.attemptId === undefined || where.attemptId.in.includes(row.attemptId)),
         ),
       ),
 

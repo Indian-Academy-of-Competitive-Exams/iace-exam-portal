@@ -8,10 +8,13 @@ import { Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
+import { RELAY_BATCH } from '../queue/queues';
 import { cohortShapeOf } from './performance-analytics';
+import { ROLLUP_REQUEST } from './rollup-outbox';
 import { sectionScoresIn } from './score-paper';
 import {
   COHORT_ROLLUP_TYPES,
+  ROLLUP_TYPE,
   STUDENT_ROLLUP_TYPES,
   addToCohortTotals,
   addToStudentTotals,
@@ -86,6 +89,98 @@ export class RollupService {
     if (attempt.isGraded && (await this.isFirstSitting(attempt))) {
       await this.foldCohort(attempt);
     }
+  }
+
+  /** One pass: claim a page of counting requests, fold them, and mark them only once counted. */
+  async foldPending(): Promise<number> {
+    const rows = await this.prisma.outboxEvent.findMany({
+      where: { eventType: ROLLUP_REQUEST.EVENT_TYPE, processedAt: null },
+      orderBy: { createdAt: 'asc' },
+      take: RELAY_BATCH,
+      select: { id: true, aggregateId: true },
+    });
+    if (rows.length === 0) return 0;
+
+    const attempts: FoldableAttempt[] = [];
+    for (const row of rows) {
+      const attempt = await this.foldable(row.aggregateId);
+      if (attempt !== null) attempts.push(attempt);
+    }
+    // Marked all the same below: a request for a sitting nobody evaluated must not jam the page.
+    if (attempts.length < rows.length) {
+      this.logger.warn(
+        `${rows.length - attempts.length} of ${rows.length} folds are not evaluated`,
+      );
+    }
+
+    for (const attempt of attempts) await this.foldStudent(attempt);
+    await this.foldCohorts(attempts);
+
+    await this.prisma.outboxEvent.updateMany({
+      where: { id: { in: rows.map((row) => row.id) } },
+      data: { processedAt: new Date() },
+    });
+    return rows.length;
+  }
+
+  /** The cohort's side of a page: one transaction per test, whatever the page's sittings sat. */
+  private async foldCohorts(attempts: readonly FoldableAttempt[]): Promise<void> {
+    const byTest = new Map<string, FoldableAttempt[]>();
+    for (const attempt of attempts) {
+      if (!attempt.isGraded || !(await this.isFirstSitting(attempt))) continue;
+      const sittings = byTest.get(attempt.testId) ?? [];
+      sittings.push(attempt);
+      byTest.set(attempt.testId, sittings);
+    }
+    for (const [testId, sittings] of byTest) await this.foldCohortBatch(testId, sittings);
+  }
+
+  /** Every fresh sitting as ONE delta, so a 5K cohort takes the test's row lock once, not 5K times. */
+  private async foldCohortBatch(
+    testId: string,
+    sittings: readonly FoldableAttempt[],
+  ): Promise<void> {
+    await this.prisma.$transaction(
+      async (tx) => {
+        const now = new Date();
+        // A REAL update first: an empty one is Prisma's findOrCreate and takes no row lock to hold.
+        await tx.testStat.upsert({
+          where: { testId },
+          create: { testId, computedAt: now },
+          update: { computedAt: now },
+        });
+
+        const fresh = await this.uncounted(tx, sittings);
+        if (fresh.length === 0) return;
+
+        const totals = emptyCohortTotals();
+        for (const attempt of fresh) addToCohortTotals(totals, attempt);
+        await tx.processedRollup.createMany({
+          data: fresh.flatMap((attempt) =>
+            COHORT_ROLLUP_TYPES.map((rollupType) => ({ attemptId: attempt.id, rollupType })),
+          ),
+          skipDuplicates: true,
+        });
+        await this.writeCohortDelta(tx, testId, totals, now);
+      },
+      { timeout: FOLD_TIMEOUT_MS },
+    );
+  }
+
+  /** The cohort's three guard rows are written and dropped together, so the test's one answers for all. */
+  private async uncounted(
+    tx: Prisma.TransactionClient,
+    sittings: readonly FoldableAttempt[],
+  ): Promise<FoldableAttempt[]> {
+    const held = await tx.processedRollup.findMany({
+      where: {
+        rollupType: ROLLUP_TYPE.TEST,
+        attemptId: { in: sittings.map((attempt) => attempt.id) },
+      },
+      select: { attemptId: true },
+    });
+    const counted = new Set(held.map((row) => row.attemptId));
+    return sittings.filter((attempt) => !counted.has(attempt.id));
   }
 
   /** A drop or a bonus moved marks already counted: the test's curve and every sitter go again. */

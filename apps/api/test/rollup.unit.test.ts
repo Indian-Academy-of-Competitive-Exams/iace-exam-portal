@@ -102,6 +102,11 @@ function withoutStamps<T extends { computedAt: Date | null }>(rows: readonly T[]
   return rows.map(({ computedAt: _computedAt, ...row }) => ({ ...row, computedThrough: null }));
 }
 
+/** The relay stamps a request as it queues the job; a batched pass claims what is still pending. */
+function unstamped(built: World): void {
+  for (const row of built.prisma.outboxEvents) row.processedAt = null;
+}
+
 describe('RollupService — folding one sitting in', () => {
   it('counts a sitting once however many times its job is delivered', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, WRONG, null, RIGHT]));
@@ -167,6 +172,87 @@ describe('RollupService — folding one sitting in', () => {
         ['sub_maths', 1, 1, 0],
       ],
     );
+  });
+});
+
+describe('RollupService — folding a pending batch', () => {
+  it('lands on the same aggregates a rebuild would compute', async () => {
+    const built = world(
+      [sitting('att_1', { studentId: 'stu_1' }), sitting('att_2', { studentId: 'stu_2' })],
+      [
+        ...paper('att_1', [RIGHT, RIGHT, WRONG, null]),
+        ...paper('att_2', [RIGHT, WRONG, WRONG, null]),
+      ],
+    );
+    await built.scoring.score('att_1');
+    await built.scoring.score('att_2');
+    unstamped(built);
+
+    const counted = await built.rollup.foldPending();
+    const batched = withoutStamps(structuredClone(built.prisma.testStat.rows));
+    const sections = withoutStamps(structuredClone(built.prisma.testSectionStat.rows));
+    const questions = withoutStamps(structuredClone(built.prisma.testQuestionStat.rows));
+
+    await built.rollup.rebuildTest('tst_1');
+
+    assert.equal(counted, 2);
+    assert.deepEqual(withoutStamps(built.prisma.testStat.rows), batched);
+    assert.deepEqual(withoutStamps(built.prisma.testSectionStat.rows), sections);
+    assert.deepEqual(withoutStamps(built.prisma.testQuestionStat.rows), questions);
+  });
+
+  it('counts a sitting once when the same page is folded twice', async () => {
+    const built = world([sitting('att_1')], paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]));
+    await built.scoring.score('att_1');
+    unstamped(built);
+
+    await built.rollup.foldPending();
+    const once = withoutStamps(structuredClone(built.prisma.testStat.rows));
+    unstamped(built);
+    await built.rollup.foldPending();
+
+    assert.deepEqual(withoutStamps(built.prisma.testStat.rows), once);
+    assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
+    assert.equal(built.prisma.processedRollups.length, 5);
+  });
+
+  it('folds a retake in the page into the student and never into the cohort', async () => {
+    const built = world(
+      [sitting('att_1'), sitting('att_2', { attemptNo: 2, isGraded: false })],
+      [
+        ...paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]),
+        ...paper('att_2', [RIGHT, WRONG, null, null]),
+      ],
+    );
+    await built.scoring.score('att_1');
+    await built.scoring.score('att_2');
+    unstamped(built);
+
+    assert.equal(await built.rollup.foldPending(), 2);
+
+    assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 1);
+    assert.equal(built.prisma.testStat.rows[0]?.sumScore, 8);
+    assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 2);
+    assert.equal(built.prisma.studentStat.rows[0]?.retakeCount, 1);
+  });
+
+  /** The hole this closes: a row marked when the job was QUEUED left a sitting nobody ever counted. */
+  it('leaves the outbox row pending when the fold throws, and counts it on the next pass', async () => {
+    const built = world([sitting('att_1')], paper('att_1', [RIGHT, null, null, null]));
+    await built.scoring.score('att_1');
+    unstamped(built);
+    built.prisma.testStat.failNextUpsert = true;
+
+    await assert.rejects(() => built.rollup.foldPending());
+
+    assert.equal(built.prisma.outboxEvents[0]?.processedAt, null);
+    assert.equal(built.prisma.testStat.rows.length, 0);
+
+    assert.equal(await built.rollup.foldPending(), 1);
+
+    assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 1);
+    assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
+    assert.notEqual(built.prisma.outboxEvents[0]?.processedAt, null);
   });
 });
 
