@@ -34,7 +34,6 @@ import {
   cohortShapeOf,
   compositionOf,
   curveBandsOf,
-  difficultyStandingOf,
   flagYours,
   sectionalStandingOf,
   type CohortShape,
@@ -132,9 +131,8 @@ export class PerformanceAnalyticsService {
     const rows = anchor === null ? [] : toReported(anchor);
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
-    const [testStats, pValues, sectionCohort, topper, standings, series] = await Promise.all([
+    const [testStats, sectionCohort, topper, standings, series] = await Promise.all([
       this.testStats(testIds),
-      this.pValues(anchor === null ? [] : [anchor.testId]),
       this.sectionCohort(anchor),
       anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
       this.leaderboard.standingsOfStudent(studentId),
@@ -155,7 +153,6 @@ export class PerformanceAnalyticsService {
       cohort: await this.curveOf(query, anchor, standing, testStats),
       composition: compositionOf(rows),
       sections: sectionalStandingOf(sectionsOf(anchor), sectionCohort, topper.bySection),
-      difficulty: difficultyStandingOf(rows, pValues),
       time: timeUseOf(rows),
       paceIndex: paceOf(rows, anchor === null ? null : (testStats.get(anchor.testId) ?? null)),
     };
@@ -217,16 +214,6 @@ export class PerformanceAnalyticsService {
       },
     });
     return new Map(rows.map((row) => [row.testId, row]));
-  }
-
-  /** Item analysis for every paper in scope, keyed by the PAPER question the student was served. */
-  private async pValues(testIds: readonly string[]): Promise<Map<string, number>> {
-    if (testIds.length === 0) return new Map();
-    const rows = await this.prisma.testQuestionStat.findMany({
-      where: { testId: { in: [...testIds] }, pValue: { not: null } },
-      select: { paperQuestionId: true, pValue: true },
-    });
-    return new Map(rows.map((row) => [row.paperQuestionId, Number(row.pValue)]));
   }
 
   private async sectionCohort(anchor: ReportRow | null): Promise<Map<string, SectionCohort>> {

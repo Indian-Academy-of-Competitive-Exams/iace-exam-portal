@@ -1,37 +1,15 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen, within } from '@testing-library/react';
-import {
-  type CohortCurve,
-  type DifficultyStanding,
-  type PercentilePoint,
-  type SectionalStanding,
-} from '@iace/contracts';
+import { type CohortCurve, type PercentilePoint, type SectionalStanding } from '@iace/contracts';
 import {
   CohortFigure,
-  DifficultyFigure,
   SectionsFigure,
   TimeFigure,
   TrajectoryFigure,
 } from '../browser/performance-figures';
 
 afterEach(cleanup);
-
-const band = (over: Partial<DifficultyStanding>): DifficultyStanding => ({
-  key: 'LOW',
-  name: 'LOW',
-  total: 10,
-  attempted: 10,
-  correct: 8,
-  wrong: 2,
-  unattempted: 0,
-  accuracy: 80,
-  marks: 8,
-  timeSpentSec: 300,
-  cohortPValue: null,
-  cohortQuestionCount: 0,
-  ...over,
-});
 
 const point = (over: Partial<PercentilePoint>): PercentilePoint => ({
   attemptId: 'a1',
@@ -57,42 +35,6 @@ const curve = (over: Partial<CohortCurve>): CohortCurve => ({
     { from: 25, to: 50, count: 3, isYours: true },
   ],
   ...over,
-});
-
-describe('DifficultyFigure', () => {
-  /** The failure this prevents: a band nobody touched drawn as a 0% they scored. */
-  it('reads a band with nothing attempted as unmeasured, never as zero', () => {
-    const { container } = render(
-      <DifficultyFigure
-        difficulty={[
-          band({ key: 'LOW', name: 'LOW', accuracy: 80 }),
-          band({
-            key: 'HIGH',
-            name: 'HIGH',
-            accuracy: null,
-            attempted: 0,
-            correct: 0,
-            wrong: 0,
-            unattempted: 6,
-            total: 6,
-          }),
-        ]}
-      />,
-    );
-
-    const view = within(container);
-    assert.ok(view.getByText('—'));
-    assert.equal(view.queryAllByText('0%').length, 0);
-    assert.ok(view.getByText('80%'));
-  });
-
-  it('names a band by the level it carries', () => {
-    const { container } = render(
-      <DifficultyFigure difficulty={[band({ key: 'MEDIUM', name: 'MEDIUM' })]} />,
-    );
-
-    assert.ok(within(container).getByText('Medium'));
-  });
 });
 
 describe('CohortFigure', () => {

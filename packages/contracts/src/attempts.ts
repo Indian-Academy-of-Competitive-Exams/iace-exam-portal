@@ -584,7 +584,6 @@ export const attemptAnalyticsSchema = z.object({
   overall: analyticsBucketSchema,
   sections: z.array(analyticsBucketSchema),
   subjects: z.array(analyticsBucketSchema),
-  difficulty: z.array(analyticsBucketSchema),
   time: timeUseSchema,
   strategy: attemptStrategySchema,
   cohort: cohortStandingSchema,

@@ -268,6 +268,14 @@ presentation.
 `Question` is the identity and `QuestionVersion` is the content. The split is what lets a paper or a
 sitting pin exactly what it served while the bank carries on moving underneath.
 
+**`Question.difficulty` is a BANK tag, for drawing a paper and nothing else.** It is a setter's
+judgement against one exam's standard, and that standard differs per exam — a question that is LOW
+for SSC CGL can be MEDIUM for SI/PC, and no mapping between them exists or is going to. So it fills
+a section's difficulty mix and it is read on the authoring screens; it is never shown to a student
+and nothing is banded, averaged or ranked by it. Where a screen wants to say how hard a question
+was, it says what share of the field got it right, which is measured inside that paper's own cohort
+and needs no mapping at all.
+
 - **A save that changes nothing writes no version.** Content, options and answer key are
   fingerprinted together, and a save matching the fingerprint keeps the version already current.
 - **A draft is rewritten in place, and everything else is appended.** While a question is a DRAFT

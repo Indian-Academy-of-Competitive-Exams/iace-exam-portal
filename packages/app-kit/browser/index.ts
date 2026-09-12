@@ -46,7 +46,6 @@ export { mountApp } from './mount-app';
 export { PageCrumbs } from './page-crumbs';
 export {
   CohortFigure,
-  DifficultyFigure,
   MarksFigure,
   type Benchmark,
   SectionsFigure,

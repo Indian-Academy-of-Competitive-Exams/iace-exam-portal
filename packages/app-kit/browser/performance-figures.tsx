@@ -1,7 +1,6 @@
 import {
   ChartFigure,
   EmptyState,
-  ColumnPlot,
   CompositionBar,
   DistributionPlot,
   DivergingBars,
@@ -13,13 +12,9 @@ import {
   type DistributionMarker,
   type DivergingItem,
   type LinePoint,
-  type PlotColumn,
 } from '@iace/ui';
 import {
-  DIFFICULTY_LABELS,
   type CohortCurve,
-  type DifficultyLevel,
-  type DifficultyStanding,
   type MarkComposition,
   type PaperCounts,
   type PercentilePoint,
@@ -33,10 +28,6 @@ const UNMEASURED = '—';
 const SECONDS_PER_MINUTE = 60;
 
 const PLOT_HEIGHT = 280;
-const COLUMN_HEIGHT = 320;
-
-/** A band the wire named but no level covers keeps its own name rather than reading as unknown. */
-const difficultyLabel = (name: string) => DIFFICULTY_LABELS[name as DifficultyLevel] ?? name;
 
 const minutes = (seconds: number) =>
   seconds < SECONDS_PER_MINUTE
@@ -272,35 +263,6 @@ function sectionCaption(section: SectionalStanding): string {
   }
   if (section.topperTimeSec !== null) held.push(`topper ${minutes(section.topperTimeSec)}`);
   return held.join(' · ');
-}
-
-/** Accuracy per band, with the cohort's own p-value ticked across it on the same scale. */
-export function DifficultyFigure({
-  difficulty,
-}: Readonly<{ difficulty: readonly DifficultyStanding[] }>) {
-  const columns: PlotColumn[] = difficulty.map((band) => ({
-    key: band.key,
-    label: difficultyLabel(band.name),
-    value: band.accuracy,
-    display: percentLabel(band.accuracy, UNMEASURED),
-    meta: `${band.attempted} of ${band.total}`,
-    marker: band.cohortPValue === null ? null : round(band.cohortPValue * 100),
-    markerDisplay:
-      band.cohortPValue === null ? undefined : `Cohort ${round(band.cohortPValue * 100)}%`,
-  }));
-  const attempted = difficulty.reduce((sum, band) => sum + band.attempted, 0);
-  const total = difficulty.reduce((sum, band) => sum + band.total, 0);
-
-  return (
-    <ChartFigure title="Difficulty" meta={`${attempted} of ${total} attempted`}>
-      <ColumnPlot
-        columns={columns}
-        height={COLUMN_HEIGHT}
-        suffix="%"
-        aria-label="Accuracy by difficulty band, against the average"
-      />
-    </ChartFigure>
-  );
 }
 
 /** Reconstructed from the means and the counts, so the shares are of the SAME clock as the total. */

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { difficultyLevelSchema } from './questions';
 import { TEST_SCOPES, paperQuestionStatusSchema, testScopeSchema, type TestScope } from './tests';
 import { todayISO } from './students';
 import {
@@ -674,15 +673,6 @@ export const sectionalStandingSchema = scoreCardSectionSchema.extend({
 });
 export type SectionalStanding = z.infer<typeof sectionalStandingSchema>;
 
-/** A difficulty band crossed with how hard the COHORT found it — their label against the evidence. */
-export const difficultyStandingSchema = measuredBucketSchema.extend({
-  /** Mean `TestQuestionStat.pValue` over this band's questions — correct over attempted, cohort-wide. */
-  cohortPValue: z.number().nullable(),
-  /** Questions in the band the cohort has a p-value for. Zero means unmeasured, not easy. */
-  cohortQuestionCount: z.number().int(),
-});
-export type DifficultyStanding = z.infer<typeof difficultyStandingSchema>;
-
 /** A series the student has sat at least one test in — what the scope picker offers. */
 export const satSeriesSchema = z.object({
   id: z.string(),
@@ -709,7 +699,6 @@ export const performanceReportSchema = z.object({
   /** The ANCHOR sitting, like everything below it: marks summed across papers are not a paper. */
   composition: markCompositionSchema,
   sections: z.array(sectionalStandingSchema),
-  difficulty: z.array(difficultyStandingSchema),
   time: timeUseSchema,
 });
 export type PerformanceReport = z.infer<typeof performanceReportSchema>;
@@ -783,23 +772,6 @@ export function bestSitting(points: readonly PerformancePoint[]): PerformancePoi
 // ============================================================================
 
 /** How hard the cohort ACTUALLY found a question, as opposed to how hard it was authored. */
-export const SYSTEM_DIFFICULTY = { EASY: 'EASY', MEDIUM: 'MEDIUM', HARD: 'HARD' } as const;
-export const systemDifficultySchema = z.enum(SYSTEM_DIFFICULTY);
-export type SystemDifficulty = z.infer<typeof systemDifficultySchema>;
-
-/** Tuned once, here. A p-value is the fraction who got it right, so higher is easier. */
-export const SYSTEM_DIFFICULTY_EASY_FROM = 0.7;
-export const SYSTEM_DIFFICULTY_MEDIUM_FROM = 0.4;
-
-/** No p-value is not a band: nobody has attempted it, so the cohort has not said anything. */
-export function systemDifficultyOf(pValue: number | null): SystemDifficulty | null {
-  if (pValue === null) return null;
-  if (pValue >= SYSTEM_DIFFICULTY_EASY_FROM) return SYSTEM_DIFFICULTY.EASY;
-  return pValue >= SYSTEM_DIFFICULTY_MEDIUM_FROM
-    ? SYSTEM_DIFFICULTY.MEDIUM
-    : SYSTEM_DIFFICULTY.HARD;
-}
-
 /** GATED: past a p-value of one half, the option with the most votes IS the key, no inference. */
 export const optionShareSchema = z.object({
   optionId: z.string(),
@@ -827,8 +799,6 @@ export const questionReportRowSchema = z.object({
   timeSpentSec: z.number().int(),
   /** Seconds from first seeing it to answering it. Null where it was never answered, or never measured. */
   timeToRespondSec: z.number().int().nullable(),
-  /** As authored. The cohort's own verdict on the same question is `systemDifficulty`. */
-  predefinedDifficulty: difficultyLevelSchema.nullable(),
   // -------------------------------------------------------------------------
   // The cohort's, straight off the rollup. Every one of these is null until a
   // `TestQuestionStat` row exists — a dash on the screen, never a live count.
@@ -838,7 +808,6 @@ export const questionReportRowSchema = z.object({
   /** Of those who answered it, the fraction that got it right. */
   accuracy: z.number().nullable(),
   cohortAverageTimeSec: z.number().nullable(),
-  systemDifficulty: systemDifficultySchema.nullable(),
   topperTimeSec: z.number().int().nullable(),
   topperMarksAwarded: z.number().nullable(),
   // -------------------------------------------------------------------------

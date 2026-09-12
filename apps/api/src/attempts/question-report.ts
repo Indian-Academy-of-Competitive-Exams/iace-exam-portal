@@ -3,12 +3,7 @@
  * gated half is passed in already fetched or not at all: nothing here can reach a key it was not
  * handed, which is what keeps the ungated read honest.
  */
-import {
-  systemDifficultyOf,
-  type OptionShare,
-  type QuestionReportRow,
-  type QuestionOption,
-} from '@iace/contracts';
+import { type OptionShare, type QuestionReportRow, type QuestionOption } from '@iace/contracts';
 import { type TopperQuestion } from './topper';
 
 /** A `TestQuestionStat` row as the report reads it — counts only, never an option's verdict. */
@@ -37,7 +32,6 @@ export interface SatQuestion {
   negativeMarks: number;
   disposition: QuestionReportRow['disposition'];
   timeSpentSec: number;
-  predefinedDifficulty: QuestionReportRow['predefinedDifficulty'];
 }
 
 /** What the key adds, fetched only past the gate. Absent means the gate is still shut. */
@@ -59,7 +53,6 @@ export function questionReportRow(
     accuracy: cohort?.pValue ?? null,
     // Everyone SERVED it spent time on it, so the clock is divided by them and not by the answerers.
     cohortAverageTimeSec: served === 0 ? null : ratio(cohort?.sumTimeSec ?? 0, served),
-    systemDifficulty: systemDifficultyOf(cohort?.pValue ?? null),
     topperTimeSec: topper?.timeSpentSec ?? null,
     topperMarksAwarded: topper?.marksAwarded ?? null,
     optionCounts: keyed === null ? [] : sharesOf(keyed.options, cohort?.optionCounts ?? {}),

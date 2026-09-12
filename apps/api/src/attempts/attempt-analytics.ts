@@ -5,7 +5,6 @@
  */
 import {
   ANSWER_STATE,
-  DIFFICULTY_LEVELS,
   type AnalyticsBucket,
   type AnswerState,
   type AttemptStrategy,
@@ -66,17 +65,6 @@ export function bucketsBy(
     grouped.set(key, held === undefined ? [row] : [...held, row]);
   }
   return [...grouped.entries()].map(([key, held]) => bucketOf(key, nameOf(held[0]), held));
-}
-
-/** Every difficulty, including one the paper never asked — an empty band is a fact too. */
-export function byDifficulty(rows: readonly AnalysedQuestion[]): AnalyticsBucket[] {
-  return DIFFICULTY_LEVELS.map((level) =>
-    bucketOf(
-      level,
-      level,
-      rows.filter((row) => row.difficulty === level),
-    ),
-  );
 }
 
 export function timeUseOf(rows: readonly AnalysedQuestion[]): TimeUse {

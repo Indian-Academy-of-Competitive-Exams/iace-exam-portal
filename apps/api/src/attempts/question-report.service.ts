@@ -231,7 +231,6 @@ function toSat(row: ReportRow['questions'][number]): SatQuestion {
     disposition: row.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
     timeSpentSec: row.timeSpentSec,
     timeToRespondSec: secondsBetween(row.firstActionAt, row.answeredAt),
-    predefinedDifficulty: row.question.difficulty,
   };
 }
 

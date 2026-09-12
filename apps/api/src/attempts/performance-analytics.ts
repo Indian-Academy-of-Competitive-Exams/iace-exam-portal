@@ -4,20 +4,18 @@
  * nobody touched reads as null and never as a zero the student can mistake for a score.
  */
 import {
-  DIFFICULTY_LEVELS,
   PAPER_QUESTION_STATUS,
   scoreHistogramSchema,
   type AnalyticsBucket,
   type CohortBand,
   type CohortCurveBand,
-  type DifficultyStanding,
   type MarkComposition,
   type MeasuredBucket,
   type PaperQuestionStatus,
   type ScoreCardSection,
   type SectionalStanding,
 } from '@iace/contracts';
-import { bucketOf, type AnalysedQuestion } from './attempt-analytics';
+import { type AnalysedQuestion } from './attempt-analytics';
 
 /** A served question with the paper's own terms for it, which is where the leaked marks live. */
 export interface ReportedQuestion extends AnalysedQuestion {
@@ -70,41 +68,6 @@ export function compositionOf(rows: readonly ReportedQuestion[]): MarkCompositio
     penalty: round(penalty),
     net: round(earned - penalty),
   };
-}
-
-/** Their accuracy in each band against the p-value the cohort earned the label with. */
-export function difficultyStandingOf(
-  rows: readonly ReportedQuestion[],
-  pValues: ReadonlyMap<string, number>,
-): DifficultyStanding[] {
-  return DIFFICULTY_LEVELS.map((level) => {
-    const held = rows.filter((row) => row.difficulty === level);
-    const measured = measuredPValues(held, pValues);
-    return {
-      ...measure(bucketOf(level, level, held)),
-      cohortPValue:
-        measured.length === 0
-          ? null
-          : round(measured.reduce((sum, value) => sum + value, 0) / measured.length),
-      cohortQuestionCount: measured.length,
-    };
-  });
-}
-
-/** One p-value per PAPER question: three sittings of one paper is still one question measured. */
-function measuredPValues(
-  rows: readonly ReportedQuestion[],
-  pValues: ReadonlyMap<string, number>,
-): number[] {
-  const seen = new Set<string>();
-  const found: number[] = [];
-  for (const row of rows) {
-    if (row.paperQuestionId === null || seen.has(row.paperQuestionId)) continue;
-    seen.add(row.paperQuestionId);
-    const held = pValues.get(row.paperQuestionId);
-    if (held !== undefined) found.push(held);
-  }
-  return found;
 }
 
 /** The cohort's curve with this student's column flagged. Empty in, empty out — never a flat line. */

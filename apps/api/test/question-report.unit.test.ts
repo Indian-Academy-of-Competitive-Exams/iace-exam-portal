@@ -5,9 +5,7 @@ import {
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   QUESTION_TYPE,
-  SYSTEM_DIFFICULTY,
   questionReportSchema,
-  systemDifficultyOf,
 } from '@iace/contracts';
 import { QuestionReportService } from '../src/attempts/question-report.service';
 import { paceIndexOf } from '../src/attempts/question-report';
@@ -168,21 +166,6 @@ function bench(overrides: Partial<FakePerformanceData> = {}) {
   return { data, prisma, service: new QuestionReportService(prisma.asService()) };
 }
 
-describe('systemDifficultyOf', () => {
-  it('bands a question by how hard the cohort actually found it', () => {
-    assert.equal(systemDifficultyOf(0.8), SYSTEM_DIFFICULTY.EASY);
-    assert.equal(systemDifficultyOf(0.7), SYSTEM_DIFFICULTY.EASY);
-    assert.equal(systemDifficultyOf(0.5), SYSTEM_DIFFICULTY.MEDIUM);
-    assert.equal(systemDifficultyOf(0.4), SYSTEM_DIFFICULTY.MEDIUM);
-    assert.equal(systemDifficultyOf(0.2), SYSTEM_DIFFICULTY.HARD);
-  });
-
-  /** Nobody has attempted it, so the cohort has said nothing — which is not the same as hard. */
-  it('reads an unmeasured question as no band at all', () => {
-    assert.equal(systemDifficultyOf(null), null);
-  });
-});
-
 describe('paceIndexOf', () => {
   it('reads above one for slower than the field and below it for faster', () => {
     assert.equal(paceIndexOf(240, 1200, 10), 2);
@@ -208,7 +191,6 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     assert.equal(report.paceIndex, 0.84);
     const first = report.questions[0];
     assert.equal(first?.accuracy, 0.8);
-    assert.equal(first?.systemDifficulty, SYSTEM_DIFFICULTY.EASY);
     assert.equal(first?.attemptRate, 0.8);
     assert.equal(first?.cohortAverageTimeSec, 30);
   });
@@ -237,7 +219,6 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     assert.equal(tail?.accuracy, null);
     assert.equal(tail?.attemptRate, null);
     assert.equal(tail?.cohortAverageTimeSec, null);
-    assert.equal(tail?.systemDifficulty, null);
   });
 });
 

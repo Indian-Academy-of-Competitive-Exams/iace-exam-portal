@@ -32,7 +32,6 @@ import { imageUrlsIn } from './exam-images';
 import {
   bucketOf,
   bucketsBy,
-  byDifficulty,
   strategyOf,
   timeUseOf,
   type AnalysedQuestion,
@@ -275,7 +274,6 @@ export class AttemptReportService {
         (row) => row.subjectId,
         (row) => row.subjectName,
       ),
-      difficulty: byDifficulty(rows),
       time: timeUseOf(rows),
       strategy: strategyOf(rows),
       cohort: {

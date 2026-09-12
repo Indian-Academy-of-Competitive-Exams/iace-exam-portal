@@ -26,7 +26,6 @@ import {
   cohortShapeOf,
   compositionOf,
   curveBandsOf,
-  difficultyStandingOf,
   measure,
   sectionalStandingOf,
   type ReportedQuestion,
@@ -145,51 +144,6 @@ describe('compositionOf', () => {
 });
 
 // --------------------------------------------------------------------------- difficulty vs cohort
-// ---------------------------------------------------------------------------
-
-describe('difficultyStandingOf', () => {
-  it('carries the cohort p-value with the number of questions it is a mean of', () => {
-    const bands = difficultyStandingOf(
-      [
-        asked({ difficulty: DIFFICULTY_LEVEL.HIGH, paperQuestionId: 'pq_1' }),
-        asked({ difficulty: DIFFICULTY_LEVEL.HIGH, paperQuestionId: 'pq_2', isCorrect: false }),
-      ],
-      new Map([
-        ['pq_1', 0.2],
-        ['pq_2', 0.4],
-      ]),
-    );
-    const high = bands.find((band) => band.key === DIFFICULTY_LEVEL.HIGH);
-
-    assert.equal(high?.cohortPValue, 0.3);
-    assert.equal(high?.cohortQuestionCount, 2);
-    assert.equal(high?.accuracy, 50);
-  });
-
-  /** An unmeasured band must not read as a band the cohort found impossible. */
-  it('reports no p-value, and no questions behind it, where the cohort has not been rolled up', () => {
-    const bands = difficultyStandingOf([asked({ difficulty: DIFFICULTY_LEVEL.LOW })], new Map());
-    const low = bands.find((band) => band.key === DIFFICULTY_LEVEL.LOW);
-    const untouched = bands.find((band) => band.key === DIFFICULTY_LEVEL.HIGH);
-
-    assert.equal(low?.cohortPValue, null);
-    assert.equal(low?.cohortQuestionCount, 0);
-    assert.equal(untouched?.accuracy, null);
-  });
-
-  it('counts one paper question once however many times the student sat the paper', () => {
-    const twice = [asked({ paperQuestionId: 'pq_1' }), asked({ paperQuestionId: 'pq_1' })];
-
-    const bands = difficultyStandingOf(twice, new Map([['pq_1', 0.5]]));
-
-    assert.equal(
-      bands.find((band) => band.key === DIFFICULTY_LEVEL.MEDIUM)?.cohortQuestionCount,
-      1,
-    );
-  });
-});
-
-// --------------------------------------------------------------------------- the cohort's curve
 // ---------------------------------------------------------------------------
 
 describe('curveBandsOf', () => {
@@ -931,9 +885,7 @@ describe('the performance report — the series a student may ask about', () => 
 
 /** Every key the report may carry, at any depth. Adding one here is a review, never a side effect. */
 const REPORT_FIELDS = [
-  'accuracy',
   'attemptId',
-  'attempted',
   'attemptsCounted',
   'averageScore',
   'avgOnCorrectSec',
@@ -944,24 +896,18 @@ const REPORT_FIELDS = [
   'cohort',
   'cohortAverageScore',
   'cohortAverageTimeSec',
-  'cohortPValue',
-  'cohortQuestionCount',
   'cohortSampleSize',
   'cohortSize',
   'composition',
-  'correct',
   'correctCount',
   'count',
-  'difficulty',
   'earned',
   'from',
   'generatedAt',
   'isYours',
-  'key',
   'label',
   'lostToUnanswered',
   'lostToWrong',
-  'marks',
   'maxMarks',
   'name',
   'net',
@@ -985,12 +931,9 @@ const REPORT_FIELDS = [
   'to',
   'topperScore',
   'topperTimeSec',
-  'total',
   'totalSec',
   'trajectory',
-  'unattempted',
   'unattemptedCount',
-  'wrong',
   'wrongCount',
 ];
 

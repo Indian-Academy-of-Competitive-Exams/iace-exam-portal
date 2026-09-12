@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import type { ReactElement } from 'react';
 import { afterEach, describe, it } from 'node:test';
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
-import { ColumnPlot } from '../src/components/charts/column-plot';
 import { ComparisonCards } from '../src/components/charts/comparison-cards';
 import { CompositionBar } from '../src/components/charts/composition-bar';
 import { DistributionPlot } from '../src/components/charts/distribution-plot';
@@ -245,38 +244,6 @@ describe('DivergingBars', () => {
 
     assert.ok(said.includes('Quant'));
     assert.ok(said.includes('cohort 38'));
-  });
-});
-
-describe('ColumnPlot', () => {
-  const LABEL = 'Accuracy by difficulty';
-  const COLUMNS = [
-    { key: 'easy', label: 'Easy', value: 92, meta: 'n=34' },
-    { key: 'hard', label: 'Hard', value: null, meta: 'n=0' },
-  ];
-
-  /** Series 3–5 sit under 3:1 on the light surface, so a value is never colour-only. */
-  it('writes every value on its cap', () => {
-    const view = mount(<ColumnPlot columns={COLUMNS} suffix="%" aria-label={LABEL} />);
-
-    assert.ok(view.getByText('92%'));
-    assert.ok(view.getByText('n=34'));
-  });
-
-  it('reads nothing attempted as a dash rather than nought percent', () => {
-    const view = mount(<ColumnPlot columns={COLUMNS} suffix="%" aria-label={LABEL} />);
-
-    assert.ok(view.getByText('—'));
-    assert.equal(view.queryAllByText('0%').length, 0);
-  });
-
-  it('answers a hover with the value and the n behind it', async () => {
-    const view = mount(<ColumnPlot columns={COLUMNS} suffix="%" aria-label={LABEL} />);
-
-    const said = await view.hover(LABEL, { x: 224, y: 160 });
-
-    assert.ok(said.includes('92%'));
-    assert.ok(said.includes('n=34'));
   });
 });
 

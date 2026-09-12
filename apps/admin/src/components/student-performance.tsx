@@ -15,7 +15,6 @@ import {
 } from '@iace/contracts';
 import {
   CohortFigure,
-  DifficultyFigure,
   MarksFigure,
   SectionsFigure,
   TimeFigure,
@@ -216,7 +215,6 @@ function Figures({
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         {report.sections.length > 0 ? <SectionsFigure sections={report.sections} /> : null}
-        <DifficultyFigure difficulty={report.difficulty} />
       </div>
 
       <TimeFigure time={report.time} counts={counts} />

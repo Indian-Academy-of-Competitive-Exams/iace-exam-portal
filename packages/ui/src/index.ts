@@ -215,7 +215,6 @@ export {
   type DivergingBarsProps,
   type DivergingItem,
 } from './components/charts/diverging-bars';
-export { ColumnPlot, type ColumnPlotProps, type PlotColumn } from './components/charts/column-plot';
 export { DonutPlot, type DonutPlotProps } from './components/charts/donut-plot';
 export {
   QuadrantPlot,

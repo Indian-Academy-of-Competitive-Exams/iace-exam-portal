@@ -3,10 +3,8 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ITEM_SIGNALS,
-  SYSTEM_DIFFICULTY,
   distractorThatWon,
   percentLabel,
-  systemDifficultyOf,
   worthInspecting,
   type ItemSignal,
   type TestAnalytics,
@@ -45,13 +43,6 @@ const DASH = '—';
 const UNTITLED = 'Untitled test';
 const PLOT_HEIGHT = 260;
 const PERCENT = 100;
-
-/** The cohort's verdict on an item, on the same three bands the student report reads. */
-const DIFFICULTY_TONES = {
-  [SYSTEM_DIFFICULTY.EASY]: 'success',
-  [SYSTEM_DIFFICULTY.MEDIUM]: 'warning',
-  [SYSTEM_DIFFICULTY.HARD]: 'danger',
-} as const;
 
 const ITEM_SIGNAL_LABELS = {
   [ITEM_SIGNALS.LOW_ACCURACY]: 'Below chance',
@@ -262,14 +253,9 @@ function itemColumns(items: readonly TestItemAnalytics[]): DataTableColumn<TestI
     },
     {
       key: 'accuracy',
-      header: 'Accuracy',
+      header: 'Got it right',
       numeric: true,
       cell: (item) => percentLabel(asPercent(item.pValue), DASH),
-    },
-    {
-      key: 'difficulty',
-      header: 'Actual difficulty',
-      cell: (item) => <DifficultyBadge item={item} />,
     },
   ];
 
@@ -289,12 +275,6 @@ function itemColumns(items: readonly TestItemAnalytics[]): DataTableColumn<TestI
       worthInspecting(item) ? <Badge variant="danger">{item.signals.length} signals</Badge> : null,
   });
   return columns;
-}
-
-function DifficultyBadge({ item }: Readonly<{ item: TestItemAnalytics }>) {
-  const band = systemDifficultyOf(item.pValue);
-  if (band === null) return <>{DASH}</>;
-  return <Badge variant={DIFFICULTY_TONES[band]}>{band}</Badge>;
 }
 
 /** How the cohort split across the options, and what the item tripped. */

@@ -4,7 +4,6 @@ import { ANSWER_STATE, ATTEMPT_STATUS, DIFFICULTY_LEVEL } from '@iace/contracts'
 import {
   bucketOf,
   bucketsBy,
-  byDifficulty,
   strategyOf,
   timeUseOf,
   type AnalysedQuestion,
@@ -100,22 +99,6 @@ describe('bucketsBy', () => {
       [
         ['Quant', 2, 50],
         ['Reasoning', 1, 100],
-      ],
-    );
-  });
-});
-
-describe('byDifficulty', () => {
-  /** A band the paper never asked is a fact about the paper, so it is reported as empty. */
-  it('reports every band, including one the paper never asked', () => {
-    const buckets = byDifficulty([asked({ difficulty: DIFFICULTY_LEVEL.LOW })]);
-
-    assert.deepEqual(
-      buckets.map((bucket) => [bucket.key, bucket.total]),
-      [
-        [DIFFICULTY_LEVEL.LOW, 1],
-        [DIFFICULTY_LEVEL.MEDIUM, 0],
-        [DIFFICULTY_LEVEL.HIGH, 0],
       ],
     );
   });
@@ -278,7 +261,6 @@ describe('the analytics one sitting can be asked for', () => {
         ['Quant', 1],
       ],
     );
-    assert.equal(report.difficulty.find((band) => band.key === DIFFICULTY_LEVEL.HIGH)?.correct, 1);
     assert.equal(report.strategy.answeredAndMarked, 1);
     assert.equal(report.sections[0]?.name, 'Section A');
   });

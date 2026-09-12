@@ -16,7 +16,6 @@ import {
 } from '@iace/ui';
 import {
   QUESTION_FILTERS,
-  SYSTEM_DIFFICULTY,
   distractorThatWon,
   percentLabel,
   questionReportInsights,
@@ -42,13 +41,6 @@ const STATUS_FILTER: ListFilter = {
     { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
     { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
   ],
-};
-
-/** The cohort found it easy, average or hard — their verdict, not the author's. */
-const SYSTEM_TONES: Record<string, 'success' | 'warning' | 'danger'> = {
-  [SYSTEM_DIFFICULTY.EASY]: 'success',
-  [SYSTEM_DIFFICULTY.MEDIUM]: 'warning',
-  [SYSTEM_DIFFICULTY.HARD]: 'danger',
 };
 
 /** What the paper said about them, which the score card shows the moment it is marked. */
@@ -221,7 +213,7 @@ function columnsFor(): DataTableColumn<QuestionReportRow>[] {
     },
     {
       key: 'accuracy',
-      header: 'Accuracy',
+      header: 'Got it right',
       numeric: true,
       cell: (row) => percentLabel(asPercent(row.accuracy), DASH),
     },
@@ -236,17 +228,6 @@ function columnsFor(): DataTableColumn<QuestionReportRow>[] {
       header: 'Topper time',
       numeric: true,
       cell: (row) => seconds(row.topperTimeSec),
-    },
-    { key: 'authored', header: 'Difficulty', cell: (row) => row.predefinedDifficulty ?? DASH },
-    {
-      key: 'system',
-      header: 'Actual difficulty',
-      cell: (row) =>
-        row.systemDifficulty === null ? (
-          DASH
-        ) : (
-          <Badge variant={SYSTEM_TONES[row.systemDifficulty]}>{row.systemDifficulty}</Badge>
-        ),
     },
   ];
 
