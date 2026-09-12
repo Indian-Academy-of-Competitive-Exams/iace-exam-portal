@@ -193,6 +193,31 @@ describe('DivergingBars', () => {
     assert.ok(view.getByText('Above the cohort'));
   });
 
+  /** The failure this prevents: every bar rounded on its right, so both directions read rightward. */
+  it('rounds each bar at its own tip, so the two directions mirror', () => {
+    const view = mount(
+      <DivergingBars
+        items={[
+          { key: 'up', label: 'English', value: 93 },
+          { key: 'down', label: 'Quant', value: -82 },
+        ]}
+        aria-label={LABEL}
+      />,
+    );
+
+    const drawn = [...(view.svg()?.querySelectorAll('path') ?? [])]
+      .map((path) => path.getAttribute('d') ?? '')
+      .filter((d) => d.includes('A'));
+    const startOf = (d: string) => Number(/^M\s?(-?[\d.]+)/.exec(d)?.[1] ?? NaN);
+
+    assert.equal(drawn.length, 2);
+    // The right-going bar starts where it leaves the middle; the left-going one starts at its tip.
+    assert.ok(
+      startOf(drawn[1] ?? '') < startOf(drawn[0] ?? ''),
+      'the bar below the middle begins left of the middle, not on it',
+    );
+  });
+
   /** The failure this prevents: the longest bar's reading printed on top of the name beside it. */
   it('keeps the furthest bar\u2019s reading clear of the names', () => {
     const view = mount(

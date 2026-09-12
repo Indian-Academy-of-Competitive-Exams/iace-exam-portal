@@ -148,12 +148,14 @@ function DivergingBar({ x, y, width, height, payload, below, above }: Readonly<D
   if (x == null || y == null || width == null || height == null) return null;
   const item = payload as DivergingItem | undefined;
   const under = item !== undefined && isBelow(item);
+  // A left-going bar arrives with a NEGATIVE width, and Recharts flips the box without the radius.
+  const left = width < 0 ? x + width : x;
 
   return (
     <Rectangle
-      x={x}
+      x={left}
       y={y}
-      width={width}
+      width={Math.abs(width)}
       height={height}
       fill={under ? below : above}
       radius={under ? [BAR_RADIUS, 0, 0, BAR_RADIUS] : [0, BAR_RADIUS, BAR_RADIUS, 0]}
