@@ -103,7 +103,7 @@ function testColumns(
     {
       key: 'title',
       header: 'Test',
-      className: 'w-full max-w-0 font-medium',
+      className: 'max-w-[18rem] font-medium',
       cell: (row) => (
         <Link to={ROUTES.TEST(row.testId)} className={linkVariants()}>
           <TruncatedText>{row.title ?? UNTITLED}</TruncatedText>
