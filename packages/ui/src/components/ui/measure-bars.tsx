@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { cn } from '../../lib/utils';
 import { TruncatedText } from './truncated-text';
 
@@ -36,15 +37,18 @@ export function MeasureBars({ bars, max, className }: Readonly<MeasureBarsProps>
   const measured = bars.some((bar) => bar.meta !== undefined);
 
   return (
-    <div className={cn('flex flex-col gap-2', className)}>
+    // One grid for every row, not one each: the readings line up and a narrow card cuts the name.
+    <div
+      className={cn(
+        'grid items-center gap-x-3 gap-y-2 text-sm',
+        measured
+          ? 'grid-cols-[minmax(0,11rem)_minmax(1.5rem,1fr)_auto_auto]'
+          : 'grid-cols-[minmax(0,11rem)_minmax(1.5rem,1fr)_auto]',
+        className,
+      )}
+    >
       {bars.map((bar) => (
-        <div
-          key={bar.key}
-          className={cn(
-            'grid items-center gap-3 text-sm',
-            measured ? 'grid-cols-[11rem_1fr_4rem_4.5rem]' : 'grid-cols-[11rem_1fr_4rem]',
-          )}
-        >
+        <Fragment key={bar.key}>
           <TruncatedText className="text-muted-foreground">{bar.label}</TruncatedText>
           <span className="h-2 rounded-full bg-muted">
             <span
@@ -69,7 +73,7 @@ export function MeasureBars({ bars, max, className }: Readonly<MeasureBarsProps>
               {bar.meta}
             </span>
           ) : null}
-        </div>
+        </Fragment>
       ))}
     </div>
   );

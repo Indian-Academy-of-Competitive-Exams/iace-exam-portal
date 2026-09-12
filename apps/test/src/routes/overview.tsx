@@ -188,7 +188,7 @@ function Body({
         ))}
       </TileGrid>
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <WeakestSubjectsFigure {...view} className="lg:col-span-2" />
         <ScoreTrendFigure points={sittings} className="lg:col-span-2" />
         <DispositionFigure

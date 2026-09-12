@@ -207,14 +207,14 @@ function Figures({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <TrajectoryFigure trajectory={report.trajectory} />
         <Standing cohort={report.cohort} onOneSitting={onOneSitting} />
       </div>
 
       <MarksFigure composition={report.composition} counts={counts} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {report.sections.length > 0 ? <SectionsFigure sections={report.sections} /> : null}
         <DifficultyFigure difficulty={report.difficulty} />
       </div>
@@ -248,7 +248,7 @@ function Standing({
 
 function FiguresSkeleton() {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <Skeleton variant="kpi" className="h-56" />
       <Skeleton variant="kpi" className="h-56" />
     </div>
