@@ -187,7 +187,7 @@ function platform() {
     analytics,
     scoring: new ScoringProcessor(
       scoringPrisma.asService(),
-      fakeRollupOutbox(scoringPrisma, new FakeQueue()),
+      fakeRollupOutbox(new FakeQueue()),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
     ),

@@ -99,7 +99,7 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
       prisma.asService(),
       submit,
       outbox,
-      fakeRollupOutbox(prisma, new FakeQueue()),
+      fakeRollupOutbox(new FakeQueue()),
     ),
   };
 }

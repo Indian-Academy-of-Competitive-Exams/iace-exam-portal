@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { type Job } from 'bullmq';
 import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS, TEST_SCOPE } from '@iace/contracts';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
+import { RollupProcessor } from '../src/attempts/rollup.processor';
 import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
 import { ROLLUP_REQUEST } from '../src/attempts/rollup-outbox';
 import { cohortShapeOf, curveBandsOf, flagYours } from '../src/attempts/performance-analytics';
-import { ROLLUP_JOBS } from '../src/queue/queues';
+import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS, type RollupJobData } from '../src/queue/queues';
 import {
   FakeEventBus,
   FakeQueue,
@@ -59,7 +61,7 @@ function world(
 ) {
   const prisma = new FakeRollupPrisma(attempts, served, tests);
   const queue = new FakeQueue();
-  const outbox = fakeRollupOutbox(prisma, queue);
+  const outbox = fakeRollupOutbox(queue);
   return {
     prisma,
     queue,
@@ -84,6 +86,9 @@ async function drain(built: World): Promise<number> {
     if (job.name === ROLLUP_JOBS.FOLD && data.attemptId !== undefined) {
       await built.rollup.fold(data.attemptId);
     }
+    if (job.name === ROLLUP_JOBS.FOLD_PENDING) {
+      await built.rollup.foldPending();
+    }
     if (job.name === ROLLUP_JOBS.REBUILD_TEST && data.testId !== undefined) {
       await built.rollup.rebuildForTest(data.testId);
     }
@@ -100,11 +105,6 @@ async function counted(built: World, attemptId: string): Promise<void> {
 /** When a rollup last looked is not part of what it says. */
 function withoutStamps<T extends { computedAt: Date | null }>(rows: readonly T[]) {
   return rows.map(({ computedAt: _computedAt, ...row }) => ({ ...row, computedThrough: null }));
-}
-
-/** The relay stamps a request as it queues the job; a batched pass claims what is still pending. */
-function unstamped(built: World): void {
-  for (const row of built.prisma.outboxEvents) row.processedAt = null;
 }
 
 describe('RollupService — folding one sitting in', () => {
@@ -186,7 +186,6 @@ describe('RollupService — folding a pending batch', () => {
     );
     await built.scoring.score('att_1');
     await built.scoring.score('att_2');
-    unstamped(built);
 
     const counted = await built.rollup.foldPending();
     const batched = withoutStamps(structuredClone(built.prisma.testStat.rows));
@@ -211,7 +210,6 @@ describe('RollupService — folding a pending batch', () => {
     );
     await built.scoring.score('att_3');
     await built.scoring.score('att_4');
-    unstamped(built);
 
     await built.rollup.foldPending();
     const moved = withoutStamps(structuredClone(built.prisma.testStat.rows));
@@ -224,11 +222,9 @@ describe('RollupService — folding a pending batch', () => {
   it('counts a sitting once when the same page is folded twice', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, RIGHT, RIGHT, RIGHT]));
     await built.scoring.score('att_1');
-    unstamped(built);
 
     await built.rollup.foldPending();
     const once = withoutStamps(structuredClone(built.prisma.testStat.rows));
-    unstamped(built);
     await built.rollup.foldPending();
 
     assert.deepEqual(withoutStamps(built.prisma.testStat.rows), once);
@@ -246,7 +242,6 @@ describe('RollupService — folding a pending batch', () => {
     );
     await built.scoring.score('att_1');
     await built.scoring.score('att_2');
-    unstamped(built);
 
     assert.equal(await built.rollup.foldPending(), 2);
 
@@ -260,7 +255,6 @@ describe('RollupService — folding a pending batch', () => {
   it('leaves the outbox row pending when the fold throws, and counts it on the next pass', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, null, null, null]));
     await built.scoring.score('att_1');
-    unstamped(built);
     built.prisma.testStat.failNextUpsert = true;
 
     await assert.rejects(() => built.rollup.foldPending());
@@ -496,33 +490,67 @@ describe('RollupService — rebuilding a scope', () => {
   });
 });
 
+describe('RollupProcessor — dispatching a job to the service', () => {
+  /** The per-attempt cohort path must stay unreachable from a job: it deadlocks racing a pass. */
+  it('asks for a pass on a legacy FOLD job too, never a fold of the one attempt it names', async () => {
+    const calls: string[] = [];
+    const rollup = {
+      foldPending: async () => {
+        calls.push('foldPending');
+        return 0;
+      },
+      fold: async () => calls.push('fold'),
+    } as unknown as RollupService;
+    const processor = new RollupProcessor(rollup);
+
+    await processor.process({
+      name: ROLLUP_JOBS.FOLD,
+      data: { attemptId: 'att_1' },
+    } as Job<RollupJobData>);
+    await processor.process({ name: ROLLUP_JOBS.FOLD_PENDING, data: {} } as Job<RollupJobData>);
+
+    assert.deepEqual(calls, ['foldPending', 'foldPending']);
+  });
+});
+
 describe('RollupOutbox — getting the fold asked for', () => {
-  it('leaves the event pending when the queue refuses it, and hands it on next sweep', async () => {
+  it('asks for one fold pass however many sittings are evaluated', async () => {
+    const built = world(
+      [sitting('a1', { studentId: 'stu_1' }), sitting('a2', { studentId: 'stu_2' })],
+      [...paper('a1', [RIGHT, null, null, null]), ...paper('a2', [RIGHT, null, null, null])],
+    );
+
+    await built.scoring.score('a1');
+    await built.scoring.score('a2');
+
+    const folds = built.queue.jobs.filter((job) => job.name === ROLLUP_JOBS.FOLD_PENDING);
+    assert.ok(folds.length > 0, 'at least one fold pass was asked for');
+    assert.ok(
+      folds.every((job) => job.jobId === FOLD_PENDING_JOB_ID),
+      'every fold pass carries the one id BullMQ collapses a burst on',
+    );
+  });
+
+  /** A queue that refuses the hand-off leaves the sitting pending, not lost: the next ask still counts it. */
+  it('folds the sitting once a later ask succeeds, after the first was refused', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, RIGHT, null, null]));
     built.queue.failNext = true;
 
     await built.scoring.score('att_1');
-
     assert.equal(built.queue.jobs.length, 0);
-    assert.equal(built.prisma.outboxEvents[0]?.processedAt, null);
 
     await built.outbox.relay();
+    await drain(built);
 
-    assert.equal(built.queue.jobs.length, 1);
-    assert.notEqual(built.prisma.outboxEvents[0]?.processedAt, null);
+    assert.equal(built.prisma.testStat.rows[0]?.evaluatedCount, 1);
+    assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
   });
 
-  /** Queued before it is marked, so the crash between the two costs a redelivery, never a count. */
-  it('redelivers an event whose stamp never landed, and still folds it once', async () => {
+  /** The scorer's own hand-off and a sweep's re-ask both land in the queue; draining folds it once. */
+  it('folds a sitting once, whether the scorer or a sweep asked for the pass', async () => {
     const built = world([sitting('att_1')], paper('att_1', [RIGHT, RIGHT, null, null]));
-    const stamp = built.prisma.outboxEvent.update;
-    built.prisma.outboxEvent.update = () => Promise.reject(new Error('gone before the stamp'));
 
     await built.scoring.score('att_1');
-    assert.equal(built.queue.jobs.length, 1);
-    assert.equal(built.prisma.outboxEvents[0]?.processedAt, null);
-
-    built.prisma.outboxEvent.update = stamp;
     await built.outbox.relay();
     const delivered = await drain(built);
 

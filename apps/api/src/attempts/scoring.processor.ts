@@ -112,8 +112,8 @@ export class ScoringProcessor extends WorkerHost {
 
   /** A first evaluation is folded in; a re-score moved marks already counted, so it asks for a rebuild. */
   private async count(testId: string, evaluation: string | null): Promise<void> {
-    const asked = evaluation === null ? this.rollup.rebuild(testId) : this.rollup.relay(evaluation);
-    // A queue nobody can reach must not fail a score that committed — the sweeper hands it on.
+    const asked = evaluation === null ? this.rollup.rebuild(testId) : this.rollup.relay();
+    // A queue nobody can reach must not fail a score that committed — the sweeper asks again.
     await asked.catch((error: unknown) => {
       this.logger.error(`Attempt on test ${testId} was scored but not counted`, error);
     });

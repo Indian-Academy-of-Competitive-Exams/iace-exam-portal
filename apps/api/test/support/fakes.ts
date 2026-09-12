@@ -6560,11 +6560,8 @@ export class FakeRollupPrisma {
 const savedKey = (row: FakeSavedQuestionRow) => `${row.studentId}|${row.questionId}|${row.kind}`;
 
 /** The seam an evaluated sitting reaches the rollup queue through. */
-export function fakeRollupOutbox(
-  prisma: { asService(): PrismaService },
-  queue: FakeQueue,
-): RollupOutbox {
-  return new RollupOutbox(prisma.asService(), queue.asQueue());
+export function fakeRollupOutbox(queue: FakeQueue): RollupOutbox {
+  return new RollupOutbox(queue.asQueue());
 }
 
 // ----------------------------------------------------------------------------

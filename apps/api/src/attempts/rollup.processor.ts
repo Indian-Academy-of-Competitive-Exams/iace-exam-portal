@@ -15,8 +15,11 @@ export class RollupProcessor extends WorkerHost {
 
   async process(job: Job<RollupJobData>): Promise<void> {
     switch (job.name) {
+      // FOLD is a job queued before this deploy: still drained, but as a pass, not a lone attempt.
       case ROLLUP_JOBS.FOLD:
-        return this.foldOne(job.data.attemptId);
+      case ROLLUP_JOBS.FOLD_PENDING:
+        await this.rollup.foldPending();
+        return;
       case ROLLUP_JOBS.REBUILD_TEST:
         return this.rebuildOne(job.data.testId);
       case ROLLUP_JOBS.REBUILD_STUDENT:
@@ -26,14 +29,6 @@ export class RollupProcessor extends WorkerHost {
       default:
         this.logger.error(`Rollup job ${job.id ?? ''} is a "${job.name}", which nothing folds`);
     }
-  }
-
-  private async foldOne(attemptId: string | undefined): Promise<void> {
-    if (attemptId === undefined) {
-      this.logger.error('A fold job names no sitting, so there is nothing to count');
-      return;
-    }
-    await this.rollup.fold(attemptId);
   }
 
   private async rebuildOne(testId: string | undefined): Promise<void> {

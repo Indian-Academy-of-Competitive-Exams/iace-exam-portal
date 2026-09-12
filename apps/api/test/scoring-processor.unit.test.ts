@@ -49,7 +49,7 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
     served,
     processor: new ScoringProcessor(
       prisma.asService(),
-      fakeRollupOutbox(prisma, rollups),
+      fakeRollupOutbox(rollups),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(prisma),
     ),

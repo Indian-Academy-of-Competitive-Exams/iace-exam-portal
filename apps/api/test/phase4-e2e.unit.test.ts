@@ -97,7 +97,7 @@ function platform() {
     attempts,
     scoring: new ScoringProcessor(
       prisma.asService(),
-      fakeRollupOutbox(prisma, new FakeQueue()),
+      fakeRollupOutbox(new FakeQueue()),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
     ),

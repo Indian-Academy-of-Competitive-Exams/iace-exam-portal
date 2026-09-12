@@ -45,7 +45,7 @@ function world(chosen: readonly (string | null)[]) {
   });
   const prisma = new FakeRollupPrisma([attempt], paper('att_1', chosen), [makeRollupTest()]);
   const queue = new FakeQueue();
-  const outbox = fakeRollupOutbox(prisma, queue);
+  const outbox = fakeRollupOutbox(queue);
   const scoring = new ScoringProcessor(
     prisma.asService(),
     outbox,
@@ -65,6 +65,9 @@ async function counted(built: World): Promise<void> {
     const data = job.data as { attemptId?: string };
     if (job.name === ROLLUP_JOBS.FOLD && data.attemptId !== undefined) {
       await built.rollup.fold(data.attemptId);
+    }
+    if (job.name === ROLLUP_JOBS.FOLD_PENDING) {
+      await built.rollup.foldPending();
     }
   }
 }
