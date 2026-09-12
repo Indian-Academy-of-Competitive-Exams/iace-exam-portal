@@ -4,7 +4,9 @@ import {
   TEST_SCOPE,
   TEST_SERIES_KIND,
   nameStem,
+  namePeriod,
   seriesNameKind,
+  todayISO,
   suggestedSeriesName,
   suggestedTestName,
   testNameKind,
@@ -73,6 +75,22 @@ describe('nameStem', () => {
   it('leaves out the parts that are not chosen yet', () => {
     assert.equal(nameStem(['SSC CGL', '', null], 'Mock'), 'SSC CGL — Mock');
     assert.equal(nameStem([undefined, '  '], 'Mock'), 'Mock');
+  });
+});
+
+describe('namePeriod', () => {
+  it('names the month and the year a series is minted in', () => {
+    assert.equal(namePeriod('2026-09-12'), 'Sep 2026');
+    assert.equal(namePeriod('2026-01-01'), 'Jan 2026');
+  });
+
+  /** The failure this prevents: a January 1st series named December, from a UTC clock 5.5 hours behind. */
+  it('reads the institute day, not whatever the device thinks the date is', () => {
+    assert.equal(namePeriod(), namePeriod(todayISO()));
+  });
+
+  it('falls back to the year alone when the month is not a month', () => {
+    assert.equal(namePeriod('2026-13-01'), '2026');
   });
 });
 

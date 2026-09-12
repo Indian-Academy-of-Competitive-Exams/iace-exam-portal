@@ -150,11 +150,12 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   const items: FormPanelTab[] = [
     {
       value: SERIES_TAB.DETAILS,
-      label: 'Details & access',
+      label: 'Access & details',
       content: (
         <>
-          <SeriesBasics form={form} stage={stage} />
+          {/* Access first: the name is suggested FROM the stage and the kind, so it cannot come before them. */}
           <SeriesAccess form={form} detail={detail} onPickStage={setStage} />
+          <SeriesBasics form={form} stage={stage} />
         </>
       ),
     },

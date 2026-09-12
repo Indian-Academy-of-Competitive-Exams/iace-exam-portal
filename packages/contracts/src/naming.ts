@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { civilDate } from './common';
 
 // ============================================================================
 // Canonical names for branches and exam codes: UPPERCASE, letters and digits,
@@ -100,6 +101,28 @@ function highestUnder(stem: string, taken: readonly string[]): number {
 /** A test is one of a run, so it is numbered from the very first one. */
 export function suggestedTestName(stem: string, taken: readonly string[]): string {
   return numbered(stem, highestUnder(stem, taken) + 1);
+}
+
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** The month and year a name is minted in, read off the institute's civil date and never a raw clock. */
+export function namePeriod(today: string = civilDate()): string {
+  const [year = '', month = ''] = today.split('-');
+  const named = MONTH_NAMES[Number(month) - 1];
+  return named === undefined ? year : `${named} ${year}`;
 }
 
 /** A series is usually alone under its stem, so it takes a number only once it needs one. */

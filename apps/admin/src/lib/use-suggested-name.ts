@@ -4,6 +4,7 @@ import {
   type TestScope,
   type TestSeriesKind,
   nameStem,
+  namePeriod,
   seriesNameKind,
   suggestedSeriesName,
   suggestedTestName,
@@ -57,7 +58,11 @@ export interface SeriesNameSource {
 
 export function useSuggestedSeriesName(source: SeriesNameSource): string | undefined {
   const ready = Boolean(source.examStageId && source.examCode);
-  const stem = nameStem([source.examCode, source.stageName], seriesNameKind(source));
+  // The period is part of the STEM, so next month's series starts its own numbering rather than 02.
+  const stem = nameStem(
+    [source.examCode, source.stageName],
+    `${seriesNameKind(source)} ${namePeriod()}`,
+  );
 
   const siblings = useQuery({
     queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.NAMED, source.examStageId, stem],
