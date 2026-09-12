@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  TEST_SERIES_KIND,
   type SeriesBranch,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import { Power } from 'lucide-react';
+import { CircleSlash, Power } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -20,7 +21,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS } from '../lib/constants';
+import { QUERY_KEYS, TEST_SERIES_KIND_HINTS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { branchesKey } from './test-series-detail';
 
@@ -34,10 +35,12 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
   const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [askingAll, setAskingAll] = useState(false);
 
+  const byBranch = series.kind === TEST_SERIES_KIND.STANDARD;
+
   const branches = useQuery({
     queryKey: branchesKey(series.id),
     queryFn: () => api.admin.testSeries.branches(series.id),
-    enabled: canRead,
+    enabled: canRead && byBranch,
   });
 
   const refresh = () => {
@@ -59,6 +62,20 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
   });
 
   const off = series.branchCount - series.enabledBranchCount;
+
+  // Every kind keeps the tab; only a standard series reaches students one branch at a time.
+  if (!byBranch) {
+    return (
+      <FormSection title="Branches">
+        <EmptyState
+          icon={CircleSlash}
+          title="No branch list"
+          /* ui-copy-ok: rule */
+          hint={TEST_SERIES_KIND_HINTS[series.kind]}
+        />
+      </FormSection>
+    );
+  }
 
   return (
     <FormSection title="Branches">

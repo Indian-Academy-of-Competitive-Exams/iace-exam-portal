@@ -3,7 +3,7 @@ import { Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { AppException, TEST_SERIES_KIND, type TestSeriesSummary } from '@iace/contracts';
+import { AppException, type TestSeriesSummary } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
@@ -158,6 +158,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </>
       ),
     },
+    // Both on every saved series, whatever its kind: a tab that comes and goes reads as a fault.
     ...(detail
       ? [
           {
@@ -166,11 +167,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             standalone: true,
             content: <SeriesTests series={detail} />,
           },
-        ]
-      : []),
-    // The saved kind, not the chosen one: a series still carrying branches has to switch them off.
-    ...(detail?.kind === TEST_SERIES_KIND.STANDARD
-      ? [
           {
             value: SERIES_TAB.BRANCHES,
             label: 'Branches',
