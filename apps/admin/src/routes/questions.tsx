@@ -3,13 +3,11 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Undo2, Upload } from 'lucide-react';
 import {
-  DIFFICULTY_LEVELS,
   FEATURE_KEYS,
   LANGUAGE_LABELS,
   PERMISSION_LEVELS,
   QUESTION_STATUS,
   QUESTION_STATUSES,
-  QUESTION_TYPES,
   type QuestionSummary,
 } from '@iace/contracts';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
@@ -26,12 +24,11 @@ import {
   TruncatedText,
   linkVariants,
   type DataTableColumn,
-  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
+import { questionFacetFilters } from '../lib/question-filters';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
 
@@ -126,43 +123,7 @@ export function QuestionsPage() {
       placeholder: 'In circulation',
       items: QUESTION_STATUSES.map((value) => ({ value, label: value })),
     },
-    {
-      key: 'subjectId',
-      kind: 'customMulti',
-      label: 'Subject',
-      render: (control: ListFilterMultiControl) => (
-        <SubjectMultiPicker
-          {...control}
-          // A topic under a subject no longer chosen would filter everything away.
-          onChange={(value) => filters.set({ subjectId: value.join(','), topicId: '' })}
-        />
-      ),
-    },
-    {
-      key: 'topicId',
-      kind: 'customMulti',
-      label: 'Topic',
-      render: (control: ListFilterMultiControl) => (
-        <TopicMultiPicker {...control} subjectIds={subjectIds} />
-      ),
-    },
-    {
-      key: 'difficulty',
-      kind: 'multi',
-      label: 'Difficulty',
-      placeholder: 'Any difficulty',
-      items: DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
-    },
-    {
-      key: 'type',
-      kind: 'multi',
-      label: 'Type',
-      placeholder: 'Any type',
-      items: QUESTION_TYPES.map((type) => ({
-        value: type,
-        label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
-      })),
-    },
+    ...questionFacetFilters(filters, subjectIds),
   ] as const;
 
   const questions = useListScreen({

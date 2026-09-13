@@ -3,12 +3,10 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Trash2 } from 'lucide-react';
 import {
-  DIFFICULTY_LEVELS,
   FEATURE_KEYS,
   LANGUAGE_LABELS,
   PERMISSION_LEVELS,
   QUESTION_STATUS,
-  QUESTION_TYPES,
   todayISO,
   type QuestionSummary,
 } from '@iace/contracts';
@@ -30,12 +28,15 @@ import {
   TableFrame,
   TruncatedText,
   type DataTableColumn,
-  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
+import {
+  QUESTION_AUTHOR_FILTER,
+  QUESTION_TAG_FILTER,
+  questionFacetFilters,
+} from '../lib/question-filters';
 
 type FilterKey =
   'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'tag' | 'author' | 'from' | 'to';
@@ -150,46 +151,9 @@ export function QuestionApprovalsPage() {
       placeholder: 'Search the text, a code or a tag',
       primary: true,
     },
-    {
-      key: 'subjectId',
-      kind: 'customMulti',
-      label: 'Subject',
-      render: (control: ListFilterMultiControl) => (
-        <SubjectMultiPicker
-          {...control}
-          // A topic under a subject no longer chosen would filter everything away.
-          onChange={(value) => filters.set({ subjectId: value.join(','), topicId: '' })}
-        />
-      ),
-    },
-    {
-      key: 'topicId',
-      kind: 'customMulti',
-      label: 'Topic',
-      render: (control: ListFilterMultiControl) => (
-        <TopicMultiPicker {...control} subjectIds={subjectIds} />
-      ),
-    },
-    {
-      key: 'difficulty',
-      kind: 'multi',
-      label: 'Difficulty',
-      placeholder: 'Any difficulty',
-      items: DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
-    },
-    {
-      key: 'type',
-      kind: 'multi',
-      label: 'Type',
-      placeholder: 'Any type',
-      items: QUESTION_TYPES.map((type) => ({
-        value: type,
-        label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
-      })),
-    },
-    // Free text, both of them: a tag is free text already, and there is no list of authors to offer.
-    { key: 'tag', kind: 'search', label: 'Tag', placeholder: 'Exactly one tag' },
-    { key: 'author', kind: 'search', label: 'Written by', placeholder: 'A name or an email' },
+    ...questionFacetFilters(filters, subjectIds),
+    QUESTION_TAG_FILTER,
+    QUESTION_AUTHOR_FILTER,
     { key: 'from', kind: 'date', label: 'Written from', max: todayISO() },
     { key: 'to', kind: 'date', label: 'Written to', max: todayISO() },
   ] as const;
