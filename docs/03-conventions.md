@@ -294,12 +294,26 @@ Rules for what you write next; what already exists is in the schema.
 Built and in use. Reach for these rather than adding a second of any of them.
 
 - **One outbound abstraction.** `MessageSender` in `apps/api/src/common/messaging` is everything the
-  platform sends outward: a channel (SMS, email, in-app), a kind, a recipient, and template data.
-  Providers implement it — console in development, SMS and email in production — and a router picks
-  one per channel, so a caller names the message and never the transport. Each kind maps to a
+  platform sends outward: a channel (SMS, email, WhatsApp, in-app), a kind, a recipient, and template
+  data. Providers implement it — console in development, SMS and email in production — and a router
+  picks one per channel, so a caller names the message and never the transport. Each kind maps to a
   template id in env; a kind with nothing configured simply does not send. OTP, the starting PIN a
   roster import issues, and result-ready are wired; test-assigned and test-reminder exist as kinds
   with no producer, because the event and the scheduled job behind them do not exist yet.
+- **The free channels carry everything but the two somebody is waiting on.** A paid message is SMS
+  for an OTP and for the starting PIN a roster import issues, and that is the whole list — every
+  other notification and every announcement reaches a student over in-app and web push, which cost
+  nothing per message. This is not a default an admin can drift: `NOTIFICATION_POLICY` in
+  `notification-policy.ts` gives every kind an EMPTY escalation chain, so paid delivery is a
+  deliberate per-send override priced against `NOTIFICATION_COST_*_PAISE`, never a kind's habit.
+  Add a kind and it is free until somebody writes an escalation for it on purpose.
+- **WhatsApp is future scope, wired and off.** One vendor — Interakt, which resells Meta's Cloud
+  API — and no selector between two: carrying a spare provider bought a config switch nobody would
+  flip mid-incident, and cost a second set of credentials to keep valid. The channel routes nowhere
+  until `WHATSAPP_INTERAKT_API_KEY` is set, so an unfunded deployment cannot half-send. `OTP_SENDER`
+  still accepts `whatsapp`, and refuses to boot without SMS behind it: Meta throttling the number
+  must not be the reason nobody can sign in. The SMS setup is done and integrated — WhatsApp needs
+  approved templates and a budget, not code.
 - **Rate limiting** is a Redis-backed throttler storage plus named limits carried by a decorator on
   the route, so moving a route cannot leave its limit behind — auth counted per address, the sitting
   path per student, a public share link per address.

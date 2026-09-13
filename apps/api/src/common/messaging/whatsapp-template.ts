@@ -1,8 +1,7 @@
 /**
- * What a WhatsApp template message IS, independent of who delivers it. Meta's
- * Cloud API and Interakt both take a registered template name, a language and
- * ordered variables, and differ only in how they spell them — so the shape
- * lives here once and each provider marshals it.
+ * What a WhatsApp template message IS, independent of who delivers it: a
+ * registered template name, a language and ordered variables. Interakt marshals
+ * it today, and a move back to Meta direct would marshal the same shape.
  */
 import { type AppConfigService } from '../../config/app-config.service';
 import { MESSAGE_KINDS, REQUIRED_KINDS, type MessageKind } from './message-sender';

@@ -4,13 +4,9 @@ import { ActorTypes } from '@iace/contracts';
 import { ConsoleMessageSender } from '../src/common/messaging/console-message-sender';
 import { SmsMessageSender } from '../src/common/messaging/sms-message-sender';
 import { EmailMessageSender } from '../src/common/messaging/email-message-sender';
-import { WhatsAppCloudMessageSender } from '../src/common/messaging/whatsapp-cloud-message-sender';
 import { InteraktMessageSender } from '../src/common/messaging/interakt-message-sender';
 import { RoutedMessageSender } from '../src/common/messaging/routed-message-sender';
-import {
-  createMessageSender,
-  createWhatsAppSender,
-} from '../src/common/messaging/messaging.module';
+import { createMessageSender } from '../src/common/messaging/messaging.module';
 import { MESSAGE_CHANNELS, MESSAGE_KINDS } from '../src/common/messaging';
 import { OtpService } from '../src/auth/otp/otp.service';
 import { FakeConfig, FakeMessageSender, FakeRedis } from './support/fakes';
@@ -29,7 +25,6 @@ const WHATSAPP_READY = {
   SMS_PROVIDER_URL: 'https://sms.example/send',
   MAIL_USER: 'no-reply@iace.co.in',
   MAIL_PASSWORD: 'abcd efgh ijkl mnop',
-  WHATSAPP_PROVIDER: 'interakt',
   WHATSAPP_INTERAKT_API_KEY: 'interakt-key',
   WHATSAPP_TEMPLATE_OTP: 'iace_login_code',
 };
@@ -89,7 +84,6 @@ describe('Provider selection', () => {
       new ConsoleMessageSender(),
       new SmsMessageSender(config),
       new EmailMessageSender(config),
-      new WhatsAppCloudMessageSender(config),
       new InteraktMessageSender(config),
     );
   };
@@ -151,13 +145,6 @@ describe('Provider selection', () => {
 
   it('refuses WhatsApp-first OTP when nobody is carrying WhatsApp', () => {
     assert.throws(
-      () => senderFor({ ...WHATSAPP_READY, WHATSAPP_PROVIDER: 'none' }),
-      /WHATSAPP_PROVIDER/,
-    );
-  });
-
-  it('refuses the chosen WhatsApp provider until it has credentials', () => {
-    assert.throws(
       () => senderFor({ ...WHATSAPP_READY, WHATSAPP_INTERAKT_API_KEY: undefined }),
       /WHATSAPP_INTERAKT_API_KEY/,
     );
@@ -174,26 +161,27 @@ describe('Provider selection', () => {
   it('routes WhatsApp once the whole chain is configured', () => {
     assert.ok(senderFor(WHATSAPP_READY) instanceof RoutedMessageSender);
   });
-});
 
-describe('Which vendor carries WhatsApp', () => {
-  const chosen = (env: Record<string, unknown>) => {
-    const config = new FakeConfig(env).asService();
-    return createWhatsAppSender(
-      config,
-      new WhatsAppCloudMessageSender(config),
-      new InteraktMessageSender(config),
+  /** WhatsApp is future scope: an SMS-first deployment carries no key, and must not half-send. */
+  it('routes WhatsApp nowhere rather than half-way when no key is set', async () => {
+    const sender = senderFor({
+      NODE_ENV: 'production',
+      OTP_SENDER: 'sms',
+      SMS_PROVIDER_URL: 'https://sms.example/send',
+      MAIL_USER: 'no-reply@iace.co.in',
+      MAIL_PASSWORD: 'abcd efgh ijkl mnop',
+    });
+
+    await assert.rejects(
+      sender.send({
+        channel: MESSAGE_CHANNELS.WHATSAPP,
+        kind: MESSAGE_KINDS.OTP,
+        to: '9876543210',
+        actor: ActorTypes.STUDENT,
+        body: '123456 is your IACE verification code.',
+      }),
+      /Nothing delivers whatsapp messages/,
     );
-  };
-
-  /** Leaving Interakt is a restart, not a rewrite — which only holds if both are wired at once. */
-  it('picks Meta direct or Interakt from config alone', () => {
-    assert.ok(chosen({ WHATSAPP_PROVIDER: 'cloud' }) instanceof WhatsAppCloudMessageSender);
-    assert.ok(chosen({ WHATSAPP_PROVIDER: 'interakt' }) instanceof InteraktMessageSender);
-  });
-
-  it('carries nothing when WhatsApp is off', () => {
-    assert.equal(chosen({ WHATSAPP_PROVIDER: 'none' }), undefined);
   });
 });
 

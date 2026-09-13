@@ -1,7 +1,7 @@
 /**
- * WhatsApp through Interakt, which resells the same Cloud API behind its own
- * field names. Kept beside the direct sender rather than replacing it: which
- * one is in front is a config value, so leaving is a restart, not a rewrite.
+ * WhatsApp through Interakt, which resells Meta's Cloud API behind its own field
+ * names. The one vendor we carry; the channel is off until its key is set, and
+ * every kind but OTP reaches a student free over in-app and web push instead.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';

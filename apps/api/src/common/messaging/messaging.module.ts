@@ -1,28 +1,13 @@
 import { Global, Module } from '@nestjs/common';
 import { AppConfigModule } from '../../config/config.module';
 import { AppConfigService } from '../../config/app-config.service';
-import { OTP_SENDERS, WHATSAPP_PROVIDERS } from '../../config/env.schema';
+import { OTP_SENDERS } from '../../config/env.schema';
 import { ConsoleMessageSender } from './console-message-sender';
 import { SmsMessageSender } from './sms-message-sender';
 import { EmailMessageSender } from './email-message-sender';
-import { WhatsAppCloudMessageSender } from './whatsapp-cloud-message-sender';
 import { InteraktMessageSender } from './interakt-message-sender';
 import { RoutedMessageSender } from './routed-message-sender';
 import { MESSAGE_CHANNELS, MESSAGE_SENDER, type MessageSender } from './message-sender';
-
-/** Undefined when nobody carries WhatsApp, which routes the channel nowhere rather than half-way. */
-export function createWhatsAppSender(
-  config: AppConfigService,
-  cloudSender: WhatsAppCloudMessageSender,
-  interaktSender: InteraktMessageSender,
-): MessageSender | undefined {
-  const provider = config.get('WHATSAPP_PROVIDER');
-
-  if (provider === WHATSAPP_PROVIDERS.CLOUD) return cloudSender;
-  if (provider === WHATSAPP_PROVIDERS.INTERAKT) return interaktSender;
-
-  return undefined;
-}
 
 /** Selects the outbound delivery provider. */
 export function createMessageSender(
@@ -30,8 +15,7 @@ export function createMessageSender(
   consoleSender: ConsoleMessageSender,
   smsSender: SmsMessageSender,
   emailSender: EmailMessageSender,
-  cloudSender: WhatsAppCloudMessageSender,
-  interaktSender: InteraktMessageSender,
+  whatsappSender: InteraktMessageSender,
 ): MessageSender {
   // The env var is still named OTP_SENDER, though it now selects for every kind and every channel.
   const mode = config.get('OTP_SENDER');
@@ -55,31 +39,20 @@ export function createMessageSender(
   }
   if (mode === OTP_SENDERS.WHATSAPP) assertWhatsAppReady(config);
 
-  const whatsappSender = createWhatsAppSender(config, cloudSender, interaktSender);
   return new RoutedMessageSender({
     [MESSAGE_CHANNELS.SMS]: smsSender,
     [MESSAGE_CHANNELS.EMAIL]: emailSender,
-    ...(whatsappSender ? { [MESSAGE_CHANNELS.WHATSAPP]: whatsappSender } : {}),
+    // An unkeyed deployment routes the channel nowhere rather than half-way — WhatsApp is future scope.
+    ...(config.get('WHATSAPP_INTERAKT_API_KEY')
+      ? { [MESSAGE_CHANNELS.WHATSAPP]: whatsappSender }
+      : {}),
   });
 }
 
 /** Every way a WhatsApp-first deployment could reach its first login and fail, refused at boot. */
 function assertWhatsAppReady(config: AppConfigService): void {
-  const provider = config.get('WHATSAPP_PROVIDER');
-
-  if (provider === WHATSAPP_PROVIDERS.NONE) {
-    throw new Error('OTP_SENDER=whatsapp needs WHATSAPP_PROVIDER=cloud or interakt.');
-  }
-  if (
-    provider === WHATSAPP_PROVIDERS.CLOUD &&
-    (!config.get('WHATSAPP_CLOUD_PHONE_NUMBER_ID') || !config.get('WHATSAPP_CLOUD_ACCESS_TOKEN'))
-  ) {
-    throw new Error(
-      'WHATSAPP_PROVIDER=cloud needs WHATSAPP_CLOUD_PHONE_NUMBER_ID and WHATSAPP_CLOUD_ACCESS_TOKEN.',
-    );
-  }
-  if (provider === WHATSAPP_PROVIDERS.INTERAKT && !config.get('WHATSAPP_INTERAKT_API_KEY')) {
-    throw new Error('WHATSAPP_PROVIDER=interakt needs WHATSAPP_INTERAKT_API_KEY.');
+  if (!config.get('WHATSAPP_INTERAKT_API_KEY')) {
+    throw new Error('OTP_SENDER=whatsapp needs WHATSAPP_INTERAKT_API_KEY — see .env.example.');
   }
   if (!config.get('WHATSAPP_TEMPLATE_OTP')) {
     throw new Error(
@@ -99,7 +72,6 @@ function assertWhatsAppReady(config: AppConfigService): void {
     ConsoleMessageSender,
     SmsMessageSender,
     EmailMessageSender,
-    WhatsAppCloudMessageSender,
     InteraktMessageSender,
     {
       provide: MESSAGE_SENDER,
@@ -108,7 +80,6 @@ function assertWhatsAppReady(config: AppConfigService): void {
         ConsoleMessageSender,
         SmsMessageSender,
         EmailMessageSender,
-        WhatsAppCloudMessageSender,
         InteraktMessageSender,
       ],
       useFactory: createMessageSender,

@@ -34,7 +34,9 @@ TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API s
 | **Database**              | PostgreSQL via Prisma                                                            | Highly relational. `prisma/schema.prisma` is the target of record.                                                          |
 | **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, OTP, sessions, device binding, rate limiting; scoring, flush, sweep and rollup jobs.                    |
 | **Auth**                  | Self-built JWT + refresh; students mobile-OTP then 4-digit PIN, admins email-OTP | OTP, sessions and device binding live in Redis, never the DB.                                                               |
+| **Outbound messaging**    | SMS for OTP and the roster PIN; everything else in-app + web push                | Those two are what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.          |
 | **OTP transport**         | `OTP_SENDER` selects console or SMS                                              | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.                |
+| **WhatsApp**              | Interakt only, wired and off — future scope                                      | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.        |
 | **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                     |
 | **Realtime**              | None — no WebSockets                                                             | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.         |
 | **Payments**              | Separate portal, not V1                                                          | The platform reads entitlements later; it never owns money.                                                                 |
@@ -167,17 +169,18 @@ small Postgres plus one Redis plus a few API containers carrying the load.
 
 A handful of managed services, containerised so nothing is tied to a single host.
 
-| Service                      | Role                                      | Notes                                                                  |
-| ---------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
-| App Runner _or_ ECS Fargate  | Runs the API container                    | App Runner first for simplicity; Fargate when finer control is needed. |
-| RDS (PostgreSQL)             | Durable data                              | Single instance. A read replica only when reads actually strain it.    |
-| ElastiCache (Redis)          | Live sitting state, queues, sessions      | Single node. Losing it loses in-flight sittings, not scored results.   |
-| S3                           | Question images, content, import files    | Private buckets, presigned URLs. Same SDK path as MinIO locally.       |
-| CloudFront                   | CDN for static assets and question images | In front of S3 and the SPAs.                                           |
-| Amplify _or_ S3 + CloudFront | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                            |
-| Route 53 + ACM               | DNS and TLS                               | HTTPS everywhere.                                                      |
-| Secrets Manager / SSM        | DB, Redis, S3 and SMS credentials         | No secrets in code or in a committed env file — `.env.example` only.   |
-| SMS provider (external)      | OTP and transactional SMS                 | DLT-compliant, which is what India requires for OTP login.             |
+| Service                      | Role                                      | Notes                                                                          |
+| ---------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| App Runner _or_ ECS Fargate  | Runs the API container                    | App Runner first for simplicity; Fargate when finer control is needed.         |
+| RDS (PostgreSQL)             | Durable data                              | Single instance. A read replica only when reads actually strain it.            |
+| ElastiCache (Redis)          | Live sitting state, queues, sessions      | Single node. Losing it loses in-flight sittings, not scored results.           |
+| S3                           | Question images, content, import files    | Private buckets, presigned URLs. Same SDK path as MinIO locally.               |
+| CloudFront                   | CDN for static assets and question images | In front of S3 and the SPAs.                                                   |
+| Amplify _or_ S3 + CloudFront | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                    |
+| Route 53 + ACM               | DNS and TLS                               | HTTPS everywhere.                                                              |
+| Secrets Manager / SSM        | DB, Redis, S3 and SMS credentials         | No secrets in code or in a committed env file — `.env.example` only.           |
+| SMS provider (external)      | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                     |
+| Web push (external)          | Every other message to a student          | VAPID direct to the browser's push service. No vendor and no per-message cost. |
 
 **Deploying the ranking change.** Migration `20260911190000` holds ACCESS EXCLUSIVE on `Attempt`
 through its backfill and its index build, so run it outside a live test window. Code from before

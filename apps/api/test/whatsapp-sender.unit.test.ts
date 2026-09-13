@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { ActorTypes } from '@iace/contracts';
-import { WhatsAppCloudMessageSender } from '../src/common/messaging/whatsapp-cloud-message-sender';
 import { InteraktMessageSender } from '../src/common/messaging/interakt-message-sender';
 import {
   MESSAGE_CHANNELS,
@@ -13,17 +12,11 @@ import { FakeConfig } from './support/fakes';
 
 const CONFIGURED = {
   WHATSAPP_TEMPLATE_LANGUAGE: 'en',
-  WHATSAPP_CLOUD_PHONE_NUMBER_ID: '106540352242922',
-  WHATSAPP_CLOUD_ACCESS_TOKEN: 'system-user-token',
-  WHATSAPP_CLOUD_API_VERSION: 'v23.0',
   WHATSAPP_INTERAKT_URL: 'https://api.interakt.ai/v1/public/message/',
   WHATSAPP_INTERAKT_API_KEY: 'interakt-key',
   WHATSAPP_TEMPLATE_OTP: 'iace_login_code',
   WHATSAPP_TEMPLATE_RESULT_READY: '',
 };
-
-const cloud = (env: Record<string, unknown> = CONFIGURED) =>
-  new WhatsAppCloudMessageSender(new FakeConfig(env).asService());
 
 const interakt = (env: Record<string, unknown> = CONFIGURED) =>
   new InteraktMessageSender(new FakeConfig(env).asService());
@@ -67,70 +60,8 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-describe('WhatsAppCloudMessageSender', () => {
-  it('posts the approved template and its positional values to the number it belongs to', async () => {
-    const calls = capture();
-
-    await cloud().send(message());
-
-    const sent = calls[0];
-    assert.equal(
-      sent?.url,
-      'https://graph.facebook.com/v23.0/106540352242922/messages',
-      'the phone number id and pinned api version are both in the path',
-    );
-    assert.equal(sent?.auth, 'Bearer system-user-token');
-    assert.deepEqual(sent?.body.template, {
-      name: 'iace_login_code',
-      language: { code: 'en' },
-      components: [
-        { type: 'body', parameters: [{ type: 'text', text: '123456' }] },
-        {
-          type: 'button',
-          sub_type: 'copy_code',
-          index: '0',
-          parameters: [{ type: 'text', text: '123456' }],
-        },
-      ],
-    });
-  });
-
-  /** Meta rejects an authentication template whose button is not given the code the body carries. */
-  it('repeats the code in the copy-code button', async () => {
-    const calls = capture();
-
-    await cloud().send(message());
-
-    const components = (calls[0]?.body.template as { components: { type: string }[] }).components;
-    assert.equal(components.length, 2);
-    assert.equal(components[1]?.type, 'button');
-  });
-
-  /** The number is stored ten digits, and Meta wants it dialled — however it was typed. */
-  it('dials the stored number', async () => {
-    const calls = capture();
-
-    await cloud().send(message({ to: '+91 98765 43210' }));
-
-    assert.equal(calls[0]?.body.to, '919876543210');
-  });
-
-  it('fails loudly on a refusal, so the caller can fall back', async () => {
-    capture(401);
-
-    await assert.rejects(cloud().send(message()), /401/);
-  });
-
-  it('refuses a channel it does not speak', async () => {
-    await assert.rejects(
-      cloud().send(message({ channel: MESSAGE_CHANNELS.SMS })),
-      /handed a sms message/,
-    );
-  });
-});
-
 describe('InteraktMessageSender', () => {
-  it('posts the same template under Interakt field names', async () => {
+  it('posts the approved template and its positional values under Interakt field names', async () => {
     const calls = capture();
 
     await interakt().send(message());
@@ -160,6 +91,23 @@ describe('InteraktMessageSender', () => {
 
     await assert.rejects(interakt().send(message()), /429/);
   });
+
+  /** The number is stored ten digits, and Interakt wants it dialled — however it was typed. */
+  it('dials the stored number', async () => {
+    const calls = capture();
+
+    await interakt().send(message({ to: '+91 98765 43210' }));
+
+    assert.equal(calls[0]?.body.countryCode, '+91');
+    assert.equal(calls[0]?.body.phoneNumber, '9876543210');
+  });
+
+  it('refuses a channel it does not speak', async () => {
+    await assert.rejects(
+      interakt().send(message({ channel: MESSAGE_CHANNELS.SMS })),
+      /handed a sms message/,
+    );
+  });
 });
 
 describe('A kind with no approved template', () => {
@@ -168,7 +116,7 @@ describe('A kind with no approved template', () => {
     capture();
 
     await assert.rejects(
-      cloud({ ...CONFIGURED, WHATSAPP_TEMPLATE_OTP: undefined }).send(message()),
+      interakt({ ...CONFIGURED, WHATSAPP_TEMPLATE_OTP: undefined }).send(message()),
       /No WhatsApp template is configured for "otp"/,
     );
   });
@@ -178,7 +126,7 @@ describe('A kind with no approved template', () => {
     const calls = capture();
 
     await assert.rejects(
-      cloud().send(message({ kind: MESSAGE_KINDS.RESULT_READY, data: { testId: 'tst_1' } })),
+      interakt().send(message({ kind: MESSAGE_KINDS.RESULT_READY, data: { testId: 'tst_1' } })),
       MessageNotConfiguredError,
     );
 
