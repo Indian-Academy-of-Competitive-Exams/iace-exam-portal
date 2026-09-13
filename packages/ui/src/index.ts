@@ -7,7 +7,6 @@ export { PinField, type PinFieldProps } from './components/ui/pin-field';
 export { StatRow, type StatRowProps } from './components/ui/stat-row';
 export { Metric, type MetricProps, type MetricSize } from './components/ui/metric';
 export { MetricGroup, type MetricGroupProps } from './components/ui/metric-group';
-export { StepIcon, type StepIconProps } from './components/ui/step-icon';
 export {
   Stepper,
   STEPPER_STATES,
@@ -295,6 +294,6 @@ export {
 // The active token set. Lives here because `data-theme` is what tokens.css
 // keys off — an app that spelled it differently would render the wrong palette.
 export { THEMES, THEME_ATTRIBUTE, THEME_STORAGE_KEY, type Theme } from './theme/theme';
-export { ThemeContext, useTheme, type ThemeContextValue } from './theme/theme-context';
+export { useTheme } from './theme/theme-context';
 export { ThemeProvider } from './theme/theme-provider';
 export { ThemeToggle } from './theme/theme-toggle';

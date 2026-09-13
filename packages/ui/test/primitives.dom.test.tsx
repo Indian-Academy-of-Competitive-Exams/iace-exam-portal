@@ -9,7 +9,6 @@ import { Skeleton, SkeletonParagraph } from '../src/components/ui/skeleton';
 import { Separator } from '../src/components/ui/separator';
 import { Brandmark } from '../src/components/ui/brandmark';
 import { StatRow } from '../src/components/ui/stat-row';
-import { StepIcon } from '../src/components/ui/step-icon';
 import { PinField } from '../src/components/ui/pin-field';
 import { Metric } from '../src/components/ui/metric';
 import { MetricGroup } from '../src/components/ui/metric-group';
@@ -116,16 +115,6 @@ describe('StatRow', () => {
 
     assert.ok(screen.getByText('Rows read'));
     assert.ok(screen.getByText('1858'));
-  });
-});
-
-describe('StepIcon', () => {
-  /** The heading under it names the step; announcing the glyph says it twice. */
-  it('is decorative', () => {
-    const Mail = (props: Record<string, unknown>) => <svg {...props} />;
-    const { container } = render(<StepIcon icon={Mail as never} />);
-
-    assert.equal(container.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
   });
 });
 
