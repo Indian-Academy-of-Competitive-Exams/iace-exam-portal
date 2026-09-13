@@ -64,61 +64,19 @@ export function PageFrame({
     ? cn(FILLS, className)
     : cn('relative min-h-0 flex-1 overflow-y-auto', REGION_BLEED, className);
 
-  const body = tabs ? (
-    <>
-      <div className="mb-4 flex shrink-0 items-center gap-3 border-b border-border">
-        <TabsList className="min-w-0 flex-1 border-b-0">
-          {tabs.items.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {tabs.action ? (
-          <span className="flex shrink-0 items-center gap-2">{tabs.action}</span>
-        ) : null}
-      </div>
-      {tabs.items.map((tab) => (
-        <TabsContent key={tab.value} value={tab.value} className={cn(scroller, 'pt-0')}>
-          {tab.content}
-        </TabsContent>
-      ))}
-    </>
-  ) : (
-    <div className={scroller}>{children}</div>
-  );
-
-  // A title with nothing beside it leaves the row empty, so the controls take that space.
-  const top = filtersBesideTitle ? (
-    <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
-      <div className="min-w-0 flex-1">{header}</div>
-      <FrameFilterRow filters={filters} beside />
-    </div>
-  ) : (
-    <>
-      {header ? <div className="shrink-0">{header}</div> : null}
-      <FrameFilterRow filters={filters} />
-    </>
-  );
-
   const frame = (
     <div data-page-frame className={FILLS}>
-      {top}
-      {body}
+      <FrameTop header={header} filters={filters} beside={filtersBesideTitle} stacksFilters />
+      {tabs ? (
+        <FrameTabs tabs={tabs} scroller={scroller} />
+      ) : (
+        <div className={scroller}>{children}</div>
+      )}
       {footer ? <div className="shrink-0">{footer}</div> : null}
     </div>
   );
 
-  // The context is what tells a table inside to fill its pane rather than cap itself half way down.
-  const rooted = fills ? <TableFrameContext value={true}>{frame}</TableFrameContext> : frame;
-
-  return tabs ? (
-    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
-      {rooted}
-    </Tabs>
-  ) : (
-    rooted
-  );
+  return withTabsRoot(tabs, fills, frame);
 }
 
 /** Nothing to narrow by is no bar at all — an empty strip of chrome reads as a broken one. */
@@ -139,6 +97,84 @@ function FrameFilterRow({
     >
       <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
     </div>
+  );
+}
+
+/** The strip and the panes. A panel bleeds the rule past the card's padding; a page does not. */
+function FrameTabs({
+  tabs,
+  scroller,
+  bleed = false,
+}: Readonly<{ tabs: TableFrameTabs; scroller: string; bleed?: boolean }>) {
+  return (
+    <>
+      <div
+        className={cn(
+          'mb-4 flex shrink-0 items-center gap-3 border-b border-border',
+          bleed && '-mx-4 px-4',
+        )}
+      >
+        <TabsList className="min-w-0 flex-1 border-b-0">
+          {tabs.items.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabs.action ? (
+          <span className="flex shrink-0 items-center gap-2">{tabs.action}</span>
+        ) : null}
+      </div>
+      {tabs.items.map((tab) => (
+        <TabsContent key={tab.value} value={tab.value} className={cn(scroller, 'pt-0')}>
+          {tab.content}
+        </TabsContent>
+      ))}
+    </>
+  );
+}
+
+/** A title with nothing beside it leaves the row empty, so the controls take that space. */
+function FrameTop({
+  header,
+  filters,
+  beside,
+  stacksFilters,
+}: Readonly<{
+  header?: React.ReactNode;
+  filters?: FrameFilters;
+  beside: boolean;
+  /** A panel puts its bar inside the card instead, so only a page stacks one under the header. */
+  stacksFilters: boolean;
+}>) {
+  if (beside) {
+    return (
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+        <div className="min-w-0 flex-1">{header}</div>
+        <FrameFilterRow filters={filters} beside />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {header ? <div className="shrink-0">{header}</div> : null}
+      {stacksFilters ? <FrameFilterRow filters={filters} /> : null}
+    </>
+  );
+}
+
+/** A TabsList rendered outside a Tabs root throws, so both branches pass through here. */
+function withTabsRoot(tabs: TableFrameTabs | undefined, fills: boolean, frame: React.ReactNode) {
+  // The context is what tells a table inside to fill its pane rather than cap itself half way down.
+  const rooted = fills ? <TableFrameContext value={true}>{frame}</TableFrameContext> : frame;
+
+  return tabs ? (
+    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
+      {rooted}
+    </Tabs>
+  ) : (
+    rooted
   );
 }
 
@@ -180,62 +216,27 @@ export function PanelFrame({
       </div>
     ) : null;
 
-  const body = tabs ? (
-    <>
-      {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
-      <div className="-mx-4 mb-4 flex shrink-0 items-center gap-3 border-b border-border px-4">
-        <TabsList className="min-w-0 flex-1 border-b-0">
-          {tabs.items.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {tabs.action ? (
-          <span className="flex shrink-0 items-center gap-2">{tabs.action}</span>
-        ) : null}
-      </div>
-      {tabs.items.map((tab) => (
-        <TabsContent key={tab.value} value={tab.value} className={cn(scroller, 'pt-0')}>
-          {tab.content}
-        </TabsContent>
-      ))}
-    </>
-  ) : (
-    <div className={scroller}>{children}</div>
-  );
-
-  // A title with nothing beside it leaves the row empty, so the controls take that space.
-  const top = filtersBesideTitle ? (
-    <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
-      <div className="min-w-0 flex-1">{header}</div>
-      <FrameFilterRow filters={filters} beside />
-    </div>
-  ) : (
-    <>{header ? <div className="shrink-0">{header}</div> : null}</>
-  );
-
   const frame = (
     <div data-page-frame className={FILLS}>
-      {top}
+      <FrameTop
+        header={header}
+        filters={filters}
+        beside={filtersBesideTitle}
+        stacksFilters={false}
+      />
       <Card className={cn(FILLS, 'p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {bar}
-        {body}
+        {tabs ? (
+          <FrameTabs tabs={tabs} scroller={scroller} bleed />
+        ) : (
+          <div className={scroller}>{children}</div>
+        )}
       </Card>
     </div>
   );
 
-  // The context is what tells a table inside to fill its pane rather than cap itself half way down.
-  const rooted = fills ? <TableFrameContext value={true}>{frame}</TableFrameContext> : frame;
-
-  return tabs ? (
-    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
-      {rooted}
-    </Tabs>
-  ) : (
-    rooted
-  );
+  return withTabsRoot(tabs, Boolean(fills), frame);
 }
 
 export function useInTableFrame(): boolean {
