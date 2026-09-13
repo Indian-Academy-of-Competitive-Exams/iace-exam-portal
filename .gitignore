@@ -120,4 +120,5 @@ docs/05-question-bank-follow-ups.md
 docs/superpowers/patches/
 
 # Read-only audit output: findings, repro scripts and evidence for one review, not source.
-audit/
+# Anchored: unanchored, it also swallowed apps/api/src/audit, which IS source.
+/audit/
