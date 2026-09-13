@@ -83,6 +83,8 @@ describe('Relaying a request', () => {
 
     assert.equal(queue.jobs.length, 1);
     assert.equal(queue.jobs[0]?.jobId, `notifications-${eventId}`);
+    // The key only holds while nothing is kept under it: a retained failure swallows the repair.
+    assert.equal(queue.jobs[0]?.removeOnFail, true);
     assert.notEqual(prisma.outboxEvents[0]?.processedAt, null);
   });
 

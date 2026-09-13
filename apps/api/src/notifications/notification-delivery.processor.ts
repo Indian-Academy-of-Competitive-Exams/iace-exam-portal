@@ -19,6 +19,7 @@ import {
 import {
   QUEUE_NAMES,
   QUEUE_POLICY,
+  keyedJob,
   notificationDeliveryJobId,
   type NotificationDeliveryJobData,
 } from '../queue/queues';
@@ -172,7 +173,7 @@ export class NotificationDeliveryProcessor extends WorkerHost {
     await this.deliveries.add(
       QUEUE_NAMES.NOTIFICATION_DELIVERY,
       { deliveryId: booked.id },
-      { jobId: notificationDeliveryJobId(booked.id) },
+      keyedJob(notificationDeliveryJobId(booked.id)),
     );
   }
 }

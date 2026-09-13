@@ -51,6 +51,11 @@ export function jobOptionsFor(queue: QueueName) {
   };
 }
 
+/** Every add under a chosen id: BullMQ drops, silently, an add whose retained failure still exists. */
+export function keyedJob(jobId: string) {
+  return { jobId, removeOnFail: true } as const;
+}
+
 /** Payload for a scoring job. Kept to ids — workers re-read from Postgres. */
 export interface ScoringJobData {
   attemptId: string;

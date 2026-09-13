@@ -13,6 +13,7 @@ import {
   QUEUE_NAMES,
   RELAY_BATCH,
   RELAY_GRACE_SEC,
+  keyedJob,
   scoringJobId,
   type ScoringJobData,
 } from '../queue/queues';
@@ -133,7 +134,7 @@ export class ScoringOutbox {
         await this.scoring.add(
           QUEUE_NAMES.SCORING,
           { attemptId: row.aggregateId, testId },
-          { jobId: scoringJobId(row.id) },
+          keyedJob(scoringJobId(row.id)),
         );
       }
       await this.prisma.outboxEvent.update({

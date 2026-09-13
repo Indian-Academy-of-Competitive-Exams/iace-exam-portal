@@ -13,6 +13,7 @@ import {
   ROLLUP_FOLD_DELAY_MS,
   ROLLUP_JOBS,
   ROLLUP_REBUILD_DELAY_MS,
+  keyedJob,
   rollupRebuildJobId,
   rollupRebuildStudentJobId,
   type RollupJobData,
@@ -24,9 +25,6 @@ export const ROLLUP_REQUEST = {
   EVENT_TYPE: DOMAIN_EVENTS.SCORING_COMPLETED,
 } as const;
 
-/** A fixed id must outlive nothing: BullMQ drops, silently, an add whose job hash still exists. */
-const NEVER_RETAINED = { removeOnComplete: true, removeOnFail: true } as const;
-
 @Injectable()
 export class RollupOutbox {
   constructor(@InjectQueue(QUEUE_NAMES.ROLLUP) private readonly rollup: Queue<RollupJobData>) {}
@@ -36,7 +34,7 @@ export class RollupOutbox {
     await this.rollup.add(
       ROLLUP_JOBS.FOLD_PENDING,
       {},
-      { jobId: FOLD_PENDING_JOB_ID, delay: ROLLUP_FOLD_DELAY_MS, ...NEVER_RETAINED },
+      { ...keyedJob(FOLD_PENDING_JOB_ID), delay: ROLLUP_FOLD_DELAY_MS, removeOnComplete: true },
     );
   }
 
@@ -45,7 +43,11 @@ export class RollupOutbox {
     await this.rollup.add(
       ROLLUP_JOBS.REBUILD_TEST,
       { testId },
-      { jobId: rollupRebuildJobId(testId), delay: ROLLUP_REBUILD_DELAY_MS, ...NEVER_RETAINED },
+      {
+        ...keyedJob(rollupRebuildJobId(testId)),
+        delay: ROLLUP_REBUILD_DELAY_MS,
+        removeOnComplete: true,
+      },
     );
   }
 
@@ -55,9 +57,9 @@ export class RollupOutbox {
       ROLLUP_JOBS.REBUILD_STUDENT,
       { studentId },
       {
-        jobId: rollupRebuildStudentJobId(studentId),
+        ...keyedJob(rollupRebuildStudentJobId(studentId)),
         delay: ROLLUP_REBUILD_DELAY_MS,
-        ...NEVER_RETAINED,
+        removeOnComplete: true,
       },
     );
   }

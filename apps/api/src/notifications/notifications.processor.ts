@@ -12,6 +12,7 @@ import {
   NOTIFICATION_JOBS,
   QUEUE_NAMES,
   QUEUE_POLICY,
+  keyedJob,
   notificationDeliveryJobId,
   type NotificationDeliveryJobData,
   type NotificationJobData,
@@ -100,9 +101,9 @@ export class NotificationsProcessor extends WorkerHost {
       await this.deliveries.add(
         QUEUE_NAMES.NOTIFICATION_DELIVERY,
         { deliveryId: row.id },
+        // Keyed on the row, so a redelivered write schedules the same job rather than a second buy.
         {
-          // Keyed on the row, so a redelivered write schedules the same job rather than a second buy.
-          jobId: notificationDeliveryJobId(row.id),
+          ...keyedJob(notificationDeliveryJobId(row.id)),
           delay: plan.deferSec * MILLISECONDS_PER_SECOND,
         },
       );

@@ -15,6 +15,7 @@ import {
   QUEUE_NAMES,
   RELAY_BATCH,
   RELAY_GRACE_SEC,
+  keyedJob,
   notificationJobId,
   type NotificationJobData,
 } from '../queue/queues';
@@ -137,7 +138,7 @@ export class NotificationOutbox {
         await this.notifications.add(
           NOTIFICATION_JOBS.WRITE,
           { eventId: row.id },
-          { jobId: notificationJobId(row.id) },
+          keyedJob(notificationJobId(row.id)),
         );
       }
       await this.prisma.outboxEvent.update({

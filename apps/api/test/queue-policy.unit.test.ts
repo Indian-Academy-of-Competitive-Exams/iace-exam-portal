@@ -8,6 +8,7 @@ import {
   QUEUE_POLICY,
   ROLLUP_FOLD_DELAY_MS,
   jobOptionsFor,
+  keyedJob,
   notificationDeliveryJobId,
   notificationJobId,
   rollupRebuildJobId,
@@ -44,6 +45,11 @@ describe('queue policy', () => {
     assert.equal(options.removeOnFail.age, FAILED_JOB_RETENTION.age);
     assert.equal(options.removeOnComplete.age, COMPLETED_JOB_RETENTION.age);
     assert.ok(FAILED_JOB_RETENTION.age > COMPLETED_JOB_RETENTION.age * 24);
+  });
+
+  /** The bug this prevents: a failed job kept a week under a chosen id swallows every later add. */
+  it('never retains a failure under an id something will ask for again', () => {
+    assert.deepEqual(keyedJob('scoring-abc'), { jobId: 'scoring-abc', removeOnFail: true });
   });
 
   /** The bug this prevents: a colon id BullMQ 6 threw on, so the job it named never queued. */

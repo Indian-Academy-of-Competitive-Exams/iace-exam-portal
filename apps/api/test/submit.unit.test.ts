@@ -135,6 +135,8 @@ describe('SubmitService', () => {
         name: QUEUE_NAMES.SCORING,
         data: { attemptId: 'att_1', testId: 'tst_1' },
         jobId: scoringJobId('obx_1'),
+        // The key only holds while nothing is kept under it: a retained failure swallows the retry.
+        removeOnFail: true,
       },
     ]);
   });
