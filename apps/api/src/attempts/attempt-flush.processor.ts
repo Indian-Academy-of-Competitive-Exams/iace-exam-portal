@@ -1,10 +1,12 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { type Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
 import { rowsToFlush } from './attempt-flush';
+import { QueueFailures } from '../common/metrics/queue-failures';
 
 /** Redis to `AttemptQuestion` on a timer. A failed run costs the durable copy a minute, not answers. */
 @Processor(QUEUE_NAMES.ATTEMPT_FLUSH, {
@@ -16,8 +18,14 @@ export class AttemptFlushProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
+    private readonly failures: QueueFailures,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.ATTEMPT_FLUSH, job, error);
   }
 
   async process(): Promise<void> {

@@ -8,7 +8,13 @@ import { NotificationsService } from '../src/notifications/notifications.service
 import { NotificationPreferencesService } from '../src/notifications/notification-preferences.service';
 import { PushService } from '../src/notifications/push.service';
 import { TestOpeningService } from '../src/notifications/test-opening.service';
-import { FakeConfig, FakeNotificationsPrisma, FakePushSender, FakeQueue } from './support/fakes';
+import {
+  FakeConfig,
+  FakeNotificationsPrisma,
+  FakePushSender,
+  FakeQueue,
+  fakeQueueFailures,
+} from './support/fakes';
 
 /** The durable path: the fact and the intent commit together, and the queue is a later step. */
 
@@ -48,6 +54,7 @@ function build() {
       push,
       openings,
       deliveries.asQueue(),
+      fakeQueueFailures(),
     ),
   };
 }

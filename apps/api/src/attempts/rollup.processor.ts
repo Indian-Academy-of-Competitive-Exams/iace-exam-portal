@@ -1,16 +1,25 @@
 /** Counting, off every request path: one sitting folded in, one test rebuilt, or every table. */
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
 import { QUEUE_NAMES, QUEUE_POLICY, ROLLUP_JOBS, type RollupJobData } from '../queue/queues';
 import { RollupService } from './rollup.service';
+import { QueueFailures } from '../common/metrics/queue-failures';
 
 @Processor(QUEUE_NAMES.ROLLUP, { concurrency: QUEUE_POLICY[QUEUE_NAMES.ROLLUP].concurrency })
 export class RollupProcessor extends WorkerHost {
   private readonly logger = new Logger(RollupProcessor.name);
 
-  constructor(private readonly rollup: RollupService) {
+  constructor(
+    private readonly rollup: RollupService,
+    private readonly failures: QueueFailures,
+  ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.ROLLUP, job, error);
   }
 
   async process(job: Job<RollupJobData>): Promise<void> {

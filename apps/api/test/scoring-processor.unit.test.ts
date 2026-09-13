@@ -14,6 +14,7 @@ import {
   type FakeAttemptRow,
   type FakeServedAnswerRow,
   fakeNotificationOutbox,
+  fakeQueueFailures,
 } from './support/fakes';
 
 const A_DAY_SEC = 24 * 60 * 60;
@@ -52,6 +53,7 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
       fakeRollupOutbox(rollups),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(prisma),
+      fakeQueueFailures(),
     ),
   };
 }

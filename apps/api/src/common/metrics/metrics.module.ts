@@ -7,13 +7,18 @@ import { QueueModule } from '../../queue/queue.module';
 import { MetricsController } from './metrics.controller';
 import { MetricsInterceptor } from './metrics.interceptor';
 import { MetricsService } from './metrics.service';
+import { QueueFailures } from './queue-failures';
 
 /** Global because anything worth counting is worth counting from wherever it happens. */
 @Global()
 @Module({
   imports: [AppConfigModule, PrismaModule, RedisModule, QueueModule],
   controllers: [MetricsController],
-  providers: [MetricsService, { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor }],
-  exports: [MetricsService],
+  providers: [
+    MetricsService,
+    QueueFailures,
+    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
+  ],
+  exports: [MetricsService, QueueFailures],
 })
 export class MetricsModule {}

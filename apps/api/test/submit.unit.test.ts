@@ -25,6 +25,7 @@ import {
   makeSection,
   makeTest,
   rowAt,
+  fakeQueueFailures,
 } from './support/fakes';
 
 const NOW = new Date('2026-09-01T05:00:00.000Z');
@@ -100,6 +101,7 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
       submit,
       outbox,
       fakeRollupOutbox(new FakeQueue()),
+      fakeQueueFailures(),
     ),
   };
 }

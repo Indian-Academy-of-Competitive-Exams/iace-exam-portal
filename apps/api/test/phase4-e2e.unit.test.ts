@@ -18,6 +18,7 @@ import {
   type FakeAttemptRow,
   type FakeServedAnswerRow,
   fakeNotificationOutbox,
+  fakeQueueFailures,
 } from './support/fakes';
 
 const TEST_ID = 'tst_1';
@@ -100,6 +101,7 @@ function platform() {
       fakeRollupOutbox(new FakeQueue()),
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
+      fakeQueueFailures(),
     ),
     reports: new AttemptReportService(
       prisma.asService(),

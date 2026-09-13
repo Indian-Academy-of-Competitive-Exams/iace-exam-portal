@@ -1628,6 +1628,26 @@ export interface FakeAttemptQuestionRow {
 }
 
 /** A queue that only remembers, and collapses a held job id the way BullMQ silently does. */
+/** What a processor tells that a job threw. Records, so a test can assert the last word on one. */
+export class FakeQueueFailures {
+  readonly recorded: { queue: string; jobId: string; message: string }[] = [];
+
+  record(
+    queue: string,
+    job: { id?: string; attemptsMade: number; opts: { attempts?: number } } | undefined,
+    error: Error,
+  ): void {
+    this.recorded.push({ queue, jobId: job?.id ?? 'unknown', message: error.message });
+  }
+
+  asService<T>(): T {
+    return this as unknown as T;
+  }
+}
+
+/** The one every test that only needs a processor to construct can hand it. */
+export const fakeQueueFailures = <T>(): T => new FakeQueueFailures().asService<T>();
+
 export class FakeQueue {
   readonly jobs: {
     name: string;
@@ -6734,8 +6754,14 @@ function matchesBranchFilter(student: FakeStudent, filter: unknown): boolean {
 export class FakeMetrics {
   readonly submits: string[] = [];
 
+  readonly queueFailures: { queue: string; spent: boolean }[] = [];
+
   countSubmit(outcome: string): void {
     this.submits.push(outcome);
+  }
+
+  countQueueFailure(queue: string, spent: boolean): void {
+    this.queueFailures.push({ queue, spent });
   }
 
   observeRequest(): void {

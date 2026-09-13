@@ -1,5 +1,5 @@
 /** Evaluation, off every request path, and repeatable: scoring twice writes the same rows. */
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
@@ -19,6 +19,7 @@ import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { NotificationOutbox } from '../notifications';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
+import { QueueFailures } from '../common/metrics/queue-failures';
 
 const SCORING_SELECT = {
   id: true,
@@ -66,8 +67,14 @@ export class ScoringProcessor extends WorkerHost {
     private readonly rollup: RollupOutbox,
     private readonly events: DomainEventBus,
     private readonly notifications: NotificationOutbox,
+    private readonly failures: QueueFailures,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.SCORING, job, error);
   }
 
   async process(job: Job<ScoringJobData>): Promise<void> {

@@ -16,6 +16,7 @@ import {
   makeServedAnswer,
   mcqOptions,
   type FakeServedAnswerRow,
+  fakeQueueFailures,
 } from './support/fakes';
 
 const RIGHT = 'o1';
@@ -52,6 +53,7 @@ function world(chosen: readonly (string | null)[]) {
     outbox,
     new FakeEventBus().asService(),
     fakeNotificationOutbox(),
+    fakeQueueFailures(),
   );
 
   return { prisma, queue, scoring, rollup: new RollupService(prisma.asService()) };

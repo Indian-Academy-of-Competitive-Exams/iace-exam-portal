@@ -4,9 +4,11 @@
  * it on — the audit log is where history lives (docs/03 §5).
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { type Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../../queue/queues';
+import { QueueFailures } from '../metrics/queue-failures';
 
 /** Long enough to answer "was this attempt's scoring ever asked for?" and no longer. */
 export const OUTBOX_RETENTION_DAYS = 7;
@@ -24,8 +26,16 @@ export const OUTBOX_PRUNE_MAX_PAGES = 100;
 export class OutboxPruneProcessor extends WorkerHost {
   private readonly logger = new Logger(OutboxPruneProcessor.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly failures: QueueFailures,
+  ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.OUTBOX_PRUNE, job, error);
   }
 
   async process(): Promise<void> {

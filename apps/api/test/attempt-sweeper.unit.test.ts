@@ -9,7 +9,13 @@ import {
 } from '../src/attempts/attempt-sweeper.processor';
 import { ROLLUP_REQUEST } from '../src/attempts/rollup-outbox';
 import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeQueue, FakeTestsPrisma, fakeRollupOutbox, makeAttempt } from './support/fakes';
+import {
+  FakeQueue,
+  FakeTestsPrisma,
+  fakeRollupOutbox,
+  makeAttempt,
+  fakeQueueFailures,
+} from './support/fakes';
 
 const LATE = new Date(Date.now() - 60 * 60 * 1000);
 const NO_MORE_WORK = { relay: () => Promise.resolve(0) } as never;
@@ -39,6 +45,7 @@ function build(count: number, refuse: (attemptId: string) => boolean = () => fal
     submit,
     NO_MORE_WORK,
     fakeRollupOutbox(rollupQueue),
+    fakeQueueFailures(),
   );
   return { prisma, asked, sweeper, rollupQueue };
 }

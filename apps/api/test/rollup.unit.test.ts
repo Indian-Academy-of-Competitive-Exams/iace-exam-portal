@@ -27,6 +27,7 @@ import {
   type FakeRollupTest,
   type FakeServedAnswerRow,
   fakeNotificationOutbox,
+  fakeQueueFailures,
 } from './support/fakes';
 
 /** `o1` is the right answer on every question, so a choice reads as right, wrong or untouched. */
@@ -76,6 +77,7 @@ function world(
       outbox,
       new FakeEventBus().asService(),
       fakeNotificationOutbox(),
+      fakeQueueFailures(),
     ),
     rollup: new RollupService(prisma.asService()),
   };
@@ -544,7 +546,7 @@ describe('RollupProcessor — dispatching a job to the service', () => {
         return 0;
       },
     } as unknown as RollupService;
-    const processor = new RollupProcessor(rollup);
+    const processor = new RollupProcessor(rollup, fakeQueueFailures());
 
     await processor.process({
       name: ROLLUP_JOBS.FOLD,

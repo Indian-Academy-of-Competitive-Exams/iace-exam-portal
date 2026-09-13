@@ -33,6 +33,7 @@ import {
   makeTestRow,
   type FakePaperRow,
   type FakeServedVersion,
+  fakeQueueFailures,
 } from './support/fakes';
 
 /** One sitting end to end: catalog, start, paper, autosave, flush, submit — the services' one meeting. */
@@ -121,7 +122,7 @@ function hall() {
     queue,
     attempts: new AttemptsService(prisma.asService(), reach, state),
     paper: new AttemptPaperService(prisma.asService(), reach, noStorage()),
-    flusher: new AttemptFlushProcessor(prisma.asService(), state),
+    flusher: new AttemptFlushProcessor(prisma.asService(), state, fakeQueueFailures()),
     submit: new SubmitService(
       prisma.asService(),
       state,

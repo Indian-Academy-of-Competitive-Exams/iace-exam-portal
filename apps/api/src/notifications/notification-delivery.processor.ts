@@ -4,7 +4,7 @@
  * read the bell is a message nobody needs to buy.
  */
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job, type Queue } from 'bullmq';
 import { DeliveryStatus, type DeliveryChannel } from '@prisma/client';
 import { ActorTypes, NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
@@ -23,6 +23,7 @@ import {
   notificationDeliveryJobId,
   type NotificationDeliveryJobData,
 } from '../queue/queues';
+import { QueueFailures } from '../common/metrics/queue-failures';
 import { NotificationsService } from './notifications.service';
 import {
   OUTBOUND_CHANNEL,
@@ -60,8 +61,14 @@ export class NotificationDeliveryProcessor extends WorkerHost {
     @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
+    private readonly failures: QueueFailures,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.NOTIFICATION_DELIVERY, job, error);
   }
 
   async process(job: Job<NotificationDeliveryJobData>): Promise<void> {

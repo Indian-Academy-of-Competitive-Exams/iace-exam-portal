@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { type Job } from 'bullmq';
 import { type RowActionLog } from '@prisma/client';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +8,7 @@ import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { StorageService } from '../storage/storage.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
+import { QueueFailures } from '../common/metrics/queue-failures';
 import { AuditService } from './audit.service';
 import { AUDIT_RETENTION_DAYS, archiveKeyFor, dayToArchive, toNdjson } from './audit-archive';
 import {
@@ -48,8 +50,14 @@ export class AuditArchiveProcessor extends WorkerHost {
     private readonly storage: StorageService,
     private readonly redis: RedisService,
     private readonly audit: AuditService,
+    private readonly failures: QueueFailures,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.AUDIT_ARCHIVE, job, error);
   }
 
   async process(): Promise<void> {

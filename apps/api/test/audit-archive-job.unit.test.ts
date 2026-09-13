@@ -10,7 +10,7 @@ import {
 } from '../src/audit/audit-archive.processor';
 import { AuditService } from '../src/audit/audit.service';
 import { redisKeys } from '../src/redis/redis.keys';
-import { FakePrisma, FakeRedis, FakeStorage, makeAdmin } from './support/fakes';
+import { FakePrisma, FakeRedis, FakeStorage, makeAdmin, fakeQueueFailures } from './support/fakes';
 import { startOfInstituteDay } from '../src/common/time/institute-day';
 
 /** The object the run said it wrote. A missing key or body is the failure, not the gunzip. */
@@ -50,6 +50,7 @@ function withRows(count: number) {
       storage as never,
       redis.asService(),
       new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeQueueFailures(),
     ),
   };
 }

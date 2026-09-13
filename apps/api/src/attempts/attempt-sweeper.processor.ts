@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { type Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +8,7 @@ import { SAVE_GRACE_SEC } from './attempt-state';
 import { RollupOutbox } from './rollup-outbox';
 import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
+import { QueueFailures } from '../common/metrics/queue-failures';
 
 /** Ends the sittings nobody ended, and hands on the scoring and counting nobody enqueued. */
 @Processor(QUEUE_NAMES.ATTEMPT_SWEEP, {
@@ -20,8 +22,14 @@ export class AttemptSweeperProcessor extends WorkerHost {
     private readonly submit: SubmitService,
     private readonly outbox: ScoringOutbox,
     private readonly rollup: RollupOutbox,
+    private readonly failures: QueueFailures,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.ATTEMPT_SWEEP, job, error);
   }
 
   async process(): Promise<void> {

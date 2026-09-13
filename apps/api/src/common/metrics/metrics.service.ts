@@ -4,7 +4,8 @@
  * Redis that starts evicting, a submit spike, a pool with nothing left in it.
  */
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
+import { getQueueToken } from '@nestjs/bullmq';
+import { ModuleRef } from '@nestjs/core';
 import { Queue } from 'bullmq';
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -26,18 +27,18 @@ export class MetricsService implements OnModuleInit {
   private readonly submits: Counter<'outcome'>;
   private readonly queueDepth: Gauge<'queue'>;
   private readonly queueOldestWait: Gauge<'queue'>;
+  private readonly queueFailures: Counter<'queue' | 'outcome'>;
   private readonly redisMemory: Gauge<string>;
   private readonly redisEvictions: Gauge<string>;
   private readonly liveAttempts: Gauge<string>;
   private readonly dbConnections: Gauge<string>;
 
+  private readonly queues = new Map<QueueName, Queue>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    @InjectQueue(QUEUE_NAMES.SCORING) private readonly scoring: Queue,
-    @InjectQueue(QUEUE_NAMES.ROLLUP) private readonly rollup: Queue,
-    @InjectQueue(QUEUE_NAMES.ATTEMPT_FLUSH) private readonly flush: Queue,
-    @InjectQueue(QUEUE_NAMES.ATTEMPT_SWEEP) private readonly sweep: Queue,
+    private readonly moduleRef: ModuleRef,
   ) {
     this.httpDuration = new Histogram({
       name: `${PREFIX}http_request_duration_seconds`,
@@ -68,6 +69,13 @@ export class MetricsService implements OnModuleInit {
       registers: [this.registry],
     });
 
+    this.queueFailures = new Counter({
+      name: `${PREFIX}queue_job_failures_total`,
+      help: 'Jobs that threw. A spent one is gone for good — nothing retains it to be found later',
+      labelNames: ['queue', 'outcome'] as const,
+      registers: [this.registry],
+    });
+
     this.redisMemory = new Gauge({
       name: `${PREFIX}redis_memory_bytes`,
       help: 'Redis memory in use. Live attempt state, sessions and OTP are all here',
@@ -93,8 +101,17 @@ export class MetricsService implements OnModuleInit {
     });
   }
 
+  /** Taken by name off QUEUE_NAMES, so a queue added later is measured without being listed again. */
   onModuleInit(): void {
     collectDefaultMetrics({ register: this.registry, prefix: PREFIX });
+
+    for (const name of Object.values(QUEUE_NAMES)) {
+      try {
+        this.queues.set(name, this.moduleRef.get<Queue>(getQueueToken(name), { strict: false }));
+      } catch {
+        this.logger.warn(`Queue ${name} is registered nowhere, so nothing will measure it`);
+      }
+    }
   }
 
   observeRequest(method: string, route: string, status: number, seconds: number): void {
@@ -105,6 +122,10 @@ export class MetricsService implements OnModuleInit {
     this.submits.inc({ outcome });
   }
 
+  countQueueFailure(queue: QueueName, spent: boolean): void {
+    this.queueFailures.inc({ queue, outcome: spent ? 'spent' : 'retrying' });
+  }
+
   /** Everything that has to be asked for rather than counted, gathered on the scrape itself. */
   async scrape(): Promise<string> {
     await Promise.all([this.readQueues(), this.readRedis(), this.readDatabase()]);
@@ -112,15 +133,8 @@ export class MetricsService implements OnModuleInit {
   }
 
   private async readQueues(): Promise<void> {
-    const queues: [QueueName, Queue][] = [
-      [QUEUE_NAMES.SCORING, this.scoring],
-      [QUEUE_NAMES.ROLLUP, this.rollup],
-      [QUEUE_NAMES.ATTEMPT_FLUSH, this.flush],
-      [QUEUE_NAMES.ATTEMPT_SWEEP, this.sweep],
-    ];
-
     await Promise.all(
-      queues.map(async ([name, queue]) => {
+      [...this.queues].map(async ([name, queue]) => {
         try {
           const counts = await queue.getJobCounts('waiting', 'delayed', 'active');
           const depth = (counts.waiting ?? 0) + (counts.delayed ?? 0) + (counts.active ?? 0);

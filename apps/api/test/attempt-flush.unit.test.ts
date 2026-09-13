@@ -17,6 +17,7 @@ import {
   makeBaseConfig,
   makeSection,
   makeTest,
+  fakeQueueFailures,
 } from './support/fakes';
 
 const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
@@ -58,7 +59,11 @@ function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS) {
   );
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma.asService(), redis.asService());
-  return { prisma, state, processor: new AttemptFlushProcessor(prisma.asService(), state) };
+  return {
+    prisma,
+    state,
+    processor: new AttemptFlushProcessor(prisma.asService(), state, fakeQueueFailures()),
+  };
 }
 
 describe('rowsToFlush', () => {

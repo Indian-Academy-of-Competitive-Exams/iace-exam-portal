@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Response } from 'express';
 import { AppException, ErrorCodes } from '@iace/contracts';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { ModuleRef } from '@nestjs/core';
+import type { PrismaService } from '../src/prisma/prisma.service';
+import type { RedisService } from '../src/redis/redis.service';
 import { MetricsController } from '../src/common/metrics/metrics.controller';
-import type { MetricsService } from '../src/common/metrics/metrics.service';
+import { MetricsService } from '../src/common/metrics/metrics.service';
+import { QUEUE_NAMES } from '../src/queue/queues';
 import { FakeConfig } from './support/fakes';
 
 const SCRAPED = 'iace_live_attempts 3\n';
@@ -67,5 +72,22 @@ describe('GET /metrics', () => {
     await controller({}).scrape(response, undefined);
 
     assert.equal(sent(), SCRAPED);
+  });
+});
+
+describe('MetricsService', () => {
+  /** The gap this closes: half the queues were measured, and a new one was measured by nobody. */
+  it('asks for every queue QUEUE_NAMES knows about', () => {
+    const asked: string[] = [];
+    const moduleRef = {
+      get: (token: string) => {
+        asked.push(token);
+        return {};
+      },
+    } as unknown as ModuleRef;
+
+    new MetricsService({} as PrismaService, {} as RedisService, moduleRef).onModuleInit();
+
+    assert.deepEqual(asked.sort(), Object.values(QUEUE_NAMES).map(getQueueToken).sort());
   });
 });

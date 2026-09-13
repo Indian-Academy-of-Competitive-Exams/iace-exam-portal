@@ -7,7 +7,7 @@ import {
   OutboxPruneProcessor,
 } from '../src/common/events/outbox-prune.processor';
 import { SCORING_REQUEST } from '../src/attempts/scoring-outbox';
-import { FakeTestsPrisma, type FakeOutboxRow } from './support/fakes';
+import { FakeTestsPrisma, type FakeOutboxRow, fakeQueueFailures } from './support/fakes';
 
 const NOW = new Date('2026-09-01T05:00:00.000Z');
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -29,7 +29,7 @@ function request(id: string, processedAt: Date | null): FakeOutboxRow {
 function build(rows: FakeOutboxRow[]) {
   const prisma = new FakeTestsPrisma();
   prisma.outboxEvents.push(...rows);
-  return { prisma, pruner: new OutboxPruneProcessor(prisma.asService()) };
+  return { prisma, pruner: new OutboxPruneProcessor(prisma.asService(), fakeQueueFailures()) };
 }
 
 const idsLeft = (prisma: FakeTestsPrisma) => prisma.outboxEvents.map((row) => row.id).sort();

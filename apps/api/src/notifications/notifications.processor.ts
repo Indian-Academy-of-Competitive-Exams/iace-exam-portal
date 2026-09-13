@@ -4,7 +4,7 @@
  * cannot send what an older payload said.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job, type Queue } from 'bullmq';
 import { DeliveryStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,6 +22,7 @@ import { PAID_CHANNELS, escalationFor } from './notification-policy';
 import { PushService } from './push.service';
 import { TestOpeningService } from './test-opening.service';
 import { NotificationOutbox, parseIntent, type NotificationIntent } from './notification-outbox';
+import { QueueFailures } from '../common/metrics/queue-failures';
 
 const MILLISECONDS_PER_SECOND = 1000;
 
@@ -40,8 +41,14 @@ export class NotificationsProcessor extends WorkerHost {
     private readonly openings: TestOpeningService,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
+    private readonly failures: QueueFailures,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    this.failures.record(QUEUE_NAMES.NOTIFICATIONS, job, error);
   }
 
   async process(job: Job<NotificationJobData>): Promise<void> {

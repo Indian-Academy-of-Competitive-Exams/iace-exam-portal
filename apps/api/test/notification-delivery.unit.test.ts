@@ -9,7 +9,12 @@ import {
   MessageNotConfiguredError,
   type MessageSender,
 } from '../src/common/messaging';
-import { FakeMessageSender, FakeNotificationsPrisma, FakeQueue } from './support/fakes';
+import {
+  FakeMessageSender,
+  FakeNotificationsPrisma,
+  FakeQueue,
+  fakeQueueFailures,
+} from './support/fakes';
 
 /** The only place money is spent, so every branch here is either a send or a decision not to. */
 
@@ -35,6 +40,7 @@ async function build(
     service,
     sender,
     queue.asQueue(),
+    fakeQueueFailures(),
   );
 
   prisma.announcements.push({ id: ANNOUNCEMENT_ID, paidChannels: escalate });
@@ -80,6 +86,7 @@ describe('Spending on a notification', () => {
       service,
       new FakeMessageSender(),
       new FakeQueue().asQueue(),
+      fakeQueueFailures(),
     );
     await service.create({
       studentId: 'stu_gone',
@@ -157,6 +164,7 @@ describe('A channel with no template registered', () => {
       service,
       unconfigured,
       new FakeQueue().asQueue(),
+      fakeQueueFailures(),
     );
     await service.create({
       studentId: 'stu_1',
