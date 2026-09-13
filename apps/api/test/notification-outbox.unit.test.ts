@@ -5,7 +5,6 @@ import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { NotificationsProcessor } from '../src/notifications/notifications.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { NotificationPreferencesService } from '../src/notifications/notification-preferences.service';
 import { PushService } from '../src/notifications/push.service';
 import { TestOpeningService } from '../src/notifications/test-opening.service';
 import {
@@ -34,11 +33,11 @@ function build() {
   const deliveries = new FakeQueue();
   const outbox = new NotificationOutbox(prisma.asService(), queue.asQueue());
   const service = new NotificationsService(prisma.asService());
-  const preferences = new NotificationPreferencesService(
+  const push = new PushService(
     prisma.asService(),
     new FakeConfig().asService(),
+    new FakePushSender(false),
   );
-  const push = new PushService(prisma.asService(), preferences, new FakePushSender(false));
   // Nothing here opens a test, so the audience it would fan out to is deliberately empty.
   const access = { studentsReaching: () => Promise.resolve([]) } as never;
   const openings = new TestOpeningService(prisma.asService(), access, outbox);

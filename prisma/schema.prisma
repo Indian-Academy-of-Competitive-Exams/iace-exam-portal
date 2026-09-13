@@ -692,14 +692,13 @@ model Student {
 
   profile           StudentProfile?
   consents          StudentConsent[]
-  currentBranch     Branch?                  @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
+  currentBranch     Branch?              @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
   attempts          Attempt[]
   grants            StudentGrant[]
   notifications     Notification[]
   stat              StudentStat?
   subjectStats      StudentSubjectStat[]
   eventCandidacies  EventCandidate[]
-  notificationPrefs NotificationPreference[]
   pushSubscriptions PushSubscription[]
   savedQuestions    SavedQuestion[]
 
@@ -1058,7 +1057,7 @@ model NotificationDelivery {
   notificationId    String
   channel           DeliveryChannel
   status            DeliveryStatus  @default(PENDING)
-  // NO_TEMPLATE, NO_CONTACT, OPTED_OUT, ALREADY_READ — why we decided not to spend.
+  // NO_TEMPLATE, NO_CONTACT, ALREADY_READ — why we decided not to spend.
   skipReason        String?
   templateId        String?
   // Dark until a provider that reports delivery is configured; indexed for the webhook that will.
@@ -1197,22 +1196,6 @@ enum QuestionFlagStatus {
   OPEN
   RESOLVED
   DISMISSED
-}
-
-// Absent row = the policy default. IN_APP is the floor and cannot be turned off (enforced in code).
-// A null `type` means the choice applies to every notification type.
-model NotificationPreference {
-  id        String            @id @default(cuid())
-  studentId String
-  channel   DeliveryChannel
-  type      NotificationType?
-  enabled   Boolean           @default(true)
-  updatedAt DateTime          @updatedAt @db.Timestamptz(3)
-
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, channel, type])
-  @@index([studentId])
 }
 
 //A browser push endpoint. Pruned when a send returns 404/410 (dead subscription).

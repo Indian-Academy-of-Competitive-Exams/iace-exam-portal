@@ -134,7 +134,7 @@ erodes.
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                                               |
 | attempts      | `Attempt`, `AttemptQuestion`, `PerformanceShare`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
 | audit         | `RowActionLog`, `ImportLog`                                                                                                                                                |
-| notifications | `Notification`, `NotificationDelivery`, `NotificationPreference`, `PushSubscription`, `Announcement`                                                                       |
+| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `Announcement`                                                                                                 |
 | saved         | `SavedQuestion`                                                                                                                                                            |
 
 `auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
@@ -307,6 +307,14 @@ Built and in use. Reach for these rather than adding a second of any of them.
   `notification-policy.ts` gives every kind an EMPTY escalation chain, so paid delivery is a
   deliberate per-send override priced against `NOTIFICATION_COST_*_PAISE`, never a kind's habit.
   Add a kind and it is free until somebody writes an escalation for it on purpose.
+- **The institute picks the channel, and a student has no switch over it.** There is no per-channel
+  opt-in: whether the platform pays to reach somebody is a delivery decision taken in code and per
+  send, never a row a student can set, and the preference table that said otherwise was dropped.
+  Its screen offered SMS, WhatsApp and email switches that the delivery processor never read — three
+  controls wired to nothing — and the one switch it did read, web push, the browser already owns:
+  a `PushSubscription` row exists only because the student granted permission, and revoking it
+  deletes the row. **The absence of a subscription is the refusal**, which is why push records no
+  skip and costs no table. What a student still controls is their browser and their bell.
 - **WhatsApp is future scope, wired and off.** One vendor — Interakt, which resells Meta's Cloud
   API — and no selector between two: carrying a spare provider bought a config switch nobody would
   flip mid-incident, and cost a second set of credentials to keep valid. The channel routes nowhere

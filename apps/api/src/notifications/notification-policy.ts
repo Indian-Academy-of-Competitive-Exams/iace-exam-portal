@@ -1,7 +1,7 @@
 /**
  * What each kind of notification is worth spending on, and how long the free
  * channels get to work before we pay for one. Code-owned like FEATURE_KEYS:
- * money and urgency are decisions, not rows an admin can drift.
+ * money and urgency are the institute's decisions, never a student's setting.
  */
 import { DeliveryChannel } from '@prisma/client';
 import { NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
@@ -11,7 +11,6 @@ import { MESSAGE_CHANNELS, type MessageChannel } from '../common/messaging';
 export const SKIP_REASONS = {
   NO_TEMPLATE: 'NO_TEMPLATE',
   NO_CONTACT: 'NO_CONTACT',
-  OPTED_OUT: 'OPTED_OUT',
   ALREADY_READ: 'ALREADY_READ',
 } as const;
 
@@ -28,18 +27,6 @@ export type PaidChannel = keyof typeof OUTBOUND_CHANNEL;
 
 /** What the delivery queue may be handed. A free channel is sent where it is booked, not there. */
 export const PAID_CHANNELS = Object.keys(OUTBOUND_CHANNEL) as PaidChannel[];
-
-/** What a channel does for a student who has never said. Free ones lead; a paid one is opted into. */
-export const CHANNEL_DEFAULT = {
-  [DeliveryChannel.IN_APP]: true,
-  [DeliveryChannel.WEB_PUSH]: true,
-  [DeliveryChannel.EMAIL]: false,
-  [DeliveryChannel.SMS]: false,
-  [DeliveryChannel.WHATSAPP]: false,
-} as const satisfies Record<DeliveryChannel, boolean>;
-
-/** The bell is the floor: a request to turn it off is refused, never quietly written. */
-export const LOCKED_CHANNEL = DeliveryChannel.IN_APP;
 
 /** How long a student gets to open the app before we start paying to reach them. */
 const DEFER_SEC = 600;

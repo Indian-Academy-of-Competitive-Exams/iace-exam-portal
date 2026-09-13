@@ -9,7 +9,6 @@ import {
   Param,
   Patch,
   Post,
-  Put,
   Query,
   Req,
   UploadedFile,
@@ -32,10 +31,9 @@ import {
   type DropPushSubscriptionBody,
   type Notification,
   type NotificationListQuery,
-  type NotificationPreferences,
+  type PushConfig,
   type Paginated,
   type PushSubscriptionBody,
-  type SetNotificationPreferenceBody,
   type RecordConsentBody,
   type StudentCatalog,
   type StudentDataExport,
@@ -46,18 +44,13 @@ import {
   notificationListQuerySchema,
   pushSubscriptionSchema,
   recordConsentSchema,
-  setNotificationPreferenceSchema,
   updateMeSchema,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
-import {
-  NotificationPreferencesService,
-  NotificationsService,
-  PushService,
-} from '../notifications';
+import { NotificationsService, PushService } from '../notifications';
 import { MeService } from './me.service';
 import { StudentPrivacyService } from '../students';
 
@@ -79,7 +72,6 @@ export class MeController {
     private readonly me: MeService,
     private readonly auth: AuthService,
     private readonly notifications: NotificationsService,
-    private readonly preferences: NotificationPreferencesService,
     private readonly push: PushService,
     private readonly privacy: StudentPrivacyService,
   ) {}
@@ -142,21 +134,10 @@ export class MeController {
     return this.notifications.markRead(user.id, id);
   }
 
-  /** Every channel and whether it is on, with the key this browser would subscribe to push with. */
-  @Get('notification-preferences')
-  notificationPreferences(
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<NotificationPreferences> {
-    return this.preferences.read(user.id);
-  }
-
-  /** One channel at a time, answering with the whole set — the screen never patches its own copy. */
-  @Put('notification-preferences')
-  setNotificationPreference(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodBody(setNotificationPreferenceSchema)) body: SetNotificationPreferenceBody,
-  ): Promise<NotificationPreferences> {
-    return this.preferences.set(user.id, body);
+  /** The key this browser would subscribe to push with. There is nothing else left to choose. */
+  @Get('push-subscription')
+  pushConfig(): PushConfig {
+    return { publicKey: this.push.publicKey() };
   }
 
   /** This browser's push endpoint. Idempotent: the same device resubscribing is the same row. */

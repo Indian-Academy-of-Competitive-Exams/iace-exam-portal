@@ -1,21 +1,9 @@
 import * as React from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import {
-  Alert,
-  Badge,
-  Button,
-  Checkbox,
-  EmptyState,
-  EMPTY_STATE_KINDS,
-  PageHeader,
-  PanelFrame,
-  Skeleton,
-  toast,
-} from '@iace/ui';
-import { DELIVERY_CHANNEL, type NotificationPreference } from '@iace/contracts';
+import { Alert, Badge, Button, Checkbox, PageHeader, PanelFrame, Skeleton, toast } from '@iace/ui';
 import { api } from '../lib/api';
-import { CHANNEL_LABELS, NAV_ITEMS, NOTIFICATION_PREFERENCES_QUERY_KEY } from '../lib/constants';
+import { NAV_ITEMS, PUSH_CONFIG_QUERY_KEY } from '../lib/constants';
 import { DividedList, DividedRow, PageBody, Section } from '../components/ui';
 import {
   currentPushSubscription,
@@ -28,18 +16,10 @@ import {
   unsubscribeFromPush,
 } from '../lib/pwa';
 
-const SKELETON_KEYS = ['a', 'b', 'c', 'd', 'e'];
-
-/** Names the gap rather than the switch: an unavailable channel is not one they turned off. */
-const UNAVAILABLE = {
-  [DELIVERY_CHANNEL.EMAIL]: 'No email on file',
-  [DELIVERY_CHANNEL.WEB_PUSH]: 'Not available here',
-} as const;
-
 export function NotificationSettingsPage() {
-  const preferences = useQuery({
-    queryKey: NOTIFICATION_PREFERENCES_QUERY_KEY,
-    queryFn: () => api.me.notificationPreferences(),
+  const config = useQuery({
+    queryKey: PUSH_CONFIG_QUERY_KEY,
+    queryFn: () => api.me.pushConfig(),
   });
 
   return (
@@ -53,135 +33,46 @@ export function NotificationSettingsPage() {
     >
       <PageBody>
         <Alert variant="info">
-          In-app notifications stay on for everyone — the bell is where every result, test and
-          notice lands. SMS still carries your sign-in codes whatever you choose here.
+          Every result, test and notice lands in the bell, which stays on for everyone. SMS carries
+          your sign-in codes whatever you choose here.
         </Alert>
 
         <InstallOffer />
 
-        <Section title="Channels">
-          <ChannelRegion
-            rows={preferences.data?.channels}
-            publicKey={preferences.data?.webPushPublicKey ?? null}
-            isLoading={preferences.isLoading}
-            isError={preferences.isError}
-            onRetry={preferences.refetch}
-          />
+        <Section title="Push notifications">
+          <DividedList>
+            <DividedRow
+              title="This browser"
+              action={
+                config.isLoading ? (
+                  <Skeleton variant="row" className="h-6 w-10 rounded-md" />
+                ) : (
+                  <PushControl publicKey={config.data?.publicKey ?? null} />
+                )
+              }
+            />
+          </DividedList>
         </Section>
       </PageBody>
     </PanelFrame>
   );
 }
 
-function ChannelRegion({
-  rows,
-  publicKey,
-  isLoading,
-  isError,
-  onRetry,
-}: Readonly<{
-  rows: readonly NotificationPreference[] | undefined;
-  publicKey: string | null;
-  isLoading: boolean;
-  isError: boolean;
-  onRetry: () => void;
-}>) {
-  if (isLoading) {
-    return (
-      <div className="flex flex-col gap-3">
-        {SKELETON_KEYS.map((key) => (
-          <Skeleton key={key} variant="row" className="h-14 rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-  if (isError || !rows) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Your notification settings did not load"
-        onRetry={onRetry}
-      />
-    );
-  }
-
-  return (
-    <DividedList>
-      {rows.map((row) => (
-        <ChannelRow key={row.channel} row={row} publicKey={publicKey} />
-      ))}
-    </DividedList>
-  );
-}
-
-function ChannelRow({
-  row,
-  publicKey,
-}: Readonly<{ row: NotificationPreference; publicKey: string | null }>) {
-  const isPush = row.channel === DELIVERY_CHANNEL.WEB_PUSH;
-  const subscribed = usePushSubscription(isPush);
-  const save = useSaveChannel();
+/** A browser that cannot carry push is named as unavailable, not drawn as a switch turned off. */
+function PushControl({ publicKey }: Readonly<{ publicKey: string | null }>) {
+  const subscribed = usePushSubscription();
   const push = usePushChannel(publicKey);
 
-  const label = CHANNEL_LABELS[row.channel];
-  const usable = row.available && (!isPush || pushIsSupported());
-  const checked = isPush ? row.enabled && subscribed.isOn : row.enabled;
-
-  const onChange = (enabled: boolean) => {
-    if (!isPush) {
-      save.mutate({ channel: row.channel, enabled });
-      return;
-    }
-    push.mutate(enabled, { onSuccess: () => subscribed.refresh() });
-  };
-
-  return (
-    <DividedRow
-      title={label}
-      action={
-        <ChannelControl
-          label={label}
-          locked={row.locked}
-          usable={usable}
-          channel={row.channel}
-          checked={checked}
-          pending={save.isPending || push.isPending}
-          onChange={onChange}
-        />
-      }
-    />
-  );
-}
-
-/** An action a row cannot take is left out, not disabled — with a badge naming why in its place. */
-function ChannelControl({
-  label,
-  locked,
-  usable,
-  channel,
-  checked,
-  pending,
-  onChange,
-}: Readonly<{
-  label: string;
-  locked: boolean;
-  usable: boolean;
-  channel: NotificationPreference['channel'];
-  checked: boolean;
-  pending: boolean;
-  onChange: (enabled: boolean) => void;
-}>) {
-  if (locked) return <Badge variant="primary">Always on</Badge>;
-  if (!usable) {
-    return <Badge variant="neutral">{UNAVAILABLE[channel as keyof typeof UNAVAILABLE]}</Badge>;
-  }
+  if (!publicKey || !pushIsSupported()) return <Badge variant="neutral">Not available here</Badge>;
 
   return (
     <Checkbox
-      aria-label={label}
-      checked={checked}
-      disabled={pending}
-      onChange={(event) => onChange(event.target.checked)}
+      aria-label="Push notifications in this browser"
+      checked={subscribed.isOn}
+      disabled={push.isPending}
+      onChange={(event) =>
+        push.mutate(event.target.checked, { onSuccess: () => subscribed.refresh() })
+      }
     />
   );
 }
@@ -209,56 +100,37 @@ function InstallOffer() {
   );
 }
 
-/** Whether THIS browser holds a subscription — the server's preference alone cannot say. */
-function usePushSubscription(enabled: boolean) {
+/** Whether THIS browser holds a subscription, which is the whole switch — the server stores no other. */
+function usePushSubscription() {
   const [isOn, setIsOn] = React.useState(false);
 
   const refresh = React.useCallback(() => {
-    if (!enabled) return;
     void currentPushSubscription().then((subscription) => setIsOn(subscription !== null));
-  }, [enabled]);
+  }, []);
 
   React.useEffect(refresh, [refresh]);
 
   return { isOn, refresh };
 }
 
-function useSaveChannel() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: api.me.setNotificationPreference,
-    onSuccess: (set) => queryClient.setQueryData(NOTIFICATION_PREFERENCES_QUERY_KEY, set),
-  });
-}
-
-/** Push is two writes that must agree: the browser's subscription, then the preference behind it. */
+/** One write, not two: the browser subscribes or revokes, and the server holds only that endpoint. */
 function usePushChannel(publicKey: string | null) {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (enabled: boolean) => {
       if (!enabled) {
         const endpoint = await unsubscribeFromPush();
         if (endpoint) await api.me.unsubscribeFromPush({ endpoint });
-        return api.me.setNotificationPreference({
-          channel: DELIVERY_CHANNEL.WEB_PUSH,
-          enabled: false,
-        });
+        return true;
       }
 
       const subscription = publicKey ? await subscribeToPush(publicKey) : null;
-      if (!subscription) return null;
+      if (!subscription) return false;
 
       await api.me.subscribeToPush(subscription);
-      return api.me.setNotificationPreference({
-        channel: DELIVERY_CHANNEL.WEB_PUSH,
-        enabled: true,
-      });
+      return true;
     },
-    onSuccess: (set) => {
-      if (set) queryClient.setQueryData(NOTIFICATION_PREFERENCES_QUERY_KEY, set);
-      else toast.info('Your browser did not allow notifications, so push stays off.');
+    onSuccess: (done) => {
+      if (!done) toast.info('Your browser did not allow notifications, so push stays off.');
     },
   });
 }

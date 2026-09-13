@@ -4473,7 +4473,7 @@ export class FakeNotificationsPrisma {
     private readonly emails: Record<string, string> = {},
   ) {}
 
-  /** Only what `mobileOf` and the preference resolver ask for: a live student, or nothing. */
+  /** Only what `mobileOf` asks for: a live student, or nothing. */
   readonly student = {
     findFirst: ({ where }: { where: { id: string } }) =>
       Promise.resolve(
@@ -4625,72 +4625,6 @@ export class FakeNotificationsPrisma {
     },
   };
 
-  readonly preferences: FakePreferenceRow[] = [];
-
-  private preferenceSeq = 0;
-
-  /** Enough for the resolver: the null-type rows a student's own screen writes, plus per-type ones. */
-  readonly notificationPreference = {
-    findMany: ({
-      where,
-    }: {
-      where: {
-        studentId: string;
-        channel?: DeliveryChannel;
-        type?: null;
-        OR?: { type: NotificationType | null }[];
-      };
-    }) =>
-      Promise.resolve(
-        this.preferences.filter(
-          (row) =>
-            row.studentId === where.studentId &&
-            (where.channel === undefined || row.channel === where.channel) &&
-            (where.type === undefined || row.type === where.type) &&
-            (where.OR === undefined || where.OR.some((clause) => clause.type === row.type)),
-        ),
-      ),
-
-    deleteMany: ({
-      where,
-    }: {
-      where: { studentId: string; channel: DeliveryChannel; type: null };
-    }) => {
-      const kept = this.preferences.filter(
-        (row) =>
-          !(
-            row.studentId === where.studentId &&
-            row.channel === where.channel &&
-            row.type === where.type
-          ),
-      );
-      const count = this.preferences.length - kept.length;
-      this.preferences.splice(0, this.preferences.length, ...kept);
-      return Promise.resolve({ count });
-    },
-
-    create: ({
-      data,
-    }: {
-      data: {
-        studentId: string;
-        channel: DeliveryChannel;
-        type?: NotificationType | null;
-        enabled: boolean;
-      };
-    }) => {
-      this.preferenceSeq += 1;
-      const row: FakePreferenceRow = {
-        id: `pref_${this.preferenceSeq}`,
-        type: null,
-        ...data,
-        updatedAt: new Date(),
-      };
-      this.preferences.push(row);
-      return Promise.resolve(row);
-    },
-  };
-
   readonly subscriptions: FakePushSubscriptionRow[] = [];
 
   private subscriptionSeq = 0;
@@ -4809,15 +4743,6 @@ export function makeOpeningTest(overrides: Partial<FakeOpeningTestRow> = {}): Fa
     announcedAt: null,
     ...overrides,
   };
-}
-
-export interface FakePreferenceRow {
-  id: string;
-  studentId: string;
-  channel: DeliveryChannel;
-  type: NotificationType | null;
-  enabled: boolean;
-  updatedAt: Date;
 }
 
 interface FakePushSubscriptionInput {

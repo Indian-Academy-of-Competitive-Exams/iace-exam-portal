@@ -129,9 +129,8 @@ import {
   notificationSchema,
   type Notification,
   type NotificationListQueryInput,
-  notificationPreferencesSchema,
-  type NotificationPreferences,
-  type SetNotificationPreferenceInput,
+  pushConfigSchema,
+  type PushConfig,
   type PushSubscriptionInput,
   type DropPushSubscriptionInput,
   studentCatalogSchema,
@@ -715,19 +714,9 @@ export function createApiClient(options: ApiClientOptions) {
       readNotification: (id: string): Promise<Notification> =>
         request(ME_ROUTES.readNotification(id), { method: 'PATCH', schema: notificationSchema }),
 
-      /** Every channel and whether it is on, plus the key this browser subscribes to push with. */
-      notificationPreferences: (): Promise<NotificationPreferences> =>
-        request(ME_ROUTES.notificationPreferences, { schema: notificationPreferencesSchema }),
-
-      /** Returns the whole set back, so the screen never reassembles it from one row. */
-      setNotificationPreference: (
-        input: SetNotificationPreferenceInput,
-      ): Promise<NotificationPreferences> =>
-        request(ME_ROUTES.notificationPreferences, {
-          method: 'PUT',
-          body: input,
-          schema: notificationPreferencesSchema,
-        }),
+      /** The key this browser subscribes to push with. */
+      pushConfig: (): Promise<PushConfig> =>
+        request(ME_ROUTES.pushSubscription, { schema: pushConfigSchema }),
 
       subscribeToPush: (input: PushSubscriptionInput): Promise<NoContent> =>
         request(ME_ROUTES.pushSubscription, {

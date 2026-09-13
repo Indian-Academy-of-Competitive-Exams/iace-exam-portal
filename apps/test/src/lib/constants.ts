@@ -2,13 +2,11 @@ import { BarChart3, Bell, Bookmark, ClipboardList, KeyRound, Trophy, User } from
 import { type NavItem } from '@iace/app-kit';
 import {
   ANSWER_STATE,
-  DELIVERY_CHANNEL,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
   PERFORMANCE_SCOPES,
   sharedReportPath,
   type AnswerState,
-  type DeliveryChannel,
   type LanguageCode,
   type LeaderboardMeasure,
   type LeaderboardScope,
@@ -92,17 +90,8 @@ export const UNREAD_POLL_MS = 60_000;
 /** One page of the bell, and the page size the header count is asked for. */
 export const NOTIFICATIONS_PAGE_SIZE = 20;
 
-/** Every channel and whether it is on, under one key: the screen reads and writes the whole set. */
-export const NOTIFICATION_PREFERENCES_QUERY_KEY = ['me', 'notification-preferences'] as const;
-
-/** What a student calls each way of being reached. `available` decides whether a row can be tuned. */
-export const CHANNEL_LABELS: Readonly<Record<DeliveryChannel, string>> = {
-  [DELIVERY_CHANNEL.IN_APP]: 'In-app',
-  [DELIVERY_CHANNEL.WEB_PUSH]: 'Push',
-  [DELIVERY_CHANNEL.WHATSAPP]: 'WhatsApp',
-  [DELIVERY_CHANNEL.EMAIL]: 'Email',
-  [DELIVERY_CHANNEL.SMS]: 'SMS',
-};
+/** The VAPID key this browser subscribes with, which is all the settings screen reads. */
+export const PUSH_CONFIG_QUERY_KEY = ['me', 'push-subscription'] as const;
 /** One page of either saved list. The same feed shape as the bell, so the same page. */
 export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
 

@@ -302,7 +302,7 @@ export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
 export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;
 
 // ============================================================================
-// How the platform reaches one student. The bell is the floor; an absent preference is the default.
+// How the platform reaches one student. The institute picks the channel, not the student.
 // ============================================================================
 
 /** Mirrors `DeliveryChannel` in prisma/schema.prisma — the two are edited together. */
@@ -316,29 +316,11 @@ export const DELIVERY_CHANNEL = {
 export const deliveryChannelSchema = z.enum(DELIVERY_CHANNEL);
 export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
 
-/** One channel as the student's own screen shows it. `locked` is the bell, which has no switch. */
-export const notificationPreferenceSchema = z.object({
-  channel: deliveryChannelSchema,
-  enabled: z.boolean(),
-  locked: z.boolean(),
-  /** False where nothing is configured to carry it — a row to show as unavailable, not as off. */
-  available: z.boolean(),
+/** Null where no VAPID key is configured, which is a channel nothing can carry rather than one off. */
+export const pushConfigSchema = z.object({
+  publicKey: z.string().nullable(),
 });
-export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
-
-/** The screen's whole read. The VAPID public key rides along so nothing is configured twice. */
-export const notificationPreferencesSchema = z.object({
-  channels: z.array(notificationPreferenceSchema),
-  webPushPublicKey: z.string().nullable(),
-});
-export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
-
-export const setNotificationPreferenceSchema = z.object({
-  channel: deliveryChannelSchema,
-  enabled: z.boolean(),
-});
-export type SetNotificationPreferenceInput = z.input<typeof setNotificationPreferenceSchema>;
-export type SetNotificationPreferenceBody = z.infer<typeof setNotificationPreferenceSchema>;
+export type PushConfig = z.infer<typeof pushConfigSchema>;
 
 /** What `pushManager.subscribe` hands back, flattened — the browser's own endpoint and its keys. */
 export const pushSubscriptionSchema = z.object({

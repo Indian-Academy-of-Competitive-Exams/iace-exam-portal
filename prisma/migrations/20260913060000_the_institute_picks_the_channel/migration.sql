@@ -1,0 +1,17 @@
+-- Drops the student's per-channel notification opt-in.
+--
+-- `NotificationPreference` let a student switch a delivery channel on or off, and the screen behind
+-- it offered SMS, WhatsApp and email rows. Only one of those switches was ever read: web push, in
+-- PushService. The delivery processor that spends money on SMS and WhatsApp never consulted the
+-- table at all, so three of the five rows on that screen were switches wired to nothing.
+--
+-- Whether the platform pays to reach somebody is the institute's decision, taken per send through
+-- NOTIFICATION_POLICY and an announcement's own paidChannels. The remaining honest switch, web push,
+-- is the browser's own permission: a row in PushSubscription exists only because the student granted
+-- it, and revoking it deletes that row. The preference table duplicated a consent the browser holds.
+--
+-- Every row here is a student's setting, and dropping the table discards them. That is intended and
+-- not recoverable: the only rows that had any effect were WEB_PUSH turned off, and a student who
+-- wants push off now turns it off in the browser, which was always the stronger switch. The platform
+-- is on internal rollout, so the count is small.
+DROP TABLE "NotificationPreference";

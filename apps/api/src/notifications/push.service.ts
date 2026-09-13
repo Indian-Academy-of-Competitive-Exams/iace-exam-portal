@@ -7,8 +7,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DeliveryChannel, DeliveryStatus, type NotificationType } from '@prisma/client';
 import { NOTIFICATION_INBOX_PATH, type PushSubscriptionBody } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationPreferencesService } from './notification-preferences.service';
-import { SKIP_REASONS, type SkipReason } from './notification-policy';
+import { AppConfigService } from '../config/app-config.service';
+import { type SkipReason } from './notification-policy';
 import { PUSH_OUTCOMES, PUSH_SENDER, type PushSender } from './web-push.sender';
 
 /** What one push is sent from. The title only — the body may name marks, and a push must not. */
@@ -25,9 +25,14 @@ export class PushService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly preferences: NotificationPreferencesService,
+    private readonly config: AppConfigService,
     @Inject(PUSH_SENDER) private readonly sender: PushSender,
   ) {}
+
+  /** Null is a channel nothing can carry, which the screen shows differently from one switched off. */
+  publicKey(): string | null {
+    return this.config.get('VAPID_PUBLIC_KEY') ?? null;
+  }
 
   /** Keyed on the endpoint the browser gave: the same device resubscribing is the same row. */
   async subscribe(studentId: string, body: PushSubscriptionBody): Promise<void> {
@@ -69,24 +74,11 @@ export class PushService {
     });
     if (settled) return;
 
-    const allowed = await this.preferences.allows(
-      input.studentId,
-      DeliveryChannel.WEB_PUSH,
-      input.type,
-    );
-    if (!allowed) {
-      await this.record(input.notificationId, {
-        status: DeliveryStatus.SKIPPED,
-        skipReason: SKIP_REASONS.OPTED_OUT,
-      });
-      return;
-    }
-
     const targets = await this.prisma.pushSubscription.findMany({
       where: { studentId: input.studentId },
       select: { endpoint: true, p256dh: true, auth: true },
     });
-    // A student who has enabled push in no browser is an absence, not a decision worth 50,000 rows.
+    // A browser subscription IS the consent, so no subscription is an absence and not a refusal.
     if (targets.length === 0) return;
 
     const payload = {

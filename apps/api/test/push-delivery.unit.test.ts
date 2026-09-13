@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { DeliveryChannel, DeliveryStatus } from '@prisma/client';
 import { NOTIFICATION_INBOX_PATH, NOTIFICATION_TYPE } from '@iace/contracts';
-import { NotificationPreferencesService } from '../src/notifications/notification-preferences.service';
 import { PushService } from '../src/notifications/push.service';
 import { FakeConfig, FakeNotificationsPrisma, FakePushSender } from './support/fakes';
 
@@ -30,15 +29,10 @@ const SUBSCRIPTION = {
 
 function build(sender = new FakePushSender()) {
   const prisma = new FakeNotificationsPrisma([], { [STUDENT]: '9876543210' });
-  const preferences = new NotificationPreferencesService(
-    prisma.asService(),
-    new FakeConfig(VAPID).asService(),
-  );
   return {
     prisma,
-    preferences,
     sender,
-    push: new PushService(prisma.asService(), preferences, sender),
+    push: new PushService(prisma.asService(), new FakeConfig(VAPID).asService(), sender),
   };
 }
 
@@ -137,17 +131,17 @@ describe('Sending a notification as a push', () => {
   });
 });
 
-describe('When a student has turned push off', () => {
-  it('sends nothing and records why', async () => {
-    const { push, sender, preferences, prisma } = build();
+describe('When a student has turned push off in the browser', () => {
+  /** Revoking permission deletes the subscription, so the absence IS the refusal and costs no row. */
+  it('sends nothing and books nothing', async () => {
+    const { push, sender, prisma } = build();
     await push.subscribe(STUDENT, SUBSCRIPTION);
-    await preferences.set(STUDENT, { channel: DeliveryChannel.WEB_PUSH, enabled: false });
+    await push.unsubscribe(STUDENT, SUBSCRIPTION.endpoint);
 
     await push.deliver(NOTIFICATION);
 
     assert.equal(sender.sent.length, 0);
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.SKIPPED);
-    assert.equal(prisma.deliveries[0]?.skipReason, 'OPTED_OUT');
+    assert.equal(prisma.deliveries.length, 0);
   });
 });
 

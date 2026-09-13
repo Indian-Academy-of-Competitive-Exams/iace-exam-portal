@@ -16,13 +16,12 @@ import { NotificationsProcessor } from './notifications.processor';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
-import { NotificationPreferencesService } from './notification-preferences.service';
 import { PushService } from './push.service';
 import { TestOpeningService } from './test-opening.service';
 import { NotificationListener } from './notification.listener';
 import { PUSH_SENDER, WebPushSender } from './web-push.sender';
 
-/** Owns the ledger, the preferences and the push endpoints. No controller: both hang off `me`. */
+/** Owns the ledger and the push endpoints. No controller of its own: both hang off `me`. */
 @Module({
   imports: [
     PrismaModule,
@@ -36,7 +35,6 @@ import { PUSH_SENDER, WebPushSender } from './web-push.sender';
   providers: [
     AnnouncementsService,
     NotificationsService,
-    NotificationPreferencesService,
     NotificationOutbox,
     NotificationsProcessor,
     NotificationDeliveryProcessor,
@@ -45,7 +43,7 @@ import { PUSH_SENDER, WebPushSender } from './web-push.sender';
     NotificationListener,
     { provide: PUSH_SENDER, useClass: WebPushSender },
   ],
-  exports: [NotificationsService, NotificationOutbox, NotificationPreferencesService, PushService],
+  exports: [NotificationsService, NotificationOutbox, PushService],
 })
 export class NotificationsModule implements OnModuleInit {
   constructor(@InjectQueue(QUEUE_NAMES.NOTIFICATIONS) private readonly notifications: Queue) {}
