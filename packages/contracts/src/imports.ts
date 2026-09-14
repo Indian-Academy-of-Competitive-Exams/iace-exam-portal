@@ -172,9 +172,6 @@ export type ProgramImportResult = z.infer<typeof programImportResultSchema>;
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
   studentsCommit: '/imports/students/commit',
-  /** The same two steps, with the main portal as the source instead of an upload. */
-  studentsPortalPreview: '/imports/students/portal/preview',
-  studentsPortalCommit: '/imports/students/portal/commit',
   /** The sample workbook, generated from STUDENT_IMPORT_COLUMNS below. */
   studentsTemplate: '/imports/students/template',
   /** An intake is filed against the EVENT whose roster it fills, never against a series. */

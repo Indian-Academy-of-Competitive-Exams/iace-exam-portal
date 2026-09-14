@@ -70,30 +70,62 @@ export function mobilesIn(table: CsvTable): string[] {
   return [...mobiles];
 }
 
-export function planStudentImport(table: CsvTable, context: ImportContext): StudentImportPlan {
+/** What every roster planner shares: refuse a sheet that cannot be read, else plan it a row at a time. */
+export function planRoster<TRow>(
+  table: CsvTable,
+  headerErrors: (headers: string[]) => string[],
+  planRow: (row: CsvRow, seenInFile: Map<string, number>) => TRow,
+): { rows: TRow[]; fileErrors: string[] } {
   if (table.rows.length === 0) {
     return {
       rows: [],
-      summary: { total: 0, willCreate: 0, willUpdate: 0, invalid: 0 },
-      fileErrors:
-        table.headers.length === 0 ? ['That file is empty'] : missingHeaders(table.headers),
+      fileErrors: table.headers.length === 0 ? ['That file is empty'] : headerErrors(table.headers),
     };
   }
 
-  const fileErrors = [...missingHeaders(table.headers), ...tooManyRows(table)];
-  if (fileErrors.length > 0) {
-    return {
-      rows: [],
-      summary: { total: 0, willCreate: 0, willUpdate: 0, invalid: 0 },
-      fileErrors,
-    };
-  }
+  const fileErrors = [...headerErrors(table.headers), ...tooManyRows(table)];
+  if (fileErrors.length > 0) return { rows: [], fileErrors };
 
-  // A number repeated inside one file would otherwise be counted as two
-  // creations and then collide on the unique index at commit time.
+  // A number repeated in one file would be two creations, then a collision on the unique index.
   const seenInFile = new Map<string, number>();
+  return { rows: table.rows.map((row) => planRow(row, seenInFile)), fileErrors: [] };
+}
 
-  const rows = table.rows.map((row) => planRow(row, context, seenInFile));
+interface SheetColumn {
+  header: string;
+  required: boolean;
+  aliases: readonly string[];
+}
+
+/** A required column the sheet has under none of its names, said the way the sample file names it. */
+export function missingColumnErrors(columns: readonly SheetColumn[], headers: string[]): string[] {
+  return columns
+    .filter((column) => column.required && !column.aliases.some((alias) => headers.includes(alias)))
+    .map((column) => `That file has no ${column.header} column`);
+}
+
+/** The number and name an intake sheet carries, and the two things that stop its row. */
+export function readContact(row: CsvRow, seenInFile: Map<string, number>) {
+  const parsed = mobileSchema.safeParse(columnValue(row, 'mobile'));
+  const mobile = parsed.success ? parsed.data : null;
+  const duplicateOf = mobile === null ? undefined : seenInFile.get(mobile);
+  if (mobile !== null && duplicateOf === undefined) seenInFile.set(mobile, row.line);
+
+  return {
+    mobile,
+    duplicateOf,
+    fullName: columnValue(row, 'fullName').trim() || null,
+    errors: [
+      parsed.success ? undefined : 'That is not a mobile number we can enter',
+      duplicateOf === undefined ? undefined : `The same number is already on line ${duplicateOf}`,
+    ].filter((error): error is string => error !== undefined),
+  };
+}
+
+export function planStudentImport(table: CsvTable, context: ImportContext): StudentImportPlan {
+  const { rows, fileErrors } = planRoster(table, missingHeaders, (row, seenInFile) =>
+    planRow(row, context, seenInFile),
+  );
 
   return {
     rows,
@@ -103,7 +135,7 @@ export function planStudentImport(table: CsvTable, context: ImportContext): Stud
       willUpdate: rows.filter((r) => r.action === 'update').length,
       invalid: rows.filter((r) => r.action === 'skip').length,
     },
-    fileErrors: [],
+    fileErrors,
   };
 }
 

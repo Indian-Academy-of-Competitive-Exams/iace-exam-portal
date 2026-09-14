@@ -14,8 +14,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { type Response } from 'express';
 import {
   ActorTypes,
-  AppException,
-  ErrorCodes,
   FEATURE_KEYS,
   IMPORT_FILE_FIELD,
   PERMISSION_LEVELS,
@@ -28,26 +26,13 @@ import {
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
-import { AppConfigService } from '../config/app-config.service';
+import { requireFile, type UploadedSheet } from '../common/importing/upload';
 import { QuestionImportService } from './question-import.service';
 
-/** The two fields we use off a multipart upload. */
-interface UploadedFileLike {
-  buffer: Buffer;
-  size: number;
-}
-
-/**
- * Mounted under /imports, the one prefix with the larger body limit — see
- * common/body-parsers.ts, which was written for exactly this endpoint.
- */
 @Controller('imports/questions')
 @Actors(ActorTypes.ADMIN)
 export class QuestionImportController {
-  constructor(
-    private readonly imports: QuestionImportService,
-    private readonly config: AppConfigService,
-  ) {}
+  constructor(private readonly imports: QuestionImportService) {}
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('template')
@@ -67,9 +52,9 @@ export class QuestionImportController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   preview(
     @CurrentUser() user: AuthenticatedUser,
-    @UploadedFile() file?: UploadedFileLike,
+    @UploadedFile() file?: UploadedSheet,
   ): Promise<QuestionImportPlan> {
-    return this.imports.preview(this.bufferOf(file), user.id);
+    return this.imports.preview(requireFile(file), user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -79,28 +64,5 @@ export class QuestionImportController {
     @Body(new ZodBody(questionImportCommitSchema)) body: QuestionImportCommitBody,
   ): Promise<QuestionImportResult> {
     return this.imports.commit(body.importLogId, body.status);
-  }
-
-  /**
-   * A second line of defence, and only that: MulterModule already aborts the
-   * stream at the same limit (see questions.module.ts).
-   */
-  private bufferOf(file: UploadedFileLike | undefined): Buffer {
-    if (!file) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to import', {
-        fieldErrors: { file: ['Choose a file to import'] },
-      });
-    }
-
-    const limit = this.config.importLimitBytes;
-    if (file.size > limit) {
-      throw new AppException(
-        ErrorCodes.VALIDATION_ERROR,
-        `That file is larger than ${Math.round(limit / 1024 / 1024)}MB. Split it and import in parts.`,
-        { fieldErrors: { file: ['That file is too large'] } },
-      );
-    }
-
-    return file.buffer;
   }
 }

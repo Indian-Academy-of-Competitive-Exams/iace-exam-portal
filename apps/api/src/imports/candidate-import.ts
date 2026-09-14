@@ -1,17 +1,12 @@
 import {
   CANDIDATE_IMPORT_COLUMNS,
-  IMPORT_MAX_ROWS,
-  mobileSchema,
   type CandidateImportPlan,
   type CandidateImportRow,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable } from '../common/importing';
-import { columnValue } from './student-import';
+import { missingColumnErrors, planRoster, readContact } from './student-import';
 
 /** Decides what an event intake WOULD do, without doing any of it. */
-
-/** The sheet is a candidate list from outside: a number and a name, and nothing to overwrite with. */
-const REQUIRED_COLUMN = 'mobile';
 
 const DELETED_MESSAGE =
   'That number belonged to a student who was deleted. Restore them, or enter them on a different number.';
@@ -23,39 +18,15 @@ export interface CandidateImportContext {
   deletedMobiles: Set<string>;
 }
 
-function missingHeaders(headers: string[]): string[] {
-  return CANDIDATE_IMPORT_COLUMNS.filter(
-    (column) => column.required && !column.aliases.some((alias) => headers.includes(alias)),
-  ).map((column) => `That file has no ${column.header} column`);
-}
-
-function tooManyRows(table: CsvTable): string[] {
-  return table.rows.length > IMPORT_MAX_ROWS
-    ? [`That file has ${table.rows.length} rows. Split it into files of ${IMPORT_MAX_ROWS}.`]
-    : [];
-}
-
-const EMPTY = { total: 0, willCreate: 0, willAdd: 0, invalid: 0 };
-
 export function planCandidateImport(
   table: CsvTable,
   context: CandidateImportContext,
 ): CandidateImportPlan {
-  if (table.rows.length === 0) {
-    return {
-      rows: [],
-      summary: EMPTY,
-      fileErrors:
-        table.headers.length === 0 ? ['That file is empty'] : missingHeaders(table.headers),
-    };
-  }
-
-  const fileErrors = [...missingHeaders(table.headers), ...tooManyRows(table)];
-  if (fileErrors.length > 0) return { rows: [], summary: EMPTY, fileErrors };
-
-  // A number repeated in one file would be two creations, then a collision on the unique index.
-  const seenInFile = new Map<string, number>();
-  const rows = table.rows.map((row) => planRow(row, context, seenInFile));
+  const { rows, fileErrors } = planRoster(
+    table,
+    (headers) => missingColumnErrors(CANDIDATE_IMPORT_COLUMNS, headers),
+    (row, seenInFile) => planRow(row, context, seenInFile),
+  );
 
   return {
     rows,
@@ -65,7 +36,7 @@ export function planCandidateImport(
       willAdd: rows.filter((row) => row.action === 'add').length,
       invalid: rows.filter((row) => row.action === 'skip').length,
     },
-    fileErrors: [],
+    fileErrors,
   };
 }
 
@@ -80,19 +51,12 @@ function planRow(
   context: CandidateImportContext,
   seenInFile: Map<string, number>,
 ): CandidateImportRow {
-  const parsed = mobileSchema.safeParse(columnValue(row, REQUIRED_COLUMN));
-  const mobile = parsed.success ? parsed.data : null;
-  const fullName = columnValue(row, 'fullName').trim() || null;
-
-  const duplicateOf = mobile === null ? undefined : seenInFile.get(mobile);
-  if (mobile !== null && duplicateOf === undefined) seenInFile.set(mobile, row.line);
-
+  const { mobile, fullName, errors: contactErrors } = readContact(row, seenInFile);
   const existing = mobile === null ? undefined : context.existingByMobile.get(mobile);
-  const errors = [
-    parsed.success ? undefined : 'That is not a mobile number we can enter',
-    duplicateOf === undefined ? undefined : `The same number is already on line ${duplicateOf}`,
-    mobile !== null && context.deletedMobiles.has(mobile) ? DELETED_MESSAGE : undefined,
-  ].filter((error): error is string => error !== undefined);
+  const errors =
+    mobile !== null && context.deletedMobiles.has(mobile)
+      ? [...contactErrors, DELETED_MESSAGE]
+      : contactErrors;
 
   const action = actionFor(errors.length > 0, existing !== undefined);
 

@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
@@ -10,10 +9,7 @@ import {
 import {
   Badge,
   BadgeList,
-  Button,
-  FormSection,
   ImportView,
-  LoadingState,
   PageHeader,
   Table,
   TableBody,
@@ -26,15 +22,12 @@ import {
   linkVariants,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
-import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
-/** Preview, then commit — from a file or from the portal. Three bad rows still import the other 397. */
+/** Preview, then commit. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
-  const { identity: admin } = useAuth();
-
   const template = useMutation({
     mutationFn: () => api.admin.imports.studentTemplate(),
     onSuccess: (blob) => saveBlob(blob, STUDENT_IMPORT_TEMPLATE_FILENAME),
@@ -42,27 +35,13 @@ export function ImportStudentsPage() {
 
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewStudents(file),
-    commit: (file) =>
-      file === null
-        ? api.admin.imports.commitPortalStudents()
-        : api.admin.imports.commitStudents(file),
+    commit: (file) => api.admin.imports.commitStudents(file as File),
     writes: (plan) => plan.summary.willCreate + plan.summary.willUpdate,
     success: (data) => {
       const result = data as { created: number; updated: number; skipped: number };
       return `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`;
     },
   });
-
-  const portal = useMutation({
-    mutationFn: () => api.admin.imports.previewPortalStudents(),
-    onSuccess: (plan) => intake.stage(null, plan),
-  });
-
-  /** The portal replaces whatever file was staged: two rosters on one screen is two answers. */
-  const pullFromPortal = () => {
-    intake.stage(null);
-    portal.mutate();
-  };
 
   const plan = intake.plan;
 
@@ -71,25 +50,6 @@ export function ImportStudentsPage() {
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import students" />}
       onDownloadTemplate={() => template.mutate()}
       downloadingTemplate={template.isPending}
-      otherSource={
-        // Super admin only: it pulls a whole roster from a system this screen does not control.
-        admin?.isSuperAdmin ? (
-          <FormSection title="From the main portal">
-            <div className="flex flex-col gap-3">
-              <Button
-                variant="outline"
-                icon={<RefreshCw aria-hidden />}
-                loading={portal.isPending}
-                onClick={pullFromPortal}
-              >
-                Sync from portal
-              </Button>
-
-              {portal.isPending ? <LoadingState>Reading the portal…</LoadingState> : null}
-            </div>
-          </FormSection>
-        ) : null
-      }
       dropzone={{
         accept: `${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`,
         file: intake.file,
@@ -151,7 +111,7 @@ export function ImportStudentsPage() {
               plan === null
                 ? {
                     title: 'Nothing to preview yet',
-                    hint: 'Choose a file, or pull from the portal. Nothing is written until you press Import.',
+                    hint: 'Choose a file. Nothing is written until you press Import.',
                   }
                 : 'No rows in that file'
             }

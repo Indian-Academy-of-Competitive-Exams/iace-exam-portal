@@ -9,7 +9,6 @@ import {
   QUESTION_IMPORT_COLUMNS,
   QUESTION_STATUS,
   type AuditAction,
-  type AuditFeature,
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
@@ -39,11 +38,10 @@ type ImportsServiceInternals = {
     logId: string,
     status: string,
     written: {
-      feature: AuditFeature;
       rowActions: readonly { entityId: string; action: AuditAction }[];
       counts: { created: number; updated: number; skipped: number; failed: number };
-      actorId: string;
     },
+    actorId: string,
     failure?: { fileErrors: readonly string[]; error: unknown },
   ) => Promise<void>;
 };
@@ -275,12 +273,8 @@ describe('ImportsService — a failed close preserves what openRun already recor
     await (importsOn() as unknown as ImportsServiceInternals).closeRun(
       opened.id,
       IMPORT_LOG_STATUS.FAILED,
-      {
-        feature: AUDIT_FEATURE.STUDENT,
-        rowActions: [],
-        counts: { created: 0, updated: 0, skipped: 0, failed: 0 },
-        actorId: ADMIN,
-      },
+      { rowActions: [], counts: { created: 0, updated: 0, skipped: 0, failed: 0 } },
+      ADMIN,
       { fileErrors, error: new Error('db exploded') },
     );
 

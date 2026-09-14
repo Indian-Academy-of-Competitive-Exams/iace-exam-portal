@@ -1253,13 +1253,6 @@ export function createApiClient(options: ApiClientOptions) {
             programImportResultSchema,
             fileBody(file),
           ),
-
-        /** No body: the roster is fetched server-side, so there is nothing here to tamper with. */
-        previewPortalStudents: (): Promise<StudentImportPlan> =>
-          write('POST', IMPORT_ROUTES.studentsPortalPreview, studentImportPlanSchema),
-
-        commitPortalStudents: (): Promise<StudentImportResult> =>
-          write('POST', IMPORT_ROUTES.studentsPortalCommit, studentImportResultSchema),
         /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */
         questionTemplate: (): Promise<Blob> => requestBlob(QUESTION_IMPORT_ROUTES.template),
 

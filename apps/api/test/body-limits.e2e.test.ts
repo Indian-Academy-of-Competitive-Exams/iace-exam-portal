@@ -1,28 +1,20 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import 'reflect-metadata';
-import { Body, Controller, Module, Post, type INestApplication } from '@nestjs/common';
+import { Body, Controller, Module, Post } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, NestFactory } from '@nestjs/core';
+import { type NestExpressApplication } from '@nestjs/platform-express';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
-import { IMPORT_ROUTE_PREFIX, registerBodyParsers } from '../src/common/body-parsers';
-import { AppConfigService } from '../src/config/app-config.service';
-import { FakeConfig } from './support/fakes';
 
-/** Two limits, one path boundary. */
+/** One JSON limit for every route: uploads are multipart and carry their own ceiling. */
 
-const DEFAULT_LIMIT = '4kb';
-const IMPORT_LIMIT = '64kb';
+const BODY_LIMIT = '4kb';
 
 @Controller()
 class EchoController {
   @Post('ordinary')
   ordinary(@Body() body: { pad?: string }) {
-    return { received: body.pad?.length ?? 0 };
-  }
-
-  @Post(`${IMPORT_ROUTE_PREFIX}/questions`)
-  importQuestions(@Body() body: { pad?: string }) {
     return { received: body.pad?.length ?? 0 };
   }
 }
@@ -32,24 +24,22 @@ class EchoController {
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
-    {
-      provide: AppConfigService,
-      useValue: new FakeConfig({
-        BODY_LIMIT_DEFAULT: DEFAULT_LIMIT,
-        BODY_LIMIT_IMPORT: IMPORT_LIMIT,
-      }).asService(),
-    },
   ],
 })
 class ProbeModule {}
 
 describe('request body limits (e2e)', () => {
-  let app: INestApplication;
+  let app: NestExpressApplication;
   let baseUrl: string;
 
   before(async () => {
-    app = await NestFactory.create(ProbeModule, { logger: false, bodyParser: false });
-    registerBodyParsers(app);
+    // The same two lines main.ts runs, over the same filter and interceptor.
+    app = await NestFactory.create<NestExpressApplication>(ProbeModule, {
+      logger: false,
+      bodyParser: false,
+    });
+    app.useBodyParser('json', { limit: BODY_LIMIT });
+    app.useBodyParser('urlencoded', { extended: true, limit: BODY_LIMIT });
     await app.listen(0, '127.0.0.1');
     baseUrl = `http://127.0.0.1:${(app.getHttpServer().address() as { port: number }).port}`;
   });
@@ -74,28 +64,13 @@ describe('request body limits (e2e)', () => {
     assert.deepEqual(body.data, { received: 1024 });
   });
 
-  it('refuses an oversized body on an ordinary route', async () => {
+  it('refuses an oversized body', async () => {
     const { status, body } = await post('/ordinary', 8 * 1024);
 
     assert.equal(status, 413);
     assert.equal(body.success, false);
     assert.equal((body.error as { code: string }).code, 'VALIDATION_ERROR');
     assert.equal((body.error as { message: string }).message, 'The request was too large');
-  });
-
-  it('accepts on the import path a body the ordinary limit would refuse', async () => {
-    // The point of the whole feature: same server, same payload, different path.
-    const { status, body } = await post(`${IMPORT_ROUTE_PREFIX}/questions`, 32 * 1024);
-
-    assert.equal(status, 201);
-    assert.deepEqual(body.data, { received: 32 * 1024 });
-  });
-
-  it('still caps the import path — larger, not unlimited', async () => {
-    const { status, body } = await post(`${IMPORT_ROUTE_PREFIX}/questions`, 128 * 1024);
-
-    assert.equal(status, 413);
-    assert.equal((body.error as { code: string }).code, 'VALIDATION_ERROR');
   });
 
   it('answers a rejected body in the envelope, with a request id to trace it', async () => {

@@ -184,9 +184,6 @@ importers:
       exceljs:
         specifier: 4.4.0
         version: 4.4.0
-      express:
-        specifier: 5.2.1
-        version: 5.2.1(supports-color@8.1.1)
       helmet:
         specifier: 8.3.0
         version: 8.3.0

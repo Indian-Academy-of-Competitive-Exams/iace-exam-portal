@@ -7,12 +7,10 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 import { REQUEST_ID_HEADER } from './common/request-id';
-import { registerBodyParsers } from './common/body-parsers';
 import { corsOrigin, helmetOptions } from './common/security-headers';
 
 async function bootstrap(): Promise<void> {
-  // bodyParser: false so the limits in registerBodyParsers are the only ones that apply — Nest's
-  // default parser would otherwise be installed first, and first parser wins.
+  // bodyParser: false, or Nest's default parser is installed first and its limit is the one that wins.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: false,
     bodyParser: false,
@@ -20,7 +18,10 @@ async function bootstrap(): Promise<void> {
   const config = app.get(AppConfigService);
 
   app.use(helmet(helmetOptions));
-  registerBodyParsers(app);
+  // Uploads are multipart and capped by multer, so every JSON or form body gets the small limit.
+  const bodyLimit = config.get('BODY_LIMIT_DEFAULT');
+  app.useBodyParser('json', { limit: bodyLimit });
+  app.useBodyParser('urlencoded', { extended: true, limit: bodyLimit });
 
   // What makes `req.ip` the caller rather than the load balancer, which every rate limit counts on.
   app.set('trust proxy', config.get('TRUST_PROXY_HOPS'));

@@ -5,9 +5,7 @@ import {
   IMPORT_LOG_STATUS,
   IMPORT_SOURCE,
   type AuditAction,
-  type AuditFeature,
   type ImportLogStatus,
-  type ImportSource,
   type StudentImportPlan,
   type StudentImportResult,
   type StudentImportRow,
@@ -23,7 +21,6 @@ import { StartingPinService, type StartingPin } from '../auth';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
-import { fetchPortalRoster, type PortalFetch } from './portal-roster';
 import { planCandidateImport } from './candidate-import';
 import { planProgramImport } from './program-import';
 import { EventsService } from '../events';
@@ -33,17 +30,10 @@ import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 import { toDateColumn } from '../common/time/institute-day';
 
-/**
- * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue
- * anyway while multiplying the transient memory.
- */
-
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
-  feature: AuditFeature;
-  rowActions: readonly { entityId: string; action: AuditAction }[];
+  rowActions: { entityId: string; action: AuditAction }[];
   counts: { created: number; updated: number; skipped: number; failed: number };
-  actorId: string;
 }
 
 /** Owns no tables (docs/03 §5). */
@@ -72,7 +62,47 @@ export class ImportsService {
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
     // Re-judged against the scope on COMMIT too: a preview is not a permission check.
     const plan = await this.planStudents(file);
-    return this.applyPlan(plan, file, IMPORT_SOURCE.SHEET, actorId);
+    // Only rows that were actually written: a PIN texted for a row that failed opens nothing.
+    const issued: StartingPin[] = [];
+
+    const run = await this.withRun(
+      file,
+      plan,
+      actorId,
+      { failed: plan.summary.invalid },
+      async (outcome) => {
+        // Hashed up front and in parallel: argon2 is ~13ms a go, which inside the loop idled a whole roster.
+        const minted = byMobile(
+          await this.startingPins.mint(
+            plan.rows.flatMap((row) =>
+              row.willReceiveDefaultPin && row.mobile !== null ? [row.mobile] : [],
+            ),
+          ),
+        );
+
+        for (const row of plan.rows) {
+          if (row.action === 'skip' || !row.mobile) continue;
+
+          // A starting PIN, marked as ours not theirs — nobody has chosen one yet.
+          const startingPin = row.willReceiveDefaultPin
+            ? { pinHash: minted.get(row.mobile)?.hash, pinIsDefault: true }
+            : {};
+
+          const done = await this.writeRow(row, startingPin);
+          if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
+          else outcome.counts.updated += 1;
+          outcome.rowActions.push(done);
+
+          const pin = row.willReceiveDefaultPin ? minted.get(row.mobile) : undefined;
+          if (pin) issued.push(pin);
+        }
+      },
+    );
+
+    await this.startingPins.announce(issued);
+
+    const { created, updated } = run.counts;
+    return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
   }
 
   /** Writes nothing. The event has to exist, so a stale page cannot fill a deleted roster. */
@@ -89,81 +119,63 @@ export class ImportsService {
   ): Promise<CandidateImportResult> {
     await this.events.detail(eventId);
     const plan = await this.planCandidates(file);
-    const logId = await this.openRun(
-      file,
-      plan.summary.total,
-      plan.fileErrors,
-      IMPORT_SOURCE.SHEET,
-      actorId,
-    );
-
-    let created = 0;
     const studentIds: string[] = [];
-    const rowActions: { entityId: string; action: AuditAction }[] = [];
     const issued: StartingPin[] = [];
-    const written = (): RunOutcome => ({
-      feature: AUDIT_FEATURE.STUDENT,
-      rowActions,
-      counts: {
-        created,
-        updated: studentIds.length - created,
-        skipped: 0,
-        failed: plan.summary.invalid,
-      },
+
+    const run = await this.withRun(
+      file,
+      plan,
       actorId,
-    });
-
-    try {
-      const minted = byMobile(
-        await this.startingPins.mint(
-          plan.rows.flatMap((row) =>
-            row.action === 'create' && row.mobile !== null ? [row.mobile] : [],
+      { failed: plan.summary.invalid },
+      async (outcome) => {
+        const minted = byMobile(
+          await this.startingPins.mint(
+            plan.rows.flatMap((row) =>
+              row.action === 'create' && row.mobile !== null ? [row.mobile] : [],
+            ),
           ),
-        ),
-      );
+        );
 
-      for (const row of plan.rows) {
-        if (row.action === 'skip' || !row.mobile) continue;
+        for (const row of plan.rows) {
+          if (row.action === 'skip' || !row.mobile) continue;
 
-        if (row.existingStudentId) {
-          studentIds.push(row.existingStudentId);
-          rowActions.push({ entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE });
-          continue;
+          if (row.existingStudentId) {
+            studentIds.push(row.existingStudentId);
+            outcome.counts.updated += 1;
+            outcome.rowActions.push({
+              entityId: row.existingStudentId,
+              action: AUDIT_ACTION.UPDATE,
+            });
+            continue;
+          }
+
+          const pin = minted.get(row.mobile);
+          const student = await this.prisma.student.create({
+            data: {
+              mobile: row.mobile,
+              fullName: row.fullName,
+              // Outside the institute and at no centre of ours: the event is the whole of their access.
+              studentType: STUDENT_TYPE.NON_IACE,
+              pinHash: pin?.hash,
+              pinIsDefault: true,
+            },
+          });
+          if (pin) issued.push(pin);
+          outcome.counts.created += 1;
+          studentIds.push(student.id);
+          outcome.rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
         }
 
-        const pin = minted.get(row.mobile);
-        const student = await this.prisma.student.create({
-          data: {
-            mobile: row.mobile,
-            fullName: row.fullName,
-            // Outside the institute and at no centre of ours: the event is the whole of their access.
-            studentType: STUDENT_TYPE.NON_IACE,
-            pinHash: pin?.hash,
-            pinIsDefault: true,
-          },
-        });
-        if (pin) issued.push(pin);
-        created += 1;
-        studentIds.push(student.id);
-        rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
-      }
+        // Through the service that owns the table, so every candidate's catalog is busted with them.
+        await this.events.addCandidates(eventId, studentIds);
+      },
+    );
 
-      // Through the service that owns the table, so every candidate's catalog is busted with them.
-      await this.events.addCandidates(eventId, studentIds);
-    } catch (error) {
-      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
-        fileErrors: plan.fileErrors,
-        error,
-      });
-      throw error;
-    }
-
-    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
     await this.startingPins.announce(issued);
 
     return {
       ...plan.summary,
-      created,
+      created: run.counts.created,
       added: studentIds.length,
       skipped: plan.summary.invalid,
     };
@@ -184,28 +196,9 @@ export class ImportsService {
     await this.programs.assertUsable([code], 'programCode');
 
     const plan = await this.planPrograms(code, file);
-    const logId = await this.openRun(
-      file,
-      plan.summary.total,
-      plan.fileErrors,
-      IMPORT_SOURCE.SHEET,
-      actorId,
-    );
+    const counts = { skipped: plan.summary.alreadyEnrolled, failed: plan.summary.invalid };
 
-    const rowActions: { entityId: string; action: AuditAction }[] = [];
-    const written = (): RunOutcome => ({
-      feature: AUDIT_FEATURE.STUDENT,
-      rowActions,
-      counts: {
-        created: 0,
-        updated: rowActions.length,
-        skipped: plan.summary.alreadyEnrolled,
-        failed: plan.summary.invalid,
-      },
-      actorId,
-    });
-
-    try {
+    const run = await this.withRun(file, plan, actorId, counts, async (outcome) => {
       for (const row of plan.rows) {
         if (row.action !== 'enrol' || row.studentId === null) continue;
 
@@ -213,102 +206,12 @@ export class ImportsService {
           where: { id: row.studentId },
           data: { programs: { push: code } },
         });
-        rowActions.push({ entityId: row.studentId, action: AUDIT_ACTION.UPDATE });
+        outcome.counts.updated += 1;
+        outcome.rowActions.push({ entityId: row.studentId, action: AUDIT_ACTION.UPDATE });
       }
-    } catch (error) {
-      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
-        fileErrors: plan.fileErrors,
-        error,
-      });
-      throw error;
-    }
-
-    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
-
-    return { ...plan.summary, enrolled: rowActions.length, skipped: plan.summary.invalid };
-  }
-
-  /** What the portal WOULD do, judged by the same planner the sheet goes through. */
-  async previewPortalStudents(): Promise<StudentImportPlan> {
-    const fetched = await fetchPortalRoster();
-    return this.planPortal(fetched);
-  }
-
-  /** Re-fetches rather than trusting a plan sent back: the roster may have moved on. */
-  async commitPortalStudents(actorId: string): Promise<StudentImportResult> {
-    const fetched = await fetchPortalRoster();
-    const plan = await this.planPortal(fetched);
-    return this.applyPlan(plan, fetched.payload, IMPORT_SOURCE.SCRIPT, actorId);
-  }
-
-  /** The write half, shared: the two sources differ in origin and artifact, never in what is written. */
-  private async applyPlan(
-    plan: StudentImportPlan,
-    artifact: Buffer,
-    source: ImportSource,
-    actorId: string,
-  ): Promise<StudentImportResult> {
-    const logId = await this.openRun(
-      artifact,
-      plan.summary.total,
-      plan.fileErrors,
-      source,
-      actorId,
-    );
-
-    let created = 0;
-    let updated = 0;
-    const rowActions: { entityId: string; action: AuditAction }[] = [];
-    // Only rows that were actually written: a PIN texted for a row that failed opens nothing.
-    const issued: StartingPin[] = [];
-    // A thunk, not a value: the failure path has to close on the rows the loop already wrote.
-    const written = (): RunOutcome => ({
-      feature: AUDIT_FEATURE.STUDENT,
-      rowActions,
-      counts: { created, updated, skipped: 0, failed: plan.summary.invalid },
-      actorId,
     });
 
-    try {
-      // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
-      // write loop made a 1,000-row roster thirteen seconds of a single request sitting idle on one
-      // core.
-      const minted = byMobile(
-        await this.startingPins.mint(
-          plan.rows.flatMap((row) =>
-            row.willReceiveDefaultPin && row.mobile !== null ? [row.mobile] : [],
-          ),
-        ),
-      );
-
-      for (const row of plan.rows) {
-        if (row.action === 'skip' || !row.mobile) continue;
-
-        // A starting PIN, marked as ours not theirs — nobody has chosen one yet.
-        const startingPin = row.willReceiveDefaultPin
-          ? { pinHash: minted.get(row.mobile)?.hash, pinIsDefault: true }
-          : {};
-
-        const done = await this.writeRow(row, startingPin);
-        if (done.action === AUDIT_ACTION.CREATE) created += 1;
-        else updated += 1;
-        rowActions.push(done);
-
-        const pin = row.willReceiveDefaultPin ? minted.get(row.mobile) : undefined;
-        if (pin) issued.push(pin);
-      }
-    } catch (error) {
-      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
-        fileErrors: plan.fileErrors,
-        error,
-      });
-      throw error;
-    }
-
-    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
-    await this.startingPins.announce(issued);
-
-    return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+    return { ...plan.summary, enrolled: run.counts.updated, skipped: plan.summary.invalid };
   }
 
   /** One row's write, and what the audit trail should call it. */
@@ -404,12 +307,6 @@ export class ImportsService {
     return planStudentImport(table, await this.contextFor(table));
   }
 
-  /** A failed fetch is a SOURCE error, never a row error — there are no rows to blame. */
-  private async planPortal(fetched: PortalFetch): Promise<StudentImportPlan> {
-    const plan = planStudentImport(fetched.table, await this.contextFor(fetched.table));
-    return { ...plan, fileErrors: [...fetched.errors, ...plan.fileErrors] };
-  }
-
   /**
    * Loads only the mobiles this file refers to rather than the whole table, so a 5,000-row
    * roster is one bounded query and not a table scan per line.
@@ -464,18 +361,45 @@ export class ImportsService {
   // run and its rows are always logged under AUDIT_FEATURE.STUDENT.
   // ==========================================================================
 
+  /** Opens the run, lets `write` record what it wrote, and closes the run on that whether or not it finished. */
+  private async withRun(
+    file: Buffer,
+    plan: { summary: { total: number }; fileErrors: readonly string[] },
+    actorId: string,
+    counts: Partial<RunOutcome['counts']>,
+    write: (outcome: RunOutcome) => Promise<void>,
+  ): Promise<RunOutcome> {
+    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+    const outcome: RunOutcome = {
+      rowActions: [],
+      counts: { created: 0, updated: 0, skipped: 0, failed: 0, ...counts },
+    };
+
+    try {
+      await write(outcome);
+    } catch (error) {
+      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, outcome, actorId, {
+        fileErrors: plan.fileErrors,
+        error,
+      });
+      throw error;
+    }
+
+    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, outcome, actorId);
+    return outcome;
+  }
+
   /** Only a commit opens a run: a row for an abandoned preview is storage nothing ever resolves. */
   private async openRun(
     file: Buffer,
     total: number,
     fileErrors: readonly string[],
-    source: ImportSource,
     actorId: string,
   ): Promise<string> {
     const log = await this.prisma.importLog.create({
       data: {
         feature: AUDIT_FEATURE.STUDENT,
-        source,
+        source: IMPORT_SOURCE.SHEET,
         actorId,
         total,
         status: IMPORT_LOG_STATUS.PREVIEWED,
@@ -498,15 +422,11 @@ export class ImportsService {
     logId: string,
     status: ImportLogStatus,
     written: RunOutcome,
+    actorId: string,
     failure?: { fileErrors: readonly string[]; error: unknown },
   ): Promise<void> {
     try {
-      await this.audit.recordImportRows(
-        logId,
-        written.feature,
-        written.rowActions,
-        written.actorId,
-      );
+      await this.audit.recordImportRows(logId, AUDIT_FEATURE.STUDENT, written.rowActions, actorId);
     } catch (error) {
       this.logger.error(`Row actions for import ${logId} were not recorded`, error);
     }

@@ -16,8 +16,6 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   ActorTypes,
-  AppException,
-  ErrorCodes,
   CANDIDATE_IMPORT_TEMPLATE_FILENAME,
   IMPORT_FILE_FIELD,
   PROGRAM_IMPORT_TEMPLATE_FILENAME,
@@ -30,34 +28,15 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
-import {
-  Actors,
-  CurrentUser,
-  RequiresFeature,
-  RequiresSuperAdmin,
-  type AuthenticatedUser,
-} from '../common/security';
-import { AppConfigService } from '../config/app-config.service';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import { requireFile, type UploadedSheet } from '../common/importing/upload';
 import { ImportsService } from './imports.service';
 import { buildCandidateTemplate, buildProgramTemplate, buildStudentTemplate } from './workbook';
 
-/** The two fields we use off a multipart upload. */
-interface UploadedFileLike {
-  buffer: Buffer;
-  size: number;
-}
-
-/**
- * Mounted under /imports, which is the one path with the larger body limit — see
- * common/body-parsers.ts. Everything else on the API is capped far lower.
- */
 @Controller('imports')
 @Actors(ActorTypes.ADMIN)
 export class ImportsController {
-  constructor(
-    private readonly imports: ImportsService,
-    private readonly config: AppConfigService,
-  ) {}
+  constructor(private readonly imports: ImportsService) {}
 
   /**
    * The sample file. Generated on request from the same column list the parser matches on, so it can
@@ -79,8 +58,8 @@ export class ImportsController {
   @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
-    return this.imports.previewStudents(this.bufferOf(file));
+  preview(@UploadedFile() file?: UploadedSheet): Promise<StudentImportPlan> {
+    return this.imports.previewStudents(requireFile(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -89,9 +68,9 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   commit(
     @CurrentUser() user: AuthenticatedUser,
-    @UploadedFile() file?: UploadedFileLike,
+    @UploadedFile() file?: UploadedSheet,
   ): Promise<StudentImportResult> {
-    return this.imports.commitStudents(this.bufferOf(file), user.id);
+    return this.imports.commitStudents(requireFile(file), user.id);
   }
 
   /** The candidate sample, generated from the same two columns the parser matches on. */
@@ -121,9 +100,9 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewProgramStudents(
     @Param('code') code: string,
-    @UploadedFile() file?: UploadedFileLike,
+    @UploadedFile() file?: UploadedSheet,
   ): Promise<ProgramImportPlan> {
-    return this.imports.previewProgramStudents(code, this.bufferOf(file));
+    return this.imports.previewProgramStudents(code, requireFile(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -133,9 +112,9 @@ export class ImportsController {
   commitProgramStudents(
     @CurrentUser() user: AuthenticatedUser,
     @Param('code') code: string,
-    @UploadedFile() file?: UploadedFileLike,
+    @UploadedFile() file?: UploadedSheet,
   ): Promise<ProgramImportResult> {
-    return this.imports.commitProgramStudents(code, this.bufferOf(file), user.id);
+    return this.imports.commitProgramStudents(code, requireFile(file), user.id);
   }
 
   /** On EVENT: the account it mints is NON_IACE and reaches that event and nothing else. */
@@ -145,9 +124,9 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewEventCandidates(
     @Param('eventId') eventId: string,
-    @UploadedFile() file?: UploadedFileLike,
+    @UploadedFile() file?: UploadedSheet,
   ): Promise<CandidateImportPlan> {
-    return this.imports.previewEventCandidates(eventId, this.bufferOf(file));
+    return this.imports.previewEventCandidates(eventId, requireFile(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -157,47 +136,8 @@ export class ImportsController {
   commitEventCandidates(
     @CurrentUser() user: AuthenticatedUser,
     @Param('eventId') eventId: string,
-    @UploadedFile() file?: UploadedFileLike,
+    @UploadedFile() file?: UploadedSheet,
   ): Promise<CandidateImportResult> {
-    return this.imports.commitEventCandidates(eventId, this.bufferOf(file), user.id);
-  }
-
-  /** Super admin, as the old fire-and-forget trigger was: it pulls a whole roster from elsewhere. */
-  @RequiresSuperAdmin()
-  @Post('students/portal/preview')
-  @HttpCode(HttpStatus.OK)
-  previewPortal(): Promise<StudentImportPlan> {
-    return this.imports.previewPortalStudents();
-  }
-
-  @RequiresSuperAdmin()
-  @Post('students/portal/commit')
-  @HttpCode(HttpStatus.OK)
-  commitPortal(@CurrentUser() user: AuthenticatedUser): Promise<StudentImportResult> {
-    return this.imports.commitPortalStudents(user.id);
-  }
-
-  /**
-   * A second line of defence, and only that: MulterModule already aborts the stream at the same
-   * limit (see imports.module.ts), so reaching this means something upstream let a large body
-   * through.
-   */
-  private bufferOf(file: UploadedFileLike | undefined): Buffer {
-    if (!file) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to import', {
-        fieldErrors: { file: ['Choose a file to import'] },
-      });
-    }
-
-    const limit = this.config.importLimitBytes;
-    if (file.size > limit) {
-      throw new AppException(
-        ErrorCodes.VALIDATION_ERROR,
-        `That file is larger than ${Math.round(limit / 1024 / 1024)}MB. Split it and import in parts.`,
-        { fieldErrors: { file: ['That file is too large'] } },
-      );
-    }
-
-    return file.buffer;
+    return this.imports.commitEventCandidates(eventId, requireFile(file), user.id);
   }
 }
