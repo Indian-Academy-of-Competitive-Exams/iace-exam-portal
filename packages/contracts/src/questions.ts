@@ -287,7 +287,6 @@ export const updateSubjectSchema = z.object({
   name: subjectNameSchema.optional(),
   code: subjectCodeSchema.nullable().optional(),
 });
-export type UpdateSubjectInput = z.input<typeof updateSubjectSchema>;
 export type UpdateSubjectBody = z.infer<typeof updateSubjectSchema>;
 
 export const createTopicSchema = z.object({
@@ -301,7 +300,6 @@ export type CreateTopicBody = z.infer<typeof createTopicSchema>;
 export const updateTopicSchema = z.object({
   name: topicNameSchema,
 });
-export type UpdateTopicInput = z.input<typeof updateTopicSchema>;
 export type UpdateTopicBody = z.infer<typeof updateTopicSchema>;
 
 export const subjectListQuerySchema = paginationQuerySchema.extend({
@@ -745,9 +743,7 @@ export type QuestionImportResult = z.infer<typeof questionImportResultSchema>;
 
 export const ADMIN_TAXONOMY_ROUTES = {
   subjects: '/admin/subjects',
-  subject: (id: string) => `/admin/subjects/${id}`,
   topics: '/admin/topics',
-  topic: (id: string) => `/admin/topics/${id}`,
 } as const;
 
 /** What the bank holds for a slice of it, counted rather than paged: a page is not a total. */

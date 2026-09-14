@@ -138,7 +138,6 @@ export const eventCandidateListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
 });
 export type EventCandidateListQuery = z.infer<typeof eventCandidateListQuerySchema>;
-export type EventCandidateListQueryInput = z.input<typeof eventCandidateListQuerySchema>;
 
 /** A whole roster in one write. Re-importing the same sheet adds nobody twice. */
 export const addEventCandidatesSchema = z.object({
@@ -236,7 +235,6 @@ export const studentGrantSchema = z.object({
   testSeriesId: z.string(),
   createdAt: z.string(),
 });
-export type StudentGrant = z.infer<typeof studentGrantSchema>;
 
 /** A grant as the student screen reads it: the series it opens, named. */
 export const studentGrantRowSchema = studentGrantSchema.extend({
@@ -441,7 +439,6 @@ export const EVENT_ROUTES = {
   detail: (id: string) => `/admin/events/${id}`,
   update: (id: string) => `/admin/events/${id}`,
   remove: (id: string) => `/admin/events/${id}`,
-  candidates: (id: string) => `/admin/events/${id}/candidates`,
   addCandidates: (id: string) => `/admin/events/${id}/candidates`,
   removeCandidate: (id: string, studentId: string) => `/admin/events/${id}/candidates/${studentId}`,
 } as const;
@@ -465,7 +462,6 @@ export const ADMIN_STUDENT_SERIES_ROUTES = {
 } as const;
 
 export const ADMIN_GRANT_ROUTES = {
-  list: (studentId: string) => `/admin/students/${studentId}/grants`,
   create: (studentId: string) => `/admin/students/${studentId}/grants`,
   remove: (studentId: string, testSeriesId: string) =>
     `/admin/students/${studentId}/grants/${testSeriesId}`,

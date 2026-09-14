@@ -69,7 +69,6 @@ export const authoringTagsSchema = z.object({ tags: z.array(z.string()) });
 export type AuthoringTags = z.infer<typeof authoringTagsSchema>;
 
 export const ADMIN_AUTHORING_ROUTES = {
-  tags: '/admin/authoring/tags',
   stats: '/admin/authoring/stats',
   history: '/admin/authoring/questions',
   create: '/admin/authoring/questions',

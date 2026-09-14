@@ -19,38 +19,6 @@ import {
 // sit the test, so it is counted live from the cohort instead.
 // ============================================================================
 
-/** One row per student — the dashboard header. */
-export const studentStatSchema = z.object({
-  studentId: z.string(),
-  testsAttempted: z.number().int(),
-  testsEvaluated: z.number().int(),
-  /** Divide by testsEvaluated for the average. */
-  sumScore: z.number(),
-  totalAnswered: z.number().int(),
-  totalCorrect: z.number().int(),
-  totalWrong: z.number().int(),
-  totalUnattempted: z.number().int(),
-  sumTimeSec: z.number().int(),
-  /** Sittings past the ranked slot, as a count only. The detail lives in the per-subject buckets. */
-  retakeCount: z.number().int(),
-  lastAttemptAt: z.string().nullable(),
-  computedAt: z.string(),
-});
-export type StudentStat = z.infer<typeof studentStatSchema>;
-
-/** The strength map, bucketed by scope so it can be filtered to full-length or sectional. */
-export const studentSubjectStatSchema = z.object({
-  studentId: z.string(),
-  subjectId: z.string(),
-  scope: testScopeSchema,
-  attempted: z.number().int(),
-  correct: z.number().int(),
-  wrong: z.number().int(),
-  sumTimeSec: z.number().int(),
-  computedAt: z.string(),
-});
-export type StudentSubjectStat = z.infer<typeof studentSubjectStatSchema>;
-
 // ============================================================================
 // The overall dashboard — the READ side of the two tables above, and the only
 // one. It is sums and counts all the way down, so every average is derived here
@@ -483,51 +451,7 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 
 export const OVERVIEW_ROUTES = {
   me: '/me/overview',
-  ofStudent: (studentId: string) => `/admin/students/${studentId}/overview`,
 } as const;
-
-/** One row per test — the cohort aggregate behind the admin report. */
-export const testStatSchema = z.object({
-  testId: z.string(),
-  attemptCount: z.number().int(),
-  /** The denominator for every average here. */
-  evaluatedCount: z.number().int(),
-  sumScore: z.number(),
-  maxScore: z.number().nullable(),
-  minScore: z.number().nullable(),
-  sumTimeSec: z.number().int(),
-  topperAttemptId: z.string().nullable(),
-  computedAt: z.string(),
-});
-export type TestStat = z.infer<typeof testStatSchema>;
-
-export const testSectionStatSchema = z.object({
-  testId: z.string(),
-  baseConfigSectionId: z.string(),
-  attempted: z.number().int(),
-  sumScore: z.number(),
-  sumTimeSec: z.number().int(),
-  computedAt: z.string(),
-});
-export type TestSectionStat = z.infer<typeof testSectionStatSchema>;
-
-/** Item analysis for a frozen paper: how each question behaved, and which distractor pulled. */
-export const testQuestionStatSchema = z.object({
-  testId: z.string(),
-  paperQuestionId: z.string(),
-  questionId: z.string(),
-  attemptedCount: z.number().int(),
-  correctCount: z.number().int(),
-  wrongCount: z.number().int(),
-  /** Visited and left unanswered, which is not the same as never reached. */
-  skippedCount: z.number().int(),
-  sumTimeSec: z.number().int(),
-  /** Difficulty index — correct over attempted. Recomputed in batch, never on read. */
-  pValue: z.number().nullable(),
-  discrimination: z.number().nullable(),
-  computedAt: z.string(),
-});
-export type TestQuestionStat = z.infer<typeof testQuestionStatSchema>;
 
 // ============================================================================
 // The performance report: ONE metric set, parameterised by (student, scope).
@@ -578,7 +502,6 @@ export const percentLabel = (value: number | null, empty = '\u2014'): string =>
 export const measuredBucketSchema = analyticsBucketSchema.extend({
   accuracy: z.number().nullable(),
 });
-export type MeasuredBucket = z.infer<typeof measuredBucketSchema>;
 
 /** One point on the trajectory. Percentile, never marks: two papers are not the same paper. */
 export const percentilePointSchema = z.object({
@@ -901,8 +824,6 @@ export const PERFORMANCE_ROUTES = {
   /** The series the picker may offer: one they have sat a test in, so a report cannot be empty. */
   mySeries: '/me/performance/series',
   ofStudent: (studentId: string) => `/admin/students/${studentId}/performance`,
-  questionReportOfStudent: (studentId: string, attemptId: string) =>
-    `/admin/students/${studentId}/attempts/${attemptId}/question-report`,
 } as const;
 
 // ============================================================================

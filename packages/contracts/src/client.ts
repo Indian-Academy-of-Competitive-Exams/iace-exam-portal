@@ -15,7 +15,6 @@ import {
   ADMIN_AUTHORING_ROUTES,
   authoringSaveResultSchema,
   authoringStatsSchema,
-  authoringTagsSchema,
   type AuthoringHistoryQueryInput,
   type AuthoringSaveResult,
   type AuthoringStats,
@@ -58,23 +57,14 @@ import {
   type Feature,
   type PermissionGrantBody,
   type PermissionGrantInput,
-  type UpdateAdminInput,
 } from './admins';
 import { CSV_SEPARATOR } from './common';
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from './dashboard';
-import { healthResponseSchema, type HealthResponse } from './health';
 import {
   DOCUMENT_FILE_FIELD,
   ME_ROUTES,
-  consentStateSchema,
-  consentStatusSchema,
   erasureReceiptSchema,
-  studentDataExportSchema,
-  type ConsentState,
-  type ConsentStatus,
   type ErasureReceipt,
-  type RecordConsentInput,
-  type StudentDataExport,
   meSchema,
   type ChangePinInput,
   type DocumentKind,
@@ -121,7 +111,6 @@ import {
   type CreateTestSeriesInput,
   type Event,
   type EventCandidate,
-  type EventCandidateListQueryInput,
   type EventListQueryInput,
   type GrantSeriesInput,
   type Program,
@@ -239,7 +228,6 @@ import {
 import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
-  finalizeResultSchema,
   testDetailSchema,
   testPaperSchema,
   testSchema,
@@ -249,9 +237,7 @@ import {
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
-  type ReplacePaperQuestionInput,
   type CreateTestInput,
-  type FinalizeResult,
   type SetPaperQuestionStatusInput,
   type SetProgramUnlockInput,
   type SetTestSeriesInput,
@@ -344,8 +330,6 @@ import {
   type SubjectListQueryInput,
   type Topic,
   type TopicListQueryInput,
-  type UpdateSubjectInput,
-  type UpdateTopicInput,
 } from './questions';
 import {
   ADMIN_PROOFREADING_ROUTES,
@@ -586,9 +570,6 @@ export function createApiClient(options: ApiClientOptions) {
     requestPaginated,
     requestBlob,
 
-    health: (): Promise<HealthResponse> =>
-      request('/health', { schema: healthResponseSchema, anonymous: true }),
-
     /** The one unauthenticated read of student data: a shared report, opened by its token. */
     sharedReport: (token: string): Promise<SharedReport> =>
       request(PERFORMANCE_SHARE_ROUTES.public(token), {
@@ -660,22 +641,6 @@ export function createApiClient(options: ApiClientOptions) {
     /** The signed-in student's own account. No ids — the token is the subject. */
     me: {
       profile: (): Promise<Me> => request(ME_ROUTES.profile, { schema: meSchema }),
-
-      consent: (): Promise<ConsentStatus> =>
-        request(ME_ROUTES.consent, { schema: consentStatusSchema }),
-
-      recordConsent: (input: RecordConsentInput): Promise<ConsentState> =>
-        request(ME_ROUTES.consent, {
-          method: 'POST',
-          body: input,
-          schema: consentStateSchema,
-        }),
-
-      dataExport: (): Promise<StudentDataExport> =>
-        request(ME_ROUTES.dataExport, { schema: studentDataExportSchema }),
-
-      erasure: (): Promise<ErasureReceipt> =>
-        request(ME_ROUTES.erasure, { method: 'POST', schema: erasureReceiptSchema }),
 
       update: (input: UpdateMeInput): Promise<Me> =>
         request(ME_ROUTES.update, { method: 'PATCH', body: input, schema: meSchema }),
@@ -982,15 +947,6 @@ export function createApiClient(options: ApiClientOptions) {
             schema: performanceReportSchema,
           }),
 
-        questionReport: (id: string, attemptId: string): Promise<QuestionReport> =>
-          request(PERFORMANCE_ROUTES.questionReportOfStudent(id, attemptId), {
-            schema: questionReportSchema,
-          }),
-
-        /** The same overall dashboard payload the student reads, behind STUDENT_PERFORMANCE. */
-        overview: (id: string): Promise<StudentOverview> =>
-          request(OVERVIEW_ROUTES.ofStudent(id), { schema: studentOverviewSchema }),
-
         performanceShares: (id: string): Promise<PerformanceShares> =>
           request(PERFORMANCE_SHARE_ROUTES.ofStudent(id), { schema: performanceSharesSchema }),
 
@@ -1021,13 +977,6 @@ export function createApiClient(options: ApiClientOptions) {
         create: (input: CreateAdminInput): Promise<Admin> =>
           request(ADMIN_ADMIN_ROUTES.create, {
             method: 'POST',
-            body: input,
-            schema: adminSchema,
-          }),
-
-        update: (id: string, input: UpdateAdminInput): Promise<Admin> =>
-          request(ADMIN_ADMIN_ROUTES.update(id), {
-            method: 'PATCH',
             body: input,
             schema: adminSchema,
           }),
@@ -1190,14 +1139,6 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           request(EVENT_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
 
-        candidates: (
-          id: string,
-          query: EventCandidateListQueryInput = {},
-        ): Promise<Paginated<EventCandidate>> =>
-          requestPaginated(`${EVENT_ROUTES.candidates(id)}${queryString({ ...query })}`, {
-            schema: eventCandidateSchema.array(),
-          }),
-
         addCandidates: (id: string, input: AddEventCandidatesInput): Promise<EventCandidate[]> =>
           request(EVENT_ROUTES.addCandidates(id), {
             method: 'POST',
@@ -1275,9 +1216,6 @@ export function createApiClient(options: ApiClientOptions) {
 
       /** The escape hatch, filed against the student it was made about. */
       grants: {
-        list: (studentId: string): Promise<StudentGrantRow[]> =>
-          request(ADMIN_GRANT_ROUTES.list(studentId), { schema: studentGrantRowSchema.array() }),
-
         create: (studentId: string, input: GrantSeriesInput): Promise<StudentGrantRow[]> =>
           request(ADMIN_GRANT_ROUTES.create(studentId), {
             method: 'POST',
@@ -1373,18 +1311,6 @@ export function createApiClient(options: ApiClientOptions) {
             schema: testPaperSchema,
           }),
 
-        /** One row of it, so a paper right but for a single question is not redrawn whole. */
-        replacePaperQuestion: (
-          id: string,
-          rowId: string,
-          input: ReplacePaperQuestionInput,
-        ): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.replaceQuestion(id, rowId), {
-            method: 'PATCH',
-            body: input,
-            schema: testPaperSchema,
-          }),
-
         removePaperQuestions: (id: string, rowIds: readonly string[]): Promise<TestPaper> =>
           request(
             `${ADMIN_TEST_PAPER_ROUTES.removeQuestions(id)}${queryString({ rowIds: [...rowIds] })}`,
@@ -1409,16 +1335,6 @@ export function createApiClient(options: ApiClientOptions) {
             body: input,
             schema: testPaperSchema,
           }),
-
-        /** Idempotent: a second call reports the first one's outcome rather than freezing twice. */
-        finalize: (id: string): Promise<FinalizeResult> =>
-          request(ADMIN_TEST_PAPER_ROUTES.finalize(id), {
-            method: 'POST',
-            schema: finalizeResultSchema,
-          }),
-
-        series: (id: string): Promise<TestSeriesLink> =>
-          request(ADMIN_TEST_PAPER_ROUTES.series(id), { schema: testSeriesLinkSchema }),
 
         offer: (id: string): Promise<OfferResult> =>
           request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
@@ -1470,13 +1386,6 @@ export function createApiClient(options: ApiClientOptions) {
             schema: subjectSchema,
           }),
 
-        updateSubject: (id: string, input: UpdateSubjectInput): Promise<Subject> =>
-          request(ADMIN_TAXONOMY_ROUTES.subject(id), {
-            method: 'PATCH',
-            body: input,
-            schema: subjectSchema,
-          }),
-
         listTopics: (query: TopicListQueryInput = {}): Promise<Paginated<Topic>> =>
           requestPaginated(`${ADMIN_TAXONOMY_ROUTES.topics}${queryString({ ...query })}`, {
             schema: topicSchema.array(),
@@ -1488,23 +1397,10 @@ export function createApiClient(options: ApiClientOptions) {
             body: input,
             schema: topicSchema,
           }),
-
-        updateTopic: (id: string, input: UpdateTopicInput): Promise<Topic> =>
-          request(ADMIN_TAXONOMY_ROUTES.topic(id), {
-            method: 'PATCH',
-            body: input,
-            schema: topicSchema,
-          }),
       },
 
       /** A typist's own questions. Every route here is scoped to the caller by the server. */
       authoring: {
-        /** The author's own recent tags, newest first — what the header offers as they type. */
-        tags: (): Promise<string[]> =>
-          request(ADMIN_AUTHORING_ROUTES.tags, { schema: authoringTagsSchema }).then(
-            (result) => result.tags,
-          ),
-
         stats: (): Promise<AuthoringStats> =>
           request(ADMIN_AUTHORING_ROUTES.stats, { schema: authoringStatsSchema }),
 
@@ -1746,8 +1642,6 @@ export function createApiClient(options: ApiClientOptions) {
     },
   };
 }
-
-export type ApiClient = ReturnType<typeof createApiClient>;
 
 /** One field, named once, so the server knows what to look for. */
 function fileBody(file: File): FormData {

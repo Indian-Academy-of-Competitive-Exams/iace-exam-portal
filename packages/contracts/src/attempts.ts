@@ -105,30 +105,6 @@ export const attemptSchema = z.object({
   sectionScores: z.array(attemptSectionScoreSchema).nullable(),
   createdAt: z.string(),
 });
-export type Attempt = z.infer<typeof attemptSchema>;
-
-/** One row per question served in an attempt, plus the response. */
-export const attemptQuestionSchema = z.object({
-  attemptId: z.string(),
-  questionId: z.string(),
-  /** Always set: every served question is a row on the test's one paper, so marks have one home. */
-  paperQuestionId: z.string().nullable(),
-  /** Always present, so the row reproduces without a join. */
-  questionVersionId: z.string(),
-  baseConfigSectionId: z.string(),
-  /** This student's display order, not the paper's. */
-  order: z.number().int(),
-  /** An option id inside the version's options JSON — validated by the service, not a foreign key. */
-  selectedOptionId: z.string().nullable(),
-  typedAnswer: z.string().nullable(),
-  state: answerStateSchema,
-  timeSpentSec: z.number().int(),
-  isCorrect: z.boolean().nullable(),
-  marksAwarded: z.number().nullable(),
-  answeredAt: z.string().nullable(),
-  firstActionAt: z.string().nullable(),
-});
-export type AttemptQuestion = z.infer<typeof attemptQuestionSchema>;
 
 // ============================================================================
 // Starting one. Nothing about TIMING comes off the request — the server sets
@@ -543,7 +519,6 @@ export const analyticsBucketSchema = z.object({
   marks: z.number(),
   timeSpentSec: z.number().int(),
 });
-export type AnalyticsBucket = z.infer<typeof analyticsBucketSchema>;
 
 export const timeUseSchema = z.object({
   totalSec: z.number().int(),

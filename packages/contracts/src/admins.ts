@@ -145,7 +145,6 @@ export const updateAdminSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
   isSuperAdmin: z.boolean().optional(),
 });
-export type UpdateAdminInput = z.input<typeof updateAdminSchema>;
 export type UpdateAdminBody = z.infer<typeof updateAdminSchema>;
 
 // ============================================================================
@@ -174,7 +173,6 @@ export type PermissionGrantBody = z.infer<typeof permissionGrantSchema>;
 export const ADMIN_ADMIN_ROUTES = {
   list: '/admin/admins',
   create: '/admin/admins',
-  update: (id: string) => `/admin/admins/${id}`,
   /** One route both ways. A PATCH, not a DELETE: the row survives, `createdById` points at it. */
   setActive: (id: string) => `/admin/admins/${id}/active`,
 } as const;

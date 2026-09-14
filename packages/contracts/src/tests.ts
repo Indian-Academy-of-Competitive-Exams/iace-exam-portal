@@ -633,7 +633,6 @@ export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;
 export const replacePaperQuestionSchema = z.object({
   questionId: z.string().min(1, 'Choose a question'),
 });
-export type ReplacePaperQuestionInput = z.input<typeof replacePaperQuestionSchema>;
 export type ReplacePaperQuestionBody = z.infer<typeof replacePaperQuestionSchema>;
 
 /** Putting several on the paper in one request, in the next free places its section has. */
@@ -657,14 +656,12 @@ export type OfferResult = z.infer<typeof offerResultSchema>;
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
-  replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestions: (id: string) => `/admin/tests/${id}/paper/questions`,
   /** Draws the rest of one section from its own spec, around the rows already on it. */
   fillSection: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/fill`,
   /** The ONE change a finalized paper still allows: withdrawing a question, or paying it to all. */
   questionStatus: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}/status`,
-  finalize: (id: string) => `/admin/tests/${id}/finalize`,
   offer: (id: string) => `/admin/tests/${id}/offer`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,

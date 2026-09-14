@@ -14,7 +14,6 @@ export * from './tests';
 export * from './attempts';
 export * from './access';
 export * from './announcements';
-export * from './question-versions';
 export * from './stats';
 export * from './leaderboard';
 export * from './live-ops';

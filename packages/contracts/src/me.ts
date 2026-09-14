@@ -94,8 +94,6 @@ export const ME_ROUTES = {
   pushSubscription: '/me/push-subscription',
   /** The kind is in the path — see DOCUMENT_KINDS. */
   document: (kind: DocumentKind) => `/me/documents/${kind}`,
-  consent: '/me/consent',
-  dataExport: '/me/data-export',
   /** Irreversible, and not a delete: every sitting stays, and none of them names anybody. */
   erasure: '/me/erasure',
 } as const;
@@ -134,7 +132,6 @@ export const recordConsentSchema = z.object({
   granted: z.boolean(),
 });
 export type RecordConsentBody = z.infer<typeof recordConsentSchema>;
-export type RecordConsentInput = z.input<typeof recordConsentSchema>;
 
 /** One sitting, as it appears in a student's own copy of their data — marks, never the paper. */
 export const exportedAttemptSchema = z.object({
