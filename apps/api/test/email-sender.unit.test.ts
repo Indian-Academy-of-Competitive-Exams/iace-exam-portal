@@ -58,14 +58,6 @@ describe('EmailMessageSender', () => {
     });
   });
 
-  /** A student's OTP arriving in a mailbox would be a message nobody ever reads. */
-  it('refuses a channel it cannot deliver', async () => {
-    const { built, posted } = sender();
-
-    await assert.rejects(built.send(message({ channel: MESSAGE_CHANNELS.SMS })), /sms/);
-    assert.equal(posted.length, 0);
-  });
-
   /** Selected but not addressed is a misconfiguration, and silence is the wrong way to report it. */
   it('says which variable is missing rather than failing obscurely', async () => {
     const unaddressed = new EmailMessageSender(new FakeConfig({}).asService());

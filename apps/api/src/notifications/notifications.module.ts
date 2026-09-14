@@ -19,7 +19,7 @@ import { AnnouncementsController } from './announcements.controller';
 import { PushService } from './push.service';
 import { TestOpeningService } from './test-opening.service';
 import { NotificationListener } from './notification.listener';
-import { PUSH_SENDER, WebPushSender } from './web-push.sender';
+import { WebPushSender } from './web-push.sender';
 
 /** Owns the ledger and the push endpoints. No controller of its own: both hang off `me`. */
 @Module({
@@ -41,7 +41,7 @@ import { PUSH_SENDER, WebPushSender } from './web-push.sender';
     PushService,
     TestOpeningService,
     NotificationListener,
-    { provide: PUSH_SENDER, useClass: WebPushSender },
+    WebPushSender,
   ],
   exports: [NotificationsService, NotificationOutbox, PushService],
 })

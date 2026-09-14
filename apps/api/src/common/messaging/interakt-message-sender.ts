@@ -6,7 +6,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
 import {
-  MESSAGE_CHANNELS,
   MessageNotConfiguredError,
   type MessageSender,
   type OutboundMessage,
@@ -33,10 +32,6 @@ export class InteraktMessageSender implements MessageSender {
   constructor(private readonly config: AppConfigService) {}
 
   async send(message: OutboundMessage): Promise<void> {
-    if (message.channel !== MESSAGE_CHANNELS.WHATSAPP) {
-      throw new Error(`The WhatsApp sender was handed a ${message.channel} message.`);
-    }
-
     const template = whatsappTemplateFor(this.config, message.kind, message.data);
     if (!template) {
       // Off, not broken — but the caller is told, or it would record this as delivered.

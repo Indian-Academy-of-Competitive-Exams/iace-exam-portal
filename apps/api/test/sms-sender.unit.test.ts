@@ -103,15 +103,4 @@ describe('SmsMessageSender', () => {
 
     await assert.rejects(sender().send(message()), /502/);
   });
-
-  /** An admin's OTP goes by email, so say so rather than post it to the SMS aggregator. */
-  it('refuses a channel it cannot deliver', async () => {
-    const calls = capture();
-
-    await assert.rejects(
-      sender().send(message({ channel: MESSAGE_CHANNELS.EMAIL, to: 'admin@iace.co.in' })),
-      /MAIL/,
-    );
-    assert.equal(calls.length, 0);
-  });
 });

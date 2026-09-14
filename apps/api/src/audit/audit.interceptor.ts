@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   type CallHandler,
   type ExecutionContext,
   type NestInterceptor,
@@ -7,12 +8,11 @@ import {
 import { Reflector } from '@nestjs/core';
 import { tap, type Observable } from 'rxjs';
 import { AUDIT_ACTOR_TYPE, ActorTypes, type AuditActorType } from '@iace/contracts';
-import { DomainEventBus } from '../common/events';
-import { DOMAIN_EVENTS } from '../common/events/event-catalog';
-import { ensureRequestId, type RequestWithId } from '../common/request-id';
+import { type RequestWithId } from '../common/request-id';
 import { type AuthenticatedUser } from '../common/security/authenticated-user';
 import { AUDIT_KEY, resolveAuditAction, type AuditRoute } from './audit.decorator';
 import { AuditContext } from './audit.context';
+import { AuditService } from './audit.service';
 
 type AuditedRequest = RequestWithId & {
   user?: AuthenticatedUser;
@@ -20,16 +20,15 @@ type AuditedRequest = RequestWithId & {
   body?: unknown;
 };
 
-/**
- * Registered AFTER ResponseInterceptor so it is inner and sees the handler's own return value
- * rather than the wrapped envelope. It never writes — the listener does.
- */
+/** Registered AFTER ResponseInterceptor, so it taps the handler's own value, not the envelope. */
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(AuditInterceptor.name);
+
   constructor(
     private readonly reflector: Reflector,
     private readonly context: AuditContext,
-    private readonly events: DomainEventBus,
+    private readonly audit: AuditService,
   ) {}
 
   intercept(execution: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -43,23 +42,25 @@ export class AuditInterceptor implements NestInterceptor {
 
     const request = execution.switchToHttp().getRequest<AuditedRequest>();
 
-    return next.handle().pipe(tap((payload: unknown) => this.emit(route, request, payload)));
+    return next.handle().pipe(tap((payload: unknown) => this.record(route, request, payload)));
   }
 
-  private emit(route: AuditRoute, request: AuditedRequest, payload: unknown): void {
+  private record(route: AuditRoute, request: AuditedRequest, payload: unknown): void {
     const store = this.context.current();
     const entityId = store?.entityId ?? request.params?.id ?? idOf(payload);
     if (!entityId) return;
 
-    this.events.emit(DOMAIN_EVENTS.AUDIT_ROW_ACTION, {
+    const entry = {
       feature: route.feature,
       action: resolveAuditAction(route, request.body),
       entityId,
       actorType: actorTypeOf(request.user),
       actorId: request.user?.id ?? null,
       changed: store?.changed ?? null,
-      importLogId: null,
-      requestId: ensureRequestId(request),
+    };
+    // The write already happened: losing its record must never fail the request that made it.
+    this.audit.record(entry).catch((error: unknown) => {
+      this.logger.error(`Audit write failed for ${entry.feature}/${entry.entityId}`, error);
     });
   }
 }

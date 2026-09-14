@@ -8,6 +8,7 @@ import {
   type NotificationType,
   type Paginated,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { firstChannelFor, type PaidChannel } from './notification-policy';
@@ -68,7 +69,7 @@ export class NotificationsService {
         });
 
         // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
-        const channel = firstChannelFor(input.type, input.escalate);
+        const channel = firstChannelFor(input.escalate);
         if (channel) {
           await tx.notificationDelivery.create({ data: { notificationId: created.id, channel } });
         }
@@ -113,13 +114,12 @@ export class NotificationsService {
       this.prisma.notification.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.notification.count({ where }),
     ]);
 
-    return { items: rows.map(toNotification), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toNotification), total);
   }
 
   /** Scoped by student, so somebody else's id in the path finds nothing rather than their row. */

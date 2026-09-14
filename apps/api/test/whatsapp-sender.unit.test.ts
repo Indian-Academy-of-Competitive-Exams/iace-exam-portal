@@ -101,13 +101,6 @@ describe('InteraktMessageSender', () => {
     assert.equal(calls[0]?.body.countryCode, '+91');
     assert.equal(calls[0]?.body.phoneNumber, '9876543210');
   });
-
-  it('refuses a channel it does not speak', async () => {
-    await assert.rejects(
-      interakt().send(message({ channel: MESSAGE_CHANNELS.SMS })),
-      /handed a sms message/,
-    );
-  });
 });
 
 describe('A kind with no approved template', () => {

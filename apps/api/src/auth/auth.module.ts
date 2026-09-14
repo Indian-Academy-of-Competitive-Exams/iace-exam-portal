@@ -13,9 +13,6 @@ import { TokenService } from './token.service';
 import { OtpService } from './otp/otp.service';
 import { PinService } from './pin/pin.service';
 import { StartingPinService } from './pin/starting-pin.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { ActorGuard } from './guards/actor.guard';
-import { FeaturePermissionGuard } from './guards/feature-permission.guard';
 
 @Module({
   // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not optional here: OTP,
@@ -40,9 +37,6 @@ import { FeaturePermissionGuard } from './guards/feature-permission.guard';
     OtpService,
     PinService,
     StartingPinService,
-    JwtAuthGuard,
-    ActorGuard,
-    FeaturePermissionGuard,
   ],
   exports: [
     // AuthService for the student's own PIN change: it owns verification, the lockout ladder, session
@@ -50,11 +44,7 @@ import { FeaturePermissionGuard } from './guards/feature-permission.guard';
     AuthService,
     TokenService,
     SessionService,
-    PinService,
     StartingPinService,
-    JwtAuthGuard,
-    ActorGuard,
-    FeaturePermissionGuard,
   ],
 })
 export class AuthModule {}

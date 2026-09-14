@@ -7,7 +7,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
 import {
-  MESSAGE_CHANNELS,
   MESSAGE_KINDS,
   MessageNotConfiguredError,
   REQUIRED_KINDS,
@@ -36,12 +35,6 @@ export class SmsMessageSender implements MessageSender {
   constructor(private readonly config: AppConfigService) {}
 
   async send(message: OutboundMessage): Promise<void> {
-    if (message.channel !== MESSAGE_CHANNELS.SMS) {
-      throw new Error(
-        `No provider is configured for ${message.channel}. Set MAIL_* and wire an email sender.`,
-      );
-    }
-
     const templateId = this.templateFor(message.kind);
     if (!templateId) {
       if (REQUIRED_KINDS.has(message.kind)) {

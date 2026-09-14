@@ -47,8 +47,6 @@ describe('AuditService.record', () => {
       actorType: AUDIT_ACTOR_TYPE.ADMIN,
       actorId: 'adm_1',
       changed: { isTestBlocked: { from: false, to: true } },
-      importLogId: null,
-      requestId: 'req_1',
     });
 
     const [row, ...others] = await prisma.rowActionLog.findMany();

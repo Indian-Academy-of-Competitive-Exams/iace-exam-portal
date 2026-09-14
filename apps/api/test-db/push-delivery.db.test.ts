@@ -35,7 +35,7 @@ async function build(sender = new FakePushSender()) {
   return {
     student: student.id,
     sender,
-    push: new PushService(prisma, new FakeConfig(VAPID).asService(), sender),
+    push: new PushService(prisma, new FakeConfig(VAPID).asService(), sender as never),
     delivery: {
       notificationId: notification.id,
       studentId: student.id,

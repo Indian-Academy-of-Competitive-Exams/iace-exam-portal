@@ -26,7 +26,11 @@ function build() {
   const queue = new FakeQueue();
   const deliveries = new FakeQueue();
   const outbox = new NotificationOutbox(prisma, queue.asQueue());
-  const push = new PushService(prisma, new FakeConfig().asService(), new FakePushSender(false));
+  const push = new PushService(
+    prisma,
+    new FakeConfig().asService(),
+    new FakePushSender(false) as never,
+  );
   // Nothing here opens a test, so the audience it would fan out to is deliberately empty.
   const access = { studentsReaching: () => Promise.resolve([]) } as never;
   return {

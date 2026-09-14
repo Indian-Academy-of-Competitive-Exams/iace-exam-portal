@@ -3,12 +3,10 @@ import { after, before, describe, it } from 'node:test';
 import 'reflect-metadata';
 import { Controller, Module, Post, type INestApplication } from '@nestjs/common';
 import { APP_INTERCEPTOR, NestFactory, Reflector } from '@nestjs/core';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AUDIT_ACTION, AUDIT_FEATURE } from '@iace/contracts';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
-import { DomainEventBus } from '../src/common/events';
-import { DOMAIN_EVENTS, type AuditRowActionEvent } from '../src/common/events/event-catalog';
 import { Audit, AuditContext, AuditInterceptor } from '../src/audit';
+import { AuditService, type AuditEntry } from '../src/audit/audit.service';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -27,22 +25,22 @@ class ProbeController {
   }
 }
 
+const entries: AuditEntry[] = [];
+
 @Module({
   controllers: [ProbeController],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     {
       provide: APP_INTERCEPTOR,
-      useFactory: (reflector: Reflector, context: AuditContext, events: DomainEventBus) =>
-        new AuditInterceptor(reflector, context, events),
-      inject: [Reflector, AuditContext, DomainEventBus],
+      useFactory: (reflector: Reflector, context: AuditContext, audit: AuditService) =>
+        new AuditInterceptor(reflector, context, audit),
+      inject: [Reflector, AuditContext, AuditService],
     },
     AuditContext,
-    { provide: EventEmitter2, useValue: new EventEmitter2() },
     {
-      provide: DomainEventBus,
-      useFactory: (emitter: EventEmitter2) => new DomainEventBus(emitter),
-      inject: [EventEmitter2],
+      provide: AuditService,
+      useValue: { record: (entry: AuditEntry) => Promise.resolve(void entries.push(entry)) },
     },
   ],
 })
@@ -70,17 +68,12 @@ describe('AuditInterceptor registered after ResponseInterceptor (audit e2e)', ()
    * just never fires, and the audit log silently has a hole in it.
    */
   it('files the audit row against the handler’s real id, with no :id param to fall back on', async () => {
-    const events: AuditRowActionEvent[] = [];
-    app
-      .get(EventEmitter2)
-      .on(DOMAIN_EVENTS.AUDIT_ROW_ACTION, (event: AuditRowActionEvent) => events.push(event));
-
     const response = await fetch(`${baseUrl}/probe`, { method: 'POST' });
     const body = (await response.json()) as { data: { id: string } };
 
     assert.equal(body.data.id, 'probe_1');
-    assert.equal(events.length, 1);
-    assert.equal(events[0]?.entityId, 'probe_1');
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0]?.entityId, 'probe_1');
   });
 
   /**

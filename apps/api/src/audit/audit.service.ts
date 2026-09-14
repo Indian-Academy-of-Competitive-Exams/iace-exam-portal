@@ -6,7 +6,9 @@ import {
   ErrorCodes,
   dateOnlySchema,
   type AuditAction,
+  type AuditActorType,
   type AuditFeature,
+  type FieldDiff,
   type ImportLogStatus,
   type ImportLogSummary,
   type Paginated,
@@ -16,9 +18,19 @@ import {
 } from '@iace/contracts';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { matchFilters } from '../common/match-filters';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { type AuditRowActionEvent } from '../common/events/event-catalog';
+
+/** One audited write, as the interceptor saw it succeed. */
+export interface AuditEntry {
+  feature: AuditFeature;
+  action: AuditAction;
+  entityId: string;
+  actorType: AuditActorType;
+  actorId: string | null;
+  changed: FieldDiff | null;
+}
 
 /** Enough of the authenticated caller to scope a read — never the whole `AuthenticatedUser`. */
 export interface AuditViewer {
@@ -62,16 +74,15 @@ export class AuditService {
   ) {}
 
   /** `changed` on a CREATE is not a snapshot: `fieldDiff` drops a field that is null on both sides. */
-  async record(event: AuditRowActionEvent): Promise<void> {
+  async record(entry: AuditEntry): Promise<void> {
     await this.prisma.rowActionLog.create({
       data: {
-        feature: event.feature,
-        entityId: event.entityId,
-        action: event.action,
-        actorType: event.actorType,
-        actorId: event.actorId,
-        changed: (event.changed ?? undefined) as Prisma.InputJsonValue | undefined,
-        importLogId: event.importLogId,
+        feature: entry.feature,
+        entityId: entry.entityId,
+        action: entry.action,
+        actorType: entry.actorType,
+        actorId: entry.actorId,
+        changed: (entry.changed ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
   }
@@ -121,25 +132,22 @@ export class AuditService {
     // Outside the AND: it narrows whatever the mode built, so ANY cannot widen past the viewer.
     if (!viewer.isSuperAdmin) where.actorId = viewer.id;
 
-    const skip = (query.page - 1) * query.pageSize;
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.rowActionLog.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.rowActionLog.count({ where }),
     ]);
 
     const names = await this.namesFor(rows);
 
-    return {
-      items: rows.map((row) => this.toRowAction(row, names)),
-      page: query.page,
-      pageSize: query.pageSize,
+    return paged(
+      query,
+      rows.map((row) => this.toRowAction(row, names)),
       total,
-    };
+    );
   }
 
   /** Same scoping rule as `listRowActions` — imports are always admin-initiated, so only `admin` resolves. */
@@ -151,13 +159,11 @@ export class AuditService {
     const where: Prisma.ImportLogWhereInput = {};
     if (!viewer.isSuperAdmin) where.actorId = viewer.id;
 
-    const skip = (query.page - 1) * query.pageSize;
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.importLog.findMany({
         where,
         orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
-        skip,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.importLog.count({ where }),
     ]);
@@ -166,12 +172,11 @@ export class AuditService {
       rows.map((row) => ({ actorId: row.actorId, actorType: AUDIT_ACTOR_TYPE.ADMIN })),
     );
 
-    return {
-      items: rows.map((row) => this.toImportSummary(row, names)),
-      page: query.page,
-      pageSize: query.pageSize,
+    return paged(
+      query,
+      rows.map((row) => this.toImportSummary(row, names)),
       total,
-    };
+    );
   }
 
   /** Scoped like `listImports`: an admin who cannot see the run cannot fetch what it was fed. */

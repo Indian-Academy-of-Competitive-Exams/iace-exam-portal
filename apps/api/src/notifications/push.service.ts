@@ -3,12 +3,12 @@
  * already committed by the time this runs, so nothing here may throw its way back into the job that
  * wrote it — a push service being down is not a student left untold.
  */
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DeliveryChannel, DeliveryStatus, type NotificationType } from '@prisma/client';
 import { NOTIFICATION_INBOX_PATH, type PushSubscriptionBody } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
-import { PUSH_OUTCOMES, PUSH_SENDER, type PushSender } from './web-push.sender';
+import { PUSH_OUTCOMES, WebPushSender } from './web-push.sender';
 
 /** What one push is sent from. The title only — the body may name marks, and a push must not. */
 export interface PushDelivery {
@@ -25,7 +25,7 @@ export class PushService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
-    @Inject(PUSH_SENDER) private readonly sender: PushSender,
+    private readonly sender: WebPushSender,
   ) {}
 
   /** Null is a channel nothing can carry, which the screen shows differently from one switched off. */

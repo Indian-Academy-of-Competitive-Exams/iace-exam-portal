@@ -1,19 +1,10 @@
 /** Every cross-module event in the platform, declared in one place (docs/03 §6). */
 
-import {
-  type AuditAction,
-  type AuditActorType,
-  type AuditFeature,
-  type FieldDiff,
-} from '@iace/contracts';
-
 export const DOMAIN_EVENTS = {
   /** A first evaluation landed, and the aggregates want it. WIRED — see the scoring worker. */
   SCORING_COMPLETED: 'scoring.completed',
   /** A student's PIN changed; auth revoked the sessions before emitting. ANNOUNCED — no handler. */
   STUDENT_PIN_RESET: 'student.pin_reset',
-  /** An audited write succeeded. WIRED — see the audit module. */
-  AUDIT_ROW_ACTION: 'audit.row_action',
   /** One student's access moved. WIRED — see the access module's cache listener. */
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
   /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
@@ -48,17 +39,6 @@ export interface StudentPinResetEvent {
   reason: PinResetReason;
 }
 
-export interface AuditRowActionEvent {
-  feature: AuditFeature;
-  action: AuditAction;
-  entityId: string;
-  actorType: AuditActorType;
-  actorId: string | null;
-  changed: FieldDiff | null;
-  importLogId: string | null;
-  requestId: string;
-}
-
 export interface StudentAccessChangedEvent {
   studentId: string;
 }
@@ -78,7 +58,6 @@ export interface StudentSignedUpEvent {
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.SCORING_COMPLETED]: ScoringCompletedEvent;
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
-  [DOMAIN_EVENTS.AUDIT_ROW_ACTION]: AuditRowActionEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;

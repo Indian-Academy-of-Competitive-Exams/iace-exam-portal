@@ -102,7 +102,7 @@ export class NotificationsProcessor extends WorkerHost {
     });
     if (booked.length === 0) return;
 
-    const plan = escalationFor(intent.type, intent.actBy ?? null, new Date(), intent.escalate);
+    const plan = escalationFor(intent.actBy ?? null, new Date(), intent.escalate);
 
     for (const row of booked) {
       await this.deliveries.add(

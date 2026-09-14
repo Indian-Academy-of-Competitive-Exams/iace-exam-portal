@@ -18,8 +18,8 @@ import {
   PUSH_OUTCOMES,
   type PushOutcome,
   type PushPayload,
-  type PushSender,
   type PushTarget,
+  type WebPushSender,
 } from '../../src/notifications/web-push.sender';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
@@ -535,7 +535,7 @@ export class FakeCodeCatalog {
 }
 
 /** Records what would have gone out, and pretends any endpoint named is dead or unreachable. */
-export class FakePushSender implements PushSender {
+export class FakePushSender implements Pick<WebPushSender, 'isConfigured' | 'send'> {
   readonly sent: { endpoint: string; payload: PushPayload }[] = [];
 
   constructor(

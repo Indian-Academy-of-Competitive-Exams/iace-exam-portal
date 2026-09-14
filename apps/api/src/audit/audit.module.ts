@@ -7,7 +7,6 @@ import { QUEUE_NAMES } from '../queue/queues';
 import { AuditArchiveProcessor } from './audit-archive.processor';
 import { AuditContext } from './audit.context';
 import { AuditController } from './audit.controller';
-import { AuditListener } from './audit.listener';
 import { AuditService } from './audit.service';
 
 /** Global: every feature module contributes a diff, and none should have to import this. */
@@ -15,7 +14,7 @@ import { AuditService } from './audit.service';
 @Module({
   imports: [PrismaModule, QueueModule],
   controllers: [AuditController],
-  providers: [AuditService, AuditListener, AuditContext, AuditArchiveProcessor],
+  providers: [AuditService, AuditContext, AuditArchiveProcessor],
   exports: [AuditService, AuditContext],
 })
 export class AuditModule implements OnModuleInit {

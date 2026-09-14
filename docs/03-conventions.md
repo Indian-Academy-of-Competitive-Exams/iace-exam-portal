@@ -195,7 +195,6 @@ does not run.
 
 | Event                    | Producer                                                                                                      | Consumers                                    | State     |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------- |
-| `audit.row_action`       | the audit interceptor, on every write carrying `@Audit`                                                       | audit (writes `RowActionLog`)                | wired     |
 | `student.signed_up`      | auth, on the signup that created the row                                                                      | students (records the platform consent)      | wired     |
 | `student.pin_reset`      | auth, both reset paths                                                                                        | —                                            | announced |
 | `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired     |
@@ -295,10 +294,9 @@ Built and in use. Reach for these rather than adding a second of any of them.
 - **The free channels carry everything but the two somebody is waiting on.** A paid message is SMS
   for an OTP and for the starting PIN a roster import issues, and that is the whole list — every
   other notification and every announcement reaches a student over in-app and web push, which cost
-  nothing per message. This is not a default an admin can drift: `NOTIFICATION_POLICY` in
-  `notification-policy.ts` gives every kind an EMPTY escalation chain, so paid delivery is a
-  deliberate per-send override priced against `NOTIFICATION_COST_*_PAISE`, never a kind's habit.
-  Add a kind and it is free until somebody writes an escalation for it on purpose.
+  nothing per message. This is not a default an admin can drift: `notification-policy.ts` holds no
+  per-kind chain at all, so paid delivery is a deliberate per-send override priced against
+  `NOTIFICATION_COST_*_PAISE`, never a kind's habit. A new kind is free until a send chooses otherwise.
 - **The institute picks the channel, and a student has no switch over it.** There is no per-channel
   opt-in: whether the platform pays to reach somebody is a delivery decision taken in code and per
   send, never a row a student can set, and the preference table that said otherwise was dropped.

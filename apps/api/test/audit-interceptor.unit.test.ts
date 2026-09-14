@@ -2,17 +2,26 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { AUDIT_ACTION, AUDIT_ACTOR_TYPE, AUDIT_FEATURE, ActorTypes } from '@iace/contracts';
-import { DOMAIN_EVENTS } from '../src/common/events/event-catalog';
 import { AuditContext } from '../src/audit/audit.context';
 import { AuditInterceptor } from '../src/audit/audit.interceptor';
 import { TOGGLE_ACTIONS } from '../src/audit/audit.decorator';
-import { FakeEventBus } from './support/fakes';
+import { type AuditEntry, type AuditService } from '../src/audit/audit.service';
 
-function harness(route: unknown, request: Record<string, unknown>) {
-  const bus = new FakeEventBus();
+function harness(
+  route: unknown,
+  request: Record<string, unknown>,
+  write: (entry: AuditEntry) => Promise<void> = () => Promise.resolve(),
+) {
+  const entries: AuditEntry[] = [];
+  const audit = {
+    record: (entry: AuditEntry) => {
+      entries.push(entry);
+      return write(entry);
+    },
+  } as unknown as AuditService;
   const context = new AuditContext();
   const reflector = { getAllAndOverride: () => route } as never;
-  const interceptor = new AuditInterceptor(reflector, context, bus as never);
+  const interceptor = new AuditInterceptor(reflector, context, audit);
 
   const execution = {
     getType: () => 'http',
@@ -21,7 +30,7 @@ function harness(route: unknown, request: Record<string, unknown>) {
     switchToHttp: () => ({ getRequest: () => request }),
   } as never;
 
-  return { bus, context, interceptor, execution };
+  return { entries, context, interceptor, execution };
 }
 
 const ADMIN_REQUEST = {
@@ -32,25 +41,38 @@ const ADMIN_REQUEST = {
 };
 
 describe('AuditInterceptor', () => {
-  it('emits one event with the actor, the entity and the resolved action', async () => {
+  it('records one row with the actor, the entity and the resolved action', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: TOGGLE_ACTIONS.tests };
-    const { bus, interceptor, execution } = harness(route, ADMIN_REQUEST);
+    const { entries, interceptor, execution } = harness(route, ADMIN_REQUEST);
 
     await firstValueFrom(
       interceptor.intercept(execution, { handle: () => of({ id: 'stu_1' }) } as never),
     );
 
-    assert.equal(bus.events.length, 1);
-    assert.equal(bus.events[0]?.name, DOMAIN_EVENTS.AUDIT_ROW_ACTION);
-    assert.equal(bus.events[0]?.payload.action, AUDIT_ACTION.BLOCK);
-    assert.equal(bus.events[0]?.payload.entityId, 'stu_1');
-    assert.equal(bus.events[0]?.payload.actorId, 'adm_1');
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0]?.action, AUDIT_ACTION.BLOCK);
+    assert.equal(entries[0]?.entityId, 'stu_1');
+    assert.equal(entries[0]?.actorId, 'adm_1');
+  });
+
+  it('answers the request even when the audit write fails', async () => {
+    const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.UPDATE };
+    const { interceptor, execution } = harness(route, ADMIN_REQUEST, () =>
+      Promise.reject(new Error('postgres is down')),
+    );
+
+    const answer = await firstValueFrom(
+      interceptor.intercept(execution, { handle: () => of({ id: 'stu_1' }) } as never),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(answer, { id: 'stu_1' });
   });
 
   /** A refused write is not a change, so a thrown request must leave no trace. */
-  it('emits nothing when the handler throws', async () => {
+  it('records nothing when the handler throws', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.UPDATE };
-    const { bus, interceptor, execution } = harness(route, ADMIN_REQUEST);
+    const { entries, interceptor, execution } = harness(route, ADMIN_REQUEST);
 
     await firstValueFrom(
       interceptor.intercept(execution, {
@@ -61,34 +83,34 @@ describe('AuditInterceptor', () => {
       () => undefined,
     );
 
-    assert.equal(bus.events.length, 0);
+    assert.equal(entries.length, 0);
   });
 
-  it('emits nothing for a route carrying no @Audit', async () => {
-    const { bus, interceptor, execution } = harness(undefined, ADMIN_REQUEST);
+  it('records nothing for a route carrying no @Audit', async () => {
+    const { entries, interceptor, execution } = harness(undefined, ADMIN_REQUEST);
 
     await firstValueFrom(
       interceptor.intercept(execution, { handle: () => of({ id: 'x' }) } as never),
     );
 
-    assert.equal(bus.events.length, 0);
+    assert.equal(entries.length, 0);
   });
 
   /** A create has no id in the path — it is in what the handler just returned. */
   it('falls back to the response id when the route has no param', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.CREATE };
-    const { bus, interceptor, execution } = harness(route, { ...ADMIN_REQUEST, params: {} });
+    const { entries, interceptor, execution } = harness(route, { ...ADMIN_REQUEST, params: {} });
 
     await firstValueFrom(
       interceptor.intercept(execution, { handle: () => of({ id: 'stu_new' }) } as never),
     );
 
-    assert.equal(bus.events[0]?.payload.entityId, 'stu_new');
+    assert.equal(entries[0]?.entityId, 'stu_new');
   });
 
   it('carries the diff the service contributed', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.UPDATE };
-    const { bus, context, interceptor, execution } = harness(route, ADMIN_REQUEST);
+    const { entries, context, interceptor, execution } = harness(route, ADMIN_REQUEST);
 
     await context.run(async () => {
       context.setChanged({ fullName: { from: 'A', to: 'B' } });
@@ -97,12 +119,12 @@ describe('AuditInterceptor', () => {
       );
     });
 
-    assert.deepEqual(bus.events[0]?.payload.changed, { fullName: { from: 'A', to: 'B' } });
+    assert.deepEqual(entries[0]?.changed, { fullName: { from: 'A', to: 'B' } });
   });
 
   it('records a student acting on themselves as a STUDENT actor', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT_PROFILE, action: AUDIT_ACTION.UPDATE };
-    const { bus, interceptor, execution } = harness(route, {
+    const { entries, interceptor, execution } = harness(route, {
       ...ADMIN_REQUEST,
       params: {},
       user: { id: 'stu_9', actor: ActorTypes.STUDENT },
@@ -112,8 +134,8 @@ describe('AuditInterceptor', () => {
       interceptor.intercept(execution, { handle: () => of({ id: 'stu_9' }) } as never),
     );
 
-    assert.equal(bus.events[0]?.payload.actorType, AUDIT_ACTOR_TYPE.STUDENT);
-    assert.equal(bus.events[0]?.payload.actorId, 'stu_9');
+    assert.equal(entries[0]?.actorType, AUDIT_ACTOR_TYPE.STUDENT);
+    assert.equal(entries[0]?.actorId, 'stu_9');
   });
 
   /**
@@ -123,7 +145,7 @@ describe('AuditInterceptor', () => {
    */
   it('records a request with no authenticated user as SCRIPT, never ADMIN', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.UPDATE };
-    const { bus, interceptor, execution } = harness(route, {
+    const { entries, interceptor, execution } = harness(route, {
       ...ADMIN_REQUEST,
       params: { id: 'stu_1' },
       user: undefined,
@@ -133,7 +155,7 @@ describe('AuditInterceptor', () => {
       interceptor.intercept(execution, { handle: () => of({ id: 'stu_1' }) } as never),
     );
 
-    assert.equal(bus.events[0]?.payload.actorType, AUDIT_ACTOR_TYPE.SCRIPT);
-    assert.equal(bus.events[0]?.payload.actorId, null);
+    assert.equal(entries[0]?.actorType, AUDIT_ACTOR_TYPE.SCRIPT);
+    assert.equal(entries[0]?.actorId, null);
   });
 });

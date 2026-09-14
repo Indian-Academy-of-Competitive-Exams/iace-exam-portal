@@ -7,10 +7,6 @@ import { DOMAIN_EVENTS } from '../src/common/events/event-catalog';
  * skips it is invisible to everyone reading the file.
  */
 describe('domain event catalog', () => {
-  it('names the audit event', () => {
-    assert.equal(DOMAIN_EVENTS.AUDIT_ROW_ACTION, 'audit.row_action');
-  });
-
   it('keeps every event name unique, so no listener answers two producers', () => {
     const names = Object.values(DOMAIN_EVENTS);
     assert.equal(new Set(names).size, names.length);

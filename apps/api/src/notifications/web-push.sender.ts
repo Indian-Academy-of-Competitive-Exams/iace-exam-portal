@@ -1,13 +1,11 @@
 /**
- * The web-push transport, behind a token so a test never talks to a push service. It lives here
+ * The web-push transport, swapped for a fake in tests so none talks to a push service. It lives here
  * rather than in common/messaging because that interface is template-and-recipient shaped: push
  * encrypts per SUBSCRIPTION, using keys the browser generated, and has no template to name.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { WebPushError, sendNotification, setVapidDetails } from 'web-push';
 import { AppConfigService } from '../config/app-config.service';
-
-export const PUSH_SENDER = Symbol('PUSH_SENDER');
 
 /** One browser endpoint and the keys that encrypt for it. */
 export interface PushTarget {
@@ -28,12 +26,6 @@ export const PUSH_OUTCOMES = { SENT: 'SENT', FAILED: 'FAILED', GONE: 'GONE' } as
 
 export type PushOutcome = (typeof PUSH_OUTCOMES)[keyof typeof PUSH_OUTCOMES];
 
-export interface PushSender {
-  /** False with no VAPID keypair configured, which is a channel to hide rather than a send to fail. */
-  readonly isConfigured: boolean;
-  send(target: PushTarget, payload: PushPayload): Promise<PushOutcome>;
-}
-
 /** A subscription the push service has retired. Anything else is worth keeping and retrying. */
 const DEAD_STATUS = new Set([404, 410]);
 
@@ -41,9 +33,10 @@ const DEAD_STATUS = new Set([404, 410]);
 const TTL_SEC = 6 * 60 * 60;
 
 @Injectable()
-export class WebPushSender implements PushSender {
+export class WebPushSender {
   private readonly logger = new Logger(WebPushSender.name);
 
+  /** False with no VAPID keypair configured, which is a channel to hide rather than a send to fail. */
   readonly isConfigured: boolean;
 
   constructor(config: AppConfigService) {

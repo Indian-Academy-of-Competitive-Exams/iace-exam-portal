@@ -6,7 +6,7 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { AppConfigService } from '../../config/app-config.service';
-import { MESSAGE_CHANNELS, type MessageSender, type OutboundMessage } from './message-sender';
+import { type MessageSender, type OutboundMessage } from './message-sender';
 
 @Injectable()
 export class EmailMessageSender implements MessageSender, OnModuleDestroy {
@@ -21,10 +21,6 @@ export class EmailMessageSender implements MessageSender, OnModuleDestroy {
   }
 
   async send(message: OutboundMessage): Promise<void> {
-    if (message.channel !== MESSAGE_CHANNELS.EMAIL) {
-      throw new Error(`The email sender was handed a ${message.channel} message.`);
-    }
-
     await this.connection().sendMail({
       // Gmail rewrites the from-address to the account that authenticated, so there is nothing else to set.
       from: this.config.get('MAIL_USER'),

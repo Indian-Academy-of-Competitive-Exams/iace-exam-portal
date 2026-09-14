@@ -165,7 +165,7 @@ export class NotificationDeliveryProcessor extends WorkerHost {
   /** Books the next channel in the chain. Nothing to book means this message has run out of road. */
   private async fallBack(notification: NotificationWithChain, from: PaidChannel): Promise<void> {
     const chosen = notification.announcement?.paidChannels as PaidChannel[] | undefined;
-    const next = nextChannelAfter(notification.type, from, chosen);
+    const next = nextChannelAfter(from, chosen);
     if (!next) {
       this.logger.warn(`Notification ${notification.id} could not be delivered on any channel`);
       return;
