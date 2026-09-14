@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Plus, Power, Trash2, Users } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import {
   BRANCH_TYPE,
   BRANCH_TYPES,
@@ -17,7 +17,6 @@ import {
   Badge,
   Button,
   Combobox,
-  ConfirmDialog,
   DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -27,10 +26,10 @@ import {
   linkVariants,
   PageHeader,
   plural,
-  RowActions,
   TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
+import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { BRANCH_TYPE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
@@ -69,7 +68,16 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
           <span className="text-muted-foreground">0</span>
         ),
     },
-    { key: 'status', header: 'Status', cell: (branch) => <BranchStatus branch={branch} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (branch) =>
+        branch.type === BRANCH_TYPE.VIRTUAL ? (
+          <Badge variant="info">System</Badge>
+        ) : (
+          <ActiveStatus isActive={branch.isActive} />
+        ),
+    },
     {
       key: 'actions',
       className: 'text-right',
@@ -78,6 +86,45 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
       ),
     },
   ];
+}
+
+function BranchRowActions({
+  branch,
+  canEdit,
+  onChanged,
+}: Readonly<{ branch: Branch; canEdit: boolean; onChanged: () => void }>) {
+  // The online branch is never editable, so its menu holds only the students link.
+  const editable = canEdit && branch.type !== BRANCH_TYPE.VIRTUAL;
+
+  return (
+    <RetireDeleteActions
+      name={branch.name}
+      noun="branch"
+      isActive={branch.isActive}
+      canEdit={editable}
+      resource={api.admin.branches}
+      id={branch.id}
+      onChanged={onChanged}
+      retireText={
+        branch.isActive
+          ? `Nothing it already holds changes — the ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
+          : 'The branch is offered again when anyone assigns a student. Nothing else changes.'
+      }
+      deleteText={
+        branch.studentCount === 0
+          ? 'No student attends this branch, so nothing loses access. This cannot be undone.'
+          : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead — a retired branch keeps everyone it has and simply takes no new students.`
+      }
+    >
+      <DropdownMenuItem asChild>
+        <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
+          <Users aria-hidden />
+          Students
+        </Link>
+      </DropdownMenuItem>
+      {editable ? <DropdownMenuSeparator /> : null}
+    </RetireDeleteActions>
+  );
 }
 
 /** Anyone managing students may read the list, because they pick from it. Only a super admin writes. */
@@ -212,152 +259,5 @@ function NewBranchDialog({
         )}
       </FormField>
     </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/** One question at a time: two booleans could render two dialogs at once. */
-const BRANCH_CONFIRMS = {
-  DELETE: 'delete',
-  RETIRE: 'retire',
-} as const;
-type BranchConfirm = (typeof BRANCH_CONFIRMS)[keyof typeof BRANCH_CONFIRMS];
-
-/**
- * The buttons only ask; both dialogs live with the mutations in `BranchRowActions`.
- * A component, not a ternary, because the first state is "render nothing".
- */
-function BranchActions({
-  branch,
-  canEdit,
-  busy,
-  onAsk,
-}: Readonly<{
-  branch: Branch;
-  canEdit: boolean;
-  busy: boolean;
-  onAsk: (confirm: BranchConfirm) => void;
-}>) {
-  // The online branch is never editable, so its menu would hold only the students link.
-  const editable = canEdit && branch.type !== BRANCH_TYPE.VIRTUAL;
-
-  return (
-    <RowActions label={`Actions for ${branch.name}`}>
-      <DropdownMenuItem asChild>
-        <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
-          <Users aria-hidden />
-          Students
-        </Link>
-      </DropdownMenuItem>
-
-      {editable ? (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={busy} onSelect={() => onAsk(BRANCH_CONFIRMS.RETIRE)}>
-            <Power aria-hidden />
-            {branch.isActive ? 'Retire' : 'Reactivate'}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            destructive
-            disabled={busy}
-            onSelect={() => onAsk(BRANCH_CONFIRMS.DELETE)}
-          >
-            <Trash2 aria-hidden />
-            Delete
-          </DropdownMenuItem>
-        </>
-      ) : null}
-    </RowActions>
-  );
-}
-
-/** Three states, listed. See SignInStatus in students.tsx for the reasoning. */
-function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
-  if (branch.type === BRANCH_TYPE.VIRTUAL) return <Badge variant="info">System</Badge>;
-  if (branch.isActive) return <Badge variant="success">Active</Badge>;
-  return <Badge variant="neutral">Retired</Badge>;
-}
-
-/** The mutations a row can run, and the question each one asks first. */
-function BranchRowActions({
-  branch,
-  canEdit,
-  onChanged,
-}: Readonly<{
-  branch: Branch;
-  canEdit: boolean;
-  onChanged: () => void;
-}>) {
-  const [asking, setAsking] = useState<BranchConfirm | null>(null);
-  const close = () => setAsking(null);
-
-  const remove = useMutation({
-    meta: { success: `${branch.name} deleted.` },
-    mutationFn: () => api.admin.branches.remove(branch.id),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
-    onError: close,
-  });
-
-  const setActive = useMutation({
-    meta: { success: (): string => `${branch.name} updated.` },
-    mutationFn: (isActive: boolean) => api.admin.branches.update(branch.id, { isActive }),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    onError: close,
-  });
-
-  const busy = remove.isPending || setActive.isPending;
-
-  return (
-    <>
-      <BranchActions branch={branch} canEdit={canEdit} busy={busy} onAsk={setAsking} />
-
-      {/* Retiring is reversible, and it still asks. It is not the undo that
-          makes it worth a question — it is that the effect is invisible from
-          here: nothing about this row changes except a badge, and the
-          consequence lands weeks later on somebody else, as a branch that is
-          not offered when they assign a student. A switch whose result you
-          cannot see is exactly the one to state out loud. */}
-      <ConfirmDialog
-        open={asking === BRANCH_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && close()}
-        loading={setActive.isPending}
-        title={branch.isActive ? `Retire ${branch.name}?` : `Reactivate ${branch.name}?`}
-        description={
-          branch.isActive
-            ? `Nothing it already holds changes — the ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
-            : 'The branch is offered again when anyone assigns a student. Nothing else changes.'
-        }
-        confirmLabel={branch.isActive ? 'Retire branch' : 'Reactivate branch'}
-        onConfirm={() => setActive.mutate(!branch.isActive)}
-      />
-
-      {/* Deleting is refused server-side while any student still sits here, so the
-          count decides which of two different questions this is: "confirm an
-          empty shell goes" or "you are about to be told no". Saying which
-          before the click saves a round trip and an error nobody expected. */}
-      <ConfirmDialog
-        open={asking === BRANCH_CONFIRMS.DELETE}
-        onOpenChange={(open) => !open && close()}
-        destructive
-        loading={remove.isPending}
-        title={`Delete ${branch.name}?`}
-        description={
-          branch.studentCount === 0
-            ? 'No student attends this branch, so nothing loses access. This cannot be undone.'
-            : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead — a retired branch keeps everyone it has and simply takes no new students.`
-        }
-        confirmLabel="Delete branch"
-        onConfirm={() => remove.mutate()}
-      />
-    </>
   );
 }

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Pencil, Plus, Power, Trash2, Upload } from 'lucide-react';
+import { Pencil, Plus, Upload } from 'lucide-react';
 import {
   createEventSchema,
   FEATURE_KEYS,
@@ -17,9 +17,7 @@ import { applyFieldErrors } from '@iace/app-kit';
 import { useListScreen } from '@iace/app-kit/browser';
 import {
   Alert,
-  Badge,
   Button,
-  ConfirmDialog,
   Dialog,
   DialogBody,
   DialogClose,
@@ -35,11 +33,11 @@ import {
   linkVariants,
   ListView,
   plural,
-  RowActions,
   Textarea,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
+import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { StudentMultiPicker } from '../components/access-picker';
@@ -110,21 +108,68 @@ function eventColumns(
       numeric: true,
       cell: (event) => event.seriesCount,
     },
-    { key: 'status', header: 'Status', cell: (event) => <EventStatus event={event} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (event) => <ActiveStatus isActive={event.isActive} />,
+    },
     {
       key: 'actions',
       className: 'text-right',
       cell: (event) => (
-        <EventRowActions
-          event={event}
-          canWrite={canWrite}
+        <RetireDeleteActions
+          name={event.name}
+          noun="event"
+          isActive={event.isActive}
+          canEdit={canWrite}
+          // Left out, not disabled: the server refuses while a series names it, and the count says so.
+          canDelete={event.seriesCount === 0}
+          resource={api.admin.events}
+          id={event.id}
           onChanged={refresh}
-          onEdit={onEdit}
-          onAddCandidates={() => onAddCandidates(event)}
-        />
+          retireText={retireDescription(event)}
+          deleteText={deleteDescription(event)}
+        >
+          {canWrite ? (
+            <>
+              <DropdownMenuItem onSelect={() => onEdit(event)}>
+                <Pencil aria-hidden />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAddCandidates(event)}>
+                <Plus aria-hidden />
+                Add candidates
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to={ROUTES.EVENT_IMPORT(event.id)}>
+                  <Upload aria-hidden />
+                  Import candidates
+                </Link>
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </RetireDeleteActions>
       ),
     },
   ];
+}
+
+function retireDescription(event: Event): string {
+  if (!event.isActive) {
+    return 'The event is offered again when anyone builds a series. Nothing else changes.';
+  }
+  const kept =
+    event.candidateCount === 0
+      ? 'Nobody is on it yet, so nothing changes for any student'
+      : `Every series already built on it keeps reaching its ${plural(event.candidateCount, 'candidate')}`;
+  return `${kept}. What stops is new ones: this event will no longer be offered when anyone builds a series. Reactivating puts it back.`;
+}
+
+function deleteDescription(event: Event): string {
+  if (event.candidateCount === 0) {
+    return 'No series names this event and nobody is on it, so nothing loses access. This cannot be undone.';
+  }
+  return `No series names this event, so no offering is lost. The ${plural(event.candidateCount, 'candidate')} on it go with it, and this cannot be undone.`;
 }
 
 /** The roster an Event Test draws on. Who is on one is the students screen, filtered to it. */
@@ -296,162 +341,6 @@ function EditEventDialog({
         {(control) => <Textarea {...control} rows={3} />}
       </FormField>
     </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/** One question at a time: two booleans could render two dialogs at once. */
-const EVENT_CONFIRMS = {
-  DELETE: 'delete',
-  RETIRE: 'retire',
-} as const;
-type EventConfirm = (typeof EVENT_CONFIRMS)[keyof typeof EVENT_CONFIRMS];
-
-function EventStatus({ event }: Readonly<{ event: Event }>) {
-  if (event.isActive) return <Badge variant="success">Active</Badge>;
-  return <Badge variant="neutral">Retired</Badge>;
-}
-
-/** A component, not a ternary: the first state is "render nothing", and the dialogs live below. */
-function EventActions({
-  event,
-  canWrite,
-  busy,
-  onAsk,
-  onEdit,
-  onAddCandidates,
-}: Readonly<{
-  event: Event;
-  canWrite: boolean;
-  busy: boolean;
-  onAsk: (confirm: EventConfirm) => void;
-  onEdit: () => void;
-  onAddCandidates: () => void;
-}>) {
-  if (!canWrite) return null;
-
-  return (
-    <RowActions label={`Actions for ${event.name}`}>
-      <DropdownMenuItem disabled={busy} onSelect={onEdit}>
-        <Pencil aria-hidden />
-        Edit
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={busy} onSelect={onAddCandidates}>
-        <Plus aria-hidden />
-        Add candidates
-      </DropdownMenuItem>
-      <DropdownMenuItem asChild>
-        <Link to={ROUTES.EVENT_IMPORT(event.id)}>
-          <Upload aria-hidden />
-          Import candidates
-        </Link>
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={busy} onSelect={() => onAsk(EVENT_CONFIRMS.RETIRE)}>
-        <Power aria-hidden />
-        {event.isActive ? 'Retire' : 'Reactivate'}
-      </DropdownMenuItem>
-      {/* Left out, not disabled: the server refuses while a series names it, and the count says so. */}
-      {event.seriesCount === 0 ? (
-        <DropdownMenuItem destructive disabled={busy} onSelect={() => onAsk(EVENT_CONFIRMS.DELETE)}>
-          <Trash2 aria-hidden />
-          Delete
-        </DropdownMenuItem>
-      ) : null}
-    </RowActions>
-  );
-}
-
-function retireDescription(event: Event): string {
-  if (!event.isActive) {
-    return 'The event is offered again when anyone builds a series. Nothing else changes.';
-  }
-  const kept =
-    event.candidateCount === 0
-      ? 'Nobody is on it yet, so nothing changes for any student'
-      : `Every series already built on it keeps reaching its ${plural(event.candidateCount, 'candidate')}`;
-  return `${kept}. What stops is new ones: this event will no longer be offered when anyone builds a series. Reactivating puts it back.`;
-}
-
-function deleteDescription(event: Event): string {
-  if (event.candidateCount === 0) {
-    return 'No series names this event and nobody is on it, so nothing loses access. This cannot be undone.';
-  }
-  return `No series names this event, so no offering is lost. The ${plural(event.candidateCount, 'candidate')} on it go with it, and this cannot be undone.`;
-}
-
-function EventRowActions({
-  event,
-  canWrite,
-  onChanged,
-  onEdit,
-  onAddCandidates,
-}: Readonly<{
-  event: Event;
-  canWrite: boolean;
-  onChanged: () => void;
-  onEdit: (event: Event) => void;
-  onAddCandidates: () => void;
-}>) {
-  const [asking, setAsking] = useState<EventConfirm | null>(null);
-  const close = () => setAsking(null);
-
-  const remove = useMutation({
-    meta: { success: `${event.name} deleted.` },
-    mutationFn: () => api.admin.events.remove(event.id),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    // Drop out of the confirm on failure, or it is left asking a question already answered.
-    onError: close,
-  });
-
-  const setActive = useMutation({
-    meta: { success: (): string => `${event.name} updated.` },
-    mutationFn: (isActive: boolean) => api.admin.events.update(event.id, { isActive }),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    onError: close,
-  });
-
-  const busy = remove.isPending || setActive.isPending;
-
-  return (
-    <>
-      <EventActions
-        event={event}
-        canWrite={canWrite}
-        busy={busy}
-        onAsk={setAsking}
-        onEdit={() => onEdit(event)}
-        onAddCandidates={onAddCandidates}
-      />
-
-      {/* Retiring only drops it from the series picker: access never reads this switch. */}
-      <ConfirmDialog
-        open={asking === EVENT_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && close()}
-        loading={setActive.isPending}
-        title={event.isActive ? `Retire ${event.name}?` : `Reactivate ${event.name}?`}
-        description={retireDescription(event)}
-        confirmLabel={event.isActive ? 'Retire event' : 'Reactivate event'}
-        onConfirm={() => setActive.mutate(!event.isActive)}
-      />
-
-      <ConfirmDialog
-        open={asking === EVENT_CONFIRMS.DELETE}
-        onOpenChange={(open) => !open && close()}
-        destructive
-        loading={remove.isPending}
-        title={`Delete ${event.name}?`}
-        description={deleteDescription(event)}
-        confirmLabel="Delete event"
-        onConfirm={() => remove.mutate()}
-      />
-    </>
   );
 }
 

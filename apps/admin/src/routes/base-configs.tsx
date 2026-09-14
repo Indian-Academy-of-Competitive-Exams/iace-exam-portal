@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Plus } from 'lucide-react';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -16,7 +16,6 @@ import {
   DropdownMenuItem,
   ListView,
   PageHeader,
-  RowActions,
   TableFrame,
   TruncatedText,
   linkVariants,
@@ -24,6 +23,7 @@ import {
   type DataTableColumn,
   type ListFilterMultiControl,
 } from '@iace/ui';
+import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
@@ -163,20 +163,10 @@ function ConfigStatus({ config }: Readonly<{ config: BaseConfig }>) {
     <span className="inline-flex flex-wrap items-center gap-1.5">
       {config.isDefault ? <Badge variant="primary">Default</Badge> : null}
       {config.locked ? <Badge variant="warning">Locked</Badge> : null}
-      <Badge variant={config.isActive ? 'success' : 'neutral'}>
-        {config.isActive ? 'Active' : 'Retired'}
-      </Badge>
+      <ActiveStatus isActive={config.isActive} />
     </span>
   );
 }
-
-/** One question at a time: three booleans could render three dialogs at once. */
-const CONFIG_CONFIRMS = {
-  CLONE: 'clone',
-  RETIRE: 'retire',
-  DELETE: 'delete',
-} as const;
-type ConfigConfirm = (typeof CONFIG_CONFIRMS)[keyof typeof CONFIG_CONFIRMS];
 
 /** Names what would refuse the delete, so the dialog is not a guess the server then corrects. */
 function deleteDescription(config: BaseConfig): string {
@@ -189,131 +179,66 @@ function deleteDescription(config: BaseConfig): string {
   return `No test inherits from ${config.name} and none has been sat. Deleting it removes its sections too, and cannot be undone.`;
 }
 
-/**
- * The buttons only ask; the dialogs live with the mutations in `ConfigRowActions`.
- * A component, not a ternary, because the first state is "render nothing".
- */
-function ConfigActions({
-  config,
-  canWrite,
-  busy,
-  onAsk,
-}: Readonly<{
-  config: BaseConfig;
-  canWrite: boolean;
-  busy: boolean;
-  onAsk: (confirm: ConfigConfirm) => void;
-}>) {
-  if (!canWrite) return null;
-
-  return (
-    <RowActions label={`Actions for ${config.name}`}>
-      <DropdownMenuItem asChild>
-        <Link to={ROUTES.BASE_CONFIG(config.id)}>
-          <Pencil aria-hidden />
-          Edit
-        </Link>
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={busy} onSelect={() => onAsk(CONFIG_CONFIRMS.CLONE)}>
-        <Copy aria-hidden />
-        Clone
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={busy} onSelect={() => onAsk(CONFIG_CONFIRMS.RETIRE)}>
-        <Power aria-hidden />
-        {config.isActive ? 'Retire' : 'Reactivate'}
-      </DropdownMenuItem>
-      <DropdownMenuItem destructive disabled={busy} onSelect={() => onAsk(CONFIG_CONFIRMS.DELETE)}>
-        <Trash2 aria-hidden />
-        Delete
-      </DropdownMenuItem>
-    </RowActions>
-  );
-}
-
 function ConfigRowActions({
   config,
   canWrite,
   onChanged,
 }: Readonly<{ config: BaseConfig; canWrite: boolean; onChanged: () => void }>) {
   const navigate = useNavigate();
-  const [asking, setAsking] = useState<ConfigConfirm | null>(null);
-  const close = () => setAsking(null);
+  const [cloning, setCloning] = useState(false);
 
   const clone = useMutation({
     meta: { success: 'Configuration cloned.' },
     mutationFn: () => api.admin.baseConfigs.clone(config.id, {}),
     onSuccess: (copy: BaseConfigDetail) => {
-      close();
+      setCloning(false);
       onChanged();
       // Cloning is only ever a step towards editing the copy, so it lands there.
       navigate(ROUTES.BASE_CONFIG(copy.id));
     },
-    onError: close,
+    onError: () => setCloning(false),
   });
 
-  const setActive = useMutation({
-    meta: { success: (): string => `${config.name} updated.` },
-    mutationFn: (isActive: boolean) => api.admin.baseConfigs.update(config.id, { isActive }),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    onError: close,
-  });
-
-  const remove = useMutation({
-    meta: { success: `${config.name} deleted.` },
-    mutationFn: () => api.admin.baseConfigs.remove(config.id),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
-    onError: close,
-  });
-
-  const busy = clone.isPending || setActive.isPending || remove.isPending;
+  if (!canWrite) return null;
 
   return (
     <>
-      <ConfigActions config={config} canWrite={canWrite} busy={busy} onAsk={setAsking} />
+      <RetireDeleteActions
+        name={config.name}
+        noun="configuration"
+        isActive={config.isActive}
+        canEdit={canWrite}
+        resource={api.admin.baseConfigs}
+        id={config.id}
+        onChanged={onChanged}
+        retireText={
+          config.isActive
+            ? `Nothing it already holds changes — ${plural(config.testCount, 'test')} built from it keep working exactly as now. What stops is new ones: this configuration will no longer be offered when anyone builds a test. Reactivating puts it back.`
+            : 'The configuration is offered again when anyone builds a test. Nothing else changes.'
+        }
+        deleteText={deleteDescription(config)}
+      >
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.BASE_CONFIG(config.id)}>
+            <Pencil aria-hidden />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setCloning(true)}>
+          <Copy aria-hidden />
+          Clone
+        </DropdownMenuItem>
+      </RetireDeleteActions>
 
-      {/* A clone is a new blueprint somebody else will find in this list, so it says
-          exactly what the copy starts as. */}
+      {/* A clone is a new blueprint somebody else will find here, so it says what the copy starts as. */}
       <ConfirmDialog
-        open={asking === CONFIG_CONFIRMS.CLONE}
-        onOpenChange={(open) => !open && close()}
+        open={cloning}
+        onOpenChange={setCloning}
         loading={clone.isPending}
         title={`Clone ${config.name}?`}
         description={`The copy carries every setting and all ${plural(config.totalQuestions, 'question')} of its sections as they stand now. It starts unlocked, is not the stage's default, and ${config.name} is left exactly as it is. You will land on the copy.`}
         confirmLabel="Clone configuration"
         onConfirm={() => clone.mutate()}
-      />
-
-      <ConfirmDialog
-        open={asking === CONFIG_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && close()}
-        loading={setActive.isPending}
-        title={config.isActive ? `Retire ${config.name}?` : `Reactivate ${config.name}?`}
-        description={
-          config.isActive
-            ? `Nothing it already holds changes — ${plural(config.testCount, 'test')} built from it keep working exactly as now. What stops is new ones: this configuration will no longer be offered when anyone builds a test. Reactivating puts it back.`
-            : 'The configuration is offered again when anyone builds a test. Nothing else changes.'
-        }
-        confirmLabel={config.isActive ? 'Retire configuration' : 'Reactivate configuration'}
-        onConfirm={() => setActive.mutate(!config.isActive)}
-      />
-
-      <ConfirmDialog
-        open={asking === CONFIG_CONFIRMS.DELETE}
-        onOpenChange={(open) => !open && close()}
-        destructive
-        loading={remove.isPending}
-        title={`Delete ${config.name}?`}
-        description={deleteDescription(config)}
-        confirmLabel="Delete config"
-        onConfirm={() => remove.mutate()}
       />
     </>
   );

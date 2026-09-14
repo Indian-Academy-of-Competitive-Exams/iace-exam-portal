@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import {
   DEFAULT_EXAM_COURSE,
   DEFAULT_EXAM_MODE,
@@ -29,9 +29,7 @@ import {
   Badge,
   Button,
   Combobox,
-  ConfirmDialog,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   FormDialog,
   FormField,
   Input,
@@ -39,11 +37,11 @@ import {
   NumericInput,
   PageHeader,
   plural,
-  RowActions,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
+import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { courseLabel, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
@@ -81,12 +79,37 @@ function examColumns(
       cell: (exam) =>
         exam.stageCount > 0 ? exam.stageCount : <span className="text-muted-foreground">0</span>,
     },
-    { key: 'status', header: 'Status', cell: (exam) => <ExamStatus exam={exam} /> },
+    { key: 'status', header: 'Status', cell: (exam) => <ActiveStatus isActive={exam.isActive} /> },
     {
       key: 'actions',
       className: 'text-right',
       cell: (exam) => (
-        <ExamRowActions exam={exam} canEdit={isSuperAdmin} onChanged={refresh} onEdit={onEdit} />
+        <RetireDeleteActions
+          name={exam.name}
+          noun="exam"
+          isActive={exam.isActive}
+          canEdit={isSuperAdmin}
+          resource={api.admin.exams}
+          id={exam.id}
+          onChanged={refresh}
+          retireText={
+            exam.isActive
+              ? `Nothing it already holds changes — ${plural(exam.stageCount, 'stage')} and every student enrolled under ${exam.code} keep working exactly as now. What stops is new ones: this exam will no longer be offered when anyone enrols a student. Reactivating puts it back.`
+              : 'The exam is offered again on the student form. Nothing else changes.'
+          }
+          deleteText={
+            exam.stageCount === 0
+              ? `Nothing hangs off ${exam.code}. If a student is still enrolled on it, this will be refused. Deleting cannot be undone.`
+              : `${plural(exam.stageCount, 'stage')} still hang off ${exam.code}, and deleting it will be refused. Retire the exam instead — it keeps everything it has and is simply no longer offered.`
+          }
+        >
+          {isSuperAdmin ? (
+            <DropdownMenuItem onSelect={() => onEdit(exam)}>
+              <Pencil aria-hidden />
+              Edit
+            </DropdownMenuItem>
+          ) : null}
+        </RetireDeleteActions>
       ),
     },
   ];
@@ -333,146 +356,6 @@ function EditExamDialog({
   );
 }
 
-// ---------------------------------------------------------------------------
-
-/** One question at a time: two booleans could render two dialogs at once. */
-const EXAM_CONFIRMS = {
-  DELETE: 'delete',
-  RETIRE: 'retire',
-} as const;
-type ExamConfirm = (typeof EXAM_CONFIRMS)[keyof typeof EXAM_CONFIRMS];
-
-function ExamStatus({ exam }: Readonly<{ exam: Exam }>) {
-  if (exam.isActive) return <Badge variant="success">Active</Badge>;
-  return <Badge variant="neutral">Retired</Badge>;
-}
-
-/**
- * The buttons only ask; both dialogs live with the mutations in `ExamRowActions`.
- * A component, not a ternary, because the first state is "render nothing".
- */
-function ExamActions({
-  exam,
-  canEdit,
-  busy,
-  onAsk,
-  onEdit,
-}: Readonly<{
-  exam: Exam;
-  canEdit: boolean;
-  busy: boolean;
-  onAsk: (confirm: ExamConfirm) => void;
-  onEdit: () => void;
-}>) {
-  return (
-    <RowActions label={`Actions for ${exam.name}`}>
-      {canEdit ? (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={busy} onSelect={onEdit}>
-            <Pencil aria-hidden />
-            Edit
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={busy} onSelect={() => onAsk(EXAM_CONFIRMS.RETIRE)}>
-            <Power aria-hidden />
-            {exam.isActive ? 'Retire' : 'Reactivate'}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            destructive
-            disabled={busy}
-            onSelect={() => onAsk(EXAM_CONFIRMS.DELETE)}
-          >
-            <Trash2 aria-hidden />
-            Delete
-          </DropdownMenuItem>
-        </>
-      ) : null}
-    </RowActions>
-  );
-}
-
-function ExamRowActions({
-  exam,
-  canEdit,
-  onChanged,
-  onEdit,
-}: Readonly<{
-  exam: Exam;
-  canEdit: boolean;
-  onChanged: () => void;
-  onEdit: (exam: Exam) => void;
-}>) {
-  const [asking, setAsking] = useState<ExamConfirm | null>(null);
-  const close = () => setAsking(null);
-
-  const remove = useMutation({
-    meta: { success: `${exam.name} deleted.` },
-    mutationFn: () => api.admin.exams.remove(exam.id),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
-    onError: close,
-  });
-
-  const setActive = useMutation({
-    meta: { success: (): string => `${exam.name} updated.` },
-    mutationFn: (isActive: boolean) => api.admin.exams.update(exam.id, { isActive }),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    onError: close,
-  });
-
-  const busy = remove.isPending || setActive.isPending;
-
-  return (
-    <>
-      <ExamActions
-        exam={exam}
-        canEdit={canEdit}
-        busy={busy}
-        onAsk={setAsking}
-        onEdit={() => onEdit(exam)}
-      />
-
-      <ConfirmDialog
-        open={asking === EXAM_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && close()}
-        loading={setActive.isPending}
-        title={exam.isActive ? `Retire ${exam.name}?` : `Reactivate ${exam.name}?`}
-        description={
-          exam.isActive
-            ? `Nothing it already holds changes — ${plural(exam.stageCount, 'stage')} and every student enrolled under ${exam.code} keep working exactly as now. What stops is new ones: this exam will no longer be offered when anyone enrols a student. Reactivating puts it back.`
-            : 'The exam is offered again on the student form. Nothing else changes.'
-        }
-        confirmLabel={exam.isActive ? 'Retire exam' : 'Reactivate exam'}
-        onConfirm={() => setActive.mutate(!exam.isActive)}
-      />
-
-      {/* Deleting is refused server-side while anything still points here, so the
-          count decides which of two different questions this is. */}
-      <ConfirmDialog
-        open={asking === EXAM_CONFIRMS.DELETE}
-        onOpenChange={(open) => !open && close()}
-        destructive
-        loading={remove.isPending}
-        title={`Delete ${exam.name}?`}
-        description={
-          exam.stageCount === 0
-            ? `Nothing hangs off ${exam.code}. If a student is still enrolled on it, this will be refused. Deleting cannot be undone.`
-            : `${plural(exam.stageCount, 'stage')} still hang off ${exam.code}, and deleting it will be refused. Retire the exam instead — it keeps everything it has and is simply no longer offered.`
-        }
-        confirmLabel="Delete exam"
-        onConfirm={() => remove.mutate()}
-      />
-    </>
-  );
-}
-
 // ============================================================================
 // Stages
 // ============================================================================
@@ -522,12 +405,42 @@ function stageColumns(
       ),
     },
     { key: 'configs', header: 'Configurations', numeric: true, cell: (stage) => stage.configCount },
-    { key: 'status', header: 'Status', cell: (stage) => <StageStatus stage={stage} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (stage) => <ActiveStatus isActive={stage.isActive} />,
+    },
     {
       key: 'actions',
       className: 'text-right',
       cell: (stage) => (
-        <StageRowActions stage={stage} canEdit={canWrite} onChanged={refresh} onEdit={onEdit} />
+        <RetireDeleteActions
+          name={stage.name}
+          noun="stage"
+          isActive={stage.isActive}
+          canEdit={canWrite}
+          resource={api.admin.examStages}
+          id={stage.id}
+          onChanged={refresh}
+          deleteTitle={`${stage.exam.code} / ${stage.name}`}
+          retireText={
+            stage.isActive
+              ? `Nothing it already holds changes — ${plural(stage.configCount, 'base configuration')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a configuration, a series or a test. Reactivating puts it back.`
+              : 'The stage is offered again when anyone builds a configuration, a series or a test. Nothing else changes.'
+          }
+          deleteText={
+            stage.configCount + stage.testCount + stage.seriesCount === 0
+              ? `Nothing hangs off ${stage.stageKey}. Deleting cannot be undone.`
+              : `${plural(stage.configCount, 'base configuration')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead — it keeps everything it has and is simply no longer offered.`
+          }
+        >
+          {canWrite ? (
+            <DropdownMenuItem onSelect={() => onEdit(stage)}>
+              <Pencil aria-hidden />
+              Edit
+            </DropdownMenuItem>
+          ) : null}
+        </RetireDeleteActions>
       ),
     },
   ];
@@ -615,11 +528,6 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
       />
     </div>
   );
-}
-
-function StageStatus({ stage }: Readonly<{ stage: ExamStage }>) {
-  if (stage.isActive) return <Badge variant="success">Active</Badge>;
-  return <Badge variant="neutral">Retired</Badge>;
 }
 
 function NewStageDialog({
@@ -826,100 +734,5 @@ function EditStageDialog({
         )}
       </FormField>
     </FormDialog>
-  );
-}
-
-function StageRowActions({
-  stage,
-  canEdit,
-  onChanged,
-  onEdit,
-}: Readonly<{
-  stage: ExamStage;
-  canEdit: boolean;
-  onChanged: () => void;
-  onEdit: (stage: ExamStage) => void;
-}>) {
-  const [asking, setAsking] = useState<ExamConfirm | null>(null);
-  const close = () => setAsking(null);
-
-  const remove = useMutation({
-    meta: { success: `${stage.name} deleted.` },
-    mutationFn: () => api.admin.examStages.remove(stage.id),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
-    onError: close,
-  });
-
-  const setActive = useMutation({
-    meta: { success: (): string => `${stage.name} updated.` },
-    mutationFn: (isActive: boolean) => api.admin.examStages.update(stage.id, { isActive }),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    onError: close,
-  });
-
-  const busy = remove.isPending || setActive.isPending;
-
-  if (!canEdit) return null;
-
-  return (
-    <>
-      <RowActions label={`Actions for ${stage.name}`}>
-        <DropdownMenuItem disabled={busy} onSelect={() => onEdit(stage)}>
-          <Pencil aria-hidden />
-          Edit
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={busy} onSelect={() => setAsking(EXAM_CONFIRMS.RETIRE)}>
-          <Power aria-hidden />
-          {stage.isActive ? 'Retire' : 'Reactivate'}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          destructive
-          disabled={busy}
-          onSelect={() => setAsking(EXAM_CONFIRMS.DELETE)}
-        >
-          <Trash2 aria-hidden />
-          Delete
-        </DropdownMenuItem>
-      </RowActions>
-
-      <ConfirmDialog
-        open={asking === EXAM_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && close()}
-        loading={setActive.isPending}
-        title={stage.isActive ? `Retire ${stage.name}?` : `Reactivate ${stage.name}?`}
-        description={
-          stage.isActive
-            ? `Nothing it already holds changes — ${plural(stage.configCount, 'base configuration')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a configuration, a series or a test. Reactivating puts it back.`
-            : 'The stage is offered again when anyone builds a configuration, a series or a test. Nothing else changes.'
-        }
-        confirmLabel={stage.isActive ? 'Retire stage' : 'Reactivate stage'}
-        onConfirm={() => setActive.mutate(!stage.isActive)}
-      />
-
-      {/* Deleting is refused server-side while anything still hangs off the stage, so the
-          counts decide which of two different questions this is. */}
-      <ConfirmDialog
-        open={asking === EXAM_CONFIRMS.DELETE}
-        onOpenChange={(open) => !open && close()}
-        destructive
-        loading={remove.isPending}
-        title={`Delete ${stage.exam.code} / ${stage.name}?`}
-        description={
-          stage.configCount + stage.testCount + stage.seriesCount === 0
-            ? `Nothing hangs off ${stage.stageKey}. Deleting cannot be undone.`
-            : `${plural(stage.configCount, 'base configuration')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead — it keeps everything it has and is simply no longer offered.`
-        }
-        confirmLabel="Delete stage"
-        onConfirm={() => remove.mutate()}
-      />
-    </>
   );
 }

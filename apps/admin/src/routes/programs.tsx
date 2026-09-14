@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
-import { Pencil, Power, Trash2, Upload, Users } from 'lucide-react';
+import { Pencil, Upload, Users } from 'lucide-react';
 import {
   createProgramSchema,
   FEATURE_KEYS,
@@ -18,17 +18,15 @@ import { useListScreen } from '@iace/app-kit/browser';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import {
   Alert,
-  Badge,
-  ConfirmDialog,
   DropdownMenuItem,
   FormDialog,
   FormField,
   Input,
   ListView,
-  RowActions,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
+import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 
@@ -73,18 +71,53 @@ function programColumns(
       className: 'max-w-[18rem] font-medium',
       cell: (program) => <TruncatedText>{program.name}</TruncatedText>,
     },
-    { key: 'status', header: 'Status', cell: (program) => <ProgramStatus program={program} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (program) => <ActiveStatus isActive={program.isActive} />,
+    },
     {
       key: 'actions',
       className: 'text-right',
       cell: (program) => (
-        <ProgramRowActions
-          program={program}
+        <RetireDeleteActions
+          name={program.name}
+          noun="program"
+          isActive={program.isActive}
           canEdit={canWrite}
-          canImport={canImport}
+          resource={api.admin.programs}
+          id={program.id}
           onChanged={refresh}
-          onEdit={onEdit}
-        />
+          retireText={
+            program.isActive
+              ? `Nothing that already carries ${program.code} changes — every student and every series keeps it and keeps working exactly as now. What stops is new ones: this program will no longer be offered when anyone enrols a student or builds a series. Reactivating puts it back.`
+              : 'The program is offered again when anyone enrols a student or builds a series. Nothing else changes.'
+          }
+          deleteText={`A student and a series carry ${program.code} as plain text, with nothing linking them back to this row. If any of them still does, the delete is refused and the count comes back with it — retire the program instead, which keeps every holder and simply stops it being offered. Deleting cannot be undone.`}
+        >
+          {/* Everyone on this screen holds STUDENT_MANAGEMENT, so who carries a program is always reachable. */}
+          <DropdownMenuItem asChild>
+            <Link to={`${ROUTES.STUDENTS}?programCode=${encodeURIComponent(program.code)}`}>
+              <Users aria-hidden />
+              View students
+            </Link>
+          </DropdownMenuItem>
+          {canWrite ? (
+            <DropdownMenuItem onSelect={() => onEdit(program)}>
+              <Pencil aria-hidden />
+              Edit
+            </DropdownMenuItem>
+          ) : null}
+          {/* Enrolling students is the student directory's business, not the catalog's. */}
+          {canImport ? (
+            <DropdownMenuItem asChild>
+              <Link to={ROUTES.PROGRAM_IMPORT(program.code)}>
+                <Upload aria-hidden />
+                Import students
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+        </RetireDeleteActions>
       ),
     },
   ];
@@ -268,166 +301,5 @@ function EditProgramDialog({
         {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
       </FormField>
     </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/** One question at a time: two booleans could render two dialogs at once. */
-const PROGRAM_CONFIRMS = {
-  DELETE: 'delete',
-  RETIRE: 'retire',
-} as const;
-type ProgramConfirm = (typeof PROGRAM_CONFIRMS)[keyof typeof PROGRAM_CONFIRMS];
-
-function ProgramStatus({ program }: Readonly<{ program: Program }>) {
-  if (program.isActive) return <Badge variant="success">Active</Badge>;
-  return <Badge variant="neutral">Retired</Badge>;
-}
-
-/**
- * The buttons only ask; both dialogs live with the mutations in `ProgramRowActions`.
- * A component, not a ternary, because the first state is "render nothing".
- */
-function ProgramActions({
-  program,
-  canEdit,
-  canImport,
-  busy,
-  onAsk,
-  onEdit,
-}: Readonly<{
-  program: Program;
-  canEdit: boolean;
-  canImport: boolean;
-  busy: boolean;
-  onAsk: (confirm: ProgramConfirm) => void;
-  onEdit: () => void;
-}>) {
-  return (
-    <RowActions label={`Actions for ${program.name}`}>
-      {/* Everyone on this screen holds STUDENT_MANAGEMENT, so who carries a program is always reachable. */}
-      <DropdownMenuItem asChild>
-        <Link to={`${ROUTES.STUDENTS}?programCode=${encodeURIComponent(program.code)}`}>
-          <Users aria-hidden />
-          View students
-        </Link>
-      </DropdownMenuItem>
-      {canEdit ? (
-        <DropdownMenuItem disabled={busy} onSelect={onEdit}>
-          <Pencil aria-hidden />
-          Edit
-        </DropdownMenuItem>
-      ) : null}
-      {/* Enrolling students is the student directory's business, not the catalog's. */}
-      {canImport ? (
-        <DropdownMenuItem asChild>
-          <Link to={ROUTES.PROGRAM_IMPORT(program.code)}>
-            <Upload aria-hidden />
-            Import students
-          </Link>
-        </DropdownMenuItem>
-      ) : null}
-      {canEdit ? (
-        <DropdownMenuItem disabled={busy} onSelect={() => onAsk(PROGRAM_CONFIRMS.RETIRE)}>
-          <Power aria-hidden />
-          {program.isActive ? 'Retire' : 'Reactivate'}
-        </DropdownMenuItem>
-      ) : null}
-      {canEdit ? (
-        <DropdownMenuItem
-          destructive
-          disabled={busy}
-          onSelect={() => onAsk(PROGRAM_CONFIRMS.DELETE)}
-        >
-          <Trash2 aria-hidden />
-          Delete
-        </DropdownMenuItem>
-      ) : null}
-    </RowActions>
-  );
-}
-
-function ProgramRowActions({
-  program,
-  canEdit,
-  canImport,
-  onChanged,
-  onEdit,
-}: Readonly<{
-  program: Program;
-  canEdit: boolean;
-  canImport: boolean;
-  onChanged: () => void;
-  onEdit: (program: Program) => void;
-}>) {
-  const [asking, setAsking] = useState<ProgramConfirm | null>(null);
-  const close = () => setAsking(null);
-
-  const remove = useMutation({
-    meta: { success: `${program.name} deleted.` },
-    mutationFn: () => api.admin.programs.remove(program.id),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
-    onError: close,
-  });
-
-  const setActive = useMutation({
-    meta: { success: (): string => `${program.name} updated.` },
-    mutationFn: (isActive: boolean) => api.admin.programs.update(program.id, { isActive }),
-    onSuccess: () => {
-      close();
-      onChanged();
-    },
-    onError: close,
-  });
-
-  const busy = remove.isPending || setActive.isPending;
-
-  return (
-    <>
-      <ProgramActions
-        program={program}
-        canEdit={canEdit}
-        canImport={canImport}
-        busy={busy}
-        onAsk={setAsking}
-        onEdit={() => onEdit(program)}
-      />
-
-      {/* Retiring is reversible and still asks: nothing about this row changes
-          except a badge, and the consequence lands later on somebody else, as a
-          program that is not offered when they enrol a student. */}
-      <ConfirmDialog
-        open={asking === PROGRAM_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && close()}
-        loading={setActive.isPending}
-        title={program.isActive ? `Retire ${program.name}?` : `Reactivate ${program.name}?`}
-        description={
-          program.isActive
-            ? `Nothing that already carries ${program.code} changes — every student and every series keeps it and keeps working exactly as now. What stops is new ones: this program will no longer be offered when anyone enrols a student or builds a series. Reactivating puts it back.`
-            : 'The program is offered again when anyone enrols a student or builds a series. Nothing else changes.'
-        }
-        confirmLabel={program.isActive ? 'Retire program' : 'Reactivate program'}
-        onConfirm={() => setActive.mutate(!program.isActive)}
-      />
-
-      {/* Nothing points back at this row, so the server counts the holders of the
-          code and refuses — this says which answer to expect before the click. */}
-      <ConfirmDialog
-        open={asking === PROGRAM_CONFIRMS.DELETE}
-        onOpenChange={(open) => !open && close()}
-        destructive
-        loading={remove.isPending}
-        title={`Delete ${program.name}?`}
-        description={`A student and a series carry ${program.code} as plain text, with nothing linking them back to this row. If any of them still does, the delete is refused and the count comes back with it — retire the program instead, which keeps every holder and simply stops it being offered. Deleting cannot be undone.`}
-        confirmLabel="Delete program"
-        onConfirm={() => remove.mutate()}
-      />
-    </>
   );
 }
