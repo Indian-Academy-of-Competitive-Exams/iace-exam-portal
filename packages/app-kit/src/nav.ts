@@ -65,27 +65,12 @@ export function collapseLoneSections(items: readonly NavItem[]): NavItem[] {
   });
 }
 
-/**
- * Drop what this user may not see, at every depth. No `can` or no `featureKey` means
- * visible — hiding nav is not the security boundary. An emptied section goes with its children.
- */
+/** No `can` or no `featureKey` means visible — hiding nav is not the security boundary. */
 export function filterNavByPermission(
   items: readonly NavItem[],
   can?: (featureKey: FeatureKey) => boolean,
 ): NavItem[] {
-  return items.reduce<NavItem[]>((kept, item) => {
-    if (item.featureKey && can && !can(item.featureKey)) return kept;
-
-    if (!isNavSection(item)) {
-      kept.push(item);
-      return kept;
-    }
-
-    const children = filterNavByPermission(item.children ?? [], can);
-    if (children.length === 0 && !item.to) return kept;
-    kept.push({ ...item, children });
-    return kept;
-  }, []);
+  return filterNavBy(items, (item) => Boolean(item.featureKey && can && !can(item.featureKey)));
 }
 
 function everyNavPath(items: readonly NavItem[]): string[] {

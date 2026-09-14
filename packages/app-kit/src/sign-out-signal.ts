@@ -6,16 +6,3 @@ export interface SignOutSignal {
   emit(): void;
   subscribe(handler: () => void): () => void;
 }
-
-/** What a caller gets when the platform has nothing to broadcast on. Not a test double. */
-export function createLocalSignOutSignal(): SignOutSignal {
-  const handlers = new Set<() => void>();
-
-  return {
-    emit: () => handlers.forEach((handler) => handler()),
-    subscribe: (handler) => {
-      handlers.add(handler);
-      return () => handlers.delete(handler);
-    },
-  };
-}

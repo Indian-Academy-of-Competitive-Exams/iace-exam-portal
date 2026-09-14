@@ -1,7 +1,12 @@
 import { useCallback, useState } from 'react';
 import { keepPreviousData, useQuery, type QueryKey } from '@tanstack/react-query';
-import { PAGE_SIZE_OPTIONS, type Paginated, type PageSizeOption } from '@iace/contracts';
-import { usePageSize } from './use-page-size';
+import {
+  PAGE_SIZE_DEFAULT,
+  PAGE_SIZE_OPTIONS,
+  isPageSizeOption,
+  type Paginated,
+  type PageSizeOption,
+} from '@iace/contracts';
 
 /**
  * A stable identity for one set of filters: keys sorted (callers build them with
@@ -40,10 +45,7 @@ export interface ListQueryResult<TItem> {
   };
 }
 
-/**
- * A filtered, paginated list: the page resets when the filters change, the rows hold
- * still while the next page loads, and the size comes from `usePageSize`.
- */
+/** A filtered, paginated list: the page resets on new filters and the rows hold still while one loads. */
 export function useListQuery<TItem, TFilters extends object>(options: {
   /** Include everything the fetch depends on EXCEPT page and pageSize. */
   queryKey: QueryKey;
@@ -53,7 +55,7 @@ export function useListQuery<TItem, TFilters extends object>(options: {
 }): ListQueryResult<TItem> {
   const { queryKey, filters, fetchPage, enabled = true } = options;
 
-  const [pageSize, choosePageSize] = usePageSize();
+  const [pageSize, setPageSize] = useState<PageSizeOption>(PAGE_SIZE_DEFAULT);
   const [page, setPage] = useState(1);
 
   /** Reset during render, not in an effect: an effect lets one render escape with the old page. */
@@ -71,15 +73,12 @@ export function useListQuery<TItem, TFilters extends object>(options: {
     enabled,
   });
 
-  const setPageSize = useCallback(
-    (size: number) => {
-      choosePageSize(size);
-      // Widening from 20 to 100 rows while on page 3 usually lands past the
-      // end. The reader asked to see more, not to be told there is nothing.
-      setPage(1);
-    },
-    [choosePageSize],
-  );
+  // A plain number: the calling control knows nothing about the allowed sizes.
+  const resize = useCallback((size: number) => {
+    if (isPageSizeOption(size)) setPageSize(size);
+    // Widening to 100 rows on page 3 lands past the end; the reader asked to see more, not nothing.
+    setPage(1);
+  }, []);
 
   const total = query.data?.total ?? 0;
 
@@ -93,14 +92,14 @@ export function useListQuery<TItem, TFilters extends object>(options: {
     isError: query.isError,
     retry: query.refetch,
     setPage,
-    setPageSize,
+    setPageSize: resize,
     pagination: {
       // The served page and size, not the requested: the rows on screen are still the old ones.
       page: query.data?.page ?? page,
       pageSize: query.data?.pageSize ?? pageSize,
       total,
       onPageChange: setPage,
-      onPageSizeChange: setPageSize,
+      onPageSizeChange: resize,
       pageSizeOptions: PAGE_SIZE_OPTIONS,
     },
   };

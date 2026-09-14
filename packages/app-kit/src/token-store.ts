@@ -1,9 +1,6 @@
 import { type AuthTokens } from '@iace/contracts';
 
-export interface StoredTokens {
-  accessToken: string;
-  refreshToken: string;
-}
+export type StoredTokens = Pick<AuthTokens, 'accessToken' | 'refreshToken'>;
 
 /** The storage seam. Synchronous, so the API client can read a token from any call site. */
 export interface KeyValueStorage {
