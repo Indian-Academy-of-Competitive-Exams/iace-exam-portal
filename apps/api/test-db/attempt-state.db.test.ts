@@ -1,0 +1,207 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import { after, beforeEach, describe, it } from 'node:test';
+import {
+  ANSWER_STATE,
+  ATTEMPT_STATUS,
+  AppException,
+  ErrorCodes,
+  type AnswerChange,
+} from '@iace/contracts';
+import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { FakeRedis } from '../test/support/fakes';
+import {
+  RIGHT_OPTION,
+  makePaper,
+  makeStudent,
+  resetDatabase,
+  sitPaper,
+  testPrisma,
+  uid,
+} from './support/database';
+
+const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
+const NOW = new Date('2026-09-01T05:00:00.000Z');
+const HOUR_MS = 60 * 60 * 1000;
+
+const prisma = testPrisma();
+
+beforeEach(() => resetDatabase(prisma));
+after(() => prisma.$disconnect());
+
+/** A live two-question sitting ending at ENDS_AT; its first answer already flushed when `durable`. */
+async function build(durable = false) {
+  const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
+  const student = (await makeStudent(prisma)).id;
+  const attempt = await sitPaper(prisma, {
+    paper,
+    studentId: student,
+    chosen: durable ? [RIGHT_OPTION, null] : [null, null],
+    timeSpent: [durable ? 20 : 0, 0],
+    status: ATTEMPT_STATUS.IN_PROGRESS,
+    startedAt: new Date(ENDS_AT.getTime() - HOUR_MS),
+    submittedAt: null,
+  });
+  const [q1 = '', q2 = ''] = paper.items.map((item) => item.questionId);
+  if (durable) {
+    await prisma.attemptQuestion.update({
+      where: { attemptId_questionId: { attemptId: attempt.id, questionId: q1 } },
+      data: { answeredAt: new Date('2026-09-01T05:01:00.000Z') },
+    });
+  }
+  const redis = new FakeRedis();
+  const service = new AttemptStateService(prisma, redis.asService());
+  const live = { id: attempt.id, studentId: student, endsAt: ENDS_AT };
+  const change = (over: Partial<AnswerChange> = {}): AnswerChange => ({
+    questionId: q1,
+    state: ANSWER_STATE.ANSWERED,
+    selectedOptionId: RIGHT_OPTION,
+    typedAnswer: null,
+    timeSpentSec: 10,
+    ...over,
+  });
+  return { service, redis, student, attemptId: attempt.id, live, q1, q2, change };
+}
+
+const refusedWith = (code: string) => (error: unknown) =>
+  AppException.is(error) && error.code === code;
+
+describe('AttemptStateService', () => {
+  it('saves to Redis and marks the attempt dirty', async () => {
+    const { service, redis, student, attemptId, live, q1, change } = await build();
+    await service.open(live);
+
+    const state = await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+    assert.equal(state.answers[q1]?.state, ANSWER_STATE.ANSWERED);
+    assert.deepEqual(await service.dirtyIds(), [attemptId]);
+    assert.ok(redis.snapshot()[`attempt:state:${attemptId}`]);
+  });
+
+  /** An id is not a thing to confirm the existence of, so another student's reads as missing. */
+  it('refuses another student with NOT_FOUND, not FORBIDDEN', async () => {
+    const { service, attemptId, live } = await build();
+    await service.open(live);
+
+    await assert.rejects(
+      () => service.save(uid('student'), attemptId, { revision: 1, answers: [] }, NOW),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+
+  it('refuses a save that arrives after the clock and its grace', async () => {
+    const { service, student, attemptId, live } = await build();
+    await service.open(live);
+
+    await assert.rejects(
+      () =>
+        service.save(
+          student,
+          attemptId,
+          { revision: 1, answers: [] },
+          new Date('2026-09-01T06:00:00.000Z'),
+        ),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+  });
+
+  /** Taking the state is what ends a sitting: with the key gone, Postgres is what a save rebuilds from. */
+  it('rebuilds a save from Postgres once the sitting has been taken', async () => {
+    const { service, student, attemptId, live, change } = await build();
+    await service.open(live);
+    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+    await service.take(attemptId);
+
+    assert.deepEqual(await service.dirtyIds(), []);
+    const rebuilt = await service.save(student, attemptId, { revision: 2, answers: [] }, NOW);
+    assert.equal(Object.keys(rebuilt.answers).length, 0);
+  });
+
+  /** The failure this prevents: a support reset handing the student back an empty paper. */
+  it('puts a lost live key back from the answers already written', async () => {
+    const { service, student, attemptId, q1 } = await build(true);
+
+    const rebuilt = await service.reestablish(student, attemptId);
+
+    assert.deepEqual(Object.keys(rebuilt.answers), [q1]);
+    assert.equal(rebuilt.answers[q1]?.state, ANSWER_STATE.ANSWERED);
+    assert.equal(rebuilt.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+  });
+
+  /** The key holds what landed since the last flush, so a reset must not roll the student back. */
+  it('keeps whatever the key still holds over the durable copy', async () => {
+    const { service, student, attemptId, live, q1, q2, change } = await build(true);
+    await service.open(live);
+    await service.save(
+      student,
+      attemptId,
+      { revision: 4, answers: [change({ questionId: q2 })] },
+      NOW,
+    );
+
+    const rebuilt = await service.reestablish(student, attemptId);
+
+    assert.equal(rebuilt.revision, 4);
+    assert.deepEqual(Object.keys(rebuilt.answers).sort(), [q1, q2].sort());
+  });
+
+  /** The bug this prevents: an extension rewriting the whole key and dropping the last autosave. */
+  it('moves the deadline without touching what the sitting has answered', async () => {
+    const { service, redis, student, attemptId, live, q1, change } = await build();
+    await service.open(live);
+    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+    const later = new Date('2026-09-01T06:00:00.000Z');
+    await service.pushDeadline(attemptId, later);
+
+    const state = await service.current(student, attemptId, NOW);
+    assert.equal(state.endsAt, later.toISOString());
+    assert.equal(state.revision, 1);
+    assert.equal(state.answers[q1]?.state, ANSWER_STATE.ANSWERED);
+    assert.ok(redis.snapshot()[`attempt:state:${attemptId}`]);
+  });
+
+  /** No key is no clock to move: the row carries the new deadline, and a rebuild reads it there. */
+  it('does nothing to a deadline whose live key has gone', async () => {
+    const { service, attemptId } = await build();
+
+    await service.pushDeadline(attemptId, new Date('2026-09-01T06:00:00.000Z'));
+
+    assert.deepEqual(await service.read(attemptId), null);
+  });
+
+  it('leaves the answers of a resumed sitting alone', async () => {
+    const { service, student, attemptId, live, q1, change } = await build();
+    await service.open(live);
+    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+    await service.open(live);
+
+    assert.equal((await service.read(attemptId))?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+  });
+
+  describe('reading a sitting back', () => {
+    /** The bug this prevents: a mid-test reload showing a blank palette while the answers are safe. */
+    it('returns what the sitting holds, without changing it', async () => {
+      const { service, student, attemptId, q1, change } = await build();
+      await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+      const shown = await service.current(student, attemptId, NOW);
+
+      assert.equal(shown.answers[q1]?.state, ANSWER_STATE.ANSWERED);
+      assert.equal(shown.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+      assert.equal(shown.revision, 1, 'reading must not move the revision on');
+    });
+
+    it("reads another student's sitting as missing, never as refused", async () => {
+      const { service, student, attemptId, change } = await build();
+      await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+      await assert.rejects(
+        () => service.current(uid('student'), attemptId, NOW),
+        refusedWith(ErrorCodes.NOT_FOUND),
+      );
+    });
+  });
+});
