@@ -360,7 +360,6 @@ export const ME_ATTEMPT_ROUTES = {
   submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
   scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
   solutions: (attemptId: string) => `/me/attempts/${attemptId}/solutions`,
-  analytics: (attemptId: string) => `/me/attempts/${attemptId}/analytics`,
   questionReport: (attemptId: string) => `/me/attempts/${attemptId}/question-report`,
   performance: '/me/performance',
   /** Sitting COUNTS by institute day, so a calendar is not capped by the trend's twenty. */
@@ -555,40 +554,6 @@ export const timeUseSchema = z.object({
   spentOnUnattemptedSec: z.number().int(),
 });
 export type TimeUse = z.infer<typeof timeUseSchema>;
-
-/** The five palette states, which partition the paper. No revisit count: the exam never wrote one. */
-export const attemptStrategySchema = z.object({
-  answered: z.number().int(),
-  answeredAndMarked: z.number().int(),
-  markedOnly: z.number().int(),
-  seenAndLeft: z.number().int(),
-  neverOpened: z.number().int(),
-});
-export type AttemptStrategy = z.infer<typeof attemptStrategySchema>;
-
-/** Where this sitting stands against the ones around it. Null where the cohort cannot say. */
-export const cohortStandingSchema = z.object({
-  score: z.number(),
-  topperScore: z.number().nullable(),
-  averageScore: z.number().nullable(),
-  rank: z.number().int().nullable(),
-  percentile: z.number().nullable(),
-  cohortSize: z.number().int().nullable(),
-});
-export type CohortStanding = z.infer<typeof cohortStandingSchema>;
-
-export const attemptAnalyticsSchema = z.object({
-  attemptId: z.string(),
-  testId: z.string(),
-  testTitle: z.string().nullable(),
-  overall: analyticsBucketSchema,
-  sections: z.array(analyticsBucketSchema),
-  subjects: z.array(analyticsBucketSchema),
-  time: timeUseSchema,
-  strategy: attemptStrategySchema,
-  cohort: cohortStandingSchema,
-});
-export type AttemptAnalytics = z.infer<typeof attemptAnalyticsSchema>;
 
 /** One sat test on the trend line, oldest first — what a chart plots. */
 export const performancePointSchema = z.object({

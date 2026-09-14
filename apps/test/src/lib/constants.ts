@@ -109,7 +109,6 @@ export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attem
 export const questionReportQueryKey = (attemptId: string) =>
   ['me', 'attempts', attemptId, 'question-report'] as const;
 export const solutionsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'solutions'];
-export const analyticsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'analytics'];
 
 /** Every test this student has sat, which is what the Performance tab and the landing both read. */
 export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;

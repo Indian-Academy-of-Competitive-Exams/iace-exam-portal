@@ -6,11 +6,9 @@
 import {
   PAPER_QUESTION_STATUS,
   scoreHistogramSchema,
-  type AnalyticsBucket,
   type CohortBand,
   type CohortCurveBand,
   type MarkComposition,
-  type MeasuredBucket,
   type PaperQuestionStatus,
   type ScoreCardSection,
   type SectionalStanding,
@@ -34,11 +32,6 @@ export interface SectionCohort {
 
 const HUNDREDTHS = 100;
 const round = (value: number) => Math.round(value * HUNDREDTHS) / HUNDREDTHS;
-
-/** The one difference from `bucketOf`: an untouched bucket has no accuracy rather than none of it. */
-export function measure(bucket: AnalyticsBucket): MeasuredBucket {
-  return { ...bucket, accuracy: bucket.attempted === 0 ? null : bucket.accuracy };
-}
 
 /** The three buckets partition `maxMarks`: each question has exactly one verdict. */
 export function compositionOf(rows: readonly ReportedQuestion[]): MarkComposition {

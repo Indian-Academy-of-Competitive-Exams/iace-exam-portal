@@ -8,7 +8,6 @@ import {
   type LiveAttempt,
   type LiveAttemptState,
   type SaveAttemptStateBody,
-  type AttemptAnalytics,
   type PerformanceTrend,
   type ScoreCard,
   type SolutionReport,
@@ -86,15 +85,6 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SolutionReport> {
     return this.reports.solutions(user.id, id);
-  }
-
-  /** How the paper was sat — accuracy, time and strategy, all derived from what the exam wrote. */
-  @Get('attempts/:id/analytics')
-  analytics(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<AttemptAnalytics> {
-    return this.reports.analytics(user.id, id);
   }
 
   /** Every test this student has sat, oldest first — the line the Performance tab draws. */

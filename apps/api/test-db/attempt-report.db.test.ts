@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   ANSWER_STATE,
-  DIFFICULTY_LEVEL,
   ErrorCodes,
   PAPER_QUESTION_STATUS,
   type AppException,
@@ -319,64 +318,6 @@ describe('the Solution Report', () => {
     await assert.rejects(
       () => reports().solutions(someoneElse.id, attemptId),
       refusedWith(ErrorCodes.NOT_FOUND),
-    );
-  });
-});
-
-describe('the analytics one sitting can be asked for', () => {
-  /** Mine: two right and a marked wrong one. The rival's: all three right, so the topper. */
-  const sittings = async () => {
-    const onPaper = await makePaper(prisma, {
-      questions: [
-        'Reasoning',
-        { subject: 'Quant', difficulty: DIFFICULTY_LEVEL.HIGH },
-        'Reasoning',
-      ],
-    });
-    const mine = await sat(onPaper, [RIGHT_OPTION, RIGHT_OPTION, WRONG], {
-      states: [undefined, undefined, ANSWER_STATE.ANSWERED_MARKED],
-      startedAt: STARTED,
-      submittedAt: new Date(STARTED.getTime() + 15 * MINUTE_MS),
-    });
-    const rival = await sat(onPaper, [RIGHT_OPTION, RIGHT_OPTION, RIGHT_OPTION]);
-    return { paper: onPaper, mine, rival };
-  };
-
-  it('derives every figure from what the exam already wrote', async () => {
-    const { mine } = await sittings();
-
-    const report = await reports().analytics(mine.studentId, mine.attemptId);
-
-    assert.equal(report.overall.accuracy, 66.67);
-    assert.deepEqual(
-      report.subjects.map((bucket) => [bucket.name, bucket.correct]),
-      [
-        ['Reasoning', 1],
-        ['Quant', 1],
-      ],
-    );
-    assert.equal(report.strategy.answeredAndMarked, 1);
-    assert.equal(report.sections[0]?.name, 'Section A');
-  });
-
-  it('sets this sitting against the cohort it was sat in', async () => {
-    const { mine } = await sittings();
-
-    const { cohort } = await reports().analytics(mine.studentId, mine.attemptId);
-
-    assert.equal(cohort.score, 3.5);
-    assert.equal(cohort.topperScore, 6);
-    assert.equal(cohort.averageScore, 4.75);
-    assert.deepEqual([cohort.rank, cohort.percentile, cohort.cohortSize], [2, 25, 2]);
-  });
-
-  it('refuses a paper nobody has marked yet', async () => {
-    const { paper } = await sittings();
-    const unmarked = await sat(paper, [RIGHT_OPTION, null, null], { marked: false });
-
-    await assert.rejects(
-      () => reports().analytics(unmarked.studentId, unmarked.attemptId),
-      refusedWith(ErrorCodes.CONFLICT),
     );
   });
 });

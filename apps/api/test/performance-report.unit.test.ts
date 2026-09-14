@@ -12,7 +12,6 @@ import {
   PAPER_QUESTION_STATUS,
   PERMISSION_LEVELS,
   performanceReportQuerySchema,
-  type AnalyticsBucket,
 } from '@iace/contracts';
 import { type AuthenticatedUser } from '../src/common/security';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
@@ -21,7 +20,6 @@ import {
   cohortShapeOf,
   compositionOf,
   curveBandsOf,
-  measure,
   sectionalStandingOf,
   type ReportedQuestion,
 } from '../src/attempts/performance-analytics';
@@ -44,36 +42,6 @@ function asked(overrides: Partial<ReportedQuestion> = {}): ReportedQuestion {
     ...overrides,
   };
 }
-
-const bucket = (over: Partial<AnalyticsBucket> = {}): AnalyticsBucket => ({
-  key: 'all',
-  name: 'Overall',
-  total: 4,
-  attempted: 2,
-  correct: 1,
-  wrong: 1,
-  unattempted: 2,
-  accuracy: 50,
-  marks: 1.5,
-  timeSpentSec: 60,
-  ...over,
-});
-
-// --------------------------------------------------------------------------- accuracy needs an n
-// ---------------------------------------------------------------------------
-
-describe('measure', () => {
-  /** The failure this prevents: a band the paper never asked reading as a band they failed. */
-  it('tells a bucket nobody attempted apart from a bucket they got wholly wrong', () => {
-    const untouched = measure(bucket({ attempted: 0, correct: 0, wrong: 0, accuracy: 0 }));
-    const allWrong = measure(bucket({ attempted: 3, correct: 0, wrong: 3, accuracy: 0 }));
-
-    assert.equal(untouched.accuracy, null);
-    assert.equal(untouched.attempted, 0);
-    assert.equal(allWrong.accuracy, 0);
-    assert.equal(allWrong.attempted, 3);
-  });
-});
 
 // --------------------------------------------------------------------------- marks in, marks out
 // ---------------------------------------------------------------------------

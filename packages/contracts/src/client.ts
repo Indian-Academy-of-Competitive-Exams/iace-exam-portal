@@ -170,7 +170,6 @@ import {
   ME_ATTEMPT_ROUTES,
   examBriefSchema,
   examPaperSchema,
-  attemptAnalyticsSchema,
   performanceTrendSchema,
   scoreCardSchema,
   solutionReportSchema,
@@ -180,7 +179,6 @@ import {
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
-  type AttemptAnalytics,
   type PerformanceTrend,
   type ScoreCard,
   type SolutionReport,
@@ -777,10 +775,6 @@ export function createApiClient(options: ApiClientOptions) {
       /** The worked solutions. Refused until the paper has been marked. */
       solutions: (attemptId: string): Promise<SolutionReport> =>
         request(ME_ATTEMPT_ROUTES.solutions(attemptId), { schema: solutionReportSchema }),
-
-      /** Accuracy, time and strategy for one sitting, all derived from what the exam wrote. */
-      analytics: (attemptId: string): Promise<AttemptAnalytics> =>
-        request(ME_ATTEMPT_ROUTES.analytics(attemptId), { schema: attemptAnalyticsSchema }),
 
       /** Their paper question by question, beside the cohort's. The key rides the solution gate. */
       questionReport: (attemptId: string): Promise<QuestionReport> =>
