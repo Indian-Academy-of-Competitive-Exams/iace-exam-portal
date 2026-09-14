@@ -1,110 +1,115 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { after, beforeEach, describe, it } from 'node:test';
 import { DeliveryChannel, DeliveryStatus } from '@prisma/client';
-import { NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
+import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationDeliveryProcessor } from '../src/notifications/notification-delivery.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { type PaidChannel } from '../src/notifications/notification-policy';
 import {
   MESSAGE_CHANNELS,
   MessageNotConfiguredError,
+  type MessageChannel,
   type MessageSender,
 } from '../src/common/messaging';
-import {
-  FakeMessageSender,
-  FakeNotificationsPrisma,
-  FakeQueue,
-  fakeQueueFailures,
-} from './support/fakes';
+import { FakeMessageSender, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { makeAnnouncement, makeStudent, resetDatabase, testPrisma } from './support/database';
 
 /** The only place money is spent, so every branch here is either a send or a decision not to. */
 
-const MOBILES = { stu_1: '9876543210' };
-
-const ANNOUNCEMENT_ID = 'ann_1';
+const MOBILE = '9876543210';
 
 /** No KIND pays by default any more, so every send here is one an admin chose for that message. */
-const CHOSEN = [DeliveryChannel.WHATSAPP, DeliveryChannel.SMS];
+const CHOSEN: PaidChannel[] = [DeliveryChannel.WHATSAPP, DeliveryChannel.SMS];
+
+const prisma = testPrisma();
+const service = new NotificationsService(prisma);
+
+beforeEach(() => resetDatabase(prisma));
+after(() => prisma.$disconnect());
 
 /** Every send is an announcement's: its `paidChannels` is the only place a fallback reads a chain. */
 async function build(
-  escalate: DeliveryChannel[] = [DeliveryChannel.WHATSAPP],
-  unreachable: string[] = [],
-  type: NotificationType = NOTIFICATION_TYPE.GENERIC,
+  escalate: PaidChannel[] = [DeliveryChannel.WHATSAPP],
+  unreachable: MessageChannel[] = [],
 ) {
-  const prisma = new FakeNotificationsPrisma([], MOBILES);
   const queue = new FakeQueue();
-  const sender = new FakeMessageSender(unreachable as never);
-  const service = new NotificationsService(prisma.asService());
+  const sender = new FakeMessageSender(unreachable);
   const processor = new NotificationDeliveryProcessor(
-    prisma.asService(),
+    prisma,
     service,
     sender,
     queue.asQueue(),
     fakeQueueFailures(),
   );
-
-  prisma.announcements.push({ id: ANNOUNCEMENT_ID, paidChannels: escalate });
+  const student = await makeStudent(prisma, { mobile: MOBILE });
+  const announcement = await makeAnnouncement(prisma, escalate);
   await service.create({
-    studentId: 'stu_1',
-    type,
+    studentId: student.id,
+    type: NOTIFICATION_TYPE.GENERIC,
     title: 'Something happened',
-    announcementId: ANNOUNCEMENT_ID,
-    escalate: escalate as never,
+    announcementId: announcement.id,
+    escalate,
   });
-  return { prisma, queue, sender, processor, deliveryId: prisma.deliveries[0]?.id ?? '' };
+  const [booked] = await prisma.notificationDelivery.findMany();
+  return { queue, sender, processor, deliveryId: booked?.id ?? '' };
 }
+
+const deliveryRow = (id: string) =>
+  prisma.notificationDelivery.findUniqueOrThrow({ where: { id } });
 
 describe('Spending on a notification', () => {
   it('sends on the channel policy booked', async () => {
-    const { processor, sender, prisma, deliveryId } = await build();
+    const { processor, sender, deliveryId } = await build();
 
     await processor.deliver(deliveryId, 1);
 
     assert.equal(sender.lastMessage.channel, MESSAGE_CHANNELS.WHATSAPP);
-    assert.equal(sender.lastMessage.to, MOBILES.stu_1);
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.SENT);
+    assert.equal(sender.lastMessage.to, MOBILE);
+    assert.equal((await deliveryRow(deliveryId)).status, DeliveryStatus.SENT);
   });
 
   /** The whole point of the grace window: the free channels worked, so this costs nothing. */
   it('spends nothing on a student who already read it', async () => {
-    const { processor, sender, prisma, deliveryId } = await build();
-    prisma.rows.forEach((row) => (row.isRead = true));
+    const { processor, sender, deliveryId } = await build();
+    await prisma.notification.updateMany({ data: { isRead: true } });
 
     await processor.deliver(deliveryId, 1);
 
     assert.equal(sender.sent.length, 0, 'nothing was bought');
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.SKIPPED);
-    assert.equal(prisma.deliveries[0]?.skipReason, 'ALREADY_READ');
+    const row = await deliveryRow(deliveryId);
+    assert.equal(row.status, DeliveryStatus.SKIPPED);
+    assert.equal(row.skipReason, 'ALREADY_READ');
   });
 
   /** A number we cannot reach is a decision recorded, not a log line nobody reads. */
   it('records a student it has no way to reach', async () => {
-    const prisma = new FakeNotificationsPrisma([], {});
-    const service = new NotificationsService(prisma.asService());
     const processor = new NotificationDeliveryProcessor(
-      prisma.asService(),
+      prisma,
       service,
       new FakeMessageSender(),
       new FakeQueue().asQueue(),
       fakeQueueFailures(),
     );
+    const gone = await makeStudent(prisma, { deletedAt: new Date() });
     await service.create({
-      studentId: 'stu_gone',
+      studentId: gone.id,
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
       escalate: [DeliveryChannel.WHATSAPP],
     });
+    const [booked] = await prisma.notificationDelivery.findMany();
 
-    await processor.deliver(prisma.deliveries[0]?.id ?? '', 1);
+    await processor.deliver(booked?.id ?? '', 1);
 
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.SKIPPED);
-    assert.equal(prisma.deliveries[0]?.skipReason, 'NO_CONTACT');
+    const row = await deliveryRow(booked?.id ?? '');
+    assert.equal(row.status, DeliveryStatus.SKIPPED);
+    assert.equal(row.skipReason, 'NO_CONTACT');
   });
 
   /** Already sent or already skipped: a re-run must not buy the same message twice. */
   it('does nothing for a delivery that is no longer pending', async () => {
-    const { processor, sender, prisma, deliveryId } = await build();
-    prisma.deliveries.forEach((row) => (row.status = DeliveryStatus.SENT));
+    const { processor, sender, deliveryId } = await build();
+    await prisma.notificationDelivery.updateMany({ data: { status: DeliveryStatus.SENT } });
 
     await processor.deliver(deliveryId, 1);
 
@@ -115,38 +120,44 @@ describe('Spending on a notification', () => {
 describe('When a channel will not take it', () => {
   /** Under the cap the SAME channel is retried, which is what BullMQ's backoff is for. */
   it('rethrows below the attempt cap rather than falling back early', async () => {
-    const { processor, prisma, deliveryId } = await build(CHOSEN, [MESSAGE_CHANNELS.WHATSAPP]);
+    const { processor, deliveryId } = await build(CHOSEN, [MESSAGE_CHANNELS.WHATSAPP]);
 
     await assert.rejects(processor.deliver(deliveryId, 1));
 
-    assert.equal(prisma.deliveries.length, 1, 'no fallback booked while retries remain');
-    assert.equal(prisma.deliveries[0]?.attempts, 1);
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.PENDING);
+    assert.equal(
+      await prisma.notificationDelivery.count(),
+      1,
+      'no fallback booked while retries remain',
+    );
+    const row = await deliveryRow(deliveryId);
+    assert.equal(row.attempts, 1);
+    assert.equal(row.status, DeliveryStatus.PENDING);
   });
 
   /** Out of retries, so the chain moves on — WhatsApp to SMS, which is the last resort. */
   it('books the next channel once the attempts are spent', async () => {
-    const { processor, queue, prisma, deliveryId } = await build(CHOSEN, [
-      MESSAGE_CHANNELS.WHATSAPP,
-    ]);
+    const { processor, queue, deliveryId } = await build(CHOSEN, [MESSAGE_CHANNELS.WHATSAPP]);
 
     await processor.deliver(deliveryId, 4);
 
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.FAILED);
-    assert.equal(prisma.deliveries[1]?.channel, DeliveryChannel.SMS);
+    assert.equal((await deliveryRow(deliveryId)).status, DeliveryStatus.FAILED);
+    const fallback = await prisma.notificationDelivery.findMany({
+      where: { channel: DeliveryChannel.SMS },
+    });
+    assert.equal(fallback.length, 1);
     assert.equal(queue.jobs.length, 1, 'and the fallback is queued, not merely recorded');
   });
 
   /** A kind with nothing left in its chain stops, rather than looping on the last channel. */
   it('stops when the chain runs out', async () => {
-    const { processor, queue, prisma, deliveryId } = await build(
+    const { processor, queue, deliveryId } = await build(
       [DeliveryChannel.WHATSAPP],
       [MESSAGE_CHANNELS.WHATSAPP],
     );
 
     await processor.deliver(deliveryId, 4);
 
-    assert.equal(prisma.deliveries.length, 1);
+    assert.equal(await prisma.notificationDelivery.count(), 1);
     assert.equal(queue.jobs.length, 0);
   });
 });
@@ -154,28 +165,29 @@ describe('When a channel will not take it', () => {
 describe('A channel with no template registered', () => {
   /** Prevents a sender that resolves without sending being recorded as delivered. */
   it('is recorded as skipped, never as sent', async () => {
-    const prisma = new FakeNotificationsPrisma([], MOBILES);
-    const service = new NotificationsService(prisma.asService());
     const unconfigured: MessageSender = {
       send: () => Promise.reject(new MessageNotConfiguredError('announcement')),
     };
     const processor = new NotificationDeliveryProcessor(
-      prisma.asService(),
+      prisma,
       service,
       unconfigured,
       new FakeQueue().asQueue(),
       fakeQueueFailures(),
     );
+    const student = await makeStudent(prisma, { mobile: MOBILE });
     await service.create({
-      studentId: 'stu_1',
+      studentId: student.id,
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
       escalate: [DeliveryChannel.WHATSAPP],
     });
+    const [booked] = await prisma.notificationDelivery.findMany();
 
-    await processor.deliver(prisma.deliveries[0]?.id ?? '', 1);
+    await processor.deliver(booked?.id ?? '', 1);
 
-    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.SKIPPED);
-    assert.equal(prisma.deliveries[0]?.skipReason, 'NO_TEMPLATE');
+    const row = await deliveryRow(booked?.id ?? '');
+    assert.equal(row.status, DeliveryStatus.SKIPPED);
+    assert.equal(row.skipReason, 'NO_TEMPLATE');
   });
 });

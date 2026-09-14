@@ -4,12 +4,13 @@
  * one that reads what it did not write — a list total, a sweep — calls resetDatabase first.
  */
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma, type DeliveryChannel } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   BRANCH_TYPE,
   DEFAULT_EXAM_COURSE,
   DIFFICULTY_LEVEL,
+  NOTIFICATION_TYPE,
   STUDENT_TYPE,
   type AttemptStatus,
   type DifficultyLevel,
@@ -193,6 +194,44 @@ export function makeAdmin(
       email: `${uid('admin')}@iace.test`,
       fullName: 'Database Tier Admin',
       ...overrides,
+    },
+    select: { id: true },
+  });
+}
+
+export function makeNotification(
+  prisma: PrismaService,
+  input: { studentId: string; isRead?: boolean; createdAt?: Date; title?: string },
+): Promise<{ id: string }> {
+  return prisma.notification.create({
+    data: {
+      id: uid('notification'),
+      studentId: input.studentId,
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: input.title ?? 'Something happened',
+      isRead: input.isRead ?? false,
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+    },
+    select: { id: true },
+  });
+}
+
+/** An announcement sent by an admin of its own, choosing the channels its messages fall back through. */
+export async function makeAnnouncement(
+  prisma: PrismaService,
+  paidChannels: DeliveryChannel[] = [],
+): Promise<{ id: string }> {
+  const admin = await makeAdmin(prisma);
+  return prisma.announcement.create({
+    data: {
+      id: uid('announcement'),
+      title: 'Branch closed tomorrow',
+      body: 'The Ameerpet centre is shut on Friday.',
+      audience: {},
+      paidChannels,
+      recipientCount: 1,
+      estimatedCostPaise: 0,
+      createdById: admin.id,
     },
     select: { id: true },
   });
