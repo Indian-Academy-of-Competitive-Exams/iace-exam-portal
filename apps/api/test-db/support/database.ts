@@ -8,6 +8,9 @@ import { Prisma, type DeliveryChannel, type SupportedLanguage } from '@prisma/cl
 import {
   ANSWER_STATE,
   ATTEMPT_STATUS,
+  AUDIT_ACTION,
+  AUDIT_ACTOR_TYPE,
+  AUDIT_FEATURE,
   BRANCH_TYPE,
   DEFAULT_EXAM_COURSE,
   DIFFICULTY_LEVEL,
@@ -21,6 +24,7 @@ import {
   type ExamCourse,
   type QuestionStatus,
   type QuestionType,
+  type StudentType,
   type TestScope,
   type TestStatus,
 } from '@iace/contracts';
@@ -48,9 +52,12 @@ export interface StudentOverrides {
   id?: string;
   mobile?: string;
   fullName?: string | null;
+  studentType?: StudentType;
+  enrolledExams?: string[];
   currentBranchId?: string | null;
   programs?: string[];
   enrolledCourses?: ExamCourse[];
+  pinHash?: string;
   isActive?: boolean;
   isTestBlocked?: boolean;
   deletedAt?: Date | null;
@@ -540,6 +547,22 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
     select: { id: true },
   });
 }
+
+/** Rows for the audit log: an admin's update of some student unless told otherwise. */
+export const rowActions = (
+  prisma: PrismaService,
+  rows: readonly Partial<Prisma.RowActionLogCreateManyInput>[],
+) =>
+  prisma.rowActionLog.createMany({
+    data: rows.map((row) => ({
+      feature: AUDIT_FEATURE.STUDENT,
+      entityId: 'stu_1',
+      action: AUDIT_ACTION.UPDATE,
+      actorType: AUDIT_ACTOR_TYPE.ADMIN,
+      actorId: 'adm_1',
+      ...row,
+    })),
+  });
 
 /** Fixed ids for the suites that build a test by hand; safe only because each case resets first. */
 export const BUILDER = {

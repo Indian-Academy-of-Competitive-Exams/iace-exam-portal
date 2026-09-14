@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DEFAULT_EXAM_COURSE } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
+import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { ExamsService } from '../src/configs/exams.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
 import { StudentsService } from '../src/students';
-import { FakeEventBus, fakeNotificationOutbox, fakeStartingPins } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, fakeStartingPins } from '../test/support/fakes';
 import { BANK, makeQuestionBank, resetDatabase, testPrisma } from './support/database';
 
 const prisma = testPrisma();
@@ -37,7 +38,7 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
       null as never,
       new AuditContext(),
       new FakeEventBus().asService(),
-      fakeNotificationOutbox(),
+      new NotificationOutbox(prisma, new FakeQueue().asQueue()),
     );
     const exams = new ExamsService(prisma, students, audit);
 

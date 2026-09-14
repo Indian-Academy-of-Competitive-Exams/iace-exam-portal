@@ -209,9 +209,10 @@ not write. Pure logic, and code that needs only Redis, S3, a queue, a sender or 
 stays in `apps/api/test` (`auth-pin.unit.test.ts`, `pnpm test`, those fakes in
 `apps/api/test/support/fakes.ts`).
 
-**Never write or extend a fake Prisma.** A hand-written copy of the database drifts from the one it
-imitates, and a test passes against the copy while production breaks. A test still on one moves to
-`apps/api/test-db` when it is next touched.
+**Never write a fake Prisma, or a fake table.** A hand-written copy of the database drifts from the
+one it imitates, and a test passes against the copy while production breaks. A case that needs the
+database to fail wraps the real client in a `Proxy` around the one call that should throw. A fixture
+the database refuses is describing a state that cannot happen: restate the case, or drop it.
 
 **Tests are for FEATURES and the invariants above — not for every fix.** A feature, a rule the data
 model depends on, or logic with branches worth naming gets a test in the same commit, covering the
