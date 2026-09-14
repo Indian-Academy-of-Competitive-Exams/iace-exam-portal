@@ -12,7 +12,6 @@ import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
 import { useExamView, type EndedSitting } from '../components/exam/engine/use-exam-view';
-import { templateFor } from '../components/exam/templates/registry';
 
 interface BeganWith {
   languages?: LanguageCode[];
@@ -90,5 +89,5 @@ function ExamHall(
 ) {
   const view = useExamView(sitting);
 
-  return <ExamShell template={templateFor(sitting.paper.examTemplate)} view={view} />;
+  return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
 }

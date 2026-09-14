@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { AlarmClock } from 'lucide-react';
 import { clockText, secondsLeft, type ExamClock } from '@iace/contracts';
 import { cn } from '@iace/ui';
+import { useCountdown } from './use-countdown';
 
 /** The countdown. It counts to the SERVER's deadline; the device clock only measures elapsed time. */
 
@@ -13,16 +14,10 @@ export function ExamTimer({
   onExpire,
   labelled = false,
 }: Readonly<{ clock: ExamClock; onExpire: () => void; labelled?: boolean }>) {
-  const [left, setLeft] = useState(() => secondsLeft(clock, Date.now()));
-
-  useEffect(() => {
-    const tick = setInterval(() => setLeft(secondsLeft(clock, Date.now())), 1000);
-    return () => clearInterval(tick);
-  }, [clock]);
-
-  useEffect(() => {
-    if (left === 0) onExpire();
-  }, [left, onExpire]);
+  const left = useCountdown(
+    useCallback(() => secondsLeft(clock, Date.now()), [clock]),
+    onExpire,
+  );
 
   return (
     <p

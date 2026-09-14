@@ -4,7 +4,7 @@
  * Nothing here holds state: every value and every callback comes off the view.
  */
 import { Flag, Eraser, Send } from 'lucide-react';
-import { TEST_UI, type SectionEffort } from '@iace/contracts';
+import { TEST_UI, type ExamTemplateConfig, type SectionEffort } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -23,7 +23,13 @@ import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
 import { QuestionStem } from '../../question-stem';
 import { SectionTimer } from '../../section-timer';
-import type { ExamSlotProps } from '../../engine/template';
+import type { ExamView } from '../../engine/exam-view';
+
+/** Every slot is handed the same view, so a skin changes how the sitting LOOKS, never what it does. */
+export interface ExamSlotProps {
+  view: ExamView;
+  config: ExamTemplateConfig;
+}
 
 const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {
   TABS: 'text-exam-section-ink data-[state=active]:border-exam-current data-[state=active]:text-exam-ink',

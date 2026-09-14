@@ -1,14 +1,23 @@
 /** Where the slots sit. Both skins compose the same way; the config moves the pieces. */
 import { Tabs, cn } from '@iace/ui';
-import type { ExamLayoutProps } from '../../engine/template';
+import {
+  BottomBar,
+  Header,
+  Options,
+  Palette,
+  PaperWatermark,
+  QuestionPanel,
+  SectionBar,
+  type ExamSlotProps,
+} from './slots';
 
-export function Layout({ view, config, slots }: Readonly<ExamLayoutProps>) {
+export function Layout({ view, config }: Readonly<ExamSlotProps>) {
   const onPaper = config.watermark === 'PAPER';
 
   return (
     <>
-      {config.watermark === 'SCREEN' ? <slots.Watermark view={view} config={config} /> : null}
-      <slots.Header view={view} config={config} />
+      {config.watermark === 'SCREEN' ? <PaperWatermark view={view} config={config} /> : null}
+      <Header view={view} config={config} />
 
       {/* A COLUMN: without it the section bar and the paper size to their content and spill over the bottom bar. */}
       <Tabs
@@ -16,14 +25,14 @@ export function Layout({ view, config, slots }: Readonly<ExamLayoutProps>) {
         onValueChange={view.openSection}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <slots.SectionBar view={view} config={config} />
+        <SectionBar view={view} config={config} />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <div className="relative min-h-0 flex-1 overflow-y-auto p-exam">
-            {onPaper ? <slots.Watermark view={view} config={config} /> : null}
+            {onPaper ? <PaperWatermark view={view} config={config} /> : null}
             <article className="flex min-w-0 flex-col gap-exam-gap">
-              <slots.QuestionPanel view={view} config={config} />
-              <slots.OptionList view={view} config={config} />
+              <QuestionPanel view={view} config={config} />
+              <Options view={view} config={config} />
             </article>
           </div>
 
@@ -35,12 +44,12 @@ export function Layout({ view, config, slots }: Readonly<ExamLayoutProps>) {
                 : 'lg:order-last lg:border-l',
             )}
           >
-            <slots.Palette view={view} config={config} />
+            <Palette view={view} config={config} />
           </aside>
         </div>
       </Tabs>
 
-      <slots.BottomBar view={view} config={config} />
+      <BottomBar view={view} config={config} />
     </>
   );
 }

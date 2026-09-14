@@ -3,23 +3,26 @@
  * confirmation are here rather than in a template, so a new skin cannot ship
  * without them — and the data attribute is what scopes that skin's tokens.
  */
+import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, ConfirmDialog, plural } from '@iace/ui';
+import { Layout } from '../templates/shared/layout';
 import type { ExamView } from './exam-view';
-import type { ExamTemplateDefinition } from './template';
 
 export function ExamShell({
-  template,
+  examTemplate,
   view,
-}: Readonly<{ template: ExamTemplateDefinition; view: ExamView }>) {
+}: Readonly<{ examTemplate: ExamTemplate; view: ExamView }>) {
   const { submit, fullscreen } = view;
+  // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
+  const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
 
   return (
     <div
       // Lowercased for CSS, where the skin's whole palette hangs off this one attribute.
-      data-exam-template={template.id.toLowerCase()}
+      data-exam-template={template.toLowerCase()}
       className="relative flex h-dvh flex-col bg-exam-surface text-exam-ink"
     >
-      <template.Layout view={view} config={template.config} slots={template.slots} />
+      <Layout view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
 
       {fullscreen.nagging ? (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">
