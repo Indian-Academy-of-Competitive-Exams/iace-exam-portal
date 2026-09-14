@@ -269,31 +269,6 @@
   --watermark-size: var(--text-xs);
 
   /* ==========================================================================
-     8. TIMER  [NEW]
-     Escalates by FORM (outlined → tinted → filled), not by hue. Red is
-     deliberately unused: it already means brand and destructive, and a third
-     meaning on the highest-attention element would collapse all three.
-     A filled block replacing an outlined one is also a stronger peripheral
-     signal than a hue shift, and it survives colourblindness.
-     ========================================================================== */
-  --timer-font-size: var(--text-xl);
-  --timer-min-w: 7.5rem; /* holds 00:00:00 without reflow */
-  --timer-pad-x: var(--space-4);
-  --timer-h: var(--control-h-lg);
-
-  --timer-normal-bg: var(--surface-2);
-  --timer-normal-ink: var(--slate-800);
-  --timer-normal-border: var(--border-strong);
-
-  --timer-warn-bg: var(--amber-100); /* ≤ 5 min — tinted */
-  --timer-warn-ink: var(--amber-800);
-  --timer-warn-border: var(--amber-300);
-
-  --timer-critical-bg: var(--ember-700); /* ≤ 1 min — filled */
-  --timer-critical-ink: #ffffff;
-  --timer-critical-border: var(--ember-700);
-
-  /* ==========================================================================
      9. SKELETON  [NEW]
      ========================================================================== */
   --skeleton-base: var(--slate-200);
@@ -497,16 +472,6 @@
   --series-8: #e66767;
 
   --watermark-ink: var(--foreground);
-
-  --timer-normal-bg: #181c23;
-  --timer-normal-ink: #f8fafc;
-  --timer-normal-border: #343b47;
-  --timer-warn-bg: #3a2a08;
-  --timer-warn-ink: #fbbf24;
-  --timer-warn-border: #78350f;
-  --timer-critical-bg: #ea580c;
-  --timer-critical-ink: #ffffff;
-  --timer-critical-border: #ea580c;
 
   --skeleton-base: #1e242c;
   --skeleton-shine: rgba(255, 255, 255, 0.07);

@@ -11,7 +11,7 @@
      This guide used to paste tokens.css into the <style> block below, which is
      precisely why it sat at v0.1 while the code moved to v0.3: a copy has no
      way of knowing it is stale. Linking the source means every colour, radius,
-     shadow, timer state, skeleton and CBT cell you see here IS what the apps
+     shadow, scrollbar and rich-content rule you see here IS what the apps
      render — open the page after editing tokens.css and the change is on
      screen. Nothing below may redefine a token.
      ========================================================================= -->
@@ -154,11 +154,52 @@
   .alert-warning { background:var(--warning-subtle); border-color:color-mix(in srgb,var(--warning) 40%,transparent); color:var(--warning-ink); }
   .alert-danger { background:color-mix(in srgb,var(--destructive) 12%,transparent); border-color:color-mix(in srgb,var(--destructive) 35%,transparent); color:var(--destructive); }
 
-  /* The exam palette is NOT redefined here — .qpalette / .qcell come from the
-     linked components.css, all five states and the current-question ring. The
-     guide used to carry its own four-state copy, which is how the fifth state
-     went missing from it. Only the legend swatch sizing is local. */
-  .qlegend__swatch { width:16px; height:16px; }
+  /* Stand-ins: the apps draw the timer, the empty state and the CBT palette in React — the TSX is the truth. */
+  .timer { display:inline-flex; align-items:center; justify-content:center; gap:var(--gap-inline);
+    height:var(--control-h-lg); min-width:7.5rem; padding-inline:var(--space-4); font-size:var(--text-xl);
+    font-weight:var(--weight-semibold); font-variant-numeric:tabular-nums; line-height:1;
+    background:var(--surface-2); color:var(--slate-800); border:1px solid var(--border-strong);
+    border-radius:var(--radius-lg); }
+  .timer__icon { width:1.125em; height:1.125em; flex-shrink:0; opacity:.75; }
+  .timer--warning { background:var(--amber-100); color:var(--amber-800); border-color:var(--amber-300); }
+  .timer--critical { background:var(--ember-700); color:#fff; border-color:var(--ember-700);
+    font-weight:var(--weight-bold); animation:timer-pulse 2s var(--ease-in-out) infinite; }
+  .timer--sm { height:var(--control-h-md); min-width:5.5rem; font-size:var(--text-md); padding-inline:var(--space-3); }
+  @keyframes timer-pulse {
+    0%, 100% { box-shadow:0 0 0 0 color-mix(in srgb,var(--ember-500) 55%,transparent); }
+    50% { box-shadow:0 0 0 6px color-mix(in srgb,var(--ember-500) 0%,transparent); }
+  }
+  [data-theme='dark'] .timer { background:#181c23; color:#f8fafc; border-color:#343b47; }
+  [data-theme='dark'] .timer--warning { background:#3a2a08; color:#fbbf24; border-color:#78350f; }
+  [data-theme='dark'] .timer--critical { background:#ea580c; border-color:#ea580c; }
+
+  .empty { display:flex; flex-direction:column; align-items:center; text-align:center;
+    padding:var(--empty-pad); max-width:var(--empty-max-w); margin-inline:auto; }
+  .empty__icon { display:grid; place-items:center; width:3.5rem; height:3.5rem; margin-bottom:var(--space-4);
+    color:var(--empty-icon); background:var(--empty-icon-bg); border-radius:var(--radius-full); }
+  .empty__icon svg { width:1.5rem; height:1.5rem; }
+  .empty__title { font-size:var(--text-md); font-weight:var(--weight-semibold); line-height:var(--leading-tight); margin-bottom:var(--space-2); }
+  .empty__body { font-size:var(--text-sm); line-height:var(--leading-normal); color:var(--muted-foreground); margin-bottom:var(--space-5); }
+  .empty__actions { display:flex; gap:var(--gap-inline); flex-wrap:wrap; justify-content:center; }
+  .empty--error .empty__icon { color:var(--destructive); background:color-mix(in srgb,var(--destructive) 10%,transparent); }
+  .empty--refused .empty__icon { color:var(--warning-ink); background:color-mix(in srgb,var(--warning) 15%,transparent); }
+
+  .qpalette { display:grid; grid-template-columns:repeat(auto-fill,var(--exam-cell-size)); gap:var(--exam-cell-gap); }
+  .qcell { position:relative; width:var(--exam-cell-size); height:var(--exam-cell-size); display:inline-flex;
+    align-items:center; justify-content:center; font:inherit; font-size:var(--text-sm); font-weight:var(--weight-semibold);
+    font-variant-numeric:tabular-nums; border:0; border-radius:var(--radius-md); cursor:pointer; }
+  .qcell--answered { background:var(--exam-answered); color:var(--exam-answered-ink); }
+  .qcell--notanswered { background:var(--exam-notanswered); color:var(--exam-notanswered-ink);
+    clip-path:polygon(0 0,100% 0,100% 78%,50% 100%,0 78%); }
+  .qcell--notvisited { background:var(--exam-notvisited); color:var(--exam-notvisited-ink); box-shadow:inset 0 0 0 1px var(--border); }
+  .qcell--marked { background:var(--exam-marked); color:var(--exam-marked-ink); border-radius:var(--radius-full); }
+  .qcell--answered-marked { background:var(--exam-answered-marked); color:var(--exam-marked-ink); border-radius:var(--radius-full); }
+  .qcell--answered-marked::after { content:''; position:absolute; right:-1px; bottom:-1px; width:.625rem; height:.625rem;
+    background:var(--exam-answered-marked-tick); border-radius:var(--radius-full); box-shadow:0 0 0 2px var(--surface); }
+  .qcell--current { box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--exam-current); }
+  .qlegend { display:flex; flex-wrap:wrap; gap:var(--space-4); margin-top:var(--space-4); font-size:var(--text-xs); color:var(--foreground-secondary); }
+  .qlegend__item { display:inline-flex; align-items:center; gap:var(--space-2); }
+  .qlegend__swatch { width:16px; height:16px; flex-shrink:0; }
 
   /* Demo-only: a viewport-less toast row and a static tooltip, so the two
      React components can be SEEN here. They are stand-ins — toast.tsx and

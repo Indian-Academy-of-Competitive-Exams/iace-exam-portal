@@ -20,7 +20,7 @@ const KIND_ICON: Readonly<Record<EmptyStateKind, LucideIcon>> = {
   REFUSED: Lock,
 };
 
-/** The two that are not "nothing yet" carry a tone, mirrored by `.empty--error`/`--refused`. */
+/** The two that are not "nothing yet" carry a tone. */
 const NEUTRAL_DISC = 'bg-[var(--empty-icon-bg)] text-[var(--empty-icon)]';
 const KIND_DISC: Readonly<Record<EmptyStateKind, string>> = {
   EMPTY: NEUTRAL_DISC,
