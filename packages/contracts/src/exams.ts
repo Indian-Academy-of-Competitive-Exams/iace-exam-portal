@@ -19,6 +19,9 @@ export const examCourseSchema = z.enum(EXAM_COURSE);
 export type ExamCourse = z.infer<typeof examCourseSchema>;
 export const EXAM_COURSES = examCourseSchema.options;
 
+/** `AP_TS_POLICE` is read aloud as AP/TS Police — the underscore is storage, not a name. */
+export const courseLabel = (course: string) => course.replaceAll('_', '/');
+
 /** What a new exam opens on. Named, not the list's head, so reordering the enum cannot move it. */
 export const DEFAULT_EXAM_COURSE = EXAM_COURSE.SSC;
 

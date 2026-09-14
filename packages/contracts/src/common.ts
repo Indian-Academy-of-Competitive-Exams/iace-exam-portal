@@ -36,8 +36,21 @@ const INSTITUTE_DAY_LABEL = new Intl.DateTimeFormat('en-IN', {
 });
 
 /** Null in, null out, so a nullable column reaches a cell without a ternary at every call site. */
+export function instituteDayLabel(at: Date | string): string;
+export function instituteDayLabel(at: Date | string | null): string | null;
 export function instituteDayLabel(at: Date | string | null): string | null {
   return at === null ? null : INSTITUTE_DAY_LABEL.format(new Date(at));
+}
+
+/** The day and the minute together — `1 Sept 2026, 9:30 am` — for when a test opens or a note arrived. */
+const INSTITUTE_DATE_TIME_LABEL = new Intl.DateTimeFormat('en-IN', {
+  timeZone: INSTITUTE_TIME_ZONE,
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+export function instituteDateTimeLabel(at: Date | string): string {
+  return INSTITUTE_DATE_TIME_LABEL.format(new Date(at));
 }
 
 /** Parts of an instant as the institute's clock reads them, which is what an offset is derived from. */
