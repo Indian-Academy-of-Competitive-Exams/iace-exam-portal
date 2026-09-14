@@ -1,0 +1,594 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import { after, beforeEach, describe, it } from 'node:test';
+import type { Prisma } from '@prisma/client';
+import {
+  AppException,
+  DIFFICULTY_LEVEL,
+  ErrorCodes,
+  QUESTION_STATUS,
+  TEST_SCOPE,
+} from '@iace/contracts';
+import { AuditContext } from '../src/audit';
+import { ScoringOutbox } from '../src/attempts/scoring-outbox';
+import { BaseConfigsService } from '../src/configs/base-configs.service';
+import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { PaperService } from '../src/tests/paper.service';
+import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
+import { FakeQueue } from '../test/support/fakes';
+import {
+  BUILDER,
+  makeBankQuestion,
+  makeBuilder,
+  makeSitting,
+  makeStudent,
+  resetDatabase,
+  testPrisma,
+  type BuilderSection,
+} from './support/database';
+
+const TEST = 'tst_1';
+
+const prisma = testPrisma();
+
+beforeEach(() => resetDatabase(prisma));
+after(() => prisma.$disconnect());
+
+/** Two sections of one config, each on its own subject — the ordinary shape of a paper. */
+const SECTIONS: BuilderSection[] = [
+  { id: 'sec_1', name: 'Reasoning', subjectId: BUILDER.REASONING, questionCount: 3 },
+  { id: 'sec_2', name: 'Quant', subjectId: BUILDER.QUANT, questionCount: 2 },
+];
+
+type BankEntry = Parameters<typeof makeBankQuestion>[1];
+
+const bank = (
+  count: number,
+  subjectId: string,
+  prefix: string,
+  extra: Partial<BankEntry> = {},
+): BankEntry[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `${prefix}${index + 1}`,
+    subjectId,
+    ...extra,
+  }));
+
+const ordinaryBank = () => [...bank(6, BUILDER.REASONING, 'r'), ...bank(6, BUILDER.QUANT, 'q')];
+
+/** Reasoning graded two of each difficulty, so a split has something to draw for every bucket. */
+const gradedBank = () => [
+  ...bank(2, BUILDER.REASONING, 'low', { difficulty: DIFFICULTY_LEVEL.LOW }),
+  ...bank(2, BUILDER.REASONING, 'med', { difficulty: DIFFICULTY_LEVEL.MEDIUM }),
+  ...bank(2, BUILDER.REASONING, 'high', { difficulty: DIFFICULTY_LEVEL.HIGH }),
+  ...bank(6, BUILDER.QUANT, 'q'),
+];
+
+/** No low question at all, so a draw against a broken split still finds one and looks filled. */
+const thinBank = () => [
+  ...bank(1, BUILDER.REASONING, 'med', { difficulty: DIFFICULTY_LEVEL.MEDIUM }),
+  ...bank(2, BUILDER.REASONING, 'high', { difficulty: DIFFICULTY_LEVEL.HIGH }),
+  ...bank(6, BUILDER.QUANT, 'q'),
+];
+
+const oneOfEach = { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 1, HIGH: 1 } } } };
+
+interface Bench {
+  questions?: BankEntry[];
+  test?: Partial<Prisma.TestUncheckedCreateInput>;
+  sections?: BuilderSection[];
+}
+
+/** A draft test on a five-question config, over the bank given. */
+async function serviceWith(over: Bench = {}): Promise<PaperService> {
+  await makeBuilder(prisma, over.sections ?? SECTIONS, { totalQuestions: 5 });
+  for (const question of over.questions ?? ordinaryBank()) {
+    await makeBankQuestion(prisma, question);
+  }
+  await prisma.testSeries.create({
+    data: { id: 'srs_1', name: 'SSC CGL 2026 mocks', examStageId: BUILDER.STAGE },
+  });
+  await prisma.test.create({
+    data: {
+      id: TEST,
+      title: 'Mock 1',
+      baseConfigId: BUILDER.CONFIG,
+      examStageId: BUILDER.STAGE,
+      testSeriesId: 'srs_1',
+      ...over.test,
+    },
+  });
+  const audit = new AuditContext();
+  return new PaperService(
+    prisma,
+    new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit),
+    new ScoringOutbox(prisma, new FakeQueue().asQueue()),
+    audit,
+  );
+}
+
+const rows = () =>
+  prisma.paperQuestion.findMany({ where: { testId: TEST }, orderBy: { order: 'asc' } });
+
+const heldIds = async () => (await rows()).map((row) => row.questionId);
+
+/** Somebody has started sitting it, which is what shuts a paper to editing. */
+const sat = async () =>
+  makeSitting(prisma, { testId: TEST, studentId: (await makeStudent(prisma)).id, score: 0 });
+
+const refused = async (attempt: Promise<unknown>) => {
+  const error = await attempt.catch((caught: unknown) => caught);
+  assert.ok(AppException.is(error));
+  return error;
+};
+
+/** Picked by hand, so this is how a paper is built up to the counts its config asks. */
+async function pickWholePaper(service: PaperService): Promise<void> {
+  await service.addQuestions(TEST, {
+    baseConfigSectionId: 'sec_1',
+    questionIds: ['r1', 'r2', 'r3'],
+  });
+  await service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1', 'q2'] });
+}
+
+describe('PaperService — picking a draft paper by hand', () => {
+  it('fills each section to the count its config asks for', async () => {
+    const service = await serviceWith();
+
+    await pickWholePaper(service);
+    const paper = await service.read(TEST);
+
+    assert.equal(paper.totalQuestions, 5);
+    assert.deepEqual(
+      paper.sections.map((section) => [section.name, section.questions.length]),
+      [
+        ['Reasoning', 3],
+        ['Quant', 2],
+      ],
+    );
+    assert.equal((await rows()).length, 5);
+  });
+
+  it('pins the version each row serves and copies the section’s marks', async () => {
+    const service = await serviceWith();
+
+    await pickWholePaper(service);
+    const paper = await service.read(TEST);
+
+    for (const row of paper.sections.flatMap((section) => section.questions)) {
+      assert.equal(row.questionVersionId, `${row.questionId}_v1`);
+      assert.equal(row.marks, 2);
+      assert.equal(row.negativeMarks, 0.5);
+    }
+  });
+
+  it('puts one on the paper in the next free place', async () => {
+    const service = await serviceWith();
+
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1'] });
+
+    const [added] = await rows();
+    assert.equal(added?.questionId, 'q1');
+    assert.equal(added?.baseConfigSectionId, 'sec_2');
+    assert.equal(Number(added?.marks), 2);
+  });
+
+  /** The failure this prevents: a section quietly holding more questions than its config asks for. */
+  it('refuses one more than the section holds', async () => {
+    const service = await serviceWith();
+    await pickWholePaper(service);
+
+    const error = await refused(
+      service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q3'] }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /already holds/);
+  });
+
+  it('refuses a question from another subject than the section draws', async () => {
+    const service = await serviceWith();
+
+    const error = await refused(
+      service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['q1'] }),
+    );
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  /** A paper pins a version, so a question with none — or out of the bank — has nothing to pin. */
+  it('refuses a question that is not live in the bank', async () => {
+    const service = await serviceWith({
+      questions: [
+        ...ordinaryBank(),
+        { id: 'unversioned', subjectId: BUILDER.QUANT, versioned: false },
+      ],
+    });
+
+    for (const questionId of ['gone', 'unversioned']) {
+      const error = await refused(
+        service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: [questionId] }),
+      );
+
+      assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+      assert.ok(error.fieldErrors?.questionId?.[0]);
+    }
+  });
+});
+
+describe('PaperService — putting several questions on a section in one request', () => {
+  it('lands every question, numbered from the current highest order, in the order sent', async () => {
+    const service = await serviceWith();
+
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: 'sec_1',
+      questionIds: ['r2', 'r1', 'r3'],
+    });
+
+    const held = await rows();
+    assert.deepEqual(
+      held.map((row) => [row.questionId, row.order]),
+      [
+        ['r2', 1],
+        ['r1', 2],
+        ['r3', 3],
+      ],
+    );
+  });
+
+  /** The failure this task exists to prevent: an admin cannot tell which of their ticks landed. */
+  it('refuses a batch that would take a section past its count, and writes none of it', async () => {
+    const service = await serviceWith();
+
+    const error = await refused(
+      service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1', 'q2', 'q3'] }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /Quant already holds the 2 it needs/);
+    assert.deepEqual(await heldIds(), []);
+  });
+
+  /** The failure this prevents: a hand-picked section quietly written against its own split. */
+  it('refuses a batch that would put a difficulty past the split, and writes none of it', async () => {
+    const service = await serviceWith({
+      questions: gradedBank(),
+      test: { questionPoolFilter: oneOfEach },
+    });
+
+    const error = await refused(
+      service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['high1', 'high2'] }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /more of one difficulty than its split allows/);
+    assert.deepEqual(await heldIds(), []);
+  });
+
+  it('refuses a batch naming a question already on the paper, and writes none of it', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1'] });
+
+    const error = await refused(
+      service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q2', 'q1'] }),
+    );
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.deepEqual(await heldIds(), ['q1']);
+  });
+
+  it('refuses a batch naming the same question twice, or one from another subject, and writes none of it', async () => {
+    const service = await serviceWith();
+
+    for (const [baseConfigSectionId, questionIds] of [
+      ['sec_2', ['q1', 'q1']],
+      ['sec_1', ['r1', 'q1']],
+    ] as const) {
+      const error = await refused(
+        service.addQuestions(TEST, { baseConfigSectionId, questionIds: [...questionIds] }),
+      );
+
+      assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+      assert.deepEqual(await heldIds(), []);
+    }
+  });
+});
+
+describe('PaperService — filling a section’s remainder from its own spec', () => {
+  const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>, sectionId: string) =>
+    paper.sections
+      .find((section) => section.baseConfigSectionId === sectionId)
+      ?.questions.map((row) => row.questionId) ?? [];
+
+  it('tops the section up to its count and leaves the hand-picked row where it was', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1'] });
+
+    const paper = await service.fillSection(TEST, 'sec_1');
+
+    assert.equal(idsOf(paper, 'sec_1').length, 3);
+    assert.equal(idsOf(paper, 'sec_1')[0], 'r2');
+    // The other section is not this draw's business, and keeps exactly what it held.
+    assert.deepEqual(idsOf(paper, 'sec_2'), ['q1']);
+  });
+
+  /** A paper pins a version, so a question without one has nothing to pin. */
+  it('draws only from ACTIVE questions that carry a version', async () => {
+    const service = await serviceWith({
+      questions: [
+        ...bank(3, BUILDER.REASONING, 'r'),
+        ...bank(2, BUILDER.QUANT, 'q'),
+        { id: 'draft', subjectId: BUILDER.QUANT, status: QUESTION_STATUS.DRAFT },
+        { id: 'unversioned', subjectId: BUILDER.QUANT, versioned: false },
+      ],
+    });
+
+    const paper = await service.fillSection(TEST, 'sec_2');
+
+    assert.deepEqual([...idsOf(paper, 'sec_2')].sort(), ['q1', 'q2']);
+  });
+
+  /** The failure this prevents: the engine hands the pins back, so a fill writes them a second time. */
+  it('writes a row only for what it drew, never for what was already on the paper', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+
+    await service.fillSection(TEST, 'sec_1');
+
+    const held = await heldIds();
+    assert.equal(held.length, 3);
+    assert.equal(new Set(held).size, 3);
+  });
+
+  /** `@@unique([testId, order])`: the engine numbers what it drew from 1, this paper cannot. */
+  it('numbers what it adds from the paper’s highest order', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1', 'q2'] });
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+
+    await service.fillSection(TEST, 'sec_1');
+
+    assert.deepEqual(
+      (await rows()).map((row) => row.order),
+      [1, 2, 3, 4, 5],
+    );
+  });
+
+  /** `@@unique([testId, questionId])`: a question sits on a paper once, whatever section. */
+  it('will not take a question another section holds, even to fill its own split', async () => {
+    const service = await serviceWith({
+      sections: [
+        { id: 'sec_a', name: 'Part A', subjectId: BUILDER.REASONING, questionCount: 3 },
+        { id: 'sec_b', name: 'Part B', subjectId: BUILDER.REASONING, questionCount: 1 },
+      ],
+      // The bank holds exactly one hard question, and Part B is already serving it.
+      questions: [
+        ...bank(1, BUILDER.REASONING, 'hard', { difficulty: DIFFICULTY_LEVEL.HIGH }),
+        ...bank(2, BUILDER.REASONING, 'easy', { difficulty: DIFFICULTY_LEVEL.LOW }),
+      ],
+      test: {
+        questionPoolFilter: { sections: { sec_a: { mix: { LOW: 2, MEDIUM: 0, HIGH: 1 } } } },
+      },
+    });
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_b', questionIds: ['hard1'] });
+
+    const error = await refused(service.fillSection(TEST, 'sec_a'));
+
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.deepEqual(await heldIds(), ['hard1']);
+  });
+
+  it('draws nothing more for a bucket the hand-picking already filled', async () => {
+    const service = await serviceWith({
+      questions: gradedBank(),
+      test: { questionPoolFilter: oneOfEach },
+    });
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['high1'] });
+
+    const held = idsOf(await service.fillSection(TEST, 'sec_1'), 'sec_1');
+
+    assert.equal(held.length, 3);
+    assert.deepEqual(
+      ['low', 'med', 'high'].map((level) => held.filter((id) => id.startsWith(level)).length),
+      [1, 1, 1],
+    );
+  });
+
+  /** The split moved under questions already picked, which is the one way a section gets over one. */
+  const pickThenNarrow = async (questions: BankEntry[]) => {
+    const service = await serviceWith({
+      questions,
+      test: {
+        questionPoolFilter: { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 0, HIGH: 2 } } } },
+      },
+    });
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: 'sec_1',
+      questionIds: ['high1', 'high2'],
+    });
+    await prisma.test.update({ where: { id: TEST }, data: { questionPoolFilter: oneOfEach } });
+    return service;
+  };
+
+  /** The failure this prevents: a fill that takes a section past the count its config asks for. */
+  it('refuses a section whose hand-picking has already broken its split, whatever the bank holds', async () => {
+    for (const questions of [gradedBank(), thinBank()]) {
+      await resetDatabase(prisma);
+      const service = await pickThenNarrow(questions);
+
+      const error = await refused(service.fillSection(TEST, 'sec_1'));
+
+      assert.equal(error.code, ErrorCodes.CONFLICT);
+      assert.match(error.message, /more of one difficulty than its split allows/);
+      assert.deepEqual(await heldIds(), ['high1', 'high2']);
+    }
+  });
+
+  it('adds nothing at all to a section already holding its count', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1', 'q2'] });
+
+    await service.fillSection(TEST, 'sec_2');
+
+    assert.equal((await rows()).length, 2);
+  });
+
+  /** The failure this prevents: a section quietly topped up with fewer than the count it needs. */
+  it('reports the gap and writes nothing when the bank cannot fill the rest', async () => {
+    const service = await serviceWith({
+      questions: [...bank(2, BUILDER.REASONING, 'r'), ...bank(6, BUILDER.QUANT, 'q')],
+    });
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['r1'] });
+
+    const error = await refused(service.fillSection(TEST, 'sec_1'));
+
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.match(error.fieldErrors?.sec_1?.[0] ?? '', /Reasoning needs 3, and the bank holds 2/);
+    assert.deepEqual(await heldIds(), ['r1']);
+  });
+
+  it('refuses a test a student has already sat', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+    await sat();
+
+    const error = await refused(service.fillSection(TEST, 'sec_1'));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(error.message, SAT_TEST_MESSAGE);
+  });
+
+  it('refuses a section this paper does not have', async () => {
+    const service = await serviceWith();
+
+    const error = await refused(service.fillSection(TEST, 'sec_gone'));
+
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+});
+
+describe('PaperService — what it refuses to edit', () => {
+  it('refuses a test a student has already sat, and one that does not exist', async () => {
+    const service = await serviceWith({ test: { isLocked: true, finalizedAt: new Date() } });
+    await sat();
+    const addOne = (testId: string) =>
+      refused(service.addQuestions(testId, { baseConfigSectionId: 'sec_2', questionIds: ['q1'] }));
+
+    assert.equal((await addOne(TEST)).code, ErrorCodes.CONFLICT);
+    assert.equal((await addOne('tst_gone')).code, ErrorCodes.NOT_FOUND);
+  });
+});
+
+describe('PaperService — one row at a time', () => {
+  /** Picks a whole paper, then hands back the row that holds the first Quant question. */
+  async function drawn() {
+    const service = await serviceWith();
+    await pickWholePaper(service);
+    const row = (await rows()).find((candidate) => candidate.questionId === 'q1');
+    assert.ok(row);
+    return { service, row };
+  }
+
+  it('swaps the question and keeps the row where it was', async () => {
+    const { service, row } = await drawn();
+
+    await service.replaceQuestion(TEST, row.id, { questionId: 'q3' });
+
+    const after = await prisma.paperQuestion.findUniqueOrThrow({ where: { id: row.id } });
+    assert.equal(after.questionId, 'q3');
+    assert.equal(after.questionVersionId, 'q3_v1');
+    assert.equal(after.order, row.order);
+    assert.equal((await rows()).length, 5);
+  });
+
+  /** The failure this prevents: a Quant slot serving a Reasoning question. */
+  it('refuses a question from another subject than the section draws', async () => {
+    const { service, row } = await drawn();
+
+    const error = await refused(service.replaceQuestion(TEST, row.id, { questionId: 'r4' }));
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.questionId?.[0]);
+  });
+
+  /** `@@unique([testId, questionId])` would refuse it, and a constraint error is not a message. */
+  it('refuses a question the paper already holds, by name', async () => {
+    const { service, row } = await drawn();
+
+    const error = await refused(service.replaceQuestion(TEST, row.id, { questionId: 'q2' }));
+
+    assert.match(error.message, /already on this paper/);
+  });
+
+  it('refuses a row that belongs to another test', async () => {
+    const { service, row } = await drawn();
+
+    const error = await refused(service.replaceQuestion('tst_other', row.id, { questionId: 'q3' }));
+
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('drops a row and leaves its section short', async () => {
+    const { service, row } = await drawn();
+
+    await service.removeQuestions(TEST, [row.id]);
+
+    const held = await rows();
+    assert.equal(held.length, 4);
+    assert.equal(
+      held.some((candidate) => candidate.id === row.id),
+      false,
+    );
+  });
+
+  it('refuses both once a student has sat the test', async () => {
+    const { service, row } = await drawn();
+    await sat();
+
+    const replaced = await refused(service.replaceQuestion(TEST, row.id, { questionId: 'q6' }));
+    const removed = await refused(service.removeQuestions(TEST, [row.id]));
+
+    assert.equal(replaced.code, ErrorCodes.CONFLICT);
+    assert.equal(removed.code, ErrorCodes.CONFLICT);
+  });
+});
+
+describe('PaperService — a test only has the sections its scope covers', () => {
+  const sectional = () =>
+    serviceWith({ test: { scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: 'sec_1' } } });
+
+  /** THE failure this prevents: a sectional test whose paper can be built across every section. */
+  it('refuses a question added to, or a fill of, a section outside the scope', async () => {
+    const service = await sectional();
+
+    const added = await refused(
+      service.addQuestions(TEST, { baseConfigSectionId: 'sec_2', questionIds: ['q1'] }),
+    );
+    const filled = await refused(service.fillSection(TEST, 'sec_2'));
+
+    assert.equal(added.code, ErrorCodes.NOT_FOUND);
+    assert.equal(filled.code, ErrorCodes.NOT_FOUND);
+    assert.deepEqual(await heldIds(), []);
+  });
+
+  it('still takes a question into the one section it does cover', async () => {
+    const service = await sectional();
+
+    await service.addQuestions(TEST, { baseConfigSectionId: 'sec_1', questionIds: ['r1'] });
+
+    assert.deepEqual(await heldIds(), ['r1']);
+  });
+
+  /** The paper a screen reads must not offer a section the server would refuse to fill. */
+  it('reads back only the covered section', async () => {
+    const service = await sectional();
+
+    const paper = await service.read(TEST);
+
+    assert.deepEqual(
+      paper.sections.map((section) => section.baseConfigSectionId),
+      ['sec_1'],
+    );
+  });
+});

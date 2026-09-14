@@ -12,6 +12,7 @@ import {
   DEFAULT_EXAM_COURSE,
   DIFFICULTY_LEVEL,
   NOTIFICATION_TYPE,
+  QUESTION_STATUS,
   STUDENT_TYPE,
   TEST_SCOPE,
   type AnswerState,
@@ -537,5 +538,103 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
       ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
     select: { id: true },
+  });
+}
+
+/** Fixed ids for the suites that build a test by hand; safe only because each case resets first. */
+export const BUILDER = {
+  STAGE: 'stage_1',
+  OTHER_STAGE: 'stage_9',
+  CONFIG: 'cfg_1',
+  REASONING: 'sub_r',
+  QUANT: 'sub_q',
+} as const;
+
+export interface BuilderSection {
+  id: string;
+  name: string;
+  subjectId?: string;
+  questionCount?: number;
+}
+
+/** Two stages of one exam, the Reasoning and Quant subjects, and one config holding the sections given. */
+export async function makeBuilder(
+  prisma: PrismaService,
+  sections: readonly BuilderSection[],
+  config: Partial<Prisma.BaseConfigUncheckedCreateInput> = {},
+): Promise<void> {
+  const exam = await prisma.exam.create({
+    data: { id: uid('exam'), course: DEFAULT_EXAM_COURSE, code: uid('EXAM'), name: 'SSC CGL' },
+    select: { id: true },
+  });
+  await prisma.examStage.createMany({
+    data: [
+      { id: BUILDER.STAGE, examId: exam.id, stageKey: uid('stage'), name: 'Tier 1' },
+      { id: BUILDER.OTHER_STAGE, examId: exam.id, stageKey: uid('stage'), name: 'Tier 2' },
+    ],
+  });
+  await prisma.subject.createMany({
+    data: [
+      { id: BUILDER.REASONING, name: 'Reasoning' },
+      { id: BUILDER.QUANT, name: 'Quant' },
+    ],
+  });
+  await prisma.baseConfig.create({
+    data: {
+      id: BUILDER.CONFIG,
+      examStageId: BUILDER.STAGE,
+      name: 'SSC CGL Tier 1 pattern',
+      totalQuestions: 100,
+      totalMarks: 200,
+      durationSec: 3600,
+      ...config,
+    },
+  });
+  await prisma.baseConfigSection.createMany({
+    data: sections.map((section, index) => ({
+      id: section.id,
+      baseConfigId: BUILDER.CONFIG,
+      name: section.name,
+      order: index + 1,
+      subjectId: section.subjectId ?? null,
+      questionCount: section.questionCount ?? 10,
+      marksPerQuestion: 2,
+      negativeMarks: 0.5,
+    })),
+  });
+}
+
+/** A bank question under a fixed id, live with a `<id>_v1` version unless told otherwise. */
+export async function makeBankQuestion(
+  prisma: PrismaService,
+  input: {
+    id: string;
+    subjectId: string;
+    difficulty?: DifficultyLevel;
+    status?: QuestionStatus;
+    versioned?: boolean;
+  },
+): Promise<void> {
+  await prisma.question.create({
+    data: {
+      id: input.id,
+      subjectId: input.subjectId,
+      difficulty: input.difficulty ?? DIFFICULTY_LEVEL.MEDIUM,
+      status: input.status ?? QUESTION_STATUS.ACTIVE,
+    },
+  });
+  if (input.versioned === false) return;
+  await prisma.questionVersion.create({
+    data: {
+      id: `${input.id}_v1`,
+      questionId: input.id,
+      version: 1,
+      content: { en: { stem: [{ type: 'TEXT', text: `<p>${input.id}</p>` }] } },
+      options: fourOptions(),
+    },
+  });
+  await prisma.question.update({
+    where: { id: input.id },
+    data: { currentVersionId: `${input.id}_v1` },
   });
 }
