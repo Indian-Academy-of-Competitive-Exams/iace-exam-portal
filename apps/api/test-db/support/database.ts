@@ -12,9 +12,11 @@ import {
   DIFFICULTY_LEVEL,
   NOTIFICATION_TYPE,
   STUDENT_TYPE,
+  TEST_SCOPE,
   type AttemptStatus,
   type DifficultyLevel,
   type QuestionStatus,
+  type TestScope,
   type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -33,6 +35,7 @@ export interface TestOverrides {
   title?: string | null;
   status?: TestStatus;
   opensAt?: Date | null;
+  scope?: TestScope;
 }
 
 export interface StudentOverrides {
@@ -249,6 +252,7 @@ export async function makeQuestion(
     stem?: string;
     status?: QuestionStatus;
     difficulty?: DifficultyLevel;
+    options?: Prisma.InputJsonValue;
   },
 ): Promise<{ id: string; versionId: string }> {
   const question = await prisma.question.create({
@@ -266,6 +270,7 @@ export async function makeQuestion(
       questionId: question.id,
       version: 1,
       content: { en: { stem: [{ type: 'TEXT', text: `<p>${input.stem ?? 'Stem'}</p>` }] } },
+      ...(input.options === undefined ? {} : { options: input.options }),
     },
     select: { id: true },
   });
@@ -289,6 +294,118 @@ export function makeSection(prisma: PrismaService, catalog: Catalog): Promise<{ 
     },
     select: { id: true },
   });
+}
+
+/** The option a paper question is keyed to; the other three are wrong. */
+export const RIGHT_OPTION = 'o1';
+
+/** Four options with `o1` right — the shape a version's `options` column holds. */
+export const fourOptions = (): Prisma.InputJsonValue =>
+  Array.from({ length: 4 }, (_, index) => ({
+    id: `o${index + 1}`,
+    position: index + 1,
+    isCorrect: index === 0,
+    text: { en: [{ type: 'TEXT', text: `Option ${index + 1}` }] },
+  }));
+
+export interface PaperItem {
+  paperQuestionId: string;
+  questionId: string;
+  versionId: string;
+  subjectId: string;
+}
+
+export interface Paper {
+  testId: string;
+  scope: TestScope;
+  sectionId: string;
+  items: PaperItem[];
+}
+
+/** A test with a real paper: one section, one question per subject named, each worth 2 with 0.5 off. */
+export async function makePaper(
+  prisma: PrismaService,
+  input: { subjects: readonly string[]; scope?: TestScope; catalog?: Catalog },
+): Promise<Paper> {
+  const catalog = input.catalog ?? (await makeCatalog(prisma));
+  const scope = input.scope ?? TEST_SCOPE.FULL;
+  const test = await makeTest(prisma, catalog, { scope });
+  const section = await makeSection(prisma, catalog);
+  const items: PaperItem[] = [];
+  for (const [index, name] of input.subjects.entries()) {
+    const subject = await prisma.subject.upsert({
+      where: { name },
+      create: { id: uid('subject'), name },
+      update: {},
+      select: { id: true },
+    });
+    const question = await makeQuestion(prisma, { subjectId: subject.id, options: fourOptions() });
+    const paperQuestion = await prisma.paperQuestion.create({
+      data: {
+        id: uid('pq'),
+        testId: test.id,
+        baseConfigId: catalog.baseConfigId,
+        baseConfigSectionId: section.id,
+        questionId: question.id,
+        questionVersionId: question.versionId,
+        order: index + 1,
+        marks: 2,
+        negativeMarks: 0.5,
+      },
+      select: { id: true },
+    });
+    items.push({
+      paperQuestionId: paperQuestion.id,
+      questionId: question.id,
+      versionId: question.versionId,
+      subjectId: subject.id,
+    });
+  }
+  return { testId: test.id, scope, sectionId: section.id, items };
+}
+
+export interface SitInput {
+  paper: Paper;
+  studentId: string;
+  /** One choice per paper question, in order; null leaves it untouched. */
+  chosen: readonly (string | null)[];
+  attemptNo?: number;
+  isGraded?: boolean;
+  submittedAt?: Date;
+}
+
+/** A submitted, not-yet-scored sitting served the whole paper, thirty seconds on each question. */
+export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<{ id: string }> {
+  const submittedAt = input.submittedAt ?? new Date('2026-08-24T05:00:00.000Z');
+  const startedAt = new Date(submittedAt.getTime() - HALF_HOUR_SEC * SECOND_MS);
+  const attempt = await prisma.attempt.create({
+    data: {
+      id: uid('attempt'),
+      testId: input.paper.testId,
+      studentId: input.studentId,
+      attemptNo: input.attemptNo ?? 1,
+      isGraded: input.isGraded ?? true,
+      status: ATTEMPT_STATUS.SUBMITTED,
+      startedAt,
+      endsAt: new Date(startedAt.getTime() + 60 * MINUTE_MS),
+      submittedAt,
+      shuffleSeed: 7,
+    },
+    select: { id: true },
+  });
+  await prisma.attemptQuestion.createMany({
+    data: input.paper.items.map((item, index) => ({
+      attemptId: attempt.id,
+      questionId: item.questionId,
+      questionVersionId: item.versionId,
+      paperQuestionId: item.paperQuestionId,
+      baseConfigSectionId: input.paper.sectionId,
+      order: index + 1,
+      selectedOptionId: input.chosen[index] ?? null,
+      timeSpentSec: 30,
+    })),
+  });
+  return attempt;
 }
 
 /** One question as a sitting was served it, with the seconds spent on it. */
