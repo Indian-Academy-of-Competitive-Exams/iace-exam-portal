@@ -1,13 +1,16 @@
 import * as React from 'react';
 import {
   get,
+  useWatch,
   type FieldError,
   type FieldValues,
   type Path,
+  type PathValue,
   type UseFormRegisterReturn,
   type UseFormReturn,
 } from 'react-hook-form';
 import { cn } from '../../lib/utils';
+import { Combobox, type ComboboxProps } from './combobox';
 import { Field } from './field';
 
 /** Everything a control needs to be labelled, described and marked invalid. */
@@ -45,6 +48,46 @@ export function FormField<TValues extends FieldValues>({
   return (
     <Field htmlFor={name} label={label} hint={hint} error={error?.message} className={className}>
       {(control) => children({ ...control, ...form.register(name) })}
+    </Field>
+  );
+}
+
+export interface FormComboboxProps<TValues extends FieldValues>
+  extends
+    Omit<FormFieldProps<TValues>, 'children'>,
+    Omit<ComboboxProps, 'value' | 'onChange' | 'id' | 'className'> {
+  /** Runs after the choice is written, for a field whose choice clears another. */
+  onChange?: (value: string) => void;
+}
+
+/** A `Combobox` bound to one string field: it reads the value, writes the choice dirty, shows the error. */
+export function FormCombobox<TValues extends FieldValues>({
+  form,
+  name,
+  label,
+  hint,
+  className,
+  onChange,
+  clearable = false,
+  ...combobox
+}: Readonly<FormComboboxProps<TValues>>) {
+  const value = useWatch({ control: form.control, name }) as string | null | undefined;
+  const error = get(form.formState.errors, name) as FieldError | undefined;
+
+  return (
+    <Field htmlFor={name} label={label} hint={hint} error={error?.message} className={className}>
+      {(control) => (
+        <Combobox
+          {...control}
+          {...combobox}
+          clearable={clearable}
+          value={value ?? ''}
+          onChange={(next) => {
+            form.setValue(name, next as PathValue<TValues, Path<TValues>>, { shouldDirty: true });
+            onChange?.(next);
+          }}
+        />
+      )}
     </Field>
   );
 }

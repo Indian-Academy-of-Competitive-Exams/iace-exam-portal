@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Flag, X } from 'lucide-react';
@@ -15,9 +15,9 @@ import {
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
+  FormCombobox,
   Badge,
   Button,
-  Combobox,
   ConfirmDialog,
   DropdownMenuItem,
   FormDialog,
@@ -234,8 +234,6 @@ function RaiseFlagDialog({
     onError: (error) => applyFieldErrors(error, form.setError, ['category', 'comment']),
   });
 
-  const category = useWatch({ control: form.control, name: 'category' });
-
   return (
     <FormDialog
       open={open}
@@ -248,26 +246,15 @@ function RaiseFlagDialog({
       submitLabel="Raise the flag"
       loading={raise.isPending}
     >
-      <FormField form={form} name="category" label="Category">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={category}
-            onChange={(next) =>
-              form.setValue('category', next as CreateQuestionFlagInput['category'], {
-                shouldDirty: true,
-              })
-            }
-            items={QUESTION_FLAG_CATEGORIES.map((value) => ({
-              value,
-              label: QUESTION_FLAG_CATEGORY_LABELS[value],
-            }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox
+        form={form}
+        name="category"
+        label="Category"
+        items={QUESTION_FLAG_CATEGORIES.map((value) => ({
+          value,
+          label: QUESTION_FLAG_CATEGORY_LABELS[value],
+        }))}
+      />
 
       <FormField form={form} name="comment" label="Comment">
         {(control) => <Textarea {...control} rows={4} autoFocus />}

@@ -16,17 +16,14 @@ import {
   type CreateExamInput,
   type CreateExamStageInput,
   type Exam,
-  type ExamCourse,
-  type ExamMode,
   type ExamStage,
-  type StageDisposition,
   type UpdateExamStageInput,
 } from '@iace/contracts';
 import {
+  FormCombobox,
   Alert,
   Badge,
   Button,
-  Combobox,
   DropdownMenuItem,
   FormDialog,
   FormField,
@@ -112,6 +109,8 @@ function examColumns(
   ];
 }
 
+const COURSE_ITEMS = EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) }));
+
 /** Every filter the bar can clear. Two controls, so nothing folds. */
 const EXAM_FILTERS = [
   { key: 'q', kind: 'search', label: 'Search exams', placeholder: 'Search exams', primary: true },
@@ -121,7 +120,7 @@ const EXAM_FILTERS = [
     label: 'Filter by course',
     primary: true,
     placeholder: 'Any course',
-    items: EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) })),
+    items: COURSE_ITEMS,
   },
 ] as const;
 
@@ -222,8 +221,6 @@ function ExamDialog({
       : { course: DEFAULT_EXAM_COURSE, name: '', code: '' },
   });
 
-  const chosenCourse = useWatch({ control: form.control, name: 'course' }) ?? DEFAULT_EXAM_COURSE;
-
   const save = useMutation({
     meta: { success: exam ? 'Exam saved.' : 'Exam created.', fields: EXAM_FIELDS },
     mutationFn: (values: CreateExamInput) =>
@@ -244,19 +241,7 @@ function ExamDialog({
       submitLabel={exam ? 'Save' : 'Create'}
       loading={save.isPending}
     >
-      <FormField form={form} name="course" label="Course">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={chosenCourse}
-            onChange={(next) => form.setValue('course', next as ExamCourse, { shouldDirty: true })}
-            items={EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox form={form} name="course" label="Course" items={COURSE_ITEMS} />
 
       <FormField form={form} name="name" label="Name">
         {(control) => <Input {...control} placeholder="SSC Combined Graduate Level" autoFocus />}
@@ -289,6 +274,13 @@ const DISPOSITION_LABELS: Readonly<Record<(typeof STAGE_DISPOSITIONS)[number], s
   PARTIAL: 'Partly conducted',
   CATALOG_ONLY: 'Listed only',
 };
+
+const DISPOSITION_ITEMS = STAGE_DISPOSITIONS.map((value) => ({
+  value,
+  label: DISPOSITION_LABELS[value],
+}));
+
+const MODE_ITEMS = EXAM_MODES.map((mode) => ({ value: mode, label: mode }));
 
 const DISPOSITION_VARIANT = {
   CONDUCTED: 'success',
@@ -464,13 +456,16 @@ function NewStageDialog({
   const form = useForm<CreateExamStageInput>({
     resolver: zodResolver(createExamStageSchema),
     // Seeded from the filter: adding stages to the exam you are looking at is the normal case.
-    defaultValues: { examId, stageKey: '', name: '', order: 0 },
+    defaultValues: {
+      examId,
+      stageKey: '',
+      name: '',
+      order: 0,
+      mode: DEFAULT_EXAM_MODE,
+      disposition: DEFAULT_STAGE_DISPOSITION,
+    },
   });
   const chosenExam = useWatch({ control: form.control, name: 'examId' }) ?? '';
-
-  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? DEFAULT_EXAM_MODE;
-  const chosenDisposition =
-    useWatch({ control: form.control, name: 'disposition' }) ?? DEFAULT_STAGE_DISPOSITION;
 
   const create = useMutation({
     meta: { success: 'Stage added.', fields: NEW_STAGE_FIELDS },
@@ -518,38 +513,9 @@ function NewStageDialog({
         {(control) => <NumericInput {...control} {...form.register('order')} />}
       </FormField>
 
-      <FormField form={form} name="mode" label="Mode">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={chosenMode}
-            onChange={(next) => form.setValue('mode', next as ExamMode, { shouldDirty: true })}
-            items={EXAM_MODES.map((mode) => ({ value: mode, label: mode }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox form={form} name="mode" label="Mode" items={MODE_ITEMS} />
 
-      <FormField form={form} name="disposition" label="Runs as">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={chosenDisposition}
-            onChange={(next) =>
-              form.setValue('disposition', next as StageDisposition, { shouldDirty: true })
-            }
-            items={STAGE_DISPOSITIONS.map((value) => ({
-              value,
-              label: DISPOSITION_LABELS[value],
-            }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox form={form} name="disposition" label="Runs as" items={DISPOSITION_ITEMS} />
     </FormDialog>
   );
 }
@@ -570,10 +536,6 @@ function EditStageDialog({
       disposition: stage.disposition,
     },
   });
-
-  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? DEFAULT_EXAM_MODE;
-  const chosenDisposition =
-    useWatch({ control: form.control, name: 'disposition' }) ?? DEFAULT_STAGE_DISPOSITION;
 
   const save = useMutation({
     meta: { success: 'Stage saved.', fields: EDIT_STAGE_FIELDS },
@@ -621,38 +583,9 @@ function EditStageDialog({
         {(control) => <NumericInput {...control} {...form.register('order')} />}
       </FormField>
 
-      <FormField form={form} name="mode" label="Mode">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={chosenMode}
-            onChange={(next) => form.setValue('mode', next as ExamMode, { shouldDirty: true })}
-            items={EXAM_MODES.map((mode) => ({ value: mode, label: mode }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox form={form} name="mode" label="Mode" items={MODE_ITEMS} />
 
-      <FormField form={form} name="disposition" label="Runs as">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={chosenDisposition}
-            onChange={(next) =>
-              form.setValue('disposition', next as StageDisposition, { shouldDirty: true })
-            }
-            items={STAGE_DISPOSITIONS.map((value) => ({
-              value,
-              label: DISPOSITION_LABELS[value],
-            }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox form={form} name="disposition" label="Runs as" items={DISPOSITION_ITEMS} />
     </FormDialog>
   );
 }

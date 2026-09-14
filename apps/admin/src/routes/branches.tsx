@@ -2,21 +2,20 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { Plus, Users } from 'lucide-react';
 import {
   BRANCH_TYPE,
   BRANCH_TYPES,
   createBranchSchema,
   type Branch,
-  type BranchType,
   type CreateBranchInput,
 } from '@iace/contracts';
 import {
+  FormCombobox,
   Alert,
   Badge,
   Button,
-  Combobox,
   DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -212,8 +211,6 @@ function NewBranchDialog({
     defaultValues: { name: '', type: BRANCH_TYPE.PHYSICAL },
   });
 
-  const type = useWatch({ control: form.control, name: 'type' }) ?? BRANCH_TYPE.PHYSICAL;
-
   const create = useMutation({
     meta: { success: 'Branch created.', fields: NEW_BRANCH_FIELDS },
     mutationFn: (values: CreateBranchInput) => api.admin.branches.create(values),
@@ -242,22 +239,15 @@ function NewBranchDialog({
         )}
       </FormField>
 
-      <FormField form={form} name="type" label="Type">
-        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
-          <Combobox
-            id={id}
-            aria-describedby={describedBy}
-            aria-invalid={invalid}
-            clearable={false}
-            value={type}
-            onChange={(next) => form.setValue('type', next as BranchType, { shouldDirty: true })}
-            // Virtual goes once one exists: an option that can only fail is not a choice.
-            items={BRANCH_TYPES.filter(
-              (value) => value !== BRANCH_TYPE.VIRTUAL || !hasOnlineBranch,
-            ).map((value) => ({ value, label: BRANCH_TYPE_LABELS[value] }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox
+        form={form}
+        name="type"
+        label="Type"
+        // Virtual goes once one exists: an option that can only fail is not a choice.
+        items={BRANCH_TYPES.filter(
+          (value) => value !== BRANCH_TYPE.VIRTUAL || !hasOnlineBranch,
+        ).map((value) => ({ value, label: BRANCH_TYPE_LABELS[value] }))}
+      />
     </FormDialog>
   );
 }

@@ -12,7 +12,7 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import {
-  Combobox,
+  FormCombobox,
   FormField,
   FormSection,
   Input,
@@ -284,18 +284,13 @@ function Rules({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <FormField form={form} name="scope" label="Covers">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={scope}
-            clearable={false}
-            disabled={sat}
-            onChange={(value) => form.setValue('scope', value as TestScope, DIRTY)}
-            items={TEST_SCOPES.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox
+        form={form}
+        name="scope"
+        label="Covers"
+        disabled={sat}
+        items={TEST_SCOPES.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] }))}
+      />
 
       <ScopeReference form={form} scope={scope} config={config} disabled={sat} />
     </div>
@@ -314,51 +309,35 @@ function ScopeReference({
   config: BaseConfigDetail | null;
   disabled: boolean;
 }>) {
-  const moduleId = useWatch({ control: form.control, name: 'moduleId' });
-  const sectionId = useWatch({ control: form.control, name: 'sectionId' });
-
   if (scope === TEST_SCOPE.MODULE) {
     return (
-      <FormField form={form} name="moduleId" label="Module">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={moduleId}
-            clearable={false}
-            disabled={disabled}
-            placeholder="Choose a module"
-            onChange={(value) => form.setValue('moduleId', value, DIRTY)}
-            items={(config?.modules ?? []).map((module) => ({
-              value: module.id,
-              label: module.name,
-            }))}
-            emptyLabel="This configuration has no modules"
-          />
-        )}
-      </FormField>
+      <FormCombobox
+        form={form}
+        name="moduleId"
+        label="Module"
+        disabled={disabled}
+        placeholder="Choose a module"
+        items={(config?.modules ?? []).map((module) => ({ value: module.id, label: module.name }))}
+        emptyLabel="This configuration has no modules"
+      />
     );
   }
 
   if (scope === TEST_SCOPE.SECTIONAL) {
     return (
-      <FormField form={form} name="sectionId" label="Section">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={sectionId}
-            clearable={false}
-            disabled={disabled}
-            placeholder="Choose a section"
-            onChange={(value) => form.setValue('sectionId', value, DIRTY)}
-            items={(config?.sections ?? []).map((section) => ({
-              value: section.id,
-              label: section.name,
-              hint: plural(section.questionCount, 'question'),
-            }))}
-            emptyLabel="This configuration has no sections"
-          />
-        )}
-      </FormField>
+      <FormCombobox
+        form={form}
+        name="sectionId"
+        label="Section"
+        disabled={disabled}
+        placeholder="Choose a section"
+        items={(config?.sections ?? []).map((section) => ({
+          value: section.id,
+          label: section.name,
+          hint: plural(section.questionCount, 'question'),
+        }))}
+        emptyLabel="This configuration has no sections"
+      />
     );
   }
 

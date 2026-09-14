@@ -19,6 +19,7 @@ import {
   type StudentType,
 } from '@iace/contracts';
 import {
+  FormCombobox,
   Alert,
   Avatar,
   Badge,
@@ -208,28 +209,12 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   return (
     <FormSection title="Access">
       <div className="flex flex-col gap-4">
-        <Field
-          htmlFor="studentType"
+        <FormCombobox
+          form={form}
+          name="studentType"
           label="Student type"
-          error={form.formState.errors.studentType?.message}
-        >
-          {(control) => (
-            <Combobox
-              id={control.id}
-              aria-describedby={control['aria-describedby']}
-              aria-invalid={control['aria-invalid']}
-              clearable={false}
-              value={studentType}
-              onChange={(next) =>
-                form.setValue('studentType', next as StudentType, { shouldDirty: true })
-              }
-              items={STUDENT_TYPES.map((value) => ({
-                value,
-                label: STUDENT_TYPE_LABELS[value],
-              }))}
-            />
-          )}
-        </Field>
+          items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
+        />
 
         <Field
           htmlFor="enrolledCourses"
@@ -313,7 +298,6 @@ function DetailsTab({
   detail,
 }: Readonly<{ form: UseFormReturn<FormValues>; detail: StudentDetail }>) {
   const dob = useWatch({ control: form.control, name: 'dob' }) ?? '';
-  const gender = useWatch({ control: form.control, name: 'gender' }) ?? '';
 
   return (
     <>
@@ -365,21 +349,14 @@ function DetailsTab({
                   />
                 )}
               </Field>
-              <Field htmlFor="gender" label="Gender" error={form.formState.errors.gender?.message}>
-                {(control) => (
-                  <Combobox
-                    id={control.id}
-                    aria-describedby={control['aria-describedby']}
-                    aria-invalid={control['aria-invalid']}
-                    value={gender}
-                    placeholder="Not recorded"
-                    onChange={(next) =>
-                      form.setValue('gender', next as FormValues['gender'], { shouldDirty: true })
-                    }
-                    items={GENDERS.map((value) => ({ value, label: GENDER_LABELS[value] }))}
-                  />
-                )}
-              </Field>
+              <FormCombobox
+                form={form}
+                name="gender"
+                label="Gender"
+                clearable
+                placeholder="Not recorded"
+                items={GENDERS.map((value) => ({ value, label: GENDER_LABELS[value] }))}
+              />
             </div>
 
             <Field htmlFor="email" label="Email" error={form.formState.errors.email?.message}>

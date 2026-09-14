@@ -31,9 +31,9 @@ import {
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  FormCombobox,
   Alert,
   Button,
-  Combobox,
   ConfirmDialog,
   FormField,
   FormPanel,
@@ -266,12 +266,9 @@ export function QuestionFormPage() {
   const subjectId = useWatch({ control: form.control, name: 'subjectId' });
   const taxonomySettled = loaded !== undefined && loaded.status !== QUESTION_STATUS.DRAFT;
   const topicId = useWatch({ control: form.control, name: 'topicId' });
-  const correctOption = useWatch({ control: form.control, name: 'correctOption' });
   // However many it has: a form that always drew four would drop a fifth on the next save.
   const optionCount = useWatch({ control: form.control, name: 'options' }).length;
   const answerMode = useWatch({ control: form.control, name: 'answerMode' });
-  const difficulty = useWatch({ control: form.control, name: 'difficulty' });
-  const status = useWatch({ control: form.control, name: 'status' });
   const banner = bannerMessage(save.error, [...SERVER_FIELDS]);
 
   let title = 'New question';
@@ -371,60 +368,24 @@ export function QuestionFormPage() {
             )}
           </FormField>
 
-          <FormField form={form} name="type" label="Type">
-            {(control) => (
-              <Combobox
-                id={control.id}
-                aria-describedby={control['aria-describedby']}
-                aria-invalid={control['aria-invalid']}
-                clearable={false}
-                value={type}
-                onChange={(next) =>
-                  form.setValue('type', next as QuestionFormValues['type'], { shouldDirty: true })
-                }
-                items={QUESTION_TYPES.map((value) => ({
-                  value,
-                  label: value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer',
-                }))}
-              />
-            )}
-          </FormField>
+          <FormCombobox
+            form={form}
+            name="type"
+            label="Type"
+            items={QUESTION_TYPES.map((value) => ({
+              value,
+              label: value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer',
+            }))}
+          />
 
-          <FormField form={form} name="difficulty" label="Difficulty">
-            {(control) => (
-              <Combobox
-                id={control.id}
-                aria-describedby={control['aria-describedby']}
-                aria-invalid={control['aria-invalid']}
-                clearable={false}
-                value={difficulty}
-                onChange={(next) =>
-                  form.setValue('difficulty', next as QuestionFormValues['difficulty'], {
-                    shouldDirty: true,
-                  })
-                }
-                items={DIFFICULTY_LEVELS.map((value) => ({ value, label: value }))}
-              />
-            )}
-          </FormField>
+          <FormCombobox
+            form={form}
+            name="difficulty"
+            label="Difficulty"
+            items={DIFFICULTY_LEVELS.map((value) => ({ value, label: value }))}
+          />
 
-          <FormField form={form} name="status" label="Status">
-            {(control) => (
-              <Combobox
-                id={control.id}
-                aria-describedby={control['aria-describedby']}
-                aria-invalid={control['aria-invalid']}
-                clearable={false}
-                value={status}
-                onChange={(next) =>
-                  form.setValue('status', next as QuestionFormValues['status'], {
-                    shouldDirty: true,
-                  })
-                }
-                items={statusChoices(loaded)}
-              />
-            )}
-          </FormField>
+          <FormCombobox form={form} name="status" label="Status" items={statusChoices(loaded)} />
         </div>
       </FormSection>
 
@@ -448,45 +409,27 @@ export function QuestionFormPage() {
 
         {type === QUESTION_TYPE.SINGLE_MCQ ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField form={form} name="correctOption" label="Correct option">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={correctOption}
-                  onChange={(value) => form.setValue('correctOption', value)}
-                  items={Array.from({ length: optionCount }, (_, index) => ({
-                    value: String(index + 1),
-                    label: `Option ${index + 1}`,
-                  }))}
-                />
-              )}
-            </FormField>
+            <FormCombobox
+              form={form}
+              name="correctOption"
+              label="Correct option"
+              items={Array.from({ length: optionCount }, (_, index) => ({
+                value: String(index + 1),
+                label: `Option ${index + 1}`,
+              }))}
+            />
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField form={form} name="answerMode" label="How the answer is compared">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={answerMode ?? ANSWER_MODE.EXACT}
-                  onChange={(next) =>
-                    form.setValue('answerMode', next as QuestionFormValues['answerMode'], {
-                      shouldDirty: true,
-                    })
-                  }
-                  items={ANSWER_MODES.map((mode) => ({
-                    value: mode,
-                    label: mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric',
-                  }))}
-                />
-              )}
-            </FormField>
+            <FormCombobox
+              form={form}
+              name="answerMode"
+              label="How the answer is compared"
+              items={ANSWER_MODES.map((mode) => ({
+                value: mode,
+                label: mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric',
+              }))}
+            />
 
             {answerMode === ANSWER_MODE.NUMERIC ? (
               <FormField

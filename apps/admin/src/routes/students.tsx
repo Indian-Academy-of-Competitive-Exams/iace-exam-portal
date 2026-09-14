@@ -20,9 +20,9 @@ import {
   type ExamCourse,
   type StudentSort,
   type StudentSummary,
-  type StudentType,
 } from '@iace/contracts';
 import {
+  FormCombobox,
   Badge,
   BadgeList,
   Button,
@@ -467,21 +467,12 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         {(control) => <Input {...control} />}
       </FormField>
 
-      <FormField form={form} name="studentType" label="Student type">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={studentType}
-            onChange={(next) =>
-              form.setValue('studentType', next as StudentType, { shouldDirty: true })
-            }
-            items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
-          />
-        )}
-      </FormField>
+      <FormCombobox
+        form={form}
+        name="studentType"
+        label="Student type"
+        items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
+      />
 
       <FormField form={form} name="enrolledCourses" label="Enrolled courses">
         {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (

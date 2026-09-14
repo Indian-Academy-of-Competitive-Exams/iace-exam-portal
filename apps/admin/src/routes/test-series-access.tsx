@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { TEST_SERIES_KIND, type TestSeriesKind, type TestSeriesSummary } from '@iace/contracts';
-import { Checkbox, Combobox, ConfirmDialog, FormField, FormSection, plural } from '@iace/ui';
+import { Checkbox, ConfirmDialog, FormCombobox, FormField, FormSection, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS } from '../lib/constants';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
@@ -75,19 +75,13 @@ export function SeriesAccess({
   return (
     <FormSection title="Access">
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField form={form} name="kind" label="Kind">
-          {(control) => (
-            <Combobox
-              id={control.id}
-              aria-describedby={control['aria-describedby']}
-              aria-invalid={control['aria-invalid']}
-              clearable={false}
-              value={kind}
-              onChange={(next) => chooseKind(form, next as TestSeriesKind)}
-              items={KIND_ITEMS}
-            />
-          )}
-        </FormField>
+        <FormCombobox
+          form={form}
+          name="kind"
+          label="Kind"
+          items={KIND_ITEMS}
+          onChange={(next) => chooseKind(form, next as TestSeriesKind)}
+        />
 
         <FormField
           form={form}
