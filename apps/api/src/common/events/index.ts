@@ -3,12 +3,9 @@ export { EventsModule } from './events.module';
 export {
   DOMAIN_EVENTS,
   PIN_RESET_REASONS,
-  type AccessCatalogChangedEvent,
   type DomainEventName,
   type DomainEventPayloads,
   type PinResetReason,
-  type ScoringCompletedEvent,
-  type StudentAccessChangedEvent,
   type StudentPinResetEvent,
   type StudentSignedUpEvent,
 } from './event-catalog';
