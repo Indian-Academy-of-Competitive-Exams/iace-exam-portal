@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { csvIdQuery, csvQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { canonicalNameSchema } from './naming';
+import { canonicalNameSchema, displayNameSchema } from './naming';
 
 // ============================================================================
 // Exam taxonomy — Course → Exam → Stage. The stage is the level that carries a
@@ -72,11 +72,7 @@ export const EXAM_NAME_MAX = 80;
 export const EXAM_CODE_MAX = 60;
 
 /** Display text — what an admin reads in a list, not what anything stores. */
-export const examNameSchema = z
-  .string()
-  .trim()
-  .min(2, 'Give the exam a name')
-  .max(EXAM_NAME_MAX, `A name cannot be longer than ${EXAM_NAME_MAX} characters`);
+export const examNameSchema = displayNameSchema('exam', EXAM_NAME_MAX);
 
 /** e.g. SSC CGL, RRB JE. Canonical, because enrolments carry this exact string. */
 export const examCodeSchema = canonicalNameSchema({ max: EXAM_CODE_MAX, label: 'exam code' });
@@ -153,11 +149,7 @@ export const ADMIN_EXAM_STAGE_ROUTES = {
 export const STAGE_NAME_MAX = 80;
 export const STAGE_KEY_MAX = 60;
 
-export const stageNameSchema = z
-  .string()
-  .trim()
-  .min(2, 'Give the stage a name')
-  .max(STAGE_NAME_MAX, `A name cannot be longer than ${STAGE_NAME_MAX} characters`);
+export const stageNameSchema = displayNameSchema('stage', STAGE_NAME_MAX);
 
 /**
  * Human-stable and unique across every exam — "SSC_CGL_T1". Underscores, not spaces: this is
@@ -186,7 +178,6 @@ export const examRefSchema = z.object({
   name: z.string(),
   course: examCourseSchema,
 });
-export type ExamRef = z.infer<typeof examRefSchema>;
 
 export const examStageSchema = z.object({
   id: z.string(),

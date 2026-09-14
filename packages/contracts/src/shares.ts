@@ -27,7 +27,6 @@ export const sharedSectionSchema = z.object({
   score: z.number(),
   maxMarks: z.number(),
 });
-export type SharedSection = z.infer<typeof sharedSectionSchema>;
 
 /** Everything a token buys. Every field is here because a reader of the link needs it. */
 export const sharedReportSchema = z.object({

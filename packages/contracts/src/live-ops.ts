@@ -77,7 +77,6 @@ export const liveOpsCountsSchema = z.object({
   /** Ended and unscored. The sweeper heals these; a number that keeps climbing does not. */
   awaitingScoring: z.number().int(),
 });
-export type LiveOpsCounts = z.infer<typeof liveOpsCountsSchema>;
 
 export const liveOpsBoardSchema = z.object({
   testId: z.string(),

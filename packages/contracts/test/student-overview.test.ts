@@ -13,12 +13,9 @@ import {
   testDayWindow,
   rankSubjectsByWeakness,
   shiftCivilDate,
-  startOfLastMonth,
   effortPerSitting,
   placeInSpread,
   scopeComparison,
-  scopesNotSat,
-  untouchedSubjects,
   questionReportInsights,
   scopesSat,
   standingTiles,
@@ -364,49 +361,6 @@ describe('placeInSpread', () => {
   });
 });
 
-describe('the blind spots every other figure filters out', () => {
-  const tally = (scope: TestScope, attempted: number, sumTimeSec = 0) => ({
-    scope,
-    attempted,
-    correct: 0,
-    sumTimeSec,
-  });
-
-  const subjects: SubjectStanding[] = [
-    {
-      subjectId: 'sub_e',
-      name: 'English Comprehension',
-      tallies: [tally(TEST_SCOPE.FULL, 0, 40)],
-    },
-    {
-      subjectId: 'sub_q',
-      name: 'Quantitative Aptitude',
-      tallies: [tally(TEST_SCOPE.FULL, 12)],
-    },
-  ];
-
-  /** The row exists because a paper asked; the zero is the answer that never came. */
-  it('names a subject served and never answered', () => {
-    const untouched = untouchedSubjects(subjects);
-
-    assert.deepEqual(
-      untouched.map((subject) => subject.name),
-      ['English Comprehension'],
-    );
-  });
-
-  it('holds nothing against a scope that was never sat at all', () => {
-    assert.deepEqual(untouchedSubjects(subjects, TEST_SCOPE.SECTIONAL), []);
-  });
-
-  it('lists the kinds of paper never sat', () => {
-    const missing = scopesNotSat(subjects);
-
-    assert.ok(!missing.includes(TEST_SCOPE.FULL));
-    assert.ok(missing.includes(TEST_SCOPE.SECTIONAL));
-  });
-});
-
 describe('scopeComparison', () => {
   const tally = (scope: TestScope, attempted: number, correct: number) => ({
     scope,
@@ -552,17 +506,6 @@ describe('testDayWindow', () => {
       window.every((day) => day.sittings === 0),
       true,
     );
-  });
-});
-
-describe('startOfLastMonth', () => {
-  it('opens on the first of the month before this one', () => {
-    assert.equal(startOfLastMonth('2026-09-08'), '2026-08-01');
-  });
-
-  /** January's previous month is in the previous YEAR, which a naive decrement gets wrong. */
-  it('crosses the year end', () => {
-    assert.equal(startOfLastMonth('2026-01-15'), '2025-12-01');
   });
 });
 

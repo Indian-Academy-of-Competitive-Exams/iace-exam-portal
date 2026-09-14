@@ -44,7 +44,6 @@ export const authoringDaySchema = z.object({
   date: dateOnlySchema,
   count: z.number().int(),
 });
-export type AuthoringDay = z.infer<typeof authoringDaySchema>;
 
 export const authoringStatsSchema = z.object({
   today: z.number().int(),

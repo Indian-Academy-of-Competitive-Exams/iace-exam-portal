@@ -34,6 +34,15 @@ export function canonicalNameSchema(options: { min?: number; max: number; label:
     );
 }
 
+/** Display text, only trimmed — what an admin reads in a list, never a key anything matches on. */
+export function displayNameSchema(noun: string, max: number, min = 2) {
+  return z
+    .string()
+    .trim()
+    .min(min, `Give the ${noun} a name`)
+    .max(max, `A name cannot be longer than ${max} characters`);
+}
+
 export const BRANCH_NAME_MAX = 60;
 
 /** e.g. AMEERPET, RTC X ROADS, ONLINE. */

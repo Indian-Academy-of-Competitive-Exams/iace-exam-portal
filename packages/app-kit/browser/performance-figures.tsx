@@ -15,8 +15,8 @@ import {
 } from '@iace/ui';
 import {
   type CohortCurve,
+  type Disposition,
   type MarkComposition,
-  type PaperCounts,
   type PercentilePoint,
   type SectionalStanding,
   type TimeUse,
@@ -175,7 +175,7 @@ export function MarksFigure({
   composition,
   counts,
   benchmark,
-}: Readonly<{ composition: MarkComposition; counts: PaperCounts; benchmark?: Benchmark }>) {
+}: Readonly<{ composition: MarkComposition; counts: Disposition; benchmark?: Benchmark }>) {
   const segments: CompositionSegment[] = [
     {
       key: 'earned',
@@ -273,7 +273,7 @@ export function TimeFigure({
   benchmark,
 }: Readonly<{
   time: TimeUse;
-  counts: PaperCounts;
+  counts: Disposition;
   paceIndex?: number | null;
   benchmark?: Benchmark;
 }>) {

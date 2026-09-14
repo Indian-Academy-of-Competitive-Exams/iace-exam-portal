@@ -119,7 +119,6 @@ export const educationEntrySchema = z.object({
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
 });
-export type EducationEntry = z.infer<typeof educationEntrySchema>;
 
 /** Exams sat ELSEWHERE, not attempts here. Self-reported, so nothing may depend on it. */
 export const pastExamEntrySchema = z.object({
@@ -130,7 +129,6 @@ export const pastExamEntrySchema = z.object({
     .transform((v) => (v === '' ? undefined : v)),
   result: z.string().trim().max(80).optional(),
 });
-export type PastExamEntry = z.infer<typeof pastExamEntrySchema>;
 
 /** How many rows either list may hold. A profile is not a CV. */
 export const PROFILE_LIST_MAX = 12;
@@ -159,7 +157,6 @@ export const studentProfileSchema = z.object({
   educationDetails: z.array(educationEntrySchema).nullable(),
   pastExamHistory: z.array(pastExamEntrySchema).nullable(),
 });
-export type StudentProfileView = z.infer<typeof studentProfileSchema>;
 
 /** One event a student is a candidate on. Named here because the profile is where they come off it. */
 export const studentEventSchema = z.object({

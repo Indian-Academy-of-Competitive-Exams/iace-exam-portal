@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attempts';
 import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { canonicalNameSchema } from './naming';
+import { canonicalNameSchema, displayNameSchema } from './naming';
 import { examCourseSchema } from './exams';
 
 // ============================================================================
@@ -60,11 +60,7 @@ export const programCodeSchema = canonicalNameSchema({
   label: 'program code',
 });
 
-export const programNameSchema = z
-  .string()
-  .trim()
-  .min(2, 'Give the program a name')
-  .max(PROGRAM_NAME_MAX, `A name cannot be longer than ${PROGRAM_NAME_MAX} characters`);
+export const programNameSchema = displayNameSchema('program', PROGRAM_NAME_MAX);
 
 export const programListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
@@ -105,7 +101,7 @@ export type Event = z.infer<typeof eventSchema>;
 export const EVENT_NAME_MAX = 120;
 
 export const createEventSchema = z.object({
-  name: z.string().trim().min(2, 'Give the event a name').max(EVENT_NAME_MAX),
+  name: displayNameSchema('event', EVENT_NAME_MAX),
   description: z.string().trim().max(500).optional(),
 });
 export type CreateEventInput = z.input<typeof createEventSchema>;
@@ -177,11 +173,7 @@ export const testSeriesSummarySchema = testSeriesSchema.extend({
 export type TestSeriesSummary = z.infer<typeof testSeriesSummarySchema>;
 
 export const SERIES_NAME_MAX = 120;
-export const seriesNameSchema = z
-  .string()
-  .trim()
-  .min(2, 'Give the series a name')
-  .max(SERIES_NAME_MAX, `A name cannot be longer than ${SERIES_NAME_MAX} characters`);
+export const seriesNameSchema = displayNameSchema('series', SERIES_NAME_MAX);
 
 /** A series is named by who reaches it: a program, its kind, or nothing in particular. */
 export function seriesNameKind(input: {

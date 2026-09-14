@@ -133,7 +133,6 @@ export const contentNodeSchema = z.object({
   type: z.literal(CONTENT_NODE_TYPE.TEXT),
   text: z.string(),
 });
-export type ContentNode = z.infer<typeof contentNodeSchema>;
 
 /** One field — a stem, a solution, an option — in one language. */
 export const richContentSchema = z.array(contentNodeSchema);
@@ -214,7 +213,6 @@ export const questionContentSchema = z.object({
   stem: richContentSchema,
   solution: richContentSchema.optional(),
 });
-export type QuestionContent = z.infer<typeof questionContentSchema>;
 
 /** `Question.content` on the wire: one entry per language the author filled in. */
 export const localizedContentSchema = z.partialRecord(languageSchema, questionContentSchema);
@@ -253,7 +251,6 @@ export const taxonomyRefSchema = z.object({
   id: z.string(),
   name: z.string(),
 });
-export type TaxonomyRef = z.infer<typeof taxonomyRefSchema>;
 
 export const subjectRefSchema = taxonomyRefSchema;
 
@@ -269,7 +266,6 @@ export const topicRefSchema = z.object({
   name: z.string(),
   subject: subjectRefSchema,
 });
-export type TopicRef = z.infer<typeof topicRefSchema>;
 
 export const topicSchema = topicRefSchema.extend({
   questionCount: z.number().int(),
@@ -379,7 +375,6 @@ export const questionOptionDraftSchema = z.object({
   isCorrect: z.boolean(),
   text: localizedTextSchema,
 });
-export type QuestionOptionDraft = z.infer<typeof questionOptionDraftSchema>;
 
 /** TEXT_FIELD only: what a typed answer is compared against. */
 export const answerKeyDraftSchema = z.object({
@@ -450,7 +445,6 @@ export const QUESTION_VALIDATION_CODE = {
   DUPLICATE_IN_BANK: 'DUPLICATE_IN_BANK',
 } as const;
 export const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
-export type QuestionValidationCode = z.infer<typeof questionValidationCodeSchema>;
 
 /**
  * One problem with one question. `field` is the draft path the form focuses
@@ -489,7 +483,6 @@ export const questionAuthorSchema = z.object({
   id: z.string(),
   name: z.string(),
 });
-export type QuestionAuthor = z.infer<typeof questionAuthorSchema>;
 
 export const questionSummarySchema = z.object({
   id: z.string(),
@@ -711,7 +704,6 @@ export const questionImportSummarySchema = z.object({
   duplicates: z.number().int(),
   invalid: z.number().int(),
 });
-export type QuestionImportSummary = z.infer<typeof questionImportSummarySchema>;
 
 export const questionImportPlanSchema = z.object({
   /** The run this preview opened. Commit names it rather than re-uploading the file. */
@@ -728,7 +720,6 @@ export const questionImportCommitSchema = z.object({
   /** Defaulted, not required: an older client that names no status still lands its rows in review. */
   status: questionIntakeStatusSchema.default(QUESTION_STATUS.DRAFT),
 });
-export type QuestionImportCommitInput = z.input<typeof questionImportCommitSchema>;
 export type QuestionImportCommitBody = z.infer<typeof questionImportCommitSchema>;
 
 export const questionImportResultSchema = questionImportSummarySchema.extend({

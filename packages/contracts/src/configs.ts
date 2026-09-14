@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { examRefSchema, languageCodeSchema } from './exams';
+import { displayNameSchema } from './naming';
 import { questionMarksSchema } from './questions';
 
 // ============================================================================
@@ -107,7 +108,6 @@ export const baseConfigModuleSchema = z.object({
   order: z.number().int(),
   durationSec: z.number().int().nullable(),
 });
-export type BaseConfigModule = z.infer<typeof baseConfigModuleSchema>;
 
 export const baseConfigSectionSchema = z.object({
   id: z.string(),
@@ -136,7 +136,6 @@ export const stageRefSchema = z.object({
   name: z.string(),
   exam: examRefSchema,
 });
-export type StageRef = z.infer<typeof stageRefSchema>;
 
 export const baseConfigSchema = z.object({
   id: z.string(),
@@ -188,18 +187,10 @@ export type BaseConfigDetail = z.infer<typeof baseConfigDetailSchema>;
 
 export const CONFIG_NAME_MAX = 120;
 
-export const configNameSchema = z
-  .string()
-  .trim()
-  .min(2, 'Give the config a name')
-  .max(CONFIG_NAME_MAX, `A name cannot be longer than ${CONFIG_NAME_MAX} characters`);
+export const configNameSchema = displayNameSchema('config', CONFIG_NAME_MAX);
 
 export const SECTION_NAME_MAX = 80;
-export const sectionNameSchema = z
-  .string()
-  .trim()
-  .min(1, 'Give the section a name')
-  .max(SECTION_NAME_MAX, `A name cannot be longer than ${SECTION_NAME_MAX} characters`);
+export const sectionNameSchema = displayNameSchema('section', SECTION_NAME_MAX, 1);
 
 /** One section of the paper. `durationSec` is required when the config is SECTIONAL_LOCKED. */
 export const baseConfigSectionDraftSchema = z.object({
@@ -220,11 +211,10 @@ export const baseConfigSectionDraftSchema = z.object({
   qualifyingCutoff: questionMarksSchema.nullish(),
 });
 export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
-export type BaseConfigSectionDraftInput = z.input<typeof baseConfigSectionDraftSchema>;
 
 /** A session block above the sections. Only SESSION_MODULE_LOCKED configs carry them. */
 export const baseConfigModuleDraftSchema = z.object({
-  name: z.string().trim().min(1, 'Give the module a name').max(SECTION_NAME_MAX),
+  name: displayNameSchema('module', SECTION_NAME_MAX, 1),
   order: z.coerce.number().int().min(0).max(99),
   durationSec: z.coerce.number().int().min(0).nullish(),
 });

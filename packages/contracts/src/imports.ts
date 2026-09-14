@@ -30,9 +30,20 @@ export const IMPORT_LOG_STATUS = {
 export const importLogStatusSchema = z.enum(IMPORT_LOG_STATUS);
 export type ImportLogStatus = z.infer<typeof importLogStatusSchema>;
 
+/** Every intake previews the same way: its rows, what they add up to, and what is wrong with the file. */
+const importPlanSchema = <Row extends z.ZodType, Summary extends z.ZodType>(
+  row: Row,
+  summary: Summary,
+) =>
+  z.object({
+    rows: z.array(row),
+    summary,
+    /** Wrong with the SOURCE rather than a row — a missing column, or an empty upload. */
+    fileErrors: z.array(z.string()),
+  });
+
 /** What a single line would do. `skip` means it has errors and will be left. */
 export const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
-export type StudentImportAction = z.infer<typeof studentImportActionSchema>;
 
 /** The profile columns, as one object — none of them is ever queried, so none of them is a column. */
 export const studentImportProfileSchema = z.object({
@@ -74,14 +85,11 @@ export const studentImportSummarySchema = z.object({
   willUpdate: z.number().int(),
   invalid: z.number().int(),
 });
-export type StudentImportSummary = z.infer<typeof studentImportSummarySchema>;
 
-export const studentImportPlanSchema = z.object({
-  rows: z.array(studentImportRowSchema),
-  summary: studentImportSummarySchema,
-  /** Wrong with the SOURCE rather than a row — a missing column, an empty upload, an unreachable portal. */
-  fileErrors: z.array(z.string()),
-});
+export const studentImportPlanSchema = importPlanSchema(
+  studentImportRowSchema,
+  studentImportSummarySchema,
+);
 export type StudentImportPlan = z.infer<typeof studentImportPlanSchema>;
 
 /** The result of actually applying the plan. */
@@ -94,7 +102,6 @@ export type StudentImportResult = z.infer<typeof studentImportResultSchema>;
 
 /** An event intake: a candidate list, never a roster, so a number we know is only ADDED to the event. */
 export const candidateImportActionSchema = z.enum(['create', 'add', 'skip']);
-export type CandidateImportAction = z.infer<typeof candidateImportActionSchema>;
 
 export const candidateImportRowSchema = z.object({
   line: z.number().int(),
@@ -114,13 +121,11 @@ export const candidateImportSummarySchema = z.object({
   willAdd: z.number().int(),
   invalid: z.number().int(),
 });
-export type CandidateImportSummary = z.infer<typeof candidateImportSummarySchema>;
 
-export const candidateImportPlanSchema = z.object({
-  rows: z.array(candidateImportRowSchema),
-  summary: candidateImportSummarySchema,
-  fileErrors: z.array(z.string()),
-});
+export const candidateImportPlanSchema = importPlanSchema(
+  candidateImportRowSchema,
+  candidateImportSummarySchema,
+);
 export type CandidateImportPlan = z.infer<typeof candidateImportPlanSchema>;
 
 export const candidateImportResultSchema = candidateImportSummarySchema.extend({
@@ -132,7 +137,6 @@ export type CandidateImportResult = z.infer<typeof candidateImportResultSchema>;
 
 /** A program is something an existing student CARRIES, so a number we do not know is a skip. */
 export const programImportActionSchema = z.enum(['enrol', 'already', 'skip']);
-export type ProgramImportAction = z.infer<typeof programImportActionSchema>;
 
 export const programImportRowSchema = z.object({
   line: z.number().int(),
@@ -154,13 +158,11 @@ export const programImportSummarySchema = z.object({
   alreadyEnrolled: z.number().int(),
   invalid: z.number().int(),
 });
-export type ProgramImportSummary = z.infer<typeof programImportSummarySchema>;
 
-export const programImportPlanSchema = z.object({
-  rows: z.array(programImportRowSchema),
-  summary: programImportSummarySchema,
-  fileErrors: z.array(z.string()),
-});
+export const programImportPlanSchema = importPlanSchema(
+  programImportRowSchema,
+  programImportSummarySchema,
+);
 export type ProgramImportPlan = z.infer<typeof programImportPlanSchema>;
 
 export const programImportResultSchema = programImportSummarySchema.extend({

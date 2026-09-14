@@ -138,7 +138,6 @@ export type CreateAdminBody = z.infer<typeof createAdminSchema>;
 
 /** On or off through one endpoint, matching `setStudentActiveSchema`. */
 export const setAdminActiveSchema = z.object({ isActive: z.boolean() });
-export type SetAdminActiveInput = z.input<typeof setAdminActiveSchema>;
 export type SetAdminActiveBody = z.infer<typeof setAdminActiveSchema>;
 
 export const updateAdminSchema = z.object({

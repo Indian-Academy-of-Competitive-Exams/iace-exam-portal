@@ -38,7 +38,6 @@ export const branchRefSchema = z.object({
   name: z.string(),
   type: branchTypeSchema,
 });
-export type BranchRef = z.infer<typeof branchRefSchema>;
 
 export const branchListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),

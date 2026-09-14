@@ -169,12 +169,11 @@ export const testDaySchema = z.object({
   sittings: z.number().int(),
 });
 export type TestDay = z.infer<typeof testDaySchema>;
-export const testDayListSchema = z.array(testDaySchema);
 
 /** The window the SERVER chose, with the days inside it — the account decides how far back. */
 export const testCalendarSchema = z.object({
   from: z.string(),
-  days: testDayListSchema,
+  days: z.array(testDaySchema),
 });
 export type TestCalendar = z.infer<typeof testCalendarSchema>;
 
@@ -184,16 +183,6 @@ const DAY_MS = 86_400_000;
 export function shiftCivilDate(date: string, days: number): string {
   const at = new Date(`${date}T00:00:00.000Z`);
   return new Date(at.getTime() + days * DAY_MS).toISOString().slice(0, 10);
-}
-
-/** The first day of the month before this one — where "this month and last" starts. */
-export function startOfLastMonth(today: string = todayISO()): string {
-  const [year, month] = today.split('-').map(Number);
-  const back = (month ?? 1) === 1;
-  const at = back
-    ? `${(year ?? 0) - 1}-12`
-    : `${year}-${String((month ?? 1) - 1).padStart(2, '0')}`;
-  return `${at}-01`;
 }
 
 /** Every day from `from` to `today` inclusive, oldest first, zeros filled in. */
@@ -368,23 +357,6 @@ export function rankSubjectsByWeakness(
       .sort((a, b) => b.measure.attempted - a.measure.attempted),
   };
 }
-
-/** Served and never answered — the rows every other figure filters out, which is what hides them. */
-export function untouchedSubjects(
-  subjects: readonly SubjectStanding[],
-  scope: TestScope | null = null,
-): SubjectStanding[] {
-  return subjects.filter((subject) => {
-    const served = subject.tallies.some((tally) => scope === null || tally.scope === scope);
-    return served && measureOf(subject.tallies, scope).attempted === 0;
-  });
-}
-
-/** The kinds of paper never sat. The enum IS the catalogue; nothing to fetch. */
-export const scopesNotSat = (subjects: readonly SubjectStanding[]): TestScope[] => {
-  const sat = new Set(scopesSat(subjects));
-  return TEST_SCOPES.filter((scope) => !sat.has(scope));
-};
 
 /** Two scopes set against each other, per subject: whether a full paper holds what a short one showed. */
 export interface ScopeComparison {
@@ -602,7 +574,6 @@ export const satSeriesSchema = z.object({
   name: z.string(),
 });
 export type SatSeries = z.infer<typeof satSeriesSchema>;
-export const satSeriesListSchema = z.array(satSeriesSchema);
 
 /** Never carries a question, an option or an answer key — at any scope, on either path. */
 export const performanceReportSchema = z.object({
@@ -656,20 +627,9 @@ export function testsSat(points: readonly PerformancePoint[]): SatTest[] {
   return [...seen.values()];
 }
 
-/** Every sitting of ONE paper, in the order they were sat — the retake line. */
-export const sittingsOf = (points: readonly PerformancePoint[], testId: string) =>
-  points.filter((point) => point.testId === testId);
-
-/** The three counts every anchor-scoped figure divides by. */
-export interface PaperCounts {
-  correct: number;
-  wrong: number;
-  unattempted: number;
-}
-
 /** The anchor's own denominator, summed off its sections so every figure shares one paper. */
-export function paperCounts(sections: readonly SectionalStanding[]): PaperCounts {
-  return sections.reduce<PaperCounts>(
+export function paperCounts(sections: readonly SectionalStanding[]): Disposition {
+  return sections.reduce<Disposition>(
     (total, section) => ({
       correct: total.correct + section.correctCount,
       wrong: total.wrong + section.wrongCount,
@@ -926,13 +886,10 @@ export const ITEM_SIGNAL_FLOOR = 10;
 /** One signal is a property of the question; two is a question worth a person opening it. */
 export const INSPECT_AT_LEAST = 2;
 
-export interface ItemCounts {
-  attemptedCount: number;
-  skippedCount: number;
-  pValue: number | null;
-  discrimination: number | null;
-  averageTimeSec: number | null;
-}
+export type ItemCounts = Pick<
+  TestItemAnalytics,
+  'attemptedCount' | 'skippedCount' | 'pValue' | 'discrimination' | 'averageTimeSec'
+>;
 
 /** Every signal an item trips, off the columns the fold already wrote. */
 export function itemSignalsOf(item: ItemCounts, paperAverageTimeSec: number | null): ItemSignal[] {

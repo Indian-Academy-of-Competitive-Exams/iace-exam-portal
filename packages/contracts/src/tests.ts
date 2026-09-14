@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { csvIdQuery, csvQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { baseConfigDetailSchema, examTemplateSchema, stageRefSchema } from './configs';
+import { displayNameSchema } from './naming';
 import {
   DIFFICULTY_LEVELS,
   difficultyLevelSchema,
@@ -161,23 +162,6 @@ export function scopedDurationSec(
   // Rounded to the minute: a share of a composite clock is an estimate, and 9m41s reads as a bug.
   const share = (config.durationSec * questions) / config.totalQuestions;
   return Math.max(60, Math.round(share / 60) * 60);
-}
-
-/** A scoped section still has to say what a question is worth, for the marks its paper carries. */
-export interface ScoredScopedSection extends ScopedSection {
-  marksPerQuestion: number;
-}
-
-/** What a scoped test's paper is worth, for the same reason its question count is its own. */
-export function scopedMarks(
-  sections: readonly ScoredScopedSection[],
-  scope: TestScope,
-  scopeRef: TestScopeRef | null,
-): number {
-  return scopedSections(sections, scope, scopeRef).reduce(
-    (total, section) => total + section.questionCount * section.marksPerQuestion,
-    0,
-  );
 }
 
 /** What a scoped test's whole paper comes to — never the configuration's total, which is bigger. */
@@ -483,11 +467,7 @@ export type SetPaperQuestionStatusBody = z.infer<typeof setPaperQuestionStatusSc
 
 export const TEST_TITLE_MAX = 140;
 
-export const testTitleSchema = z
-  .string()
-  .trim()
-  .min(2, 'Give the test a name')
-  .max(TEST_TITLE_MAX, `A name cannot be longer than ${TEST_TITLE_MAX} characters`);
+export const testTitleSchema = displayNameSchema('test', TEST_TITLE_MAX);
 
 /** Everything a test owns, shared by create and update. `baseConfigId` is only ever set once. */
 const testOwnFieldsSchema = z.object({
@@ -549,7 +529,6 @@ export const paperQuestionRefSchema = z.object({
   subjectId: z.string(),
   topicId: z.string().nullable(),
 });
-export type PaperQuestionRef = z.infer<typeof paperQuestionRefSchema>;
 
 export const paperRowSchema = paperQuestionSchema.extend({
   question: paperQuestionRefSchema,
@@ -564,7 +543,6 @@ export const paperSectionSchema = z.object({
   questionCount: z.number().int(),
   questions: z.array(paperRowSchema),
 });
-export type PaperSection = z.infer<typeof paperSectionSchema>;
 
 export const testPaperSchema = z.object({
   testId: z.string(),

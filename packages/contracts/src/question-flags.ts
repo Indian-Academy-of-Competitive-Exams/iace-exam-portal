@@ -25,7 +25,6 @@ export const QUESTION_FLAG_STATUS = {
 } as const;
 export const questionFlagStatusSchema = z.enum(QUESTION_FLAG_STATUS);
 export type QuestionFlagStatus = z.infer<typeof questionFlagStatusSchema>;
-export const QUESTION_FLAG_STATUSES = questionFlagStatusSchema.options;
 
 /** An OPEN flag is the only one that gates; the other two are how it is closed. */
 export const questionFlagSettlementSchema = z.enum([

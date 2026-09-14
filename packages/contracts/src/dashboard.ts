@@ -22,20 +22,17 @@ export const dashboardStudentCountsSchema = z.object({
   active: z.number().int(),
   suspended: z.number().int(),
 });
-export type DashboardStudentCounts = z.infer<typeof dashboardStudentCountsSchema>;
 
 export const dashboardCatalogCountsSchema = z.object({
   branches: z.number().int(),
   programs: z.number().int(),
   exams: z.number().int(),
 });
-export type DashboardCatalogCounts = z.infer<typeof dashboardCatalogCountsSchema>;
 
 export const dashboardTestCountsSchema = z.object({
   byStatus: z.partialRecord(testStatusSchema, z.number().int()),
   series: z.number().int(),
 });
-export type DashboardTestCounts = z.infer<typeof dashboardTestCountsSchema>;
 
 /** Band A. Every tile answers to its own key, so a partial grant is a partial row. */
 export const dashboardHeadlineSchema = z.object({

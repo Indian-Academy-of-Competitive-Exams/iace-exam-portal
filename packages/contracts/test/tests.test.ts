@@ -8,7 +8,6 @@ import {
   offerRequirements,
   scopedSections,
   scopedQuestionCount,
-  scopedMarks,
   scopedDurationSec,
   testBuilderStepOf,
   owesAPaper,
@@ -216,20 +215,6 @@ describe('scopedQuestionCount', () => {
 
   it('counts a module as the sum of its own sections', () => {
     assert.equal(scopedQuestionCount(sections, TEST_SCOPE.MODULE, { moduleId: 'mod_a' }), 55);
-  });
-});
-
-describe('scopedMarks', () => {
-  const sections = [
-    { id: 'sec_quant', moduleId: 'mod_a', questionCount: 25, marksPerQuestion: 2 },
-    { id: 'sec_english', moduleId: 'mod_b', questionCount: 20, marksPerQuestion: 1 },
-  ];
-
-  /** Marks are PER SECTION, so a scoped paper is not a fraction of the configuration's total. */
-  it('is worth what its own sections are worth, at their own rates', () => {
-    assert.equal(scopedMarks(sections, TEST_SCOPE.FULL, null), 70);
-    assert.equal(scopedMarks(sections, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_english' }), 20);
-    assert.equal(scopedMarks(sections, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_quant' }), 50);
   });
 });
 

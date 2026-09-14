@@ -69,7 +69,6 @@ export type BookmarkedInAttempt = z.infer<typeof bookmarkedInAttemptSchema>;
 
 /** One filterable value. Read off the student's OWN set, so no choice can find nothing. */
 export const savedFacetSchema = z.object({ id: z.string(), name: z.string() });
-export type SavedFacet = z.infer<typeof savedFacetSchema>;
 
 /** Every choice both filters can offer, in one read — two pickers are not two round trips. */
 export const savedFacetsSchema = z.object({

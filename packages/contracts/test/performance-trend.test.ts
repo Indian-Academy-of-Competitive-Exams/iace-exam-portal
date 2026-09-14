@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { bestSitting, sittingsOf, testsSat } from '../src/stats';
+import { bestSitting, testsSat } from '../src/stats';
 import { type PerformancePoint } from '../src/attempts';
 
 /** The API hands the trend back oldest sitting first, so every fixture here is in that order. */
@@ -49,21 +49,6 @@ describe('testsSat', () => {
 
   it('has nothing to offer when no paper has been sat', () => {
     assert.deepEqual(testsSat([]), []);
-  });
-});
-
-describe('sittingsOf', () => {
-  it('keeps only one paper, in the order it was sat', () => {
-    const points = [
-      sitting({ attemptId: 'att_1', testId: 'tst_a', score: 34 }),
-      sitting({ attemptId: 'att_2', testId: 'tst_b', score: 90 }),
-      sitting({ attemptId: 'att_3', testId: 'tst_a', score: 44 }),
-    ];
-
-    assert.deepEqual(
-      sittingsOf(points, 'tst_a').map((point) => point.score),
-      [34, 44],
-    );
   });
 });
 

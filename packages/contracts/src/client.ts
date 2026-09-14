@@ -181,7 +181,7 @@ import {
   PERFORMANCE_ROUTES,
   performanceReportSchema,
   questionReportSchema,
-  satSeriesListSchema,
+  satSeriesSchema,
   studentOverviewSchema,
   testAnalyticsSchema,
   testCalendarSchema,
@@ -734,7 +734,7 @@ export function createApiClient(options: ApiClientOptions) {
 
       /** Every series they have sat a test in — the SERIES scope has nothing else to offer. */
       performanceSeries: (): Promise<SatSeries[]> =>
-        get(PERFORMANCE_ROUTES.mySeries, satSeriesListSchema),
+        get(PERFORMANCE_ROUTES.mySeries, satSeriesSchema.array()),
 
       /** Their whole career off the two rollup tables: standing, disposition and subjects. */
       overview: (): Promise<StudentOverview> => get(OVERVIEW_ROUTES.me, studentOverviewSchema),

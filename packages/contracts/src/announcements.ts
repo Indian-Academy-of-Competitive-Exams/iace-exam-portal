@@ -23,7 +23,6 @@ export const announcementAudienceSchema = studentListQuerySchema.omit({
   sort: true,
 });
 export type AnnouncementAudience = z.infer<typeof announcementAudienceSchema>;
-export type AnnouncementAudienceInput = z.input<typeof announcementAudienceSchema>;
 
 export const ANNOUNCEMENT_TITLE_MAX = 120;
 export const ANNOUNCEMENT_BODY_MAX = 1000;
