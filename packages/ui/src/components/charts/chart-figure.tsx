@@ -8,7 +8,6 @@ export interface ChartFigureProps {
   meta?: React.ReactNode;
   /** The headline the chart is read for, set against the title. */
   figure?: React.ReactNode;
-  legend?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
@@ -18,7 +17,6 @@ export function ChartFigure({
   title,
   meta,
   figure,
-  legend,
   children,
   className,
 }: Readonly<ChartFigureProps>) {
@@ -28,7 +26,6 @@ export function ChartFigure({
         <SectionHeading className="min-w-0" title={title} meta={meta} />
         {figure ? <div className="shrink-0">{figure}</div> : null}
       </figcaption>
-      {legend}
       {children}
     </figure>
   );

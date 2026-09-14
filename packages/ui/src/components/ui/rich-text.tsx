@@ -5,18 +5,11 @@ import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { Superscript } from '@tiptap/extension-superscript';
 import { Subscript } from '@tiptap/extension-subscript';
 import { TableKit } from '@tiptap/extension-table';
-import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
 import { TableTools } from './rich-text-table';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
-import {
-  QuestionImage,
-  imageFilesIn,
-  insertUploadedInto,
-  type ImageLimits,
-  type UploadImage,
-} from './rich-text-image';
+import { QuestionImage, takeImages, type ImageLimits, type UploadImage } from './rich-text-image';
 
 export interface RichTextProps {
   value: string;
@@ -50,21 +43,6 @@ function documentFrom(value: string): string | JSONContent {
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }],
   };
-}
-
-/** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
-function takeImages(
-  view: EditorView,
-  data: DataTransfer | null,
-  upload: UploadImage | undefined,
-  limits: ImageLimits | undefined,
-): boolean {
-  if (!upload) return false;
-  const files = imageFilesIn(data);
-  if (files.length === 0) return false;
-
-  for (const file of files) insertUploadedInto(view, file, upload, limits);
-  return true;
 }
 
 const SHELL = [

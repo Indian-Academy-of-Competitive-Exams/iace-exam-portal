@@ -63,23 +63,8 @@ export function isOutOfRange(iso: string, min?: string, max?: string): boolean {
 }
 
 /** A span is only unreachable when EVERY day in it is, so a half-allowed month stays clickable. */
-function isSpanOutOfRange(first: string, last: string, min?: string, max?: string): boolean {
+export function isSpanOutOfRange(first: string, last: string, min?: string, max?: string): boolean {
   return Boolean((min && last < min) || (max && first > max));
-}
-
-/** Whether no day of this month can be chosen. */
-export function isMonthOutOfRange(
-  year: number,
-  month: number,
-  min?: string,
-  max?: string,
-): boolean {
-  return isSpanOutOfRange(toISODate(year, month, 1), toISODate(year, month + 1, 0), min, max);
-}
-
-/** Whether no day of this year can be chosen. */
-export function isYearOutOfRange(year: number, min?: string, max?: string): boolean {
-  return isSpanOutOfRange(toISODate(year, 0, 1), toISODate(year, 11, 31), min, max);
 }
 
 export function shiftMonth(year: number, month: number, by: number) {
@@ -152,12 +137,6 @@ function todayWhereTheUserIs(): string {
   return LOCAL_CIVIL_DATE.format(new Date());
 }
 
-/** The same day off the clock rather than the string, so the calendar always has a month to open on. */
-function monthOfToday() {
-  const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() };
-}
-
 const MONTH_LABEL = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
   month: 'long',
@@ -188,11 +167,13 @@ export function headingFor(
   return `${block.start} – ${block.end}`;
 }
 
-/** What the heading says and does in each mode, and what a chevron pages by. */
-const MODE_OUT: Readonly<Record<CalendarMode, CalendarMode>> = {
-  day: 'month',
-  month: 'year',
-  year: 'year',
+/** What the heading zooms out to and says doing so in each mode, and what the chevrons are named. */
+const MODES: Readonly<
+  Record<CalendarMode, { out: CalendarMode; zoomOut: string; back: string; next: string }>
+> = {
+  day: { out: 'month', zoomOut: 'Choose a month', back: 'Previous month', next: 'Next month' },
+  month: { out: 'year', zoomOut: 'Choose a year', back: 'Previous year', next: 'Next year' },
+  year: { out: 'year', zoomOut: '', back: 'Previous years', next: 'Next years' },
 };
 
 export interface DatePickerProps {
@@ -228,16 +209,19 @@ export function DatePicker({
   const selected = parseISODate(value);
   const today = todayWhereTheUserIs();
 
-  const opening = selected ?? parseISODate(today) ?? monthOfToday();
-  const [view, setView] = React.useState({ year: opening.year, month: opening.month });
+  // `today` is always a real `YYYY-MM-DD`, so the calendar always has a month to open on.
+  const seed = () => {
+    const from = (selected ?? parseISODate(today)) as DateParts;
+    return { year: from.year, month: from.month };
+  };
+  const [view, setView] = React.useState(seed);
   const [mode, setMode] = React.useState<CalendarMode>('day');
   const [focused, setFocused] = React.useState(value || today);
 
   // Re-seeded on every open, so reopening lands on the chosen month rather than wherever it was left.
   const onOpen = (next: boolean) => {
     if (next) {
-      const from = parseISODate(value) ?? parseISODate(today) ?? monthOfToday();
-      setView({ year: from.year, month: from.month });
+      setView(seed());
       setFocused(value || today);
       setMode('day');
     }
@@ -269,7 +253,8 @@ export function DatePicker({
 
   const block = yearBlock(view.year);
   const heading = headingFor(mode, view, block);
-  const canZoomOut = MODE_OUT[mode] !== mode;
+  const labels = MODES[mode];
+  const canZoomOut = labels.out !== mode;
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpen}>
@@ -296,22 +281,22 @@ export function DatePicker({
           className="z-50 w-[17.5rem] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
-            <NavButton label={PAGE_BACK_LABEL[mode]} onClick={() => page(-1)}>
+            <NavButton label={labels.back} onClick={() => page(-1)}>
               <ChevronLeft className="size-4" aria-hidden />
             </NavButton>
             {/* The caret is the whole affordance: without it the heading reads as a label. */}
             <button
               type="button"
-              onClick={() => setMode(MODE_OUT[mode])}
+              onClick={() => setMode(labels.out)}
               disabled={!canZoomOut}
               aria-live="polite"
-              aria-label={canZoomOut ? `${heading}. ${ZOOM_OUT_LABEL[mode]}` : heading}
+              aria-label={canZoomOut ? `${heading}. ${labels.zoomOut}` : heading}
               className="flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium tabular-nums hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none disabled:hover:bg-transparent [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
             >
               {heading}
               {canZoomOut ? <ChevronDown aria-hidden /> : null}
             </button>
-            <NavButton label={PAGE_NEXT_LABEL[mode]} onClick={() => page(1)}>
+            <NavButton label={labels.next} onClick={() => page(1)}>
               <ChevronRight className="size-4" aria-hidden />
             </NavButton>
           </div>
@@ -339,7 +324,12 @@ export function DatePicker({
                   label: name,
                   current: month === view.month,
                   outside: false,
-                  disabled: isMonthOutOfRange(view.year, month, min, max),
+                  disabled: isSpanOutOfRange(
+                    toISODate(view.year, month, 1),
+                    toISODate(view.year, month + 1, 0),
+                    min,
+                    max,
+                  ),
                 }))}
                 onPick={(month) => {
                   setView((c) => ({ ...c, month }));
@@ -356,7 +346,12 @@ export function DatePicker({
                   label: String(year),
                   current: year === view.year,
                   outside: year < block.start || year > block.end,
-                  disabled: isYearOutOfRange(year, min, max),
+                  disabled: isSpanOutOfRange(
+                    toISODate(year, 0, 1),
+                    toISODate(year, 11, 31),
+                    min,
+                    max,
+                  ),
                 }))}
                 onPick={(year) => {
                   setView((c) => ({ ...c, year }));
@@ -381,24 +376,7 @@ export function DatePicker({
   );
 }
 
-const PAGE_BACK_LABEL: Readonly<Record<CalendarMode, string>> = {
-  day: 'Previous month',
-  month: 'Previous year',
-  year: 'Previous years',
-};
-
-const PAGE_NEXT_LABEL: Readonly<Record<CalendarMode, string>> = {
-  day: 'Next month',
-  month: 'Next year',
-  year: 'Next years',
-};
-
-const ZOOM_OUT_LABEL: Readonly<Record<CalendarMode, string>> = {
-  day: 'Choose a month',
-  month: 'Choose a year',
-  year: '',
-};
-
+/** Roving tabindex: one cell is tabbable and the arrows move which, so Tab does not visit 42 buttons. */
 function DayGrid({
   view,
   value,
@@ -418,9 +396,17 @@ function DayGrid({
   onSelect: (iso: string) => void;
   onFocus: (iso: string) => void;
 }>) {
+  const grid = React.useRef<HTMLTableElement>(null);
+
+  // Keyed on the view too: paging remounts the cells, and the focused one must take focus again.
+  React.useEffect(() => {
+    const cell = grid.current?.querySelector<HTMLButtonElement>('[tabindex="0"]');
+    if (cell && document.activeElement !== cell) cell.focus();
+  }, [focused, view.year, view.month]);
+
   return (
     // A calendar IS a week-by-weekday grid, and <td> carries the gridcell role for free.
-    <table className="w-full border-collapse" aria-label="Calendar">
+    <table ref={grid} className="w-full border-collapse" aria-label="Calendar">
       <thead>
         <tr>
           {WEEKDAYS.map((name) => (
@@ -437,19 +423,34 @@ function DayGrid({
       <tbody>
         {weeksOf(monthGrid(view.year, view.month)).map((week, index) => (
           <tr key={week[0]?.iso ?? index}>
-            {week.map((cell) => (
-              <td key={cell.iso} className="p-[1px]">
-                <DayCell
-                  cell={cell}
-                  selected={cell.iso === value}
-                  today={cell.iso === today}
-                  focused={cell.iso === focused}
-                  disabled={isOutOfRange(cell.iso, min, max)}
-                  onSelect={onSelect}
-                  onFocus={onFocus}
-                />
-              </td>
-            ))}
+            {week.map((cell) => {
+              const selected = cell.iso === value;
+              const disabled = isOutOfRange(cell.iso, min, max);
+              return (
+                <td key={cell.iso} className="p-[1px]">
+                  <button
+                    type="button"
+                    tabIndex={cell.iso === focused ? 0 : -1}
+                    disabled={disabled}
+                    aria-pressed={selected}
+                    aria-current={cell.iso === today ? 'date' : undefined}
+                    aria-label={FULL_LABEL.format(new Date(`${cell.iso}T00:00:00Z`))}
+                    onClick={() => onSelect(cell.iso)}
+                    onFocus={() => onFocus(cell.iso)}
+                    className={cn(
+                      'h-8 w-full rounded-sm text-sm tabular-nums transition-colors',
+                      'hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
+                      !cell.inMonth && 'text-muted-foreground/60',
+                      cell.iso === today && !selected && 'font-semibold text-primary',
+                      selected && 'bg-primary text-primary-foreground hover:bg-primary',
+                      disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
+                    )}
+                  >
+                    {cell.day}
+                  </button>
+                </td>
+              );
+            })}
           </tr>
         ))}
       </tbody>
@@ -509,55 +510,6 @@ function NavButton({
       className="rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:shadow-focus focus-visible:outline-none"
     >
       {children}
-    </button>
-  );
-}
-
-/** Roving tabindex: one cell is tabbable and the arrows move which, so Tab does not visit 42 buttons. */
-function DayCell({
-  cell,
-  selected,
-  today,
-  focused,
-  disabled,
-  onSelect,
-  onFocus,
-}: Readonly<{
-  cell: CalendarDay;
-  selected: boolean;
-  today: boolean;
-  focused: boolean;
-  disabled: boolean;
-  onSelect: (iso: string) => void;
-  onFocus: (iso: string) => void;
-}>) {
-  const ref = React.useRef<HTMLButtonElement>(null);
-
-  React.useEffect(() => {
-    if (focused && ref.current && document.activeElement !== ref.current) ref.current.focus();
-  }, [focused]);
-
-  return (
-    <button
-      ref={ref}
-      type="button"
-      tabIndex={focused ? 0 : -1}
-      disabled={disabled}
-      aria-pressed={selected}
-      aria-current={today ? 'date' : undefined}
-      aria-label={FULL_LABEL.format(new Date(`${cell.iso}T00:00:00Z`))}
-      onClick={() => onSelect(cell.iso)}
-      onFocus={() => onFocus(cell.iso)}
-      className={cn(
-        'h-8 w-full rounded-sm text-sm tabular-nums transition-colors',
-        'hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
-        !cell.inMonth && 'text-muted-foreground/60',
-        today && !selected && 'font-semibold text-primary',
-        selected && 'bg-primary text-primary-foreground hover:bg-primary',
-        disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
-      )}
-    >
-      {cell.day}
     </button>
   );
 }

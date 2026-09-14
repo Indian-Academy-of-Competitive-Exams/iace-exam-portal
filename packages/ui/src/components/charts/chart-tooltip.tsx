@@ -42,6 +42,12 @@ export function ChartTipCard({ title, rows }: Readonly<ChartTipCardProps>) {
   );
 }
 
+/** A mark's reading, with its caption under it when it has one. */
+export function tipRows(value: string, swatch: string, caption?: string): ChartTipRow[] {
+  const rows: ChartTipRow[] = [{ key: 'value', value, swatch }];
+  return caption === undefined ? rows : [...rows, { key: 'caption', value: caption }];
+}
+
 export interface ChartTooltipProps {
   tip: ChartTip | null;
 }

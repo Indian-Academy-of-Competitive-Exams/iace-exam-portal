@@ -29,9 +29,8 @@ import {
   TIP_WRAPPER,
   UNMEASURED,
   anchorAt,
-  type SeriesSlot,
 } from './chart-theme';
-import { PlotTip, type ChartTipRow } from './chart-tooltip';
+import { PlotTip, tipRows } from './chart-tooltip';
 
 export interface LinePoint {
   key: string;
@@ -60,14 +59,11 @@ export interface LinePlotProps {
   min?: number;
   max?: number;
   suffix?: string;
-  series?: SeriesSlot;
   ticks?: readonly number[];
   band?: PlotBand;
   reference?: PlotReference;
   /** A sparkline: the line alone, sized to sit beside a number. */
   compact?: boolean;
-  /** `bands` puts each point over the middle of a column band, so it stacks on a ColumnPlot. */
-  align?: 'edges' | 'bands';
   xLabels?: boolean;
   /** Pixels. */
   height?: number;
@@ -85,19 +81,17 @@ export function LinePlot({
   min = 0,
   max = 100,
   suffix = '',
-  series = 1,
   ticks,
   band,
   reference,
   compact = false,
-  align = 'edges',
   xLabels = true,
   height,
   className,
   ...props
 }: Readonly<LinePlotProps>) {
   const box = height ?? (compact ? COMPACT_HEIGHT : DEFAULT_HEIGHT);
-  const colour = SERIES_VAR[series];
+  const colour = SERIES_VAR[1];
   const lastMeasured = [...points].reverse().find((point) => point.value !== null);
   const activeDot = React.useMemo(
     () => ({ r: DOT_RADIUS + 2, fill: colour, stroke: CHART_VAR.surface, strokeWidth: DOT_RING }),
@@ -119,7 +113,7 @@ export function LinePlot({
       <XAxis
         dataKey="key"
         type="category"
-        scale={align === 'bands' ? 'band' : 'point'}
+        scale="point"
         hide={compact || !xLabels}
         height={X_AXIS_HEIGHT}
         axisLine={AXIS_LINE}
@@ -168,7 +162,7 @@ export function LinePlot({
         content={
           <PlotTip<LinePoint>
             title={(point) => point.label}
-            rows={(point) => rowsFor(point, suffix, SERIES_SWATCH[series])}
+            rows={(point) => tipRows(textFor(point, suffix), SERIES_SWATCH[1], point.caption)}
           />
         }
       />
@@ -297,10 +291,4 @@ function textFor(point: LinePoint, suffix: string): string {
   if (point.display !== undefined) return point.display;
   if (point.value === null) return UNMEASURED;
   return `${point.value}${suffix}`;
-}
-
-function rowsFor(point: LinePoint, suffix: string, swatch: string): ChartTipRow[] {
-  const rows: ChartTipRow[] = [{ key: 'value', value: textFor(point, suffix), swatch }];
-  if (point.caption === undefined) return rows;
-  return [...rows, { key: 'caption', value: point.caption }];
 }

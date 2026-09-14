@@ -1,4 +1,8 @@
 import * as React from 'react';
+import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { Badge } from './badge';
+import { Button } from './button';
 import { Combobox, type ComboboxItem } from './combobox';
 import {
   DataTable,
@@ -10,10 +14,9 @@ import {
 import { DatePicker } from './date-picker';
 import { EMPTY_STATE_KINDS, type EmptyMessage } from './empty-state';
 import { Field } from './field';
-import { NotchedField } from './notched-field';
-import { FilterBar } from './filter-bar';
 import { MultiCombobox } from './multi-combobox';
 import { Pagination, type PaginationProps } from './pagination';
+import { RadioGroup, RadioGroupItem } from './radio-group';
 import { SearchInput } from './search-input';
 import { useInTableFrame } from './table-frame';
 
@@ -148,6 +151,9 @@ const widthOf = (filter: ListFilter): string => {
   return holdsASet(filter) ? 'w-56' : 'w-44';
 };
 
+const MATCH_ALL_VALUE = 'all';
+const MATCH_ANY_VALUE = 'any';
+
 /** Behind the fold a `Field` names the control, so a second name on it would be one too many. */
 function FilterControl({
   filter,
@@ -220,39 +226,80 @@ export function FilterRow({
 
   // With fewer than two to combine, "all" and "any" ask the same question and the choice is noise.
   const combinable = filters.filter((filter) => !ALWAYS_NARROWS(filter)).length;
-  const offersMatch = Boolean(state.setMatchAny) && combinable > 1;
+  const setMatchAny = combinable > 1 ? state.setMatchAny : undefined;
+
+  const activeCount = activeFilterCount(state.values, filters);
+  const foldedCount = activeFilterCount(state.values, folded);
+  const [showFolded, setShowFolded] = React.useState(false);
+  // A set filter is never hidden: the fold opens itself rather than lying about the rows.
+  const open = showFolded || foldedCount > 0;
 
   return (
-    <FilterBar
-      leading={leading}
-      activeCount={activeFilterCount(state.values, filters)}
-      advancedCount={activeFilterCount(state.values, folded)}
-      onClear={state.clearFilters}
-      matchAny={state.matchAny}
-      onMatchAnyChange={offersMatch ? state.setMatchAny : undefined}
-      advanced={
-        folded.length > 0
-          ? folded.map((filter) => (
-              <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
-                {(described) => (
-                  <FilterControl filter={filter} naming={described} {...bind(filter)} />
-                )}
-              </Field>
-            ))
-          : undefined
-      }
-    >
-      {primary.map((filter) => (
-        <NotchedField
-          key={filter.key}
-          className={filter.width ?? widthOf(filter)}
-          htmlFor={`filter-${filter.key}`}
-          label={filter.label}
-        >
-          {({ id }) => <FilterControl filter={filter} naming={{ id }} {...bind(filter)} />}
-        </NotchedField>
-      ))}
-    </FilterBar>
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        {leading}
+        {primary.map((filter) => (
+          // Named from inside its top border, so a bar of controls stays one row high.
+          <div key={filter.key} className={cn('relative', filter.width ?? widthOf(filter))}>
+            <FilterControl
+              filter={filter}
+              naming={{ id: `filter-${filter.key}` }}
+              {...bind(filter)}
+            />
+            <label
+              htmlFor={`filter-${filter.key}`}
+              className="pointer-events-none absolute -top-2 left-2 max-w-[calc(100%-1rem)] truncate bg-card px-1 text-xs text-muted-foreground"
+            >
+              {filter.label}
+            </label>
+          </div>
+        ))}
+
+        {folded.length > 0 ? (
+          <Button variant="outline" onClick={() => setShowFolded((was) => !was)}>
+            <SlidersHorizontal aria-hidden />
+            Filters
+            {foldedCount > 0 ? <Badge variant="primary">{foldedCount}</Badge> : null}
+            <ChevronDown aria-hidden className={cn('transition-transform', open && 'rotate-180')} />
+          </Button>
+        ) : null}
+
+        {/* Plain words: the people reading this ran exam centres, not query planners. */}
+        {setMatchAny ? (
+          <RadioGroup
+            inline
+            name="filter-match"
+            legend="Match filters"
+            value={state.matchAny ? MATCH_ANY_VALUE : MATCH_ALL_VALUE}
+            onValueChange={(next) => setMatchAny(next === MATCH_ANY_VALUE)}
+          >
+            <RadioGroupItem value={MATCH_ALL_VALUE} label="All" />
+            <RadioGroupItem value={MATCH_ANY_VALUE} label="Any" />
+          </RadioGroup>
+        ) : null}
+
+        {/* Shown only when it would do something — a permanently greyed Clear teaches nobody. */}
+        {activeCount > 0 ? (
+          <Button variant="ghost" onClick={state.clearFilters}>
+            <X aria-hidden />
+            Clear filters
+            <Badge variant="neutral">{activeCount}</Badge>
+          </Button>
+        ) : null}
+      </div>
+
+      {folded.length > 0 && open ? (
+        <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          {folded.map((filter) => (
+            <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
+              {(described) => (
+                <FilterControl filter={filter} naming={described} {...bind(filter)} />
+              )}
+            </Field>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

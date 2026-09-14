@@ -18,7 +18,6 @@ export interface CompositionSegment {
 export interface CompositionBarProps {
   segments: readonly CompositionSegment[];
   size?: 'sm' | 'md';
-  legend?: boolean;
   'aria-label': string;
   className?: string;
 }
@@ -38,17 +37,32 @@ const SWATCH = {
 /** Below this share the words would be clipped, so the value goes to the hover instead. */
 const LABEL_FLOOR = 0.11;
 
+/** What a segment reads as, the same in a hover and in a legend. */
+export const segmentRow = (segment: CompositionSegment) => ({
+  key: segment.key,
+  value: textFor(segment),
+  swatch: SWATCH[segment.tone ?? 'neutral'],
+});
+
+export function CompositionLegend({
+  segments,
+}: Readonly<{ segments: readonly CompositionSegment[] }>) {
+  return (
+    <ChartLegend
+      items={segments.map((segment) => ({ ...segmentRow(segment), label: segment.label }))}
+    />
+  );
+}
+
 export function CompositionBar({
   segments,
   size = 'md',
-  legend,
   className,
   ...props
 }: Readonly<CompositionBarProps>) {
   const [tip, setTip] = React.useState<ChartTip | null>(null);
   const total = segments.reduce((sum, segment) => sum + Math.max(segment.value, 0), 0);
   const drawn = segments.filter((segment) => segment.value > 0);
-  const showLegend = legend ?? size === 'md';
 
   const placed = drawn.map((segment, index) => {
     const before = drawn.slice(0, index).reduce((sum, earlier) => sum + earlier.value, 0);
@@ -57,18 +71,7 @@ export function CompositionBar({
   });
 
   const show = (at: (typeof placed)[number]) => () =>
-    setTip({
-      x: at.centre,
-      y: 0,
-      title: at.segment.label,
-      rows: [
-        {
-          key: at.segment.key,
-          value: textFor(at.segment),
-          swatch: SWATCH[at.segment.tone ?? 'neutral'],
-        },
-      ],
-    });
+    setTip({ x: at.centre, y: 0, title: at.segment.label, rows: [segmentRow(at.segment)] });
 
   return (
     <div className={cn('flex flex-col gap-2.5', className)}>
@@ -101,16 +104,7 @@ export function CompositionBar({
         <ChartTooltip tip={tip} />
       </div>
 
-      {showLegend ? (
-        <ChartLegend
-          items={segments.map((segment) => ({
-            key: segment.key,
-            label: segment.label,
-            value: textFor(segment),
-            swatch: SWATCH[segment.tone ?? 'neutral'],
-          }))}
-        />
-      ) : null}
+      {size === 'md' ? <CompositionLegend segments={segments} /> : null}
     </div>
   );
 }

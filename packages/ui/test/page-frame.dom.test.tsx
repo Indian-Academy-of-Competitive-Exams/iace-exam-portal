@@ -187,7 +187,7 @@ describe('PanelFrame — the filter bar', () => {
   });
 });
 
-describe('TableFrame — unframed', () => {
+describe('TableFrame — tabs', () => {
   const tabs = {
     value: 'draft',
     onValueChange: () => undefined,
@@ -198,18 +198,12 @@ describe('TableFrame — unframed', () => {
   };
 
   /** The failure this prevents: a TabsList rendered outside a Tabs root, which Radix throws on. */
-  it('still roots its tabs when the frame is turned off', () => {
-    render(<TableFrame framed={false} header={<h1>Questions</h1>} tabs={tabs} />);
+  it('roots its tabs and shows only the open one', () => {
+    const { container } = render(<TableFrame header={<h1>Questions</h1>} tabs={tabs} />);
 
     assert.ok(screen.getByRole('tab', { name: 'Draft' }));
     assert.ok(screen.getByText('The form'));
     assert.equal(screen.queryByText('The record'), null);
-  });
-
-  it('leaves the scroll to the page, which is the whole point of turning it off', () => {
-    const { container } = render(<TableFrame framed={false} tabs={tabs} />);
-
-    assert.equal(container.querySelector('[data-page-frame]'), null);
-    assert.equal(container.querySelectorAll('.overflow-y-auto').length, 0);
+    assert.ok(container.querySelector('[data-page-frame]'));
   });
 });

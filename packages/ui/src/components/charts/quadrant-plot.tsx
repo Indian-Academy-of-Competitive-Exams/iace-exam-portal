@@ -51,7 +51,6 @@ export interface QuadrantPlotProps {
   quadrants: QuadrantLabels;
   xSuffix?: string;
   ySuffix?: string;
-  yMax?: number;
   /** Pixels. */
   height?: number;
   'aria-label': string;
@@ -63,6 +62,7 @@ const X_AXIS_HEIGHT = 26;
 const Y_AXIS_WIDTH = 34;
 const DOT_AREA = [90, 420] as const;
 const FAINT_OPACITY = 0.35;
+const Y_MAX = 100;
 /** Room past the outermost dot, so a label at the edge is not half outside the box. */
 const X_PAD = 0.12;
 
@@ -76,7 +76,6 @@ export function QuadrantPlot({
   quadrants,
   xSuffix = '',
   ySuffix = '',
-  yMax = 100,
   height = DEFAULT_HEIGHT,
   className,
   ...props
@@ -113,11 +112,11 @@ export function QuadrantPlot({
         <YAxis
           type="number"
           dataKey="y"
-          domain={[0, yMax]}
+          domain={[0, Y_MAX]}
           width={Y_AXIS_WIDTH}
           axisLine={AXIS_LINE}
           tickLine={false}
-          ticks={[0, yMax / 2, yMax]}
+          ticks={[0, Y_MAX / 2, Y_MAX]}
           tick={<SideTick suffix={ySuffix} />}
         />
         <ZAxis type="number" dataKey="weight" range={[...DOT_AREA]} />

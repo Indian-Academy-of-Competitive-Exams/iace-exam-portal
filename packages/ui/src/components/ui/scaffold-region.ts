@@ -11,9 +11,6 @@ import { type Node as ProseNode } from '@tiptap/pm/model';
 
 export const REGION_NODE = 'scaffoldRegion';
 
-/** Marks the transactions allowed to change the shape: the ones the editor's own commands make. */
-export const SCAFFOLD_SHAPE = 'scaffoldShape';
-
 /** An empty slot says what it is for, from the hint the region carries. */
 function hints(state: EditorState): DecorationSet {
   const found: Decoration[] = [];
@@ -116,10 +113,7 @@ export const ScaffoldRegionNode = Node.create({
       new Plugin({
         // The content is the typist's, the shape is not: no key of theirs takes a slot away.
         filterTransaction: (tr: Transaction, state) =>
-          loading ||
-          !tr.docChanged ||
-          Boolean(tr.getMeta(SCAFFOLD_SHAPE)) ||
-          shapeOf(tr.doc) === shapeOf(state.doc),
+          loading || !tr.docChanged || shapeOf(tr.doc) === shapeOf(state.doc),
         props: { decorations: hints },
       }),
     ];

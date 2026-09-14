@@ -2,9 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   headingFor,
-  isMonthOutOfRange,
   isOutOfRange,
-  isYearOutOfRange,
+  isSpanOutOfRange,
   monthGrid,
   nextFocusedDate,
   parseISODate,
@@ -147,34 +146,35 @@ describe('shiftMonth', () => {
   });
 });
 
-describe('isMonthOutOfRange', () => {
+describe('isSpanOutOfRange', () => {
+  const AUGUST = ['2026-08-01', '2026-08-31'] as const;
+  const yearOf = (year: number) => [`${year}-01-01`, `${year}-12-31`] as const;
+
   /** The whole point of greying a month: it must not hide days that ARE reachable. */
   it('keeps a month whose range only partly overlaps', () => {
-    assert.equal(isMonthOutOfRange(2026, 7, undefined, '2026-08-21'), false);
-    assert.equal(isMonthOutOfRange(2026, 7, '2026-08-21', undefined), false);
+    assert.equal(isSpanOutOfRange(...AUGUST, undefined, '2026-08-21'), false);
+    assert.equal(isSpanOutOfRange(...AUGUST, '2026-08-21', undefined), false);
   });
 
   it('refuses a month entirely past the cap', () => {
-    assert.equal(isMonthOutOfRange(2026, 8, undefined, '2026-08-21'), true);
-    assert.equal(isMonthOutOfRange(2026, 6, '2026-08-01', undefined), true);
+    assert.equal(isSpanOutOfRange('2026-09-01', '2026-09-30', undefined, '2026-08-21'), true);
+    assert.equal(isSpanOutOfRange('2026-07-01', '2026-07-31', '2026-08-01', undefined), true);
   });
 
   it('is inclusive on the boundary day', () => {
-    assert.equal(isMonthOutOfRange(2026, 7, undefined, '2026-08-01'), false);
-    assert.equal(isMonthOutOfRange(2026, 7, '2026-08-31', undefined), false);
+    assert.equal(isSpanOutOfRange(...AUGUST, undefined, '2026-08-01'), false);
+    assert.equal(isSpanOutOfRange(...AUGUST, '2026-08-31', undefined), false);
   });
-});
 
-describe('isYearOutOfRange', () => {
   it('keeps the capped year itself, and refuses the ones beyond it', () => {
-    assert.equal(isYearOutOfRange(2026, undefined, '2026-08-21'), false);
-    assert.equal(isYearOutOfRange(2027, undefined, '2026-08-21'), true);
-    assert.equal(isYearOutOfRange(1899, '1900-01-01', undefined), true);
-    assert.equal(isYearOutOfRange(1900, '1900-01-01', undefined), false);
+    assert.equal(isSpanOutOfRange(...yearOf(2026), undefined, '2026-08-21'), false);
+    assert.equal(isSpanOutOfRange(...yearOf(2027), undefined, '2026-08-21'), true);
+    assert.equal(isSpanOutOfRange(...yearOf(1899), '1900-01-01', undefined), true);
+    assert.equal(isSpanOutOfRange(...yearOf(1900), '1900-01-01', undefined), false);
   });
 
   it('allows any year when unbounded, so a DOB field is not trapped in this decade', () => {
-    assert.equal(isYearOutOfRange(1950), false);
+    assert.equal(isSpanOutOfRange(...yearOf(1950)), false);
   });
 });
 

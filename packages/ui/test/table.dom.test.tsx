@@ -137,12 +137,9 @@ describe('TableFrame', () => {
   });
 
   /** The shell's content wrapper reacts to this attribute; without it the page scrolls. */
-  it('marks the page as framed only when it is', () => {
-    const { container, rerender } = render(<TableFrame>{table()}</TableFrame>);
+  it('marks the page as framed', () => {
+    const { container } = render(<TableFrame>{table()}</TableFrame>);
     assert.ok(container.querySelector('[data-page-frame]'));
-
-    rerender(<TableFrame framed={false}>{table()}</TableFrame>);
-    assert.equal(container.querySelector('[data-page-frame]'), null);
   });
 
   it('pins the header and the toolbar around the table', () => {
@@ -156,15 +153,11 @@ describe('TableFrame', () => {
     assert.ok(screen.getByRole('textbox', { name: 'Search' }));
   });
 
-  /** Inside a frame the body is the only scroller; outside, the page still scrolls. */
-  it('hands the table its own scrollbar only inside a frame', () => {
-    const { rerender } = render(<TableFrame>{table()}</TableFrame>);
+  /** Inside a frame the body is the only scroller. */
+  it('hands the table its own scrollbar inside a frame', () => {
+    render(<TableFrame>{table()}</TableFrame>);
     assert.match(groups().scroller.className, /overflow-auto/);
     assert.match(groups().scroller.className, /flex-1/);
-
-    rerender(<TableFrame framed={false}>{table()}</TableFrame>);
-    assert.match(groups().scroller.className, /overflow-x-auto/);
-    assert.ok(!groups().scroller.className.includes('flex-1'));
   });
 });
 

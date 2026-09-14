@@ -1,9 +1,13 @@
 import { Pie, PieChart, Tooltip } from 'recharts';
 import { cn } from '../../lib/utils';
 import { CHART_VAR, TIP_WRAPPER } from './chart-theme';
-import { ChartLegend } from './chart-legend';
 import { PlotTip } from './chart-tooltip';
-import { type CompositionSegment, type CompositionTone } from './composition-bar';
+import {
+  CompositionLegend,
+  segmentRow,
+  type CompositionSegment,
+  type CompositionTone,
+} from './composition-bar';
 
 export interface DonutPlotProps {
   /** The same segments a `CompositionBar` takes: one partition, read two ways. */
@@ -26,12 +30,6 @@ const FILL = {
   positive: CHART_VAR.success,
   negative: CHART_VAR.danger,
   neutral: CHART_VAR.muted,
-} as const satisfies Record<CompositionTone, string>;
-
-const SWATCH = {
-  positive: 'bg-success',
-  negative: 'bg-destructive',
-  neutral: 'bg-muted-foreground',
 } as const satisfies Record<CompositionTone, string>;
 
 /** A partition with a hole: the ring carries the shares, the hole carries what they are shares OF. */
@@ -68,13 +66,7 @@ export function DonutPlot({
             content={
               <PlotTip<CompositionSegment>
                 title={(segment) => segment.label}
-                rows={(segment) => [
-                  {
-                    key: segment.key,
-                    value: textFor(segment),
-                    swatch: SWATCH[segment.tone ?? 'neutral'],
-                  },
-                ]}
+                rows={(segment) => [segmentRow(segment)]}
               />
             }
           />
@@ -90,16 +82,7 @@ export function DonutPlot({
         ) : null}
       </div>
 
-      <ChartLegend
-        items={segments.map((segment) => ({
-          key: segment.key,
-          label: segment.label,
-          value: textFor(segment),
-          swatch: SWATCH[segment.tone ?? 'neutral'],
-        }))}
-      />
+      <CompositionLegend segments={segments} />
     </div>
   );
 }
-
-const textFor = (segment: CompositionSegment): string => segment.display ?? String(segment.value);

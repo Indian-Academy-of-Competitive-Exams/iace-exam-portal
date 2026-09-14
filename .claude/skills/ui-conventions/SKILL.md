@@ -49,7 +49,7 @@ The in-exam CBT screen follows neither: it replicates the government paper faith
 
 **Build the screen the way the app already builds that kind of screen.** Open two that do this job before writing a third; deviate only for a reason you can state in one sentence.
 
-- **[admin] List screen:** `TableFrame` with `PageHeader` in `header` and ONE `ListView` inside. Not a bare fragment, not a hand-rolled header above a card, and never `FilterBar` + `DataTable` + `Pagination` wired by hand again. `TableFrame.toolbar` survives for something a list does not own; nothing passes it today, so reaching for it needs a stated reason — a banner belonging to the list is `ListView`'s `banner`.
+- **[admin] List screen:** `TableFrame` with `PageHeader` in `header` and ONE `ListView` inside. Not a bare fragment, not a hand-rolled header above a card, and never a hand-built filter bar + `DataTable` + `Pagination` wired by hand again. `TableFrame.toolbar` survives for something a list does not own; nothing passes it today, so reaching for it needs a stated reason — a banner belonging to the list is `ListView`'s `banner`.
 - **The unit that repeats is the LIST, not the screen.** Two lists on a page = two `ListView`s; a list in an expand panel = a `ListView` with no frame. `useListScreen` is a HOOK, not a component, so it composes with whatever wraps a list — tabs, panels, `SuperAdminOnly`.
 - **A list with neither filters nor server pagination stays a bare `DataTable`** (`branches.tsx` loads every branch at once). That is the whole exception.
 - **[student]** a browse screen is not a list screen. It composes `PageFrame` with the student
@@ -93,7 +93,7 @@ Every failure here is silent: the page looks built, and the header or the pager 
 - **Scrollbars are styled once, globally** (`components.css`), never per component. Every scroller sits inside a border and a radius, so a platform-width bar lands on the rounded edge and reads as a seam. Thin, muted, inset, and 0px of layout width so a body that starts scrolling does not shift.
 - **A scrollport must also be a containing block — give it `relative`.** An absolutely positioned descendant of a `static` scroller resolves against the nearest positioned ancestor, escapes the scroll and grows the DOCUMENT. `sr-only` is `position: absolute`, which is how a hidden `<legend>` once put a scrollbar across the whole app.
 - **Every ancestor between the frame and the scroller needs `min-h-0`.** A flex child defaults to `min-height: auto` and will not shrink below its content, so one missing `min-h-0` hands the scroll back to the page and the header leaves with it.
-- **A page with no frame is the deviation**, and there is no longer an exception — the dashboard grew a body and took a `PageFrame` with it. `TableFrame`'s `framed={false}` escape has no callers, so using it needs a stated reason.
+- **A page with no frame is the deviation**, and there is no longer an exception — the dashboard grew a body and took a `PageFrame` with it. `TableFrame` has no unframed mode.
 
 </scrolling>
 

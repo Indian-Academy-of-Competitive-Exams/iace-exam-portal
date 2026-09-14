@@ -1,7 +1,6 @@
 import { ResizableNodeView } from '@tiptap/core';
 import { Image } from '@tiptap/extension-image';
 import { type EditorView } from '@tiptap/pm/view';
-import { type Editor } from '@tiptap/react';
 import { REMOVE_LABELS, removeControl } from './rich-text-remove';
 import { toast } from './toast';
 
@@ -116,18 +115,8 @@ function refusalFor(file: File, limits: ImageLimits): string | null {
   return null;
 }
 
-/** Uploads first, then inserts — so the node is born holding a key rather than acquiring one. */
+/** Uploads first, then inserts, against the view: paste and drop hold only that, not the editor. */
 export function insertUploaded(
-  editor: Editor,
-  file: File,
-  upload: UploadImage,
-  limits: ImageLimits = {},
-): void {
-  insertUploadedInto(editor.view, file, upload, limits);
-}
-
-/** The same against the view: paste and drop hold only that, and `view.editor` is undefined. */
-export function insertUploadedInto(
   view: EditorView,
   file: File,
   upload: UploadImage,
@@ -150,4 +139,19 @@ export function insertUploadedInto(
     .catch((error: unknown) =>
       toast.error(error instanceof Error ? error.message : 'That image could not be uploaded'),
     );
+}
+
+/** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
+export function takeImages(
+  view: EditorView,
+  data: DataTransfer | null,
+  upload: UploadImage | undefined,
+  limits: ImageLimits | undefined,
+): boolean {
+  if (!upload) return false;
+  const files = imageFilesIn(data);
+  if (files.length === 0) return false;
+
+  for (const file of files) insertUploaded(view, file, upload, limits);
+  return true;
 }

@@ -13,6 +13,7 @@ import {
   Superscript as SuperscriptIcon,
   Underline as UnderlineIcon,
 } from 'lucide-react';
+import { mathErrorIn } from '../../lib/rich-html';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 import { Input } from './input';
@@ -77,17 +78,10 @@ function ToolButton({
   );
 }
 
-/** In a table the row and column actions apply; out of one only inserting does. */
+/** The preview draws leniently; the error is the strict check a stored formula must pass. */
 function parse(latex: string): { html: string; error: string | null } {
   const html = katex.renderToString(latex || '', { throwOnError: false, displayMode: false });
-  if (!latex.trim()) return { html, error: null };
-
-  try {
-    katex.renderToString(latex, { throwOnError: true, strict: 'error' });
-    return { html, error: null };
-  } catch (error) {
-    return { html, error: (error as Error).message.replace('KaTeX parse error: ', '') };
-  }
+  return { html, error: latex.trim() ? mathErrorIn(latex) : null };
 }
 
 /** The LaTeX box. A real dialog rather than `prompt`, which the docs suggest and this repo forbids. */
@@ -192,7 +186,7 @@ export function RichTextToolbar({
   const run = (act: (chain: Chain) => Chain) => act(editor.chain().focus()).run();
 
   const choose = (file: File | undefined) => {
-    if (file && onUploadImage) insertUploaded(editor, file, onUploadImage, imageLimits);
+    if (file && onUploadImage) insertUploaded(editor.view, file, onUploadImage, imageLimits);
   };
 
   const submit = () => {

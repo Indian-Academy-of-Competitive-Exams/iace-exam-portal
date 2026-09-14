@@ -265,73 +265,20 @@ export interface TableFrameProps {
   toolbar?: React.ReactNode;
   /** Sub-features close enough to be one idea. The strip sits inside the card, above the tab. */
   tabs?: TableFrameTabs;
-  /** False scrolls the page instead. Pinning a tall create form leaves no table. */
-  framed?: boolean;
   children?: React.ReactNode;
 }
 
 /** A list screen: header and filters held still, the table body the only scroller. */
-export function TableFrame({
-  header,
-  toolbar,
-  tabs,
-  framed = true,
-  children,
-}: Readonly<TableFrameProps>) {
-  const body = tabs ? (
-    <>
-      {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
-      <TabsList className="-mx-4 mb-4 px-4">
-        {tabs.items.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value}>
-            {tab.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      {tabs.items.map((tab) => (
-        <TabsContent key={tab.value} value={tab.value} className={cn(FILLS, 'pt-0')}>
-          {tab.content}
-        </TabsContent>
-      ))}
-    </>
-  ) : (
-    children
-  );
-
-  const unframed = (
-    <>
-      {header}
-      <Card className="p-4">
-        {toolbar}
-        {body}
+export function TableFrame({ header, toolbar, tabs, children }: Readonly<TableFrameProps>) {
+  const frame = (
+    <div data-page-frame className={FILLS}>
+      {header ? <div className="shrink-0">{header}</div> : null}
+      <Card className={cn(FILLS, 'p-4')}>
+        {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
+        {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}
       </Card>
-    </>
+    </div>
   );
 
-  const frame = framed ? (
-    <TableFrameContext value={true}>
-      <div data-page-frame className={FILLS}>
-        {header ? <div className="shrink-0">{header}</div> : null}
-        <Card className={cn(FILLS, 'p-4')}>
-          {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
-          {body}
-        </Card>
-      </div>
-    </TableFrameContext>
-  ) : (
-    unframed
-  );
-
-  // Both branches pass through here: a TabsList rendered outside a Tabs root throws.
-  return tabs ? (
-    <Tabs
-      value={tabs.value}
-      onValueChange={tabs.onValueChange}
-      className={framed ? FILLS : undefined}
-    >
-      {frame}
-    </Tabs>
-  ) : (
-    frame
-  );
+  return withTabsRoot(tabs, true, frame);
 }

@@ -12,13 +12,7 @@ import { TableTools } from './rich-text-table';
 import { Transliterate, writeIn, type IndicScript } from './rich-text-transliterate';
 import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
-import {
-  QuestionImage,
-  imageFilesIn,
-  insertUploadedInto,
-  type ImageLimits,
-  type UploadImage,
-} from './rich-text-image';
+import { QuestionImage, takeImages, type ImageLimits, type UploadImage } from './rich-text-image';
 import {
   REGION_KIND,
   REGION_NODE,
@@ -64,21 +58,6 @@ const SHELL = [
 
 const CONTENT =
   'scaffold-content rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
-
-/** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
-function takeImages(
-  view: EditorView,
-  data: DataTransfer | null,
-  upload: UploadImage | undefined,
-  limits: ImageLimits | undefined,
-): boolean {
-  if (!upload) return false;
-  const files = imageFilesIn(data);
-  if (files.length === 0) return false;
-
-  for (const file of files) insertUploadedInto(view, file, upload, limits);
-  return true;
-}
 
 const ESCAPED: Readonly<Record<string, string>> = {
   '&': '&amp;',

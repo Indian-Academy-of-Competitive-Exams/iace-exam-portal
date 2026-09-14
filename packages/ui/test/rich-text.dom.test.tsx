@@ -220,16 +220,14 @@ describe('an image the field will not take', () => {
   const never = () => Promise.reject(new Error('should not have been uploaded'));
   const file = (size: number, type = 'image/png') =>
     new File([new Uint8Array(size)], 'a.png', { type });
-  const stubEditor = {
-    chain: () => ({ focus: () => ({ setImage: () => ({ run: () => true }) }) }),
-  } as never;
+  const stubView = {} as never;
 
   afterEach(() => toast.clear());
 
   /** It reached the server, the server refused it, and nothing told anybody. */
   it('says so when the upload is refused, rather than failing silently', async () => {
     render(<Toaster />);
-    insertUploaded(stubEditor, file(10), () =>
+    insertUploaded(stubView, file(10), () =>
       Promise.reject(new Error('That image is larger than 2MB.')),
     );
 
@@ -239,14 +237,14 @@ describe('an image the field will not take', () => {
   /** Refused here, so ten megabytes are never put on the wire to be refused there. */
   it('refuses an oversized file without uploading it at all', async () => {
     render(<Toaster />);
-    insertUploaded(stubEditor, file(3 * 1024 * 1024), never, limits);
+    insertUploaded(stubView, file(3 * 1024 * 1024), never, limits);
 
     assert.ok(await screen.findByText(/larger than 2MB/));
   });
 
   it('refuses a type the server would not take, and names what it would', async () => {
     render(<Toaster />);
-    insertUploaded(stubEditor, file(10, 'image/svg+xml'), never, limits);
+    insertUploaded(stubView, file(10, 'image/svg+xml'), never, limits);
 
     assert.ok(await screen.findByText(/not accepted/));
   });
@@ -254,7 +252,7 @@ describe('an image the field will not take', () => {
   it('lets an acceptable file through to the uploader', () => {
     let asked = false;
     insertUploaded(
-      stubEditor,
+      stubView,
       file(10),
       () => {
         asked = true;

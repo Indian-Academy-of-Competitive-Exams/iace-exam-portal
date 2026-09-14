@@ -25,7 +25,7 @@ import {
   UNMEASURED,
   type SeriesSlot,
 } from './chart-theme';
-import { PlotTip, type ChartTipRow } from './chart-tooltip';
+import { PlotTip, tipRows } from './chart-tooltip';
 
 export interface DivergingItem {
   key: string;
@@ -38,10 +38,6 @@ export interface DivergingItem {
 
 export interface DivergingBarsProps {
   items: readonly DivergingItem[];
-  /** The widest bar either way. Defaults to the largest size present. */
-  max?: number;
-  belowSeries?: SeriesSlot;
-  aboveSeries?: SeriesSlot;
   /** Named under the axis so the two directions never rely on hue alone. */
   belowLabel?: string;
   aboveLabel?: string;
@@ -59,15 +55,14 @@ const TOP = 8;
 const FOOT = 24;
 const FOOT_GAP = 16;
 const LABEL_GAP = 8;
+const BELOW: SeriesSlot = 4;
+const ABOVE: SeriesSlot = 1;
 
 const isBelow = (item: DivergingItem) => (item.value ?? 0) < 0;
 
 /** Every bar carries its signed value: the middle is what the reader is measured against. */
 export function DivergingBars({
   items,
-  max,
-  belowSeries = 4,
-  aboveSeries = 1,
   belowLabel,
   aboveLabel,
   labelWidth = LABEL_WIDTH,
@@ -75,7 +70,7 @@ export function DivergingBars({
   ...props
 }: Readonly<DivergingBarsProps>) {
   const height = TOP + items.length * ROW_HEIGHT + FOOT;
-  const ceiling = Math.max(max ?? 0, ...items.map((item) => Math.abs(item.value ?? 0)), 1);
+  const ceiling = Math.max(...items.map((item) => Math.abs(item.value ?? 0)), 1);
 
   return (
     <BarChart
@@ -106,7 +101,9 @@ export function DivergingBars({
         content={
           <PlotTip<DivergingItem>
             title={(item) => item.label}
-            rows={(item) => rowsFor(item, SERIES_SWATCH[isBelow(item) ? belowSeries : aboveSeries])}
+            rows={(item) =>
+              tipRows(textFor(item), SERIES_SWATCH[isBelow(item) ? BELOW : ABOVE], item.caption)
+            }
           />
         }
       />
@@ -122,7 +119,7 @@ export function DivergingBars({
         dataKey="value"
         maxBarSize={BAR_MAX}
         isAnimationActive={false}
-        shape={<DivergingBar below={SERIES_VAR[belowSeries]} above={SERIES_VAR[aboveSeries]} />}
+        shape={<DivergingBar />}
       />
 
       {items.map((item) => (
@@ -141,10 +138,8 @@ export function DivergingBars({
   );
 }
 
-type DivergingBarProps = Partial<BarShapeProps> & { below: string; above: string };
-
 /** 4px rounded at the data end, square where it leaves the middle. */
-function DivergingBar({ x, y, width, height, payload, below, above }: Readonly<DivergingBarProps>) {
+function DivergingBar({ x, y, width, height, payload }: Readonly<Partial<BarShapeProps>>) {
   if (x == null || y == null || width == null || height == null) return null;
   const item = payload as DivergingItem | undefined;
   const under = item !== undefined && isBelow(item);
@@ -157,7 +152,7 @@ function DivergingBar({ x, y, width, height, payload, below, above }: Readonly<D
       y={y}
       width={Math.abs(width)}
       height={height}
-      fill={under ? below : above}
+      fill={SERIES_VAR[under ? BELOW : ABOVE]}
       radius={under ? [BAR_RADIUS, 0, 0, BAR_RADIUS] : [0, BAR_RADIUS, BAR_RADIUS, 0]}
     />
   );
@@ -235,10 +230,4 @@ function textFor(item: DivergingItem): string {
   if (item.value > 0) return `+${item.value}`;
   if (item.value < 0) return `−${Math.abs(item.value)}`;
   return '0';
-}
-
-function rowsFor(item: DivergingItem, swatch: string): ChartTipRow[] {
-  const rows: ChartTipRow[] = [{ key: 'value', value: textFor(item), swatch }];
-  if (item.caption === undefined) return rows;
-  return [...rows, { key: 'caption', value: item.caption }];
 }
