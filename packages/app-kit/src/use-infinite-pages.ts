@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query';
-import { type Paginated } from '@iace/contracts';
+import { PAGE_SIZE_MAX, type Paginated } from '@iace/contracts';
 
 /**
  * Whether there is another page, and which. Counts what has been LOADED, so a short
@@ -64,5 +64,38 @@ export function useInfinitePages<T>(options: {
     retry: query.refetch,
     isLoading: query.isPending,
     isLoadingMore: isFetchingNextPage,
+  };
+}
+
+/** The query a paged picker sends: the largest page the API serves, searched on the server. */
+export interface PickerPageParams {
+  page: number;
+  pageSize: number;
+  q: string;
+}
+
+/** Server-side search and paging, as the props a combobox spreads; a new search restarts at page one. */
+export function usePagedPicker<T>(options: {
+  queryKey: QueryKey;
+  fetchPage: (params: PickerPageParams) => Promise<Paginated<T>>;
+  enabled?: boolean;
+}) {
+  const [search, setSearch] = useState('');
+  const pages = useInfinitePages({
+    queryKey: [...options.queryKey, search],
+    fetchPage: (page) => options.fetchPage({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+    enabled: options.enabled,
+  });
+
+  return {
+    items: pages.items,
+    paging: {
+      search,
+      onSearchChange: setSearch,
+      hasMore: pages.hasMore,
+      onLoadMore: pages.loadMore,
+      isLoading: pages.isLoading,
+      isLoadingMore: pages.isLoadingMore,
+    },
   };
 }

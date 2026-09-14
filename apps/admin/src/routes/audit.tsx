@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import {
   AUDIT_WINDOW_DAYS,
   IMPORT_LOG_STATUS,
-  PAGE_SIZE_MAX,
   auditActionSchema,
   auditFeatureSchema,
   type AuditAction,
@@ -27,7 +26,7 @@ import {
   type ListFilter,
   type ListFilterMultiControl,
 } from '@iace/ui';
-import { useInfinitePages } from '@iace/app-kit';
+import { usePagedPicker } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import { ChangedCell } from '../lib/audit-format';
 import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
@@ -180,12 +179,10 @@ export function AuditActivityPage() {
   const { identity } = useAuth();
   const isSuperAdmin = identity?.isSuperAdmin ?? false;
 
-  /** Every admin, a page at a time, searched server-side. The server ignores this filter for
-   *  anyone but a super admin, so it is fetched — and shown — only for one. */
-  const [actorSearch, setActorSearch] = useState('');
-  const actorPages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.ADMINS, 'filter', actorSearch],
-    fetchPage: (page) => api.admin.admins.list({ page, pageSize: PAGE_SIZE_MAX, q: actorSearch }),
+  // The server ignores the actor filter for anyone but a super admin, so only one fetches it.
+  const actors = usePagedPicker({
+    queryKey: [...QUERY_KEYS.ADMINS, 'filter'],
+    fetchPage: (params) => api.admin.admins.list(params),
     enabled: isSuperAdmin,
   });
 
@@ -223,21 +220,16 @@ export function AuditActivityPage() {
               render: (control: ListFilterMultiControl) => (
                 <MultiCombobox
                   {...control}
+                  {...actors.paging}
                   chips={false}
                   selectedLabels={selectedActorLabels}
-                  items={actorPages.items.map((admin) => ({
+                  items={actors.items.map((admin) => ({
                     value: admin.id,
                     label: admin.fullName ?? admin.email,
                     hint: admin.fullName ? admin.email : undefined,
                   }))}
                   placeholder="Any admin"
-                  search={actorSearch}
-                  onSearchChange={setActorSearch}
                   searchPlaceholder="Search admins"
-                  hasMore={actorPages.hasMore}
-                  onLoadMore={actorPages.loadMore}
-                  isLoading={actorPages.isLoading}
-                  isLoadingMore={actorPages.isLoadingMore}
                   emptyLabel="No admin matches that"
                 />
               ),

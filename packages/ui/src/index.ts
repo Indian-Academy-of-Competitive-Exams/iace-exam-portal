@@ -50,8 +50,8 @@ export {
 export { FormDialog } from './components/ui/form-dialog';
 export { DatePicker } from './components/ui/date-picker';
 export { DateTimePicker } from './components/ui/date-time-picker';
-export { Combobox } from './components/ui/combobox';
-export { MultiCombobox } from './components/ui/multi-combobox';
+export { Combobox, type ComboboxProps } from './components/ui/combobox';
+export { MultiCombobox, type MultiComboboxProps } from './components/ui/multi-combobox';
 export {
   DropdownMenu,
   DropdownMenuTrigger,

@@ -26,7 +26,12 @@ export {
   shouldKeepPolling,
 } from './poll-policy';
 export { usePageSize } from './use-page-size';
-export { useInfinitePages, nextPageParam } from './use-infinite-pages';
+export {
+  useInfinitePages,
+  usePagedPicker,
+  nextPageParam,
+  type PickerPageParams,
+} from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';
 export {
   NAV_INLINE_MAX_ITEMS,

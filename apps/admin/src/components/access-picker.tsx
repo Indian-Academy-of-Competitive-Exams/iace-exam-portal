@@ -1,52 +1,29 @@
-import { useState } from 'react';
-import { PAGE_SIZE_MAX } from '@iace/contracts';
-import { useInfinitePages } from '@iace/app-kit';
+import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, MultiCombobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import { type MultiPickerProps, type PickerProps } from './picker-props';
 
 /** A program is picked by its CODE: a student row and a series both store that string with no FK. */
 
-interface PickerProps {
-  value: string;
-  onChange: (value: string) => void;
-  /** The label of the current value, for when it sits outside the loaded pages. */
-  selectedLabel?: string;
-  placeholder?: string;
-  clearable?: boolean;
-  disabled?: boolean;
-  id?: string;
-  'aria-label'?: string;
-  'aria-describedby'?: string;
-  'aria-invalid'?: boolean;
-}
-
 /** Only active programs: the server refuses a retired one, so it is never offered. */
 export function ProgramPicker(props: Readonly<PickerProps>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) =>
-      api.admin.programs.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
+  const programs = usePagedPicker({
+    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.PICKER],
+    fetchPage: (params) => api.admin.programs.list({ ...params, activeOnly: 'true' }),
   });
 
   return (
     <Combobox
       {...props}
+      {...programs.paging}
       placeholder={props.placeholder ?? 'Any program'}
-      items={pages.items.map((program) => ({
+      items={programs.items.map((program) => ({
         value: program.code,
         label: program.code,
         hint: program.name,
       }))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search programs"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No program matches that"
     />
   );
@@ -54,30 +31,22 @@ export function ProgramPicker(props: Readonly<PickerProps>) {
 
 /** Only active events: an event nobody is running is not a roster to build a series on. */
 export function EventPicker(props: Readonly<PickerProps>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) =>
-      api.admin.events.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
+  const events = usePagedPicker({
+    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.PICKER],
+    fetchPage: (params) => api.admin.events.list({ ...params, activeOnly: 'true' }),
   });
 
   return (
     <Combobox
       {...props}
+      {...events.paging}
       placeholder={props.placeholder ?? 'Any event'}
-      items={pages.items.map((event) => ({
+      items={events.items.map((event) => ({
         value: event.id,
         label: event.name,
         hint: plural(event.candidateCount, 'candidate'),
       }))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search events"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No event matches that"
     />
   );
@@ -113,37 +82,22 @@ export function TestSeriesPicker({
     onChange: (chosen: ChosenSeries) => void;
   }
 >) {
-  const [search, setSearch] = useState('');
   // Empty is a stage ASKED for and not yet picked, which the server would read as no filter at all.
   const awaitingStage = forExamStageId === '';
 
-  const pages = useInfinitePages({
+  const series = usePagedPicker({
     queryKey: [
       ...QUERY_KEYS.TEST_SERIES,
       QUERY_SCOPES.PICKER,
-      search,
       notReachedBy ?? '',
       forExamStageId ?? '',
     ],
-    fetchPage: (page) =>
-      api.admin.testSeries.list({
-        page,
-        pageSize: PAGE_SIZE_MAX,
-        q: search,
-        notReachedBy,
-        forExamStageId,
-      }),
+    fetchPage: (params) => api.admin.testSeries.list({ ...params, notReachedBy, forExamStageId }),
     enabled: !awaitingStage,
   });
 
-  const items = pages.items.map((series) => ({
-    value: series.id,
-    label: series.name,
-    hint: series.examStage ? `${series.examStage.examCode} / ${series.examStage.name}` : undefined,
-  }));
-
   const chosenOf = (value: string): ChosenSeries => {
-    const row = pages.items.find((series) => series.id === value);
+    const row = series.items.find((held) => held.id === value);
     if (!row) return NO_SERIES;
     return { id: row.id, name: row.name, isEnabled: row.isEnabled };
   };
@@ -151,17 +105,16 @@ export function TestSeriesPicker({
   return (
     <Combobox
       {...props}
+      {...series.paging}
       disabled={awaitingStage || props.disabled}
       placeholder={awaitingStage ? 'Choose a stage first' : (props.placeholder ?? 'No series')}
-      items={items}
+      items={series.items.map((row) => ({
+        value: row.id,
+        label: row.name,
+        hint: row.examStage ? `${row.examStage.examCode} / ${row.examStage.name}` : undefined,
+      }))}
       onChange={(value) => onChange(chosenOf(value))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search series"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No series matches that"
     />
   );
@@ -169,43 +122,26 @@ export function TestSeriesPicker({
 
 /** A FILTER, so unlike `ProgramPicker` it reaches retired programs — students are still on them. */
 export function ProgramMultiPicker({
-  value,
-  onChange,
   placeholder = 'Any program',
-  ...control
-}: Readonly<{
-  value: readonly string[];
-  onChange: (next: string[]) => void;
-  placeholder?: string;
-  id?: string;
-  'aria-label'?: string;
-}>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.FILTER, search],
-    fetchPage: (page) => api.admin.programs.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  ...props
+}: Readonly<MultiPickerProps>) {
+  const programs = usePagedPicker({
+    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.FILTER],
+    fetchPage: (params) => api.admin.programs.list(params),
   });
 
   return (
     <MultiCombobox
-      {...control}
+      {...props}
+      {...programs.paging}
       chips={false}
-      value={value}
-      onChange={onChange}
       placeholder={placeholder}
-      items={pages.items.map((program) => ({
+      items={programs.items.map((program) => ({
         value: program.code,
         label: program.code,
         hint: program.name,
       }))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search programs"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No program matches that"
     />
   );
@@ -213,39 +149,22 @@ export function ProgramMultiPicker({
 
 /** Which events a roster is being read through — the events themselves, not their candidates. */
 export function EventMultiPicker({
-  value,
-  onChange,
   placeholder = 'Any event',
-  ...control
-}: Readonly<{
-  value: readonly string[];
-  onChange: (next: string[]) => void;
-  placeholder?: string;
-  id?: string;
-  'aria-label'?: string;
-}>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.FILTER, search],
-    fetchPage: (page) => api.admin.events.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  ...props
+}: Readonly<MultiPickerProps>) {
+  const events = usePagedPicker({
+    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.FILTER],
+    fetchPage: (params) => api.admin.events.list(params),
   });
 
   return (
     <MultiCombobox
-      {...control}
+      {...props}
+      {...events.paging}
       chips={false}
-      value={value}
-      onChange={onChange}
       placeholder={placeholder}
-      items={pages.items.map((event) => ({ value: event.id, label: event.name }))}
-      search={search}
-      onSearchChange={setSearch}
+      items={events.items.map((event) => ({ value: event.id, label: event.name }))}
       searchPlaceholder="Search events"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No event matches that"
     />
   );
@@ -253,43 +172,25 @@ export function EventMultiPicker({
 
 /** A candidate on an event is a student row, so a roster is picked out of the directory itself. */
 export function StudentMultiPicker({
-  value,
-  onChange,
   placeholder = 'No students chosen',
-  ...control
-}: Readonly<{
-  value: readonly string[];
-  onChange: (next: string[]) => void;
-  placeholder?: string;
-  id?: string;
-  'aria-label'?: string;
-  'aria-describedby'?: string;
-}>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.STUDENTS, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) => api.admin.students.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  ...props
+}: Readonly<MultiPickerProps>) {
+  const students = usePagedPicker({
+    queryKey: [...QUERY_KEYS.STUDENTS, QUERY_SCOPES.PICKER],
+    fetchPage: (params) => api.admin.students.list(params),
   });
 
   return (
     <MultiCombobox
-      {...control}
-      value={value}
-      onChange={onChange}
+      {...props}
+      {...students.paging}
       placeholder={placeholder}
-      items={pages.items.map((student) => ({
+      items={students.items.map((student) => ({
         value: student.id,
         label: student.fullName ?? student.mobile,
         hint: student.mobile,
       }))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search by name or mobile number"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No student matches that"
     />
   );

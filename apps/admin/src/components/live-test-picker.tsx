@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { INSTITUTE_TIME_ZONE, PAGE_SIZE_MAX, type LiveOpsTest } from '@iace/contracts';
-import { useInfinitePages } from '@iace/app-kit';
+import { INSTITUTE_TIME_ZONE, type LiveOpsTest } from '@iace/contracts';
+import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
@@ -18,32 +17,25 @@ export function LiveTestPicker({
   value,
   onChange,
 }: Readonly<{ value: string; onChange: (value: string) => void }>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.LIVE_OPS, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) => api.admin.liveOps.tests({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  const tests = usePagedPicker({
+    queryKey: [...QUERY_KEYS.LIVE_OPS, QUERY_SCOPES.PICKER],
+    fetchPage: (params) => api.admin.liveOps.tests(params),
   });
 
   return (
     <Combobox
+      {...tests.paging}
       value={value}
       onChange={onChange}
       clearable={false}
       placeholder="Choose a test"
       className="w-72"
-      items={pages.items.map((test) => ({
+      items={tests.items.map((test) => ({
         value: test.id,
         label: test.title ?? test.seriesName,
         hint: windowLabel(test),
       }))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search tests"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No active test"
     />
   );

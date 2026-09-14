@@ -1,6 +1,4 @@
-import { useState } from 'react';
-import { PAGE_SIZE_MAX } from '@iace/contracts';
-import { useInfinitePages } from '@iace/app-kit';
+import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { durationLabel } from '../lib/duration';
@@ -18,43 +16,30 @@ export function BaseConfigPicker({
   onChange: (value: string) => void;
   id?: string;
 }>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.BASE_CONFIGS, QUERY_SCOPES.PICKER, examStageId, search],
-    fetchPage: (page) =>
-      api.admin.baseConfigs.list({
-        page,
-        pageSize: PAGE_SIZE_MAX,
-        q: search,
-        examStageId,
-        activeOnly: 'true',
-      }),
+  const configs = usePagedPicker({
+    queryKey: [...QUERY_KEYS.BASE_CONFIGS, QUERY_SCOPES.PICKER, examStageId],
+    fetchPage: (params) =>
+      api.admin.baseConfigs.list({ ...params, examStageId, activeOnly: 'true' }),
     enabled: examStageId !== '',
   });
 
   return (
     <Combobox
+      {...configs.paging}
       id={id}
       value={value}
       onChange={onChange}
       clearable={false}
       disabled={examStageId === ''}
       placeholder={examStageId === '' ? 'Choose a stage first' : 'Choose a base configuration'}
-      items={pages.items.map((config) => ({
+      items={configs.items.map((config) => ({
         value: config.id,
         label: config.name,
         hint: `${plural(config.totalQuestions, 'question')} · ${durationLabel(config.durationSec)}${
           config.isDefault ? " · the stage's default" : ''
         }`,
       }))}
-      search={search}
-      onSearchChange={setSearch}
       searchPlaceholder="Search base configurations"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
       emptyLabel="No active base configuration for this stage"
     />
   );
