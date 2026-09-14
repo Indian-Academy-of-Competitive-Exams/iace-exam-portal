@@ -3,6 +3,8 @@ import { after, describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
+  AppException,
+  ErrorCodes,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
   leaderboardSchema,
@@ -225,6 +227,31 @@ describe('the points board for a series', () => {
     );
   });
 
+  it('names itself after the series it ranks', async () => {
+    const { seriesId, testIds } = await seriesOf(1);
+    await prisma.testSeries.update({
+      where: { id: seriesId },
+      data: { name: 'SSC CGL Prelims 2026' },
+    });
+    const me = await entrant('Harshith Diyyala', testIds, [90]);
+
+    const board = await seriesBoard(me, seriesId);
+
+    assert.deepEqual([board.scopeId, board.label], [seriesId, 'SSC CGL Prelims 2026']);
+  });
+
+  /** A series they have never sat has no board of theirs to be in, so it reads as missing. */
+  it('refuses a series the reader has never sat a paper in', async () => {
+    const { seriesId, testIds } = await seriesOf(1);
+    await entrant('Priya Sharma', testIds, [120]);
+    const { id: stranger } = await makeStudent(prisma);
+
+    await assert.rejects(
+      () => seriesBoard(stranger, seriesId),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+
   it('gives a reader with a single sitting no movement', async () => {
     const { seriesId, testIds } = await seriesOf(1);
     await entrant('Priya Sharma', testIds, [120]);
@@ -238,6 +265,19 @@ describe('the points board for a series', () => {
 });
 
 describe('the points board across every paper', () => {
+  it('answers without asking about a series at all, and names none', async () => {
+    const { testIds } = await seriesOf(1);
+    const me = await entrant('Harshith Diyyala', testIds, [90]);
+
+    const board = await view.board(me, { scope: LEADERBOARD_SCOPES.ALL_TIME });
+
+    assert.deepEqual(
+      [board.scopeId, board.label, board.measure],
+      [null, null, LEADERBOARD_MEASURES.PERCENTILE_POINTS],
+    );
+    assert.equal(board.you?.isYou, true);
+  });
+
   it('counts the reader on every paper, and only a live student above them moves them down', async () => {
     const one = (await seriesOf(1)).testIds;
     const two = (await seriesOf(1)).testIds;

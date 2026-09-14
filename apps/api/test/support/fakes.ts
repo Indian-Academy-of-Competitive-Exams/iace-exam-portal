@@ -63,7 +63,6 @@ import {
   type SittingStanding,
   type Standing,
 } from '../../src/attempts/leaderboard.service';
-import { type PointsRow, type TestBoardRow } from '../../src/attempts/ranking-sql';
 import { type StorageService } from '../../src/storage/storage.service';
 import {
   type MessageChannel,
@@ -5173,99 +5172,6 @@ export class FakePerformancePrisma {
       );
     },
   };
-
-  asService(): PrismaService {
-    return this as unknown as PrismaService;
-  }
-}
-
-// --------------------------------------------------------------------------- the leaderboard board
-// ---------------------------------------------------------------------------
-
-/** The reader's own sitting: the gate a one-paper board opens on. Postgres ranks everyone else. */
-export interface FakeBoardSitting {
-  id: string;
-  testId: string;
-  studentId: string;
-  isGraded: boolean;
-  status: AttemptStatus;
-}
-
-export function makeBoardSitting(overrides: Partial<FakeBoardSitting> = {}): FakeBoardSitting {
-  return {
-    id: 'att_1',
-    testId: 'tst_1',
-    studentId: 'stu_1',
-    isGraded: true,
-    status: ATTEMPT_STATUS.EVALUATED,
-    ...overrides,
-  };
-}
-
-/** The papers a board can be asked about, and the series that group them. */
-export interface FakeBoardTest {
-  id: string;
-  title: string | null;
-}
-
-export interface FakeBoardSeries {
-  id: string;
-  name: string;
-  testIds: string[];
-}
-
-/** Rows a ranking query would return. Postgres does that ranking, so a test hands them over. */
-export type FakeBoardRawRow = TestBoardRow | PointsRow;
-
-export class FakeBoardPrisma {
-  constructor(
-    readonly sittings: FakeBoardSitting[] = [],
-    readonly tests: FakeBoardTest[] = [],
-    readonly series: FakeBoardSeries[] = [],
-    readonly raw: readonly FakeBoardRawRow[] = [],
-  ) {}
-
-  /** What the raw ranking query was asked, so a test can prove it ran rather than guessing. */
-  rawReads = 0;
-
-  private testOf(testId: string): FakeBoardTest {
-    return this.tests.find((row) => row.id === testId) ?? { id: testId, title: null };
-  }
-
-  readonly attempt = {
-    findFirst: ({
-      where,
-    }: {
-      where: { testId: string; studentId: string; isGraded: boolean; status: AttemptStatus };
-    }) => {
-      const row = this.sittings.find(
-        (sitting) =>
-          sitting.testId === where.testId &&
-          sitting.studentId === where.studentId &&
-          sitting.isGraded === where.isGraded &&
-          sitting.status === where.status,
-      );
-      if (!row) return Promise.resolve(null);
-      const test = this.testOf(row.testId);
-      return Promise.resolve({ id: row.id, test: { title: test.title } });
-    },
-  };
-
-  readonly testSeries = {
-    findFirst: ({ where }: { where: { id: string } }) => {
-      const row = this.series.find((candidate) => candidate.id === where.id);
-      if (!row) return Promise.resolve(null);
-      return Promise.resolve({
-        name: row.name,
-        tests: row.testIds.map((id) => ({ id })),
-      });
-    },
-  };
-
-  $queryRaw() {
-    this.rawReads += 1;
-    return Promise.resolve(this.raw);
-  }
 
   asService(): PrismaService {
     return this as unknown as PrismaService;

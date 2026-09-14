@@ -158,6 +158,35 @@ describe('the board for one paper', () => {
     );
   });
 
+  /** Real names are on this payload, so what identifies a sitting must never ride with them. */
+  it('never carries a sitting’s own id, only a name, a branch and a standing', async () => {
+    const testId = await paper();
+    const rival = await entrant(testId, 'Priya Sharma', 120);
+    const me = await entrant(testId, 'Harshith Diyyala', 90);
+
+    const read = await board(me.studentId, testId);
+
+    const payload = JSON.stringify(read);
+    assert.equal(payload.includes(rival.attemptId), false);
+    assert.equal(payload.includes(me.attemptId), false);
+    assert.equal(payload.includes(rival.studentId), false);
+  });
+
+  /** A graded sitting with no marks yet is in no cohort, so its reader sees a board with nobody on it. */
+  it('draws an empty board for a sitting the cohort does not count', async () => {
+    const testId = await paper();
+    await entrant(testId, 'Priya Sharma', 120);
+    const me = await entrant(testId, 'Harshith Diyyala', 90);
+    await prisma.attempt.update({ where: { id: me.attemptId }, data: { score: null } });
+
+    const read = await board(me.studentId, testId);
+
+    assert.deepEqual(
+      [read.label, read.cohortSize, read.podium, read.neighbourhood, read.you],
+      ['Board mock', 0, [], [], null],
+    );
+  });
+
   it('refuses a paper the reader holds no graded sitting on', async () => {
     const testId = await paper();
     await entrant(testId, 'Priya Sharma', 120);
