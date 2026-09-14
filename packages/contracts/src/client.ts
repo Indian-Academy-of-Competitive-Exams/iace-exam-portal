@@ -946,25 +946,6 @@ export function createApiClient(options: ApiClientOptions) {
           request(`${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`, {
             schema: performanceReportSchema,
           }),
-
-        performanceShares: (id: string): Promise<PerformanceShares> =>
-          request(PERFORMANCE_SHARE_ROUTES.ofStudent(id), { schema: performanceSharesSchema }),
-
-        sharePerformance: (
-          id: string,
-          input: CreatePerformanceShareInput,
-        ): Promise<PerformanceShare> =>
-          request(PERFORMANCE_SHARE_ROUTES.ofStudent(id), {
-            method: 'POST',
-            body: input,
-            schema: performanceShareSchema,
-          }),
-
-        revokePerformanceShare: (id: string, shareId: string): Promise<PerformanceShare> =>
-          request(PERFORMANCE_SHARE_ROUTES.revokeOfStudent(id, shareId), {
-            method: 'POST',
-            schema: performanceShareSchema,
-          }),
       },
 
       /** Super admin only, enforced server-side. The client does not re-state it. */

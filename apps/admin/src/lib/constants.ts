@@ -507,10 +507,6 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
 };
 
-/** One student's share links. The sittings a SHARE may open are capped; a report's picker is not. */
-export const studentSharesQueryKey = (studentId: string) =>
-  [...QUERY_KEYS.STUDENT, studentId, 'shares'] as const;
-
 export const studentSittingsQueryKey = (studentId: string, search: string) =>
   [...QUERY_KEYS.STUDENT, studentId, 'sittings', search] as const;
 

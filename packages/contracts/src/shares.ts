@@ -103,9 +103,6 @@ export const PERFORMANCE_SHARE_ROUTES = {
   public: (token: string) => `/public/reports/${token}`,
   mine: '/me/performance/shares',
   revokeMine: (id: string) => `/me/performance/shares/${id}/revoke`,
-  ofStudent: (studentId: string) => `/admin/students/${studentId}/performance/shares`,
-  revokeOfStudent: (studentId: string, id: string) =>
-    `/admin/students/${studentId}/performance/shares/${id}/revoke`,
 } as const;
 
 /** Where the student portal serves a shared report. The link the student copies is this path. */
