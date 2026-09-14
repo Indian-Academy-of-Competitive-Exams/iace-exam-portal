@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { Pencil, Plus } from 'lucide-react';
 import {
+  courseLabel,
   DEFAULT_EXAM_COURSE,
   DEFAULT_EXAM_MODE,
   DEFAULT_STAGE_DISPOSITION,
@@ -39,7 +40,7 @@ import {
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { courseLabel, NAV_ITEMS, NEW_RECORD, QUERY_KEYS } from '../lib/constants';
+import { NAV_ITEMS, NEW_RECORD, QUERY_KEYS } from '../lib/constants';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';

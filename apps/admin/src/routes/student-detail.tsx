@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { FileText, Pencil, Save } from 'lucide-react';
 import {
+  courseLabel,
   EARLIEST_BIRTH_DATE,
   EXAM_COURSES,
   examsInCourses,
@@ -29,6 +30,7 @@ import {
   EmptyState,
   EMPTY_STATE_KINDS,
   Field,
+  FormField,
   FormPanel,
   FormSection,
   Input,
@@ -39,13 +41,7 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import {
-  courseLabel,
-  GENDER_LABELS,
-  NAV_ITEMS,
-  QUERY_KEYS,
-  STUDENT_TYPE_LABELS,
-} from '../lib/constants';
+import { GENDER_LABELS, NAV_ITEMS, QUERY_KEYS, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
@@ -216,11 +212,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
           items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
         />
 
-        <Field
-          htmlFor="enrolledCourses"
-          label="Enrolled courses"
-          error={form.formState.errors.enrolledCourses?.message}
-        >
+        <FormField form={form} name="enrolledCourses" label="Enrolled courses">
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <MultiCombobox
               id={id}
@@ -239,13 +231,9 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               emptyLabel="No course matches that"
             />
           )}
-        </Field>
+        </FormField>
 
-        <Field
-          htmlFor="enrolledExams"
-          label="Enrolled exams"
-          error={form.formState.errors.enrolledExams?.message}
-        >
+        <FormField form={form} name="enrolledExams" label="Enrolled exams">
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <MultiCombobox
               id={id}
@@ -263,14 +251,14 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               emptyLabel="No exam matches that"
             />
           )}
-        </Field>
+        </FormField>
 
-        <Field
-          htmlFor="currentBranchId"
+        <FormField
+          form={form}
+          name="currentBranchId"
           label="Current branch"
           // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
           hint={branch.hint}
-          error={form.formState.errors.currentBranchId?.message}
         >
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <Combobox
@@ -286,7 +274,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               emptyLabel="No branch matches that"
             />
           )}
-        </Field>
+        </FormField>
       </div>
     </FormSection>
   );
@@ -311,29 +299,17 @@ function DetailsTab({
       <div className="grid gap-8 lg:grid-cols-2">
         <FormSection title="Details">
           <div className="flex flex-col gap-4">
-            <Field
-              htmlFor="fullName"
-              label="Full name"
-              error={form.formState.errors.fullName?.message}
-            >
-              {(control) => <Input {...control} {...form.register('fullName')} />}
-            </Field>
+            <FormField form={form} name="fullName" label="Full name">
+              {(control) => <Input {...control} />}
+            </FormField>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                htmlFor="motherName"
-                label="Mother's name"
-                error={form.formState.errors.motherName?.message}
-              >
-                {(control) => <Input {...control} {...form.register('motherName')} />}
-              </Field>
-              <Field
-                htmlFor="fatherName"
-                label="Father's name"
-                error={form.formState.errors.fatherName?.message}
-              >
-                {(control) => <Input {...control} {...form.register('fatherName')} />}
-              </Field>
+              <FormField form={form} name="motherName" label="Mother's name">
+                {(control) => <Input {...control} />}
+              </FormField>
+              <FormField form={form} name="fatherName" label="Father's name">
+                {(control) => <Input {...control} />}
+              </FormField>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -359,13 +335,13 @@ function DetailsTab({
               />
             </div>
 
-            <Field htmlFor="email" label="Email" error={form.formState.errors.email?.message}>
-              {(control) => <Input {...control} type="email" {...form.register('email')} />}
-            </Field>
+            <FormField form={form} name="email" label="Email">
+              {(control) => <Input {...control} type="email" />}
+            </FormField>
 
-            <Field htmlFor="address" label="Address" error={form.formState.errors.address?.message}>
-              {(control) => <Input {...control} {...form.register('address')} />}
-            </Field>
+            <FormField form={form} name="address" label="Address">
+              {(control) => <Input {...control} />}
+            </FormField>
           </div>
         </FormSection>
 

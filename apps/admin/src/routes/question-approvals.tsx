@@ -30,7 +30,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { DIFFICULTY_VARIANT, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import {
   QUESTION_AUTHOR_FILTER,
@@ -40,12 +40,6 @@ import {
 
 type FilterKey =
   'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'tag' | 'author' | 'from' | 'to';
-
-const DIFFICULTY_VARIANT = {
-  LOW: 'success',
-  MEDIUM: 'info',
-  HIGH: 'warning',
-} as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function approvalColumns(): DataTableColumn<QuestionSummary>[] {

@@ -12,9 +12,7 @@
     "noEmit": true,
     "types": ["vite/client", "node"],
     "baseUrl": "..",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "paths": {}
   },
   "include": ["**/*.ts", "**/*.tsx", "../src/**/*.ts", "../src/**/*.tsx"]
 }

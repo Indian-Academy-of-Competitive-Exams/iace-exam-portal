@@ -32,7 +32,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
-import { opensLabel } from '../lib/schedule-format';
+import { opensLabel } from '../lib/duration';
 import {
   AUDIT_ACTION_LABELS,
   AUDIT_ACTOR_TYPE_LABELS,

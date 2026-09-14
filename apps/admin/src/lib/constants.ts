@@ -62,7 +62,6 @@ export const ROUTES = {
   STUDENTS: '/students',
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_PATTERN: '/students/:id',
-  STUDENT_PERFORMANCE: (id: string) => `/students/${id}/performance`,
   STUDENT_PERFORMANCE_PATTERN: '/students/:id/performance',
   BRANCHES: '/branches',
   EXAMS: '/exams',
@@ -217,9 +216,6 @@ export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>>
   EVENT: 'Event candidate',
   GRANT: 'Granted directly',
 };
-
-/** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
-export const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 /** What each branch type is called on screen. */
 export const BRANCH_TYPE_LABELS: Readonly<Record<BranchType, string>> = {

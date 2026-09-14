@@ -6,6 +6,7 @@ import {
   type QuestionLanguage,
 } from '@iace/contracts';
 import { Badge, BadgeList, RichContent, Separator, StatRow } from '@iace/ui';
+import { ANSWER_MODE_LABELS } from '../lib/constants';
 
 /** One question in one language: `plainTextOf` returns the stored MARKUP, so images and math render. */
 
@@ -50,7 +51,7 @@ export function QuestionInLanguage({
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold tracking-tight text-foreground">Answer</h3>
           <StatRow
-            label={question.answerKey?.mode === ANSWER_MODE.NUMERIC ? 'Numeric' : 'Exact text'}
+            label={ANSWER_MODE_LABELS[question.answerKey?.mode ?? ANSWER_MODE.EXACT]}
             value={question.answerKey?.answers[language] || '—'}
           />
           {question.answerKey?.tolerance == null ? null : (

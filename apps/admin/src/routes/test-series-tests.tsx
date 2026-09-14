@@ -24,10 +24,9 @@ import {
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
 import { TestStatusBadges } from '../components/test-status-badges';
-import { durationLabel } from '../lib/duration';
+import { durationLabel, opensLabel } from '../lib/duration';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
-import { opensLabel } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
 import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { testsKey } from './test-series-detail';

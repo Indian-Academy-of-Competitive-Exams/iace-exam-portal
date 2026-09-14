@@ -5,6 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Upload, UserPlus } from 'lucide-react';
 import {
+  courseLabel,
   BRANCH_TYPE,
   EXAM_COURSES,
   examsInCourses,
@@ -48,7 +49,7 @@ import {
 } from '@iace/ui';
 import { EventMultiPicker, ProgramMultiPicker } from '../components/access-picker';
 import { api } from '../lib/api';
-import { courseLabel, NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../lib/use-branches';

@@ -1,4 +1,5 @@
 import { optionalNumber } from '@iace/app-kit';
+import { WHEN_FORMATTER } from './audit-vocabulary';
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -23,3 +24,7 @@ export function secondsLabel(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined) return '—';
   return `${Math.round(seconds)}s`;
 }
+
+/** A test with no instant of its own opens when its series does — an absence, not a gap. */
+export const opensLabel = (unlockAt: string | null): string =>
+  unlockAt ? WHEN_FORMATTER.format(new Date(unlockAt)) : 'With the series';

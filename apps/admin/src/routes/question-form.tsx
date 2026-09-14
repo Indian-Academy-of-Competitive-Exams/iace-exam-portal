@@ -51,7 +51,13 @@ import {
 import { RichText } from '@iace/ui/rich-text';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import {
+  ANSWER_MODE_LABELS,
+  NAV_ITEMS,
+  QUERY_KEYS,
+  QUESTION_TYPE_LABELS,
+  ROUTES,
+} from '../lib/constants';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
 /**
@@ -372,10 +378,7 @@ export function QuestionFormPage() {
             form={form}
             name="type"
             label="Type"
-            items={QUESTION_TYPES.map((value) => ({
-              value,
-              label: value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer',
-            }))}
+            items={QUESTION_TYPES.map((value) => ({ value, label: QUESTION_TYPE_LABELS[value] }))}
           />
 
           <FormCombobox
@@ -425,10 +428,7 @@ export function QuestionFormPage() {
               form={form}
               name="answerMode"
               label="How the answer is compared"
-              items={ANSWER_MODES.map((mode) => ({
-                value: mode,
-                label: mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric',
-              }))}
+              items={ANSWER_MODES.map((mode) => ({ value: mode, label: ANSWER_MODE_LABELS[mode] }))}
             />
 
             {answerMode === ANSWER_MODE.NUMERIC ? (

@@ -19,7 +19,7 @@ import {
 import { api } from '../lib/api';
 import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
 import { QUERY_KEYS } from '../lib/constants';
-import { opensLabel } from '../lib/schedule-format';
+import { opensLabel } from '../lib/duration';
 import { instantOf, type ProgramOpening, type ScheduleDraft } from './test-schedule-draft';
 import {
   applyOffer,

@@ -26,17 +26,11 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { DIFFICULTY_VARIANT, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { questionFacetFilters } from '../lib/question-filters';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
-
-const DIFFICULTY_VARIANT = {
-  LOW: 'success',
-  MEDIUM: 'info',
-  HIGH: 'warning',
-} as const;
 
 const STATUS_VARIANT = {
   [QUESTION_STATUS.DRAFT]: 'neutral',

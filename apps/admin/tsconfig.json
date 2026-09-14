@@ -4,7 +4,6 @@
     "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
       "@iace/contracts": ["../../packages/contracts/src/index.ts"]
     }
   },

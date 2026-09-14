@@ -51,14 +51,6 @@ export interface QuestionPicking {
   action?: ReactNode;
 }
 
-export const DIFFICULTY_VARIANT: Readonly<
-  Record<QuestionSummary['difficulty'], 'success' | 'warning' | 'danger'>
-> = {
-  LOW: 'success',
-  MEDIUM: 'warning',
-  HIGH: 'danger',
-};
-
 /** Far enough that the control is a way back, not a nag at the first flick of a wheel. */
 const BACK_TO_TOP_AFTER = 400;
 

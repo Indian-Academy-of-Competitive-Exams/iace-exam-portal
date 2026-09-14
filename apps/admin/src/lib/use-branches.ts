@@ -10,14 +10,9 @@ import { api } from './api';
 import { QUERY_KEYS } from './constants';
 
 /** Unpaged and long-cached, and already scoped by the server: a branch outside theirs is not in it. */
-function useBranchList(options: { activeOnly?: boolean } = {}): {
-  branches: Branch[];
-  isLoading: boolean;
-} {
-  const { activeOnly } = options;
-
+export function useBranches({ activeOnly = false }: { activeOnly?: boolean } = {}): Branch[] {
   const query = useQuery({
-    queryKey: [...QUERY_KEYS.BRANCHES, { activeOnly: activeOnly ?? false }],
+    queryKey: [...QUERY_KEYS.BRANCHES, { activeOnly }],
     queryFn: () =>
       api.admin.branches.list({
         pageSize: PAGE_SIZE_MAX,
@@ -26,11 +21,7 @@ function useBranchList(options: { activeOnly?: boolean } = {}): {
     staleTime: 5 * 60_000,
   });
 
-  return { branches: query.data?.items ?? [], isLoading: query.isLoading };
-}
-
-export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
-  return useBranchList(options).branches;
+  return query.data?.items ?? [];
 }
 
 /** Mirrors `studentBranchBlocker` on the server, so the picker never offers a branch the save refuses. */
