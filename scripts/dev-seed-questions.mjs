@@ -4,33 +4,8 @@
  * one, configured or not; re-running tops up. Refuses a DATABASE_URL that is not local.
  * Run: node scripts/dev-seed-questions.mjs [--reset]
  */
-import { readFileSync } from 'node:fs';
+import './dev-seed-env.mjs';
 import { PrismaClient } from '@prisma/client';
-
-// --- env: load DATABASE_URL from .env if the shell has not already ---
-if (!process.env.DATABASE_URL) {
-  try {
-    const line = readFileSync(new URL('../.env', import.meta.url), 'utf8')
-      .split('\n')
-      .find((l) => l.startsWith('DATABASE_URL='));
-    if (line)
-      process.env.DATABASE_URL = line
-        .slice('DATABASE_URL='.length)
-        .trim()
-        .replace(/^["']|["']$/g, '');
-  } catch {
-    /* no .env — rely on the shell */
-  }
-}
-
-const url = process.env.DATABASE_URL ?? '';
-const looksLocal = /@(localhost|127\.0\.0\.1|host\.docker\.internal|postgres|db)[:/]/.test(url);
-if (!looksLocal && process.env.FORCE_DEV_SEED !== '1') {
-  console.error(
-    `Refusing to run: DATABASE_URL does not look local.\n  ${url || '(unset)'}\n  Set FORCE_DEV_SEED=1 to override on a disposable database.`,
-  );
-  process.exit(1);
-}
 
 const DIFFICULTIES = ['LOW', 'MEDIUM', 'HIGH'];
 const OPTS = 4;

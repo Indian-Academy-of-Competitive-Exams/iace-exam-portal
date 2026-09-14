@@ -4,32 +4,8 @@
  * the cohort and nothing else. Marks are left NULL because filling them is the worker's job, and
  * writing rows directly raises no domain event. Run: node scripts/dev-seed-cohort.mjs [--reset]
  */
-import { readFileSync } from 'node:fs';
+import './dev-seed-env.mjs';
 import { PrismaClient } from '@prisma/client';
-
-// --- env: whatever the shell has not already set, taken from .env ---
-try {
-  for (const line of readFileSync(new URL('../.env', import.meta.url), 'utf8').split('\n')) {
-    const at = line.indexOf('=');
-    const key = at > 0 ? line.slice(0, at).trim() : '';
-    if (!key || key.startsWith('#') || process.env[key]) continue;
-    process.env[key] = line
-      .slice(at + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-  }
-} catch {
-  /* no .env — rely on the shell */
-}
-
-const url = process.env.DATABASE_URL ?? '';
-const looksLocal = /@(localhost|127\.0\.0\.1|host\.docker\.internal|postgres|db)[:/]/.test(url);
-if (!looksLocal && process.env.FORCE_DEV_SEED !== '1') {
-  console.error(
-    `Refusing to run: DATABASE_URL does not look local.\n  ${url || '(unset)'}\n  Set FORCE_DEV_SEED=1 to override on a disposable database.`,
-  );
-  process.exit(1);
-}
 
 // --- the shape of the cohort ------------------------------------------------
 

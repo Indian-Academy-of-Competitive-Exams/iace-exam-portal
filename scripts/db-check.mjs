@@ -13,24 +13,12 @@
  * contain spaces, and `. .env` runs them as commands.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ROOT, envValue } from './test-database.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const VARIABLE = 'SHADOW_DATABASE_URL';
 
-function fromEnvFile() {
-  try {
-    const line = readFileSync(join(ROOT, '.env'), 'utf8')
-      .split('\n')
-      .find((it) => it.startsWith(`${VARIABLE}=`));
-    return line?.slice(VARIABLE.length + 1).trim();
-  } catch {
-    return undefined;
-  }
-}
-
-const shadowUrl = process.env[VARIABLE] || fromEnvFile();
+const shadowUrl = envValue(VARIABLE);
 
 if (!shadowUrl) {
   console.error(

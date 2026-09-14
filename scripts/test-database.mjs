@@ -7,22 +7,20 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseEnv } from 'node:util';
 
 export const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const TEST_DATABASE_SUFFIX = '_test';
 
-function fromEnvFile(variable) {
+/** One variable, the shell's first — read, never loaded, so .env does not leak into the test run's env. */
+export function envValue(variable) {
+  if (process.env[variable]) return process.env[variable];
   try {
-    const line = readFileSync(join(ROOT, '.env'), 'utf8')
-      .split('\n')
-      .find((it) => it.startsWith(`${variable}=`));
-    return line?.slice(variable.length + 1).trim();
+    return parseEnv(readFileSync(join(ROOT, '.env'), 'utf8'))[variable];
   } catch {
     return undefined;
   }
 }
-
-const resolve = (variable) => process.env[variable] || fromEnvFile(variable);
 
 /** Credentials and options aside, two URLs on one host, port and database are one database. */
 function databaseOf(url) {
@@ -39,8 +37,8 @@ function refuse(reason) {
 
 /** Migrates the test database and returns the environment every database test must run under. */
 export function prepareTestDatabase() {
-  const testUrl = resolve('TEST_DATABASE_URL');
-  const devUrl = resolve('DATABASE_URL');
+  const testUrl = envValue('TEST_DATABASE_URL');
+  const devUrl = envValue('DATABASE_URL');
 
   if (!testUrl) {
     refuse(

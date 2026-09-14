@@ -39,7 +39,13 @@ const PACKAGES = [
     imports: ['./test/support/dom.ts'],
     globs: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
   },
-  { dir: 'packages/app-kit', env: {} },
+  {
+    dir: 'packages/app-kit',
+    env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' },
+    imports: ['@iace/ui/test-support/dom'],
+    globs: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+  },
+  { dir: 'apps/admin', env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' } },
 ];
 
 const merged = [];
@@ -110,9 +116,7 @@ function filesIn(lcov, cwd, dir) {
 
 function sourceFiles(dir) {
   if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(full);
-    return /\.tsx?$/.test(entry.name) && !entry.name.endsWith('.d.ts') ? [full] : [];
-  });
+  return readdirSync(dir, { recursive: true })
+    .filter((file) => /\.tsx?$/.test(file) && !file.endsWith('.d.ts'))
+    .map((file) => join(dir, file));
 }
