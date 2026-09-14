@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
+  BRANCH_TYPE,
   DEFAULT_EXAM_COURSE,
   DIFFICULTY_LEVEL,
   STUDENT_TYPE,
@@ -30,7 +31,9 @@ export interface TestOverrides {
 
 export interface StudentOverrides {
   id?: string;
+  mobile?: string;
   fullName?: string | null;
+  currentBranchId?: string | null;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;
 }
@@ -44,6 +47,7 @@ export interface SittingInput {
   attemptNo?: number;
   submittedAt?: Date;
   timeTakenSec?: number;
+  createdAt?: Date;
 }
 
 /** Run any other way, Prisma falls back to `.env` and the dev database. */
@@ -144,6 +148,20 @@ export function makeStudent(
   });
 }
 
+export function makeBranch(prisma: PrismaService, name = uid('Branch')): Promise<{ id: string }> {
+  return prisma.branch.create({
+    data: { id: uid('branch'), name, type: BRANCH_TYPE.PHYSICAL },
+    select: { id: true },
+  });
+}
+
+export function makeAdmin(prisma: PrismaService): Promise<{ id: string }> {
+  return prisma.admin.create({
+    data: { id: uid('admin'), email: `${uid('admin')}@iace.test`, fullName: 'Database Tier Admin' },
+    select: { id: true },
+  });
+}
+
 export function makeSubject(prisma: PrismaService, name = uid('Subject')): Promise<{ id: string }> {
   return prisma.subject.create({ data: { id: uid('subject'), name }, select: { id: true } });
 }
@@ -231,6 +249,7 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
       shuffleSeed: 1,
       score: input.score,
       timeTakenSec,
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
     select: { id: true },
   });
