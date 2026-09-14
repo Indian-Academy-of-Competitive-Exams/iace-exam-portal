@@ -39,7 +39,9 @@ export interface StudentOverrides {
   mobile?: string;
   fullName?: string | null;
   currentBranchId?: string | null;
+  programs?: string[];
   isActive?: boolean;
+  isTestBlocked?: boolean;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;
 }
@@ -118,6 +120,19 @@ export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
     select: { id: true },
   });
   return { examStageId: stage.id, baseConfigId: config.id, testSeriesId: series.id };
+}
+
+/** A stage on an exam of its own, with no config or series beside it. */
+export async function makeStage(prisma: PrismaService, isActive = true): Promise<string> {
+  const exam = await prisma.exam.create({
+    data: { id: uid('exam'), course: DEFAULT_EXAM_COURSE, code: uid('EXAM'), name: 'SSC CGL' },
+    select: { id: true },
+  });
+  const stage = await prisma.examStage.create({
+    data: { id: uid('stage'), examId: exam.id, stageKey: uid('STAGE'), name: 'Tier 1', isActive },
+    select: { id: true },
+  });
+  return stage.id;
 }
 
 export function makeTest(
