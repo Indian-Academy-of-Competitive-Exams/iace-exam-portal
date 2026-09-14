@@ -7,13 +7,14 @@ import {
   itemSignalsOf,
   medianInBands,
   type CohortBand,
-  type OptionShare,
   type QuestionOption,
   type TestAnalyticsSummary,
   type TestItemAnalytics,
   type TestSectionAnalytics,
   type TestTopper,
 } from '@iace/contracts';
+import { perSitting } from './attempt-report';
+import { sharesOf } from './question-report';
 
 export interface StatTotals {
   attemptCount: number;
@@ -67,8 +68,6 @@ const EMPTY_SUMMARY: TestAnalyticsSummary = {
   computedAt: null,
 };
 
-const SCORE_PLACES = 2;
-
 export function summaryOf(
   stat: StatTotals | null,
   topper: TestTopper | null,
@@ -91,14 +90,10 @@ export function summaryOf(
 export function sectionsOf(rows: readonly SectionTotals[]): TestSectionAnalytics[] {
   return [...rows]
     .sort((a, b) => a.order - b.order)
-    .map((row) => ({
-      baseConfigSectionId: row.baseConfigSectionId,
-      name: row.name,
-      order: row.order,
-      maxMarks: row.maxMarks,
-      attempted: row.attempted,
-      averageScore: perSitting(row.sumScore, row.attempted),
-      averageTimeSec: perSitting(row.sumTimeSec, row.attempted),
+    .map(({ sumScore, sumTimeSec, ...row }) => ({
+      ...row,
+      averageScore: perSitting(sumScore, row.attempted),
+      averageTimeSec: perSitting(sumTimeSec, row.attempted),
     }));
 }
 
@@ -107,31 +102,13 @@ export function itemsOf(rows: readonly ItemTotals[]): TestItemAnalytics[] {
   const paperAverage = paperAverageTimeOf(rows);
   return [...rows]
     .sort((a, b) => a.order - b.order)
-    .map((row) => {
-      const averageTimeSec = perSitting(row.sumTimeSec, row.attemptedCount);
-      const counts = {
-        attemptedCount: row.attemptedCount,
-        skippedCount: row.skippedCount,
-        pValue: row.pValue,
-        discrimination: row.discrimination,
-        averageTimeSec,
-      };
+    .map(({ sumTimeSec, options, optionCounts, ...row }) => {
+      const averageTimeSec = perSitting(sumTimeSec, row.attemptedCount);
       return {
-        paperQuestionId: row.paperQuestionId,
-        questionId: row.questionId,
-        order: row.order,
-        baseConfigSectionId: row.baseConfigSectionId,
-        questionCode: row.questionCode,
-        stemPreview: row.stemPreview,
-        attemptedCount: row.attemptedCount,
-        correctCount: row.correctCount,
-        wrongCount: row.wrongCount,
-        skippedCount: row.skippedCount,
+        ...row,
         averageTimeSec,
-        pValue: row.pValue,
-        discrimination: row.discrimination,
-        optionCounts: sharesOf(row.options, row.optionCounts),
-        signals: itemSignalsOf(counts, paperAverage),
+        optionCounts: sharesOf(options, optionCounts),
+        signals: itemSignalsOf({ ...row, averageTimeSec }, paperAverage),
       };
     });
 }
@@ -141,25 +118,4 @@ function paperAverageTimeOf(rows: readonly ItemTotals[]): number | null {
   const attempted = rows.reduce((total, row) => total + row.attemptedCount, 0);
   const spent = rows.reduce((total, row) => total + row.sumTimeSec, 0);
   return perSitting(spent, attempted);
-}
-
-function sharesOf(
-  options: readonly QuestionOption[],
-  counts: Record<string, number>,
-): OptionShare[] {
-  return [...options]
-    .sort((a, b) => a.position - b.position)
-    .map((option) => ({
-      optionId: option.id,
-      position: option.position,
-      count: counts[option.id] ?? 0,
-      isCorrect: option.isCorrect === true,
-    }));
-}
-
-/** Nothing counted is not a zero: an unfolded paper has no average, it does not average zero. */
-function perSitting(total: number, sittings: number): number | null {
-  if (sittings === 0) return null;
-  const steps = 10 ** SCORE_PLACES;
-  return Math.round((total / sittings) * steps) / steps;
 }

@@ -10,7 +10,6 @@ import {
   AppException,
   ErrorCodes,
   PAPER_QUESTION_STATUS,
-  contentLanguageOf,
   type AnswerKey,
   type LanguageCode,
   type LocalizedContent,
@@ -28,7 +27,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { imageUrlsIn } from './exam-images';
-import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
+import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService, type Standing } from './leaderboard.service';
@@ -36,6 +35,7 @@ import {
   elapsedSeconds,
   marksBySection,
   numberOrNull,
+  roundHundredths as round,
   percentageOf,
   sectionsWithScores,
 } from './attempt-report';
@@ -261,7 +261,7 @@ export class AttemptReportService {
     const questions = attempt.questions.map((row) =>
       toSolutionQuestion(row, attempt.languages, shuffleOptions, random),
     );
-    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOf));
+    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
 
     return {
       attemptId: attempt.id,
@@ -275,7 +275,7 @@ export class AttemptReportService {
         questionCount: section.questionCount,
         durationSec: section.durationSec,
       })),
-      questions: urls.size === 0 ? questions : questions.map((row) => signed(row, urls)),
+      questions: urls.size === 0 ? questions : questions.map((row) => signedQuestion(row, urls)),
     };
   }
 
@@ -307,8 +307,6 @@ function toScoreCardQuestion(row: ScoreCardRow['questions'][number]): ScoreCardQ
   };
 }
 
-const round = (value: number) => Math.round(value * 100) / 100;
-
 function toSolutionQuestion(
   row: SolutionRow['questions'][number],
   languages: readonly LanguageCode[],
@@ -316,61 +314,14 @@ function toSolutionQuestion(
   random: () => number,
 ): SolutionQuestion {
   const stored = (row.questionVersion.options as QuestionOption[] | null) ?? [];
-  const options = stored.map((option) => ({ ...option, text: narrowRich(option.text, languages) }));
+  const options = stored.map((option) => ({ ...option, text: narrowTo(option.text, languages) }));
   return {
     ...toScoreCardQuestion(row),
     type: row.question.type,
-    content: narrowContent(row.questionVersion.content as LocalizedContent | null, languages),
+    // Stem AND solution, unlike the exam paper — explaining the answer is the whole point here.
+    content: narrowTo(row.questionVersion.content as LocalizedContent | null, languages),
     options: shuffleOptions ? shuffle(options, random) : options,
     answerKey: (row.questionVersion.answerKey as AnswerKey | null) ?? null,
-  };
-}
-
-/** Stem AND solution, unlike the exam paper — explaining the answer is the whole point here. */
-function narrowContent(
-  content: LocalizedContent | null,
-  languages: readonly LanguageCode[],
-): LocalizedContent {
-  const kept: LocalizedContent = {};
-  for (const code of languages) {
-    const key = contentLanguageOf(code);
-    const held = content?.[key];
-    if (held) kept[key] = held;
-  }
-  return kept;
-}
-
-/** Every piece of HTML one reviewed question carries — stem, solution and every option. */
-function htmlOf(question: SolutionQuestion): string[] {
-  const content = Object.values(question.content).flatMap((held) => [
-    ...htmlIn(held?.stem),
-    ...htmlIn(held?.solution),
-  ]);
-  const options = question.options.flatMap((option) =>
-    Object.values(option.text).flatMap((nodes) => htmlIn(nodes)),
-  );
-  return [...content, ...options];
-}
-
-function signed(question: SolutionQuestion, urls: ReadonlyMap<string, string>): SolutionQuestion {
-  return {
-    ...question,
-    content: Object.fromEntries(
-      Object.entries(question.content).map(([language, held]) => [
-        language,
-        // `solution` is optional, so it is added back only where there was one to sign.
-        held
-          ? {
-              stem: signRich(held.stem, urls),
-              ...(held.solution ? { solution: signRich(held.solution, urls) } : {}),
-            }
-          : held,
-      ]),
-    ),
-    options: question.options.map((option) => ({
-      ...option,
-      text: signLocalizedRich(option.text, urls),
-    })),
   };
 }
 

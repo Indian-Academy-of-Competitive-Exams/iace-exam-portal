@@ -5,17 +5,15 @@
  */
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { numberOrNull } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 
 /** No `questionVersion`, no `selectedOptionId`: nothing here says what the right answer was. */
 const TOPPER_SELECT = {
-  id: true,
-  score: true,
   sectionScores: true,
   questions: {
     select: {
       paperQuestionId: true,
-      questionId: true,
       baseConfigSectionId: true,
       marksAwarded: true,
       timeSpentSec: true,
@@ -30,15 +28,11 @@ export interface TopperQuestion {
 
 /** What the topper spent, keyed the two ways a report needs it. Empty when no rollup names one. */
 export interface TopperTimes {
-  attemptId: string | null;
-  score: number | null;
   byPaperQuestion: ReadonlyMap<string, TopperQuestion>;
   bySection: ReadonlyMap<string, number>;
 }
 
 export const NO_TOPPER: TopperTimes = {
-  attemptId: null,
-  score: null,
   byPaperQuestion: new Map(),
   bySection: new Map(),
 };
@@ -62,7 +56,7 @@ export async function topperOf(prisma: PrismaService, testId: string): Promise<T
     if (row.paperQuestionId === null) continue;
     byPaperQuestion.set(row.paperQuestionId, {
       timeSpentSec: row.timeSpentSec,
-      marksAwarded: row.marksAwarded === null ? null : Number(row.marksAwarded),
+      marksAwarded: numberOrNull(row.marksAwarded),
     });
   }
 
@@ -72,8 +66,6 @@ export async function topperOf(prisma: PrismaService, testId: string): Promise<T
   }
 
   return {
-    attemptId: topper.id,
-    score: topper.score === null ? null : Number(topper.score),
     byPaperQuestion,
     bySection: bySection.size > 0 ? bySection : sectionTimesFrom(topper.questions),
   };

@@ -5,18 +5,12 @@
  * only difference is who is allowed to name the student.
  */
 import { Injectable } from '@nestjs/common';
-import {
-  AppException,
-  ErrorCodes,
-  measureOf,
-  type StudentOverview,
-  type SubjectStanding,
-  type SubjectTally,
-} from '@iace/contracts';
+import { type Prisma } from '@prisma/client';
+import { measureOf, type StudentOverview, type SubjectStanding } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { perSitting } from './attempt-report';
+import { requireStudent } from './require-student';
 import { LeaderboardService, type SittingStanding } from './leaderboard.service';
-
-const NO_STUDENT = 'No such student';
 
 /** A student who has sat nothing has no row at all, which is a clean slate rather than an error. */
 const NO_SITTINGS: StudentOverview['standing'] = {
@@ -43,7 +37,7 @@ const SUBJECT_SELECT = {
   correct: true,
   sumTimeSec: true,
   subject: { select: { name: true } },
-} as const;
+} as const satisfies Prisma.StudentSubjectStatSelect;
 
 @Injectable()
 export class StudentOverviewService {
@@ -54,11 +48,7 @@ export class StudentOverviewService {
 
   /** The admin path. The student is named, so an unknown id must read as missing, not as empty. */
   async forStudent(studentId: string): Promise<StudentOverview> {
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);
+    await requireStudent(this.prisma, studentId);
     return this.overview(studentId);
   }
 
@@ -105,14 +95,7 @@ export class StudentOverviewService {
   }
 }
 
-type SubjectStatRow = {
-  subjectId: string;
-  scope: SubjectTally['scope'];
-  attempted: number;
-  correct: number;
-  sumTimeSec: bigint;
-  subject: { name: string };
-};
+type SubjectStatRow = Prisma.StudentSubjectStatGetPayload<{ select: typeof SUBJECT_SELECT }>;
 
 /** One entry per subject carrying its scope rows, so a scope filter costs no second call. */
 function subjectsOf(rows: readonly SubjectStatRow[]): SubjectStanding[] {
@@ -148,7 +131,3 @@ function percentilesOf(
     bestPercentile: Math.max(...held),
   };
 }
-
-/** Nothing evaluated is nothing to average, which is a dash on screen rather than a nought. */
-const perSitting = (sum: number, sittings: number): number | null =>
-  sittings === 0 ? null : Math.round((sum / sittings) * 100) / 100;

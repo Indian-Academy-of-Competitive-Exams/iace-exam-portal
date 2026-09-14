@@ -11,17 +11,26 @@ import {
   ANSWERED_STATES,
   ATTEMPT_STATUS,
   ErrorCodes,
-  type AttemptStatus,
   type SubmittedAttempt,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
-import { rowsToFlush, type FlushRow } from './attempt-flush';
+import { rowsToFlush, writeRows } from './attempt-flush';
 import { ScoringOutbox } from './scoring-outbox';
 import { MetricsService } from '../common/metrics';
 
 const NOT_YOURS = 'No such attempt';
+
+const ATTEMPT_SELECT = {
+  id: true,
+  studentId: true,
+  testId: true,
+  status: true,
+  submittedAt: true,
+} as const satisfies Prisma.AttemptSelect;
+
+type AttemptRow = Prisma.AttemptGetPayload<{ select: typeof ATTEMPT_SELECT }>;
 
 /** Ahead of the claim, so a call that lost the race cannot write over the winner's answers. */
 const STILL_LIVE = { attempt: { status: ATTEMPT_STATUS.IN_PROGRESS } } as const;
@@ -62,7 +71,7 @@ export class SubmitService {
 
     // READ, never taken: the live state has to outlive a write that throws.
     const held = await this.state.read(attempt.id);
-    await this.flush(attempt.id, held ? rowsToFlush(held) : [], STILL_LIVE);
+    await writeRows(this.prisma, attempt.id, held ? rowsToFlush(held) : [], STILL_LIVE);
 
     const requested = await this.claim(attempt, now);
     if (requested === null) return this.alreadySubmitted(attempt.id);
@@ -70,7 +79,8 @@ export class SubmitService {
     // Taken only behind the claim, so a save arriving after this is refused rather than swallowed.
     const last = await this.state.take(attempt.id);
     // A save that beat the claim: written before the request is handed to a scorer.
-    if (last && last.revision !== held?.revision) await this.flush(attempt.id, rowsToFlush(last));
+    if (last && last.revision !== held?.revision)
+      await writeRows(this.prisma, attempt.id, rowsToFlush(last));
 
     await this.hand(requested);
     // The catalog caches where this student has got to; ending a sitting is what moves it last.
@@ -99,24 +109,6 @@ export class SubmitService {
     });
   }
 
-  /** Idempotent: every value comes off the held state, so writing it twice writes the same row. */
-  private async flush(
-    attemptId: string,
-    rows: readonly FlushRow[],
-    gate: Prisma.AttemptQuestionWhereInput = {},
-  ): Promise<void> {
-    if (rows.length === 0) return;
-    // The batched form: one round trip for the whole paper, on the path 5K students converge on.
-    await this.prisma.$transaction(
-      rows.map((row) =>
-        this.prisma.attemptQuestion.updateMany({
-          where: { attemptId, questionId: row.questionId, ...gate },
-          data: row.data,
-        }),
-      ),
-    );
-  }
-
   /** A queue nobody can reach must not fail a submit that committed — the sweeper hands it on. */
   private async hand(requestId: string): Promise<void> {
     await this.outbox.relay(requestId).catch((error: unknown) => {
@@ -133,7 +125,7 @@ export class SubmitService {
   /** Found already ended. Taking the state makes this the only caller that can still write it. */
   private async closeOff(attemptId: string): Promise<SubmittedAttempt> {
     const stray = await this.state.take(attemptId);
-    if (stray) await this.flush(attemptId, rowsToFlush(stray));
+    if (stray) await writeRows(this.prisma, attemptId, rowsToFlush(stray));
     return this.alreadySubmitted(attemptId);
   }
 
@@ -156,17 +148,9 @@ export class SubmitService {
   private async require(attemptId: string): Promise<AttemptRow> {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
-      select: { id: true, studentId: true, testId: true, status: true, submittedAt: true },
+      select: ATTEMPT_SELECT,
     });
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     return attempt;
   }
-}
-
-interface AttemptRow {
-  id: string;
-  studentId: string;
-  testId: string;
-  status: AttemptStatus;
-  submittedAt: Date | null;
 }

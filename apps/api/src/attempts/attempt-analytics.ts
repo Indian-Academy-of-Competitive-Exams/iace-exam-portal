@@ -4,6 +4,7 @@
  * on each question — plus the question's own subject and difficulty.
  */
 import { type AnswerState, type DifficultyLevel, type TimeUse } from '@iace/contracts';
+import { roundHundredths as round } from './attempt-report';
 
 /** One answered question, with the little the analytics needs to know about it. */
 export interface AnalysedQuestion {
@@ -18,9 +19,6 @@ export interface AnalysedQuestion {
   marksAwarded: number;
   timeSpentSec: number;
 }
-
-const HUNDREDTHS = 100;
-const round = (value: number) => Math.round(value * HUNDREDTHS) / HUNDREDTHS;
 
 export function timeUseOf(rows: readonly AnalysedQuestion[]): TimeUse {
   const spent = (held: readonly AnalysedQuestion[]) =>

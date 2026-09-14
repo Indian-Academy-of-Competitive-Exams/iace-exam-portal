@@ -18,20 +18,8 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttemptStateService } from './attempt-state.service';
-import { sittingsFrom, watchableTestsWhere } from './live-ops';
-
-/** Both panels come off one read, so the stuck ones are simply the first rows it returns. */
-const SITTING_SELECT = {
-  id: true,
-  studentId: true,
-  attemptNo: true,
-  isGraded: true,
-  startedAt: true,
-  endsAt: true,
-  student: {
-    select: { fullName: true, mobile: true, currentBranch: { select: { name: true } } },
-  },
-} as const satisfies Prisma.AttemptSelect;
+import { numberOrNull } from './attempt-report';
+import { SITTING_SELECT, sittingsFrom, watchableTestsWhere } from './live-ops';
 
 const SUBMISSION_SELECT = {
   id: true,
@@ -55,7 +43,7 @@ export class LiveOpsService {
 
   /** The picker's list. On this feature's own key, so an ops admin needs nothing else granted. */
   async tests(query: LiveOpsTestQuery): Promise<Paginated<LiveOpsTest>> {
-    const where = watchableTestsWhere(query.q) as Prisma.TestWhereInput;
+    const where = watchableTestsWhere(query.q);
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.test.findMany({
@@ -166,6 +154,6 @@ function toSubmission(row: Prisma.AttemptGetPayload<{ select: typeof SUBMISSION_
     isGraded: row.isGraded,
     status: row.status,
     submittedAt: row.submittedAt?.toISOString() ?? null,
-    score: row.score === null ? null : Number(row.score),
+    score: numberOrNull(row.score),
   } satisfies RecentSubmission;
 }

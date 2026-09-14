@@ -36,11 +36,6 @@ export function extendedEndsAt(endsAt: Date, minutes: number, now: Date): Date {
   return new Date(from + minutes * SECONDS_PER_MINUTE * MILLISECONDS_PER_SECOND);
 }
 
-/** Whether the void hands the ranked slot back. Spent by default; only a fault earns it back. */
-export function regrantsRankedSlot(isGraded: boolean, asked: boolean): boolean {
-  return isGraded && asked;
-}
-
 /** The audit row's `changed`, with what was done and why beside whatever fields moved. */
 export function supportDiff(
   action: SupportAction,

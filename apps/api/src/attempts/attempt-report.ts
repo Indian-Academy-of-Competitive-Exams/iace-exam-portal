@@ -53,7 +53,7 @@ export function sectionsWithScores(
       order: section.order,
       questionCount: section.questionCount,
       // The paper's own marks, not the blueprint's: a per-question mark makes the two differ.
-      maxMarks: round(
+      maxMarks: roundHundredths(
         paperMarks.get(section.id) ?? section.questionCount * section.marksPerQuestion,
       ),
       score: byId.get(section.id)?.score ?? 0,
@@ -66,4 +66,10 @@ export function sectionsWithScores(
 
 const HUNDREDTHS = 100;
 const MS_PER_SECOND = 1000;
-const round = (value: number) => Math.round(value * HUNDREDTHS) / HUNDREDTHS;
+
+/** Marks, seconds and averages all go out to two places. */
+export const roundHundredths = (value: number) => Math.round(value * HUNDREDTHS) / HUNDREDTHS;
+
+/** Nothing counted is not a zero: an average over no sittings is a dash, never a nought. */
+export const perSitting = (total: number, sittings: number): number | null =>
+  sittings === 0 ? null : roundHundredths(total / sittings);

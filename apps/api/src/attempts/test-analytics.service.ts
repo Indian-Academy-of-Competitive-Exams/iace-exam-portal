@@ -15,8 +15,10 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { stemPreviewOf } from '../questions';
+import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
-import { bandsIn, optionCountsIn, optionsIn } from './rollup-fold';
+import { bandsIn } from './performance-analytics';
+import { optionCountsIn, optionsIn } from './rollup-fold';
 import {
   itemsOf,
   sectionsOf,
@@ -86,8 +88,8 @@ export class TestAnalyticsService {
       attemptCount: row.attemptCount,
       evaluatedCount: row.evaluatedCount,
       sumScore: Number(row.sumScore),
-      maxScore: row.maxScore === null ? null : Number(row.maxScore),
-      minScore: row.minScore === null ? null : Number(row.minScore),
+      maxScore: numberOrNull(row.maxScore),
+      minScore: numberOrNull(row.minScore),
       sumTimeSec: Number(row.sumTimeSec),
       bands: bandsIn(row.scoreHistogram),
       computedAt: row.computedAt,
@@ -146,7 +148,7 @@ export class TestAnalyticsService {
       attemptId: attempt.id,
       studentId: attempt.studentId,
       name: boardName(attempt.student.fullName),
-      score: attempt.score === null ? null : Number(attempt.score),
+      score: numberOrNull(attempt.score),
       timeSpentSec: attempt.questions.reduce((total, row) => total + row.timeSpentSec, 0),
     };
   }
@@ -167,8 +169,8 @@ function toItemTotals(row: ItemRow): ItemTotals {
     wrongCount: row.wrongCount,
     skippedCount: row.skippedCount,
     sumTimeSec: Number(row.sumTimeSec),
-    pValue: row.pValue === null ? null : Number(row.pValue),
-    discrimination: row.discrimination === null ? null : Number(row.discrimination),
+    pValue: numberOrNull(row.pValue),
+    discrimination: numberOrNull(row.discrimination),
     options,
     optionCounts: optionCountsIn(row.optionCounts),
   };

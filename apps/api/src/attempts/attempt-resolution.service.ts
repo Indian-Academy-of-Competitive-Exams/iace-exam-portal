@@ -4,11 +4,11 @@
  * void archives rather than deletes, then asks for every aggregate it was counted in to be recounted.
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { type Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  type AttemptStatus,
   type ExtendAttemptBody,
   type FieldDiff,
   type ForceSubmitAttemptBody,
@@ -25,7 +25,6 @@ import { SubmitService } from './submit.service';
 import {
   SUPPORT_ACTIONS,
   extendedEndsAt,
-  regrantsRankedSlot,
   resolutionBlocker,
   supportDiff,
   type SupportAction,
@@ -33,16 +32,18 @@ import {
 
 const NO_SITTING = 'No such sitting';
 
-interface ResolvableAttempt {
-  id: string;
-  studentId: string;
-  testId: string;
-  status: AttemptStatus;
-  endsAt: Date;
-  isGraded: boolean;
-  voidedAt: Date | null;
-  voidReason: string | null;
-}
+const RESOLVABLE_SELECT = {
+  id: true,
+  studentId: true,
+  testId: true,
+  status: true,
+  endsAt: true,
+  isGraded: true,
+  voidedAt: true,
+  voidReason: true,
+} as const satisfies Prisma.AttemptSelect;
+
+type ResolvableAttempt = Prisma.AttemptGetPayload<{ select: typeof RESOLVABLE_SELECT }>;
 
 @Injectable()
 export class AttemptResolutionService {
@@ -107,7 +108,8 @@ export class AttemptResolutionService {
     now: Date = new Date(),
   ): Promise<ResolvedAttempt> {
     const attempt = await this.require(attemptId, SUPPORT_ACTIONS.VOID);
-    const regranted = regrantsRankedSlot(attempt.isGraded, body.regrantRanked);
+    // The ranked slot is spent by default; only a fault earns it back.
+    const regranted = attempt.isGraded && body.regrantRanked;
 
     await this.prisma.attempt.update({
       where: { id: attemptId },
@@ -172,16 +174,7 @@ export class AttemptResolutionService {
   ): Promise<ResolvableAttempt> {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
-      select: {
-        id: true,
-        studentId: true,
-        testId: true,
-        status: true,
-        endsAt: true,
-        isGraded: true,
-        voidedAt: true,
-        voidReason: true,
-      },
+      select: RESOLVABLE_SELECT,
     });
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NO_SITTING);
 

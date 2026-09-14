@@ -4,7 +4,6 @@ import { ATTEMPT_STATUS } from '@iace/contracts';
 import {
   SUPPORT_ACTIONS,
   extendedEndsAt,
-  regrantsRankedSlot,
   resolutionBlocker,
   supportDiff,
 } from '../src/attempts/attempt-resolution';
@@ -78,13 +77,6 @@ describe('support actions — what may be done to a sitting', () => {
 });
 
 describe('the ranked slot — spent unless a void hands it back', () => {
-  it('frees the slot only when a ranked sitting is voided with the regrant asked for', () => {
-    assert.equal(regrantsRankedSlot(true, true), true);
-    assert.equal(regrantsRankedSlot(true, false), false);
-    // Nothing to hand back: a retake never held the slot in the first place.
-    assert.equal(regrantsRankedSlot(false, true), false);
-  });
-
   it('ranks the first sitting and numbers it one', () => {
     const slots = slotsAfter([]);
 

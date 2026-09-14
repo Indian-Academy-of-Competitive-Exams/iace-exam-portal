@@ -16,6 +16,8 @@ import {
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { elapsedSeconds, numberOrNull } from './attempt-report';
+import { requireStudent } from './require-student';
 import { optionCountsIn, optionsIn } from './rollup-fold';
 import { topperOf, type TopperTimes } from './topper';
 import {
@@ -28,7 +30,6 @@ import {
 
 const NOT_YOURS = 'No such sitting';
 const NOT_MARKED = 'This paper has not been marked yet, so there is nothing to compare.';
-const NO_STUDENT = 'No such student';
 
 /** No `questionVersion` anywhere in here. That absence is the feature. */
 const REPORT_SELECT = {
@@ -109,14 +110,7 @@ export class QuestionReportService {
 
   /** The same payload the student reads, for any student the admin's branches reach. */
   async forStudent(studentId: string, attemptId: string): Promise<QuestionReport> {
-    const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);
+    await requireStudent(this.prisma, studentId);
     return this.forAttempt(studentId, attemptId);
   }
 
@@ -174,7 +168,7 @@ export class QuestionReportService {
           skippedCount: row.skippedCount,
           correctCount: row.correctCount,
           sumTimeSec: Number(row.sumTimeSec),
-          pValue: row.pValue === null ? null : Number(row.pValue),
+          pValue: numberOrNull(row.pValue),
           optionCounts: optionCountsIn(row.optionCounts),
         },
       ]),
@@ -225,19 +219,17 @@ function toSat(row: ReportRow['questions'][number]): SatQuestion {
     selectedOptionId: row.selectedOptionId,
     typedAnswer: row.typedAnswer,
     isCorrect: row.isCorrect,
-    marksAwarded: row.marksAwarded === null ? null : Number(row.marksAwarded),
+    marksAwarded: numberOrNull(row.marksAwarded),
     marks: Number(row.paperItem?.marks ?? 0),
     negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
     disposition: row.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
     timeSpentSec: row.timeSpentSec,
-    timeToRespondSec: secondsBetween(row.firstActionAt, row.answeredAt),
+    // Null unless BOTH instants exist: a sitting from before this was measured has neither.
+    timeToRespondSec:
+      row.firstActionAt && row.answeredAt
+        ? elapsedSeconds(row.firstActionAt, row.answeredAt)
+        : null,
   };
-}
-
-/** Null unless BOTH instants exist: a sitting from before this was measured has neither. */
-function secondsBetween(from?: Date | null, to?: Date | null): number | null {
-  if (!from || !to) return null;
-  return Math.max(0, Math.round((to.getTime() - from.getTime()) / 1000));
 }
 
 /** The first answer the key accepts. A typed question has no option to point at instead. */

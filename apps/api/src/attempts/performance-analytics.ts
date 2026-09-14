@@ -14,6 +14,7 @@ import {
   type SectionalStanding,
 } from '@iace/contracts';
 import { type AnalysedQuestion } from './attempt-analytics';
+import { roundHundredths as round } from './attempt-report';
 
 /** A served question with the paper's own terms for it, which is where the leaked marks live. */
 export interface ReportedQuestion extends AnalysedQuestion {
@@ -29,9 +30,6 @@ export interface SectionCohort {
   sumScore: number;
   sumTimeSec: number;
 }
-
-const HUNDREDTHS = 100;
-const round = (value: number) => Math.round(value * HUNDREDTHS) / HUNDREDTHS;
 
 /** The three buckets partition `maxMarks`: each question has exactly one verdict. */
 export function compositionOf(rows: readonly ReportedQuestion[]): MarkComposition {
@@ -65,8 +63,13 @@ export function compositionOf(rows: readonly ReportedQuestion[]): MarkCompositio
 
 /** The cohort's curve with this student's column flagged. Empty in, empty out — never a flat line. */
 export function curveBandsOf(histogram: unknown, score: number): CohortCurveBand[] {
-  const parsed = scoreHistogramSchema.safeParse(histogram);
-  return parsed.success ? flagYours(parsed.data, score) : [];
+  return flagYours(bandsIn(histogram), score);
+}
+
+/** The `Json?` column read back. Anything that is not a curve reads as no curve at all. */
+export function bandsIn(stored: unknown): CohortBand[] {
+  const parsed = scoreHistogramSchema.safeParse(stored);
+  return parsed.success ? parsed.data : [];
 }
 
 /** Exactly one column is theirs: a score off either end takes the end band nearest it. */

@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
-  contentLanguageOf,
   scopedSections,
   scopedDurationSec,
   type ExamOption,
@@ -18,7 +17,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { imageUrlsIn } from './exam-images';
-import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
+import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
@@ -193,8 +192,10 @@ export class AttemptPaperService {
 
   /** Content on disk holds only the image KEY, so the sitting signs its own, long enough to last. */
   private async withImages(questions: ExamQuestion[]): Promise<ExamQuestion[]> {
-    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOf));
-    return urls.size === 0 ? questions : questions.map((question) => signed(question, urls));
+    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
+    return urls.size === 0
+      ? questions
+      : questions.map((question) => signedQuestion(question, urls));
   }
 }
 
@@ -214,7 +215,12 @@ function toExamQuestion(
     type: row.question.type,
     marks: Number(row.paperItem?.marks ?? 0),
     negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
-    content: narrowContent(row.questionVersion.content as LocalizedContent | null, languages),
+    // The STEM only: `solution` explains the answer, so it stays behind.
+    content: narrowTo(
+      row.questionVersion.content as LocalizedContent | null,
+      languages,
+      (held) => ({ stem: held.stem }),
+    ),
     options: shuffleOptions ? shuffle(visible, random) : visible,
   };
 }
@@ -224,45 +230,6 @@ function toExamOption(option: QuestionOption, languages: readonly LanguageCode[]
   return {
     id: option.id,
     position: option.position,
-    text: narrowRich(option.text, languages),
-  };
-}
-
-/** The STEM only, in this sitting's languages. `solution` explains the answer, so it stays behind. */
-function narrowContent(
-  content: LocalizedContent | null,
-  languages: readonly LanguageCode[],
-): LocalizedContent {
-  const kept: LocalizedContent = {};
-  for (const code of languages) {
-    const key = contentLanguageOf(code);
-    const held = content?.[key];
-    if (held) kept[key] = { stem: held.stem };
-  }
-  return kept;
-}
-
-/** Every piece of HTML one served question carries — its stem and every option, in every language. */
-function htmlOf(question: ExamQuestion): string[] {
-  const stems = Object.values(question.content).flatMap((content) => htmlIn(content?.stem));
-  const options = question.options.flatMap((option) =>
-    Object.values(option.text).flatMap((nodes) => htmlIn(nodes)),
-  );
-  return [...stems, ...options];
-}
-
-function signed(question: ExamQuestion, urls: ReadonlyMap<string, string>): ExamQuestion {
-  return {
-    ...question,
-    content: Object.fromEntries(
-      Object.entries(question.content).map(([language, content]) => [
-        language,
-        content ? { ...content, stem: signRich(content.stem, urls) } : content,
-      ]),
-    ),
-    options: question.options.map((option) => ({
-      ...option,
-      text: signLocalizedRich(option.text, urls),
-    })),
+    text: narrowTo(option.text, languages),
   };
 }

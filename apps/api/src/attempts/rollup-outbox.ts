@@ -40,27 +40,23 @@ export class RollupOutbox {
 
   /** One id per test: a retained one, done or dead, would swallow the next hour's rebuild. */
   async rebuild(testId: string): Promise<void> {
-    await this.rollup.add(
-      ROLLUP_JOBS.REBUILD_TEST,
-      { testId },
-      {
-        ...keyedJob(rollupRebuildJobId(testId)),
-        delay: ROLLUP_REBUILD_DELAY_MS,
-        removeOnComplete: true,
-      },
-    );
+    await this.rebuildLater(ROLLUP_JOBS.REBUILD_TEST, { testId }, rollupRebuildJobId(testId));
   }
 
   /** One student's two tables, for a void that took a sitting out of their own history. */
   async rebuildStudent(studentId: string): Promise<void> {
-    await this.rollup.add(
+    await this.rebuildLater(
       ROLLUP_JOBS.REBUILD_STUDENT,
       { studentId },
-      {
-        ...keyedJob(rollupRebuildStudentJobId(studentId)),
-        delay: ROLLUP_REBUILD_DELAY_MS,
-        removeOnComplete: true,
-      },
+      rollupRebuildStudentJobId(studentId),
     );
+  }
+
+  private async rebuildLater(name: string, data: RollupJobData, jobId: string): Promise<void> {
+    await this.rollup.add(name, data, {
+      ...keyedJob(jobId),
+      delay: ROLLUP_REBUILD_DELAY_MS,
+      removeOnComplete: true,
+    });
   }
 }

@@ -24,8 +24,9 @@ import {
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
+import { requireStudent } from './require-student';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
+import { marksBySection, numberOrNull, perSitting, sectionsWithScores } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
 import { NO_TOPPER, topperOf } from './topper';
@@ -42,7 +43,6 @@ import {
 } from './performance-analytics';
 
 const NOT_YOURS = 'No such sitting';
-const NO_STUDENT = 'No such student';
 const NO_SERIES = 'No such test series';
 
 /** How many sittings any one report folds in. Beyond this a trajectory is a smear, not a line. */
@@ -103,14 +103,7 @@ export class PerformanceAnalyticsService {
 
   /** The admin path. The student is named, so an unknown id must read as missing, not as empty. */
   async forStudent(studentId: string, query: PerformanceReportQuery): Promise<PerformanceReport> {
-    const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);
+    await requireStudent(this.prisma, studentId);
     return this.report(studentId, query);
   }
 
@@ -204,14 +197,7 @@ export class PerformanceAnalyticsService {
     if (testIds.length === 0) return new Map();
     const rows = await this.prisma.testStat.findMany({
       where: { testId: { in: [...testIds] } },
-      select: {
-        testId: true,
-        evaluatedCount: true,
-        sumScore: true,
-        sumTimeSec: true,
-        maxScore: true,
-        scoreHistogram: true,
-      },
+      select: TEST_STAT_SELECT,
     });
     return new Map(rows.map((row) => [row.testId, row]));
   }
@@ -235,10 +221,7 @@ export class PerformanceAnalyticsService {
   }
 
   /** What the report is OF — the owner is in this WHERE too, so no series is read for somebody else. */
-  private async seriesOf(
-    studentId: string,
-    query: PerformanceReportQuery,
-  ): Promise<ScopedSeries | null> {
+  private async seriesOf(studentId: string, query: PerformanceReportQuery) {
     if (query.scope !== PERFORMANCE_SCOPES.SERIES) return null;
     const series = await this.prisma.testSeries.findFirst({
       where: {
@@ -253,12 +236,7 @@ export class PerformanceAnalyticsService {
 
   /** Sitting counts by institute day, since the account opened. No paper is read, ever. */
   async testDays(studentId: string): Promise<TestCalendar> {
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null },
-      select: { createdAt: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
+    const student = await requireStudent(this.prisma, studentId);
     const from = civilDate(student.createdAt);
     const floor = startOfInstituteDay(from);
     const rows = await this.prisma.attempt.findMany({
@@ -294,26 +272,21 @@ export class PerformanceAnalyticsService {
   }
 }
 
-interface ScopedSeries {
-  id: string;
-  name: string;
-}
+const TEST_STAT_SELECT = {
+  testId: true,
+  evaluatedCount: true,
+  sumScore: true,
+  sumTimeSec: true,
+  maxScore: true,
+  scoreHistogram: true,
+} as const satisfies Prisma.TestStatSelect;
 
-interface TestStatRow {
-  testId: string;
-  evaluatedCount: number;
-  sumTimeSec: bigint;
-  sumScore: Prisma.Decimal;
-  maxScore: Prisma.Decimal | null;
-  scoreHistogram: Prisma.JsonValue;
-}
+type TestStatRow = Prisma.TestStatGetPayload<{ select: typeof TEST_STAT_SELECT }>;
 
 const ONE_PAPER_SCOPES = new Set<string>([PERFORMANCE_SCOPES.ATTEMPT, PERFORMANCE_SCOPES.TEST]);
 
 const averageOf = (rolled: TestStatRow | null): number | null =>
-  rolled === null || rolled.evaluatedCount === 0
-    ? null
-    : Math.round((Number(rolled.sumScore) / rolled.evaluatedCount) * 100) / 100;
+  rolled === null ? null : perSitting(Number(rolled.sumScore), rolled.evaluatedCount);
 
 /** The owner is part of every WHERE, so another student's work reads as missing, not as refused. */
 function scopeWhere(studentId: string, query: PerformanceReportQuery): Prisma.AttemptWhereInput {

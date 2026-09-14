@@ -23,6 +23,7 @@ import {
   testStartBlocker,
   type SittingSlots,
 } from './attempt-rules';
+import { numberOrNull } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 
 const SITTABLE_INCLUDE = {
@@ -211,7 +212,7 @@ function toLiveAttempt(
     evaluatedAt: attempt.evaluatedAt?.toISOString() ?? null,
     shuffleSeed: attempt.shuffleSeed,
     languages: attempt.languages,
-    score: attempt.score === null ? null : Number(attempt.score),
+    score: numberOrNull(attempt.score),
     correctCount: attempt.correctCount,
     wrongCount: attempt.wrongCount,
     unattemptedCount: attempt.unattemptedCount,

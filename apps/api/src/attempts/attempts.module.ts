@@ -86,14 +86,7 @@ import { SubmitService } from './submit.service';
     AttemptSweeperProcessor,
   ],
   // Neither processor is here on purpose: an export is how a worker reaches a request path.
-  exports: [
-    AttemptsService,
-    AttemptPaperService,
-    AttemptStateService,
-    LeaderboardService,
-    ScoringOutbox,
-    SubmitService,
-  ],
+  exports: [LeaderboardService, ScoringOutbox],
 })
 export class AttemptsModule implements OnModuleInit {
   constructor(

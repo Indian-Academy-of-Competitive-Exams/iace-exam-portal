@@ -5,6 +5,7 @@
  * revocation and expiry are read before any report is loaded.
  */
 import { Injectable } from '@nestjs/common';
+import { type Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   AppException,
@@ -53,17 +54,15 @@ const SHARE_SELECT = {
   revokedAt: true,
   createdAt: true,
   attempt: { select: { submittedAt: true, test: { select: { title: true } } } },
-} as const;
+} as const satisfies Prisma.PerformanceShareSelect;
 
-interface ShareRow {
-  id: string;
-  token: string;
-  attemptId: string;
-  expiresAt: Date | null;
-  revokedAt: Date | null;
-  createdAt: Date;
-  attempt: { submittedAt: Date | null; test: { title: string | null } };
-}
+type ShareRow = Prisma.PerformanceShareGetPayload<{ select: typeof SHARE_SELECT }>;
+
+const SITTING_SELECT = {
+  id: true,
+  submittedAt: true,
+  test: { select: { title: true } },
+} as const satisfies Prisma.AttemptSelect;
 
 @Injectable()
 export class PerformanceShareService {
@@ -87,7 +86,7 @@ export class PerformanceShareService {
         where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
         orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
         take: SHAREABLE_SITTING_CAP,
-        select: { id: true, submittedAt: true, test: { select: { title: true } } },
+        select: SITTING_SELECT,
       }),
     ]);
 
@@ -217,11 +216,9 @@ function toShare(row: ShareRow, now: Date, withToken: boolean): PerformanceShare
   };
 }
 
-function toSitting(row: {
-  id: string;
-  submittedAt: Date | null;
-  test: { title: string | null };
-}): ShareableSitting {
+function toSitting(
+  row: Prisma.AttemptGetPayload<{ select: typeof SITTING_SELECT }>,
+): ShareableSitting {
   return {
     attemptId: row.id,
     testTitle: row.test.title,

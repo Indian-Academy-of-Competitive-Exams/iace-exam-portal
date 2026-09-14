@@ -9,7 +9,8 @@ import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { RELAY_BATCH } from '../queue/queues';
-import { cohortShapeOf } from './performance-analytics';
+import { numberOrNull } from './attempt-report';
+import { bandsIn, cohortShapeOf } from './performance-analytics';
 import { ROLLUP_REQUEST } from './rollup-outbox';
 import { sectionScoresIn } from './score-paper';
 import {
@@ -19,11 +20,9 @@ import {
   addToCohortTotals,
   addToStudentTotals,
   bandsAfterBatch,
-  bandsIn,
   emptyCohortTotals,
   emptyStudentTotals,
-  higherOf,
-  laterOf,
+  maxOf,
   mergedQuestion,
   optionCountsIn,
   pValueOf,
@@ -289,37 +288,15 @@ export class RollupService {
   }
 
   private async foldStudent(attempt: FoldableAttempt): Promise<void> {
-    const totals = studentDeltaOf(attempt);
+    const totals = addToStudentTotals(emptyStudentTotals(), attempt);
     await this.guarded(attempt.id, STUDENT_ROLLUP_TYPES, async (tx) => {
       const now = new Date();
       // The increment goes first ON PURPOSE: it locks the row, so the read below is not overtaken.
+      const counts = studentCounts(totals);
       await tx.studentStat.upsert({
         where: { studentId: attempt.studentId },
-        create: {
-          studentId: attempt.studentId,
-          testsAttempted: totals.testsAttempted,
-          testsEvaluated: totals.testsEvaluated,
-          sumScore: totals.sumScore,
-          totalAnswered: totals.totalAnswered,
-          totalCorrect: totals.totalCorrect,
-          totalWrong: totals.totalWrong,
-          totalUnattempted: totals.totalUnattempted,
-          sumTimeSec: BigInt(totals.sumTimeSec),
-          retakeCount: totals.retakeCount,
-          computedAt: now,
-        },
-        update: {
-          testsAttempted: { increment: totals.testsAttempted },
-          testsEvaluated: { increment: totals.testsEvaluated },
-          sumScore: { increment: totals.sumScore },
-          totalAnswered: { increment: totals.totalAnswered },
-          totalCorrect: { increment: totals.totalCorrect },
-          totalWrong: { increment: totals.totalWrong },
-          totalUnattempted: { increment: totals.totalUnattempted },
-          sumTimeSec: { increment: BigInt(totals.sumTimeSec) },
-          retakeCount: { increment: totals.retakeCount },
-          computedAt: now,
-        },
+        create: { studentId: attempt.studentId, ...counts, computedAt: now },
+        update: { ...increments(counts), computedAt: now },
       });
 
       const held = await tx.studentStat.findUniqueOrThrow({
@@ -329,39 +306,24 @@ export class RollupService {
       await tx.studentStat.update({
         where: { studentId: attempt.studentId },
         data: {
-          lastAttemptAt: laterOf(held.lastAttemptAt, totals.lastAttemptAt),
-          computedThrough: laterOf(held.computedThrough, totals.computedThrough),
+          lastAttemptAt: maxOf(held.lastAttemptAt, totals.lastAttemptAt),
+          computedThrough: maxOf(held.computedThrough, totals.computedThrough),
         },
       });
 
       await this.foldMistakes(tx, attempt);
 
       for (const subject of totals.subjects.values()) {
+        const key = {
+          studentId: attempt.studentId,
+          subjectId: subject.subjectId,
+          scope: subject.scope,
+        };
+        const subjectTotals = subjectCounts(subject);
         await tx.studentSubjectStat.upsert({
-          where: {
-            studentId_subjectId_scope: {
-              studentId: attempt.studentId,
-              subjectId: subject.subjectId,
-              scope: subject.scope,
-            },
-          },
-          create: {
-            studentId: attempt.studentId,
-            subjectId: subject.subjectId,
-            scope: subject.scope,
-            attempted: subject.attempted,
-            correct: subject.correct,
-            wrong: subject.wrong,
-            sumTimeSec: BigInt(subject.sumTimeSec),
-            computedAt: now,
-          },
-          update: {
-            attempted: { increment: subject.attempted },
-            correct: { increment: subject.correct },
-            wrong: { increment: subject.wrong },
-            sumTimeSec: { increment: BigInt(subject.sumTimeSec) },
-            computedAt: now,
-          },
+          where: { studentId_subjectId_scope: key },
+          create: { ...key, ...subjectTotals, computedAt: now },
+          update: { ...increments(subjectTotals), computedAt: now },
         });
       }
     });
@@ -394,25 +356,11 @@ export class RollupService {
     totals: CohortTotals,
     now: Date,
   ): Promise<void> {
+    const counts = cohortCounts(totals);
     await tx.testStat.upsert({
       where: { testId },
-      create: {
-        testId,
-        attemptCount: totals.attempts,
-        evaluatedCount: totals.attempts,
-        sumScore: totals.sumScore,
-        sumTimeSec: BigInt(totals.sumTimeSec),
-        attemptsIncluded: totals.attempts,
-        computedAt: now,
-      },
-      update: {
-        attemptCount: { increment: totals.attempts },
-        evaluatedCount: { increment: totals.attempts },
-        sumScore: { increment: totals.sumScore },
-        sumTimeSec: { increment: BigInt(totals.sumTimeSec) },
-        attemptsIncluded: { increment: totals.attempts },
-        computedAt: now,
-      },
+      create: { testId, ...counts, computedAt: now },
+      update: { ...increments(counts), computedAt: now },
     });
 
     const held = await tx.testStat.findUniqueOrThrow({
@@ -430,7 +378,7 @@ export class RollupService {
     await tx.testStat.update({
       where: { testId },
       data: {
-        maxScore: higherOf(maxScore, totals.maxScore),
+        maxScore: maxOf(maxScore, totals.maxScore),
         minScore: lowerOf(minScore, totals.minScore),
         topperAttemptId: raised ? totals.topperAttemptId : held.topperAttemptId,
         scoreHistogram: asJson(moved ?? (await this.rebandOf(tx, testId))),
@@ -438,24 +386,12 @@ export class RollupService {
     });
 
     for (const section of totals.sections.values()) {
+      const key = { testId, baseConfigSectionId: section.baseConfigSectionId };
+      const sectionTotals = sectionCounts(section);
       await tx.testSectionStat.upsert({
-        where: {
-          testId_baseConfigSectionId: { testId, baseConfigSectionId: section.baseConfigSectionId },
-        },
-        create: {
-          testId,
-          baseConfigSectionId: section.baseConfigSectionId,
-          attempted: section.attempted,
-          sumScore: section.sumScore,
-          sumTimeSec: BigInt(section.sumTimeSec),
-          computedAt: now,
-        },
-        update: {
-          attempted: { increment: section.attempted },
-          sumScore: { increment: section.sumScore },
-          sumTimeSec: { increment: BigInt(section.sumTimeSec) },
-          computedAt: now,
-        },
+        where: { testId_baseConfigSectionId: key },
+        create: { ...key, ...sectionTotals, computedAt: now },
+        update: { ...increments(sectionTotals), computedAt: now },
       });
     }
 
@@ -539,15 +475,11 @@ export class RollupService {
     await tx.testStat.update({
       where: { testId },
       data: {
-        attemptCount: totals.attempts,
-        evaluatedCount: totals.attempts,
-        sumScore: totals.sumScore,
+        ...cohortCounts(totals),
         maxScore: totals.maxScore,
         minScore: totals.minScore,
-        sumTimeSec: BigInt(totals.sumTimeSec),
         scoreHistogram: asJson(cohortShapeOf(scoreCountsOf(totals)).bands),
         topperAttemptId: totals.topperAttemptId,
-        attemptsIncluded: totals.attempts,
         computedAt: now,
       },
     });
@@ -557,9 +489,7 @@ export class RollupService {
       data: [...totals.sections.values()].map((section) => ({
         testId,
         baseConfigSectionId: section.baseConfigSectionId,
-        attempted: section.attempted,
-        sumScore: section.sumScore,
-        sumTimeSec: BigInt(section.sumTimeSec),
+        ...sectionCounts(section),
         computedAt: now,
       })),
     });
@@ -582,15 +512,7 @@ export class RollupService {
     await tx.studentStat.update({
       where: { studentId },
       data: {
-        testsAttempted: totals.testsAttempted,
-        testsEvaluated: totals.testsEvaluated,
-        sumScore: totals.sumScore,
-        totalAnswered: totals.totalAnswered,
-        totalCorrect: totals.totalCorrect,
-        totalWrong: totals.totalWrong,
-        totalUnattempted: totals.totalUnattempted,
-        sumTimeSec: BigInt(totals.sumTimeSec),
-        retakeCount: totals.retakeCount,
+        ...studentCounts(totals),
         lastAttemptAt: totals.lastAttemptAt,
         computedThrough: totals.computedThrough,
         computedAt: now,
@@ -603,10 +525,7 @@ export class RollupService {
         studentId,
         subjectId: subject.subjectId,
         scope: subject.scope,
-        attempted: subject.attempted,
-        correct: subject.correct,
-        wrong: subject.wrong,
-        sumTimeSec: BigInt(subject.sumTimeSec),
+        ...subjectCounts(subject),
         computedAt: now,
       })),
     });
@@ -679,8 +598,57 @@ export class RollupService {
   }
 }
 
-function studentDeltaOf(attempt: FoldableAttempt): StudentTotals {
-  return addToStudentTotals(emptyStudentTotals(), attempt);
+/** Each count as an increment, so a folded delta and a rebuild write one column list. */
+function increments<T extends Record<string, number | bigint>>(counts: T) {
+  return Object.fromEntries(
+    Object.entries(counts).map(([column, value]) => [column, { increment: value }]),
+  ) as { [K in keyof T]: { increment: T[K] } };
+}
+
+function studentCounts(totals: StudentTotals) {
+  return {
+    testsAttempted: totals.testsAttempted,
+    testsEvaluated: totals.testsEvaluated,
+    sumScore: totals.sumScore,
+    totalAnswered: totals.totalAnswered,
+    totalCorrect: totals.totalCorrect,
+    totalWrong: totals.totalWrong,
+    totalUnattempted: totals.totalUnattempted,
+    sumTimeSec: BigInt(totals.sumTimeSec),
+    retakeCount: totals.retakeCount,
+  };
+}
+
+function subjectCounts(subject: {
+  attempted: number;
+  correct: number;
+  wrong: number;
+  sumTimeSec: number;
+}) {
+  return {
+    attempted: subject.attempted,
+    correct: subject.correct,
+    wrong: subject.wrong,
+    sumTimeSec: BigInt(subject.sumTimeSec),
+  };
+}
+
+function sectionCounts(section: { attempted: number; sumScore: number; sumTimeSec: number }) {
+  return {
+    attempted: section.attempted,
+    sumScore: section.sumScore,
+    sumTimeSec: BigInt(section.sumTimeSec),
+  };
+}
+
+function cohortCounts(totals: CohortTotals) {
+  return {
+    attemptCount: totals.attempts,
+    evaluatedCount: totals.attempts,
+    sumScore: totals.sumScore,
+    sumTimeSec: BigInt(totals.sumTimeSec),
+    attemptsIncluded: totals.attempts,
+  };
 }
 
 function toFoldable(row: FoldRow): FoldableAttempt {
@@ -720,12 +688,7 @@ function toQuestionTotals(row: {
   optionCounts: Prisma.JsonValue;
 }): QuestionTotals {
   return {
-    paperQuestionId: row.paperQuestionId,
-    questionId: row.questionId,
-    attemptedCount: row.attemptedCount,
-    correctCount: row.correctCount,
-    wrongCount: row.wrongCount,
-    skippedCount: row.skippedCount,
+    ...row,
     sumTimeSec: Number(row.sumTimeSec),
     optionCounts: optionCountsIn(row.optionCounts),
   };
@@ -733,12 +696,7 @@ function toQuestionTotals(row: {
 
 function questionColumns(question: QuestionTotals, now: Date) {
   return {
-    paperQuestionId: question.paperQuestionId,
-    questionId: question.questionId,
-    attemptedCount: question.attemptedCount,
-    correctCount: question.correctCount,
-    wrongCount: question.wrongCount,
-    skippedCount: question.skippedCount,
+    ...question,
     sumTimeSec: BigInt(question.sumTimeSec),
     optionCounts: asJson(question.optionCounts),
     pValue: pValueOf(question.correctCount, question.attemptedCount),
@@ -749,10 +707,6 @@ function questionColumns(question: QuestionTotals, now: Date) {
 function named(ids: readonly string[]): string {
   const shown = ids.slice(0, WARNED_IDS).join(', ');
   return ids.length > WARNED_IDS ? `${shown}, and ${ids.length - WARNED_IDS} more` : shown;
-}
-
-function numberOrNull(value: Prisma.Decimal | null): number | null {
-  return value === null ? null : Number(value);
 }
 
 function lowerOf(held: number | null, found: number | null): number | null {

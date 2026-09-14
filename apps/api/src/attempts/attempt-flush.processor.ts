@@ -5,7 +5,7 @@ import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
-import { rowsToFlush } from './attempt-flush';
+import { rowsToFlush, writeRows } from './attempt-flush';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
 /** Redis to `AttemptQuestion` on a timer. A failed run costs the durable copy a minute, not answers. */
@@ -54,17 +54,7 @@ export class AttemptFlushProcessor extends WorkerHost {
       return;
     }
 
-    const rows = rowsToFlush(held);
-    if (rows.length > 0) {
-      await this.prisma.$transaction(
-        rows.map((row) =>
-          this.prisma.attemptQuestion.updateMany({
-            where: { attemptId, questionId: row.questionId },
-            data: row.data,
-          }),
-        ),
-      );
-    }
+    await writeRows(this.prisma, attemptId, rowsToFlush(held));
 
     // Cleared last: a save landing mid-flush re-marks it, and the next run picks the newer state.
     await this.state.clearDirty(attemptId);

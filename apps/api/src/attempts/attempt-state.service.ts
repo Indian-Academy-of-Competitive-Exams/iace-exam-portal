@@ -18,7 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { applyBatch, isInTime, type HeldState } from './attempt-state';
-import { answersFromRows } from './attempt-flush';
+import { DURABLE_ANSWER_SELECT, answersFromRows } from './attempt-flush';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
 const STATE_TTL_SEC = 12 * 60 * 60;
@@ -183,15 +183,7 @@ export class AttemptStateService {
     // TOUCHED rows only: the whole paper is seeded at start, and a flush writes a row per entry.
     const durable = await this.prisma.attemptQuestion.findMany({
       where: { attemptId, state: { not: ANSWER_STATE.NOT_VISITED } },
-      select: {
-        questionId: true,
-        state: true,
-        selectedOptionId: true,
-        typedAnswer: true,
-        timeSpentSec: true,
-        answeredAt: true,
-        firstActionAt: true,
-      },
+      select: DURABLE_ANSWER_SELECT,
     });
 
     return {

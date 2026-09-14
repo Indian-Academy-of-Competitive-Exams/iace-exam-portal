@@ -75,7 +75,7 @@ export function paceIndexOf(
 }
 
 /** Every option with its share, in the order the paper puts them. */
-function sharesOf(
+export function sharesOf(
   options: readonly QuestionOption[],
   counts: Record<string, number>,
 ): OptionShare[] {

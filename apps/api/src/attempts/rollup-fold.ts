@@ -4,7 +4,6 @@
  * the result outright, so a backfilled table and an accumulated one cannot disagree.
  */
 import {
-  scoreHistogramSchema,
   type AttemptSectionScore,
   type CohortBand,
   type QuestionOption,
@@ -154,8 +153,8 @@ export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttem
   totals.totalUnattempted += attempt.unattemptedCount;
   totals.totalAnswered += attempt.correctCount + attempt.wrongCount;
   totals.sumTimeSec += timeSpentOn(attempt);
-  totals.lastAttemptAt = laterOf(totals.lastAttemptAt, attempt.submittedAt);
-  totals.computedThrough = laterOf(totals.computedThrough, attempt.evaluatedAt);
+  totals.lastAttemptAt = maxOf(totals.lastAttemptAt, attempt.submittedAt);
+  totals.computedThrough = maxOf(totals.computedThrough, attempt.evaluatedAt);
 
   if (attempt.isGraded) {
     totals.testsEvaluated += 1;
@@ -211,12 +210,6 @@ export function scoreCountsOf(totals: CohortTotals): ScoreCount[] {
 export function pValueOf(correctCount: number, attemptedCount: number): number | null {
   if (attemptedCount === 0) return null;
   return Math.round((correctCount / attemptedCount) * P_VALUE_STEPS) / P_VALUE_STEPS;
-}
-
-/** The `Json?` column read back. Anything that is not a curve reads as no curve at all. */
-export function bandsIn(stored: unknown): CohortBand[] {
-  const parsed = scoreHistogramSchema.safeParse(stored);
-  return parsed.success ? parsed.data : [];
 }
 
 /** Inside the range the bands were cut for, a count moves; outside it, every edge has to move. */
@@ -339,14 +332,8 @@ function timeSpentOn(attempt: FoldableAttempt): number {
   return attempt.questions.reduce((total, question) => total + question.timeSpentSec, 0);
 }
 
-/** The later of two instants, either of which may be missing. */
-export function laterOf(held: Date | null, found: Date | null): Date | null {
-  if (found === null) return held;
-  return held === null || found > held ? found : held;
-}
-
-/** The higher of two numbers, either of which may be missing. */
-export function higherOf(held: number | null, found: number | null): number | null {
+/** The later instant or the higher number of two, either of which may be missing. */
+export function maxOf<T extends number | Date>(held: T | null, found: T | null): T | null {
   if (found === null) return held;
   return held === null || found > held ? found : held;
 }

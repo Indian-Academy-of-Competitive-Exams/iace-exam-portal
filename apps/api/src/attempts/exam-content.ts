@@ -2,37 +2,76 @@
 import {
   contentLanguageOf,
   type LanguageCode,
+  type LocalizedContent,
   type LocalizedRich,
+  type QuestionLanguage,
   type RichContent,
 } from '@iace/contracts';
 import { applyImageUrls } from '../questions';
 
-/** Only the languages this sitting was taken in, and only the ones the question actually has. */
-export function narrowRich(text: LocalizedRich, languages: readonly LanguageCode[]): LocalizedRich {
-  const kept: LocalizedRich = {};
+/** Only the languages this sitting was taken in and the question has, each cut down by `pick`. */
+export function narrowTo<T, R = T>(
+  record: Partial<Record<QuestionLanguage, T>> | null,
+  languages: readonly LanguageCode[],
+  pick: (held: T) => R = (held) => held as unknown as R,
+): Partial<Record<QuestionLanguage, R>> {
+  const kept: Partial<Record<QuestionLanguage, R>> = {};
   for (const code of languages) {
     const key = contentLanguageOf(code);
-    const held = text?.[key];
-    if (held) kept[key] = held;
+    const held = record?.[key];
+    if (held) kept[key] = pick(held);
   }
   return kept;
 }
 
 /** The HTML inside a run of rich nodes, which is where an image key hides. */
-export const htmlIn = (nodes: RichContent | undefined): string[] =>
-  (nodes ?? []).map((node) => node.text);
+const htmlIn = (nodes: RichContent | undefined): string[] => (nodes ?? []).map((node) => node.text);
 
 /** The same nodes with every image key replaced by a URL that will still be live in an hour. */
-export const signRich = (
-  nodes: RichContent | undefined,
-  urls: ReadonlyMap<string, string>,
-): RichContent => (nodes ?? []).map((node) => ({ ...node, text: applyImageUrls(node.text, urls) }));
+const signRich = (nodes: RichContent | undefined, urls: ReadonlyMap<string, string>): RichContent =>
+  (nodes ?? []).map((node) => ({ ...node, text: applyImageUrls(node.text, urls) }));
 
-export function signLocalizedRich(
-  text: LocalizedRich,
-  urls: ReadonlyMap<string, string>,
-): LocalizedRich {
-  return Object.fromEntries(
-    Object.entries(text).map(([language, nodes]) => [language, signRich(nodes, urls)]),
+interface ContentBearing {
+  content: LocalizedContent;
+  options: readonly { text: LocalizedRich }[];
+}
+
+/** Every piece of HTML a question carries — stem, any solution, and every option. */
+export function htmlOfQuestion(question: ContentBearing): string[] {
+  const content = Object.values(question.content).flatMap((held) => [
+    ...htmlIn(held?.stem),
+    ...htmlIn(held?.solution),
+  ]);
+  const options = question.options.flatMap((option) =>
+    Object.values(option.text).flatMap((nodes) => htmlIn(nodes)),
   );
+  return [...content, ...options];
+}
+
+/** The question with every image key signed; a solution is signed only where one was served. */
+export function signedQuestion<Q extends ContentBearing>(
+  question: Q,
+  urls: ReadonlyMap<string, string>,
+): Q {
+  return {
+    ...question,
+    content: Object.fromEntries(
+      Object.entries(question.content).map(([language, held]) => [
+        language,
+        held
+          ? {
+              ...held,
+              stem: signRich(held.stem, urls),
+              ...(held.solution ? { solution: signRich(held.solution, urls) } : {}),
+            }
+          : held,
+      ]),
+    ),
+    options: question.options.map((option) => ({
+      ...option,
+      text: Object.fromEntries(
+        Object.entries(option.text).map(([language, nodes]) => [language, signRich(nodes, urls)]),
+      ),
+    })),
+  };
 }
