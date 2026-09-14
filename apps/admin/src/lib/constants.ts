@@ -468,6 +468,9 @@ export function filterAdminNav(
   return filterNavBy(items, (item) => Boolean(item.superAdminOnly) && !viewer.isSuperAdmin);
 }
 
+/** A create-or-edit dialog's target while it is adding a record rather than editing one. */
+export const NEW_RECORD = 'new';
+
 const ADMIN = 'admin';
 
 /** Every query key this app owns; a raw key that drifts by a character fails silently at invalidation. */

@@ -12,7 +12,6 @@ import {
   STAGE_DISPOSITIONS,
   createExamSchema,
   createExamStageSchema,
-  updateExamSchema,
   updateExamStageSchema,
   type CreateExamInput,
   type CreateExamStageInput,
@@ -21,7 +20,6 @@ import {
   type ExamMode,
   type ExamStage,
   type StageDisposition,
-  type UpdateExamInput,
   type UpdateExamStageInput,
 } from '@iace/contracts';
 import {
@@ -44,13 +42,12 @@ import {
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { courseLabel, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { courseLabel, NAV_ITEMS, NEW_RECORD, QUERY_KEYS } from '../lib/constants';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 
-const NEW_EXAM_FIELDS = ['course', 'name', 'code'] as const;
-const EDIT_EXAM_FIELDS = ['course', 'name', 'code'] as const;
+const EXAM_FIELDS = ['course', 'name', 'code'] as const;
 
 /** AP_TS_POLICE reads as AP/TS POLICE — the underscore is a Prisma enum's constraint, not a name. */
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
@@ -132,22 +129,13 @@ const EXAM_FILTERS = [
 export function ExamsPage() {
   const { identity: admin } = useAuth();
   const canWrite = admin?.isSuperAdmin ?? false;
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<Exam | null>(null);
+  const [dialog, setDialog] = useState<Exam | typeof NEW_RECORD | null>(null);
   const queryClient = useQueryClient();
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAMS });
   }, [queryClient]);
 
-  const startEdit = useCallback((exam: Exam) => {
-    setCreating(false);
-    setEditing(exam);
-  }, []);
-
-  const columns = useMemo(
-    () => examColumns(canWrite, refresh, startEdit),
-    [canWrite, refresh, startEdit],
-  );
+  const columns = useMemo(() => examColumns(canWrite, refresh, setDialog), [canWrite, refresh]);
 
   const exams = useListScreen({
     queryKey: QUERY_KEYS.EXAMS,
@@ -166,13 +154,7 @@ export function ExamsPage() {
         title="Exams"
         action={
           canWrite ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditing(null);
-                setCreating(true);
-              }}
-            >
+            <Button size="sm" onClick={() => setDialog(NEW_RECORD)}>
               <Plus aria-hidden />
               New exam
             </Button>
@@ -192,25 +174,16 @@ export function ExamsPage() {
 
   return (
     <TableFrame header={header}>
-      <NewExamDialog
-        open={creating}
-        onOpenChange={setCreating}
-        onDone={() => {
-          setCreating(false);
-          refresh();
-        }}
-      />
-
-      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
-      {editing ? (
-        <EditExamDialog
-          key={editing.id}
-          exam={editing}
+      {/* Mounted only while open and keyed by its row, so its defaults are the row that was clicked. */}
+      {dialog ? (
+        <ExamDialog
+          key={dialog === NEW_RECORD ? NEW_RECORD : dialog.id}
+          exam={dialog === NEW_RECORD ? null : dialog}
           onDone={() => {
-            setEditing(null);
+            setDialog(null);
             refresh();
           }}
-          onClose={() => setEditing(null)}
+          onClose={() => setDialog(null)}
         />
       ) : null}
 
@@ -232,34 +205,44 @@ export function ExamsPage() {
 
 // ---------------------------------------------------------------------------
 
-function NewExamDialog({
-  open,
-  onOpenChange,
+/**
+ * A typo in a code must be fixable before any student is enrolled on it; after that the server
+ * refuses (`examEditBlocker`). There is no enrolment count on this row, so the input stays
+ * editable and the save is what refuses.
+ */
+function ExamDialog({
+  exam,
   onDone,
-}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
+  onClose,
+}: Readonly<{ exam: Exam | null; onDone: () => void; onClose: () => void }>) {
   const form = useForm<CreateExamInput>({
     resolver: zodResolver(createExamSchema),
-    defaultValues: { course: DEFAULT_EXAM_COURSE, name: '', code: '' },
+    defaultValues: exam
+      ? { course: exam.course, name: exam.name, code: exam.code }
+      : { course: DEFAULT_EXAM_COURSE, name: '', code: '' },
   });
 
   const chosenCourse = useWatch({ control: form.control, name: 'course' }) ?? DEFAULT_EXAM_COURSE;
 
-  const create = useMutation({
-    meta: { success: 'Exam created.', fields: NEW_EXAM_FIELDS },
-    mutationFn: (values: CreateExamInput) => api.admin.exams.create(values),
+  const save = useMutation({
+    meta: { success: exam ? 'Exam saved.' : 'Exam created.', fields: EXAM_FIELDS },
+    mutationFn: (values: CreateExamInput) =>
+      exam ? api.admin.exams.update(exam.id, values) : api.admin.exams.create(values),
     onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, NEW_EXAM_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, EXAM_FIELDS),
   });
 
   return (
     <FormDialog
-      open={open}
-      onOpenChange={onOpenChange}
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
       form={form}
-      onSubmit={(values) => create.mutate(values)}
-      title="New exam"
-      submitLabel="Create"
-      loading={create.isPending}
+      onSubmit={(values) => save.mutate(values)}
+      title={exam ? `Edit ${exam.name}` : 'New exam'}
+      submitLabel={exam ? 'Save' : 'Create'}
+      loading={save.isPending}
     >
       <FormField form={form} name="course" label="Course">
         {(control) => (
@@ -279,78 +262,15 @@ function NewExamDialog({
         {(control) => <Input {...control} placeholder="SSC Combined Graduate Level" autoFocus />}
       </FormField>
 
-      <FormField form={form} name="code" label="Code">
-        {(control) => (
-          <Input {...control} className="uppercase placeholder:normal-case" placeholder="SSC CGL" />
-        )}
-      </FormField>
-    </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/**
- * A typo in a code must be fixable before any student is enrolled on it; after that the server
- * refuses (`examEditBlocker`). There is no enrolment count on this row, so the input stays
- * editable and the save is what refuses.
- */
-function EditExamDialog({
-  exam,
-  onDone,
-  onClose,
-}: Readonly<{ exam: Exam; onDone: () => void; onClose: () => void }>) {
-  const form = useForm<UpdateExamInput>({
-    resolver: zodResolver(updateExamSchema),
-    defaultValues: { course: exam.course, name: exam.name, code: exam.code },
-  });
-
-  const chosenCourse = useWatch({ control: form.control, name: 'course' }) ?? exam.course;
-
-  const save = useMutation({
-    meta: { success: 'Exam saved.', fields: EDIT_EXAM_FIELDS },
-    mutationFn: (values: UpdateExamInput) => api.admin.exams.update(exam.id, values),
-    onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, EDIT_EXAM_FIELDS),
-  });
-
-  return (
-    <FormDialog
-      open
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      form={form}
-      onSubmit={(values) => save.mutate(values)}
-      title={`Edit ${exam.name}`}
-      submitLabel="Save"
-      loading={save.isPending}
-    >
-      <FormField form={form} name="course" label="Course">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={chosenCourse}
-            onChange={(next) => form.setValue('course', next as ExamCourse, { shouldDirty: true })}
-            items={EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) }))}
-          />
-        )}
-      </FormField>
-
-      <FormField form={form} name="name" label="Name">
-        {(control) => <Input {...control} autoFocus />}
-      </FormField>
-
       <FormField
         form={form}
         name="code"
         label="Code"
-        /* ui-copy-ok: rule */ hint="Locked once a student is enrolled"
+        /* ui-copy-ok: rule */ hint={exam ? 'Locked once a student is enrolled' : undefined}
       >
-        {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
+        {(control) => (
+          <Input {...control} className="uppercase placeholder:normal-case" placeholder="SSC CGL" />
+        )}
       </FormField>
     </FormDialog>
   );

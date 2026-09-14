@@ -8,14 +8,12 @@ import {
   createProgramSchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
-  updateProgramSchema,
   type CreateProgramInput,
   type Program,
-  type UpdateProgramInput,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { useListScreen } from '@iace/app-kit/browser';
-import { QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NEW_RECORD, QUERY_KEYS, ROUTES } from '../lib/constants';
 import {
   Alert,
   DropdownMenuItem,
@@ -137,6 +135,11 @@ export function ProgramsList({
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROGRAMS });
   }, [queryClient]);
 
+  const close = () => {
+    setEditing(null);
+    onCreatingChange(false);
+  };
+
   const startEdit = useCallback(
     (program: Program) => {
       onCreatingChange(false);
@@ -162,26 +165,16 @@ export function ProgramsList({
 
   return (
     <>
-      {/* Portalled, so where these sit in the tree costs the pinned header nothing. */}
-      <NewProgramDialog
-        open={creating}
-        onOpenChange={onCreatingChange}
-        onDone={() => {
-          onCreatingChange(false);
-          refresh();
-        }}
-      />
-
-      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
-      {editing ? (
-        <EditProgramDialog
-          key={editing.id}
+      {/* Mounted only while open and keyed by its row, so its defaults are the row that was clicked. */}
+      {creating || editing ? (
+        <ProgramDialog
+          key={editing?.id ?? NEW_RECORD}
           program={editing}
           onDone={() => {
-            setEditing(null);
+            close();
             refresh();
           }}
-          onClose={() => setEditing(null)}
+          onClose={close}
         />
       ) : null}
       <ListView
@@ -208,70 +201,25 @@ export function ProgramsList({
 
 // ---------------------------------------------------------------------------
 
-function NewProgramDialog({
-  open,
-  onOpenChange,
-  onDone,
-}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
-  const form = useForm<CreateProgramInput>({
-    resolver: zodResolver(createProgramSchema),
-    defaultValues: { code: '', name: '' },
-  });
-
-  const create = useMutation({
-    meta: { success: 'Program created.', fields: PROGRAM_FIELDS },
-    mutationFn: (values: CreateProgramInput) => api.admin.programs.create(values),
-    onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, PROGRAM_FIELDS),
-  });
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      form={form}
-      onSubmit={(values) => create.mutate(values)}
-      title="New program"
-      submitLabel="Create"
-      loading={create.isPending}
-    >
-      <FormField form={form} name="name" label="Name">
-        {(control) => <Input {...control} placeholder="SSC Foundation 2026" autoFocus />}
-      </FormField>
-
-      <FormField form={form} name="code" label="Code">
-        {(control) => (
-          <Input
-            {...control}
-            className="uppercase placeholder:normal-case"
-            placeholder="SSC FOUNDATION"
-          />
-        )}
-      </FormField>
-    </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
 /**
  * A typo in a code must be fixable before anything carries it; after that the server refuses with
  * a `fieldErrors.code`. Nothing on this row counts the holders, so the input stays editable and
  * the save is what refuses.
  */
-function EditProgramDialog({
+function ProgramDialog({
   program,
   onDone,
   onClose,
-}: Readonly<{ program: Program; onDone: () => void; onClose: () => void }>) {
-  const form = useForm<UpdateProgramInput>({
-    resolver: zodResolver(updateProgramSchema),
-    defaultValues: { code: program.code, name: program.name },
+}: Readonly<{ program: Program | null; onDone: () => void; onClose: () => void }>) {
+  const form = useForm<CreateProgramInput>({
+    resolver: zodResolver(createProgramSchema),
+    defaultValues: { code: program?.code ?? '', name: program?.name ?? '' },
   });
 
   const save = useMutation({
-    meta: { success: 'Program saved.', fields: PROGRAM_FIELDS },
-    mutationFn: (values: UpdateProgramInput) => api.admin.programs.update(program.id, values),
+    meta: { success: program ? 'Program saved.' : 'Program created.', fields: PROGRAM_FIELDS },
+    mutationFn: (values: CreateProgramInput) =>
+      program ? api.admin.programs.update(program.id, values) : api.admin.programs.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, PROGRAM_FIELDS),
   });
@@ -284,21 +232,27 @@ function EditProgramDialog({
       }}
       form={form}
       onSubmit={(values) => save.mutate(values)}
-      title={`Edit ${program.name}`}
-      submitLabel="Save"
+      title={program ? `Edit ${program.name}` : 'New program'}
+      submitLabel={program ? 'Save' : 'Create'}
       loading={save.isPending}
     >
       <FormField form={form} name="name" label="Name">
-        {(control) => <Input {...control} autoFocus />}
+        {(control) => <Input {...control} placeholder="SSC Foundation 2026" autoFocus />}
       </FormField>
 
       <FormField
         form={form}
         name="code"
         label="Code"
-        /* ui-copy-ok: rule */ hint="Locked once anything carries it"
+        /* ui-copy-ok: rule */ hint={program ? 'Locked once anything carries it' : undefined}
       >
-        {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
+        {(control) => (
+          <Input
+            {...control}
+            className="uppercase placeholder:normal-case"
+            placeholder="SSC FOUNDATION"
+          />
+        )}
       </FormField>
     </FormDialog>
   );

@@ -8,10 +8,8 @@ import {
   createEventSchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
-  updateEventSchema,
   type CreateEventInput,
   type Event,
-  type UpdateEventInput,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { useListScreen } from '@iace/app-kit/browser';
@@ -41,7 +39,7 @@ import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-a
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { StudentMultiPicker } from '../components/access-picker';
-import { QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NEW_RECORD, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 const EVENT_FIELDS = ['name', 'description'] as const;
 
@@ -187,6 +185,11 @@ export function EventsList({
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EVENTS });
   }, [queryClient]);
 
+  const close = () => {
+    setEditing(null);
+    onCreatingChange(false);
+  };
+
   const startEdit = useCallback(
     (event: Event) => {
       onCreatingChange(false);
@@ -212,26 +215,16 @@ export function EventsList({
 
   return (
     <>
-      {/* Portalled, so where these sit in the tree costs the pinned header nothing. */}
-      <NewEventDialog
-        open={creating}
-        onOpenChange={onCreatingChange}
-        onDone={() => {
-          onCreatingChange(false);
-          refresh();
-        }}
-      />
-
-      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
-      {editing ? (
-        <EditEventDialog
-          key={editing.id}
+      {/* Mounted only while open and keyed by its row, so its defaults are the row that was clicked. */}
+      {creating || editing ? (
+        <EventDialog
+          key={editing?.id ?? NEW_RECORD}
           event={editing}
           onDone={() => {
-            setEditing(null);
+            close();
             refresh();
           }}
-          onClose={() => setEditing(null)}
+          onClose={close}
         />
       ) : null}
 
@@ -264,59 +257,20 @@ export function EventsList({
 
 // ---------------------------------------------------------------------------
 
-function NewEventDialog({
-  open,
-  onOpenChange,
-  onDone,
-}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
-  const form = useForm<CreateEventInput>({
-    resolver: zodResolver(createEventSchema),
-    defaultValues: { name: '', description: '' },
-  });
-
-  const create = useMutation({
-    meta: { success: 'Event created.', fields: EVENT_FIELDS },
-    mutationFn: (values: CreateEventInput) => api.admin.events.create(values),
-    onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, EVENT_FIELDS),
-  });
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      form={form}
-      onSubmit={(values) => create.mutate(values)}
-      title="New event"
-      submitLabel="Create"
-      loading={create.isPending}
-    >
-      <FormField form={form} name="name" label="Name">
-        {(control) => <Input {...control} placeholder="Scholarship Test 2026" autoFocus />}
-      </FormField>
-
-      <FormField form={form} name="description" label="Description">
-        {(control) => <Textarea {...control} rows={3} />}
-      </FormField>
-    </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function EditEventDialog({
+function EventDialog({
   event,
   onDone,
   onClose,
-}: Readonly<{ event: Event; onDone: () => void; onClose: () => void }>) {
-  const form = useForm<UpdateEventInput>({
-    resolver: zodResolver(updateEventSchema),
-    defaultValues: { name: event.name, description: event.description ?? '' },
+}: Readonly<{ event: Event | null; onDone: () => void; onClose: () => void }>) {
+  const form = useForm<CreateEventInput>({
+    resolver: zodResolver(createEventSchema),
+    defaultValues: { name: event?.name ?? '', description: event?.description ?? '' },
   });
 
   const save = useMutation({
-    meta: { success: 'Event saved.', fields: EVENT_FIELDS },
-    mutationFn: (values: UpdateEventInput) => api.admin.events.update(event.id, values),
+    meta: { success: event ? 'Event saved.' : 'Event created.', fields: EVENT_FIELDS },
+    mutationFn: (values: CreateEventInput) =>
+      event ? api.admin.events.update(event.id, values) : api.admin.events.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, EVENT_FIELDS),
   });
@@ -329,12 +283,12 @@ function EditEventDialog({
       }}
       form={form}
       onSubmit={(values) => save.mutate(values)}
-      title={`Edit ${event.name}`}
-      submitLabel="Save"
+      title={event ? `Edit ${event.name}` : 'New event'}
+      submitLabel={event ? 'Save' : 'Create'}
       loading={save.isPending}
     >
       <FormField form={form} name="name" label="Name">
-        {(control) => <Input {...control} autoFocus />}
+        {(control) => <Input {...control} placeholder="Scholarship Test 2026" autoFocus />}
       </FormField>
 
       <FormField form={form} name="description" label="Description">
