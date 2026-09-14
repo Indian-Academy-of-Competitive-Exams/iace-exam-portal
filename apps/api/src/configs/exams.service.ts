@@ -6,7 +6,6 @@ import {
   fieldDiff,
   type CreateExamBody,
   type Exam,
-  type ExamCourse,
   type ExamListQuery,
   type Paginated,
   type UpdateExamBody,
@@ -16,26 +15,17 @@ import { everyTermMatches } from '../common/search-terms';
 import { type StudentsService } from '../students';
 import { AuditContext } from '../audit';
 import {
+  changedFields,
   examDeletionBlocker,
   examEditBlocker,
   INACTIVE_EXAM_MESSAGE,
-  type ExamUsage,
 } from './exam-rules';
-
-interface ExamRow {
-  id: string;
-  course: ExamCourse;
-  name: string;
-  code: string;
-  description: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  _count: { stages: number };
-}
 
 const EXAM_INCLUDE = {
   _count: { select: { stages: true } },
 } as const satisfies Prisma.ExamInclude;
+
+type ExamRow = Prisma.ExamGetPayload<{ include: typeof EXAM_INCLUDE }>;
 
 /** What an exam's audit diff covers — every column an edit can change. */
 export const AUDITED_EXAM_FIELDS = ['course', 'name', 'code', 'description', 'isActive'] as const;
@@ -100,21 +90,7 @@ export class ExamsService {
   async update(id: string, input: UpdateExamBody): Promise<Exam> {
     const exam = await this.requireExam(id);
 
-    // The diff, not the body: a PATCH that re-sends the current code is not a code change, and
-    // treating it as one would make the row uneditable forever.
-    const changes = {
-      ...(input.course !== undefined && input.course !== exam.course
-        ? { course: input.course }
-        : {}),
-      ...(input.name !== undefined && input.name !== exam.name ? { name: input.name } : {}),
-      ...(input.code !== undefined && input.code !== exam.code ? { code: input.code } : {}),
-      ...(input.description !== undefined && (input.description ?? null) !== exam.description
-        ? { description: input.description ?? null }
-        : {}),
-      ...(input.isActive !== undefined && input.isActive !== exam.isActive
-        ? { isActive: input.isActive }
-        : {}),
-    };
+    const changes = changedFields(exam, input);
 
     // Only a code change can be refused, and only an enrolment count answers that — so an
     // ordinary rename or retire does not pay for it.
@@ -146,7 +122,10 @@ export class ExamsService {
   async remove(id: string): Promise<void> {
     const exam = await this.requireExam(id);
 
-    const blocker = examDeletionBlocker(await this.usageOf(exam));
+    const blocker = examDeletionBlocker({
+      stageCount: exam._count.stages,
+      studentCount: await this.students.countEnrolledIn(exam.code),
+    });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     await this.prisma.exam.delete({ where: { id } });
@@ -190,13 +169,6 @@ export class ExamsService {
     const exam = await this.prisma.exam.findUnique({ where: { id }, include: EXAM_INCLUDE });
     if (!exam) throw new AppException(ErrorCodes.NOT_FOUND, 'No such exam');
     return exam;
-  }
-
-  private async usageOf(exam: ExamRow): Promise<ExamUsage> {
-    return {
-      stageCount: exam._count.stages,
-      studentCount: await this.students.countEnrolledIn(exam.code),
-    };
   }
 
   private async assertFree(name: string, code: string, exceptId?: string): Promise<void> {

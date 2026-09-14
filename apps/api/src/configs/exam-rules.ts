@@ -5,6 +5,18 @@ export interface ExamUsage {
   studentCount: number;
 }
 
+/** The diff, not the body: a PATCH that re-sends a current value would otherwise read as editing it. */
+export function changedFields<Input extends object>(
+  row: Record<keyof Input, unknown>,
+  input: Input,
+): Partial<Input> {
+  return Object.fromEntries(
+    Object.entries(input).filter(
+      ([field, value]) => value !== undefined && value !== row[field as keyof Input],
+    ),
+  ) as Partial<Input>;
+}
+
 function countOf(count: number, noun: string, plural = `${noun}s`): string | null {
   if (count === 0) return null;
   return `${count} ${count === 1 ? noun : plural}`;

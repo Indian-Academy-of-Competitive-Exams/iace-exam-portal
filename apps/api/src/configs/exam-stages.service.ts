@@ -18,6 +18,7 @@ import { everyTermMatches } from '../common/search-terms';
 import { AuditContext } from '../audit';
 import {
   CATALOG_ONLY_STAGE_MESSAGE,
+  changedFields,
   INACTIVE_STAGE_MESSAGE,
   stageDeletionBlocker,
   stageEditBlocker,
@@ -100,22 +101,7 @@ export class ExamStagesService {
   async update(id: string, input: UpdateExamStageBody): Promise<ExamStage> {
     const stage = await this.requireStage(id);
 
-    // The diff, not the body: a PATCH that re-sends the current key is not a key change, and
-    // treating it as one would make the row uneditable forever.
-    const changes = {
-      ...(input.stageKey !== undefined && input.stageKey !== stage.stageKey
-        ? { stageKey: input.stageKey }
-        : {}),
-      ...(input.name !== undefined && input.name !== stage.name ? { name: input.name } : {}),
-      ...(input.order !== undefined && input.order !== stage.order ? { order: input.order } : {}),
-      ...(input.mode !== undefined && input.mode !== stage.mode ? { mode: input.mode } : {}),
-      ...(input.disposition !== undefined && input.disposition !== stage.disposition
-        ? { disposition: input.disposition }
-        : {}),
-      ...(input.isActive !== undefined && input.isActive !== stage.isActive
-        ? { isActive: input.isActive }
-        : {}),
-    };
+    const changes = changedFields(stage, input);
 
     if (changes.stageKey !== undefined) {
       const blocker = stageEditBlocker(usageOf(stage), changes);
