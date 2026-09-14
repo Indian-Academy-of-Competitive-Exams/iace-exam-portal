@@ -375,8 +375,10 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+type WriteMethod = 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+
 interface RequestOptions<T> {
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  method?: 'GET' | WriteMethod;
   body?: unknown;
   schema: ZodType<T>;
   /** Skip the Authorization header and the refresh-on-401 dance. */
@@ -565,6 +567,12 @@ export function createApiClient(options: ApiClientOptions) {
     return response.blob();
   }
 
+  const get = <T>(path: string, schema: ZodType<T>) => request(path, { schema });
+  const write = <T>(method: WriteMethod, path: string, schema: ZodType<T>, body?: unknown) =>
+    request(path, { method, body, schema });
+  const list = <T>(path: string, query: object, schema: ZodType<T>) =>
+    requestPaginated(`${path}${queryString({ ...query })}`, { schema: schema.array() });
+
   return {
     request,
     requestPaginated,
@@ -630,680 +638,439 @@ export function createApiClient(options: ApiClientOptions) {
           anonymous: true,
         }),
 
-      me: (): Promise<AuthIdentity> => request(AUTH_ROUTES.me, { schema: authIdentitySchema }),
+      me: (): Promise<AuthIdentity> => get(AUTH_ROUTES.me, authIdentitySchema),
 
       /** The envelope's `success` is the whole answer; there is no payload. */
-      logout: (): Promise<NoContent> =>
-        request(AUTH_ROUTES.logout, { method: 'POST', schema: noContentSchema }),
+      logout: (): Promise<NoContent> => write('POST', AUTH_ROUTES.logout, noContentSchema),
     },
 
     /** Admin-only. A student token gets 403 from every one of these. */
     /** The signed-in student's own account. No ids — the token is the subject. */
     me: {
-      profile: (): Promise<Me> => request(ME_ROUTES.profile, { schema: meSchema }),
+      profile: (): Promise<Me> => get(ME_ROUTES.profile, meSchema),
 
       update: (input: UpdateMeInput): Promise<Me> =>
-        request(ME_ROUTES.update, { method: 'PATCH', body: input, schema: meSchema }),
+        write('PATCH', ME_ROUTES.update, meSchema, input),
 
       /** Returns a FRESH session — the caller must store these tokens. */
       /** A photo or an identity document. Returns the refreshed profile. */
       uploadDocument: (kind: DocumentKind, file: File): Promise<Me> => {
         const form = new FormData();
         form.append(DOCUMENT_FILE_FIELD, file);
-        return request(ME_ROUTES.document(kind), {
-          method: 'POST',
-          body: form,
-          schema: meSchema,
-        });
+        return write('POST', ME_ROUTES.document(kind), meSchema, form);
       },
 
       changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
-        request(ME_ROUTES.changePin, {
-          method: 'POST',
-          body: input,
-          schema: authSessionResponseSchema,
-        }),
+        write('POST', ME_ROUTES.changePin, authSessionResponseSchema, input),
 
       /** Every series this student reaches, with what is open right now. */
-      catalog: (): Promise<StudentCatalog> =>
-        request(ME_ROUTES.catalog, { schema: studentCatalogSchema }),
+      catalog: (): Promise<StudentCatalog> => get(ME_ROUTES.catalog, studentCatalogSchema),
 
       /** The bell, newest first. `meta.total` under `unreadOnly` is the count the header shows. */
       notifications: (query: NotificationListQueryInput = {}): Promise<Paginated<Notification>> =>
-        requestPaginated(`${ME_ROUTES.notifications}${queryString({ ...query })}`, {
-          schema: notificationSchema.array(),
-        }),
+        list(ME_ROUTES.notifications, query, notificationSchema),
 
       readNotification: (id: string): Promise<Notification> =>
-        request(ME_ROUTES.readNotification(id), { method: 'PATCH', schema: notificationSchema }),
+        write('PATCH', ME_ROUTES.readNotification(id), notificationSchema),
 
       /** The key this browser subscribes to push with. */
-      pushConfig: (): Promise<PushConfig> =>
-        request(ME_ROUTES.pushSubscription, { schema: pushConfigSchema }),
+      pushConfig: (): Promise<PushConfig> => get(ME_ROUTES.pushSubscription, pushConfigSchema),
 
       subscribeToPush: (input: PushSubscriptionInput): Promise<NoContent> =>
-        request(ME_ROUTES.pushSubscription, {
-          method: 'POST',
-          body: input,
-          schema: noContentSchema,
-        }),
+        write('POST', ME_ROUTES.pushSubscription, noContentSchema, input),
 
       unsubscribeFromPush: (input: DropPushSubscriptionInput): Promise<NoContent> =>
-        request(ME_ROUTES.pushSubscription, {
-          method: 'DELETE',
-          body: input,
-          schema: noContentSchema,
-        }),
+        write('DELETE', ME_ROUTES.pushSubscription, noContentSchema, input),
 
       /** What the student reads before the clock starts. */
       testBrief: (testId: string): Promise<ExamBrief> =>
-        request(ME_ATTEMPT_ROUTES.brief(testId), { schema: examBriefSchema }),
+        get(ME_ATTEMPT_ROUTES.brief(testId), examBriefSchema),
 
       /** Idempotent: a second start while one is running resumes it, clock and all. */
       startAttempt: (testId: string, input: StartAttemptInput = {}): Promise<LiveAttempt> =>
-        request(ME_ATTEMPT_ROUTES.start(testId), {
-          method: 'POST',
-          body: input,
-          schema: liveAttemptSchema,
-        }),
+        write('POST', ME_ATTEMPT_ROUTES.start(testId), liveAttemptSchema, input),
 
       /** The paper as a candidate sees it — it carries no answer. */
       attemptPaper: (attemptId: string): Promise<ExamPaper> =>
-        request(ME_ATTEMPT_ROUTES.paper(attemptId), { schema: examPaperSchema }),
+        get(ME_ATTEMPT_ROUTES.paper(attemptId), examPaperSchema),
 
       /** The autosave. Batches what changed since the last one; the server merges and decides. */
       saveAttemptState: (
         attemptId: string,
         input: SaveAttemptStateInput,
       ): Promise<LiveAttemptState> =>
-        request(ME_ATTEMPT_ROUTES.state(attemptId), {
-          method: 'PATCH',
-          body: input,
-          schema: liveAttemptStateSchema,
-        }),
+        write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema, input),
 
       /** What the server is holding, so a reloaded tab can seed its answers instead of starting blank. */
       attemptState: (attemptId: string): Promise<LiveAttemptState> =>
-        request(ME_ATTEMPT_ROUTES.state(attemptId), { schema: liveAttemptStateSchema }),
+        get(ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema),
 
       /** Ends it. A second call reports the first one's outcome rather than refusing. */
       submitAttempt: (attemptId: string): Promise<SubmittedAttempt> =>
-        request(ME_ATTEMPT_ROUTES.submit(attemptId), {
-          method: 'POST',
-          schema: submittedAttemptSchema,
-        }),
+        write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema),
 
       /** Marks, standing and their own answers. Refused until the paper has been marked. */
       scoreCard: (attemptId: string): Promise<ScoreCard> =>
-        request(ME_ATTEMPT_ROUTES.scoreCard(attemptId), { schema: scoreCardSchema }),
+        get(ME_ATTEMPT_ROUTES.scoreCard(attemptId), scoreCardSchema),
 
       /** The worked solutions. Refused until the paper has been marked. */
       solutions: (attemptId: string): Promise<SolutionReport> =>
-        request(ME_ATTEMPT_ROUTES.solutions(attemptId), { schema: solutionReportSchema }),
+        get(ME_ATTEMPT_ROUTES.solutions(attemptId), solutionReportSchema),
 
       /** Their paper question by question, beside the cohort's. The key rides the solution gate. */
       questionReport: (attemptId: string): Promise<QuestionReport> =>
-        request(ME_ATTEMPT_ROUTES.questionReport(attemptId), { schema: questionReportSchema }),
+        get(ME_ATTEMPT_ROUTES.questionReport(attemptId), questionReportSchema),
 
       /** Every test this student has sat, oldest first. */
       performance: (): Promise<PerformanceTrend> =>
-        request(ME_ATTEMPT_ROUTES.performance, { schema: performanceTrendSchema }),
+        get(ME_ATTEMPT_ROUTES.performance, performanceTrendSchema),
 
       /** Sitting counts by institute day, for the calendar the trend's twenty cannot fill. */
-      testDays: (): Promise<TestCalendar> =>
-        request(ME_ATTEMPT_ROUTES.testDays, { schema: testCalendarSchema }),
+      testDays: (): Promise<TestCalendar> => get(ME_ATTEMPT_ROUTES.testDays, testCalendarSchema),
 
       /** The cutoff-free metric set for one sitting, one paper, one series or the whole career. */
       performanceReport: (query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
-        request(`${PERFORMANCE_ROUTES.me}${queryString({ ...query })}`, {
-          schema: performanceReportSchema,
-        }),
+        get(`${PERFORMANCE_ROUTES.me}${queryString({ ...query })}`, performanceReportSchema),
 
       /** Every series they have sat a test in — the SERIES scope has nothing else to offer. */
       performanceSeries: (): Promise<SatSeries[]> =>
-        request(PERFORMANCE_ROUTES.mySeries, { schema: satSeriesListSchema }),
+        get(PERFORMANCE_ROUTES.mySeries, satSeriesListSchema),
 
       /** Their whole career off the two rollup tables: standing, disposition and subjects. */
-      overview: (): Promise<StudentOverview> =>
-        request(OVERVIEW_ROUTES.me, { schema: studentOverviewSchema }),
+      overview: (): Promise<StudentOverview> => get(OVERVIEW_ROUTES.me, studentOverviewSchema),
 
       /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
       leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
-        request(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, {
-          schema: leaderboardSchema,
-        }),
+        get(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, leaderboardSchema),
 
       /** Their own links, live and dead, and the sittings a new one could open. */
       performanceShares: (): Promise<PerformanceShares> =>
-        request(PERFORMANCE_SHARE_ROUTES.mine, { schema: performanceSharesSchema }),
+        get(PERFORMANCE_SHARE_ROUTES.mine, performanceSharesSchema),
 
       sharePerformance: (input: CreatePerformanceShareInput): Promise<PerformanceShare> =>
-        request(PERFORMANCE_SHARE_ROUTES.mine, {
-          method: 'POST',
-          body: input,
-          schema: performanceShareSchema,
-        }),
+        write('POST', PERFORMANCE_SHARE_ROUTES.mine, performanceShareSchema, input),
 
       revokePerformanceShare: (id: string): Promise<PerformanceShare> =>
-        request(PERFORMANCE_SHARE_ROUTES.revokeMine(id), {
-          method: 'POST',
-          schema: performanceShareSchema,
-        }),
+        write('POST', PERFORMANCE_SHARE_ROUTES.revokeMine(id), performanceShareSchema),
 
       /** One of the two lists, newest first. The kind is required — there is no combined list. */
       savedQuestions: (query: SavedListQueryInput): Promise<Paginated<SavedQuestion>> =>
-        requestPaginated(`${SAVED_ROUTES.list}${queryString({ ...query })}`, {
-          schema: savedQuestionSchema.array(),
-        }),
+        list(SAVED_ROUTES.list, query, savedQuestionSchema),
 
       /** Idempotent: starring a question already starred returns the row it already had. */
       bookmarkQuestion: (input: BookmarkQuestionInput): Promise<SavedQuestion> =>
-        request(SAVED_ROUTES.bookmark, {
-          method: 'POST',
-          body: input,
-          schema: savedQuestionSchema,
-        }),
+        write('POST', SAVED_ROUTES.bookmark, savedQuestionSchema, input),
 
       /** Drops one saved row. A dismissed mistake comes back only if they get it wrong again. */
       /** Every choice both saved-list filters can offer, off their own set — never the whole catalog. */
       savedFacets: (query: SavedFacetsQueryInput): Promise<SavedFacets> =>
-        request(`${SAVED_ROUTES.facets}${queryString({ ...query })}`, {
-          schema: savedFacetsSchema,
-        }),
+        get(`${SAVED_ROUTES.facets}${queryString({ ...query })}`, savedFacetsSchema),
 
       removeSavedQuestion: (id: string): Promise<NoContent> =>
-        request(SAVED_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+        write('DELETE', SAVED_ROUTES.remove(id), noContentSchema),
 
       /** Which questions of one sitting are already starred — what the review draws its stars from. */
       bookmarksInAttempt: (attemptId: string): Promise<BookmarkedInAttempt> =>
-        request(SAVED_ROUTES.inAttempt(attemptId), { schema: bookmarkedInAttemptSchema }),
+        get(SAVED_ROUTES.inAttempt(attemptId), bookmarkedInAttemptSchema),
     },
 
     admin: {
       /** Watching one test's sittings, and resolving the ones that broke. */
       liveOps: {
         tests: (query: LiveOpsTestQueryInput = {}): Promise<Paginated<LiveOpsTest>> =>
-          requestPaginated(`${ADMIN_LIVE_OPS_ROUTES.tests}${queryString({ ...query })}`, {
-            schema: liveOpsTestSchema.array(),
-          }),
+          list(ADMIN_LIVE_OPS_ROUTES.tests, query, liveOpsTestSchema),
 
         board: (testId: string): Promise<LiveOpsBoard> =>
-          request(ADMIN_LIVE_OPS_ROUTES.board(testId), { schema: liveOpsBoardSchema }),
+          get(ADMIN_LIVE_OPS_ROUTES.board(testId), liveOpsBoardSchema),
 
         forceSubmit: (
           attemptId: string,
           input: ForceSubmitAttemptInput,
         ): Promise<ResolvedAttempt> =>
-          request(ADMIN_LIVE_OPS_ROUTES.forceSubmit(attemptId), {
-            method: 'POST',
-            body: input,
-            schema: resolvedAttemptSchema,
-          }),
+          write('POST', ADMIN_LIVE_OPS_ROUTES.forceSubmit(attemptId), resolvedAttemptSchema, input),
 
         extend: (attemptId: string, input: ExtendAttemptInput): Promise<ResolvedAttempt> =>
-          request(ADMIN_LIVE_OPS_ROUTES.extend(attemptId), {
-            method: 'POST',
-            body: input,
-            schema: resolvedAttemptSchema,
-          }),
+          write('POST', ADMIN_LIVE_OPS_ROUTES.extend(attemptId), resolvedAttemptSchema, input),
 
         reset: (attemptId: string, input: ResetAttemptInput): Promise<ResolvedAttempt> =>
-          request(ADMIN_LIVE_OPS_ROUTES.reset(attemptId), {
-            method: 'POST',
-            body: input,
-            schema: resolvedAttemptSchema,
-          }),
+          write('POST', ADMIN_LIVE_OPS_ROUTES.reset(attemptId), resolvedAttemptSchema, input),
 
         void: (attemptId: string, input: VoidAttemptInput): Promise<ResolvedAttempt> =>
-          request(ADMIN_LIVE_OPS_ROUTES.void(attemptId), {
-            method: 'POST',
-            body: input,
-            schema: resolvedAttemptSchema,
-          }),
+          write('POST', ADMIN_LIVE_OPS_ROUTES.void(attemptId), resolvedAttemptSchema, input),
       },
 
       /** What an admin says to a cohort, and what reaching them cost. */
       announcements: {
         list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<AnnouncementSummary>> =>
-          requestPaginated(`${ANNOUNCEMENT_ROUTES.list}${queryString({ ...query })}`, {
-            schema: announcementSummarySchema.array(),
-          }),
+          list(ANNOUNCEMENT_ROUTES.list, query, announcementSummarySchema),
 
         /** Asked while composing. Changes nothing — the cohort is read off the body. */
         preview: (input: CreateAnnouncementInput): Promise<AnnouncementPreview> =>
-          request(ANNOUNCEMENT_ROUTES.preview, {
-            method: 'POST',
-            body: input,
-            schema: announcementPreviewSchema,
-          }),
+          write('POST', ANNOUNCEMENT_ROUTES.preview, announcementPreviewSchema, input),
 
         send: (input: CreateAnnouncementInput): Promise<Announcement> =>
-          request(ANNOUNCEMENT_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: announcementSchema,
-          }),
+          write('POST', ANNOUNCEMENT_ROUTES.create, announcementSchema, input),
 
         detail: (id: string): Promise<Announcement> =>
-          request(ANNOUNCEMENT_ROUTES.detail(id), { schema: announcementSchema }),
+          get(ANNOUNCEMENT_ROUTES.detail(id), announcementSchema),
       },
 
       students: {
         list: (query: StudentListQueryInput = {}): Promise<Paginated<StudentSummary>> =>
-          requestPaginated(`${ADMIN_STUDENT_ROUTES.list}${queryString({ ...query })}`, {
-            schema: studentSummarySchema.array(),
-          }),
+          list(ADMIN_STUDENT_ROUTES.list, query, studentSummarySchema),
 
         detail: (id: string): Promise<StudentDetail> =>
-          request(ADMIN_STUDENT_ROUTES.detail(id), { schema: studentDetailSchema }),
+          get(ADMIN_STUDENT_ROUTES.detail(id), studentDetailSchema),
 
         create: (input: CreateStudentInput): Promise<StudentDetail> =>
-          request(ADMIN_STUDENT_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: studentDetailSchema,
-          }),
+          write('POST', ADMIN_STUDENT_ROUTES.create, studentDetailSchema, input),
 
         update: (id: string, input: UpdateStudentInput): Promise<StudentDetail> =>
-          request(ADMIN_STUDENT_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: studentDetailSchema,
-          }),
+          write('PATCH', ADMIN_STUDENT_ROUTES.update(id), studentDetailSchema, input),
 
         setActive: (id: string, isActive: boolean): Promise<StudentDetail> =>
-          request(ADMIN_STUDENT_ROUTES.setActive(id), {
-            method: 'PATCH',
-            body: { isActive },
-            schema: studentDetailSchema,
-          }),
+          write('PATCH', ADMIN_STUDENT_ROUTES.setActive(id), studentDetailSchema, { isActive }),
 
         setTestBlocked: (id: string, input: SetStudentTestBlockedBody): Promise<StudentDetail> =>
-          request(ADMIN_STUDENT_ROUTES.setTestBlocked(id), {
-            method: 'PATCH',
-            body: input,
-            schema: studentDetailSchema,
-          }),
+          write('PATCH', ADMIN_STUDENT_ROUTES.setTestBlocked(id), studentDetailSchema, input),
 
         /** Their evaluated sittings, paged. The share picker's own list is capped; a report's is not. */
         sittings: (
           id: string,
           query: StudentSittingsQueryInput,
         ): Promise<Paginated<ReportSitting>> =>
-          requestPaginated(`${ADMIN_STUDENT_ROUTES.sittings(id)}${queryString({ ...query })}`, {
-            schema: reportSittingSchema.array(),
-          }),
+          list(ADMIN_STUDENT_ROUTES.sittings(id), query, reportSittingSchema),
 
         /** Anonymises the person. Super admin only, and every sitting they sat is left standing. */
         erase: (id: string): Promise<ErasureReceipt> =>
-          request(ADMIN_STUDENT_ROUTES.erasure(id), {
-            method: 'POST',
-            schema: erasureReceiptSchema,
-          }),
+          write('POST', ADMIN_STUDENT_ROUTES.erasure(id), erasureReceiptSchema),
 
         /** Any student's analytics, behind STUDENT_PERFORMANCE. Same payload the student reads. */
         performance: (id: string, query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
-          request(`${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`, {
-            schema: performanceReportSchema,
-          }),
+          get(
+            `${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`,
+            performanceReportSchema,
+          ),
       },
 
       /** Super admin only, enforced server-side. The client does not re-state it. */
       admins: {
         list: (query: AdminListQueryInput = {}): Promise<Paginated<Admin>> =>
-          requestPaginated(`${ADMIN_ADMIN_ROUTES.list}${queryString({ ...query })}`, {
-            schema: adminSchema.array(),
-          }),
+          list(ADMIN_ADMIN_ROUTES.list, query, adminSchema),
 
         create: (input: CreateAdminInput): Promise<Admin> =>
-          request(ADMIN_ADMIN_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: adminSchema,
-          }),
+          write('POST', ADMIN_ADMIN_ROUTES.create, adminSchema, input),
 
         /** Deactivating prunes every grant. Reactivating does NOT restore them. */
         setActive: (id: string, isActive: boolean): Promise<Admin> =>
-          request(ADMIN_ADMIN_ROUTES.setActive(id), {
-            method: 'PATCH',
-            body: { isActive },
-            schema: adminSchema,
-          }),
+          write('PATCH', ADMIN_ADMIN_ROUTES.setActive(id), adminSchema, { isActive }),
       },
 
       features: {
-        list: (): Promise<Feature[]> =>
-          request(ADMIN_FEATURE_ROUTES.list, { schema: featureSchema.array() }),
+        list: (): Promise<Feature[]> => get(ADMIN_FEATURE_ROUTES.list, featureSchema.array()),
 
         grant: (input: PermissionGrantInput): Promise<Feature> =>
-          request(ADMIN_FEATURE_ROUTES.grant, {
-            method: 'POST',
-            body: input,
-            schema: featureSchema,
-          }),
+          write('POST', ADMIN_FEATURE_ROUTES.grant, featureSchema, input),
 
         revoke: (input: PermissionGrantBody): Promise<Feature> =>
-          request(ADMIN_FEATURE_ROUTES.revoke(input.featureKey, input.level, input.adminId), {
-            method: 'DELETE',
-            schema: featureSchema,
-          }),
+          write(
+            'DELETE',
+            ADMIN_FEATURE_ROUTES.revoke(input.featureKey, input.level, input.adminId),
+            featureSchema,
+          ),
       },
 
       branches: {
         list: (query: BranchListQueryInput = {}): Promise<Paginated<Branch>> =>
-          requestPaginated(`${ADMIN_BRANCH_ROUTES.list}${queryString({ ...query })}`, {
-            schema: branchSchema.array(),
-          }),
+          list(ADMIN_BRANCH_ROUTES.list, query, branchSchema),
 
         create: (input: CreateBranchInput): Promise<Branch> =>
-          request(ADMIN_BRANCH_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: branchSchema,
-          }),
+          write('POST', ADMIN_BRANCH_ROUTES.create, branchSchema, input),
 
         update: (id: string, input: UpdateBranchInput): Promise<Branch> =>
-          request(ADMIN_BRANCH_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: branchSchema,
-          }),
+          write('PATCH', ADMIN_BRANCH_ROUTES.update(id), branchSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_BRANCH_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+          write('DELETE', ADMIN_BRANCH_ROUTES.remove(id), noContentSchema),
       },
 
       exams: {
         list: (query: ExamListQueryInput = {}): Promise<Paginated<Exam>> =>
-          requestPaginated(`${ADMIN_EXAM_ROUTES.list}${queryString({ ...query })}`, {
-            schema: examSchema.array(),
-          }),
+          list(ADMIN_EXAM_ROUTES.list, query, examSchema),
 
         create: (input: CreateExamInput): Promise<Exam> =>
-          request(ADMIN_EXAM_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: examSchema,
-          }),
+          write('POST', ADMIN_EXAM_ROUTES.create, examSchema, input),
 
         update: (id: string, input: UpdateExamInput): Promise<Exam> =>
-          request(ADMIN_EXAM_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: examSchema,
-          }),
+          write('PATCH', ADMIN_EXAM_ROUTES.update(id), examSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_EXAM_ROUTES.remove(id), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
+          write('DELETE', ADMIN_EXAM_ROUTES.remove(id), noContentSchema),
       },
 
       /** The stage layer: what a base config, a series and a test all hang off. */
       examStages: {
         list: (query: ExamStageListQueryInput = {}): Promise<Paginated<ExamStage>> =>
-          requestPaginated(`${ADMIN_EXAM_STAGE_ROUTES.list}${queryString({ ...query })}`, {
-            schema: examStageSchema.array(),
-          }),
+          list(ADMIN_EXAM_STAGE_ROUTES.list, query, examStageSchema),
 
         create: (input: CreateExamStageInput): Promise<ExamStage> =>
-          request(ADMIN_EXAM_STAGE_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: examStageSchema,
-          }),
+          write('POST', ADMIN_EXAM_STAGE_ROUTES.create, examStageSchema, input),
 
         update: (id: string, input: UpdateExamStageInput): Promise<ExamStage> =>
-          request(ADMIN_EXAM_STAGE_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: examStageSchema,
-          }),
+          write('PATCH', ADMIN_EXAM_STAGE_ROUTES.update(id), examStageSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_EXAM_STAGE_ROUTES.remove(id), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
+          write('DELETE', ADMIN_EXAM_STAGE_ROUTES.remove(id), noContentSchema),
       },
 
       /** The coaching variants a student can be a candidate for. */
       programs: {
         list: (query: ProgramListQueryInput = {}): Promise<Paginated<Program>> =>
-          requestPaginated(`${ADMIN_PROGRAM_ROUTES.list}${queryString({ ...query })}`, {
-            schema: programCatalogSchema.array(),
-          }),
+          list(ADMIN_PROGRAM_ROUTES.list, query, programCatalogSchema),
 
         create: (input: CreateProgramInput): Promise<Program> =>
-          request(ADMIN_PROGRAM_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: programCatalogSchema,
-          }),
+          write('POST', ADMIN_PROGRAM_ROUTES.create, programCatalogSchema, input),
 
         update: (id: string, input: UpdateProgramInput): Promise<Program> =>
-          request(ADMIN_PROGRAM_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: programCatalogSchema,
-          }),
+          write('PATCH', ADMIN_PROGRAM_ROUTES.update(id), programCatalogSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_PROGRAM_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+          write('DELETE', ADMIN_PROGRAM_ROUTES.remove(id), noContentSchema),
       },
 
       /** Who an EVENT series reaches — sitters, not necessarily students yet. */
       events: {
         list: (query: EventListQueryInput = {}): Promise<Paginated<Event>> =>
-          requestPaginated(`${EVENT_ROUTES.list}${queryString({ ...query })}`, {
-            schema: eventSchema.array(),
-          }),
+          list(EVENT_ROUTES.list, query, eventSchema),
 
-        detail: (id: string): Promise<Event> =>
-          request(EVENT_ROUTES.detail(id), { schema: eventSchema }),
+        detail: (id: string): Promise<Event> => get(EVENT_ROUTES.detail(id), eventSchema),
 
         create: (input: CreateEventInput): Promise<Event> =>
-          request(EVENT_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: eventSchema,
-          }),
+          write('POST', EVENT_ROUTES.create, eventSchema, input),
 
         update: (id: string, input: UpdateEventInput): Promise<Event> =>
-          request(EVENT_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: eventSchema,
-          }),
+          write('PATCH', EVENT_ROUTES.update(id), eventSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(EVENT_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+          write('DELETE', EVENT_ROUTES.remove(id), noContentSchema),
 
         addCandidates: (id: string, input: AddEventCandidatesInput): Promise<EventCandidate[]> =>
-          request(EVENT_ROUTES.addCandidates(id), {
-            method: 'POST',
-            body: input,
-            schema: eventCandidateSchema.array(),
-          }),
+          write('POST', EVENT_ROUTES.addCandidates(id), eventCandidateSchema.array(), input),
 
         removeCandidate: (id: string, studentId: string): Promise<NoContent> =>
-          request(EVENT_ROUTES.removeCandidate(id, studentId), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
+          write('DELETE', EVENT_ROUTES.removeCandidate(id, studentId), noContentSchema),
       },
 
       /** The unit of offering. A test reaches a student only through one of these. */
       testSeries: {
         list: (query: TestSeriesListQueryInput = {}): Promise<Paginated<TestSeriesSummary>> =>
-          requestPaginated(`${ADMIN_SERIES_ROUTES.list}${queryString({ ...query })}`, {
-            schema: testSeriesSummarySchema.array(),
-          }),
+          list(ADMIN_SERIES_ROUTES.list, query, testSeriesSummarySchema),
 
         detail: (id: string): Promise<TestSeriesSummary> =>
-          request(ADMIN_SERIES_ROUTES.detail(id), { schema: testSeriesSummarySchema }),
+          get(ADMIN_SERIES_ROUTES.detail(id), testSeriesSummarySchema),
 
         create: (input: CreateTestSeriesInput): Promise<TestSeriesSummary> =>
-          request(ADMIN_SERIES_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: testSeriesSummarySchema,
-          }),
+          write('POST', ADMIN_SERIES_ROUTES.create, testSeriesSummarySchema, input),
 
         update: (id: string, input: UpdateTestSeriesInput): Promise<TestSeriesSummary> =>
-          request(ADMIN_SERIES_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: testSeriesSummarySchema,
-          }),
+          write('PATCH', ADMIN_SERIES_ROUTES.update(id), testSeriesSummarySchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_SERIES_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+          write('DELETE', ADMIN_SERIES_ROUTES.remove(id), noContentSchema),
 
         /** Every branch, and whether this series reaches it, scoped to what the caller may see. */
         branches: (id: string): Promise<SeriesBranch[]> =>
-          request(ADMIN_SERIES_ROUTES.branches(id), { schema: seriesBranchSchema.array() }),
+          get(ADMIN_SERIES_ROUTES.branches(id), seriesBranchSchema.array()),
 
         setBranches: (id: string, input: UpdateSeriesBranchesInput): Promise<SeriesBranch[]> =>
-          request(ADMIN_SERIES_ROUTES.branches(id), {
-            method: 'PUT',
-            body: input,
-            schema: seriesBranchSchema.array(),
-          }),
+          write('PUT', ADMIN_SERIES_ROUTES.branches(id), seriesBranchSchema.array(), input),
 
         tests: (id: string): Promise<SeriesTestRow[]> =>
-          request(ADMIN_SERIES_ROUTES.tests(id), { schema: seriesTestRowSchema.array() }),
+          get(ADMIN_SERIES_ROUTES.tests(id), seriesTestRowSchema.array()),
 
         setTestUnlock: (
           id: string,
           testId: string,
           input: SetSeriesTestUnlockInput,
         ): Promise<SeriesTestRow[]> =>
-          request(ADMIN_SERIES_ROUTES.test(id, testId), {
-            method: 'PATCH',
-            body: input,
-            schema: seriesTestRowSchema.array(),
-          }),
+          write('PATCH', ADMIN_SERIES_ROUTES.test(id, testId), seriesTestRowSchema.array(), input),
       },
 
       /** Every series a student reaches and what opens each one, the branch gate already applied. */
       studentSeries: {
         list: (studentId: string): Promise<StudentSeriesAccess[]> =>
-          request(ADMIN_STUDENT_SERIES_ROUTES.list(studentId), {
-            schema: studentSeriesAccessSchema.array(),
-          }),
+          get(ADMIN_STUDENT_SERIES_ROUTES.list(studentId), studentSeriesAccessSchema.array()),
       },
 
       /** The escape hatch, filed against the student it was made about. */
       grants: {
         create: (studentId: string, input: GrantSeriesInput): Promise<StudentGrantRow[]> =>
-          request(ADMIN_GRANT_ROUTES.create(studentId), {
-            method: 'POST',
-            body: input,
-            schema: studentGrantRowSchema.array(),
-          }),
+          write('POST', ADMIN_GRANT_ROUTES.create(studentId), studentGrantRowSchema.array(), input),
 
         remove: (studentId: string, testSeriesId: string): Promise<NoContent> =>
-          request(ADMIN_GRANT_ROUTES.remove(studentId, testSeriesId), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
+          write('DELETE', ADMIN_GRANT_ROUTES.remove(studentId, testSeriesId), noContentSchema),
       },
 
       /** A stage's blueprints. The shape freezes at the first finalize — clone to evolve. */
       baseConfigs: {
         list: (query: BaseConfigListQueryInput = {}): Promise<Paginated<BaseConfig>> =>
-          requestPaginated(`${ADMIN_BASE_CONFIG_ROUTES.list}${queryString({ ...query })}`, {
-            schema: baseConfigSchema.array(),
-          }),
+          list(ADMIN_BASE_CONFIG_ROUTES.list, query, baseConfigSchema),
 
         detail: (id: string): Promise<BaseConfigDetail> =>
-          request(ADMIN_BASE_CONFIG_ROUTES.detail(id), { schema: baseConfigDetailSchema }),
+          get(ADMIN_BASE_CONFIG_ROUTES.detail(id), baseConfigDetailSchema),
 
         create: (input: CreateBaseConfigInput): Promise<BaseConfigDetail> =>
-          request(ADMIN_BASE_CONFIG_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: baseConfigDetailSchema,
-          }),
+          write('POST', ADMIN_BASE_CONFIG_ROUTES.create, baseConfigDetailSchema, input),
 
         update: (id: string, input: UpdateBaseConfigInput): Promise<BaseConfigDetail> =>
-          request(ADMIN_BASE_CONFIG_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: baseConfigDetailSchema,
-          }),
+          write('PATCH', ADMIN_BASE_CONFIG_ROUTES.update(id), baseConfigDetailSchema, input),
 
         clone: (id: string, input: CloneBaseConfigInput = {}): Promise<BaseConfigDetail> =>
-          request(ADMIN_BASE_CONFIG_ROUTES.clone(id), {
-            method: 'POST',
-            body: input,
-            schema: baseConfigDetailSchema,
-          }),
+          write('POST', ADMIN_BASE_CONFIG_ROUTES.clone(id), baseConfigDetailSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_BASE_CONFIG_ROUTES.remove(id), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
+          write('DELETE', ADMIN_BASE_CONFIG_ROUTES.remove(id), noContentSchema),
       },
 
       /** The tests built from a config. Every shape field is read through it, never copied. */
       tests: {
         list: (query: TestListQueryInput = {}): Promise<Paginated<Test>> =>
-          requestPaginated(`${ADMIN_TEST_ROUTES.list}${queryString({ ...query })}`, {
-            schema: testSchema.array(),
-          }),
+          list(ADMIN_TEST_ROUTES.list, query, testSchema),
 
         detail: (id: string): Promise<TestDetail> =>
-          request(ADMIN_TEST_ROUTES.detail(id), { schema: testDetailSchema }),
+          get(ADMIN_TEST_ROUTES.detail(id), testDetailSchema),
 
         create: (input: CreateTestInput): Promise<TestDetail> =>
-          request(ADMIN_TEST_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: testDetailSchema,
-          }),
+          write('POST', ADMIN_TEST_ROUTES.create, testDetailSchema, input),
 
         update: (id: string, input: UpdateTestInput): Promise<TestDetail> =>
-          request(ADMIN_TEST_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: testDetailSchema,
-          }),
+          write('PATCH', ADMIN_TEST_ROUTES.update(id), testDetailSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+          write('DELETE', ADMIN_TEST_ROUTES.remove(id), noContentSchema),
 
         /** How the cohort did on it: the three rollups, read whole and derived from. */
         analytics: (id: string): Promise<TestAnalytics> =>
-          request(ADMIN_TEST_ROUTES.analytics(id), { schema: testAnalyticsSchema }),
+          get(ADMIN_TEST_ROUTES.analytics(id), testAnalyticsSchema),
 
         /** The paper as it stands, built a question or a section at a time. */
         readPaper: (id: string): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.read(id), { schema: testPaperSchema }),
+          get(ADMIN_TEST_PAPER_ROUTES.read(id), testPaperSchema),
 
         /** Several at once, in the next free places its section has. */
         addPaperQuestions: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.addQuestion(id), {
-            method: 'POST',
-            body: input,
-            schema: testPaperSchema,
-          }),
+          write('POST', ADMIN_TEST_PAPER_ROUTES.addQuestion(id), testPaperSchema, input),
 
         removePaperQuestions: (id: string, rowIds: readonly string[]): Promise<TestPaper> =>
-          request(
+          write(
+            'DELETE',
             `${ADMIN_TEST_PAPER_ROUTES.removeQuestions(id)}${queryString({ rowIds: [...rowIds] })}`,
-            { method: 'DELETE', schema: testPaperSchema },
+            testPaperSchema,
           ),
 
         /** Fills the rest of one section from its own spec; every hand-picked row keeps its place. */
         fillPaperSection: (id: string, sectionId: string): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.fillSection(id, sectionId), {
-            method: 'POST',
-            schema: testPaperSchema,
-          }),
+          write('POST', ADMIN_TEST_PAPER_ROUTES.fillSection(id, sectionId), testPaperSchema),
 
         /** Drops a question or makes it a bonus, and re-scores every sitting that served it. */
         setPaperQuestionStatus: (
@@ -1311,28 +1078,16 @@ export function createApiClient(options: ApiClientOptions) {
           rowId: string,
           input: SetPaperQuestionStatusInput,
         ): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.questionStatus(id, rowId), {
-            method: 'PATCH',
-            body: input,
-            schema: testPaperSchema,
-          }),
+          write('PATCH', ADMIN_TEST_PAPER_ROUTES.questionStatus(id, rowId), testPaperSchema, input),
 
         offer: (id: string): Promise<OfferResult> =>
-          request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
+          write('POST', ADMIN_TEST_PAPER_ROUTES.offer(id), offerResultSchema),
 
         moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink> =>
-          request(ADMIN_TEST_PAPER_ROUTES.series(id), {
-            method: 'POST',
-            body: input,
-            schema: testSeriesLinkSchema,
-          }),
+          write('POST', ADMIN_TEST_PAPER_ROUTES.series(id), testSeriesLinkSchema, input),
 
         setStatus: (id: string, input: SetTestStatusInput): Promise<TestStatus> =>
-          request(ADMIN_TEST_PAPER_ROUTES.setStatus(id), {
-            method: 'PATCH',
-            body: input,
-            schema: testStatusSchema,
-          }),
+          write('PATCH', ADMIN_TEST_PAPER_ROUTES.setStatus(id), testStatusSchema, input),
 
         /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
         setProgramUnlock: (
@@ -1340,172 +1095,112 @@ export function createApiClient(options: ApiClientOptions) {
           programCode: string,
           input: SetProgramUnlockInput,
         ): Promise<TestProgramUnlock[]> =>
-          request(ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode), {
-            method: 'PUT',
-            body: input,
-            schema: testProgramUnlockSchema.array(),
-          }),
+          write(
+            'PUT',
+            ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode),
+            testProgramUnlockSchema.array(),
+            input,
+          ),
 
         clearProgramUnlock: (id: string, programCode: string): Promise<TestProgramUnlock[]> =>
-          request(ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode), {
-            method: 'DELETE',
-            schema: testProgramUnlockSchema.array(),
-          }),
+          write(
+            'DELETE',
+            ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode),
+            testProgramUnlockSchema.array(),
+          ),
       },
 
       /** Subject -> Topic. Anything finer than a topic is a `topic:` tag on the question. */
       taxonomy: {
         listSubjects: (query: SubjectListQueryInput = {}): Promise<Paginated<Subject>> =>
-          requestPaginated(`${ADMIN_TAXONOMY_ROUTES.subjects}${queryString({ ...query })}`, {
-            schema: subjectSchema.array(),
-          }),
+          list(ADMIN_TAXONOMY_ROUTES.subjects, query, subjectSchema),
 
         createSubject: (input: CreateSubjectInput): Promise<Subject> =>
-          request(ADMIN_TAXONOMY_ROUTES.subjects, {
-            method: 'POST',
-            body: input,
-            schema: subjectSchema,
-          }),
+          write('POST', ADMIN_TAXONOMY_ROUTES.subjects, subjectSchema, input),
 
         listTopics: (query: TopicListQueryInput = {}): Promise<Paginated<Topic>> =>
-          requestPaginated(`${ADMIN_TAXONOMY_ROUTES.topics}${queryString({ ...query })}`, {
-            schema: topicSchema.array(),
-          }),
+          list(ADMIN_TAXONOMY_ROUTES.topics, query, topicSchema),
 
         createTopic: (input: CreateTopicInput): Promise<Topic> =>
-          request(ADMIN_TAXONOMY_ROUTES.topics, {
-            method: 'POST',
-            body: input,
-            schema: topicSchema,
-          }),
+          write('POST', ADMIN_TAXONOMY_ROUTES.topics, topicSchema, input),
       },
 
       /** A typist's own questions. Every route here is scoped to the caller by the server. */
       authoring: {
         stats: (): Promise<AuthoringStats> =>
-          request(ADMIN_AUTHORING_ROUTES.stats, { schema: authoringStatsSchema }),
+          get(ADMIN_AUTHORING_ROUTES.stats, authoringStatsSchema),
 
         history: (query: AuthoringHistoryQueryInput = {}): Promise<Paginated<QuestionSummary>> =>
-          requestPaginated(`${ADMIN_AUTHORING_ROUTES.history}${queryString({ ...query })}`, {
-            schema: questionSummarySchema.array(),
-          }),
+          list(ADMIN_AUTHORING_ROUTES.history, query, questionSummarySchema),
 
         detail: (id: string): Promise<QuestionDetail> =>
-          request(ADMIN_AUTHORING_ROUTES.get(id), { schema: questionDetailSchema }),
+          get(ADMIN_AUTHORING_ROUTES.get(id), questionDetailSchema),
 
         create: (input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
-          request(ADMIN_AUTHORING_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: authoringSaveResultSchema,
-          }),
+          write('POST', ADMIN_AUTHORING_ROUTES.create, authoringSaveResultSchema, input),
 
         update: (id: string, input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
-          request(ADMIN_AUTHORING_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: authoringSaveResultSchema,
-          }),
+          write('PATCH', ADMIN_AUTHORING_ROUTES.update(id), authoringSaveResultSchema, input),
       },
 
       questions: {
         list: (query: QuestionListQueryInput = {}): Promise<Paginated<QuestionSummary>> =>
-          requestPaginated(`${ADMIN_QUESTION_ROUTES.list}${queryString({ ...query })}`, {
-            schema: questionSummarySchema.array(),
-          }),
+          list(ADMIN_QUESTION_ROUTES.list, query, questionSummarySchema),
 
         detail: (id: string): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.get(id), { schema: questionDetailSchema }),
+          get(ADMIN_QUESTION_ROUTES.get(id), questionDetailSchema),
 
         /** Counts, not a page: what a section can actually be drawn from. */
         availability: (query: QuestionAvailabilityQueryInput = {}): Promise<QuestionAvailability> =>
-          request(`${ADMIN_QUESTION_ROUTES.availability}${queryString({ ...query })}`, {
-            schema: questionAvailabilitySchema,
-          }),
+          get(
+            `${ADMIN_QUESTION_ROUTES.availability}${queryString({ ...query })}`,
+            questionAvailabilitySchema,
+          ),
 
         create: (input: QuestionDraftInput): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: questionDetailSchema,
-          }),
+          write('POST', ADMIN_QUESTION_ROUTES.create, questionDetailSchema, input),
 
         update: (id: string, input: QuestionDraftInput): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: questionDetailSchema,
-          }),
+          write('PATCH', ADMIN_QUESTION_ROUTES.update(id), questionDetailSchema, input),
 
         /** ARCHIVED retires a question: it is drawn into no future paper. */
         setStatus: (id: string, input: SetQuestionStatusInput): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.setStatus(id), {
-            method: 'PATCH',
-            body: input,
-            schema: questionDetailSchema,
-          }),
+          write('PATCH', ADMIN_QUESTION_ROUTES.setStatus(id), questionDetailSchema, input),
 
         /** The soft remove: out of circulation and out of the bank, losing nothing. */
         archive: (id: string): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.archive(id), {
-            method: 'POST',
-            schema: questionDetailSchema,
-          }),
+          write('POST', ADMIN_QUESTION_ROUTES.archive(id), questionDetailSchema),
 
         unarchive: (id: string): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.unarchive(id), {
-            method: 'POST',
-            schema: questionDetailSchema,
-          }),
+          write('POST', ADMIN_QUESTION_ROUTES.unarchive(id), questionDetailSchema),
 
         /** Only a draft nothing has drawn. Everything else is archived, never removed. */
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_QUESTION_ROUTES.remove(id), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
+          write('DELETE', ADMIN_QUESTION_ROUTES.remove(id), noContentSchema),
 
         /** One decision over a page of drafts — one request, so nothing is half-approved. */
         bulkSetStatus: (input: BulkQuestionStatusInput): Promise<BulkQuestionStatusResult> =>
-          request(ADMIN_QUESTION_ROUTES.bulkStatus, {
-            method: 'PATCH',
-            body: input,
-            schema: bulkQuestionStatusResultSchema,
-          }),
+          write('PATCH', ADMIN_QUESTION_ROUTES.bulkStatus, bulkQuestionStatusResultSchema, input),
 
         /** Content stores the `key`; the `url` is for showing the image that was just chosen. */
         uploadImage: (file: File): Promise<QuestionImage> => {
           const form = new FormData();
           form.append(QUESTION_IMAGE_FILE_FIELD, file);
-          return request(ADMIN_QUESTION_ROUTES.uploadImage, {
-            method: 'POST',
-            body: form,
-            schema: questionImageSchema,
-          });
+          return write('POST', ADMIN_QUESTION_ROUTES.uploadImage, questionImageSchema, form);
         },
       },
 
       /** The proof-reading document, and the flags raised on it. */
       proofreading: {
         document: (query: QuestionListQueryInput = {}): Promise<Paginated<ProofreadQuestion>> =>
-          requestPaginated(`${ADMIN_PROOFREADING_ROUTES.document}${queryString({ ...query })}`, {
-            schema: proofreadQuestionSchema.array(),
-          }),
+          list(ADMIN_PROOFREADING_ROUTES.document, query, proofreadQuestionSchema),
 
         raise: (questionId: string, input: CreateQuestionFlagInput): Promise<QuestionFlag> =>
-          request(ADMIN_PROOFREADING_ROUTES.raise(questionId), {
-            method: 'POST',
-            body: input,
-            schema: questionFlagSchema,
-          }),
+          write('POST', ADMIN_PROOFREADING_ROUTES.raise(questionId), questionFlagSchema, input),
 
         /** Resolved or dismissed — either one clears the block on going ACTIVE. */
         settle: (flagId: string, input: SettleQuestionFlagInput): Promise<QuestionFlag> =>
-          request(ADMIN_PROOFREADING_ROUTES.settle(flagId), {
-            method: 'PATCH',
-            body: input,
-            schema: questionFlagSchema,
-          }),
+          write('PATCH', ADMIN_PROOFREADING_ROUTES.settle(flagId), questionFlagSchema, input),
       },
 
       imports: {
@@ -1514,67 +1209,57 @@ export function createApiClient(options: ApiClientOptions) {
 
         /** Writes nothing — this is what the admin reads before committing. */
         previewStudents: (file: File): Promise<StudentImportPlan> =>
-          request(IMPORT_ROUTES.studentsPreview, {
-            method: 'POST',
-            body: fileBody(file),
-            schema: studentImportPlanSchema,
-          }),
+          write('POST', IMPORT_ROUTES.studentsPreview, studentImportPlanSchema, fileBody(file)),
 
         commitStudents: (file: File): Promise<StudentImportResult> =>
-          request(IMPORT_ROUTES.studentsCommit, {
-            method: 'POST',
-            body: fileBody(file),
-            schema: studentImportResultSchema,
-          }),
+          write('POST', IMPORT_ROUTES.studentsCommit, studentImportResultSchema, fileBody(file)),
 
         /** The candidate sample — a Blob, not an envelope. */
         candidateTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.candidatesTemplate),
 
         /** An event intake: an existing number joins the roster and nothing about them is edited. */
         previewEventCandidates: (eventId: string, file: File): Promise<CandidateImportPlan> =>
-          request(IMPORT_ROUTES.eventCandidatesPreview(eventId), {
-            method: 'POST',
-            body: fileBody(file),
-            schema: candidateImportPlanSchema,
-          }),
+          write(
+            'POST',
+            IMPORT_ROUTES.eventCandidatesPreview(eventId),
+            candidateImportPlanSchema,
+            fileBody(file),
+          ),
 
         commitEventCandidates: (eventId: string, file: File): Promise<CandidateImportResult> =>
-          request(IMPORT_ROUTES.eventCandidatesCommit(eventId), {
-            method: 'POST',
-            body: fileBody(file),
-            schema: candidateImportResultSchema,
-          }),
+          write(
+            'POST',
+            IMPORT_ROUTES.eventCandidatesCommit(eventId),
+            candidateImportResultSchema,
+            fileBody(file),
+          ),
 
         /** The program enrolment sample — a Blob, not an envelope. */
         programTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.programStudentsTemplate),
 
         /** Adds a program to students who already exist; a number we do not know is skipped. */
         previewProgramStudents: (code: string, file: File): Promise<ProgramImportPlan> =>
-          request(IMPORT_ROUTES.programStudentsPreview(code), {
-            method: 'POST',
-            body: fileBody(file),
-            schema: programImportPlanSchema,
-          }),
+          write(
+            'POST',
+            IMPORT_ROUTES.programStudentsPreview(code),
+            programImportPlanSchema,
+            fileBody(file),
+          ),
 
         commitProgramStudents: (code: string, file: File): Promise<ProgramImportResult> =>
-          request(IMPORT_ROUTES.programStudentsCommit(code), {
-            method: 'POST',
-            body: fileBody(file),
-            schema: programImportResultSchema,
-          }),
+          write(
+            'POST',
+            IMPORT_ROUTES.programStudentsCommit(code),
+            programImportResultSchema,
+            fileBody(file),
+          ),
 
         /** No body: the roster is fetched server-side, so there is nothing here to tamper with. */
         previewPortalStudents: (): Promise<StudentImportPlan> =>
-          request(IMPORT_ROUTES.studentsPortalPreview, {
-            method: 'POST',
-            schema: studentImportPlanSchema,
-          }),
+          write('POST', IMPORT_ROUTES.studentsPortalPreview, studentImportPlanSchema),
 
         commitPortalStudents: (): Promise<StudentImportResult> =>
-          request(IMPORT_ROUTES.studentsPortalCommit, {
-            method: 'POST',
-            schema: studentImportResultSchema,
-          }),
+          write('POST', IMPORT_ROUTES.studentsPortalCommit, studentImportResultSchema),
         /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */
         questionTemplate: (): Promise<Blob> => requestBlob(QUESTION_IMPORT_ROUTES.template),
 
@@ -1583,42 +1268,32 @@ export function createApiClient(options: ApiClientOptions) {
          * names the run rather than sending the same megabytes a second time.
          */
         previewQuestions: (file: File): Promise<QuestionImportPlan> =>
-          request(QUESTION_IMPORT_ROUTES.preview, {
-            method: 'POST',
-            body: fileBody(file),
-            schema: questionImportPlanSchema,
-          }),
+          write('POST', QUESTION_IMPORT_ROUTES.preview, questionImportPlanSchema, fileBody(file)),
 
         commitQuestions: (
           importLogId: string,
           status: QuestionIntakeStatus,
         ): Promise<QuestionImportResult> =>
-          request(QUESTION_IMPORT_ROUTES.commit, {
-            method: 'POST',
-            body: { importLogId, status },
-            schema: questionImportResultSchema,
+          write('POST', QUESTION_IMPORT_ROUTES.commit, questionImportResultSchema, {
+            importLogId,
+            status,
           }),
       },
 
       /** The landing screen. One payload, carrying only the bands the caller may see. */
       dashboard: {
-        get: (): Promise<Dashboard> =>
-          request(ADMIN_DASHBOARD_ROUTES.get, { schema: dashboardSchema }),
+        get: (): Promise<Dashboard> => get(ADMIN_DASHBOARD_ROUTES.get, dashboardSchema),
       },
 
       audit: {
         rowActions: (query: RowActionListQueryInput = {}): Promise<Paginated<RowAction>> =>
-          requestPaginated(`${ADMIN_AUDIT_ROUTES.rowActions}${queryString({ ...query })}`, {
-            schema: rowActionSchema.array(),
-          }),
+          list(ADMIN_AUDIT_ROUTES.rowActions, query, rowActionSchema),
 
         /** The sheet a run was fed — a Blob, not an envelope. */
         importFile: (id: string): Promise<Blob> => requestBlob(ADMIN_AUDIT_ROUTES.importFile(id)),
 
         imports: (query: PaginationQueryInput = {}): Promise<Paginated<ImportLogSummary>> =>
-          requestPaginated(`${ADMIN_AUDIT_ROUTES.imports}${queryString({ ...query })}`, {
-            schema: importLogSchema.array(),
-          }),
+          list(ADMIN_AUDIT_ROUTES.imports, query, importLogSchema),
       },
     },
   };
