@@ -17,6 +17,7 @@ import {
   type AnswerState,
   type AttemptStatus,
   type DifficultyLevel,
+  type ExamCourse,
   type QuestionStatus,
   type QuestionType,
   type TestScope,
@@ -39,6 +40,7 @@ export interface TestOverrides {
   status?: TestStatus;
   opensAt?: Date | null;
   scope?: TestScope;
+  seriesOrder?: number;
 }
 
 export interface StudentOverrides {
@@ -47,6 +49,7 @@ export interface StudentOverrides {
   fullName?: string | null;
   currentBranchId?: string | null;
   programs?: string[];
+  enrolledCourses?: ExamCourse[];
   isActive?: boolean;
   isTestBlocked?: boolean;
   deletedAt?: Date | null;
