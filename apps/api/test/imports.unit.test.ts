@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { BRANCH_TYPE, IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
-import { parseCsv, readCsvTable, normaliseHeader } from '../src/common/importing';
+import { parseCsvRows, readCsvTable, normaliseHeader } from '../src/common/importing';
 import { mobilesIn, planStudentImport, type ImportContext } from '../src/imports/student-import';
 import { roster } from './support/fakes';
 
@@ -10,7 +10,9 @@ import { roster } from './support/fakes';
  * the import succeeds with the wrong data in the wrong fields.
  */
 
-describe('parseCsv', () => {
+const parseCsv = (input: string) => parseCsvRows(input).map((row) => row.cells);
+
+describe('parseCsvRows', () => {
   it('reads a plain sheet', () => {
     assert.deepEqual(parseCsv('a,b\n1,2'), [
       ['a', 'b'],

@@ -362,14 +362,14 @@ export class ImportsService {
         ? []
         : await this.prisma.student.findMany({
             where: { mobile: { in: mobiles } },
-            select: { id: true, mobile: true, pinHash: true, deletedAt: true },
+            select: { id: true, mobile: true, deletedAt: true },
           });
 
     return planCandidateImport(table, {
       existingByMobile: new Map(
         students
           .filter((student) => student.deletedAt === null)
-          .map((student) => [student.mobile, { id: student.id, hasPin: student.pinHash !== null }]),
+          .map((student) => [student.mobile, { id: student.id }]),
       ),
       deletedMobiles: new Set(
         students.filter((student) => student.deletedAt !== null).map((student) => student.mobile),

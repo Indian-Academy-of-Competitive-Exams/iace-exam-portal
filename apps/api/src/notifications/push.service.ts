@@ -8,7 +8,6 @@ import { DeliveryChannel, DeliveryStatus, type NotificationType } from '@prisma/
 import { NOTIFICATION_INBOX_PATH, type PushSubscriptionBody } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
-import { type SkipReason } from './notification-policy';
 import { PUSH_OUTCOMES, PUSH_SENDER, type PushSender } from './web-push.sender';
 
 /** What one push is sent from. The title only — the body may name marks, and a push must not. */
@@ -128,7 +127,6 @@ export class PushService {
 
 interface DeliveryOutcome {
   status: DeliveryStatus;
-  skipReason?: SkipReason;
   sentAt?: Date;
   failedAt?: Date;
   attempts?: number;

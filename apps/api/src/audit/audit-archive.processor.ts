@@ -10,7 +10,7 @@ import { StorageService } from '../storage/storage.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { AuditService } from './audit.service';
-import { AUDIT_RETENTION_DAYS, archiveKeyFor, dayToArchive, toNdjson } from './audit-archive';
+import { archiveKeyFor, dayToArchive, toNdjson } from './audit-archive';
 import {
   instituteDayOf,
   shiftInstituteDay,
@@ -108,7 +108,7 @@ export class AuditArchiveProcessor extends WorkerHost {
   }
 
   private async oldestPendingDay(now: Date): Promise<PendingDay | null> {
-    const eligibleBefore = nextInstituteMidnight(dayToArchive(now, AUDIT_RETENTION_DAYS));
+    const eligibleBefore = nextInstituteMidnight(dayToArchive(now));
     const [oldest] = await this.prisma.rowActionLog.findMany({
       where: { createdAt: { lt: eligibleBefore } },
       orderBy: { createdAt: 'asc' },

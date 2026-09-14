@@ -2,24 +2,14 @@
  * Which bands a caller may see. Pure, so the gate is testable without a database and the service
  * cannot query for a band it then drops — a count it never runs is a count that cannot leak.
  */
-import {
-  FEATURE_KEYS,
-  PERMISSION_LEVELS,
-  satisfiesLevel,
-  type FeatureKey,
-  type PermissionLevel,
-} from '@iace/contracts';
+import { FEATURE_KEYS, PERMISSION_LEVELS, satisfiesLevel, type FeatureKey } from '@iace/contracts';
 import { type AuthenticatedUser } from '../common/security';
 
 /** Mirrors FeaturePermissionGuard, including its order: a deactivated super admin holds nothing. */
-export function holds(
-  user: AuthenticatedUser,
-  keys: readonly FeatureKey[],
-  level: PermissionLevel = PERMISSION_LEVELS.READ,
-): boolean {
+export function holds(user: AuthenticatedUser, keys: readonly FeatureKey[]): boolean {
   if (!user.isActive) return false;
   if (user.isSuperAdmin) return true;
-  return keys.some((key) => satisfiesLevel(user.permissions[key], level));
+  return keys.some((key) => satisfiesLevel(user.permissions[key], PERMISSION_LEVELS.READ));
 }
 
 export interface DashboardBands {

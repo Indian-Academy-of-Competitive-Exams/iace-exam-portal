@@ -1,13 +1,7 @@
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes } from '@iace/contracts';
-import {
-  AUDIT_RETENTION_DAYS,
-  archiveKeyFor,
-  dayToArchive,
-  toNdjson,
-} from '../src/audit/audit-archive';
+import { archiveKeyFor, dayToArchive, toNdjson } from '../src/audit/audit-archive';
 
 describe('archiveKeyFor', () => {
   /** Derived from the date alone, so finding a day needs no index and no tool. */
@@ -56,7 +50,7 @@ describe('toNdjson', () => {
 
 describe('dayToArchive', () => {
   it('is the retention boundary, at institute midnight', () => {
-    const day = dayToArchive(new Date('2026-04-10T13:45:00Z'), AUDIT_RETENTION_DAYS);
+    const day = dayToArchive(new Date('2026-04-10T13:45:00Z'));
 
     assert.equal(day.toISOString(), '2026-03-10T18:30:00.000Z');
   });
@@ -68,23 +62,12 @@ describe('dayToArchive', () => {
   it('never returns today', () => {
     const now = new Date('2026-04-10T13:45:00Z');
 
-    assert.ok(dayToArchive(now, AUDIT_RETENTION_DAYS).getTime() < now.getTime());
+    assert.ok(dayToArchive(now).getTime() < now.getTime());
   });
 
   it('never returns today, even when now is exactly midnight UTC', () => {
     const now = new Date('2026-04-10T00:00:00.000Z');
 
-    assert.ok(dayToArchive(now, AUDIT_RETENTION_DAYS).getTime() < now.getTime());
-  });
-
-  it('refuses a retention window under a day, rather than return today', () => {
-    assert.throws(
-      () => dayToArchive(new Date('2026-04-10T13:45:00Z'), 0),
-      (error: unknown) => {
-        assert.ok(AppException.is(error));
-        assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-        return true;
-      },
-    );
+    assert.ok(dayToArchive(now).getTime() < now.getTime());
   });
 });

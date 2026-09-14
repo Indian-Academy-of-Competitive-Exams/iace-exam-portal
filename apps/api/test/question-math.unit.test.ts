@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { latexIn } from '@iace/contracts';
-import { firstMathError, mathErrorIn } from '../src/questions/question-math';
+import { firstMathFailure, latexIn } from '@iace/contracts';
+import { mathErrorIn } from '../src/questions/question-math';
 
 describe('latexIn', () => {
   it('finds the formulas the editor wrote', () => {
@@ -47,14 +47,14 @@ describe('mathErrorIn', () => {
   });
 });
 
-describe('firstMathError', () => {
+describe('firstMathFailure', () => {
   it('says nothing about content that is fine', () => {
-    assert.equal(firstMathError('<p>a <span data-latex="x^2"></span></p>'), null);
+    assert.equal(firstMathFailure('<p>a <span data-latex="x^2"></span></p>', mathErrorIn), null);
   });
 
   it('names the formula that broke, not just that one did', () => {
     const html = '<span data-latex="x^2"></span><span data-latex="\\frac{a}"></span>';
-    const failure = firstMathError(html);
+    const failure = firstMathFailure(html, mathErrorIn);
 
     assert.equal(failure?.latex, '\\frac{a}');
     assert.match(failure?.message ?? '', /Unexpected end of input/);

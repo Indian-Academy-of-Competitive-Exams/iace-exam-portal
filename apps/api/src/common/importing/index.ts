@@ -1,7 +1,6 @@
 /** Reading an uploaded roster or question sheet — the half both importers share. */
 export {
   normaliseHeader,
-  parseCsv,
   parseCsvRows,
   readCsvTable,
   type CsvRow,

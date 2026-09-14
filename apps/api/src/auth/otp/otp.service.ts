@@ -31,19 +31,6 @@ export class OtpService {
     @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
   ) {}
 
-  /** Policy values, exposed so callers can echo them without re-reading config. */
-  get ttlSec(): number {
-    return this.config.get('OTP_TTL_SEC');
-  }
-
-  get cooldownSec(): number {
-    return this.config.get('OTP_RESEND_COOLDOWN_SEC');
-  }
-
-  get codeLength(): number {
-    return this.config.get('OTP_LENGTH');
-  }
-
   async request(actor: ActorType, identifier: string): Promise<OtpRequestResponse> {
     const cooldownKey = redisKeys.otpCooldown(actor, identifier);
     const remaining = await this.redis.ttl(cooldownKey);

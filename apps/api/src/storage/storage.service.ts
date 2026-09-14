@@ -16,12 +16,10 @@ export class StorageService implements OnModuleDestroy {
   private readonly logger = new Logger(StorageService.name);
   private readonly client: S3Client;
   private readonly bucket: string;
-  private readonly publicBaseUrl: string | undefined;
 
-  constructor(private readonly config: AppConfigService) {
+  constructor(config: AppConfigService) {
     const endpoint = config.get('S3_ENDPOINT');
     this.bucket = config.get('S3_BUCKET');
-    this.publicBaseUrl = config.get('S3_PUBLIC_URL');
 
     this.client = new S3Client({
       region: config.get('S3_REGION'),
@@ -41,7 +39,11 @@ export class StorageService implements OnModuleDestroy {
     this.client.destroy();
   }
 
-  async upload(key: string, body: Buffer | Uint8Array | string, contentType?: string) {
+  async upload(
+    key: string,
+    body: Buffer | Uint8Array | string,
+    contentType?: string,
+  ): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -49,16 +51,6 @@ export class StorageService implements OnModuleDestroy {
         Body: body,
         ContentType: contentType,
       }),
-    );
-    return { key, url: this.publicUrl(key) };
-  }
-
-  /** Hand the browser a short-lived URL so large files never proxy through the API. */
-  async createUploadUrl(key: string, contentType: string, expiresInSec = 900): Promise<string> {
-    return getSignedUrl(
-      this.client,
-      new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }),
-      { expiresIn: expiresInSec },
     );
   }
 
@@ -98,14 +90,5 @@ export class StorageService implements OnModuleDestroy {
   /** Used by /health — proves credentials and the bucket are both good. */
   async ping(): Promise<void> {
     await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
-  }
-
-  /**
-   * Stable public URL for an object. In production this is the CloudFront / bucket origin; locally
-   * it points straight at MinIO.
-   */
-  publicUrl(key: string): string {
-    const base = this.publicBaseUrl ?? `${this.config.get('S3_ENDPOINT') ?? ''}/${this.bucket}`;
-    return `${base.replace(/\/$/, '')}/${key.replace(/^\//, '')}`;
   }
 }

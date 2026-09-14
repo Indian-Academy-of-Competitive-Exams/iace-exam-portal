@@ -8,7 +8,7 @@ import { roster } from './support/fakes';
 /** A candidate sheet is an intake list, not a roster: a number we know only JOINS the event. */
 
 const context = (over: Partial<CandidateImportContext> = {}): CandidateImportContext => ({
-  existingByMobile: new Map([['9000000001', { id: 'stu_existing', hasPin: true }]]),
+  existingByMobile: new Map([['9000000001', { id: 'stu_existing' }]]),
   deletedMobiles: new Set<string>(),
   ...over,
 });

@@ -17,5 +17,3 @@ if (dsn) {
     sendDefaultPii: false,
   });
 }
-
-export const sentryEnabled = Boolean(dsn);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
 import { AdminsController } from '../src/admins/admins.controller';
-import { AUDITED_ADMIN_FIELDS, permissionAuditEntity } from '../src/admins/admins.service';
+import { AUDITED_ADMIN_FIELDS, permissionDiff } from '../src/admins/admins.service';
 import { AUDIT_KEY, type AuditRoute } from '../src/audit/audit.decorator';
 
 describe('the admin audit diff', () => {
@@ -37,26 +37,15 @@ describe('what files under FEATURE_PERMISSION', () => {
 });
 
 describe('permission grants', () => {
-  /**
-   * A grant has no row of its own to name, so the entity is the admin it was made about —
-   * which is also who you are looking at when you ask the question.
-   */
-  it('files a grant against the admin who received it', () => {
-    assert.deepEqual(
-      permissionAuditEntity({ adminId: 'adm_2', key: 'STUDENT_MANAGEMENT', level: 'WRITE' }),
-      {
-        feature: AUDIT_FEATURE.FEATURE_PERMISSION,
-        entityId: 'adm_2',
-        changed: { STUDENT_MANAGEMENT: { from: null, to: 'WRITE' } },
-      },
-    );
+  it('records a grant as the level arriving', () => {
+    assert.deepEqual(permissionDiff({ key: 'STUDENT_MANAGEMENT', level: 'WRITE' }), {
+      STUDENT_MANAGEMENT: { from: null, to: 'WRITE' },
+    });
   });
 
   it('records a revoke as the level going away', () => {
-    assert.deepEqual(
-      permissionAuditEntity({ adminId: 'adm_2', key: 'STUDENT_MANAGEMENT', level: 'WRITE' }, true)
-        .changed,
-      { STUDENT_MANAGEMENT: { from: 'WRITE', to: null } },
-    );
+    assert.deepEqual(permissionDiff({ key: 'STUDENT_MANAGEMENT', level: 'WRITE' }, true), {
+      STUDENT_MANAGEMENT: { from: 'WRITE', to: null },
+    });
   });
 });

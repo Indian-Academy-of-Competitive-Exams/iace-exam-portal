@@ -85,8 +85,6 @@ export const ROLLUP_JOBS = {
   REBUILD_ALL: 'rebuild-all',
 } as const;
 
-export type RollupJob = (typeof ROLLUP_JOBS)[keyof typeof ROLLUP_JOBS];
-
 /** One id for the whole pass: a burst of evaluations asks for one fold, not one each. */
 export const FOLD_PENDING_JOB_ID = `${QUEUE_NAMES.ROLLUP}-fold-pending`;
 

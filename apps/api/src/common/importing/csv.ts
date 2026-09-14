@@ -92,11 +92,6 @@ function readQuotedField(
   return { value, endsAt: text.length, newlines };
 }
 
-/** The cells alone, where the line numbers are not needed. */
-export function parseCsv(input: string): string[][] {
-  return parseCsvRows(input).map((row) => row.cells);
-}
-
 /**
  * Turns the sheet into objects keyed by header name, keeping the 1-based line number of each row —
  * an error that cannot say "line 42" is not actionable against a 400-row file.

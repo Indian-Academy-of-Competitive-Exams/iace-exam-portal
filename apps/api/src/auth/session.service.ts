@@ -46,10 +46,6 @@ export class SessionService {
     await this.redis.client.expire(indexKey, ttlSec);
   }
 
-  async get(actor: ActorType, subjectId: string, sessionId: string): Promise<StoredSession | null> {
-    return this.redis.getJson<StoredSession>(redisKeys.session(actor, subjectId, sessionId));
-  }
-
   /** Called by the JWT guard: a revoked session invalidates a still-valid token. */
   async exists(actor: ActorType, subjectId: string, sessionId: string): Promise<boolean> {
     return (await this.redis.client.exists(redisKeys.session(actor, subjectId, sessionId))) === 1;

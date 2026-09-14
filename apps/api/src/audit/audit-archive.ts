@@ -1,5 +1,4 @@
 import { gzipSync } from 'node:zlib';
-import { AppException, ErrorCodes } from '@iace/contracts';
 import {
   instituteDayOf,
   shiftInstituteDay,
@@ -26,9 +25,6 @@ export function toNdjson(rows: readonly object[]): Buffer {
 }
 
 /** Institute midnight of the day that has just fallen outside the window. Never today. */
-export function dayToArchive(now: Date, retentionDays: number): Date {
-  if (retentionDays < 1) {
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, 'retentionDays must be at least 1');
-  }
-  return startOfInstituteDay(shiftInstituteDay(instituteDayOf(now), -retentionDays));
+export function dayToArchive(now: Date): Date {
+  return startOfInstituteDay(shiftInstituteDay(instituteDayOf(now), -AUDIT_RETENTION_DAYS));
 }

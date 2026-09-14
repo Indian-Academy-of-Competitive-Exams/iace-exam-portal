@@ -304,7 +304,7 @@ export class FakeStorage implements Pick<
     if (this.failNextUpload) return Promise.reject(new Error('s3 is down'));
     const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body as Uint8Array | string);
     this.objects.set(key, buffer);
-    return Promise.resolve({ key, url: `memory://${key}` });
+    return Promise.resolve();
   }
 
   /** Lets a test make `objectSize` disagree with what one specific key actually holds. */

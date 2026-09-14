@@ -18,7 +18,7 @@ const DELETED_MESSAGE =
 
 export interface CandidateImportContext {
   /** Mobile → the LIVE student it already belongs to. Such a row only joins the roster. */
-  existingByMobile: Map<string, { id: string; hasPin: boolean }>;
+  existingByMobile: Map<string, { id: string }>;
   /** Numbers held by a soft-deleted student: unique among live rows only, so a create would succeed. */
   deletedMobiles: Set<string>;
 }

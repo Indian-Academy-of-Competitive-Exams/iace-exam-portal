@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
-  AUDIT_FEATURE,
   ErrorCodes,
   FEATURES,
   FEATURE_KEY_VALUES,
@@ -10,7 +9,6 @@ import {
   type Admin as AdminDto,
   type AdminListQuery,
   type AdminPermissions,
-  type AuditFeature,
   type CreateAdminBody,
   type Feature as FeatureDto,
   type FeatureKey,
@@ -41,17 +39,9 @@ export const AUDITED_ADMIN_FIELDS = ['fullName', 'isSuperAdmin'] as const;
 /** The single column the toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 
-/** A grant has no row to name, so it is filed against the admin it was made about. */
-export function permissionAuditEntity(
-  grant: { adminId: string; key: string; level: string },
-  revoked = false,
-): { feature: AuditFeature; entityId: string; changed: FieldDiff } {
+export function permissionDiff(grant: { key: string; level: string }, revoked = false): FieldDiff {
   return {
-    feature: AUDIT_FEATURE.FEATURE_PERMISSION,
-    entityId: grant.adminId,
-    changed: {
-      [grant.key]: revoked ? { from: grant.level, to: null } : { from: null, to: grant.level },
-    },
+    [grant.key]: revoked ? { from: grant.level, to: null } : { from: null, to: grant.level },
   };
 }
 
@@ -262,11 +252,9 @@ export class AdminsService {
 
     // A grant that did not move is not a grant that happened.
     if ((action === 'add') !== Boolean(held)) {
-      const { changed } = permissionAuditEntity(
-        { adminId: input.adminId, key: input.featureKey, level: input.level },
-        action === 'remove',
+      this.auditContext.setChanged(
+        permissionDiff({ key: input.featureKey, level: input.level }, action === 'remove'),
       );
-      this.auditContext.setChanged(changed);
     }
 
     return this.featureWithGrants(input.featureKey);

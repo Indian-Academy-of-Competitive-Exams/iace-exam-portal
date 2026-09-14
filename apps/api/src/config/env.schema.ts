@@ -138,10 +138,6 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1, 'S3_ACCESS_KEY_ID is required'),
   S3_SECRET_ACCESS_KEY: z.string().min(1, 'S3_SECRET_ACCESS_KEY is required'),
   S3_FORCE_PATH_STYLE: boolFromEnv(false),
-  S3_PUBLIC_URL: z
-    .string()
-    .optional()
-    .transform((v) => (v === '' ? undefined : v)),
 
   // The SMS aggregator, named nowhere: a swap is these three values, not a code change.
   SMS_PROVIDER_URL: optional,

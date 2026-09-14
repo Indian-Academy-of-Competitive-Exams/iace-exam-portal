@@ -243,14 +243,6 @@ export class AuthService {
     return { tokens: await this.issue(identity, device), identity };
   }
 
-  /**
-   * Hashes a PIN the way a chosen one is hashed — same argon2 profile, same pepper — for the bulk
-   * importer, which seeds a starting PIN so an uploaded roster can sign in the same day.
-   */
-  hashPin(pin: string): Promise<string> {
-    return this.pin.hash(pin);
-  }
-
   // ==========================================================================
   // Session lifecycle
   // ==========================================================================
