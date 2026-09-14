@@ -1,7 +1,5 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { cva, type VariantProps } from 'class-variance-authority';
-import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /**
@@ -9,55 +7,25 @@ import { cn } from '../../lib/utils';
  * Always render a `SheetTitle`; hide it with `sr-only` where there is no visible heading.
  */
 const Sheet = DialogPrimitive.Root;
-const SheetTrigger = DialogPrimitive.Trigger;
 const SheetClose = DialogPrimitive.Close;
-
-const sheetVariants = cva(
-  [
-    'fixed inset-y-0 z-[--z-drawer] flex w-[--drawer-w] max-w-[85vw] flex-col',
-    'bg-surface p-[--sidebar-pad] shadow-[--shadow-overlay] focus:outline-none',
-  ].join(' '),
-  {
-    variants: {
-      side: {
-        left: 'left-0 border-r border-border data-[state=open]:animate-sheet-in-left data-[state=closed]:animate-sheet-out-left',
-        right:
-          'right-0 border-l border-border data-[state=open]:animate-sheet-in-right data-[state=closed]:animate-sheet-out-right',
-      },
-    },
-    defaultVariants: { side: 'left' },
-  },
-);
-
-export interface SheetContentProps
-  extends
-    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {
-  /** The corner ✕. Off when the panel supplies its own close control. */
-  showClose?: boolean;
-  closeLabel?: string;
-}
 
 const SheetContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
-  SheetContentProps
->(({ className, children, side, showClose = true, closeLabel = 'Close', ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className="fixed inset-0 z-[--z-drawer] bg-[--overlay-bg] data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
     <DialogPrimitive.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), className)}
+      className={cn(
+        'fixed inset-y-0 left-0 z-[--z-drawer] flex w-[--drawer-w] max-w-[85vw] flex-col border-r border-border',
+        'bg-surface p-[--sidebar-pad] shadow-[--shadow-overlay] focus:outline-none',
+        'data-[state=open]:animate-sheet-in-left data-[state=closed]:animate-sheet-out-left',
+        className,
+      )}
       {...props}
     >
       {children}
-      {showClose ? (
-        <DialogPrimitive.Close
-          className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:shadow-focus focus-visible:outline-none"
-          aria-label={closeLabel}
-        >
-          <X className="size-4" aria-hidden />
-        </DialogPrimitive.Close>
-      ) : null}
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
 ));
@@ -75,24 +43,4 @@ const SheetTitle = React.forwardRef<
 ));
 SheetTitle.displayName = DialogPrimitive.Title.displayName;
 
-const SheetDescription = React.forwardRef<
-  React.ComponentRef<typeof DialogPrimitive.Description>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description
-    ref={ref}
-    className={cn('text-sm leading-normal text-foreground-secondary', className)}
-    {...props}
-  />
-));
-SheetDescription.displayName = DialogPrimitive.Description.displayName;
-
-export {
-  Sheet,
-  SheetTrigger,
-  SheetClose,
-  SheetContent,
-  SheetTitle,
-  SheetDescription,
-  sheetVariants,
-};
+export { Sheet, SheetClose, SheetContent, SheetTitle };

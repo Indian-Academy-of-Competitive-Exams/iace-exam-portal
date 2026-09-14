@@ -5,7 +5,6 @@ import { cn } from '../../lib/utils';
 /** Menu semantics a popover has not: item count, arrow keys, typeahead, Escape to trigger. */
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
-const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 
 const DropdownMenuContent = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Content>,
@@ -86,7 +85,6 @@ DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 export {
   DropdownMenu,
   DropdownMenuTrigger,
-  DropdownMenuGroup,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,

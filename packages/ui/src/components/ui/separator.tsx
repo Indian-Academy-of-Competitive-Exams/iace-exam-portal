@@ -3,17 +3,14 @@ import { cn } from '../../lib/utils';
 
 export interface SeparatorProps extends React.HTMLAttributes<HTMLDivElement> {
   orientation?: 'horizontal' | 'vertical';
-  /** Decorative (the default) hides it from assistive tech. */
-  decorative?: boolean;
   /** Dashed where the rule divides two working areas rather than two parts of one thing. */
   dashed?: boolean;
 }
 
-/** A rule that stands on its own, between two things. Spacing is the caller's. */
+/** A rule that stands on its own, between two things. Decorative, so assistive tech skips it. */
 export function Separator({
   className,
   orientation = 'horizontal',
-  decorative = true,
   dashed = false,
   ...props
 }: Readonly<SeparatorProps>) {
@@ -21,8 +18,6 @@ export function Separator({
   return (
     // A bare <div> announces nothing already; role="presentation" would repeat it.
     <div
-      role={decorative ? undefined : 'separator'}
-      aria-orientation={decorative ? undefined : orientation}
       className={cn(
         'shrink-0',
         // A dash needs a BORDER to break; a filled div has nothing to leave gaps in.

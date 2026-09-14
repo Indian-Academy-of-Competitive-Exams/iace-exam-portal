@@ -1,15 +1,9 @@
 import * as React from 'react';
-import { cva } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
-export type MetricSize = 'sm' | 'md' | 'lg';
+const VALUE_SIZES = { sm: 'text-xl', md: 'text-2xl', lg: 'text-3xl' } as const;
 
-const metricValue = cva('font-semibold tabular-nums tracking-tight text-foreground', {
-  variants: {
-    size: { sm: 'text-xl', md: 'text-2xl', lg: 'text-3xl' },
-  },
-  defaultVariants: { size: 'lg' },
-});
+export type MetricSize = keyof typeof VALUE_SIZES;
 
 export interface MetricProps {
   /** The plain noun for the value, set as an overline above it. */
@@ -21,14 +15,18 @@ export interface MetricProps {
   className?: string;
 }
 
-export function Metric({ label, value, unit, size, className }: Readonly<MetricProps>) {
+export function Metric({ label, value, unit, size = 'lg', className }: Readonly<MetricProps>) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1', className)}>
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
       <span className="flex items-baseline gap-1.5">
-        <span className={metricValue({ size })}>{value}</span>
+        <span
+          className={`font-semibold tabular-nums tracking-tight text-foreground ${VALUE_SIZES[size]}`}
+        >
+          {value}
+        </span>
         {unit ? <span className="text-md text-muted-foreground">{unit}</span> : null}
       </span>
     </div>

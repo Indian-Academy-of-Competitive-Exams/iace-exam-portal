@@ -203,7 +203,6 @@ export function TableState({
   emptyKind = EMPTY_STATE_KINDS.EMPTY,
   error,
   onRetry,
-  loading,
   skeletonRows = 5,
   children,
 }: Readonly<{
@@ -216,19 +215,11 @@ export function TableState({
   emptyKind?: EmptyStateKind;
   error?: EmptyMessage;
   onRetry?: () => void;
-  /** Overrides the loading skeleton with a message. Rarely what you want. */
-  loading?: React.ReactNode;
   /** Roughly what the list usually holds — enough to fill the fold, not more. */
   skeletonRows?: number;
   children: React.ReactNode;
 }>) {
-  if (isLoading) {
-    return loading === undefined ? (
-      <TableSkeleton rows={skeletonRows} columns={colSpan} />
-    ) : (
-      <TableEmpty colSpan={colSpan}>{loading}</TableEmpty>
-    );
-  }
+  if (isLoading) return <TableSkeleton rows={skeletonRows} columns={colSpan} />;
 
   if (isError && isEmpty) return <TableFailure colSpan={colSpan} error={error} onRetry={onRetry} />;
   if (isEmpty) {

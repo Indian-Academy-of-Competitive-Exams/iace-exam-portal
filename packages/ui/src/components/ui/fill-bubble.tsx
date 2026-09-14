@@ -29,26 +29,12 @@ export interface FillBubbleProps {
   /** Names the control — the option's letter, or whatever the caller letters with. */
   label: string;
   disabled?: boolean;
-  holdMs?: number;
-  /** How long a press must last to count as a hold at all. */
-  minHoldMs?: number;
   className?: string;
 }
 
 /** A bubble that fills while held. It reports a number and never learns what filling one means. */
 export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
-  (
-    {
-      fill,
-      onFillChange,
-      label,
-      disabled = false,
-      holdMs = FILL_BUBBLE_HOLD_MS,
-      minHoldMs = FILL_BUBBLE_MIN_HOLD_MS,
-      className,
-    },
-    ref,
-  ) => {
+  ({ fill, onFillChange, label, disabled = false, className }, ref) => {
     const [held, setHeld] = React.useState<number | null>(null);
     const frame = React.useRef<number | null>(null);
     const pressedFrom = React.useRef(0);
@@ -68,7 +54,7 @@ export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
       const began = performance.now();
 
       const tick = (now: number) => {
-        const next = Math.min(FULL, from + (now - began) / holdMs);
+        const next = Math.min(FULL, from + (now - began) / FILL_BUBBLE_HOLD_MS);
         setHeld(next);
         if (next >= FULL) {
           stop();
@@ -87,8 +73,8 @@ export const FillBubble = React.forwardRef<HTMLButtonElement, FillBubbleProps>(
       stop();
       const reached = held;
       setHeld(null);
-      // Measured from the ink, not the clock: the accrual IS the elapsed time, at 1/holdMs per ms.
-      if ((reached - pressedFrom.current) * holdMs < minHoldMs) return;
+      // Measured from the ink, not the clock: the accrual IS the elapsed time, at 1/HOLD_MS per ms.
+      if ((reached - pressedFrom.current) * FILL_BUBBLE_HOLD_MS < FILL_BUBBLE_MIN_HOLD_MS) return;
       onFillChange(reached);
     };
 

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Card } from './card';
-import { Separator } from './separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
 export interface FormPanelTab {
@@ -27,8 +26,6 @@ export interface FormPanelProps {
   onSubmit?: NonNullable<React.FormHTMLAttributes<HTMLFormElement>['onSubmit']>;
   /** Read-only: the same layout, every control inert. The footer stays live, so Edit is reachable. */
   disabled?: boolean;
-  /** Below the fields behind a divider, OUTSIDE the fieldset — a section Edit does not own. */
-  after?: React.ReactNode;
   /** Views of ONE record. The form spans every tab that is not `standalone`, under one footer. */
   tabs?: FormPanelTabs;
   children?: React.ReactNode;
@@ -51,7 +48,6 @@ export function FormPanel({
   footer,
   onSubmit,
   disabled,
-  after,
   tabs,
   children,
   className,
@@ -63,17 +59,7 @@ export function FormPanel({
     </fieldset>
   );
 
-  const plain = (
-    <div className={cn(BODY, className)}>
-      {inForm(children)}
-      {after ? (
-        <>
-          <Separator />
-          {after}
-        </>
-      ) : null}
-    </div>
-  );
+  const plain = <div className={cn(BODY, className)}>{inForm(children)}</div>;
 
   const strip = tabs ? (
     <>

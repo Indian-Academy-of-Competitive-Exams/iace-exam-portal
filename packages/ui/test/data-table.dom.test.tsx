@@ -72,14 +72,6 @@ describe('DataTable', () => {
     );
   });
 
-  /** `loading` is the opt-out for a wait that has something to say. */
-  it('shows a loading message instead of the skeleton when given one', () => {
-    render(table({ isLoading: true, rows: [], loading: 'Reading the file…' }));
-
-    assert.ok(screen.getByText('Reading the file…'));
-    assert.equal(bodyRows().length, 1);
-  });
-
   it('renders a footer only when there is one', () => {
     const { rerender } = render(table());
     assert.equal(screen.queryByTestId('footer'), null);

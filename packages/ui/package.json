@@ -16,7 +16,6 @@
     "./scaffold-editor": "./src/components/ui/scaffold-editor.tsx",
     "./scaffold-region": "./src/components/ui/scaffold-region.ts",
     "./lib/utils": "./src/lib/utils.ts",
-    "./components/*": "./src/components/ui/*.tsx",
     "./test-support/dom": "./test/support/dom.ts"
   },
   "files": [
@@ -51,7 +50,6 @@
     "@tiptap/pm": "3.30.2",
     "@tiptap/react": "3.30.2",
     "@tiptap/starter-kit": "3.30.2",
-    "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "katex": "0.18.4",
     "lucide-react": "1.31.0",

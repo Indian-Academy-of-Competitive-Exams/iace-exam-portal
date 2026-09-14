@@ -12,7 +12,6 @@ export interface DateTimePickerProps {
   value: string;
   onChange: (value: string) => void;
   minDate?: string;
-  maxDate?: string;
   disabled?: boolean;
   id?: string;
   'aria-label'?: string;
@@ -33,7 +32,6 @@ export function DateTimePicker({
   value,
   onChange,
   minDate,
-  maxDate,
   disabled = false,
   id,
   className,
@@ -48,7 +46,6 @@ export function DateTimePicker({
         id={id}
         value={date}
         min={minDate}
-        max={maxDate}
         disabled={disabled}
         className="flex-1"
         onChange={(next) => onChange(joined(next, next && !time ? MIDNIGHT : time))}

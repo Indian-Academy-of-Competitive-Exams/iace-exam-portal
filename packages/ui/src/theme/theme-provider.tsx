@@ -17,13 +17,12 @@ export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
-  const choose = useCallback((next: Theme) => setTheme(next), []);
   const toggle = useCallback(
     () => setTheme((current) => (current === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK)),
     [],
   );
 
-  const value = useMemo(() => ({ theme, toggle, setTheme: choose }), [theme, toggle, choose]);
+  const value = useMemo(() => ({ theme, toggle, setTheme }), [theme, toggle]);
 
   return <ThemeContext value={value}>{children}</ThemeContext>;
 }

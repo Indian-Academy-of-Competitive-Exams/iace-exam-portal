@@ -1,13 +1,11 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { cva, type VariantProps } from 'class-variance-authority';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
 /** The modal layer, on Radix: focus trap, Escape, inert background, focus restored. */
 const Dialog = DialogPrimitive.Root;
-const DialogTrigger = DialogPrimitive.Trigger;
 const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<
@@ -26,31 +24,25 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
-const dialogVariants = cva(
-  [
-    // The centring wrapper waives pointer-events so a click beside this reaches the overlay.
-    'pointer-events-auto relative flex w-full flex-col',
-    'max-h-[calc(100dvh-4rem)]',
-    'bg-surface text-foreground rounded-[--modal-radius] shadow-[--shadow-overlay]',
-    'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
-    'focus:outline-none',
-  ].join(' '),
-  {
-    variants: {
-      size: {
-        sm: 'max-w-[--modal-w-sm]',
-        md: 'max-w-[--modal-w-md]',
-        lg: 'max-w-[--modal-w-lg]',
-      },
-    },
-    defaultVariants: { size: 'md' },
-  },
-);
+const CONTENT = [
+  // The centring wrapper waives pointer-events so a click beside this reaches the overlay.
+  'pointer-events-auto relative flex w-full flex-col',
+  'max-h-[calc(100dvh-4rem)]',
+  'bg-surface text-foreground rounded-[--modal-radius] shadow-[--shadow-overlay]',
+  'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
+  'focus:outline-none',
+].join(' ');
 
-export interface DialogContentProps
-  extends
-    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
-    VariantProps<typeof dialogVariants> {
+const SIZES = {
+  sm: 'max-w-[--modal-w-sm]',
+  md: 'max-w-[--modal-w-md]',
+  lg: 'max-w-[--modal-w-lg]',
+} as const;
+
+export interface DialogContentProps extends React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Content
+> {
+  size?: keyof typeof SIZES;
   /** The corner ✕. Off for a confirm, where Cancel is already the way out. */
   showClose?: boolean;
   /** Accessible name for the ✕, since the icon alone announces nothing. */
@@ -66,7 +58,7 @@ const DialogContent = React.forwardRef<
     {
       className,
       children,
-      size,
+      size = 'md',
       showClose = true,
       closeLabel = 'Close',
       onOpenAutoFocus,
@@ -86,7 +78,7 @@ const DialogContent = React.forwardRef<
         <div className="pointer-events-none fixed inset-0 z-[--z-modal] grid place-items-center overflow-hidden p-4">
           <DialogPrimitive.Content
             ref={ref}
-            className={cn(dialogVariants({ size }), className)}
+            className={cn(CONTENT, SIZES[size], className)}
             // Fires before focus moves in, so this is still whatever opened the dialog.
             onOpenAutoFocus={(event) => {
               opener.current = document.activeElement as HTMLElement | null;
@@ -189,7 +181,6 @@ export interface ConfirmDialogProps {
   description: React.ReactNode;
   /** Names the action — "Deactivate", "Delete test". Never "Confirm" or "OK". */
   confirmLabel: string;
-  cancelLabel?: string;
   /** Crimson button, warning glyph — for anything that destroys or revokes. */
   destructive?: boolean;
   /** Keeps the dialog open and inert while the action it started is running. */
@@ -209,7 +200,6 @@ function ConfirmDialog({
   title,
   description,
   confirmLabel,
-  cancelLabel = 'Cancel',
   destructive = false,
   loading = false,
   onConfirm,
@@ -257,7 +247,7 @@ function ConfirmDialog({
             disabled={loading}
             onClick={() => onOpenChange(false)}
           >
-            {cancelLabel}
+            Cancel
           </Button>
           <Button
             type="button"
@@ -275,9 +265,7 @@ function ConfirmDialog({
 
 export {
   Dialog,
-  DialogTrigger,
   DialogClose,
-  DialogOverlay,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -285,5 +273,4 @@ export {
   DialogBody,
   DialogFooter,
   ConfirmDialog,
-  dialogVariants,
 };

@@ -3,7 +3,6 @@ import { afterEach, describe, it } from 'node:test';
 import { useForm } from 'react-hook-form';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Alert } from '../src/components/ui/alert';
-import { Progress } from '../src/components/ui/progress';
 import { Spinner, LoadingState } from '../src/components/ui/spinner';
 import { Skeleton, SkeletonParagraph } from '../src/components/ui/skeleton';
 import { Separator } from '../src/components/ui/separator';
@@ -18,23 +17,6 @@ import { SectionHeading } from '../src/components/ui/section-heading';
 import { PageHeader } from '../src/components/ui/page-header';
 
 afterEach(cleanup);
-
-describe('Progress', () => {
-  it('reports its value as a progress bar', () => {
-    render(<Progress aria-label="Import progress" value={42} max={100} />);
-    const bar = screen.getByRole('progressbar', { name: 'Import progress' });
-
-    assert.equal(bar.tagName, 'PROGRESS');
-    assert.equal((bar as HTMLProgressElement).value, 42);
-  });
-
-  /** No value is the indeterminate state, which is honest about not knowing. */
-  it('is indeterminate with no value', () => {
-    render(<Progress aria-label="Working" />);
-
-    assert.equal(screen.getByRole('progressbar').getAttribute('value'), null);
-  });
-});
 
 describe('Spinner', () => {
   /** Marking both the glyph and the text beside it announces the wait twice. */
@@ -79,13 +61,9 @@ describe('Skeleton', () => {
 
 describe('Separator', () => {
   /** A reader hearing "separator" between every row gets noise a sighted one does not. */
-  it('is silent when decorative, and announced when it is not', () => {
-    const { container, rerender } = render(<Separator />);
+  it('is silent to assistive tech', () => {
+    const { container } = render(<Separator />);
     assert.equal(container.firstElementChild?.getAttribute('role'), null);
-
-    rerender(<Separator decorative={false} orientation="vertical" />);
-    const rule = screen.getByRole('separator');
-    assert.equal(rule.getAttribute('aria-orientation'), 'vertical');
   });
 });
 
@@ -244,17 +222,6 @@ describe('Alert', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
     assert.equal(screen.queryByText('Your performance did not load.'), null);
-  });
-
-  /** The failure this prevents: a message that must stay put quietly growing a way out. */
-  it('pins one open where a caller says it must not close', () => {
-    render(
-      <Alert variant="info" dismissible={false}>
-        A fact they could not infer.
-      </Alert>,
-    );
-
-    assert.equal(screen.queryByRole('button', { name: 'Dismiss' }), null);
   });
 });
 

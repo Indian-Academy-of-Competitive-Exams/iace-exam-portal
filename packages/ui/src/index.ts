@@ -10,12 +10,7 @@ export { Stepper, STEPPER_STATES, type StepperStep } from './components/ui/stepp
 export { Kbd } from './components/ui/kbd';
 export { Label } from './components/ui/label';
 export { Field } from './components/ui/field';
-export {
-  FormActions,
-  FormCombobox,
-  FormField,
-  type FieldControl,
-} from './components/ui/form-field';
+export { FormCombobox, FormField, type FieldControl } from './components/ui/form-field';
 export { Accordion } from './components/ui/accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 export { Alert } from './components/ui/alert';

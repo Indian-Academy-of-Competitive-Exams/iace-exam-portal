@@ -20,7 +20,7 @@ afterEach(cleanup);
 describe('Sheet', () => {
   const drawer = (props: { open: boolean; onOpenChange?: (o: boolean) => void }) => (
     <Sheet {...props}>
-      <SheetContent side="left" showClose={false} aria-describedby={undefined}>
+      <SheetContent aria-describedby={undefined}>
         <SheetTitle className="sr-only">Navigation</SheetTitle>
         <a href="/students">All students</a>
         <SheetClose>Close</SheetClose>
@@ -163,7 +163,7 @@ describe('overlays animate out as well as in', () => {
   it('gives the sheet and its scrim a closed-state animation', () => {
     render(
       <Sheet open>
-        <SheetContent side="left">
+        <SheetContent>
           <SheetTitle>Nav</SheetTitle>
         </SheetContent>
       </Sheet>,

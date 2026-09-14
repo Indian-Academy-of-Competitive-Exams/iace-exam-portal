@@ -42,7 +42,6 @@ import {
   Card,
   Checkbox,
   ConfirmDialog,
-  FormActions,
   FormField,
   FormPanel,
   FormSection,
@@ -650,7 +649,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               </div>
             ))}
 
-            <FormActions className="pt-0">
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -660,7 +659,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                 <Plus aria-hidden />
                 Add a session
               </Button>
-            </FormActions>
+            </div>
           </div>
         </FormSection>
       ) : null}
@@ -689,7 +688,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             />
           ))}
 
-          <FormActions className="pt-0">
+          <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
@@ -699,7 +698,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               <Plus aria-hidden />
               Add a section
             </Button>
-          </FormActions>
+          </div>
         </div>
       </FormSection>
 

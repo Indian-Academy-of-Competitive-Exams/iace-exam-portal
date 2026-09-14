@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { MoreHorizontal } from 'lucide-react';
-import { cn } from '../../lib/utils';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './dropdown-menu';
 
@@ -9,15 +8,10 @@ export interface RowActionsProps {
   label?: string;
   /** `DropdownMenuItem`s. A destructive one takes `destructive`. */
   children: React.ReactNode;
-  className?: string;
 }
 
 /** Everything a row can do, behind one trigger — a button per action is width off every row. */
-export function RowActions({
-  label = 'Row actions',
-  children,
-  className,
-}: Readonly<RowActionsProps>) {
+export function RowActions({ label = 'Row actions', children }: Readonly<RowActionsProps>) {
   // A trigger opening on nothing is a promise the row cannot keep; callers filter items inline.
   if (React.Children.toArray(children).length === 0) return null;
 
@@ -29,7 +23,7 @@ export function RowActions({
           size="iconSm"
           aria-label={label}
           // A ring repeats down the last column, so this one control fills instead.
-          className={cn('focus-visible:bg-muted focus-visible:shadow-none', className)}
+          className="focus-visible:bg-muted focus-visible:shadow-none"
         >
           <MoreHorizontal aria-hidden />
         </Button>

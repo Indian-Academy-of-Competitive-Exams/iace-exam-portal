@@ -11,8 +11,6 @@ export interface PinInputProps extends Omit<
   value: string;
   /** The whole value, not an event: the boxes are a rendering, not the state. */
   onChange: (value: string) => void;
-  /** Fired the moment the last box fills — for auto-submit. */
-  onComplete?: (value: string) => void;
   /** Show dots instead of digits. A PIN is a secret; an emailed OTP is not. */
   masked?: boolean;
   /** Marks the field invalid for both styling and assistive tech. */
@@ -36,7 +34,6 @@ const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
       length,
       value,
       onChange,
-      onComplete,
       masked = false,
       invalid,
       className,
@@ -99,7 +96,6 @@ const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
           onChange={(event) => {
             const next = digitsOnly(event.currentTarget.value, length);
             onChange(next);
-            if (next.length === length) onComplete?.(next);
           }}
           onFocus={(event) => {
             setFocused(true);

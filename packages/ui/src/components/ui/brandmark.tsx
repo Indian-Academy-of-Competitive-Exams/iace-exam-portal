@@ -1,20 +1,11 @@
 import * as React from 'react';
-import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 /** The plate carries the mark, so its size is the lockup's size. */
-const plateVariants = cva(
-  'inline-flex items-center rounded-md bg-primary font-brand text-primary-foreground font-extrabold tracking-brand',
-  {
-    variants: {
-      size: {
-        default: 'px-4 py-1.5 text-brand',
-        lg: 'px-6 py-2.5 text-3xl',
-      },
-    },
-    defaultVariants: { size: 'default' },
-  },
-);
+const PLATE_CLASS = {
+  default: 'px-4 py-1.5 text-brand',
+  lg: 'px-6 py-2.5 text-3xl',
+} as const;
 
 const PORTAL_CLASS = {
   default: 'text-xs',
@@ -26,19 +17,21 @@ const GAP_CLASS = {
   lg: 'gap-3',
 } as const;
 
-export interface BrandmarkProps
-  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof plateVariants> {
+export interface BrandmarkProps extends React.HTMLAttributes<HTMLDivElement> {
+  size?: keyof typeof PLATE_CLASS;
   portal?: string;
 }
 
 /** The IACE lockup: the name on a brand-red plate; `lg` is for a screen it leads. */
 const Brandmark = React.forwardRef<HTMLDivElement, BrandmarkProps>(
-  ({ className, portal, size, ...props }, ref) => {
-    const scale = size ?? 'default';
-
+  ({ className, portal, size: scale = 'default', ...props }, ref) => {
     return (
       <div ref={ref} className={cn('flex items-center', GAP_CLASS[scale], className)} {...props}>
-        <span className={plateVariants({ size })}>IACE</span>
+        <span
+          className={`inline-flex items-center rounded-md bg-primary font-brand text-primary-foreground font-extrabold tracking-brand ${PLATE_CLASS[scale]}`}
+        >
+          IACE
+        </span>
         {portal ? (
           <span
             className={cn(

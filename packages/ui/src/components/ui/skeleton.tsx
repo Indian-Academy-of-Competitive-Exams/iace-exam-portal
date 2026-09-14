@@ -10,8 +10,6 @@ const VARIANTS = {
   text: 'h-[1em] rounded-sm',
   /** A heading — shorter than the measure, as headings are. */
   title: 'h-[1.5em] w-2/5 rounded-sm',
-  /** An avatar, a status dot. Give it a size. */
-  circle: 'rounded-full',
   /** One row of a table. */
   row: 'h-[--row-h-comfortable] rounded-sm',
   /** A stat tile on a dashboard. */

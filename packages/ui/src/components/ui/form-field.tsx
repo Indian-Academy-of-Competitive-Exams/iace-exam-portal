@@ -9,7 +9,6 @@ import {
   type UseFormRegisterReturn,
   type UseFormReturn,
 } from 'react-hook-form';
-import { cn } from '../../lib/utils';
 import { Combobox, type ComboboxProps } from './combobox';
 import { Field } from './field';
 
@@ -90,22 +89,4 @@ export function FormCombobox<TValues extends FieldValues>({
       )}
     </Field>
   );
-}
-
-/** The inline layout the "new X" cards use: controls grow, wrap, align on their labels. */
-export function FormRow({
-  className,
-  ...props
-}: Readonly<React.FormHTMLAttributes<HTMLFormElement>>) {
-  return (
-    <form className={cn('flex flex-wrap items-start gap-4', className)} noValidate {...props} />
-  );
-}
-
-/** Buttons at the end of a `FormRow`. The top padding lines them up with the inputs. */
-export function FormActions({
-  className,
-  ...props
-}: Readonly<React.HTMLAttributes<HTMLDivElement>>) {
-  return <div className={cn('flex gap-2 pt-[1.625rem]', className)} {...props} />;
 }

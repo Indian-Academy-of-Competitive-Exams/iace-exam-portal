@@ -1,6 +1,5 @@
 import * as React from 'react';
 import type { FieldValues, SubmitHandler, UseFormReturn } from 'react-hook-form';
-import { cn } from '../../lib/utils';
 import { Button } from './button';
 import {
   Dialog,
@@ -22,12 +21,10 @@ export interface FormDialogProps<TValues extends FieldValues> {
   description?: React.ReactNode;
   /** Names the action, the way `ConfirmDialog` does — "Add student", never "Submit". */
   submitLabel: string;
-  cancelLabel?: string;
   /** Mid-request: the submit button spins and both buttons go inert. */
   loading?: boolean;
   size?: NonNullable<DialogContentProps['size']>;
   children: React.ReactNode;
-  className?: string;
 }
 
 /** One entity in a modal. Takes the whole `form` because closing has to reset it. */
@@ -39,11 +36,9 @@ export function FormDialog<TValues extends FieldValues>({
   title,
   description,
   submitLabel,
-  cancelLabel = 'Cancel',
   loading = false,
   size,
   children,
-  className,
 }: Readonly<FormDialogProps<TValues>>) {
   const change = (next: boolean) => {
     if (!next) form.reset();
@@ -65,9 +60,7 @@ export function FormDialog<TValues extends FieldValues>({
 
           {/* min-h-0 so the body is what shrinks; without it the flex child refuses to go
               below its content and the dialog grows past the viewport instead. */}
-          <DialogBody className={cn('flex min-h-0 flex-1 flex-col gap-4 py-1', className)}>
-            {children}
-          </DialogBody>
+          <DialogBody className="flex min-h-0 flex-1 flex-col gap-4 py-1">{children}</DialogBody>
 
           <DialogFooter>
             {/* Cancel is neutral grey, never red — it destroys nothing. */}
@@ -77,7 +70,7 @@ export function FormDialog<TValues extends FieldValues>({
               disabled={loading}
               onClick={() => change(false)}
             >
-              {cancelLabel}
+              Cancel
             </Button>
             <Button type="submit" loading={loading}>
               {submitLabel}

@@ -192,7 +192,7 @@ export function AppShell({
             {/* aria-describedby={undefined}: the panel is a list of links and has
               nothing to describe. Radix otherwise warns in dev that a dialog
               without a description is probably missing one. */}
-            <SheetContent side="left" showClose={false} aria-describedby={undefined}>
+            <SheetContent aria-describedby={undefined}>
               {/* The lockup is a heading, not the first row of the list. */}
               <div className="mb-5 flex items-center justify-between border-b border-border pb-3">
                 <Link to={homeTo} onClick={closePanel} className="rounded-md">

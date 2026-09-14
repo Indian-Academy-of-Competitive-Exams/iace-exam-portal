@@ -32,8 +32,6 @@ export interface DataTableProps<TRow> {
   isError?: boolean;
   error?: EmptyMessage;
   onRetry?: () => void;
-  /** Overrides the loading skeleton with a message. Rarely what you want. */
-  loading?: React.ReactNode;
   /** Roughly how many rows this list usually shows. */
   skeletonRows?: number;
   /** Usually a `<Pagination />`. Rendered only when given. */
@@ -87,7 +85,6 @@ export function DataTable<TRow>({
   isError,
   error,
   onRetry,
-  loading,
   skeletonRows,
   footer,
   selection,
@@ -166,7 +163,6 @@ export function DataTable<TRow>({
             emptyKind={emptyKind}
             error={error}
             onRetry={onRetry}
-            loading={loading}
             skeletonRows={skeletonRows}
           >
             {rows.map((row) => (

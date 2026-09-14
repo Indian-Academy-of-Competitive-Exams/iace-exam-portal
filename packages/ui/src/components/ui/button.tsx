@@ -1,51 +1,35 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
-import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /** A filled control reads as off by going grey, not by fading — half-opacity on a pale card is still pale. */
 const OFF = 'disabled:bg-disabled disabled:text-disabled-foreground';
 
-/** default = brand red, secondary = neutral grey (what Cancel uses), destructive = crimson. */
-const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:shadow-focus focus-visible:outline-none disabled:pointer-events-none disabled:shadow-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
-  {
-    variants: {
-      variant: {
-        default: ['bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover', OFF],
-        secondary: ['bg-secondary text-secondary-foreground hover:bg-secondary-hover', OFF],
-        destructive: [
-          'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive-hover',
-          OFF,
-        ],
-        outline: [
-          'border border-border bg-surface text-foreground shadow-sm hover:bg-muted hover:text-foreground',
-          OFF,
-          'disabled:border-disabled-border',
-        ],
-        // No fill to mute, so these take the ink alone.
-        ghost: 'text-foreground hover:bg-muted disabled:text-disabled-foreground',
-        link: 'text-primary underline-offset-4 hover:underline disabled:text-disabled-foreground disabled:no-underline',
-      },
-      size: {
-        sm: 'h-8 px-3 text-xs',
-        default: 'h-10 px-4 py-2',
-        lg: 'h-11 px-6',
-        // Round: the target IS the glyph, so its corners would belong to nothing.
-        icon: 'size-10 rounded-full',
-        iconSm: 'size-8 rounded-full',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
-  },
-);
+const BASE =
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:shadow-focus focus-visible:outline-none disabled:pointer-events-none disabled:shadow-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+/** default = brand red, secondary = neutral grey (what Cancel uses), destructive = crimson. */
+const VARIANTS = {
+  default: `bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover ${OFF}`,
+  secondary: `bg-secondary text-secondary-foreground hover:bg-secondary-hover ${OFF}`,
+  destructive: `bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive-hover ${OFF}`,
+  outline: `border border-border bg-surface text-foreground shadow-sm hover:bg-muted hover:text-foreground ${OFF} disabled:border-disabled-border`,
+  // No fill to mute, so it takes the ink alone.
+  ghost: 'text-foreground hover:bg-muted disabled:text-disabled-foreground',
+} as const;
+
+const SIZES = {
+  sm: 'h-8 px-3 text-xs',
+  default: 'h-10 px-4 py-2',
+  // Round: the target IS the glyph, so its corners would belong to nothing.
+  icon: 'size-10 rounded-full',
+  iconSm: 'size-8 rounded-full',
+} as const;
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: keyof typeof VARIANTS;
+  size?: keyof typeof SIZES;
   /** Render as the child element (e.g. a router <Link>) instead of a <button>. */
   asChild?: boolean;
   /** Leading glyph. `loading` swaps it for the spinner — one slot, never both. */
@@ -58,8 +42,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
       className,
-      variant,
-      size,
+      variant = 'default',
+      size = 'default',
       asChild = false,
       icon,
       loading = false,
@@ -71,7 +55,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref,
   ) => {
-    const classes = cn(buttonVariants({ variant, size }), className);
+    const classes = cn(BASE, VARIANTS[variant], SIZES[size], className);
 
     // Slot takes exactly one child, so nothing is injected here.
     if (asChild) {
@@ -100,4 +84,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = 'Button';
 
-export { Button, buttonVariants };
+export { Button };
