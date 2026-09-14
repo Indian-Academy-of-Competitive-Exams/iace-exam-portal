@@ -1,16 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  DIFFICULTY_LEVEL,
-  QUESTION_STATUS,
-  fieldDiff,
-  questionDraftSchema,
-  type QuestionDraftInput,
-  type QuestionStatus,
-} from '@iace/contracts';
-import { AUDITED_QUESTION_FIELDS, QuestionsService } from '../src/questions/questions.service';
-import { AuditContext } from '../src/audit';
-import { FakeQuestionBankPrisma, FakeStorage, makeSubject, makeTopic } from './support/fakes';
+import { QUESTION_STATUS, fieldDiff, type QuestionStatus } from '@iace/contracts';
+import { AUDITED_QUESTION_FIELDS } from '../src/questions/questions.service';
 
 describe('the question audit diff', () => {
   it('covers the columns a question edit can change', () => {
@@ -86,72 +77,5 @@ describe('the question audit diff', () => {
     };
 
     assert.equal(fieldDiff(before, after, AUDITED_QUESTION_FIELDS as never), null);
-  });
-});
-
-// ============================================================================
-// Driving QuestionsService.update inside a live AuditContext, the way the
-// interceptor actually reads it. Everything above is `fieldDiff` against
-// hand-built objects, which cannot catch a wiring mistake in the service.
-// ============================================================================
-
-function build() {
-  const prisma = new FakeQuestionBankPrisma([], [makeSubject()], [makeTopic()]);
-  const auditContext = new AuditContext();
-  return {
-    prisma,
-    auditContext,
-    questions: new QuestionsService(prisma.asService(), auditContext, new FakeStorage() as never),
-  };
-}
-
-function draft(over: Partial<QuestionDraftInput> = {}) {
-  return questionDraftSchema.parse({
-    subjectId: 'sub_1',
-    topicId: 'top_1',
-    difficulty: DIFFICULTY_LEVEL.MEDIUM,
-    stem: { en: 'What is 20% of 150?' },
-    options: [
-      { position: 1, isCorrect: false, text: { en: '25' } },
-      { position: 2, isCorrect: true, text: { en: '30' } },
-      { position: 3, isCorrect: false, text: { en: '35' } },
-      { position: 4, isCorrect: false, text: { en: '40' } },
-    ],
-    ...over,
-  });
-}
-
-describe('QuestionsService.update — driven live, the diff a real edit contributes', () => {
-  /**
-   * A save that rewrites the option text leaves the correct one at the same position. That must
-   * report the real change (difficulty) and, in the same diff, no `correctOptionPositions` entry.
-   */
-  it('reports a real change but no correctOptionPositions change when only the option text moves', async () => {
-    const ctx = build();
-    const created = await ctx.questions.create(draft(), 'adm_1');
-
-    await ctx.auditContext.run(async () => {
-      await ctx.questions.update(
-        created.id,
-        draft({
-          difficulty: DIFFICULTY_LEVEL.HIGH,
-          stem: { en: 'What is 20% of 150, rounded?' },
-          options: [
-            { position: 1, isCorrect: false, text: { en: '20' } },
-            { position: 2, isCorrect: true, text: { en: '30' } },
-            { position: 3, isCorrect: false, text: { en: '45' } },
-            { position: 4, isCorrect: false, text: { en: '50' } },
-          ],
-        }),
-        'adm_1',
-      );
-
-      const changed = ctx.auditContext.current()?.changed;
-      assert.deepEqual(changed?.difficulty, {
-        from: DIFFICULTY_LEVEL.MEDIUM,
-        to: DIFFICULTY_LEVEL.HIGH,
-      });
-      assert.ok(changed && !('correctOptionPositions' in changed));
-    });
   });
 });

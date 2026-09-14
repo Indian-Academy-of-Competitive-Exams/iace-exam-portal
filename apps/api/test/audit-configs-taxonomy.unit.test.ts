@@ -2,26 +2,10 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
-import { AUDITED_EXAM_FIELDS, ExamsService } from '../src/configs/exams.service';
+import { AUDITED_EXAM_FIELDS } from '../src/configs/exams.service';
 import { AUDIT_KEY, type AuditRoute } from '../src/audit/audit.decorator';
 import { TaxonomyController } from '../src/questions/taxonomy.controller';
-import {
-  AUDITED_SUBJECT_FIELDS,
-  AUDITED_TOPIC_FIELDS,
-  TaxonomyService,
-} from '../src/questions/taxonomy.service';
-import { AuditContext } from '../src/audit';
-import { StudentsService } from '../src/students';
-import {
-  fakeStartingPins,
-  FakeEventBus,
-  FakePrisma,
-  FakeQuestionBankPrisma,
-  makeExam,
-  makeSubject,
-  makeTopic,
-  fakeNotificationOutbox,
-} from './support/fakes';
+import { AUDITED_SUBJECT_FIELDS, AUDITED_TOPIC_FIELDS } from '../src/questions/taxonomy.service';
 
 describe('the exam audit diff', () => {
   it('covers every column an exam edit can change', () => {
@@ -92,81 +76,5 @@ describe('the taxonomy routes file under two distinct features', () => {
   it('never lets two levels share a value', () => {
     const features = [featureOf('createSubject'), featureOf('createTopic')];
     assert.equal(new Set(features).size, 2);
-  });
-});
-
-// ============================================================================
-// Driving the real services inside a live AuditContext, the way the interceptor
-// actually reads it. Everything above is `fieldDiff` against hand-built objects,
-// which cannot catch a wiring mistake in the service or in the fake it runs
-// against.
-// ============================================================================
-
-describe('ExamsService.update — driven live, the diff a real edit contributes', () => {
-  it('reports a rename', async () => {
-    const prisma = new FakePrisma(
-      [],
-      [],
-      [],
-      [makeExam({ id: 'exam_1', name: 'SSC CGL', code: 'SSC CGL' })],
-    );
-    const auditContext = new AuditContext();
-    const service = new ExamsService(
-      prisma.asService(),
-      new StudentsService(
-        prisma.asService(),
-        null as never,
-        null as never,
-        null as never,
-        fakeStartingPins(),
-        null as never,
-        new AuditContext(),
-        new FakeEventBus().asService(),
-        fakeNotificationOutbox(),
-      ),
-      auditContext,
-    );
-
-    await auditContext.run(async () => {
-      await service.update('exam_1', { name: 'SSC CGL TIER 1' });
-      assert.deepEqual(auditContext.current()?.changed, {
-        name: { from: 'SSC CGL', to: 'SSC CGL TIER 1' },
-      });
-    });
-  });
-});
-
-describe('TaxonomyService.updateSubject — driven live, the diff a real edit contributes', () => {
-  it('reports a code change', async () => {
-    const prisma = new FakeQuestionBankPrisma(
-      [],
-      [makeSubject({ id: 'sub_1', name: 'QUANTITATIVE APTITUDE', code: null })],
-    );
-    const auditContext = new AuditContext();
-    const service = new TaxonomyService(prisma.asService(), auditContext);
-
-    await auditContext.run(async () => {
-      await service.updateSubject('sub_1', { code: 'QA' });
-      assert.deepEqual(auditContext.current()?.changed, { code: { from: null, to: 'QA' } });
-    });
-  });
-});
-
-describe('TaxonomyService.updateTopic — driven live, the diff a real edit contributes', () => {
-  it('reports a rename', async () => {
-    const prisma = new FakeQuestionBankPrisma(
-      [],
-      [makeSubject({ id: 'sub_1' })],
-      [makeTopic({ id: 'top_1', name: 'ARITHMETIC', subjectId: 'sub_1' })],
-    );
-    const auditContext = new AuditContext();
-    const service = new TaxonomyService(prisma.asService(), auditContext);
-
-    await auditContext.run(async () => {
-      await service.updateTopic('top_1', { name: 'ARITHMETIC BASICS' });
-      assert.deepEqual(auditContext.current()?.changed, {
-        name: { from: 'ARITHMETIC', to: 'ARITHMETIC BASICS' },
-      });
-    });
   });
 });

@@ -604,26 +604,65 @@ export async function makeBuilder(
   });
 }
 
+/** The question bank's taxonomy under fixed ids: two subjects, three topics. */
+export const BANK = {
+  QUANT: 'sub_1',
+  GENERAL_AWARENESS: 'sub_2',
+  ARITHMETIC: 'top_1',
+  ALGEBRA: 'top_2',
+  HISTORY: 'top_3',
+} as const;
+
+/** The bank's taxonomy, and an admin per id given, named as given; only behind resetDatabase. */
+export async function makeQuestionBank(
+  prisma: PrismaService,
+  admins: Readonly<Record<string, string>> = {},
+): Promise<void> {
+  await prisma.subject.createMany({
+    data: [
+      { id: BANK.QUANT, name: 'QUANTITATIVE APTITUDE' },
+      { id: BANK.GENERAL_AWARENESS, name: 'GENERAL AWARENESS' },
+    ],
+  });
+  await prisma.topic.createMany({
+    data: [
+      { id: BANK.ARITHMETIC, name: 'ARITHMETIC', subjectId: BANK.QUANT },
+      { id: BANK.ALGEBRA, name: 'ALGEBRA', subjectId: BANK.QUANT },
+      { id: BANK.HISTORY, name: 'HISTORY', subjectId: BANK.GENERAL_AWARENESS },
+    ],
+  });
+  await prisma.admin.createMany({
+    data: Object.entries(admins).map(([id, fullName]) => ({
+      id,
+      fullName,
+      email: `${id}@iace.test`,
+    })),
+  });
+}
+
 /** A bank question under a fixed id, live with a `<id>_v1` version unless told otherwise. */
 export async function makeBankQuestion(
   prisma: PrismaService,
   input: {
     id: string;
     subjectId: string;
+    topicId?: string;
     difficulty?: DifficultyLevel;
     status?: QuestionStatus;
+    createdById?: string;
     versioned?: boolean;
   },
 ): Promise<void> {
+  const { versioned, ...question } = input;
   await prisma.question.create({
     data: {
-      id: input.id,
-      subjectId: input.subjectId,
-      difficulty: input.difficulty ?? DIFFICULTY_LEVEL.MEDIUM,
-      status: input.status ?? QUESTION_STATUS.ACTIVE,
+      difficulty: DIFFICULTY_LEVEL.MEDIUM,
+      status: QUESTION_STATUS.ACTIVE,
+      stemHash: `hash_${input.id}`,
+      ...question,
     },
   });
-  if (input.versioned === false) return;
+  if (versioned === false) return;
   await prisma.questionVersion.create({
     data: {
       id: `${input.id}_v1`,
