@@ -8,10 +8,9 @@ rest of `CLAUDE.md` only for the section a task explicitly needs.
 
 Green before commit:
 
-`pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+`pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:db && pnpm build`
 
 Schema tasks also: `pnpm db:migrate:deploy` from scratch + `pnpm db:check`.
-Tasks that add or change SQL or the schema also: `pnpm test:db`.
 
 **A migration that MOVES data is proved by none of them.** From scratch the table is empty, so the
 statement matches no rows and never runs — it passes on a migration that cannot work. Seed a
@@ -202,10 +201,17 @@ freely on UI and copy.
 
 ## Tests
 
-`node:test` + `node:assert/strict`, named after the unit (`auth-pin.unit.test.ts`,
-`envelope.e2e.test.ts`), no Postgres/Redis/S3 (extend `apps/api/test/support/fakes.ts`).
-Those are unit tests (`pnpm test`); every `$queryRaw` query added or changed is also covered in
-`apps/api/test-db` against a real Postgres, by `pnpm test:db`.
+`node:test` + `node:assert/strict`, named after the unit. **Where a test lives follows what it
+touches.** A test that reads or writes Postgres runs against the real database in `apps/api/test-db`
+(`saved-questions.db.test.ts`, `pnpm test:db`), building its rows from
+`apps/api/test-db/support/database.ts` and calling `resetDatabase` first when it reads rows it did
+not write. Pure logic, and code that needs only Redis, S3, a queue, a sender or the clock faked,
+stays in `apps/api/test` (`auth-pin.unit.test.ts`, `pnpm test`, those fakes in
+`apps/api/test/support/fakes.ts`).
+
+**Never write or extend a fake Prisma.** A hand-written copy of the database drifts from the one it
+imitates, and a test passes against the copy while production breaks. A test still on one moves to
+`apps/api/test-db` when it is next touched.
 
 **Tests are for FEATURES and the invariants above — not for every fix.** A feature, a rule the data
 model depends on, or logic with branches worth naming gets a test in the same commit, covering the
@@ -224,5 +230,5 @@ belongs in ESLint or the type system.
 
 </not-a-test>
 
-Assert the guarantee, not the implementation. Do not edit the golden invariant suite. `pnpm test` is
-a release gate and stays green.
+Assert the guarantee, not the implementation. Do not edit the golden invariant suite. `pnpm test` and
+`pnpm test:db` are release gates and stay green.

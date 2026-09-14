@@ -1,11 +1,14 @@
 /**
  * Fixtures for the database tier. Each builder inserts the fewest rows a real Postgres accepts,
- * under ids no other file or run shares. Nothing is deleted, so each test asserts on its own rows.
+ * under ids no other file or run shares. A test that reads only its own rows needs nothing more;
+ * one that reads what it did not write — a list total, a sweep — calls resetDatabase first.
  */
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   DEFAULT_EXAM_COURSE,
+  DIFFICULTY_LEVEL,
   STUDENT_TYPE,
   type AttemptStatus,
 } from '@iace/contracts';
@@ -55,6 +58,25 @@ export function testPrisma(): PrismaService {
 }
 
 export const uid = (prefix: string): string => `${prefix}_${randomUUID()}`;
+
+let emptyEveryTable: Prisma.Sql | undefined;
+
+/** Every table but the migration ledger, read from the catalog so a new table needs no edit here. */
+export async function resetDatabase(prisma: PrismaService): Promise<void> {
+  emptyEveryTable ??= await truncateStatement(prisma);
+  await prisma.$transaction([
+    // The locked-config guard refuses TRUNCATE by design; replica mode stands it down for this transaction.
+    prisma.$executeRaw`SET LOCAL session_replication_role = replica`,
+    prisma.$executeRaw(emptyEveryTable),
+  ]);
+}
+
+async function truncateStatement(prisma: PrismaService): Promise<Prisma.Sql> {
+  const tables = await prisma.$queryRaw<{ name: string }[]>`
+    SELECT tablename AS name FROM pg_tables
+    WHERE schemaname = current_schema() AND tablename <> '_prisma_migrations'`;
+  return Prisma.raw(`TRUNCATE ${tables.map((row) => `"${row.name}"`).join(', ')} CASCADE`);
+}
 
 export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
   const exam = await prisma.exam.create({
@@ -119,6 +141,73 @@ export function makeStudent(
       ...overrides,
     },
     select: { id: true },
+  });
+}
+
+export function makeSubject(prisma: PrismaService, name = uid('Subject')): Promise<{ id: string }> {
+  return prisma.subject.create({ data: { id: uid('subject'), name }, select: { id: true } });
+}
+
+/** A question with one version, pointed at as current — the order the composite FK demands. */
+export async function makeQuestion(
+  prisma: PrismaService,
+  input: { subjectId: string; stem?: string },
+): Promise<{ id: string; versionId: string }> {
+  const question = await prisma.question.create({
+    data: { id: uid('question'), subjectId: input.subjectId, difficulty: DIFFICULTY_LEVEL.MEDIUM },
+    select: { id: true },
+  });
+  const version = await prisma.questionVersion.create({
+    data: {
+      id: uid('version'),
+      questionId: question.id,
+      version: 1,
+      content: { en: { stem: [{ type: 'TEXT', text: `<p>${input.stem ?? 'Stem'}</p>` }] } },
+    },
+    select: { id: true },
+  });
+  await prisma.question.update({
+    where: { id: question.id },
+    data: { currentVersionId: version.id },
+  });
+  return { id: question.id, versionId: version.id };
+}
+
+export function makeSection(prisma: PrismaService, catalog: Catalog): Promise<{ id: string }> {
+  return prisma.baseConfigSection.create({
+    data: {
+      id: uid('section'),
+      baseConfigId: catalog.baseConfigId,
+      name: 'Database tier section',
+      order: 1,
+      questionCount: 10,
+      marksPerQuestion: 2,
+      negativeMarks: 0.5,
+    },
+    select: { id: true },
+  });
+}
+
+/** One question as a sitting was served it, with the seconds spent on it. */
+export function serveQuestion(
+  prisma: PrismaService,
+  input: {
+    attemptId: string;
+    question: { id: string; versionId: string };
+    sectionId: string;
+    order?: number;
+    timeSpentSec?: number;
+  },
+): Promise<unknown> {
+  return prisma.attemptQuestion.create({
+    data: {
+      attemptId: input.attemptId,
+      questionId: input.question.id,
+      questionVersionId: input.question.versionId,
+      baseConfigSectionId: input.sectionId,
+      order: input.order ?? 1,
+      timeSpentSec: input.timeSpentSec ?? 0,
+    },
   });
 }
 

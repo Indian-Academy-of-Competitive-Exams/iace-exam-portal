@@ -17,12 +17,20 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
-
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+import { ROOT, prepareTestDatabase } from './test-database.mjs';
 
 /** Packages that have tests, and the command that runs them with coverage. */
 const PACKAGES = [
   { dir: 'apps/api', env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' } },
+  {
+    // The services whose tests read and write Postgres are covered here, or Sonar sees them as untested.
+    dir: 'apps/api',
+    label: 'apps/api (db)',
+    env: () => ({ ...prepareTestDatabase(), TSX_TSCONFIG_PATH: 'test/tsconfig.json' }),
+    args: ['--test-concurrency=1'],
+    globs: ['test-db/**/*.db.test.ts'],
+    report: 'lcov-db.info',
+  },
   { dir: 'packages/contracts', env: {} },
   {
     dir: 'packages/ui',
@@ -40,6 +48,8 @@ const summary = [];
 for (const pkg of PACKAGES) {
   const cwd = join(ROOT, pkg.dir);
   const out = join(cwd, 'coverage');
+  const lcovPath = join(out, pkg.report ?? 'lcov.info');
+  const env = typeof pkg.env === 'function' ? pkg.env() : pkg.env;
   mkdirSync(out, { recursive: true });
 
   try {
@@ -50,24 +60,24 @@ for (const pkg of PACKAGES) {
         'tsx',
         ...(pkg.imports ?? []).flatMap((module) => ['--import', module]),
         '--test',
+        ...(pkg.args ?? []),
         '--experimental-test-coverage',
         '--test-reporter=lcov',
-        `--test-reporter-destination=${join(out, 'lcov.info')}`,
+        `--test-reporter-destination=${lcovPath}`,
         '--test-reporter=dot',
         '--test-reporter-destination=stdout',
         ...(pkg.globs ?? ['test/**/*.test.ts']),
       ],
-      { cwd, env: { ...process.env, ...pkg.env }, stdio: ['ignore', 'pipe', 'pipe'] },
+      { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] },
     );
   } catch (error) {
     // A failing test still writes what it managed to cover. Reporting a merged
     // number from a red suite would be a lie, so this stops.
     process.stderr.write(String(error.stdout ?? '') + String(error.stderr ?? ''));
-    console.error(`\n✗ tests failed in ${pkg.dir} — coverage not written`);
+    console.error(`\n✗ tests failed in ${pkg.label ?? pkg.dir} — coverage not written`);
     process.exit(1);
   }
 
-  const lcovPath = join(out, 'lcov.info');
   if (!existsSync(lcovPath)) continue;
 
   // Rewrite each SF: to be repo-root relative — see the note above.
@@ -77,7 +87,7 @@ for (const pkg of PACKAGES) {
   );
   merged.push(body);
 
-  summary.push({ dir: pkg.dir, ...filesIn(body, cwd, pkg.dir) });
+  summary.push({ dir: pkg.label ?? pkg.dir, ...filesIn(body, cwd, pkg.dir) });
 }
 
 mkdirSync(join(ROOT, 'coverage'), { recursive: true });

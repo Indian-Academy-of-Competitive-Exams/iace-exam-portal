@@ -93,6 +93,8 @@ describe('sittingCountsSql', () => {
   });
 
   it('can be answered from Attempt_ranking_idx alone, because its cohort filter is literal', async () => {
+    // Without all-visible pages an index-only scan costs the same as the general index's, and ties.
+    await prisma.$executeRaw`VACUUM ANALYZE "Attempt"`;
     const plan = await prisma.$transaction(async (tx) => {
       // A table this small reads cheaper whole or by bitmap, which says nothing about the index.
       await tx.$executeRaw`SET LOCAL enable_seqscan = off`;

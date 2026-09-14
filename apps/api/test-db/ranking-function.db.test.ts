@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
-import { testPrisma, uid } from './support/database';
+import {
+  makeCatalog,
+  makeSitting,
+  makeStudent,
+  makeTest,
+  testPrisma,
+  uid,
+} from './support/database';
 
 const prisma = testPrisma();
 
@@ -79,6 +86,16 @@ describe('sitting_percentile', () => {
 
 describe('Attempt_ranking_idx', () => {
   it('serves the cohort count of one test', async () => {
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    await makeSitting(prisma, {
+      testId: test.id,
+      studentId: (await makeStudent(prisma)).id,
+      score: 1,
+    });
+    // A small table's two indexes tie on cost until its pages are all-visible and one can scan index-only.
+    await prisma.$executeRaw`VACUUM ANALYZE "Attempt"`;
+
     const plan = await prisma.$transaction(async (tx) => {
       // A table this small is cheaper to read whole, which would say nothing about the index.
       await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
