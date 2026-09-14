@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AppException, ErrorCodes, type ActorType } from '@iace/contracts';
+import { sameHex } from '../common/same-hex';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { type DeviceContext, type StoredSession } from './auth.types';
@@ -70,7 +71,7 @@ export class SessionService {
     if (!session)
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired — sign in again');
 
-    if (!this.matches(presentedToken, session.refreshTokenHash)) {
+    if (!sameHex(this.hash(presentedToken), session.refreshTokenHash)) {
       await this.revoke(actor, subjectId, sessionId);
       this.logger.warn(`Refresh token reuse detected for ${actor} ${subjectId}; session revoked`);
       throw new AppException(
@@ -115,11 +116,5 @@ export class SessionService {
     // The token is already a high-entropy signed JWT, so a plain digest is the
     // right tool here — this is theft detection, not password storage.
     return createHash('sha256').update(token).digest('hex');
-  }
-
-  private matches(token: string, expectedHash: string): boolean {
-    const actual = Buffer.from(this.hash(token), 'hex');
-    const expected = Buffer.from(expectedHash, 'hex');
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
   }
 }

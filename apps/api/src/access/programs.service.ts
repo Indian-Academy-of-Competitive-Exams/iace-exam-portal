@@ -10,6 +10,7 @@ import {
   type ProgramListQuery,
   type UpdateProgramBody,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
 import { AuditContext } from '../audit';
@@ -52,13 +53,12 @@ export class ProgramsService {
       this.prisma.program.findMany({
         where,
         orderBy: [{ name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.program.count({ where }),
     ]);
 
-    return { items: rows.map(toProgram), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toProgram), total);
   }
 
   async create(input: CreateProgramBody): Promise<Program> {

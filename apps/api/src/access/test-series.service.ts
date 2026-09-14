@@ -15,6 +15,7 @@ import {
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { reachableBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
@@ -114,20 +115,18 @@ export class TestSeriesService {
         where,
         include: SERIES_INCLUDE,
         orderBy: [{ name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.testSeries.count({ where }),
     ]);
 
     const branchCount = await this.liveBranchCount();
 
-    return {
-      items: rows.map((row) => toSummary(row, branchCount)),
-      page: query.page,
-      pageSize: query.pageSize,
+    return paged(
+      query,
+      rows.map((row) => toSummary(row, branchCount)),
       total,
-    };
+    );
   }
 
   async detail(id: string): Promise<TestSeriesSummary> {

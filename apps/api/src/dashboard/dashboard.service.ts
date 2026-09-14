@@ -25,7 +25,6 @@ import {
   type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { isMissingTable } from '../common/prisma-errors';
 import { AuditService } from '../audit';
 import { type AuthenticatedUser } from '../common/security';
 import { bandsFor, type DashboardBands } from './dashboard-bands';
@@ -113,14 +112,8 @@ export class DashboardService {
     return { coverage, ...(openFlags > 0 ? { openFlags } : {}) };
   }
 
-  /** Proof-reading is a later lane, so its table may not be in this database yet. */
-  private async openFlags(): Promise<number> {
-    try {
-      return await this.prisma.questionFlag.count({ where: { status: QuestionFlagStatus.OPEN } });
-    } catch (error) {
-      if (isMissingTable(error)) return 0;
-      throw error;
-    }
+  private openFlags(): Promise<number> {
+    return this.prisma.questionFlag.count({ where: { status: QuestionFlagStatus.OPEN } });
   }
 
   private async coverage(): Promise<DashboardCoverage[]> {

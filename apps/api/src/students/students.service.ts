@@ -22,6 +22,7 @@ import {
   type UpdateStudentBody,
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { StartingPinService } from '../auth';
@@ -100,25 +101,21 @@ export class StudentsService {
 
   async list(query: StudentListQuery): Promise<Paginated<StudentSummary>> {
     const where = studentWhere(query);
-    const skip = (query.page - 1) * query.pageSize;
-
     // One round trip for the rows and one for the count.
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.student.findMany({
         where,
         orderBy: studentOrderBy(query.sort),
-        skip,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.student.count({ where }),
     ]);
 
-    return {
-      items: rows.map((row) => this.toSummary(row)),
-      page: query.page,
-      pageSize: query.pageSize,
+    return paged(
+      query,
+      rows.map((row) => this.toSummary(row)),
       total,
-    };
+    );
   }
 
   /** Evaluated only, newest first, PAGED — the report's scope picker must reach the oldest one. */
@@ -136,8 +133,7 @@ export class StudentsService {
       this.prisma.attempt.findMany({
         where,
         orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
         select: {
           id: true,
           submittedAt: true,
@@ -148,17 +144,16 @@ export class StudentsService {
       this.prisma.attempt.count({ where }),
     ]);
 
-    return {
-      items: rows.map((row) => ({
+    return paged(
+      query,
+      rows.map((row) => ({
         attemptId: row.id,
         testTitle: row.test.title,
         submittedAt: row.submittedAt?.toISOString() ?? null,
         isGraded: row.isGraded,
       })),
-      page: query.page,
-      pageSize: query.pageSize,
       total,
-    };
+    );
   }
 
   async detail(id: string): Promise<StudentDetail> {

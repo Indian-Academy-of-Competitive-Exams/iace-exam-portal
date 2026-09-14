@@ -13,6 +13,7 @@ import {
   type StudentType,
   type UpdateBranchBody,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import {
@@ -98,13 +99,12 @@ export class BranchesService {
         // The online branch first: it is the one every admin is looking for by
         // default. `desc` because VIRTUAL is declared after PHYSICAL.
         orderBy: [{ type: 'desc' }, { name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.branch.count({ where }),
     ]);
 
-    return { items: rows.map(toBranch), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toBranch), total);
   }
 
   async create(input: CreateBranchBody): Promise<Branch> {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { Prisma, QuestionFlagCategory } from '@prisma/client';
+import { QuestionFlagCategory } from '@prisma/client';
 import {
   ActorTypes,
   DEFAULT_EXAM_COURSE,
@@ -206,28 +206,6 @@ describe('the open proof-reading flags tile', () => {
     const payload = await service.overview(holding(FEATURE_KEYS.QUESTION_MANAGEMENT));
 
     assert.equal(payload.bank?.openFlags, 3);
-  });
-
-  it('stands down when the table is not in this database, rather than taking the band with it', async () => {
-    // Caught in the browser: P2021 from an undeployed migration 500'd the WHOLE dashboard.
-    const subject = await makeSubject(prisma, 'REASONING');
-    await makeQuestion(prisma, { subjectId: subject.id, status: QUESTION_STATUS.ACTIVE });
-    const missingTable = new Prisma.PrismaClientKnownRequestError(
-      'The table `public.QuestionFlag` does not exist in the current database.',
-      { code: 'P2021', clientVersion: Prisma.prismaVersion.client },
-    );
-    const withoutFlags = new Proxy(prisma, {
-      get(target, key: string | symbol) {
-        if (key === 'questionFlag') return { count: () => Promise.reject(missingTable) };
-        return Reflect.get(target, key) as unknown;
-      },
-    });
-    const { service } = build(withoutFlags);
-
-    const payload = await service.overview(holding(FEATURE_KEYS.QUESTION_MANAGEMENT));
-
-    assert.equal(payload.bank?.coverage.length, 1);
-    assert.equal('openFlags' in (payload.bank ?? {}), false);
   });
 });
 

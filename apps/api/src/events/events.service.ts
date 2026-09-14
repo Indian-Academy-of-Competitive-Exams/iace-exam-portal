@@ -11,6 +11,7 @@ import {
   type Paginated,
   type UpdateEventBody,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
@@ -49,13 +50,12 @@ export class EventsService {
         where,
         include: EVENT_INCLUDE,
         orderBy: [{ name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.event.count({ where }),
     ]);
 
-    return { items: rows.map(toEvent), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toEvent), total);
   }
 
   async detail(id: string): Promise<Event> {
@@ -118,13 +118,12 @@ export class EventsService {
         where,
         include: CANDIDATE_INCLUDE,
         orderBy: [{ createdAt: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.eventCandidate.count({ where }),
     ]);
 
-    return { items: rows.map(toCandidate), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toCandidate), total);
   }
 
   /** `skipDuplicates`, so re-importing the same roster over itself adds nobody twice. */

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
 import { secondsToHuman } from '../../common/duration';
+import { sameHex } from '../../common/same-hex';
 
 /**
  * Picks the rung: the 1st lockout gets the 1st step, the 2nd the 2nd, and anything past the end of
@@ -150,7 +151,7 @@ export class PinService {
     const setupToken = randomBytes(32).toString('hex');
     await this.redis.client.set(
       redisKeys.pinSetup(mobile),
-      this.digest(setupToken),
+      this.pepper(setupToken),
       'EX',
       this.setupTtlSec,
     );
@@ -161,7 +162,7 @@ export class PinService {
   async consumeSetupToken(mobile: string, setupToken: string): Promise<void> {
     const key = redisKeys.pinSetup(mobile);
     const stored = await this.redis.client.get(key);
-    if (!stored || !this.digestMatches(setupToken, stored)) {
+    if (!stored || !sameHex(this.pepper(setupToken), stored)) {
       // The ticket is the OTP's continuation, so an expired one sends the
       // student back to the same place a stale code would.
       throw new AppException(
@@ -178,17 +179,5 @@ export class PinService {
 
   private pepper(pin: string): string {
     return createHmac('sha256', this.config.get('PIN_PEPPER')).update(pin).digest('hex');
-  }
-
-  /** The ticket is already 256 bits of CSPRNG output, so a plain digest is the
-   *  right tool — this is a lookup handle, not a password. */
-  private digest(token: string): string {
-    return createHmac('sha256', this.config.get('PIN_PEPPER')).update(token).digest('hex');
-  }
-
-  private digestMatches(token: string, expected: string): boolean {
-    const actual = Buffer.from(this.digest(token), 'hex');
-    const target = Buffer.from(expected, 'hex');
-    return actual.length === target.length && timingSafeEqual(actual, target);
   }
 }

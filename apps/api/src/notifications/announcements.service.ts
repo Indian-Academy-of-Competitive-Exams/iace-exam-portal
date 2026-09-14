@@ -19,6 +19,7 @@ import {
   type PaginationQuery,
   type Paginated,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
 import { studentWhere } from '../students';
@@ -155,14 +156,13 @@ export class AnnouncementsService {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.announcement.findMany({
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
         include: { createdBy: { select: { id: true, fullName: true, email: true } } },
       }),
       this.prisma.announcement.count(),
     ]);
 
-    return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toSummary), total);
   }
 
   async detail(id: string): Promise<Announcement> {

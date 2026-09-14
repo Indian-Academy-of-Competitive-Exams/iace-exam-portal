@@ -3,8 +3,9 @@
  * paths that hand one out — the roster import and an admin adding a student by
  * hand — mint it here, so neither can quietly go back to a guessable one.
  */
+import { randomInt } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ActorTypes } from '@iace/contracts';
+import { ActorTypes, PIN_LENGTH } from '@iace/contracts';
 import {
   MESSAGE_CHANNELS,
   MESSAGE_KINDS,
@@ -12,7 +13,6 @@ import {
   type MessageSender,
 } from '../../common/messaging';
 import { PinService } from './pin.service';
-import { randomPin } from './random-pin';
 
 /** argon2 is memory-hard by design: a thousand hashes at once would ask for ~19GB. */
 const HASH_CONCURRENCY = 4;
@@ -38,9 +38,10 @@ export class StartingPinService {
     const minted: StartingPin[] = [];
 
     for (let start = 0; start < mobiles.length; start += HASH_CONCURRENCY) {
-      const batch = mobiles
-        .slice(start, start + HASH_CONCURRENCY)
-        .map((mobile) => ({ mobile, pin: randomPin() }));
+      const batch = mobiles.slice(start, start + HASH_CONCURRENCY).map((mobile) => ({
+        mobile,
+        pin: String(randomInt(10 ** PIN_LENGTH)).padStart(PIN_LENGTH, '0'),
+      }));
       const hashed = await Promise.all(
         batch.map(async (issued) => ({ ...issued, hash: await this.pin.hash(issued.pin) })),
       );

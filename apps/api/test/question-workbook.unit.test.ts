@@ -4,11 +4,7 @@ import ExcelJS from 'exceljs';
 import { QUESTION_IMPORT_COLUMNS, QUESTION_IMPORT_SHEETS } from '@iace/contracts';
 import { readUploadedTable } from '../src/common/importing';
 import { emptyTaxonomy } from '../src/questions/question-core';
-import {
-  buildQuestionTemplate,
-  columnLetter,
-  topicRangeName,
-} from '../src/questions/question-workbook';
+import { buildQuestionTemplate, topicRangeName } from '../src/questions/question-workbook';
 import { type TaxonomyCatalog } from '../src/questions/taxonomy-context';
 
 /** Two subjects, and a topic name that appears under BOTH — the collision case. */
@@ -98,12 +94,12 @@ describe('the question import template', () => {
     const sheet = workbook.getWorksheet(QUESTION_IMPORT_SHEETS.QUESTIONS);
     assert.ok(sheet);
 
-    const topicColumn = columnLetter(
+    const topicColumn = sheet.getColumn(
       QUESTION_IMPORT_COLUMNS.findIndex((column) => column.key === 'topic') + 1,
-    );
-    const subjectColumn = columnLetter(
+    ).letter;
+    const subjectColumn = sheet.getColumn(
       QUESTION_IMPORT_COLUMNS.findIndex((column) => column.key === 'subject') + 1,
-    );
+    ).letter;
 
     const validation = sheet.getCell(`${topicColumn}2`).dataValidation;
     assert.equal(validation?.type, 'list');
@@ -113,13 +109,6 @@ describe('the question import template', () => {
 
   it('turns a name with spaces into a usable Excel range name', () => {
     assert.equal(topicRangeName('QUANTITATIVE APTITUDE'), 'T_QUANTITATIVE_APTITUDE');
-  });
-
-  it('numbers columns the way Excel does past Z', () => {
-    assert.equal(columnLetter(1), 'A');
-    assert.equal(columnLetter(26), 'Z');
-    assert.equal(columnLetter(27), 'AA');
-    assert.equal(columnLetter(28), 'AB');
   });
 
   it('still builds when the bank has no taxonomy yet', async () => {

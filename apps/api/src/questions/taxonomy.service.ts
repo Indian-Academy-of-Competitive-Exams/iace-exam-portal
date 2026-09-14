@@ -14,6 +14,7 @@ import {
   type UpdateSubjectBody,
   type UpdateTopicBody,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 
@@ -59,13 +60,12 @@ export class TaxonomyService {
         where,
         include: SUBJECT_INCLUDE,
         orderBy: { name: 'asc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.subject.count({ where }),
     ]);
 
-    return { items: rows.map(toSubject), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toSubject), total);
   }
 
   async createSubject(body: CreateSubjectBody): Promise<Subject> {
@@ -120,13 +120,12 @@ export class TaxonomyService {
         where,
         include: TOPIC_INCLUDE,
         orderBy: [{ subject: { name: 'asc' } }, { name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.topic.count({ where }),
     ]);
 
-    return { items: rows.map(toTopic), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toTopic), total);
   }
 
   async createTopic(body: CreateTopicBody): Promise<Topic> {

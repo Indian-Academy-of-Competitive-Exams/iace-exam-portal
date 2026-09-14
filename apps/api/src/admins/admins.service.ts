@@ -18,6 +18,7 @@ import {
   type PermissionLevel,
   type UpdateAdminBody,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 
@@ -61,18 +62,7 @@ export class AdminsService {
    * A stored key that code no longer defines is dropped rather than carried.
    */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
-    const rows = await this.prisma.adminFeaturePermission.findMany({
-      where: { adminId },
-      select: { featureKey: true, level: true },
-    });
-
-    const permissions: AdminPermissions = {};
-    for (const row of rows) {
-      const key = asFeatureKey(row.featureKey);
-      if (key === null || permissions[key] === PERMISSION_LEVELS.WRITE) continue;
-      permissions[key] = row.level;
-    }
-    return permissions;
+    return (await this.grantsByAdmin([adminId])).get(adminId) ?? {};
   }
 
   // ==========================================================================
@@ -97,8 +87,7 @@ export class AdminsService {
       this.prisma.admin.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.admin.count({ where }),
     ]);
@@ -106,12 +95,11 @@ export class AdminsService {
     // One grants query for the whole page rather than one per row: a list of 50
     // admins would otherwise be 51 queries.
     const grants = await this.grantsByAdmin(rows.map((row) => row.id));
-    return {
-      items: rows.map((row) => this.toAdminDto(row, grants.get(row.id) ?? {})),
-      page: query.page,
-      pageSize: query.pageSize,
+    return paged(
+      query,
+      rows.map((row) => this.toAdminDto(row, grants.get(row.id) ?? {})),
       total,
-    };
+    );
   }
 
   async create(input: CreateAdminBody, createdById: string): Promise<AdminDto> {

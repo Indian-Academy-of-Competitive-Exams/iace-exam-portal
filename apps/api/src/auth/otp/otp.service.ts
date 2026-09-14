@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomInt } from 'node:crypto';
 import {
   ActorTypes,
   AppException,
@@ -7,6 +7,7 @@ import {
   type ActorType,
   type OtpRequestResponse,
 } from '@iace/contracts';
+import { sameHex } from '../../common/same-hex';
 import { AppConfigService } from '../../config/app-config.service';
 import { OTP_SENDERS } from '../../config/env.schema';
 import { RedisService } from '../../redis/redis.service';
@@ -109,7 +110,7 @@ export class OtpService {
     if (!stored)
       throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired — request a new one');
 
-    if (!this.matches(code, stored.codeHash)) {
+    if (!sameHex(this.hash(code), stored.codeHash)) {
       const attempts = stored.attempts + 1;
       if (attempts >= this.config.get('OTP_MAX_VERIFY_ATTEMPTS')) {
         await this.redis.del(key);
@@ -141,12 +142,6 @@ export class OtpService {
 
   private hash(code: string): string {
     return createHmac('sha256', this.config.get('JWT_ACCESS_SECRET')).update(code).digest('hex');
-  }
-
-  private matches(code: string, expectedHash: string): boolean {
-    const actual = Buffer.from(this.hash(code), 'hex');
-    const expected = Buffer.from(expectedHash, 'hex');
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
   }
 }
 

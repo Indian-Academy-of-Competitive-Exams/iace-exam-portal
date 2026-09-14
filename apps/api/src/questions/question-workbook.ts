@@ -132,7 +132,7 @@ function writeLists(
   let column = 1;
 
   const addList = (title: string, values: readonly (string | number)[], rangeName: string) => {
-    const letter = columnLetter(column);
+    const letter = lists.getColumn(column).letter;
     lists.getColumn(column).width = Math.max(title.length + 2, 24);
     lists.getCell(`${letter}1`).value = title;
     lists.getCell(`${letter}1`).font = { bold: true };
@@ -183,8 +183,9 @@ const topicRangeName = (subject: string) => `${TOPIC_RANGE_PREFIX}${rangeToken(s
  * nothing, which is the right answer — the importer reports it by name either way.
  */
 function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void {
-  const subject = columnLetterOf('subject');
-  const topic = columnLetterOf('topic');
+  const letterOf = (key: QuestionImportColumnKey) => sheet.getColumn(key).letter;
+  const subject = letterOf('subject');
+  const topic = letterOf('topic');
 
   const listOf = (formula: string) => ({
     type: 'list' as const,
@@ -193,14 +194,14 @@ function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): v
   });
 
   for (let row = 2; row <= VALIDATED_ROWS + 1; row += 1) {
-    sheet.getCell(`${columnLetterOf('type')}${row}`).dataValidation = listOf(`=${TYPES_RANGE}`);
-    sheet.getCell(`${columnLetterOf('difficulty')}${row}`).dataValidation = listOf(
+    sheet.getCell(`${letterOf('type')}${row}`).dataValidation = listOf(`=${TYPES_RANGE}`);
+    sheet.getCell(`${letterOf('difficulty')}${row}`).dataValidation = listOf(
       `=${DIFFICULTIES_RANGE}`,
     );
-    sheet.getCell(`${columnLetterOf('correct_option')}${row}`).dataValidation = listOf(
+    sheet.getCell(`${letterOf('correct_option')}${row}`).dataValidation = listOf(
       `=${CORRECT_OPTIONS_RANGE}`,
     );
-    sheet.getCell(`${columnLetterOf('answer_mode')}${row}`).dataValidation = listOf(
+    sheet.getCell(`${letterOf('answer_mode')}${row}`).dataValidation = listOf(
       `=${ANSWER_MODES_RANGE}`,
     );
 
@@ -263,24 +264,4 @@ const INSTRUCTIONS = [
   'an error — re-uploading a sheet with new questions on the end is normal.',
 ];
 
-const ALPHABET_SIZE = 26;
-const CHAR_CODE_A = 65;
-
-/** 1 -> A, 27 -> AA. Excel's own column naming, which exceljs does not expose. */
-function columnLetter(index: number): string {
-  let remaining = index;
-  let letters = '';
-  while (remaining > 0) {
-    const position = (remaining - 1) % ALPHABET_SIZE;
-    letters = String.fromCodePoint(CHAR_CODE_A + position) + letters;
-    remaining = Math.floor((remaining - position - 1) / ALPHABET_SIZE);
-  }
-  return letters;
-}
-
-function columnLetterOf(key: QuestionImportColumnKey): string {
-  const index = QUESTION_IMPORT_COLUMNS.findIndex((column) => column.key === key);
-  return columnLetter(index + 1);
-}
-
-export { columnLetter, topicRangeName };
+export { topicRangeName };

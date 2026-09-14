@@ -9,7 +9,7 @@ import { matchFilters } from '../common/match-filters';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 /** A civil day in Asia/Kolkata is a whole day, not the instant its name would parse to. */
-function writtenBetween(from: string | undefined, to: string | undefined) {
+export function writtenBetween(from: string | undefined, to: string | undefined) {
   return {
     ...(from ? { gte: startOfInstituteDay(from) } : {}),
     ...(to ? { lte: endOfInstituteDay(to) } : {}),

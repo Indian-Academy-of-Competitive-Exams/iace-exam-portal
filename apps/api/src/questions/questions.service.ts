@@ -25,6 +25,7 @@ import {
   type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -139,7 +140,7 @@ export class QuestionsService {
     scope?: Prisma.QuestionWhereInput,
   ): Promise<Paginated<QuestionSummary>> {
     const [rows, total] = await this.pageOf(query, scope);
-    return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toSummary), total);
   }
 
   /** The same page in FULL, images signed together — a document to read, not a table to scan. */
@@ -149,7 +150,7 @@ export class QuestionsService {
   ): Promise<Paginated<QuestionDetail>> {
     const [rows, total] = await this.pageOf(query, scope);
     const items = await this.signedAll(rows.map(toDetail));
-    return { items, page: query.page, pageSize: query.pageSize, total };
+    return paged(query, items, total);
   }
 
   private async pageOf(
@@ -165,8 +166,7 @@ export class QuestionsService {
         where,
         include: QUESTION_INCLUDE,
         orderBy: questionOrderBy(query.sort),
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.question.count({ where }),
     ]);

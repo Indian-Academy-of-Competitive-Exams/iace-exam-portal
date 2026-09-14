@@ -19,6 +19,7 @@ import {
   type SavedQuestionKind,
   type SavedFacets,
 } from '@iace/contracts';
+import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { stemPreviewOf } from '../questions';
 import { isUniqueViolation } from '../common/prisma-errors';
@@ -66,20 +67,18 @@ export class SavedQuestionsService {
       this.prisma.savedQuestion.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
         select: ROW_SELECT,
       }),
       this.prisma.savedQuestion.count({ where }),
     ]);
 
     const sat = await this.satContext(rows);
-    return {
-      items: rows.map((row) => toSavedQuestion(row, sat.get(row.id))),
-      page: query.page,
-      pageSize: query.pageSize,
+    return paged(
+      query,
+      rows.map((row) => toSavedQuestion(row, sat.get(row.id))),
       total,
-    };
+    );
   }
 
   /** The sittings this student had on those tests. An empty answer narrows to nothing, correctly. */

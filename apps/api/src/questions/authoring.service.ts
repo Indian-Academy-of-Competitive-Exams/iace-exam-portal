@@ -18,12 +18,9 @@ import {
   type QuestionSummary,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  endOfInstituteDay,
-  shiftInstituteDay,
-  startOfInstituteDay,
-} from '../common/time/institute-day';
+import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { computeStemHash } from './question-core';
+import { writtenBetween } from './question-query';
 import { QuestionsService } from './questions.service';
 
 /** Every read and write fenced to the author, over the one service that owns the two tables. */
@@ -58,7 +55,7 @@ export class AuthoringService {
   history(query: AuthoringHistoryQuery, adminId: string): Promise<Paginated<QuestionSummary>> {
     return this.questions.list(asBankQuery(query), {
       createdById: adminId,
-      ...writtenBetween(query.from, query.to),
+      ...(query.from || query.to ? { createdAt: writtenBetween(query.from, query.to) } : {}),
     });
   }
 
@@ -167,16 +164,6 @@ function asBankQuery(query: AuthoringHistoryQuery): QuestionListQuery {
     tag: query.tag,
     sort: QUESTION_SORTS.RECENT,
     match: query.match,
-  };
-}
-
-function writtenBetween(from: string | undefined, to: string | undefined) {
-  if (!from && !to) return {};
-  return {
-    createdAt: {
-      ...(from ? { gte: startOfInstituteDay(from) } : {}),
-      ...(to ? { lte: endOfInstituteDay(to) } : {}),
-    },
   };
 }
 
