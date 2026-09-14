@@ -22,10 +22,10 @@ import {
   type SatTest,
 } from '@iace/contracts';
 import { api } from '../lib/api';
+import { performanceQuery } from '../lib/queries';
 import {
   LEADERBOARD_SCOPE_LABELS,
   NAV_ITEMS,
-  PERFORMANCE_QUERY_KEY,
   PERFORMANCE_SERIES_QUERY_KEY,
   ROUTES,
   leaderboardQueryKey,
@@ -56,7 +56,7 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
 }
 
 export function LeaderboardPage() {
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const trend = useQuery(performanceQuery);
   const sat = testsSat(trend.data?.points ?? []);
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.

@@ -12,12 +12,8 @@ import {
   type SolutionReport,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import {
-  bookmarksInAttemptQueryKey,
-  savedQueryKey,
-  scoreCardQueryKey,
-  solutionsQueryKey,
-} from '../lib/constants';
+import { scoreCardQuery, solutionsQuery } from '../lib/queries';
+import { bookmarksInAttemptQueryKey, savedQueryKey } from '../lib/constants';
 import {
   ReviewPaper,
   type BookmarkControl,
@@ -27,14 +23,10 @@ import {
 export function SolutionPanel() {
   const { attemptId = '' } = useParams();
 
-  const card = useQuery({
-    queryKey: scoreCardQueryKey(attemptId),
-    queryFn: () => api.me.scoreCard(attemptId),
-  });
+  const card = useQuery(scoreCardQuery(attemptId));
   // Refused until the gate opens, which is an ANSWER about this paper, not a failure to retry.
   const solutions = useQuery({
-    queryKey: solutionsQueryKey(attemptId),
-    queryFn: () => api.me.solutions(attemptId),
+    ...solutionsQuery(attemptId),
     retry: false,
   });
 

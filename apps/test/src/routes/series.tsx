@@ -18,15 +18,15 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
-  INSTITUTE_TIME_ZONE,
+  instituteDateTimeLabel,
   TEST_BUCKET,
   testAction,
   testBucket,
   type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
-import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { catalogQuery, performanceQuery } from '../lib/queries';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import {
   BlockSkeleton,
   PageBody,
@@ -35,13 +35,13 @@ import {
   TileGrid,
   TilesSkeleton,
 } from '../components/ui';
-import { averageAccuracy, bestRank, seriesProgress, type SeriesProgress } from '../lib/catalog';
-
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+import {
+  averageAccuracy,
+  bestRank,
+  seriesProgress,
+  type SeriesProgress,
+  shutReason,
+} from '../lib/catalog';
 
 const BUCKET_BADGE: Readonly<Record<string, 'success' | 'neutral' | 'warning'>> = {
   [TEST_BUCKET.DONE]: 'success',
@@ -59,8 +59,8 @@ export function SeriesPage() {
   const { seriesId = '' } = useParams();
   const now = new Date();
 
-  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const catalog = useQuery(catalogQuery);
+  const trend = useQuery(performanceQuery);
 
   const series = catalog.data?.series.find((row) => row.id === seriesId);
   const progress = series ? seriesProgress(series) : null;
@@ -212,13 +212,7 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
 /** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
-    return `Opens ${WHEN.format(new Date(test.opensAt))}`;
+    return `Opens ${instituteDateTimeLabel(test.opensAt)}`;
   }
   return 'Any time';
-}
-
-/** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
-function shutReason(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
-  return 'Waiting its turn';
 }

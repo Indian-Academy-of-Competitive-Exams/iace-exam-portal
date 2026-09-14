@@ -15,13 +15,14 @@ import {
   type ListFilter,
 } from '@iace/ui';
 import {
+  courseLabel,
   EXAM_COURSES,
   TEST_BUCKET,
   type ExamCourse,
   type StudentCatalogSeries,
 } from '@iace/contracts';
-import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, courseLabel, NAV_ITEMS, PERFORMANCE_QUERY_KEY } from '../lib/constants';
+import { catalogQuery, performanceQuery } from '../lib/queries';
+import { NAV_ITEMS } from '../lib/constants';
 import {
   matching,
   resultsByTest,
@@ -39,8 +40,8 @@ const SKELETON_KEYS = ['a', 'b', 'c'];
 type Emptiness = 'NONE' | 'FILTERED' | null;
 
 export function TestsPage() {
-  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const catalog = useQuery(catalogQuery);
+  const trend = useQuery(performanceQuery);
 
   const FILTERS = [
     {

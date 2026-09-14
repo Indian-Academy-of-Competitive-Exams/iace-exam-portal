@@ -14,7 +14,7 @@ import {
   EMPTY_STATE_KINDS,
   SkeletonParagraph,
 } from '@iace/ui';
-import { api } from '../../lib/api';
+import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
 import { ReviewQuestion, type ReviewedQuestion } from './review-paper';
 
 /** The two reads the review screen already makes, cached per sitting so a second row is free. */
@@ -22,13 +22,11 @@ function useSatQuestion(saved: SavedQuestion) {
   const attemptId = saved.attemptId ?? '';
 
   const card = useQuery({
-    queryKey: ['me', 'score-card', attemptId],
-    queryFn: () => api.me.scoreCard(attemptId),
+    ...scoreCardQuery(attemptId),
     enabled: attemptId !== '',
   });
   const solutions = useQuery({
-    queryKey: ['me', 'solutions', attemptId],
-    queryFn: () => api.me.solutions(attemptId),
+    ...solutionsQuery(attemptId),
     enabled: attemptId !== '',
     retry: false,
   });

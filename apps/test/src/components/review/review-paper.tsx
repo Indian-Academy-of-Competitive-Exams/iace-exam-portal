@@ -16,6 +16,7 @@ import {
   cn,
 } from '@iace/ui';
 import {
+  contentLanguageOf,
   type ExamSection,
   type LanguageCode,
   type LanguageMode,
@@ -170,7 +171,10 @@ export function ReviewQuestion({
       </div>
 
       {shown.map((language) => (
-        <RichContent key={language} html={htmlOf(question.content?.[contentKey(language)]?.stem)} />
+        <RichContent
+          key={language}
+          html={htmlOf(question.content?.[contentLanguageOf(language)]?.stem)}
+        />
       ))}
 
       <ol className="flex flex-col gap-2">
@@ -178,7 +182,9 @@ export function ReviewQuestion({
           <li key={option.id}>
             <ReviewOption
               seat={seat}
-              html={shown.map((language) => htmlOf(option.text[contentKey(language)])).join('')}
+              html={shown
+                .map((language) => htmlOf(option.text[contentLanguageOf(language)]))
+                .join('')}
               chosen={option.id === question.selectedOptionId}
               correct={option.isCorrect}
             />
@@ -192,7 +198,7 @@ export function ReviewQuestion({
           {shown.map((language) => (
             <RichContent
               key={language}
-              html={htmlOf(question.content?.[contentKey(language)]?.solution)}
+              html={htmlOf(question.content?.[contentLanguageOf(language)]?.solution)}
             />
           ))}
         </div>
@@ -315,6 +321,3 @@ function ReviewPalette({
     </aside>
   );
 }
-
-/** `LanguageCode` (EN) is the row's; the content JSON is keyed by the lower-case form. */
-const contentKey = (language: LanguageCode) => language.toLowerCase() as 'en' | 'hi' | 'te';

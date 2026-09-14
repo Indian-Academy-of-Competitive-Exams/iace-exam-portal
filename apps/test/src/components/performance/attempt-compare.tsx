@@ -10,7 +10,7 @@ import {
   type PlotReference,
 } from '@iace/ui';
 import {
-  INSTITUTE_TIME_ZONE,
+  instituteDayLabel,
   bestSitting,
   type CohortCurve,
   type PerformancePoint,
@@ -19,12 +19,7 @@ import {
 
 const RETAKE_HEIGHT = 300;
 
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-});
-
-const sat = (at: string | null) => (at === null ? undefined : WHEN.format(new Date(at)));
+const sat = (at: string | null) => instituteDayLabel(at) ?? undefined;
 
 /** Marks won against marks forgone — the one bar all three cards can honestly be read on. */
 function marksAgainst(score: number, maxMarks: number): CompositionSegment[] {

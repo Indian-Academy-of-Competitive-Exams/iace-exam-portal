@@ -4,10 +4,8 @@ import {
   ANSWER_STATE,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
-  PERFORMANCE_SCOPES,
   sharedReportPath,
   type AnswerState,
-  type LanguageCode,
   type LeaderboardMeasure,
   type LeaderboardScope,
   type PerformanceScope,
@@ -37,11 +35,8 @@ export const ROUTES = {
   REPORT_PATTERN: '/attempts/:attemptId/report',
   REPORT_TAB: (attemptId: string, tab: string) => `/attempts/${attemptId}/report/${tab}`,
   /** Where a link written before the shell existed lands; each redirects into its tab. */
-  SCORE_CARD: (attemptId: string) => `/attempts/${attemptId}/score-card`,
   SCORE_CARD_PATTERN: '/attempts/:attemptId/score-card',
-  REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
   REVIEW_PATTERN: '/attempts/:attemptId/review',
-  QUESTION_REPORT: (attemptId: string) => `/attempts/${attemptId}/questions`,
   QUESTION_REPORT_PATTERN: '/attempts/:attemptId/questions',
   PERFORMANCE: '/performance',
   /** Public: no session, no nav, one student's own report opened by a token. */
@@ -65,9 +60,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.SAVED, label: 'Saved questions', icon: Bookmark },
   { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
 ];
-
-/** `AP_TS_POLICE` is read aloud as AP/TS Police — the underscore is storage, not a name. */
-export const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
 export const PICKER_WIDTH = { REPORT: 'w-[26rem]', SCOPE: 'w-44' } as const;
@@ -123,13 +115,6 @@ export const ANY_SCOPE = '';
 export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
   ['me', 'performance', 'report', scope, scopeId] as const;
 
-/** Three of the four: ATTEMPT is a single sitting, which the score card already opens on. */
-export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
-  [PERFORMANCE_SCOPES.TEST]: 'This test',
-  [PERFORMANCE_SCOPES.SERIES]: 'This series',
-  [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
-};
-
 /** One board, keyed by what it is OF, so swapping scope or paper never reads a stale one. */
 export const leaderboardQueryKey = (scope: LeaderboardScope, scopeId: string) =>
   ['me', 'leaderboard', scope, scopeId] as const;
@@ -164,13 +149,6 @@ export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as c
 
 /** What a test covers, read before the clock starts. */
 export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'];
-
-/** The languages a paper can be sat in, in the words the exam world uses for them. */
-export const LANGUAGE_LABELS: Readonly<Record<LanguageCode, string>> = {
-  EN: 'English',
-  HI: 'Hindi',
-  TE: 'Telugu',
-};
 
 /** The five states a question can be in, and the colour the palette draws each one. */
 export const PALETTE_LEGEND: readonly {

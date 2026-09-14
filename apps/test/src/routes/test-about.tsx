@@ -16,7 +16,9 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
-  INSTITUTE_TIME_ZONE,
+  instituteDateTimeLabel,
+  LANGUAGE_LABELS,
+  contentLanguageOf,
   LANGUAGE_MODE,
   TEST_BUCKET,
   testAction,
@@ -26,15 +28,9 @@ import {
   type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
-import { api } from '../lib/api';
-import {
-  CATALOG_QUERY_KEY,
-  LANGUAGE_LABELS,
-  NAV_ITEMS,
-  PERFORMANCE_QUERY_KEY,
-  ROUTES,
-  briefQueryKey,
-} from '../lib/constants';
+import { briefQuery, catalogQuery, performanceQuery } from '../lib/queries';
+import { shutReason } from '../lib/catalog';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import {
   BandSkeleton,
   BlockPairSkeleton,
@@ -44,17 +40,11 @@ import {
   SurfaceCard,
 } from '../components/ui';
 
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-
 const PAST_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
   {
     key: 'when',
     header: 'Sat',
-    cell: (row) => (row.submittedAt ? WHEN.format(new Date(row.submittedAt)) : '—'),
+    cell: (row) => (row.submittedAt ? instituteDateTimeLabel(row.submittedAt) : '—'),
   },
   { key: 'marks', header: 'Marks', cell: (row) => `${row.score} / ${row.maxMarks}` },
   { key: 'rank', header: 'Rank', numeric: true, cell: (row) => row.rank ?? '—' },
@@ -62,7 +52,7 @@ const PAST_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
   {
     key: 'open',
     cell: (row) => (
-      <Link className={linkVariants()} to={ROUTES.SCORE_CARD(row.attemptId)}>
+      <Link className={linkVariants()} to={ROUTES.REPORT(row.attemptId)}>
         Score card
       </Link>
     ),
@@ -74,12 +64,9 @@ export function TestAboutPage() {
   const { testId = '' } = useParams();
   const now = new Date();
 
-  const brief = useQuery({
-    queryKey: briefQueryKey(testId),
-    queryFn: () => api.me.testBrief(testId),
-  });
-  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const brief = useQuery(briefQuery(testId));
+  const catalog = useQuery(catalogQuery);
+  const trend = useQuery(performanceQuery);
 
   const series = catalog.data?.series.find((row) => row.tests.some((test) => test.id === testId));
   const listed = series?.tests.find((test) => test.id === testId);
@@ -193,7 +180,7 @@ function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
         Opens
       </span>
       <span className="text-md font-semibold text-foreground">
-        {test.opensAt === null ? 'Any time' : WHEN.format(new Date(test.opensAt))}
+        {test.opensAt === null ? 'Any time' : instituteDateTimeLabel(test.opensAt)}
       </span>
     </div>
   );
@@ -248,11 +235,6 @@ function Exits({
   );
 }
 
-function shutReason(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
-  return 'Waiting its turn';
-}
-
 const totalMarksOf = (brief: ExamBrief) =>
   round(
     brief.sections.reduce(
@@ -272,7 +254,9 @@ function negativeOf(brief: ExamBrief): string {
 }
 
 const languagesOf = (brief: ExamBrief) => {
-  const named = brief.languages.map((code: LanguageCode) => LANGUAGE_LABELS[code]).join(', ');
+  const named = brief.languages
+    .map((code: LanguageCode) => LANGUAGE_LABELS[contentLanguageOf(code)])
+    .join(', ');
   return brief.languageMode === LANGUAGE_MODE.DUAL ? `${named} (side by side)` : named;
 };
 

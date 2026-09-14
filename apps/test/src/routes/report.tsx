@@ -12,25 +12,15 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { REPORT_TABS, newestFirst, reportTabOf } from '@iace/app-kit';
-import { INSTITUTE_TIME_ZONE, type PerformancePoint, type ScoreCard } from '@iace/contracts';
-import { api } from '../lib/api';
-import {
-  NAV_ITEMS,
-  PERFORMANCE_QUERY_KEY,
-  PICKER_WIDTH,
-  ROUTES,
-  scoreCardQueryKey,
-} from '../lib/constants';
+import { type PerformancePoint, type ScoreCard } from '@iace/contracts';
+import { performanceQuery, scoreCardQuery } from '../lib/queries';
+import { sittingHint } from '../lib/catalog';
+import { NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
 
 const UNTITLED = 'Untitled test';
 
 /** The one tab whose body is a table long enough to want the scroll for itself. */
 const QUESTIONS_TAB = 'questions';
-
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-});
 
 /** One sitting, whole. The tabs are routes, so a tab is a place a student can be sent. */
 export function ReportShell() {
@@ -93,10 +83,7 @@ export function ReportShell() {
 
 /** What the paper IS and what qualifies it — on the strip, so it holds on every tab. */
 function Standing({ attemptId }: Readonly<{ attemptId: string }>) {
-  const card = useQuery({
-    queryKey: scoreCardQueryKey(attemptId),
-    queryFn: () => api.me.scoreCard(attemptId),
-  });
+  const card = useQuery(scoreCardQuery(attemptId));
   const notices = card.data ? noticesFor(card.data) : [];
   return notices.length === 0 ? null : <Notices notices={notices} />;
 }
@@ -138,15 +125,9 @@ export function ReportRedirect({ tab }: Readonly<{ tab: string }>) {
 
 /** The trend is oldest-first, which is the line a chart draws and the reverse of a picker's list. */
 function useSittings() {
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const trend = useQuery(performanceQuery);
   const points = trend.data?.points ?? [];
   return { points, newestFirst: newestFirst(points) };
 }
 
 const marksOf = (point: PerformancePoint) => `${point.score} of ${point.maxMarks} marks`;
-
-/** Which sitting of the paper this was, and the day it was sat — in the institute's own zone. */
-function sittingHint(point: PerformancePoint): string {
-  const sat = point.submittedAt === null ? null : WHEN.format(new Date(point.submittedAt));
-  return [`Attempt ${point.attemptNo}`, sat].filter((part) => part !== null).join(' · ');
-}

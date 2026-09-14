@@ -21,7 +21,7 @@ import {
   type ListFilter,
 } from '@iace/ui';
 import {
-  INSTITUTE_TIME_ZONE,
+  instituteDateTimeLabel,
   NOTIFICATION_TYPE,
   type Notification,
   type NotificationType,
@@ -261,9 +261,5 @@ function destinationOf(notification: Notification): { to: string; label: string 
 
 /** The institute's clock, never the device's — a student in another zone reads the same day. */
 function whenItArrived(at: string): string {
-  return new Date(at).toLocaleString('en-IN', {
-    timeZone: INSTITUTE_TIME_ZONE,
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  return instituteDateTimeLabel(at);
 }

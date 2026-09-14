@@ -20,7 +20,8 @@ import {
 import { newestFirst } from '@iace/app-kit';
 import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
-  INSTITUTE_TIME_ZONE,
+  instituteDateTimeLabel,
+  instituteDayLabel,
   dispositionRates,
   instituteWallTime,
   percentLabel,
@@ -37,27 +38,10 @@ import {
   SurfaceCard,
 } from '../components/ui';
 import { api } from '../lib/api';
-import {
-  CATALOG_QUERY_KEY,
-  NAV_ITEMS,
-  OVERVIEW_QUERY_KEY,
-  PERFORMANCE_QUERY_KEY,
-  ROUTES,
-  TEST_DAYS_QUERY_KEY,
-} from '../lib/constants';
+import { catalogQuery, overviewQuery, performanceQuery } from '../lib/queries';
+import { NAV_ITEMS, ROUTES, TEST_DAYS_QUERY_KEY } from '../lib/constants';
 import { continueWith, openNow, sittablesOf, upNext, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
-
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-});
-
-const WHEN_EXACT = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
 
 /** The institute's clock, never the device's — a student abroad is still on an IST morning. */
 const GREETINGS = [
@@ -81,9 +65,9 @@ const TOP_QUARTER: PlotBand = { from: 75, to: 100, label: 'Top quarter' };
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
 export function DashboardPage() {
   const { identity: student } = useAuth();
-  const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
-  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+  const overview = useQuery(overviewQuery);
+  const trend = useQuery(performanceQuery);
+  const catalog = useQuery(catalogQuery);
   const testDays = useQuery({
     queryKey: TEST_DAYS_QUERY_KEY,
     queryFn: () => api.me.testDays(),
@@ -401,7 +385,7 @@ const resultLine = (point: PerformancePoint) =>
     `${point.score} of ${point.maxMarks} marks`,
     point.percentile === null ? null : `${point.percentile}th percentile`,
     point.rank === null ? null : `rank ${point.rank}`,
-    point.submittedAt === null ? null : `sat ${WHEN.format(new Date(point.submittedAt))}`,
+    point.submittedAt === null ? null : `sat ${instituteDayLabel(point.submittedAt)}`,
   ]
     .filter((part) => part !== null)
     .join(' · ');
@@ -410,7 +394,7 @@ function whenLine(row: Sittable, now: Date): string | null {
   const { opensAt } = row.test;
   if (opensAt === null || Date.parse(opensAt) <= now.getTime()) return null;
 
-  return `opens ${WHEN_EXACT.format(new Date(opensAt))}`;
+  return `opens ${instituteDateTimeLabel(opensAt)}`;
 }
 
 function greetingFor(now: Date, name: string | null | undefined): string {

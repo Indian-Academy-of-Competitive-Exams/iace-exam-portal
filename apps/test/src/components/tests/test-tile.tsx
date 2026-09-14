@@ -1,18 +1,13 @@
 import { Link } from 'react-router-dom';
 import { Button, Card, TruncatedText, cn, linkVariants, plural } from '@iace/ui';
 import {
+  instituteDayLabel,
   ATTEMPT_STATUS,
-  INSTITUTE_TIME_ZONE,
   TEST_BUCKET,
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
 import { type Sittable, type TestResult } from '../../lib/catalog';
-
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-});
 
 /** The wash is scanned across a shelf; the pill is read. Held under the pill so it stays legible. */
 const STATES = {
@@ -131,7 +126,7 @@ const paperLine = (test: StudentCatalogTest) =>
 /** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
-    return `Opens ${WHEN.format(new Date(test.opensAt))}`;
+    return `Opens ${instituteDayLabel(test.opensAt)}`;
   }
   return 'Any time';
 }

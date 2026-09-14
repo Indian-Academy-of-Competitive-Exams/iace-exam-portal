@@ -2,13 +2,9 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
-import {
-  PERFORMANCE_SCOPES,
-  type PerformanceReport,
-  type SectionalStanding,
-} from '@iace/contracts';
-import { api } from '../lib/api';
-import { performanceReportQueryKey } from '../lib/constants';
+import { type PerformanceReport, type SectionalStanding } from '@iace/contracts';
+import { attemptReportQuery } from '../lib/queries';
+import { minutes } from '../lib/catalog';
 import { PageBody, ReportSkeleton, Section } from '../components/ui';
 
 const DASH = '—';
@@ -23,10 +19,7 @@ const STANDINGS = {
 
 export function SubjectPanel() {
   const { attemptId = '' } = useParams();
-  const report = useQuery({
-    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
-    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
-  });
+  const report = useQuery(attemptReportQuery(attemptId));
 
   return (
     <>
@@ -110,11 +103,4 @@ function standingOf(row: SectionalStanding) {
 function perMinute(score: number | null, seconds: number | null): string {
   if (score === null || seconds === null || seconds === 0) return DASH;
   return (Math.round((score / (seconds / 60)) * 100) / 100).toFixed(2);
-}
-
-/** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */
-function minutes(seconds: number | null): string {
-  if (seconds === null) return DASH;
-  const whole = Math.floor(seconds / 60);
-  return whole === 0 ? `${seconds}s` : `${whole}m`;
 }

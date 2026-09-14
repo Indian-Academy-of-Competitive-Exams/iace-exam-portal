@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
+  courseLabel,
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
   GENDERS,
@@ -23,6 +24,7 @@ import {
   EmptyState,
   EMPTY_STATE_KINDS,
   Field,
+  FormField,
   FormPanel,
   FormSection,
   Input,
@@ -36,7 +38,7 @@ import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { courseLabel, ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY } from '../lib/constants';
+import { ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY } from '../lib/constants';
 
 /** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
 const FORM_FIELDS = [
@@ -156,21 +158,13 @@ export function ProfilePage() {
         <>
           <FormSection title="Needed before a test">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                htmlFor="motherName"
-                label="Mother's name"
-                error={form.formState.errors.profile?.motherName?.message}
-              >
-                {(control) => <Input {...control} {...form.register('profile.motherName')} />}
-              </Field>
+              <FormField form={form} name="profile.motherName" label="Mother's name">
+                {(control) => <Input {...control} />}
+              </FormField>
 
-              <Field
-                htmlFor="fatherName"
-                label="Father's name"
-                error={form.formState.errors.profile?.fatherName?.message}
-              >
-                {(control) => <Input {...control} {...form.register('profile.fatherName')} />}
-              </Field>
+              <FormField form={form} name="profile.fatherName" label="Father's name">
+                {(control) => <Input {...control} />}
+              </FormField>
 
               <Field
                 htmlFor="dob"
@@ -195,28 +189,18 @@ export function ProfilePage() {
 
           <FormSection title="About you">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                htmlFor="fullName"
-                label="Full name"
-                error={form.formState.errors.fullName?.message}
-              >
-                {(control) => <Input {...control} {...form.register('fullName')} />}
-              </Field>
+              <FormField form={form} name="fullName" label="Full name">
+                {(control) => <Input {...control} />}
+              </FormField>
 
               <Field htmlFor="mobile" label="Mobile">
                 {/* The one field an admin owns; it is here so the page shows the whole record. */}
                 {(control) => <Input {...control} readOnly value={`+91 ${me.data.mobile}`} />}
               </Field>
 
-              <Field
-                htmlFor="email"
-                label="Email"
-                error={form.formState.errors.profile?.email?.message}
-              >
-                {(control) => (
-                  <Input type="email" {...control} {...form.register('profile.email')} />
-                )}
-              </Field>
+              <FormField form={form} name="profile.email" label="Email">
+                {(control) => <Input type="email" {...control} />}
+              </FormField>
 
               <Field
                 htmlFor="gender"
@@ -247,15 +231,9 @@ export function ProfilePage() {
               </Field>
 
               <div className="sm:col-span-2">
-                <Field
-                  htmlFor="address"
-                  label="Address"
-                  error={form.formState.errors.profile?.address?.message}
-                >
-                  {(control) => (
-                    <Textarea rows={3} {...control} {...form.register('profile.address')} />
-                  )}
-                </Field>
+                <FormField form={form} name="profile.address" label="Address">
+                  {(control) => <Textarea rows={3} {...control} />}
+                </FormField>
               </div>
             </div>
           </FormSection>

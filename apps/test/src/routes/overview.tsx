@@ -23,9 +23,9 @@ import {
 } from '@iace/app-kit/browser';
 import { newestFirst } from '@iace/app-kit';
 import {
-  INSTITUTE_TIME_ZONE,
   TEST_SCOPE_LABELS,
   civilDate,
+  instituteDayLabel,
   todayISO,
   effortPerSitting,
   scopesSat,
@@ -35,15 +35,9 @@ import {
   type StudentOverview,
   type TestScope,
 } from '@iace/contracts';
-import { api } from '../lib/api';
-import {
-  ANY_SCOPE,
-  NAV_ITEMS,
-  OVERVIEW_QUERY_KEY,
-  PERFORMANCE_QUERY_KEY,
-  PICKER_WIDTH,
-  ROUTES,
-} from '../lib/constants';
+import { overviewQuery, performanceQuery } from '../lib/queries';
+import { sittingHint } from '../lib/catalog';
+import { ANY_SCOPE, NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
 import {
   BlockPairSkeleton,
   Hero,
@@ -57,17 +51,12 @@ import {
 const UNTITLED = 'Untitled test';
 const DASH = '—';
 
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  dateStyle: 'medium',
-});
-
 /** Three bands wide, not eight blocks tall: the standing, its counts, then the figures in one row. */
 export function OverviewPage() {
   const navigate = useNavigate();
   const [scope, setScope] = useState<TestScope | null>(null);
-  const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const overview = useQuery(overviewQuery);
+  const trend = useQuery(performanceQuery);
 
   const sat = newestFirst(trend.data?.points ?? []);
   const scopes = overview.data ? scopesSat(overview.data.subjects) : [];
@@ -179,7 +168,7 @@ function Body({
     <>
       {/* With no headline the pace tiles lead, or the band would sit empty down its whole left. */}
       {headline !== null || measured ? (
-        <Hero tone="accent" figure={headline ?? pace} aside={headline ? pace : undefined} />
+        <Hero figure={headline ?? pace} aside={headline ? pace : undefined} />
       ) : null}
 
       <TileGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
@@ -223,7 +212,7 @@ function satOn(overview: StudentOverview): string | undefined {
   if (at === null) return undefined;
   const days = daysSince(at);
   const ago = days === 0 ? 'today' : plural(days, 'day') + ' ago';
-  return `Last sat ${WHEN.format(new Date(at))} · ${ago}`;
+  return `Last sat ${instituteDayLabel(at)} · ${ago}`;
 }
 
 /** Whole institute days between two civil dates — never a UTC subtraction on a stored instant. */
@@ -240,10 +229,4 @@ function bestLine(overview: StudentOverview): string {
   const spread =
     avgPercentile === null ? '' : ` · ${Math.round(bestPercentile - avgPercentile)} above it`;
   return `average percentile · best ${bestPercentile}${spread}`;
-}
-
-/** Which sitting of the paper this was, and the day it was sat — in the institute's own zone. */
-function sittingHint(point: PerformancePoint): string {
-  const on = point.submittedAt === null ? null : WHEN.format(new Date(point.submittedAt));
-  return [`Attempt ${point.attemptNo}`, on].filter((part) => part !== null).join(' · ');
 }

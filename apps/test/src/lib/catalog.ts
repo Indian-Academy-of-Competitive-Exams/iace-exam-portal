@@ -1,8 +1,10 @@
 import {
   ATTEMPT_STATUS,
   TEST_BUCKET,
+  instituteDayLabel,
   testAction,
   testBucket,
+  type PerformancePoint,
   type StudentCatalogSeries,
   type StudentCatalogTest,
   type TestBucket,
@@ -87,13 +89,6 @@ export const averageAccuracy = (points: readonly { accuracy: number }[]) => {
   return `${Math.round(mean)}`;
 };
 
-/** Bare number over the sittings that HAVE one — a retake is unranked, not a zero. */
-export const averagePercentile = (points: readonly { percentile: number | null }[]) => {
-  const ranked = points.map((point) => point.percentile).filter((value) => value !== null);
-  if (ranked.length === 0) return '—';
-  return `${Math.round(ranked.reduce((sum, value) => sum + value, 0) / ranked.length)}`;
-};
-
 /** What a sat paper scored, joined onto its catalog card from the trend a screen already holds. */
 export interface TestResult {
   attemptId: string;
@@ -116,4 +111,24 @@ export function resultsByTest(
     });
   }
   return held;
+}
+
+/** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
+export function shutReason(test: StudentCatalogTest, now: Date): string {
+  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
+  return 'Waiting its turn';
+}
+
+/** Which sitting of the paper this was, and the day it was sat — in the institute's own zone. */
+export function sittingHint(point: PerformancePoint): string {
+  return [`Attempt ${point.attemptNo}`, instituteDayLabel(point.submittedAt)]
+    .filter((part) => part !== null)
+    .join(' · ');
+}
+
+/** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */
+export function minutes(seconds: number | null): string {
+  if (seconds === null) return '—';
+  const whole = Math.floor(seconds / 60);
+  return whole === 0 ? `${seconds}s` : `${whole}m`;
 }

@@ -3,17 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
 import {
   LEADERBOARD_SCOPES,
-  PERFORMANCE_SCOPES,
   percentLabel,
   type CohortCurve,
   type PerformanceReport,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import {
-  PERFORMANCE_QUERY_KEY,
-  leaderboardQueryKey,
-  performanceReportQueryKey,
-} from '../lib/constants';
+import { attemptReportQuery, performanceQuery } from '../lib/queries';
+import { leaderboardQueryKey } from '../lib/constants';
 import { PageBody, ReportSkeleton, RowsSkeleton, Section } from '../components/ui';
 import { AttemptCompare } from '../components/performance/attempt-compare';
 import { Podium, Standings } from '../components/leaderboard/board';
@@ -21,11 +17,8 @@ import { Podium, Standings } from '../components/leaderboard/board';
 /** Who else sat this paper. Without a cohort the benchmark swaps rather than the tab disappearing. */
 export function ComparePanel() {
   const { attemptId = '' } = useParams();
-  const report = useQuery({
-    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
-    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
-  });
-  const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const report = useQuery(attemptReportQuery(attemptId));
+  const trend = useQuery(performanceQuery);
 
   // `scopeId` on an ATTEMPT report is the ATTEMPT's id, so the paper has to come from elsewhere.
   const points = trend.data?.points ?? [];

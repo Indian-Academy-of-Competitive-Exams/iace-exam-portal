@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
+import { useForm, type FieldValues, type Path, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -27,7 +27,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Field,
+  FormField,
   NumericInput,
   PinField,
   ThemeToggle,
@@ -160,7 +160,7 @@ function SignInStep({
           onSubmit={form.handleSubmit((values) => login.mutate(values))}
           noValidate
         >
-          <MobileField autoFocus register={form.register('mobile')} />
+          <MobileField form={form} name="mobile" autoFocus />
           <PinField
             name="pin"
             form={form}
@@ -238,7 +238,7 @@ function MobileStep({
           onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
           noValidate
         >
-          <MobileField autoFocus register={form.register('mobile')} />
+          <MobileField form={form} name="mobile" autoFocus />
 
           <Button type="submit" loading={requestOtp.isPending}>
             Send code
@@ -403,22 +403,21 @@ function SetPinStep({
 // Shared bits
 // ---------------------------------------------------------------------------
 
-/** The mobile input is identical on three of the four screens. */
-function MobileField({
+/** The mobile input is identical on both screens that ask for one. */
+function MobileField<TValues extends FieldValues>({
+  form,
+  name,
   autoFocus,
-  error,
-  register,
 }: Readonly<{
+  form: UseFormReturn<TValues>;
+  name: Path<TValues>;
   autoFocus?: boolean;
-  error?: string;
-  register: UseFormRegisterReturn;
 }>) {
   return (
-    <Field htmlFor="mobile" label="Mobile number" error={error}>
+    <FormField form={form} name={name} label="Mobile number">
       {(control) => (
         <NumericInput
           {...control}
-          {...register}
           autoFocus={autoFocus}
           autoComplete="tel"
           // Room for a +91 paste; a flat cap of 10 would keep the wrong ten digits.
@@ -427,11 +426,11 @@ function MobileField({
           sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
           placeholder="98765 43210"
           prefix="+91"
-          invalid={Boolean(error)}
+          invalid={Boolean(control['aria-invalid'])}
           className="tabular-nums"
         />
       )}
-    </Field>
+    </FormField>
   );
 }
 

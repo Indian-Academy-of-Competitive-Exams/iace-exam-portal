@@ -1,14 +1,6 @@
 import * as React from 'react';
 import { cn } from '@iace/ui';
 
-const TONES = {
-  plain: '',
-  accent:
-    'rounded-2xl border border-border bg-gradient-to-br from-surface to-primary-subtle p-6 shadow-sm sm:p-8',
-} as const;
-
-export type HeroTone = keyof typeof TONES;
-
 export interface HeroProps {
   /** The overline above the title — where this sits, in the exam world's own words. */
   eyebrow?: React.ReactNode;
@@ -20,25 +12,15 @@ export interface HeroProps {
   figure?: React.ReactNode;
   /** The right-hand block — a window, a chip, the actions. */
   aside?: React.ReactNode;
-  tone?: HeroTone;
   className?: string;
 }
 
 /** The focal element every primary student screen opens on, before its supporting grid. */
-export function Hero({
-  eyebrow,
-  title,
-  meta,
-  figure,
-  aside,
-  tone = 'plain',
-  className,
-}: Readonly<HeroProps>) {
+export function Hero({ eyebrow, title, meta, figure, aside, className }: Readonly<HeroProps>) {
   return (
     <div
       className={cn(
-        'flex flex-wrap items-end justify-between gap-x-10 gap-y-6',
-        TONES[tone],
+        'flex flex-wrap items-end justify-between gap-x-10 gap-y-6 rounded-2xl border border-border bg-gradient-to-br from-surface to-primary-subtle p-6 shadow-sm sm:p-8',
         className,
       )}
     >

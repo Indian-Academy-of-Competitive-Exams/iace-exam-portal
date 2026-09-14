@@ -8,10 +8,8 @@ import { STORAGE_KEYS } from './constants';
  */
 export const tokenStore = createBrowserTokenStore(STORAGE_KEYS.AUTH);
 
-export const signOutSignal = browserSignOutSignal;
-
 export const api = createAppApiClient({
   baseUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:3000',
   tokenStore,
-  signOutSignal,
+  signOutSignal: browserSignOutSignal,
 });

@@ -24,7 +24,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import {
-  INSTITUTE_TIME_ZONE,
+  instituteDayLabel,
   SAVED_QUESTION_KIND,
   SAVED_QUESTION_KINDS,
   SAVED_QUESTION_KIND_LABELS,
@@ -247,8 +247,5 @@ function savedColumns(
 
 /** The institute's clock, never the device's — a student in another zone reads the same day. */
 function whenItWasSaved(at: string): string {
-  return new Date(at).toLocaleDateString('en-IN', {
-    timeZone: INSTITUTE_TIME_ZONE,
-    dateStyle: 'medium',
-  });
+  return instituteDayLabel(at);
 }

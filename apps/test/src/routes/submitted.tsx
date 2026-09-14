@@ -17,9 +17,9 @@ import {
 } from '@iace/ui';
 import { pollDelayMs, shouldKeepPolling } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import { api } from '../lib/api';
+import { scoreCardQuery } from '../lib/queries';
 import { DividedList, DividedRow, PageBody, Section } from '../components/ui';
-import { NAV_ITEMS, ROUTES, scoreCardQueryKey } from '../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { type EndedSitting } from '../components/exam/engine/use-exam-view';
 
 /** A queued marking job is the only reason the card 409s; anything else is a real failure. */
@@ -32,8 +32,7 @@ export function SubmittedPage() {
   const handedIn = useLocation().state as EndedSitting | null;
 
   const card = useQuery({
-    queryKey: scoreCardQueryKey(attemptId),
-    queryFn: () => api.me.scoreCard(attemptId),
+    ...scoreCardQuery(attemptId),
     enabled: attemptId !== '',
     retry: (count, error) => isPending(error) && shouldKeepPolling(count),
     retryDelay: (count) => pollDelayMs(count),
@@ -41,7 +40,7 @@ export function SubmittedPage() {
 
   const marked = card.data !== undefined;
   useEffect(() => {
-    if (marked) navigate(ROUTES.SCORE_CARD(attemptId), { replace: true });
+    if (marked) navigate(ROUTES.REPORT(attemptId), { replace: true });
   }, [marked, attemptId, navigate]);
 
   const failed = card.isError;

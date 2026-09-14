@@ -9,27 +9,20 @@ import {
   type Benchmark,
 } from '@iace/app-kit/browser';
 import {
-  PERFORMANCE_SCOPES,
   paperCounts,
   type CohortCurve,
   type PerformanceReport,
   type ScoreCard,
   type SectionalStanding,
 } from '@iace/contracts';
-import { api } from '../lib/api';
-import { performanceReportQueryKey, scoreCardQueryKey } from '../lib/constants';
+import { attemptReportQuery, scoreCardQuery } from '../lib/queries';
+import { minutes } from '../lib/catalog';
 import { Hero, HeroFigure, PageBody, ReportSkeleton, StatTile, TileGrid } from '../components/ui';
 
 export function ScoreCardPanel() {
   const { attemptId = '' } = useParams();
-  const card = useQuery({
-    queryKey: scoreCardQueryKey(attemptId),
-    queryFn: () => api.me.scoreCard(attemptId),
-  });
-  const report = useQuery({
-    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
-    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
-  });
+  const card = useQuery(scoreCardQuery(attemptId));
+  const report = useQuery(attemptReportQuery(attemptId));
 
   if (card.isLoading) return <ReportSkeleton />;
   if (!card.data) return null;
@@ -47,7 +40,6 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
   return (
     <PageBody>
       <Hero
-        tone="accent"
         eyebrow="Your result"
         figure={<Headline card={card} />}
         aside={<Beside card={card} accuracy={accuracy} />}
@@ -146,10 +138,4 @@ function timeAgainst(sections: readonly SectionalStanding[]): Benchmark | undefi
 function sumOrNull(values: readonly (number | null)[]): number | null {
   if (values.includes(null)) return null;
   return values.reduce((total: number, value) => total + (value ?? 0), 0);
-}
-
-/** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */
-function minutes(seconds: number): string {
-  const whole = Math.floor(seconds / 60);
-  return whole === 0 ? `${seconds}s` : `${whole}m`;
 }

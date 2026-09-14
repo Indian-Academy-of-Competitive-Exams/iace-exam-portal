@@ -1,6 +1,7 @@
 import {
   ANSWER_STATE,
   contentLanguageOf,
+  LANGUAGE_LABELS,
   LANGUAGE_MODE,
   omrFillFor,
   TEST_UI,
@@ -10,7 +11,6 @@ import {
   type TestUi,
 } from '@iace/contracts';
 import { FillBubble, RichContent, cn } from '@iace/ui';
-import { LANGUAGE_LABELS } from '../../lib/constants';
 import { htmlOf, shownLanguages } from './content';
 
 /** The answers on offer. One radio group per question, lettered the way a paper letters them. */
@@ -92,7 +92,7 @@ export function OptionList({
       </ol>
 
       {languageMode !== LANGUAGE_MODE.DUAL && languages.length > 1 && shown[0] ? (
-        <p className="text-xs text-exam-ink-muted">{`Shown in ${LANGUAGE_LABELS[shown[0]]}`}</p>
+        <p className="text-xs text-exam-ink-muted">{`Shown in ${LANGUAGE_LABELS[contentLanguageOf(shown[0])]}`}</p>
       ) : null}
     </>
   );

@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LANGUAGE_MODE, type ExamBrief, type LanguageCode } from '@iace/contracts';
+import {
+  LANGUAGE_LABELS,
+  LANGUAGE_MODE,
+  contentLanguageOf,
+  type ExamBrief,
+  type LanguageCode,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -18,8 +24,8 @@ import {
   plural,
 } from '@iace/ui';
 import { PageCrumbs, useFullscreen } from '@iace/app-kit/browser';
-import { api } from '../lib/api';
-import { LANGUAGE_LABELS, NAV_ITEMS, PALETTE_LEGEND, ROUTES } from '../lib/constants';
+import { briefQuery } from '../lib/queries';
+import { NAV_ITEMS, PALETTE_LEGEND, ROUTES } from '../lib/constants';
 import { SystemCheck } from '../components/system-check';
 import { DividedList, DividedRow, PageBody, Section, StatBand } from '../components/ui';
 
@@ -35,8 +41,7 @@ export function TestInstructionsPage() {
   const [language, setLanguage] = useState<LanguageCode | ''>('');
 
   const brief = useQuery({
-    queryKey: ['me', 'test-brief', testId],
-    queryFn: () => api.me.testBrief(testId),
+    ...briefQuery(testId),
     enabled: testId !== '',
   });
 
@@ -104,7 +109,7 @@ export function TestInstructionsPage() {
 
         {dual ? (
           <Alert variant="info">
-            {`This paper is shown in ${paper.languages.map((code) => LANGUAGE_LABELS[code]).join(' and ')} together. There is nothing to choose.`}
+            {`This paper is shown in ${paper.languages.map((code) => LANGUAGE_LABELS[contentLanguageOf(code)]).join(' and ')} together. There is nothing to choose.`}
           </Alert>
         ) : (
           <Field htmlFor="exam-language" label="Language">
@@ -117,7 +122,7 @@ export function TestInstructionsPage() {
                 onChange={(next) => setLanguage(next as LanguageCode)}
                 items={paper.languages.map((code) => ({
                   value: code,
-                  label: LANGUAGE_LABELS[code],
+                  label: LANGUAGE_LABELS[contentLanguageOf(code)],
                 }))}
               />
             )}
