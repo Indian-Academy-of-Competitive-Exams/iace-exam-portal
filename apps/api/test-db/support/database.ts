@@ -18,6 +18,7 @@ import {
   type AttemptStatus,
   type DifficultyLevel,
   type QuestionStatus,
+  type QuestionType,
   type TestScope,
   type TestStatus,
 } from '@iace/contracts';
@@ -50,6 +51,7 @@ export interface StudentOverrides {
   isTestBlocked?: boolean;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;
+  createdAt?: Date;
 }
 
 export interface SittingInput {
@@ -254,8 +256,10 @@ export async function makeQuestion(
     stem?: string;
     status?: QuestionStatus;
     difficulty?: DifficultyLevel;
+    type?: QuestionType;
     options?: Prisma.InputJsonValue;
     content?: Prisma.InputJsonValue;
+    answerKey?: Prisma.InputJsonValue;
   },
 ): Promise<{ id: string; versionId: string }> {
   const question = await prisma.question.create({
@@ -264,6 +268,7 @@ export async function makeQuestion(
       subjectId: input.subjectId,
       difficulty: input.difficulty ?? DIFFICULTY_LEVEL.MEDIUM,
       ...(input.status ? { status: input.status } : {}),
+      ...(input.type ? { type: input.type } : {}),
     },
     select: { id: true },
   });
@@ -276,6 +281,7 @@ export async function makeQuestion(
         en: { stem: [{ type: 'TEXT', text: `<p>${input.stem ?? 'Stem'}</p>` }] },
       },
       ...(input.options === undefined ? {} : { options: input.options }),
+      ...(input.answerKey === undefined ? {} : { answerKey: input.answerKey }),
     },
     select: { id: true },
   });
@@ -338,8 +344,10 @@ export interface PaperQuestionSpec {
   /** Index into the paper's sections; the first when left out. */
   section?: number;
   difficulty?: DifficultyLevel;
+  type?: QuestionType;
   options?: Prisma.InputJsonValue;
   content?: Prisma.InputJsonValue;
+  answerKey?: Prisma.InputJsonValue;
 }
 
 export interface PaperInput {
@@ -365,20 +373,23 @@ export async function makePaper(prisma: PrismaService, input: PaperInput): Promi
   }
   const items: PaperItem[] = [];
   for (const [index, entry] of input.questions.entries()) {
-    const spec = typeof entry === 'string' ? { subject: entry } : entry;
+    const {
+      subject: subjectName,
+      section,
+      ...asked
+    } = typeof entry === 'string' ? { subject: entry } : entry;
     const subject = await prisma.subject.upsert({
-      where: { name: spec.subject },
-      create: { id: uid('subject'), name: spec.subject },
+      where: { name: subjectName },
+      create: { id: uid('subject'), name: subjectName },
       update: {},
       select: { id: true },
     });
     const question = await makeQuestion(prisma, {
       subjectId: subject.id,
-      options: spec.options ?? fourOptions(),
-      ...(spec.content === undefined ? {} : { content: spec.content }),
-      ...(spec.difficulty === undefined ? {} : { difficulty: spec.difficulty }),
+      options: fourOptions(),
+      ...asked,
     });
-    const sectionId = sectionIds[spec.section ?? 0] ?? sectionIds[0] ?? '';
+    const sectionId = sectionIds[section ?? 0] ?? sectionIds[0] ?? '';
     const paperQuestion = await prisma.paperQuestion.create({
       data: {
         id: uid('pq'),
@@ -409,6 +420,8 @@ export interface SitInput {
   studentId: string;
   /** One choice per paper question, in order; null leaves it untouched. */
   chosen: readonly (string | null)[];
+  /** A typed answer per question, for the ones with no options to choose. */
+  typed?: readonly (string | null)[];
   /** The palette state per question; answered or not visited follows the choice when left out. */
   states?: readonly (AnswerState | undefined)[];
   /** Seconds per question; thirty each when left out. */
@@ -453,6 +466,7 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
   await prisma.attemptQuestion.createMany({
     data: input.paper.items.map((item, index) => {
       const chosen = input.chosen[index] ?? null;
+      const typedAnswer = input.typed?.[index] ?? null;
       return {
         attemptId: attempt.id,
         questionId: item.questionId,
@@ -461,9 +475,12 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
         baseConfigSectionId: item.sectionId,
         order: index + 1,
         selectedOptionId: chosen,
+        typedAnswer,
         state:
           input.states?.[index] ??
-          (chosen === null ? ANSWER_STATE.NOT_VISITED : ANSWER_STATE.ANSWERED),
+          (chosen === null && typedAnswer === null
+            ? ANSWER_STATE.NOT_VISITED
+            : ANSWER_STATE.ANSWERED),
         timeSpentSec: input.timeSpent?.[index] ?? 30,
       };
     }),
