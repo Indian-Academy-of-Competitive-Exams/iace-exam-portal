@@ -163,7 +163,7 @@ export class StudentGrantsService {
 
     const key = { studentId, testSeriesId: input.testSeriesId };
     // One transaction, so the read that decides "is this new" cannot lose a race with a second grant.
-    const held = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const already = await tx.studentGrant.findUnique({
         where: { studentId_testSeriesId: key },
         select: { testSeriesId: true },
@@ -187,13 +187,11 @@ export class StudentGrantsService {
           testSeriesId: input.testSeriesId,
         });
       }
-      return already;
     });
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
-    if (!held) this.events.emit(DOMAIN_EVENTS.SERIES_GRANTED, key);
 
     return this.list(studentId);
   }

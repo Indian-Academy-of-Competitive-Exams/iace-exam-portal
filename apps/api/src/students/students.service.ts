@@ -384,7 +384,7 @@ export class StudentsService {
 
     const before = auditFieldsOf(student);
     // The save and the word to the student commit together, so a crash cannot leave one without the other.
-    const { updated, examCodes } = await this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.student.update({ where: { id }, data: updatedColumns });
 
       // Only what was ADDED: an un-enrolment is not news, and the whole array is not what changed.
@@ -398,16 +398,13 @@ export class StudentsService {
           dedupeKey: `enrolment:${added.join(',')}`,
         });
       }
-      return { updated: row, examCodes: added };
+      return row;
     });
 
     const after = auditFieldsOf(updated);
     this.auditContext.setChanged(fieldDiff(before, after, AUDITED_STUDENT_FIELDS));
     if (fieldDiff(before, after, ACCESS_STUDENT_FIELDS)) {
       this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
-    }
-    if (examCodes.length > 0) {
-      this.events.emit(DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED, { studentId: id, examCodes });
     }
 
     return this.detail(id);

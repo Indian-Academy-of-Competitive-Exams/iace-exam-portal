@@ -739,20 +739,6 @@ describe('the access writes that bust the catalog cache', () => {
     ]);
   });
 
-  /** What the student is TOLD, as opposed to what the cache has to forget — two different facts. */
-  it('announces the grant itself once, however often the roster is re-read', async () => {
-    const { grants, events, stageId } = await build();
-    const held = await seedSeries({ examStageId: stageId });
-    const student = await makeStudent(prisma);
-
-    await grants.grant(student.id, { testSeriesId: held.id }, ADMIN);
-    await grants.grant(student.id, { testSeriesId: held.id }, ADMIN);
-
-    assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_GRANTED), [
-      { studentId: student.id, testSeriesId: held.id },
-    ]);
-  });
-
   it('announces the series when its branches move', async () => {
     const { series, events, stageId } = await build();
     const branch = await makeBranch(prisma);

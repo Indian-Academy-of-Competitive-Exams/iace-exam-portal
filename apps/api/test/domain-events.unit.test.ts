@@ -43,11 +43,7 @@ describe('DomainEventBus', () => {
     );
   });
 
-  /**
-   * Dotted names are names, not namespaces. With wildcards on, a listener for `paperQuestion.*`
-   * would receive both DROPPED and BONUS — two different corrections with opposite effects on a
-   * score.
-   */
+  /** Dotted names are names, not namespaces: a `student.*` listener must hear no student event. */
   it('treats a dotted event name as opaque', () => {
     const emitter = new EventEmitter2({ wildcard: false, delimiter: '.' });
     const bus = new DomainEventBus(emitter);

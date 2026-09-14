@@ -8,16 +8,8 @@ import {
 } from '@iace/contracts';
 
 export const DOMAIN_EVENTS = {
-  /** A student pressed submit. TODO(docs/03 §6): emit from the exam module. */
-  ATTEMPT_SUBMITTED: 'attempt.submitted',
   /** A first evaluation landed, and the aggregates want it. WIRED — see the scoring worker. */
   SCORING_COMPLETED: 'scoring.completed',
-  /** A test was offered through a series a student reaches. TODO(docs/03 §6): emit from access/admin. */
-  TEST_ASSIGNED: 'test.assigned',
-  /** A paper question was excluded from scoring. TODO(docs/03 §6): from admin. */
-  PAPER_QUESTION_DROPPED: 'paperQuestion.dropped',
-  /** A paper question was awarded to everyone. TODO(docs/03 §6): from admin. */
-  PAPER_QUESTION_BONUS: 'paperQuestion.bonus',
   /** A student's PIN changed; auth revoked the sessions before emitting. ANNOUNCED — no handler. */
   STUDENT_PIN_RESET: 'student.pin_reset',
   /** An audited write succeeded. WIRED — see the audit module. */
@@ -26,10 +18,6 @@ export const DOMAIN_EVENTS = {
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
   /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
-  /** Exam codes were ADDED to a student, never removed. WIRED — see students. */
-  STUDENT_ENROLMENT_ADDED: 'student.enrolment_added',
-  /** An admin filed a grant against a student. WIRED — see access. */
-  SERIES_GRANTED: 'series.granted',
   /** A student finished signing up and has an account for the first time. WIRED — see students. */
   STUDENT_SIGNED_UP: 'student.signed_up',
 } as const;
@@ -46,34 +34,12 @@ export const PIN_RESET_REASONS = {
 
 export type PinResetReason = (typeof PIN_RESET_REASONS)[keyof typeof PIN_RESET_REASONS];
 
-export interface AttemptSubmittedEvent {
-  attemptId: string;
-  testId: string;
-  studentId: string;
-  /** ISO — events carry strings, so the payload survives a queue unchanged. */
-  submittedAt: string;
-}
-
 export interface ScoringCompletedEvent {
   attemptId: string;
   testId: string;
   studentId: string;
   /** Which rollups it lands in: a retake never reaches the cohort's three. */
   isGraded: boolean;
-}
-
-export interface TestAssignedEvent {
-  testId: string;
-  /** The branches that just gained access, through their per-series config rows. */
-  branchIds: string[];
-}
-
-export interface PaperQuestionCorrectedEvent {
-  testId: string;
-  paperQuestionId: string;
-  questionId: string;
-  /** Audit only — `Admin.id`, matching the createdById columns in the schema. */
-  changedByAdminId: string | null;
 }
 
 export interface StudentPinResetEvent {
@@ -101,17 +67,6 @@ export interface AccessCatalogChangedEvent {
   testSeriesId: string;
 }
 
-export interface StudentEnrolmentAddedEvent {
-  studentId: string;
-  /** Only the codes this save ADDED — `Exam.code`, the string `Student.enrolledExams` holds. */
-  examCodes: string[];
-}
-
-export interface SeriesGrantedEvent {
-  studentId: string;
-  testSeriesId: string;
-}
-
 export interface StudentSignedUpEvent {
   studentId: string;
 }
@@ -121,16 +76,10 @@ export interface StudentSignedUpEvent {
  * and a handler cannot claim a shape the producer never sends.
  */
 export interface DomainEventPayloads {
-  [DOMAIN_EVENTS.ATTEMPT_SUBMITTED]: AttemptSubmittedEvent;
   [DOMAIN_EVENTS.SCORING_COMPLETED]: ScoringCompletedEvent;
-  [DOMAIN_EVENTS.TEST_ASSIGNED]: TestAssignedEvent;
-  [DOMAIN_EVENTS.PAPER_QUESTION_DROPPED]: PaperQuestionCorrectedEvent;
-  [DOMAIN_EVENTS.PAPER_QUESTION_BONUS]: PaperQuestionCorrectedEvent;
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
   [DOMAIN_EVENTS.AUDIT_ROW_ACTION]: AuditRowActionEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
-  [DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED]: StudentEnrolmentAddedEvent;
-  [DOMAIN_EVENTS.SERIES_GRANTED]: SeriesGrantedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;
 }

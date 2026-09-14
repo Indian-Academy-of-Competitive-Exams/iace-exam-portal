@@ -477,31 +477,6 @@ describe('the student writes that bust the catalog cache', () => {
   });
 });
 
-/** What the student is TOLD about an enrolment, which is a different fact from the cache bust. */
-describe('the enrolment a student is told about', () => {
-  const added = (events: FakeEventBus) => events.of(DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED);
-
-  /** Announcing the whole array would turn one added exam into "you were enrolled in everything you had". */
-  it('names only the codes this save added', async () => {
-    const { service, events } = await serviceWith({ student: { enrolledExams: ['SSC CGL'] } });
-
-    await service.update(STUDENT, { enrolledExams: ['SSC CGL', 'RRB JE'] });
-
-    assert.deepEqual(added(events), [{ studentId: STUDENT, examCodes: ['RRB JE'] }]);
-  });
-
-  it('says nothing when an exam is taken away, though the cache still has to forget', async () => {
-    const { service, events } = await serviceWith({
-      student: { enrolledExams: ['SSC CGL', 'RRB JE'] },
-    });
-
-    await service.update(STUDENT, { enrolledExams: ['SSC CGL'] });
-
-    assert.deepEqual(added(events), []);
-    assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED), [{ studentId: STUDENT }]);
-  });
-});
-
 describe('StudentsService — driven live, the diff an admin edit contributes', () => {
   const diffOf = async (context: AuditContext, edit: () => Promise<unknown>) =>
     context.run(async () => {
