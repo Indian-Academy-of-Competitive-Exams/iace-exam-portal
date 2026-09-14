@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, ATTEMPT_STATUS, DIFFICULTY_LEVEL } from '@iace/contracts';
+import { ANSWER_STATE, DIFFICULTY_LEVEL } from '@iace/contracts';
 import {
   bucketOf,
   bucketsBy,
@@ -8,17 +8,6 @@ import {
   timeUseOf,
   type AnalysedQuestion,
 } from '../src/attempts/attempt-analytics';
-import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import {
-  FakeLeaderboard,
-  FakeScoringPrisma,
-  FakeStorage,
-  makeAttempt,
-  makeScoredTest,
-  makeServedAnswer,
-  makeStanding,
-  rowAt,
-} from './support/fakes';
 
 function asked(overrides: Partial<AnalysedQuestion> = {}): AnalysedQuestion {
   return {
@@ -44,9 +33,6 @@ const untouched = asked({
   timeSpentSec: 0,
   state: ANSWER_STATE.NOT_VISITED,
 });
-
-// --------------------------------------------------------------------------- the derivations
-// ---------------------------------------------------------------------------
 
 describe('bucketOf', () => {
   /** The failure this prevents: a strong student who skipped half the paper reading as weak. */
@@ -145,208 +131,6 @@ describe('strategyOf', () => {
     assert.equal(
       Object.values(strategy).reduce((sum, count) => sum + count, 0),
       rows.length,
-    );
-  });
-});
-
-// --------------------------------------------------------------------------- the endpoints
-// ---------------------------------------------------------------------------
-
-const STUDENT = 'stu_1';
-const STARTED = new Date('2026-09-01T05:00:00.000Z');
-
-const SHAPE = makeScoredTest({
-  totalQuestions: 3,
-  totalMarks: 6,
-  sections: [
-    {
-      id: 'sec_1',
-      name: 'Section A',
-      order: 1,
-      questionCount: 3,
-      marksPerQuestion: 2,
-      durationSec: null,
-    },
-  ],
-});
-
-function bench() {
-  const mine = makeAttempt({
-    id: 'att_1',
-    studentId: STUDENT,
-    testId: 'tst_1',
-    status: ATTEMPT_STATUS.EVALUATED,
-    startedAt: STARTED,
-    submittedAt: new Date(STARTED.getTime() + 900_000),
-    score: 3.5,
-    correctCount: 2,
-    wrongCount: 1,
-    unattemptedCount: 0,
-  });
-  const rival = makeAttempt({
-    id: 'att_2',
-    studentId: 'stu_2',
-    testId: 'tst_1',
-    status: ATTEMPT_STATUS.EVALUATED,
-    startedAt: STARTED,
-    submittedAt: new Date(STARTED.getTime() + 600_000),
-    score: 6,
-  });
-  const served = [
-    makeServedAnswer({
-      questionId: 'q1',
-      order: 1,
-      selectedOptionId: 'o1',
-      isCorrect: true,
-      marksAwarded: 2,
-    }),
-    makeServedAnswer({
-      questionId: 'q2',
-      order: 2,
-      selectedOptionId: 'o1',
-      isCorrect: true,
-      marksAwarded: 2,
-      subjectId: 'sub_q',
-      subjectName: 'Quant',
-      difficulty: DIFFICULTY_LEVEL.HIGH,
-    }),
-    makeServedAnswer({
-      questionId: 'q3',
-      order: 3,
-      selectedOptionId: 'o2',
-      isCorrect: false,
-      marksAwarded: -0.5,
-      state: ANSWER_STATE.ANSWERED_MARKED,
-    }),
-  ];
-  const prisma = new FakeScoringPrisma([mine, rival], served, SHAPE);
-  const leaderboard = new FakeLeaderboard([
-    makeStanding({
-      attemptId: mine.id,
-      studentId: STUDENT,
-      rank: 2,
-      percentile: 25,
-      cohortSize: 2,
-    }),
-    makeStanding({
-      attemptId: rival.id,
-      studentId: 'stu_2',
-      rank: 1,
-      percentile: 75,
-      cohortSize: 2,
-    }),
-  ]);
-  return {
-    prisma,
-    mine,
-    service: new AttemptReportService(
-      prisma.asService(),
-      leaderboard.asService(),
-      new FakeStorage() as never,
-    ),
-  };
-}
-
-describe('the analytics one sitting can be asked for', () => {
-  it('derives every figure from what the exam already wrote', async () => {
-    const { service, mine } = bench();
-
-    const report = await service.analytics(STUDENT, mine.id);
-
-    assert.equal(report.overall.accuracy, 66.67);
-    assert.deepEqual(
-      report.subjects.map((bucket) => [bucket.name, bucket.correct]),
-      [
-        ['Reasoning', 1],
-        ['Quant', 1],
-      ],
-    );
-    assert.equal(report.strategy.answeredAndMarked, 1);
-    assert.equal(report.sections[0]?.name, 'Section A');
-  });
-
-  it('sets this sitting against the cohort it was sat in', async () => {
-    const { service, mine } = bench();
-
-    const report = await service.analytics(STUDENT, mine.id);
-
-    assert.equal(report.cohort.score, 3.5);
-    assert.equal(report.cohort.topperScore, 6);
-    assert.equal(report.cohort.averageScore, 4.75);
-    assert.deepEqual(
-      [report.cohort.rank, report.cohort.percentile, report.cohort.cohortSize],
-      [2, 25, 2],
-    );
-  });
-
-  it('refuses a paper nobody has marked yet', async () => {
-    const { service, prisma, mine } = bench();
-    rowAt(prisma.attempts).status = ATTEMPT_STATUS.SUBMITTED;
-
-    await assert.rejects(() => service.analytics(STUDENT, mine.id));
-  });
-});
-
-describe('the trend across every test a student has sat', () => {
-  it('reads oldest first, so a chart draws left to right', async () => {
-    const { service, prisma } = bench();
-    prisma.attempts.push(
-      makeAttempt({
-        id: 'att_old',
-        studentId: STUDENT,
-        testId: 'tst_0',
-        status: ATTEMPT_STATUS.EVALUATED,
-        submittedAt: new Date('2026-08-01T05:00:00.000Z'),
-        score: 1,
-        correctCount: 1,
-        wrongCount: 1,
-      }),
-    );
-
-    const trend = await service.performance(STUDENT);
-
-    assert.deepEqual(
-      trend.points.map((point) => point.attemptId),
-      ['att_old', 'att_1'],
-    );
-    assert.equal(trend.testsSat, 2);
-    assert.equal(trend.points[0]?.accuracy, 50);
-  });
-
-  it('plots each sitting at its standing now, and a retake at none', async () => {
-    const { service, prisma } = bench();
-    prisma.attempts.push(
-      makeAttempt({
-        id: 'att_retake',
-        studentId: STUDENT,
-        testId: 'tst_1',
-        attemptNo: 2,
-        isGraded: false,
-        status: ATTEMPT_STATUS.EVALUATED,
-        submittedAt: new Date('2026-09-02T05:00:00.000Z'),
-        score: 6,
-      }),
-    );
-
-    const trend = await service.performance(STUDENT);
-
-    assert.deepEqual(
-      trend.points.map((point) => [point.attemptId, point.rank, point.percentile]),
-      [
-        ['att_1', 2, 25],
-        ['att_retake', null, null],
-      ],
-    );
-  });
-
-  it('leaves another student’s sittings out of it', async () => {
-    const { service } = bench();
-
-    const trend = await service.performance(STUDENT);
-
-    assert.equal(
-      trend.points.every((point) => point.attemptId !== 'att_2'),
-      true,
     );
   });
 });

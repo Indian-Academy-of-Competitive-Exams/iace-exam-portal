@@ -4,8 +4,9 @@
  * one that reads what it did not write — a list total, a sweep — calls resetDatabase first.
  */
 import { randomUUID } from 'node:crypto';
-import { Prisma, type DeliveryChannel } from '@prisma/client';
+import { Prisma, type DeliveryChannel, type SupportedLanguage } from '@prisma/client';
 import {
+  ANSWER_STATE,
   ATTEMPT_STATUS,
   BRANCH_TYPE,
   DEFAULT_EXAM_COURSE,
@@ -13,6 +14,7 @@ import {
   NOTIFICATION_TYPE,
   STUDENT_TYPE,
   TEST_SCOPE,
+  type AnswerState,
   type AttemptStatus,
   type DifficultyLevel,
   type QuestionStatus,
@@ -253,6 +255,7 @@ export async function makeQuestion(
     status?: QuestionStatus;
     difficulty?: DifficultyLevel;
     options?: Prisma.InputJsonValue;
+    content?: Prisma.InputJsonValue;
   },
 ): Promise<{ id: string; versionId: string }> {
   const question = await prisma.question.create({
@@ -269,7 +272,9 @@ export async function makeQuestion(
       id: uid('version'),
       questionId: question.id,
       version: 1,
-      content: { en: { stem: [{ type: 'TEXT', text: `<p>${input.stem ?? 'Stem'}</p>` }] } },
+      content: input.content ?? {
+        en: { stem: [{ type: 'TEXT', text: `<p>${input.stem ?? 'Stem'}</p>` }] },
+      },
       ...(input.options === undefined ? {} : { options: input.options }),
     },
     select: { id: true },
@@ -281,13 +286,17 @@ export async function makeQuestion(
   return { id: question.id, versionId: version.id };
 }
 
-export function makeSection(prisma: PrismaService, catalog: Catalog): Promise<{ id: string }> {
+export function makeSection(
+  prisma: PrismaService,
+  catalog: Catalog,
+  input: { name?: string; order?: number } = {},
+): Promise<{ id: string }> {
   return prisma.baseConfigSection.create({
     data: {
       id: uid('section'),
       baseConfigId: catalog.baseConfigId,
-      name: 'Database tier section',
-      order: 1,
+      name: input.name ?? 'Database tier section',
+      order: input.order ?? 1,
       questionCount: 10,
       marksPerQuestion: 2,
       negativeMarks: 0.5,
@@ -313,39 +322,69 @@ export interface PaperItem {
   questionId: string;
   versionId: string;
   subjectId: string;
+  sectionId: string;
 }
 
 export interface Paper {
   testId: string;
+  catalog: Catalog;
   scope: TestScope;
-  sectionId: string;
+  sectionIds: string[];
   items: PaperItem[];
 }
 
-/** A test with a real paper: one section, one question per subject named, each worth 2 with 0.5 off. */
-export async function makePaper(
-  prisma: PrismaService,
-  input: { subjects: readonly string[]; scope?: TestScope; catalog?: Catalog },
-): Promise<Paper> {
+export interface PaperQuestionSpec {
+  subject: string;
+  /** Index into the paper's sections; the first when left out. */
+  section?: number;
+  difficulty?: DifficultyLevel;
+  options?: Prisma.InputJsonValue;
+  content?: Prisma.InputJsonValue;
+}
+
+export interface PaperInput {
+  /** One question per entry — a subject name alone, or the whole question. */
+  questions: readonly (string | PaperQuestionSpec)[];
+  sections?: readonly string[];
+  scope?: TestScope;
+  catalog?: Catalog;
+  title?: string;
+}
+
+/** A test with a real paper: its sections, and each question priced at 2 with 0.5 off. */
+export async function makePaper(prisma: PrismaService, input: PaperInput): Promise<Paper> {
   const catalog = input.catalog ?? (await makeCatalog(prisma));
   const scope = input.scope ?? TEST_SCOPE.FULL;
-  const test = await makeTest(prisma, catalog, { scope });
-  const section = await makeSection(prisma, catalog);
+  const test = await makeTest(prisma, catalog, {
+    scope,
+    ...(input.title ? { title: input.title } : {}),
+  });
+  const sectionIds: string[] = [];
+  for (const [index, name] of (input.sections ?? ['Section A']).entries()) {
+    sectionIds.push((await makeSection(prisma, catalog, { name, order: index + 1 })).id);
+  }
   const items: PaperItem[] = [];
-  for (const [index, name] of input.subjects.entries()) {
+  for (const [index, entry] of input.questions.entries()) {
+    const spec = typeof entry === 'string' ? { subject: entry } : entry;
     const subject = await prisma.subject.upsert({
-      where: { name },
-      create: { id: uid('subject'), name },
+      where: { name: spec.subject },
+      create: { id: uid('subject'), name: spec.subject },
       update: {},
       select: { id: true },
     });
-    const question = await makeQuestion(prisma, { subjectId: subject.id, options: fourOptions() });
+    const question = await makeQuestion(prisma, {
+      subjectId: subject.id,
+      options: spec.options ?? fourOptions(),
+      ...(spec.content === undefined ? {} : { content: spec.content }),
+      ...(spec.difficulty === undefined ? {} : { difficulty: spec.difficulty }),
+    });
+    const sectionId = sectionIds[spec.section ?? 0] ?? sectionIds[0] ?? '';
     const paperQuestion = await prisma.paperQuestion.create({
       data: {
         id: uid('pq'),
         testId: test.id,
         baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: section.id,
+        baseConfigSectionId: sectionId,
         questionId: question.id,
         questionVersionId: question.versionId,
         order: index + 1,
@@ -359,9 +398,10 @@ export async function makePaper(
       questionId: question.id,
       versionId: question.versionId,
       subjectId: subject.id,
+      sectionId,
     });
   }
-  return { testId: test.id, scope, sectionId: section.id, items };
+  return { testId: test.id, catalog, scope, sectionIds, items };
 }
 
 export interface SitInput {
@@ -369,15 +409,29 @@ export interface SitInput {
   studentId: string;
   /** One choice per paper question, in order; null leaves it untouched. */
   chosen: readonly (string | null)[];
+  /** The palette state per question; answered or not visited follows the choice when left out. */
+  states?: readonly (AnswerState | undefined)[];
+  /** Seconds per question; thirty each when left out. */
+  timeSpent?: readonly number[];
   attemptNo?: number;
   isGraded?: boolean;
-  submittedAt?: Date;
+  status?: AttemptStatus;
+  startedAt?: Date;
+  /** Null for a sitting that never submitted. */
+  submittedAt?: Date | null;
+  evaluatedAt?: Date | null;
+  score?: number | null;
+  languages?: SupportedLanguage[];
+  shuffleSeed?: number;
 }
 
-/** A submitted, not-yet-scored sitting served the whole paper, thirty seconds on each question. */
+const SAT_ON = new Date('2026-08-24T05:00:00.000Z');
+
+/** A sitting served the whole paper — submitted and unscored unless told otherwise. */
 export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<{ id: string }> {
-  const submittedAt = input.submittedAt ?? new Date('2026-08-24T05:00:00.000Z');
-  const startedAt = new Date(submittedAt.getTime() - HALF_HOUR_SEC * SECOND_MS);
+  const submittedAt = input.submittedAt === undefined ? SAT_ON : input.submittedAt;
+  const startedAt =
+    input.startedAt ?? new Date((submittedAt ?? SAT_ON).getTime() - HALF_HOUR_SEC * SECOND_MS);
   const attempt = await prisma.attempt.create({
     data: {
       id: uid('attempt'),
@@ -385,25 +439,34 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
       studentId: input.studentId,
       attemptNo: input.attemptNo ?? 1,
       isGraded: input.isGraded ?? true,
-      status: ATTEMPT_STATUS.SUBMITTED,
+      status: input.status ?? ATTEMPT_STATUS.SUBMITTED,
       startedAt,
       endsAt: new Date(startedAt.getTime() + 60 * MINUTE_MS),
       submittedAt,
-      shuffleSeed: 7,
+      evaluatedAt: input.evaluatedAt ?? null,
+      score: input.score ?? null,
+      shuffleSeed: input.shuffleSeed ?? 7,
+      ...(input.languages ? { languages: input.languages } : {}),
     },
     select: { id: true },
   });
   await prisma.attemptQuestion.createMany({
-    data: input.paper.items.map((item, index) => ({
-      attemptId: attempt.id,
-      questionId: item.questionId,
-      questionVersionId: item.versionId,
-      paperQuestionId: item.paperQuestionId,
-      baseConfigSectionId: input.paper.sectionId,
-      order: index + 1,
-      selectedOptionId: input.chosen[index] ?? null,
-      timeSpentSec: 30,
-    })),
+    data: input.paper.items.map((item, index) => {
+      const chosen = input.chosen[index] ?? null;
+      return {
+        attemptId: attempt.id,
+        questionId: item.questionId,
+        questionVersionId: item.versionId,
+        paperQuestionId: item.paperQuestionId,
+        baseConfigSectionId: item.sectionId,
+        order: index + 1,
+        selectedOptionId: chosen,
+        state:
+          input.states?.[index] ??
+          (chosen === null ? ANSWER_STATE.NOT_VISITED : ANSWER_STATE.ANSWERED),
+        timeSpentSec: input.timeSpent?.[index] ?? 30,
+      };
+    }),
   });
   return attempt;
 }

@@ -51,7 +51,7 @@ function build(rollupClient: PrismaService = prisma) {
 type World = ReturnType<typeof build>;
 
 const paperOf = (scope: TestScope = TEST_SCOPE.FULL) =>
-  makePaper(prisma, { subjects: SUBJECTS, scope });
+  makePaper(prisma, { questions: SUBJECTS, scope });
 
 /** A sitting of the paper, by a new student unless one is named. */
 async function sat(

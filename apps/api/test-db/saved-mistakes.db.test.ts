@@ -27,7 +27,7 @@ after(() => prisma.$disconnect());
 /** Four Reasoning questions on one paper, sat once with the answers chosen. */
 async function world(chosen: readonly (string | null)[]) {
   const paper = await makePaper(prisma, {
-    subjects: ['Reasoning', 'Reasoning', 'Reasoning', 'Reasoning'],
+    questions: ['Reasoning', 'Reasoning', 'Reasoning', 'Reasoning'],
   });
   const student = await makeStudent(prisma);
   const attempt = await sitPaper(prisma, { paper, studentId: student.id, chosen });
