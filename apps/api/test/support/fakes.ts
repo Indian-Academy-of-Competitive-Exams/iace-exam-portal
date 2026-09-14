@@ -32,7 +32,6 @@ import {
   type PaperQuestionStatus,
   type PermissionLevel,
   QUESTION_TYPE,
-  type QuestionStatus,
   type QuestionType,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
@@ -58,7 +57,6 @@ import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
 import { type MetricsService } from '../../src/common/metrics';
-import { PRISMA_ERROR_CODES } from '../../src/common/prisma-errors';
 import { type PrismaService } from '../../src/prisma/prisma.service';
 import {
   type LeaderboardService,
@@ -88,7 +86,7 @@ import {
   type DomainEventPayloads,
 } from '../../src/common/events';
 import { type EventsService } from '../../src/events';
-import { type AccessResolverService, type ProgramsService } from '../../src/access';
+import { type ProgramsService } from '../../src/access';
 
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
@@ -5578,75 +5576,6 @@ export interface FakeStudentSubjectStatRow {
   computedAt: Date | null;
 }
 
-/** One `StudentSubjectStat` row with the subject name the overview joins to. */
-export interface FakeOverviewSubjectRow {
-  studentId: string;
-  subjectId: string;
-  subjectName: string;
-  scope: TestScope;
-  attempted: number;
-  correct: number;
-  sumTimeSec: number;
-}
-
-export interface FakeOverviewData {
-  stats: FakeStudentStatRow[];
-  subjects: FakeOverviewSubjectRow[];
-  students: { id: string; deletedAt: Date | null; currentBranchId: string | null }[];
-}
-
-/** The dashboard's whole world, handing back Decimal and BigInt exactly as Prisma does. */
-export class FakeOverviewPrisma {
-  constructor(private readonly data: FakeOverviewData) {}
-
-  readonly studentStat = {
-    findUnique: ({ where }: { where: { studentId: string } }) => {
-      const row = this.data.stats.find((held) => held.studentId === where.studentId);
-      if (!row) return Promise.resolve(null);
-      return Promise.resolve({
-        ...row,
-        sumScore: new Prisma.Decimal(row.sumScore),
-        sumTimeSec: BigInt(row.sumTimeSec),
-      });
-    },
-  };
-
-  readonly studentSubjectStat = {
-    findMany: ({ where }: { where: { studentId: string } }) =>
-      Promise.resolve(
-        this.data.subjects
-          .filter((row) => row.studentId === where.studentId)
-          .map((row) => ({
-            subjectId: row.subjectId,
-            scope: row.scope,
-            attempted: row.attempted,
-            correct: row.correct,
-            sumTimeSec: BigInt(row.sumTimeSec),
-            subject: { name: row.subjectName },
-          })),
-      ),
-  };
-
-  readonly student = {
-    /** The scoped read: a branch filter, and `in: []` matching nobody exactly as Prisma does. */
-    findFirst: ({
-      where,
-    }: {
-      where: { id: string; deletedAt: null; currentBranchId?: { in: string[] } };
-    }) =>
-      Promise.resolve(
-        this.data.students.find(
-          (row) =>
-            row.id === where.id &&
-            row.deletedAt === null &&
-            (where.currentBranchId === undefined ||
-              (row.currentBranchId !== null &&
-                where.currentBranchId.in.includes(row.currentBranchId))),
-        ) ?? null,
-      ),
-  };
-}
-
 export interface FakeTestStatRow {
   testId: string;
   attemptCount: number;
@@ -6237,220 +6166,4 @@ export class FakeMetrics {
   asService(): MetricsService {
     return this as unknown as MetricsService;
   }
-}
-
-/** The schedule the star's gate reads. `closesAt` null is a ranked test nobody has capped entry on. */
-export function fakeTestSchedule(closesAt: string | null): AccessResolverService {
-  return { testSchedule: () => Promise.resolve({ closesAt, extraTimeSec: 0 }) } as never;
-}
-
-// ============================================================================
-// The admin dashboard. Deliberately holds NO `attempt` delegate: the sittings
-// series reads folded `TestStat` rows, so a scan that crept in would throw here
-// rather than pass quietly.
-// ============================================================================
-
-export interface FakeDashboardStudent {
-  isActive: boolean;
-  deletedAt: Date | null;
-}
-
-export interface FakeDashboardQuestion {
-  status: QuestionStatus;
-  subjectId: string;
-  difficulty: DifficultyLevel;
-}
-
-export interface FakeDashboardTest {
-  id: string;
-  title: string | null;
-  status: TestStatus;
-  opensAt: Date | null;
-  seriesName: string;
-  seriesEnabled: boolean;
-  attemptCount: number;
-  evaluatedCount: number;
-}
-
-export interface FakeDashboardData {
-  students?: FakeDashboardStudent[];
-  branches?: number;
-  programs?: number;
-  exams?: number;
-  questions?: FakeDashboardQuestion[];
-  subjects?: { id: string; name: string }[];
-  tests?: FakeDashboardTest[];
-  series?: number;
-  /** A number, or the P2021 a database without Lane E's migration answers with. */
-  openFlags?: number | 'missing-table';
-}
-
-type CountWhere = { where?: Record<string, unknown> };
-
-export function makeDashboardTest(overrides: Partial<FakeDashboardTest> = {}): FakeDashboardTest {
-  return {
-    id: 'tst_1',
-    title: 'Mock 1',
-    status: TEST_STATUS.ACTIVE,
-    opensAt: new Date('2026-09-01T04:30:00.000Z'),
-    seriesName: 'SSC CGL Mocks',
-    seriesEnabled: true,
-    attemptCount: 0,
-    evaluatedCount: 0,
-    ...overrides,
-  };
-}
-
-export class FakeDashboardPrisma {
-  /** Which delegates a request touched - how a band nobody may see is proved never to run. */
-  readonly touched: string[] = [];
-
-  constructor(private readonly data: FakeDashboardData = {}) {}
-
-  private saw<T>(delegate: string, value: T): Promise<T> {
-    this.touched.push(delegate);
-    return Promise.resolve(value);
-  }
-
-  private liveTests(): FakeDashboardTest[] {
-    return (this.data.tests ?? []).filter((test) => test.status === TEST_STATUS.ACTIVE);
-  }
-
-  readonly student = {
-    count: ({ where = {} }: CountWhere = {}) =>
-      this.saw(
-        'student',
-        (this.data.students ?? []).filter(
-          (row) =>
-            row.deletedAt === null &&
-            (where.isActive === undefined || row.isActive === where.isActive),
-        ).length,
-      ),
-  };
-
-  readonly branch = { count: () => this.saw('branch', this.data.branches ?? 0) };
-
-  readonly program = { count: () => this.saw('program', this.data.programs ?? 0) };
-
-  readonly exam = { count: () => this.saw('exam', this.data.exams ?? 0) };
-
-  readonly testSeries = { count: () => this.saw('testSeries', this.data.series ?? 0) };
-
-  readonly questionFlag = {
-    count: () => {
-      this.touched.push('questionFlag');
-      if (this.data.openFlags !== 'missing-table') return Promise.resolve(this.data.openFlags ?? 0);
-      return Promise.reject(
-        new Prisma.PrismaClientKnownRequestError('The table does not exist', {
-          code: PRISMA_ERROR_CODES.TABLE_NOT_FOUND,
-          clientVersion: 'test',
-        }),
-      );
-    },
-  };
-
-  readonly subject = {
-    findMany: () =>
-      this.saw(
-        'subject',
-        [...(this.data.subjects ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-      ),
-  };
-
-  readonly question = {
-    count: ({ where = {} }: CountWhere = {}) =>
-      this.saw(
-        'question',
-        (this.data.questions ?? []).filter((row) => row.status === where.status).length,
-      ),
-
-    groupBy: ({
-      by,
-      where = {},
-    }: {
-      by: readonly ('status' | 'subjectId' | 'difficulty')[];
-      where?: { status?: QuestionStatus };
-    }) => {
-      const rows = (this.data.questions ?? []).filter(
-        (row) => where.status === undefined || row.status === where.status,
-      );
-      return this.saw('question', groupRows(rows, by));
-    },
-  };
-
-  readonly test = {
-    groupBy: ({ by }: { by: readonly 'status'[] }) =>
-      this.saw('test', groupRows(this.data.tests ?? [], by)),
-
-    findMany: ({
-      where = {},
-      orderBy,
-      take,
-    }: {
-      where?: { testSeries?: { isEnabled: boolean }; OR?: unknown[]; opensAt?: { gt: Date } };
-      orderBy: { opensAt: 'asc' | { sort: 'desc' } };
-      take: number;
-    }) => {
-      const anySeries = where.testSeries === undefined;
-      const rows = this.liveTests()
-        .filter((test) => anySeries || test.seriesEnabled)
-        .filter((test) => matchesWindow(test, where))
-        .sort(byOpensAt(orderBy.opensAt === 'asc'))
-        .slice(0, take)
-        .map((test) => ({
-          id: test.id,
-          title: test.title,
-          opensAt: test.opensAt,
-          testSeries: { name: test.seriesName },
-          stat: { attemptCount: test.attemptCount, evaluatedCount: test.evaluatedCount },
-        }));
-      return this.saw('test', rows);
-    },
-  };
-
-  asService(): PrismaService {
-    return this as unknown as PrismaService;
-  }
-}
-
-/** Prisma's `_count: true` shape: one row per distinct combination of the grouped columns. */
-function groupRows<T extends object>(
-  rows: readonly T[],
-  by: readonly (keyof T & string)[],
-): (Partial<T> & { _count: number })[] {
-  const held = new Map<string, Partial<T> & { _count: number }>();
-  for (const row of rows) {
-    const key = by.map((column) => String(row[column])).join(' ');
-    const seen = held.get(key);
-    if (seen) {
-      seen._count += 1;
-      continue;
-    }
-    held.set(key, {
-      ...Object.fromEntries(by.map((column) => [column, row[column]])),
-      _count: 1,
-    } as Partial<T> & { _count: number });
-  }
-  return [...held.values()];
-}
-
-/** `opensAt: null` is a test that opened with its series, so it is always already open. */
-function matchesWindow(
-  test: FakeDashboardTest,
-  where: { OR?: unknown[]; opensAt?: { gt: Date } },
-): boolean {
-  if (where.opensAt) return test.opensAt !== null && test.opensAt > where.opensAt.gt;
-  if (!where.OR) return true;
-  const [, upperBound] = where.OR as [unknown, { opensAt: { lte: Date } }];
-  return test.opensAt === null || test.opensAt <= upperBound.opensAt.lte;
-}
-
-/** Nulls last either way, matching the `{ sort, nulls: 'last' }` the service asks Postgres for. */
-function byOpensAt(ascending: boolean) {
-  return (a: FakeDashboardTest, b: FakeDashboardTest): number => {
-    if (a.opensAt === null) return b.opensAt === null ? 0 : 1;
-    if (b.opensAt === null) return -1;
-    const gap = a.opensAt.getTime() - b.opensAt.getTime();
-    return ascending ? gap : -gap;
-  };
 }

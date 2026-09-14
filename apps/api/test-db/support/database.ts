@@ -12,6 +12,9 @@ import {
   DIFFICULTY_LEVEL,
   STUDENT_TYPE,
   type AttemptStatus,
+  type DifficultyLevel,
+  type QuestionStatus,
+  type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
@@ -26,7 +29,9 @@ export interface Catalog {
 }
 
 export interface TestOverrides {
-  title?: string;
+  title?: string | null;
+  status?: TestStatus;
+  opensAt?: Date | null;
 }
 
 export interface StudentOverrides {
@@ -34,6 +39,7 @@ export interface StudentOverrides {
   mobile?: string;
   fullName?: string | null;
   currentBranchId?: string | null;
+  isActive?: boolean;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;
 }
@@ -169,10 +175,20 @@ export function makeSubject(prisma: PrismaService, name = uid('Subject')): Promi
 /** A question with one version, pointed at as current — the order the composite FK demands. */
 export async function makeQuestion(
   prisma: PrismaService,
-  input: { subjectId: string; stem?: string },
+  input: {
+    subjectId: string;
+    stem?: string;
+    status?: QuestionStatus;
+    difficulty?: DifficultyLevel;
+  },
 ): Promise<{ id: string; versionId: string }> {
   const question = await prisma.question.create({
-    data: { id: uid('question'), subjectId: input.subjectId, difficulty: DIFFICULTY_LEVEL.MEDIUM },
+    data: {
+      id: uid('question'),
+      subjectId: input.subjectId,
+      difficulty: input.difficulty ?? DIFFICULTY_LEVEL.MEDIUM,
+      ...(input.status ? { status: input.status } : {}),
+    },
     select: { id: true },
   });
   const version = await prisma.questionVersion.create({
