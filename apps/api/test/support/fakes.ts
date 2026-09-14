@@ -18,7 +18,6 @@ import {
   type ExamCourse,
   type ExamMode,
   type ExamTemplate,
-  type FeatureKey,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
   type LanguageCode,
@@ -30,7 +29,6 @@ import {
   type NotificationType,
   PAPER_QUESTION_STATUS,
   type PaperQuestionStatus,
-  type PermissionLevel,
   QUESTION_TYPE,
   type QuestionType,
   STAGE_DISPOSITION,
@@ -2666,151 +2664,6 @@ export class FakeAdminsService {
 
 // --------------------------------------------------------------------------- Admins / features /
 // grants ---------------------------------------------------------------------------
-
-interface FakeGrantRow {
-  adminId: string;
-  featureKey: FeatureKey;
-  level: PermissionLevel;
-}
-
-interface FakeAdminRow {
-  id: string;
-  email: string;
-  fullName: string | null;
-  isSuperAdmin: boolean;
-  isActive: boolean;
-  createdById: string | null;
-  createdAt: Date;
-}
-
-/** Enough Prisma for AdminsService to run unchanged, with no database. */
-export class FakeAdminsPrisma {
-  private seq = 0;
-  readonly grants: FakeGrantRow[] = [];
-
-  constructor(
-    readonly admins: FakeAdminRow[] = [],
-    readonly branches: FakeBranch[] = [],
-  ) {}
-
-  readonly branch = {
-    count: ({ where }: { where: { id: { in: string[] } } }) =>
-      Promise.resolve(this.branches.filter((row) => where.id.in.includes(row.id)).length),
-  };
-
-  private id(prefix: string): string {
-    this.seq += 1;
-    return `${prefix}_${this.seq}`;
-  }
-
-  asService(): PrismaService {
-    return this as unknown as PrismaService;
-  }
-
-  $transaction<T>(fn: (tx: FakeAdminsPrisma) => Promise<T>): Promise<T> {
-    return fn(this);
-  }
-
-  readonly admin = {
-    // A copy, not the live row: `update` mutates in place, and a caller that reads a row
-    // before writing to it — to diff before against after — must see it as it was.
-    findUnique: ({ where }: { where: { id?: string; email?: string } }) => {
-      const row = this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email));
-      return Promise.resolve(row ? { ...row } : null);
-    },
-
-    findFirst: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.admins.find((a) => a.id === where.id) ?? null),
-
-    findMany: ({ skip = 0, take = 50 }: { skip?: number; take?: number } = {}) =>
-      Promise.resolve(this.admins.slice(skip, skip + take)),
-
-    count: () => Promise.resolve(this.admins.length),
-
-    create: ({ data }: { data: Partial<FakeAdminRow> & { email: string } }) => {
-      const row: FakeAdminRow = {
-        id: this.id('adm'),
-        email: data.email,
-        fullName: data.fullName ?? null,
-        isSuperAdmin: data.isSuperAdmin ?? false,
-        isActive: true,
-        createdById: data.createdById ?? null,
-        createdAt: new Date(),
-      };
-      this.admins.push(row);
-      return Promise.resolve(row);
-    },
-
-    update: ({ where, data }: { where: { id: string }; data: Partial<FakeAdminRow> }) => {
-      const row = this.admins.find((a) => a.id === where.id);
-      if (!row) throw new Error(`no admin ${where.id}`);
-      Object.assign(row, data);
-      return Promise.resolve(row);
-    },
-  };
-
-  /** One row per (admin, key, level) — the row IS its own key, so there is nothing to update. */
-  readonly adminFeaturePermission = {
-    findMany: ({
-      where = {},
-    }: { where?: { adminId?: string | { in: string[] }; featureKey?: FeatureKey } } = {}) =>
-      Promise.resolve(
-        this.grants
-          .filter(
-            (g) =>
-              matchesKey(g.adminId, where.adminId) &&
-              (where.featureKey === undefined || g.featureKey === where.featureKey),
-          )
-          .map((g) => ({ ...g })),
-      ),
-
-    findUnique: ({ where }: { where: { adminId_featureKey_level: FakeGrantRow } }) => {
-      const key = where.adminId_featureKey_level;
-      const row = this.grants.find((g) => sameGrant(g, key));
-      return Promise.resolve(row ? { ...row } : null);
-    },
-
-    create: ({ data }: { data: FakeGrantRow }) => {
-      const row = { ...data };
-      this.grants.push(row);
-      return Promise.resolve(row);
-    },
-
-    delete: ({ where }: { where: { adminId_featureKey_level: FakeGrantRow } }) => {
-      const key = where.adminId_featureKey_level;
-      const index = this.grants.findIndex((g) => sameGrant(g, key));
-      const [removed] = this.grants.splice(index, 1);
-      return Promise.resolve(removed);
-    },
-
-    deleteMany: ({ where }: { where: { adminId: string } }) => {
-      const before = this.grants.length;
-      for (let i = this.grants.length - 1; i >= 0; i -= 1) {
-        if (this.grants[i]?.adminId === where.adminId) this.grants.splice(i, 1);
-      }
-      return Promise.resolve({ count: before - this.grants.length });
-    },
-  };
-}
-
-function sameGrant(row: FakeGrantRow, key: FakeGrantRow): boolean {
-  return (
-    row.adminId === key.adminId && row.featureKey === key.featureKey && row.level === key.level
-  );
-}
-
-export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRow {
-  return {
-    id: 'adm_1',
-    email: 'admin@iace.co.in',
-    fullName: 'An Admin',
-    isSuperAdmin: false,
-    isActive: true,
-    createdById: null,
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    ...overrides,
-  };
-}
 
 // ============================================================================
 // The question bank. Its own fake, like the admins one: the tables are unrelated

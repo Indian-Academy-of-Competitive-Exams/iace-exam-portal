@@ -176,9 +176,24 @@ export function makeBranch(prisma: PrismaService, name = uid('Branch')): Promise
   });
 }
 
-export function makeAdmin(prisma: PrismaService): Promise<{ id: string }> {
+export interface AdminOverrides {
+  email?: string;
+  fullName?: string | null;
+  isSuperAdmin?: boolean;
+  isActive?: boolean;
+}
+
+export function makeAdmin(
+  prisma: PrismaService,
+  overrides: AdminOverrides = {},
+): Promise<{ id: string }> {
   return prisma.admin.create({
-    data: { id: uid('admin'), email: `${uid('admin')}@iace.test`, fullName: 'Database Tier Admin' },
+    data: {
+      id: uid('admin'),
+      email: `${uid('admin')}@iace.test`,
+      fullName: 'Database Tier Admin',
+      ...overrides,
+    },
     select: { id: true },
   });
 }
