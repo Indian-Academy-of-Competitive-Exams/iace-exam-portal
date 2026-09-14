@@ -11,8 +11,8 @@ import {
   quotaWithPicks,
   sectionQuota,
   type DifficultyMix,
-  type DrawShortfall,
   type DrawSpec,
+  type SectionDrawSpec,
   type SectionQuota,
   type AddPaperQuestionBody,
   type ReplacePaperQuestionBody,
@@ -25,7 +25,13 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { BaseConfigsService } from '../configs';
-import { drawPaper, type DrawCandidate, type DrawnQuestion, type DrawSection } from './draw-engine';
+import {
+  drawSection,
+  narrows,
+  type DrawCandidate,
+  type DrawnQuestion,
+  type DrawSection,
+} from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
 import { thaw } from './thaw';
 import { stemPreviewOf } from '../questions';
@@ -174,7 +180,7 @@ export class PaperService {
       where: { testId },
       select: HELD_SELECT,
     });
-    const spec = sectionSpec((test.questionPoolFilter as DrawSpec | null) ?? null, section.id);
+    const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id];
     const added = await this.drawRemainder(section, spec, rows);
     if (added.length === 0) return this.paperOf(testId, this.scopedOf(test, config));
 
@@ -198,14 +204,13 @@ export class PaperService {
   /** What the section still lacks. The engine hands the pins back, so only the new rows survive. */
   private async drawRemainder(
     section: BaseConfigDetail['sections'][number],
-    spec: DrawSpec | null,
+    spec: SectionDrawSpec | undefined,
     rows: readonly HeldRow[],
   ): Promise<DrawnQuestion[]> {
     const held = rows.filter((row) => row.baseConfigSectionId === section.id);
-    const drawSection = toDrawSection(section);
     // One question sits on a paper once, so every row already on it is out of this draw's reach.
     const onPaper = new Set(rows.map((row) => row.questionId));
-    const pool = (await this.poolFor([drawSection], spec)).filter(
+    const pool = (await this.poolFor(section, spec)).filter(
       (candidate) => !onPaper.has(candidate.id),
     );
 
@@ -214,22 +219,21 @@ export class PaperService {
     assertWithinSplit(
       section.name,
       sectionQuota(
-        mixOf(spec, section.id),
+        spec?.mix,
         pins.map((pin) => pin.difficulty),
       ),
       FORM_LEVEL_FIELD,
     );
 
-    const result = drawPaper({
-      sections: [drawSection],
-      pool,
-      spec,
-      seed: freshSeed(),
-      pinned: new Map([[section.id, pins]]),
-    });
+    const result = drawSection({ section, pool, spec, seed: freshSeed(), pins });
     if (!result.ok) {
+      const { baseConfigSectionId, sectionName, needed, available } = result.shortfall;
       throw new AppException(ErrorCodes.DRAW_SHORTFALL, SECTION_TOO_THIN_MESSAGE, {
-        fieldErrors: shortfallErrors(result.shortfalls),
+        fieldErrors: {
+          [baseConfigSectionId]: [
+            `${sectionName} needs ${needed}, and the bank holds ${available}.`,
+          ],
+        },
       });
     }
 
@@ -248,9 +252,7 @@ export class PaperService {
     return held.flatMap((row) => {
       const question = bank.get(row.questionId);
       // The version the ROW pins, so a question the bank has moved on from still counts as one.
-      return question
-        ? [toCandidate({ ...question, currentVersionId: row.questionVersionId })]
-        : [];
+      return question ? [{ ...question, currentVersionId: row.questionVersionId }] : [];
     });
   }
 
@@ -407,19 +409,20 @@ export class PaperService {
 
   /** Only ACTIVE questions carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
-    sections: readonly DrawSection[],
-    spec: DrawSpec | null,
+    section: DrawSection,
+    spec: SectionDrawSpec | undefined,
   ): Promise<DrawCandidate[]> {
     const rows = await this.prisma.question.findMany({
       where: {
         status: QUESTION_STATUS.ACTIVE,
         currentVersionId: { not: null },
-        ...subjectWhere(sections),
-        ...topicWhere(spec),
+        // The narrowing SQL can do; tags and the split are the engine's.
+        ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),
+        ...(narrows(spec?.topicIds) ? { topicId: { in: [...spec.topicIds] } } : {}),
       },
       select: CANDIDATE_SELECT,
     });
-    return rows.filter(hasVersion).map(toCandidate);
+    return rows.filter(hasVersion);
   }
 
   private assertAssemblable(test: { attemptCount: number }): void {
@@ -503,46 +506,8 @@ export class PaperService {
   }
 }
 
-/** No section takes anything, so the bank narrows to the subjects the paper is actually made of. */
-function subjectWhere(sections: readonly DrawSection[]): Prisma.QuestionWhereInput {
-  const subjects = sections.map((section) => section.subjectId);
-  if (subjects.includes(null)) return {};
-  return { subjectId: { in: subjects.filter((id): id is string => id !== null) } };
-}
-
-/** The narrowing SQL can do. The section's own subject is the engine's, per section. */
-/** Every topic any section names. A section that names none is narrowed by its subject alone. */
-function topicWhere(spec: DrawSpec | null): Prisma.QuestionWhereInput {
-  const sections = Object.values(spec?.sections ?? {});
-  if (sections.length === 0 || sections.some((section) => !section.topicIds?.length)) return {};
-
-  const topicIds = [...new Set(sections.flatMap((section) => section.topicIds ?? []))];
-  return { topicId: { in: topicIds } };
-}
-
-/** One message per short section, keyed by section so the form puts it beside the right one. */
-function shortfallErrors(gaps: readonly DrawShortfall[]): Record<string, string[]> {
-  const errors: Record<string, string[]> = {};
-  for (const gap of gaps) {
-    const held = (errors[gap.baseConfigSectionId] ??= []);
-    held.push(`${gap.sectionName} needs ${gap.needed}, and the bank holds ${gap.available}.`);
-  }
-  return errors;
-}
-
 function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId: string } {
   return row.currentVersionId !== null;
-}
-
-function toCandidate(row: CandidateRow & { currentVersionId: string }): DrawCandidate {
-  return {
-    id: row.id,
-    currentVersionId: row.currentVersionId,
-    subjectId: row.subjectId,
-    topicId: row.topicId,
-    difficulty: row.difficulty,
-    tags: row.tags,
-  };
 }
 
 function mixOf(spec: DrawSpec | null, sectionId: string): DifficultyMix | undefined {
@@ -559,24 +524,6 @@ function assertWithinSplit(sectionName: string, quota: SectionQuota, field: stri
 
   const message = overSplitMessage(sectionName);
   throw new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { [field]: [message] } });
-}
-
-/** One section's own narrowing, alone: another section's topics must not shrink this one's pool. */
-function sectionSpec(spec: DrawSpec | null, sectionId: string): DrawSpec | null {
-  const held = spec?.sections?.[sectionId];
-  return held ? { sections: { [sectionId]: held } } : null;
-}
-
-function toDrawSection(section: BaseConfigDetail['sections'][number]): DrawSection {
-  return {
-    id: section.id,
-    name: section.name,
-    order: section.order,
-    subjectId: section.subjectId,
-    questionCount: section.questionCount,
-    marksPerQuestion: section.marksPerQuestion,
-    negativeMarks: section.negativeMarks,
-  };
 }
 
 const SEED_CEILING = 2 ** 31;

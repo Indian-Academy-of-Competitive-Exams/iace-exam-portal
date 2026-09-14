@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { DIFFICULTY_LEVEL } from '@iace/contracts';
 import { rowAt } from './support/fakes';
 import {
-  drawPaper,
+  drawSection,
   type DrawCandidate,
   type DrawRequest,
   type DrawSection,
@@ -34,7 +34,6 @@ function section(over: Partial<DrawSection> = {}): DrawSection {
   return {
     id: 'sec_1',
     name: 'Quantitative Aptitude',
-    order: 1,
     subjectId: null,
     questionCount: 5,
     marksPerQuestion: 2,
@@ -44,88 +43,61 @@ function section(over: Partial<DrawSection> = {}): DrawSection {
 }
 
 function draw(over: Partial<DrawRequest> = {}) {
-  return drawPaper({
-    sections: [section()],
+  return drawSection({
+    section: section(),
     pool: pool(20),
     seed: SEED,
     ...over,
   });
 }
 
-/** Every assertion below reads `questions`, which the union only hands over on a whole paper. */
-function questionsOf(result: ReturnType<typeof drawPaper>) {
-  assert.ok(result.ok, 'expected a complete paper');
+/** Every assertion below reads `questions`, which the union only hands over on a whole section. */
+function questionsOf(result: ReturnType<typeof drawSection>) {
+  assert.ok(result.ok, 'expected a complete section');
   return result.questions;
 }
 
 // --------------------------------------------------------------------------- filling
 // ---------------------------------------------------------------------------
 
-describe('drawPaper — filling every section', () => {
-  it('fills each section to its exact count', () => {
-    const sections = [
-      section({ id: 'sec_1', order: 1, questionCount: 5 }),
-      section({ id: 'sec_2', order: 2, questionCount: 8 }),
-    ];
+describe('drawSection — filling the section', () => {
+  it('fills the section to its exact count', () => {
+    const questions = questionsOf(draw({ section: section({ questionCount: 8 }), pool: pool(40) }));
 
-    const questions = questionsOf(draw({ sections, pool: pool(40) }));
-
-    assert.equal(questions.length, 13);
-    assert.equal(questions.filter((row) => row.baseConfigSectionId === 'sec_1').length, 5);
-    assert.equal(questions.filter((row) => row.baseConfigSectionId === 'sec_2').length, 8);
+    assert.equal(questions.length, 8);
+    assert.ok(questions.every((row) => row.baseConfigSectionId === 'sec_1'));
   });
 
-  it('never serves one question twice, even where two sections could both take it', () => {
-    // Both sections draw from the same undifferentiated pool of exactly the size they add up to.
-    const sections = [
-      section({ id: 'sec_1', order: 1, questionCount: 10 }),
-      section({ id: 'sec_2', order: 2, questionCount: 10 }),
-    ];
-
-    const questions = questionsOf(draw({ sections, pool: pool(20) }));
+  it('never serves one question twice, even from a pool of exactly the size it needs', () => {
+    const questions = questionsOf(
+      draw({ section: section({ questionCount: 20 }), pool: pool(20) }),
+    );
 
     assert.equal(new Set(questions.map((row) => row.questionId)).size, 20);
   });
 
-  it('numbers the paper 1..N across sections, in section order', () => {
-    const sections = [
-      section({ id: 'sec_2', order: 2, questionCount: 3 }),
-      section({ id: 'sec_1', order: 1, questionCount: 2 }),
-    ];
-
-    const questions = questionsOf(draw({ sections, pool: pool(10) }));
+  it('numbers the rows 1..N', () => {
+    const questions = questionsOf(draw({ section: section({ questionCount: 5 }), pool: pool(10) }));
 
     assert.deepEqual(
       questions.map((row) => row.order),
       [1, 2, 3, 4, 5],
     );
-    // The paper reads in the config's order whatever order the sections arrived in.
-    assert.deepEqual(
-      questions.map((row) => row.baseConfigSectionId),
-      ['sec_1', 'sec_1', 'sec_2', 'sec_2', 'sec_2'],
-    );
   });
 
   it('takes marks from the section and the version from the question', () => {
-    const sections = [
-      section({ id: 'sec_1', order: 1, questionCount: 1, marksPerQuestion: 3, negativeMarks: 1 }),
-      section({
-        id: 'sec_2',
-        order: 2,
-        questionCount: 1,
-        marksPerQuestion: 2,
-        negativeMarks: 0.25,
+    const questions = questionsOf(
+      draw({
+        section: section({ questionCount: 2, marksPerQuestion: 3, negativeMarks: 1 }),
+        pool: pool(4),
       }),
-    ];
+    );
 
-    const questions = questionsOf(draw({ sections, pool: pool(4) }));
-
-    // One paper may mix them: marks are per SECTION, which is the whole reason they are copied.
     assert.deepEqual(
       questions.map((row) => [row.marks, row.negativeMarks]),
       [
         [3, 1],
-        [2, 0.25],
+        [3, 1],
       ],
     );
     for (const row of questions) {
@@ -137,82 +109,39 @@ describe('drawPaper — filling every section', () => {
 // --------------------------------------------------------------------------- shortfall
 // ---------------------------------------------------------------------------
 
-describe('drawPaper — a pool too thin to fill the paper', () => {
-  it('reports the exact gap instead of a short paper', () => {
+describe('drawSection — a pool too thin to fill the section', () => {
+  it('reports the exact gap instead of a short section', () => {
     const result = draw({
-      sections: [section({ id: 'sec_1', name: 'Quantitative Aptitude', questionCount: 25 })],
+      section: section({ id: 'sec_1', name: 'Quantitative Aptitude', questionCount: 25 }),
       pool: pool(18),
     });
 
-    // The failure this prevents: a 25-question paper quietly finalized with 18 in it.
+    // The failure this prevents: a 25-question section quietly finalized with 18 in it.
     assert.ok(!result.ok);
-    assert.deepEqual(result.shortfalls, [
-      {
-        baseConfigSectionId: 'sec_1',
-        sectionName: 'Quantitative Aptitude',
-        needed: 25,
-        available: 18,
-      },
-    ]);
-  });
-
-  it('names every short section, not just the first', () => {
-    const result = draw({
-      sections: [
-        section({ id: 'sec_1', name: 'Reasoning', order: 1, questionCount: 10 }),
-        section({ id: 'sec_2', name: 'English', order: 2, questionCount: 10 }),
-      ],
-      pool: pool(4),
+    assert.deepEqual(result.shortfall, {
+      baseConfigSectionId: 'sec_1',
+      sectionName: 'Quantitative Aptitude',
+      needed: 25,
+      available: 18,
     });
-
-    assert.ok(!result.ok);
-    assert.deepEqual(
-      result.shortfalls.map((gap) => [gap.sectionName, gap.available]),
-      [
-        ['Reasoning', 4],
-        ['English', 0],
-      ],
-    );
-  });
-
-  it('counts what is left after the earlier sections took theirs', () => {
-    // 12 questions, section 1 takes 10, so section 2 genuinely has 2 to work with — not 12.
-    const result = draw({
-      sections: [
-        section({ id: 'sec_1', order: 1, questionCount: 10 }),
-        section({ id: 'sec_2', order: 2, questionCount: 5 }),
-      ],
-      pool: pool(12),
-    });
-
-    assert.ok(!result.ok);
-    assert.deepEqual(
-      result.shortfalls.map((gap) => [gap.baseConfigSectionId, gap.needed, gap.available]),
-      [['sec_2', 5, 2]],
-    );
   });
 });
 
 // --------------------------------------------------------------------------- narrowing
 // ---------------------------------------------------------------------------
 
-describe('drawPaper — what narrows a section’s pool', () => {
-  it('holds a section to its own subject', () => {
-    const sections = [
-      section({ id: 'sec_1', order: 1, subjectId: 'subject_quant', questionCount: 2 }),
-      section({ id: 'sec_2', order: 2, subjectId: 'subject_reasoning', questionCount: 2 }),
-    ];
+describe('drawSection — what narrows the pool', () => {
+  it('holds the section to its own subject', () => {
     const bank = [
       ...pool(3, { subjectId: 'subject_quant' }, 'quant'),
       ...pool(3, { subjectId: 'subject_reasoning' }, 'reas'),
     ];
 
-    const questions = questionsOf(draw({ sections, pool: bank }));
+    const questions = questionsOf(
+      draw({ section: section({ subjectId: 'subject_quant', questionCount: 3 }), pool: bank }),
+    );
 
-    const bySection = (id: string) =>
-      questions.filter((row) => row.baseConfigSectionId === id).map((row) => row.questionId);
-    assert.ok(bySection('sec_1').every((id) => id.startsWith('quant')));
-    assert.ok(bySection('sec_2').every((id) => id.startsWith('reas')));
+    assert.ok(questions.every((row) => row.questionId.startsWith('quant')));
   });
 
   it('takes a question carrying ANY of the section’s tags', () => {
@@ -224,9 +153,9 @@ describe('drawPaper — what narrows a section’s pool', () => {
 
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 6 })],
+        section: section({ questionCount: 6 }),
         pool: bank,
-        spec: { sections: { sec_1: { tags: ['ssc cgl', 'previous paper'] } } },
+        spec: { tags: ['ssc cgl', 'previous paper'] },
       }),
     );
 
@@ -243,44 +172,22 @@ describe('drawPaper — what narrows a section’s pool', () => {
 
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 4 })],
+        section: section({ questionCount: 4 }),
         pool: bank,
-        spec: { sections: { sec_1: { topicIds: ['topic_percentages'] } } },
+        spec: { topicIds: ['topic_percentages'] },
       }),
     );
 
     assert.ok(questions.every((row) => row.questionId.startsWith('pct')));
   });
 
-  /** One section's topics must not narrow another's — that is the point of it being per section. */
-  it('narrows only the section it was written for', () => {
-    const bank = [
-      ...pool(3, { subjectId: 'sub_a', topicId: 'topic_pct' }, 'pct'),
-      ...pool(3, { subjectId: 'sub_b', topicId: 'topic_syllo' }, 'syllo'),
-    ];
-
-    const questions = questionsOf(
-      draw({
-        sections: [
-          section({ id: 'sec_1', subjectId: 'sub_a', questionCount: 2, order: 1 }),
-          section({ id: 'sec_2', subjectId: 'sub_b', questionCount: 2, order: 2 }),
-        ],
-        pool: bank,
-        spec: { sections: { sec_1: { topicIds: ['topic_pct'] } } },
-      }),
-    );
-
-    assert.equal(questions.length, 4);
-    assert.equal(questions.filter((row) => row.questionId.startsWith('syllo')).length, 2);
-  });
-
   it('reads a section that chose nothing as all of them, not none', () => {
     // The Prisma `in: []` trap, one layer up: an empty set must not blank the pool.
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 3 })],
+        section: section({ questionCount: 3 }),
         pool: pool(10),
-        spec: { sections: { sec_1: { tags: [], topicIds: [] } } },
+        spec: { tags: [], topicIds: [] },
       }),
     );
 
@@ -289,22 +196,22 @@ describe('drawPaper — what narrows a section’s pool', () => {
 
   it('lets a section subject and its own topics that disagree empty the pool', () => {
     const result = draw({
-      sections: [section({ subjectId: 'subject_quant', questionCount: 3 })],
+      section: section({ subjectId: 'subject_quant', questionCount: 3 }),
       pool: pool(10, { subjectId: 'subject_quant', topicId: 'topic_pct' }),
-      spec: { sections: { sec_1: { topicIds: ['topic_ratios'] } } },
+      spec: { topicIds: ['topic_ratios'] },
     });
 
     assert.ok(!result.ok);
-    assert.equal(result.shortfalls[0]?.available, 0);
+    assert.equal(result.shortfall.available, 0);
   });
 });
 
 // --------------------------------------------------------------------------- determinism
 // ---------------------------------------------------------------------------
 
-describe('drawPaper — the seed', () => {
-  it('gives the same paper for the same seed and pool', () => {
-    const options = { sections: [section({ questionCount: 6 })], pool: pool(30) };
+describe('drawSection — the seed', () => {
+  it('gives the same rows for the same seed and pool', () => {
+    const options = { section: section({ questionCount: 6 }), pool: pool(30) };
 
     const first = questionsOf(draw({ ...options, seed: 7 }));
     const again = questionsOf(draw({ ...options, seed: 7 }));
@@ -313,8 +220,8 @@ describe('drawPaper — the seed', () => {
     assert.deepEqual(first, again);
   });
 
-  it('gives a different paper for a different seed', () => {
-    const options = { sections: [section({ questionCount: 6 })], pool: pool(30) };
+  it('gives different rows for a different seed', () => {
+    const options = { section: section({ questionCount: 6 }), pool: pool(30) };
 
     const first = questionsOf(draw({ ...options, seed: 7 })).map((row) => row.questionId);
     const other = questionsOf(draw({ ...options, seed: 8 })).map((row) => row.questionId);
@@ -322,8 +229,8 @@ describe('drawPaper — the seed', () => {
     assert.notDeepEqual(first, other);
   });
 
-  it('gives a different seed a different SET of questions, not one paper reordered', () => {
-    const options = { sections: [section({ questionCount: 20 })], pool: pool(200) };
+  it('gives a different seed a different SET of questions, not one set reordered', () => {
+    const options = { section: section({ questionCount: 20 }), pool: pool(200) };
 
     const papers = Array.from({ length: 10 }, (_, offset) =>
       questionsOf(draw({ ...options, seed: 1000 + offset }))
@@ -336,9 +243,9 @@ describe('drawPaper — the seed', () => {
     assert.equal(new Set(papers).size, 10);
   });
 
-  it('gives the same paper however the rows arrived', () => {
+  it('gives the same rows however the pool arrived', () => {
     const bank = pool(30);
-    const options = { sections: [section({ questionCount: 6 })], seed: 7 };
+    const options = { section: section({ questionCount: 6 }), seed: 7 };
 
     const forwards = questionsOf(draw({ ...options, pool: bank })).map((row) => row.questionId);
     const backwards = questionsOf(draw({ ...options, pool: [...bank].reverse() })).map(
@@ -353,17 +260,13 @@ describe('drawPaper — the seed', () => {
 // --------------------------------------------------------------------------- manual picks
 // ---------------------------------------------------------------------------
 
-describe('drawPaper — a paper the admin has had a hand in', () => {
+describe('drawSection — a section the admin has had a hand in', () => {
   it('keeps every hand-picked question and draws only the rest', () => {
     const bank = pool(20);
     const chosen = [rowAt(bank, 3), rowAt(bank, 7)];
 
     const questions = questionsOf(
-      draw({
-        sections: [section({ id: 'sec_1', questionCount: 5 })],
-        pool: bank,
-        pinned: new Map([['sec_1', chosen]]),
-      }),
+      draw({ section: section({ questionCount: 5 }), pool: bank, pins: chosen }),
     );
 
     assert.equal(questions.length, 5);
@@ -372,22 +275,7 @@ describe('drawPaper — a paper the admin has had a hand in', () => {
       questions.slice(0, 2).map((row) => row.questionId),
       ['q4', 'q8'],
     );
-  });
-
-  it('never auto-draws a question a LATER section was pinned to', () => {
-    // Section 1 could otherwise take q1 on its way past, and section 2 would serve it again.
-    const bank = pool(4);
-    const sections = [
-      section({ id: 'sec_1', order: 1, questionCount: 3 }),
-      section({ id: 'sec_2', order: 2, questionCount: 1 }),
-    ];
-
-    const questions = questionsOf(
-      draw({ sections, pool: bank, pinned: new Map([['sec_2', [rowAt(bank)]]]) }),
-    );
-
-    assert.equal(new Set(questions.map((row) => row.questionId)).size, 4);
-    assert.equal(questions.find((row) => row.baseConfigSectionId === 'sec_2')?.questionId, 'q1');
+    assert.equal(new Set(questions.map((row) => row.questionId)).size, 5);
   });
 
   it('a fully hand-picked section leaves the draw nothing to do', () => {
@@ -395,9 +283,9 @@ describe('drawPaper — a paper the admin has had a hand in', () => {
 
     const questions = questionsOf(
       draw({
-        sections: [section({ id: 'sec_1', questionCount: 2 })],
+        section: section({ questionCount: 2 }),
         pool: bank,
-        pinned: new Map([['sec_1', [rowAt(bank, 5), rowAt(bank, 2)]]]),
+        pins: [rowAt(bank, 5), rowAt(bank, 2)],
       }),
     );
 
@@ -408,7 +296,7 @@ describe('drawPaper — a paper the admin has had a hand in', () => {
   });
 });
 
-describe('drawPaper — a section drawn to a difficulty split', () => {
+describe('drawSection — a section drawn to a difficulty split', () => {
   const mixedBank = [
     ...pool(20, { difficulty: DIFFICULTY_LEVEL.LOW }, 'low'),
     ...pool(20, { difficulty: DIFFICULTY_LEVEL.MEDIUM }, 'med'),
@@ -424,9 +312,9 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
   it('draws exactly the split it was given', () => {
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 25 })],
+        section: section({ questionCount: 25 }),
         pool: mixedBank,
-        spec: { sections: { sec_1: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } } } },
+        spec: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } },
       }),
     );
 
@@ -436,9 +324,9 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
   it('draws none of a difficulty the split asked nothing of', () => {
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 10 })],
+        section: section({ questionCount: 10 }),
         pool: mixedBank,
-        spec: { sections: { sec_1: { mix: { LOW: 5, MEDIUM: 0, HIGH: 5 } } } },
+        spec: { mix: { LOW: 5, MEDIUM: 0, HIGH: 5 } },
       }),
     );
 
@@ -447,16 +335,12 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
 
   /** The failure this prevents: three hard pins leaving a section with ten hard questions on it. */
   it('counts a hand-picked question against its OWN bucket', () => {
-    const pins = new Map([
-      ['sec_1', mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 3)],
-    ]);
-
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 25 })],
+        section: section({ questionCount: 25 }),
         pool: mixedBank,
-        spec: { sections: { sec_1: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } } } },
-        pinned: pins,
+        spec: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } },
+        pins: mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 3),
       }),
     );
 
@@ -471,13 +355,13 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
     ];
 
     const result = draw({
-      sections: [section({ questionCount: 25 })],
+      section: section({ questionCount: 25 }),
       pool: thin,
-      spec: { sections: { sec_1: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } } } },
+      spec: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } },
     });
 
     assert.ok(!result.ok);
-    assert.equal(result.shortfalls[0]?.available, 21);
+    assert.equal(result.shortfall.available, 21);
   });
 
   /** The top-up a hand-picked section asks for: three already on it, a split of 25 to reach. */
@@ -489,10 +373,10 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
 
     const questions = questionsOf(
       draw({
-        sections: [section({ questionCount: 25 })],
+        section: section({ questionCount: 25 }),
         pool: mixedBank,
-        spec: { sections: { sec_1: { mix: { LOW: 8, MEDIUM: 12, HIGH: 5 } } } },
-        pinned: new Map([['sec_1', pins]]),
+        spec: { mix: { LOW: 8, MEDIUM: 12, HIGH: 5 } },
+        pins,
       }),
     );
 
@@ -509,11 +393,7 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
     const pins = mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 2);
 
     const questions = questionsOf(
-      draw({
-        sections: [section({ questionCount: 5 })],
-        pool: mixedBank,
-        pinned: new Map([['sec_1', pins]]),
-      }),
+      draw({ section: section({ questionCount: 5 }), pool: mixedBank, pins }),
     );
 
     assert.deepEqual(
@@ -528,7 +408,7 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
 
   it('draws as it always did when the section has no split', () => {
     const questions = questionsOf(
-      draw({ sections: [section({ questionCount: 12 })], pool: mixedBank }),
+      draw({ section: section({ questionCount: 12 }), pool: mixedBank }),
     );
 
     assert.equal(questions.length, 12);

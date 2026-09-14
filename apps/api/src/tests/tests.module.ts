@@ -14,6 +14,5 @@ import { OfferingService } from './offering.service';
   imports: [PrismaModule, ConfigsModule, EventsModule, AttemptsModule],
   controllers: [TestsController, SeriesTestsController],
   providers: [TestsService, PaperService, FinalizeService, OfferingService],
-  exports: [TestsService, PaperService, FinalizeService, OfferingService],
 })
 export class TestsModule {}

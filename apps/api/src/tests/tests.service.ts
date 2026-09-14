@@ -6,8 +6,6 @@ import {
   FORM_LEVEL_FIELD,
   TEST_SCOPE,
   fieldDiff,
-  scopedQuestionCount,
-  scopedDurationSec,
   type BaseConfigDetail,
   type CreateTestBody,
   type Paginated,
@@ -26,12 +24,13 @@ import {
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
   locksOutTestEdit,
+  scopeRefOf,
+  testShapeOf,
   thawsThePaper,
   scopeRefIssue,
   seriesFitIssue,
   seriesRefused,
   titleRefused,
-  TEST_DEFAULTS,
   testDeletionBlocker,
 } from './test-rules';
 import { thaw } from './thaw';
@@ -127,7 +126,7 @@ export class TestsService {
 
     await this.assertTitleFree(series.id, input.title);
 
-    const scope = input.scope ?? TEST_DEFAULTS.scope;
+    const scope = input.scope ?? TEST_SCOPE.FULL;
     const scopeRef = input.scopeRef ?? null;
     this.assertCovers(config, scope, scopeRef);
 
@@ -279,27 +278,13 @@ function toJson(
   return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue);
 }
 
-function scopeRefOf(row: { scopeRef: Prisma.JsonValue }): TestScopeRef | null {
-  return (row.scopeRef as TestScopeRef | null) ?? null;
-}
-
 function toTest(row: TestRow): Test {
   return {
     id: row.id,
     title: row.title,
     baseConfigId: row.baseConfigId,
     baseConfigName: row.baseConfig.name,
-    // A full paper is the configuration's own maintained total; a scoped one is its sections' worth.
-    totalQuestions:
-      row.scope === TEST_SCOPE.FULL
-        ? row.baseConfig.totalQuestions
-        : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRefOf(row)),
-    durationSec: scopedDurationSec(
-      row.baseConfig.sections,
-      row.baseConfig,
-      row.scope,
-      scopeRefOf(row),
-    ),
+    ...testShapeOf(row),
     examStageId: row.examStageId,
     examStage: row.examStage,
     scope: row.scope,

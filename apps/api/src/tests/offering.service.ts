@@ -7,11 +7,7 @@ import {
   OPENING_HAS_PASSED,
   TEST_STATUS,
   testIsOpen,
-  scopedDurationSec,
-  scopedQuestionCount,
-  TEST_SCOPE,
   type SeriesTestRow,
-  type TestScopeRef,
   type SetSeriesTestUnlockBody,
   type SetProgramUnlockBody,
   type SetTestSeriesBody,
@@ -24,9 +20,11 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import {
   activationBlocker,
+  attemptsLabel,
   seriesFitIssue,
   seriesRefused,
   SERIES_GONE_MESSAGE,
+  testShapeOf,
 } from './test-rules';
 
 const OFFERING_SELECT = {
@@ -72,8 +70,6 @@ const SERIES_TEST_SELECT = {
 
 const dateOrNull = (value: string | null | undefined): Date | null =>
   value === null || value === undefined ? null : new Date(value);
-
-const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
 const OPENS_BEFORE_THE_TEST_DOES =
   'A program opens a test earlier, never later — a later opening would hold this program’s students back after the test has opened for everyone else.';
@@ -199,7 +195,8 @@ export class OfferingService {
     const next = input.testSeriesId;
     if (next === test.testSeriesId) return linkOf(test);
 
-    this.assertNotSat(test);
+    // A test students have sat is part of their record wherever it was offered.
+    this.assertUnsat(test, 'it cannot be moved to another series');
     const series = await this.assertSeriesUsable(test, next);
     await this.assertTitleFreeIn(next, series.name, test);
     const opensAt = test.opensAt;
@@ -274,16 +271,7 @@ export class OfferingService {
       unlockAt: row.opensAt?.toISOString() ?? null,
       status: row.status,
       isLocked: row.isLocked,
-      totalQuestions:
-        row.scope === TEST_SCOPE.FULL
-          ? row.baseConfig.totalQuestions
-          : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRefOf(row)),
-      durationSec: scopedDurationSec(
-        row.baseConfig.sections,
-        row.baseConfig,
-        row.scope,
-        scopeRefOf(row),
-      ),
+      ...testShapeOf(row),
       attemptCount: row._count.attempts,
     }));
   }
@@ -297,7 +285,7 @@ export class OfferingService {
   ): Promise<SeriesTestRow[]> {
     const test = await this.requireTestIn(testSeriesId, testId);
     // `Test.opensAt` is a frozen field, and this is its other door — see TEST_UNFROZEN_FIELDS.
-    this.assertNotOpened(test);
+    this.assertUnsat(test, 'when it opens can no longer move');
     const opensAt = dateOrNull(input.unlockAt);
     if (opensAt !== null) {
       assertOpeningAhead(opensAt, now, UNLOCK_FIELD);
@@ -416,21 +404,11 @@ export class OfferingService {
     return test;
   }
 
-  /** A sat test's opening is history: moving it would say a paper with results has not opened. */
-  private assertNotOpened(test: OfferingRow): void {
+  /** A sat test's history is fixed: `consequence` names what its attempts forbid. */
+  private assertUnsat(test: OfferingRow, consequence: string): void {
     if (test._count.attempts === 0) return;
 
-    const message = `This test has ${attempts(test._count.attempts)} on it, so when it opens can no longer move.`;
-    throw new AppException(ErrorCodes.CONFLICT, message, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
-    });
-  }
-
-  private assertNotSat(test: OfferingRow): void {
-    if (test._count.attempts === 0) return;
-
-    // A test students have sat is part of their record wherever it was offered.
-    const message = `This test has ${attempts(test._count.attempts)} on it, so it cannot be moved to another series.`;
+    const message = `This test has ${attemptsLabel(test._count.attempts)} on it, so ${consequence}.`;
     throw new AppException(ErrorCodes.CONFLICT, message, {
       fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
     });
@@ -441,9 +419,4 @@ export class OfferingService {
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }
-}
-
-/** Prisma hands JSON back as `JsonValue`; the shape it holds is the scope's own. */
-function scopeRefOf(row: { scopeRef: Prisma.JsonValue }): TestScopeRef | null {
-  return (row.scopeRef as TestScopeRef | null) ?? null;
 }

@@ -5,6 +5,7 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
+  type FinalizeResult,
   type OfferResult,
   type TestStatus,
 } from '@iace/contracts';
@@ -26,18 +27,12 @@ type FinalizeRow = Prisma.TestGetPayload<{ select: typeof FINALIZE_SELECT }>;
 /** Prisma's 5s default is a cliff nobody sees, so the freeze names its own. */
 const FREEZE_LIMITS = { maxWait: 10_000, timeout: 15_000 } as const;
 
-interface PaperRowRef {
-  questionId: string;
-  baseConfigSectionId: string;
-}
+const PAPER_REF_SELECT = {
+  questionId: true,
+  baseConfigSectionId: true,
+} as const satisfies Prisma.PaperQuestionSelect;
 
-export interface FinalizeResult {
-  testId: string;
-  finalizedAt: string;
-  /** False when another request had already finalized it — the same outcome, not an error. */
-  finalizedByThisCall: boolean;
-  frozenQuestions: number;
-}
+type PaperRowRef = Prisma.PaperQuestionGetPayload<{ select: typeof PAPER_REF_SELECT }>;
 
 /** Freezes a test: the draft rows already exist, so this locks them rather than writing them. */
 @Injectable()
@@ -119,7 +114,7 @@ export class FinalizeService {
   private async paperOf(tx: Prisma.TransactionClient, test: FinalizeRow): Promise<PaperRowRef[]> {
     return tx.paperQuestion.findMany({
       where: { testId: test.id },
-      select: { questionId: true, baseConfigSectionId: true },
+      select: PAPER_REF_SELECT,
     });
   }
 

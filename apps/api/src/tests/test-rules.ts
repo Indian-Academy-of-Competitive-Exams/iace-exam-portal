@@ -1,21 +1,50 @@
+import { type Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  scopedDurationSec,
+  scopedQuestionCount,
   TEST_SCOPE,
   TEST_STATUS,
   type TestScope,
   type TestScopeRef,
+  type TimedScopedSection,
   type UpdateTestBody,
 } from '@iace/contracts';
 
 /** The rules that keep a test honest — pure, so they are testable without a database. */
 
-/** What a test is when the admin says nothing. */
-export const TEST_DEFAULTS = {
-  scope: TEST_SCOPE.FULL,
-} as const;
-
 export const SERIES_GONE_MESSAGE = 'That series no longer exists.';
+
+export const attemptsLabel = (count: number): string =>
+  `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
+
+/** Prisma hands JSON back as `JsonValue`; the shape it holds is the scope's own. */
+export function scopeRefOf(row: { scopeRef: Prisma.JsonValue }): TestScopeRef | null {
+  return (row.scopeRef as TestScopeRef | null) ?? null;
+}
+
+interface ShapedTest {
+  scope: TestScope;
+  scopeRef: Prisma.JsonValue;
+  baseConfig: {
+    totalQuestions: number;
+    durationSec: number;
+    sections: readonly TimedScopedSection[];
+  };
+}
+
+/** A full paper is the configuration's own maintained total; a scoped one is its sections' worth. */
+export function testShapeOf(row: ShapedTest): { totalQuestions: number; durationSec: number } {
+  const scopeRef = scopeRefOf(row);
+  return {
+    totalQuestions:
+      row.scope === TEST_SCOPE.FULL
+        ? row.baseConfig.totalQuestions
+        : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRef),
+    durationSec: scopedDurationSec(row.baseConfig.sections, row.baseConfig, row.scope, scopeRef),
+  };
+}
 
 /** Every refusal of a series lands on the one control that chose it, so all of them are thrown alike. */
 export const seriesRefused = (message: string): AppException =>
@@ -136,6 +165,5 @@ export function activationBlocker(test: { isLocked: boolean }): string | null {
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */
 export function testDeletionBlocker(usage: { attemptCount: number }): string | null {
   if (usage.attemptCount === 0) return null;
-  const attempts = `${usage.attemptCount} attempt${usage.attemptCount === 1 ? '' : 's'}`;
-  return `${attempts} were sat on this test. Retire it instead — it keeps its results and is simply no longer offered.`;
+  return `${attemptsLabel(usage.attemptCount)} were sat on this test. Retire it instead — it keeps its results and is simply no longer offered.`;
 }
