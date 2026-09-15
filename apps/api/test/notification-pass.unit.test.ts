@@ -36,7 +36,8 @@ function build(rows: Row[]) {
 
   const prisma = {
     outboxEvent: {
-      findMany: () => Promise.resolve(rows.filter((row) => row.processedAt === null)),
+      findMany: ({ take }: { take: number }) =>
+        Promise.resolve(rows.filter((row) => row.processedAt === null).slice(0, take)),
       updateMany: ({
         where,
         data,
@@ -143,6 +144,20 @@ describe('NotificationsProcessor — one pass over a page of requests', () => {
       ['stu_a'],
     );
     assert.deepEqual(marked(built.rows), ['bad', 'a']);
+  });
+
+  /** The regression this prevents: one page a sweep meant a hall's results took half an hour. */
+  it('drains a backlog rather than one page of it', async () => {
+    const built = build(Array.from({ length: 450 }, (_, at) => request(`r${at}`)));
+
+    const counted = await built.processor.writePending();
+
+    assert.equal(counted, 450);
+    assert.deepEqual(
+      built.pages.map((page) => page.length),
+      [200, 200, 50],
+    );
+    assert.equal(marked(built.rows).length, 450);
   });
 
   /** A paid send walks a fallback chain, so it keeps the one-at-a-time path the chain needs. */

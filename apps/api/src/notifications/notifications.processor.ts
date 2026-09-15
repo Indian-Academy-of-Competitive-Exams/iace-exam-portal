@@ -35,6 +35,9 @@ const MILLISECONDS_PER_SECOND = 1000;
 /** How many pushes are in flight at once. Each is an HTTP call, not a database round trip. */
 const PUSH_LANES = 8;
 
+/** A bound on one pass, so a backlog is drained by several jobs rather than one that never ends. */
+const WRITE_PAGES_PER_PASS = 25;
+
 @Injectable()
 @Processor(QUEUE_NAMES.NOTIFICATIONS, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.NOTIFICATIONS].concurrency,
@@ -73,8 +76,19 @@ export class NotificationsProcessor extends WorkerHost {
     await this.writePending();
   }
 
-  /** One pass: claim a page of requests, write them, and mark them only once they are written. */
+  /** One pass drains what it finds: a page at a time, so a backlog does not wait out a sweep each. */
   async writePending(): Promise<number> {
+    let written = 0;
+    for (let page = 0; page < WRITE_PAGES_PER_PASS; page += 1) {
+      const claimed = await this.writePage();
+      written += claimed;
+      if (claimed < RELAY_BATCH) break;
+    }
+    return written;
+  }
+
+  /** One page: claim it, write it, and mark it only once it is written. */
+  private async writePage(): Promise<number> {
     const rows = await this.prisma.outboxEvent.findMany({
       where: { eventType: NOTIFICATION_REQUEST.EVENT_TYPE, processedAt: null },
       orderBy: { createdAt: 'asc' },
