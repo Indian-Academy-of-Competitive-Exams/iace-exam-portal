@@ -111,10 +111,6 @@ graft/
 docs/superpowers/plans/
 docs/superpowers/specs/
 
-# The TODO markers lifted out of the source to keep the Sonar gate clean. A
-# backlog, not architecture — and one `git add .` from coming back without this.
-docs/05-question-bank-follow-ups.md
-
 # Local patches to the installed superpowers plugin — this machine's tooling,
 # not the platform's source.
 docs/superpowers/patches/
