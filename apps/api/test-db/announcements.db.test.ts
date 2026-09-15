@@ -26,7 +26,7 @@ const service = new AnnouncementsService(
     NOTIFICATION_COST_SMS_PAISE: 18,
     NOTIFICATION_MAX_RECIPIENTS: 10,
   }).asService(),
-  new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+  new NotificationOutbox(new FakeQueue().asQueue()),
 );
 
 /** One branch of `students`, and an admin to send as. Parsed through the real schema's defaults. */

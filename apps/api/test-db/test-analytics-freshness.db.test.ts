@@ -35,7 +35,7 @@ function build() {
       prisma,
       outbox,
       new FakeEventBus().asService(),
-      new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
     ),
   };

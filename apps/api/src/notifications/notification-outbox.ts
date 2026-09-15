@@ -3,20 +3,18 @@
  * the two commit together and no crash can leave a student untold. Handing it to the queue is a
  * separate, repeatable step — at-least-once, deduplicated by job id, landing once by dedupeKey.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { type Prisma } from '@prisma/client';
 import { type NotificationType } from '@iace/contracts';
 import { type PaidChannel } from './notification-policy';
-import { PrismaService } from '../prisma/prisma.service';
 import {
   NOTIFICATION_JOBS,
+  NOTIFICATION_WRITE_DELAY_MS,
+  NOTIFICATION_WRITE_JOB_ID,
   QUEUE_NAMES,
-  RELAY_BATCH,
-  RELAY_GRACE_SEC,
   keyedJob,
-  notificationJobId,
   type NotificationJobData,
 } from '../queue/queues';
 
@@ -25,13 +23,6 @@ export const NOTIFICATION_REQUEST = {
   AGGREGATE_TYPE: 'Notification',
   EVENT_TYPE: 'notification.requested',
 } as const;
-
-/** What a pass did with one request: handed it on, gave up on it, or left it for the next sweep. */
-const HANDLED = { SENT: 'sent', DROPPED: 'dropped', LEFT: 'left' } as const;
-
-type Handled = (typeof HANDLED)[keyof typeof HANDLED];
-
-const MILLISECONDS_PER_SECOND = 1000;
 
 /** Everything the worker needs to write the row without the producer still being around. */
 export interface NotificationIntent {
@@ -48,17 +39,9 @@ export interface NotificationIntent {
   testSeriesId?: string;
 }
 
-interface PendingRequest {
-  id: string;
-  payload: Prisma.JsonValue | null;
-}
-
 @Injectable()
 export class NotificationOutbox {
-  private readonly logger = new Logger(NotificationOutbox.name);
-
   constructor(
-    private readonly prisma: PrismaService,
     @InjectQueue(QUEUE_NAMES.NOTIFICATIONS)
     private readonly notifications: Queue<NotificationJobData>,
   ) {}
@@ -95,62 +78,17 @@ export class NotificationOutbox {
     return intents.length;
   }
 
-  /** One id straight after a write, or every request left pending when the sweeper runs. */
-  async relay(eventId?: string): Promise<number> {
-    let handed = 0;
-    for (;;) {
-      const pending = await this.pending(eventId);
-      const outcomes: Handled[] = [];
-      for (const row of pending) {
-        outcomes.push(await this.deliver(row));
-      }
-      handed += outcomes.filter((outcome) => outcome === HANDLED.SENT).length;
-
-      // Drains a backlog rather than 200 of it a sweep, and stops on a queue nobody can reach.
-      const stuck = outcomes.every((outcome) => outcome === HANDLED.LEFT);
-      if (pending.length < RELAY_BATCH || stuck) return handed;
-    }
-  }
-
-  private async pending(eventId?: string): Promise<PendingRequest[]> {
-    const settling = new Date(Date.now() - RELAY_GRACE_SEC * MILLISECONDS_PER_SECOND);
-    return this.prisma.outboxEvent.findMany({
-      where: {
-        eventType: NOTIFICATION_REQUEST.EVENT_TYPE,
-        processedAt: null,
-        // A writer hands its own on; a sweep waits, in case that writer is still committing.
-        ...(eventId ? { id: eventId } : { createdAt: { lt: settling } }),
+  /** Asks for a pass. The pass claims its own rows, so a hall's worth of results is one job. */
+  async relay(): Promise<void> {
+    await this.notifications.add(
+      NOTIFICATION_JOBS.WRITE_PENDING,
+      {},
+      {
+        ...keyedJob(NOTIFICATION_WRITE_JOB_ID),
+        delay: NOTIFICATION_WRITE_DELAY_MS,
+        removeOnComplete: true,
       },
-      orderBy: { createdAt: 'asc' },
-      take: RELAY_BATCH,
-      select: { id: true, payload: true },
-    });
-  }
-
-  /** Queued BEFORE it is marked, so a crash between the two redelivers rather than loses. */
-  private async deliver(row: PendingRequest): Promise<Handled> {
-    const intent = parseIntent(row.payload);
-    try {
-      if (intent === null) {
-        // Marked anyway: a request nothing can ever act on would block every request behind it.
-        this.logger.error(`Notification request ${row.id} carries no usable intent`);
-      } else {
-        await this.notifications.add(
-          NOTIFICATION_JOBS.WRITE,
-          { eventId: row.id },
-          keyedJob(notificationJobId(row.id)),
-        );
-      }
-      await this.prisma.outboxEvent.update({
-        where: { id: row.id },
-        data: { processedAt: new Date() },
-      });
-      return intent === null ? HANDLED.DROPPED : HANDLED.SENT;
-    } catch (error) {
-      // One request's failure is its own: it stays pending, and the next sweep hands it on again.
-      this.logger.error(`Notification request ${row.id} could not be handed on`, error);
-      return HANDLED.LEFT;
-    }
+    );
   }
 }
 

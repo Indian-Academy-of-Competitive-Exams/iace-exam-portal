@@ -107,7 +107,7 @@ async function serviceWith(over: Bench = {}) {
       programs.asService(),
       auditContext,
       events.asService(),
-      new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
     ),
   };
 }

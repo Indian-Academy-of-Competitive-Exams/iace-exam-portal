@@ -51,7 +51,7 @@ async function serviceWith(exams: ExamRow[] = [{}]) {
     null as never,
     null as never,
     new FakeEventBus().asService(),
-    new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+    new NotificationOutbox(new FakeQueue().asQueue()),
   );
   return new ExamsService(prisma, students, new AuditContext());
 }

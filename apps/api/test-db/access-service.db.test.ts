@@ -50,7 +50,7 @@ async function build(stageActive = true) {
       prisma,
       auditContext,
       events.asService(),
-      new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
     ),
   };
 }

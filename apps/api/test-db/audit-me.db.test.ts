@@ -45,7 +45,7 @@ async function build(over: { fullName?: string; motherName?: string | null } = {
     new FakeCodeCatalog().asService(),
     auditContext,
     new FakeEventBus().asService(),
-    new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+    new NotificationOutbox(new FakeQueue().asQueue()),
   );
   const me = new MeService(
     students,

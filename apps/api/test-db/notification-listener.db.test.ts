@@ -18,7 +18,7 @@ after(() => prisma.$disconnect());
 
 const listener = new NotificationListener(
   prisma,
-  new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+  new NotificationOutbox(new FakeQueue().asQueue()),
 );
 
 const written = async () =>

@@ -119,10 +119,17 @@ export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
 /** Writing one request, or sweeping up whatever a crash left unrelayed. */
 export const NOTIFICATION_JOBS = {
   WRITE: 'write-notification',
+  WRITE_PENDING: 'write-pending',
   SWEEP: 'relay-sweep',
   /** Finds tests that have opened since anybody was last told, and tells whoever reaches them. */
   TESTS_OPENED: 'tests-opened-sweep',
 } as const;
+
+/** One id for the whole pass: a hall's worth of results asks for one write, not one each. */
+export const NOTIFICATION_WRITE_JOB_ID = `${QUEUE_NAMES.NOTIFICATIONS}-write-pending`;
+
+/** Long enough to collect a burst, short enough that a student is told while it is news. */
+export const NOTIFICATION_WRITE_DELAY_MS = 5 * 1000;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
 export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;

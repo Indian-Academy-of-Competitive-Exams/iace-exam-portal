@@ -10,6 +10,7 @@ import { DeliveryStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   NOTIFICATION_JOBS,
+  RELAY_BATCH,
   QUEUE_NAMES,
   QUEUE_POLICY,
   keyedJob,
@@ -17,14 +18,22 @@ import {
   type NotificationDeliveryJobData,
   type NotificationJobData,
 } from '../queue/queues';
-import { NotificationsService } from './notifications.service';
+import { NotificationsService, type WrittenNotification } from './notifications.service';
 import { PAID_CHANNELS, escalationFor } from './notification-policy';
 import { PushService } from './push.service';
 import { TestOpeningService } from './test-opening.service';
-import { NotificationOutbox, parseIntent, type NotificationIntent } from './notification-outbox';
+import {
+  NOTIFICATION_REQUEST,
+  NotificationOutbox,
+  parseIntent,
+  type NotificationIntent,
+} from './notification-outbox';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
 const MILLISECONDS_PER_SECOND = 1000;
+
+/** How many pushes are in flight at once. Each is an HTTP call, not a database round trip. */
+const PUSH_LANES = 8;
 
 @Injectable()
 @Processor(QUEUE_NAMES.NOTIFICATIONS, {
@@ -60,27 +69,46 @@ export class NotificationsProcessor extends WorkerHost {
       await this.openings.sweep();
       return;
     }
-    if (job.data.eventId) await this.write(job.data.eventId);
+    // WRITE is a job queued before this deploy: drained as a pass, which claims its row anyway.
+    await this.writePending();
   }
 
-  /** Idempotent through the dedupe key, so a retried job re-reads its own row instead of adding one. */
-  async write(eventId: string): Promise<void> {
-    const event = await this.prisma.outboxEvent.findUnique({
-      where: { id: eventId },
-      select: { payload: true },
+  /** One pass: claim a page of requests, write them, and mark them only once they are written. */
+  async writePending(): Promise<number> {
+    const rows = await this.prisma.outboxEvent.findMany({
+      where: { eventType: NOTIFICATION_REQUEST.EVENT_TYPE, processedAt: null },
+      orderBy: { createdAt: 'asc' },
+      take: RELAY_BATCH,
+      select: { id: true, payload: true },
     });
-    if (!event) {
-      // A pruned request is one already acted on: retrying it would tell somebody twice.
-      this.logger.warn(`Notification request ${eventId} is gone, so nothing is written`);
-      return;
+    if (rows.length === 0) return 0;
+
+    const unreadable = rows.filter((row) => parseIntent(row.payload) === null).map((row) => row.id);
+    if (unreadable.length > 0) {
+      // Marked with the page: a request nothing can act on would block every request behind it.
+      this.logger.error(`Notification requests carry no usable intent: ${unreadable.join(', ')}`);
     }
 
-    const intent = parseIntent(event.payload);
-    if (!intent) {
-      this.logger.error(`Notification request ${eventId} carries no usable intent`);
-      return;
-    }
+    const intents = rows
+      .map((row) => parseIntent(row.payload))
+      .filter((intent): intent is NotificationIntent => intent !== null);
 
+    // A paid send is an admin's, rare, and walks a fallback chain — it keeps the one-at-a-time path.
+    for (const intent of intents.filter((intent) => (intent.escalate?.length ?? 0) > 0)) {
+      await this.writeOne(intent);
+    }
+    const free = intents.filter((intent) => (intent.escalate?.length ?? 0) === 0);
+    await this.pushAll(await this.notifications.createMany(free));
+
+    await this.prisma.outboxEvent.updateMany({
+      where: { id: { in: rows.map((row) => row.id) } },
+      data: { processedAt: new Date() },
+    });
+    return rows.length;
+  }
+
+  /** The chain a paid send walks needs its own booked row, so this one is written on its own. */
+  private async writeOne(intent: NotificationIntent): Promise<void> {
     const written = await this.notifications.create(intent);
     // Before the window opens, not inside it: the free channels are what the paid one waits on.
     await this.push.deliver({
@@ -90,6 +118,24 @@ export class NotificationsProcessor extends WorkerHost {
       title: intent.title,
     });
     await this.schedule(written.id, intent);
+  }
+
+  /** Lanes, because a push is an HTTP call each and a hall's worth of them is not a loop to await. */
+  private async pushAll(written: readonly WrittenNotification[]): Promise<void> {
+    const pushable = written.filter((row) => row.studentId !== null);
+
+    for (let at = 0; at < pushable.length; at += PUSH_LANES) {
+      await Promise.all(
+        pushable.slice(at, at + PUSH_LANES).map((row) =>
+          this.push.deliver({
+            notificationId: row.id,
+            studentId: row.studentId ?? '',
+            type: row.type,
+            title: row.title,
+          }),
+        ),
+      );
+    }
   }
 
   /** The grace window: the free channels get this long before a paid one is bought. */

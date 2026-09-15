@@ -41,7 +41,7 @@ function build(rollupClient: PrismaService = prisma) {
       prisma,
       outbox,
       new FakeEventBus().asService(),
-      new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
     ),
     rollup: new RollupService(rollupClient),

@@ -13,6 +13,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { firstChannelFor, type PaidChannel } from './notification-policy';
 
+/** What a pass hands the push sender: the row's own columns, never the intent behind it. */
+export interface WrittenNotification {
+  id: string;
+  /** Null on an admin-side notification, which no student is pushed about. */
+  studentId: string | null;
+  type: NotificationType;
+  title: string;
+}
+
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
 export interface NewNotification {
   studentId: string;
@@ -53,20 +62,7 @@ export class NotificationsService {
   async create(input: NewNotification): Promise<Notification> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.notification.create({
-          data: {
-            studentId: input.studentId,
-            type: input.type,
-            title: input.title,
-            body: input.body ?? null,
-            data: input.data ?? Prisma.DbNull,
-            dedupeKey: input.dedupeKey ?? null,
-            announcementId: input.announcementId ?? null,
-            actBy: input.actBy ?? null,
-            testId: input.testId ?? null,
-            testSeriesId: input.testSeriesId ?? null,
-          },
-        });
+        const created = await tx.notification.create({ data: toRow(input) });
 
         // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
         const channel = firstChannelFor(input.escalate);
@@ -83,6 +79,18 @@ export class NotificationsService {
 
       return toNotification(already);
     }
+  }
+
+  /** A page at once, for the hall's worth of results one pass claims. Nothing here buys a channel. */
+  async createMany(inputs: readonly NewNotification[]): Promise<WrittenNotification[]> {
+    if (inputs.length === 0) return [];
+
+    // skipDuplicates on the dedupe key is what makes a redelivered page land once.
+    return this.prisma.notification.createManyAndReturn({
+      data: inputs.map(toRow),
+      skipDuplicates: true,
+      select: { id: true, studentId: true, type: true, title: true },
+    });
   }
 
   /** Only ever reached after a unique violation, so the row it looks for is already there. */
@@ -146,5 +154,21 @@ function toNotification(row: NotificationColumns): Notification {
     testSeriesId: row.testSeriesId,
     isRead: row.isRead,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One mapping for both writers, so a page and a single row can never disagree about a column. */
+function toRow(input: NewNotification): Prisma.NotificationCreateManyInput {
+  return {
+    studentId: input.studentId,
+    type: input.type,
+    title: input.title,
+    body: input.body ?? null,
+    data: input.data ?? Prisma.DbNull,
+    dedupeKey: input.dedupeKey ?? null,
+    announcementId: input.announcementId ?? null,
+    actBy: input.actBy ?? null,
+    testId: input.testId ?? null,
+    testSeriesId: input.testSeriesId ?? null,
   };
 }

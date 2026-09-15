@@ -11,7 +11,7 @@ import { NotificationsProcessor } from '../src/notifications/notifications.proce
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { PushService } from '../src/notifications/push.service';
 import { TestOpeningService } from '../src/notifications/test-opening.service';
-import { RELAY_GRACE_SEC } from '../src/queue/queues';
+import { NOTIFICATION_WRITE_JOB_ID } from '../src/queue/queues';
 import { FakeConfig, FakePushSender, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import { makeAnnouncement, makeStudent, resetDatabase, testPrisma, uid } from './support/database';
 
@@ -25,7 +25,7 @@ after(() => prisma.$disconnect());
 function build() {
   const queue = new FakeQueue();
   const deliveries = new FakeQueue();
-  const outbox = new NotificationOutbox(prisma, queue.asQueue());
+  const outbox = new NotificationOutbox(queue.asQueue());
   const push = new PushService(
     prisma,
     new FakeConfig().asService(),
@@ -82,51 +82,37 @@ describe('Asking for a notification', () => {
   });
 });
 
-describe('Relaying a request', () => {
-  it('hands it on and marks it, keyed so a redelivery is the same job', async () => {
+describe('Asking for a pass', () => {
+  /** A hall's worth of results asks for one job, and the row it named stays for the pass to claim. */
+  it('asks for one pass and marks nothing itself', async () => {
     const { queue, outbox } = build();
     const eventId = await outbox.request(prisma, await intentFor());
 
-    await outbox.relay(eventId);
+    await outbox.relay();
+    await outbox.relay();
 
-    assert.equal(queue.jobs.length, 1);
-    assert.equal(queue.jobs[0]?.jobId, `notifications-${eventId}`);
+    assert.equal(queue.jobs.length, 1, 'one id, so a burst collapses into a single pass');
+    assert.equal(queue.jobs[0]?.jobId, NOTIFICATION_WRITE_JOB_ID);
     // The key only holds while nothing is kept under it: a retained failure swallows the repair.
     assert.equal(queue.jobs[0]?.removeOnFail, true);
-    assert.notEqual((await requestRow(eventId)).processedAt, null);
+    assert.equal((await requestRow(eventId)).processedAt, null, 'the pass marks it, not the ask');
   });
 
-  /** The crash this whole shape exists for: unqueued must mean unmarked, so a sweep finds it again. */
-  it('leaves a request pending when the queue cannot take it', async () => {
-    const { queue, outbox } = build();
-    const eventId = await outbox.request(prisma, await intentFor());
-    queue.failNext = true;
-
-    await outbox.relay(eventId);
-
-    assert.equal(
-      (await requestRow(eventId)).processedAt,
-      null,
-      'still pending, so a sweep retries it',
-    );
-  });
-
-  /** Aged past the grace window, since a sweep waits out a writer that may still be committing. */
-  it('drops an unreadable request rather than blocking the queue behind it', async () => {
-    const { queue, outbox } = build();
+  /** A request nothing can act on must not block every request behind it. */
+  it('marks an unreadable request with the page and writes nothing for it', async () => {
+    const { processor } = build();
     const unreadable = await prisma.outboxEvent.create({
       data: {
         aggregateType: NOTIFICATION_REQUEST.AGGREGATE_TYPE,
         aggregateId: uid('student'),
         eventType: NOTIFICATION_REQUEST.EVENT_TYPE,
         payload: { nothing: 'usable' },
-        createdAt: new Date(Date.now() - (RELAY_GRACE_SEC + 5) * 1000),
       },
     });
 
-    await outbox.relay();
+    await processor.writePending();
 
-    assert.equal(queue.jobs.length, 0);
+    assert.equal(await prisma.notification.count(), 0);
     assert.notEqual((await requestRow(unreadable.id)).processedAt, null);
   });
 });
@@ -135,9 +121,9 @@ describe('Acting on a relayed request', () => {
   it('writes the row the student reads', async () => {
     const { outbox, processor } = build();
     const intent = await intentFor();
-    const eventId = await outbox.request(prisma, intent);
+    await outbox.request(prisma, intent);
 
-    await processor.write(eventId);
+    await processor.writePending();
 
     const rows = await prisma.notification.findMany();
     assert.equal(rows.length, 1);
@@ -152,8 +138,9 @@ describe('Acting on a relayed request', () => {
       await intentFor({ escalate: [DeliveryChannel.WHATSAPP] }),
     );
 
-    await processor.write(eventId);
-    await processor.write(eventId);
+    await processor.writePending();
+    await prisma.outboxEvent.update({ where: { id: eventId }, data: { processedAt: null } });
+    await processor.writePending();
 
     assert.equal(await prisma.notification.count(), 1);
     assert.equal(
@@ -164,11 +151,10 @@ describe('Acting on a relayed request', () => {
   });
 
   /** A pruned request has already been acted on; re-writing it would tell somebody twice. */
-  it('writes nothing for a request that is gone', async () => {
+  it('writes nothing when there is nothing pending', async () => {
     const { processor } = build();
 
-    await processor.write(uid('outbox'));
-
+    assert.equal(await processor.writePending(), 0);
     assert.equal(await prisma.notification.count(), 0);
   });
 });
@@ -178,7 +164,7 @@ describe('An announcement, end to end', () => {
   it('books the channel an admin chose and actually queues it', async () => {
     const { deliveries, outbox, processor } = build();
     const announcement = await makeAnnouncement(prisma, [DeliveryChannel.WHATSAPP]);
-    const eventId = await outbox.request(
+    await outbox.request(
       prisma,
       await intentFor({
         type: NOTIFICATION_TYPE.GENERIC,
@@ -189,7 +175,7 @@ describe('An announcement, end to end', () => {
       }),
     );
 
-    await processor.write(eventId);
+    await processor.writePending();
 
     const booked = await prisma.notificationDelivery.findMany();
     assert.deepEqual(
@@ -203,7 +189,7 @@ describe('An announcement, end to end', () => {
   it('queues nothing when the admin chose no paid channel', async () => {
     const { deliveries, outbox, processor } = build();
     const announcement = await makeAnnouncement(prisma);
-    const eventId = await outbox.request(
+    await outbox.request(
       prisma,
       await intentFor({
         type: NOTIFICATION_TYPE.GENERIC,
@@ -214,7 +200,7 @@ describe('An announcement, end to end', () => {
       }),
     );
 
-    await processor.write(eventId);
+    await processor.writePending();
 
     assert.equal(await prisma.notification.count(), 1);
     assert.equal(await prisma.notificationDelivery.count(), 0);

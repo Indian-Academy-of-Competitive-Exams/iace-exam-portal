@@ -18,7 +18,7 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 function build(reaching: string[] = COHORT) {
-  const outbox = new NotificationOutbox(prisma, new FakeQueue().asQueue());
+  const outbox = new NotificationOutbox(new FakeQueue().asQueue());
   const access = { studentsReaching: () => Promise.resolve(reaching) } as never;
   return new TestOpeningService(prisma, access, outbox);
 }

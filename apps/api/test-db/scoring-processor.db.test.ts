@@ -34,7 +34,7 @@ const processor = new ScoringProcessor(
   prisma,
   new RollupOutbox(new FakeQueue().asQueue()),
   new FakeEventBus().asService(),
-  new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+  new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
 );
 

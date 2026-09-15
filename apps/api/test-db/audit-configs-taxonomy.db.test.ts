@@ -38,7 +38,7 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
       null as never,
       new AuditContext(),
       new FakeEventBus().asService(),
-      new NotificationOutbox(prisma, new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
     );
     const exams = new ExamsService(prisma, students, audit);
 
