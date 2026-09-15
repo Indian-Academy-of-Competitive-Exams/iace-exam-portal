@@ -67,14 +67,14 @@ export class ProgramsController {
     return this.programs.list(query);
   }
 
-  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.CREATE)
+  @Audit(AUDIT_FEATURE.PROGRAM, AUDIT_ACTION.CREATE)
   @Post()
   @RequiresSuperAdmin()
   create(@Body(new ZodBody(createProgramSchema)) body: CreateProgramBody): Promise<Program> {
     return this.programs.create(body);
   }
 
-  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
+  @Audit(AUDIT_FEATURE.PROGRAM, AUDIT_ACTION.UPDATE)
   @Patch(':id')
   @RequiresSuperAdmin()
   update(
@@ -84,7 +84,7 @@ export class ProgramsController {
     return this.programs.update(id, body);
   }
 
-  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.DELETE)
+  @Audit(AUDIT_FEATURE.PROGRAM, AUDIT_ACTION.DELETE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @RequiresSuperAdmin()

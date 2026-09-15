@@ -119,7 +119,9 @@ export class ExamStagesService {
       include: STAGE_INCLUDE,
     });
 
-    this.auditContext.setChanged(fieldDiff(stage, { ...stage, ...changes }, AUDITED_STAGE_FIELDS));
+    this.auditContext.setPatchDiff(
+      fieldDiff(stage, { ...stage, ...changes }, AUDITED_STAGE_FIELDS),
+    );
 
     return toStage(updated);
   }

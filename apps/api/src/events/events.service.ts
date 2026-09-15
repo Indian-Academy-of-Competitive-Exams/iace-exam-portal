@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  fieldDiff,
   type CreateEventBody,
   type Event,
   type EventCandidate,
@@ -15,6 +16,9 @@ import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { AuditContext } from '../audit';
+
+export const AUDITED_EVENT_FIELDS = ['name', 'description', 'isActive'] as const;
 
 const EVENT_INCLUDE = {
   _count: { select: { candidates: true, series: true } },
@@ -34,6 +38,7 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: DomainEventBus,
+    private readonly auditContext: AuditContext,
   ) {}
 
   async list(query: EventListQuery): Promise<Paginated<Event>> {
@@ -71,7 +76,7 @@ export class EventsService {
   }
 
   async update(id: string, input: UpdateEventBody): Promise<Event> {
-    await this.requireEvent(id);
+    const event = await this.requireEvent(id);
 
     const changes = {
       ...(input.name !== undefined ? { name: input.name } : {}),
@@ -84,6 +89,11 @@ export class EventsService {
       data: changes,
       include: EVENT_INCLUDE,
     });
+
+    this.auditContext.setPatchDiff(
+      fieldDiff(event, { ...event, ...changes }, AUDITED_EVENT_FIELDS),
+    );
+
     return toEvent(updated);
   }
 
@@ -128,17 +138,19 @@ export class EventsService {
 
   /** `skipDuplicates`, so re-importing the same roster over itself adds nobody twice. */
   async addCandidates(id: string, studentIds: readonly string[]): Promise<EventCandidate[]> {
-    await this.requireEvent(id);
+    const before = (await this.requireEvent(id))._count.candidates;
 
-    if (studentIds.length > 0) {
-      await this.prisma.eventCandidate.createMany({
-        data: studentIds.map((studentId) => ({ eventId: id, studentId })),
-        skipDuplicates: true,
-      });
-      // Per student, not one global bust — an intake must not throw away every other catalog.
-      for (const studentId of studentIds) {
-        this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
-      }
+    const { count } =
+      studentIds.length > 0
+        ? await this.prisma.eventCandidate.createMany({
+            data: studentIds.map((studentId) => ({ eventId: id, studentId })),
+            skipDuplicates: true,
+          })
+        : { count: 0 };
+    this.auditContext.setPatchDiff(rosterDiff(before, before + count));
+    // Per student, not one global bust — an intake must not throw away every other catalog.
+    for (const studentId of studentIds) {
+      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
     }
 
     // The rows just written, not the roster: past a page the roster is not a return value.
@@ -152,9 +164,12 @@ export class EventsService {
   }
 
   async removeCandidate(id: string, studentId: string): Promise<void> {
-    await this.requireEvent(id);
+    const before = (await this.requireEvent(id))._count.candidates;
 
-    await this.prisma.eventCandidate.deleteMany({ where: { eventId: id, studentId } });
+    const { count } = await this.prisma.eventCandidate.deleteMany({
+      where: { eventId: id, studentId },
+    });
+    this.auditContext.setPatchDiff(rosterDiff(before, before - count));
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
@@ -164,6 +179,10 @@ export class EventsService {
     return event;
   }
 }
+
+/** A roster of thousands is a count in the log, not a list of every student on it. */
+const rosterDiff = (from: number, to: number) =>
+  fieldDiff({ candidates: from }, { candidates: to }, ['candidates']);
 
 function toEvent(row: EventRow): Event {
   return {

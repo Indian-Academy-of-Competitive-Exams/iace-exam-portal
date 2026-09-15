@@ -98,7 +98,7 @@ export class TaxonomyService {
       include: SUBJECT_INCLUDE,
     });
 
-    this.auditContext.setChanged(
+    this.auditContext.setPatchDiff(
       fieldDiff(subject, { ...subject, ...changes }, AUDITED_SUBJECT_FIELDS),
     );
 
@@ -169,7 +169,9 @@ export class TaxonomyService {
       include: TOPIC_INCLUDE,
     });
 
-    this.auditContext.setChanged(fieldDiff(topic, { ...topic, ...changes }, AUDITED_TOPIC_FIELDS));
+    this.auditContext.setPatchDiff(
+      fieldDiff(topic, { ...topic, ...changes }, AUDITED_TOPIC_FIELDS),
+    );
 
     return toTopic(updated);
   }

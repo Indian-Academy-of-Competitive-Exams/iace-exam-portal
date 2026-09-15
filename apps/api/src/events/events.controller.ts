@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import {
   ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   addEventCandidatesSchema,
   createEventSchema,
   eventCandidateListQuerySchema,
@@ -28,6 +30,7 @@ import {
   type Paginated,
   type UpdateEventBody,
 } from '@iace/contracts';
+import { Audit } from '../audit';
 import { Actors, RequiresFeature } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { EventsService } from './events.service';
@@ -52,12 +55,14 @@ export class EventsController {
     return this.events.detail(id);
   }
 
+  @Audit(AUDIT_FEATURE.EVENT, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(@Body(new ZodBody(createEventSchema)) body: CreateEventBody): Promise<Event> {
     return this.events.create(body);
   }
 
+  @Audit(AUDIT_FEATURE.EVENT, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
@@ -67,6 +72,7 @@ export class EventsController {
     return this.events.update(id, body);
   }
 
+  @Audit(AUDIT_FEATURE.EVENT, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
@@ -84,6 +90,7 @@ export class EventsController {
   }
 
   /** A whole roster in one write — the import screen's commit, not a row at a time. */
+  @Audit(AUDIT_FEATURE.EVENT, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/candidates')
   @HttpCode(HttpStatus.OK)
@@ -94,6 +101,7 @@ export class EventsController {
     return this.events.addCandidates(id, body.studentIds);
   }
 
+  @Audit(AUDIT_FEATURE.EVENT, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id/candidates/:studentId')
   @HttpCode(HttpStatus.OK)

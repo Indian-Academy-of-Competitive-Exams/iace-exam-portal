@@ -128,6 +128,8 @@ describe('audit vocabulary', () => {
       'TAXONOMY_SUBJECT',
       'TAXONOMY_TOPIC',
       'FEATURE_PERMISSION',
+      'PROGRAM',
+      'EVENT',
     ]);
     assert.deepEqual(Object.keys(AUDIT_ACTION), [
       'CREATE',

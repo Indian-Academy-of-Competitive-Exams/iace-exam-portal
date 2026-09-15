@@ -158,4 +158,41 @@ describe('AuditInterceptor', () => {
     assert.equal(entries[0]?.actorType, AUDIT_ACTOR_TYPE.SCRIPT);
     assert.equal(entries[0]?.actorId, null);
   });
+
+  /** A clone posts to the source's path; the row it made is the one the log must name. */
+  it('names the row a create made, not the row in its path', async () => {
+    const route = { feature: AUDIT_FEATURE.BASE_CONFIG, action: AUDIT_ACTION.CREATE };
+    const { entries, interceptor, execution } = harness(route, {
+      ...ADMIN_REQUEST,
+      params: { id: 'cfg_source' },
+    });
+
+    await firstValueFrom(
+      interceptor.intercept(execution, { handle: () => of({ id: 'cfg_copy' }) } as never),
+    );
+
+    assert.equal(entries[0]?.entityId, 'cfg_copy');
+  });
+
+  /** A patch diff covers every column; an untracked update does not, so only the first may vanish. */
+  it('records nothing for a patch that changed nothing, and still records an untracked update', async () => {
+    const route = { feature: AUDIT_FEATURE.EXAM_TAXONOMY, action: AUDIT_ACTION.UPDATE };
+    const { entries, context, interceptor, execution } = harness(route, ADMIN_REQUEST);
+    const save = () =>
+      firstValueFrom(
+        interceptor.intercept(execution, { handle: () => of({ id: 'stu_1' }) } as never),
+      );
+
+    await context.run(async () => {
+      context.setPatchDiff(null);
+      await save();
+    });
+    assert.equal(entries.length, 0);
+
+    await context.run(async () => {
+      context.setChanged(null);
+      await save();
+    });
+    assert.equal(entries.length, 1);
+  });
 });

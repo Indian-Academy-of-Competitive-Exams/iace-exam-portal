@@ -24,7 +24,7 @@ async function diffOf(audit: AuditContext, edit: () => Promise<unknown>) {
 }
 
 describe('ExamsService.update — driven live, the diff a real edit contributes', () => {
-  it('reports a rename', async () => {
+  it('reports a rename, and a re-save of the same name as nothing to log', async () => {
     await prisma.exam.create({
       data: { id: 'exam_1', course: DEFAULT_EXAM_COURSE, name: 'SSC CGL', code: 'SSC CGL' },
     });
@@ -45,6 +45,12 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
     const changed = await diffOf(audit, () => exams.update('exam_1', { name: 'SSC CGL TIER 1' }));
 
     assert.deepEqual(changed, { name: { from: 'SSC CGL', to: 'SSC CGL TIER 1' } });
+
+    const resaved = await audit.run(async () => {
+      await exams.update('exam_1', { name: 'SSC CGL TIER 1' });
+      return audit.current()?.unchanged;
+    });
+    assert.equal(resaved, true);
   });
 });
 

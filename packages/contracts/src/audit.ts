@@ -28,6 +28,8 @@ export const AUDIT_FEATURE = {
   TAXONOMY_SUBJECT: 'TAXONOMY_SUBJECT',
   TAXONOMY_TOPIC: 'TAXONOMY_TOPIC',
   FEATURE_PERMISSION: 'FEATURE_PERMISSION',
+  PROGRAM: 'PROGRAM',
+  EVENT: 'EVENT',
 } as const;
 export const auditFeatureSchema = z.enum(AUDIT_FEATURE);
 export type AuditFeature = z.infer<typeof auditFeatureSchema>;

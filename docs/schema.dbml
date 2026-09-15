@@ -198,6 +198,8 @@ Enum AuditFeature {
   TAXONOMY_SUBJECT
   TAXONOMY_TOPIC
   FEATURE_PERMISSION
+  PROGRAM
+  EVENT
 }
 
 Enum AuditAction {

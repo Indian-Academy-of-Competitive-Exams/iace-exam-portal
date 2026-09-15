@@ -5,6 +5,8 @@ import { type FieldDiff } from '@iace/contracts';
 export interface AuditStore {
   changed: FieldDiff | null;
   entityId: string | null;
+  /** A patch measured against every column it writes, and nothing moved: there is no row to log. */
+  unchanged: boolean;
 }
 
 /**
@@ -16,7 +18,7 @@ export class AuditContext {
   private readonly storage = new AsyncLocalStorage<AuditStore>();
 
   run<T>(fn: () => T): T {
-    return this.storage.run({ changed: null, entityId: null }, fn);
+    return this.storage.run({ changed: null, entityId: null, unchanged: false }, fn);
   }
 
   current(): AuditStore | undefined {
@@ -26,6 +28,14 @@ export class AuditContext {
   setChanged(diff: FieldDiff | null): void {
     const store = this.storage.getStore();
     if (store) store.changed = diff;
+  }
+
+  /** Only where `diff` covers every column the write can touch — a null one then means a no-op save. */
+  setPatchDiff(diff: FieldDiff | null): void {
+    const store = this.storage.getStore();
+    if (!store) return;
+    store.changed = diff;
+    store.unchanged = diff === null;
   }
 
   setEntityId(id: string): void {

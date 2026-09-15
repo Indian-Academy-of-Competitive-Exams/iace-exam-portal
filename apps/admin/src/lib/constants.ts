@@ -247,6 +247,8 @@ export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
   TAXONOMY_SUBJECT: 'Subject',
   TAXONOMY_TOPIC: 'Topic',
   FEATURE_PERMISSION: 'Feature permission',
+  PROGRAM: 'Program',
+  EVENT: 'Event',
 };
 
 /** What an audit row's `action` is called on screen. */

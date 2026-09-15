@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { tap, type Observable } from 'rxjs';
-import { AUDIT_ACTOR_TYPE, ActorTypes, type AuditActorType } from '@iace/contracts';
+import { AUDIT_ACTION, AUDIT_ACTOR_TYPE, ActorTypes, type AuditActorType } from '@iace/contracts';
 import { type RequestWithId } from '../common/request-id';
 import { type AuthenticatedUser } from '../common/security/authenticated-user';
 import { AUDIT_KEY, resolveAuditAction, type AuditRoute } from './audit.decorator';
@@ -47,12 +47,17 @@ export class AuditInterceptor implements NestInterceptor {
 
   private record(route: AuditRoute, request: AuditedRequest, payload: unknown): void {
     const store = this.context.current();
-    const entityId = store?.entityId ?? request.params?.id ?? idOf(payload);
+    if (store?.unchanged) return;
+
+    const action = resolveAuditAction(route, request.body);
+    // A create names the row it made, even under the path of the row it was copied from.
+    const created = action === AUDIT_ACTION.CREATE ? idOf(payload) : null;
+    const entityId = store?.entityId ?? created ?? request.params?.id ?? idOf(payload);
     if (!entityId) return;
 
     const entry = {
       feature: route.feature,
-      action: resolveAuditAction(route, request.body),
+      action,
       entityId,
       actorType: actorTypeOf(request.user),
       actorId: request.user?.id ?? null,

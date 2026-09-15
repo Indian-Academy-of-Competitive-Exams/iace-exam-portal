@@ -91,7 +91,7 @@ export class ProgramsService {
 
     const updated = await this.prisma.program.update({ where: { id }, data: changes });
 
-    this.auditContext.setChanged(
+    this.auditContext.setPatchDiff(
       fieldDiff(program, { ...program, ...changes }, AUDITED_PROGRAM_FIELDS),
     );
 

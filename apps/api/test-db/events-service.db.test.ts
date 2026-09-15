@@ -8,6 +8,7 @@ import {
   eventCandidateListQuerySchema,
   eventListQuerySchema,
 } from '@iace/contracts';
+import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { EventsService } from '../src/events/events.service';
 import { FakeEventBus } from '../test/support/fakes';
@@ -20,7 +21,8 @@ after(() => prisma.$disconnect());
 
 function build() {
   const eventBus = new FakeEventBus();
-  return { eventBus, service: new EventsService(prisma, eventBus.asService()) };
+  const audit = new AuditContext();
+  return { eventBus, audit, service: new EventsService(prisma, eventBus.asService(), audit) };
 }
 
 const makeEvent = (name = 'Scholarship test') =>
@@ -184,5 +186,49 @@ describe('EventsService — the roster', () => {
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
     assert.equal(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED).length, 0);
+  });
+});
+
+/** Runs the write inside a live AuditContext and hands back what the interceptor would read. */
+async function auditOf(audit: AuditContext, write: () => Promise<unknown>) {
+  return audit.run(async () => {
+    await write();
+    const store = audit.current();
+    return { changed: store?.changed, unchanged: store?.unchanged };
+  });
+}
+
+describe('EventsService — what each write leaves in the audit log', () => {
+  it('reports a rename, and a save that changed nothing as nothing to log', async () => {
+    const { service, audit } = build();
+    const event = await makeEvent('Scholarship test');
+
+    const renamed = await auditOf(audit, () =>
+      service.update(event.id, { name: 'Scholarship test 2026' }),
+    );
+    const resaved = await auditOf(audit, () =>
+      service.update(event.id, { name: 'Scholarship test 2026', isActive: true }),
+    );
+
+    assert.deepEqual(renamed, {
+      changed: { name: { from: 'Scholarship test', to: 'Scholarship test 2026' } },
+      unchanged: false,
+    });
+    assert.deepEqual(resaved, { changed: null, unchanged: true });
+  });
+
+  it('counts the roster a change moved, and leaves nothing for a re-import that added nobody', async () => {
+    const { service, audit } = build();
+    const event = await makeEvent();
+    const [kept = ''] = await intake(event.id, 2);
+    const newcomer = await makeStudent(prisma, { mobile: '9100000000' });
+
+    const added = await auditOf(audit, () => service.addCandidates(event.id, [kept, newcomer.id]));
+    const again = await auditOf(audit, () => service.addCandidates(event.id, [kept]));
+    const removed = await auditOf(audit, () => service.removeCandidate(event.id, kept));
+
+    assert.deepEqual(added.changed, { candidates: { from: 2, to: 3 } });
+    assert.equal(again.unchanged, true);
+    assert.deepEqual(removed.changed, { candidates: { from: 3, to: 2 } });
   });
 });

@@ -114,7 +114,7 @@ export class ExamsService {
       include: EXAM_INCLUDE,
     });
 
-    this.auditContext.setChanged(fieldDiff(exam, { ...exam, ...changes }, AUDITED_EXAM_FIELDS));
+    this.auditContext.setPatchDiff(fieldDiff(exam, { ...exam, ...changes }, AUDITED_EXAM_FIELDS));
 
     return toExam(updated);
   }
