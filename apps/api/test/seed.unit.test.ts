@@ -117,10 +117,11 @@ describe('reading the seed', () => {
 
 describe('the first super admin', () => {
   /** The failure this prevents: nothing in the application creates one, so there is no way in. */
-  it('is a super admin, active, and scoped to every branch', () => {
+  it('is a super admin and active', () => {
     const admin = new RegExp('INSERT INTO "Admin"[\\s\\S]*?;').exec(SEED)?.[0] ?? '';
+    assert.match(admin, /"isSuperAdmin", "isActive"\)/);
     assert.match(admin, /'developer@iace\.co\.in'/);
-    assert.match(admin, /true,\s*true,\s*true\s*\)/);
+    assert.match(admin, /true,\s*true\s*\)/);
   });
 });
 

@@ -180,7 +180,7 @@ const CORPUS = [
     subject: 'QUANTITATIVE_APTITUDE',
     difficulty: 'MEDIUM',
     tags: ['image', 'math'],
-    correct: 1,
+    correct: 0,
     stem: {
       en: `${p('The figure shows a right triangle with base 24 cm and height 13 cm.')}${img(TRIANGLE, 'Right triangle')}${p(`Using ${inline('A = \\tfrac{1}{2}bh')}, find its area.`)}`,
       hi: `${p('चित्र में आधार 24 सेमी और ऊँचाई 13 सेमी वाला समकोण त्रिभुज दिखाया गया है।')}${img(TRIANGLE, 'समकोण त्रिभुज')}${p(`${inline('A = \\tfrac{1}{2}bh')} का प्रयोग कर क्षेत्रफल ज्ञात कीजिए।`)}`,
@@ -193,7 +193,7 @@ const CORPUS = [
     subject: 'QUANTITATIVE_APTITUDE',
     difficulty: 'LOW',
     tags: ['table', 'math'],
-    correct: 2,
+    correct: 1,
     stem: {
       en: `${p('The table records four years of sales.')}${SALES_TABLE}${p(`By what percentage did units grow from 2021 to 2022? Use ${inline('\\frac{new - old}{old} \\times 100')}.`)}`,
       hi: `${p('तालिका में चार वर्षों की बिक्री दर्ज है।')}${SALES_TABLE}${p(`2021 से 2022 तक इकाइयाँ कितने प्रतिशत बढ़ीं? ${inline('\\frac{new - old}{old} \\times 100')} का प्रयोग कीजिए।`)}`,
@@ -206,7 +206,7 @@ const CORPUS = [
     subject: 'QUANTITATIVE_APTITUDE',
     difficulty: 'HIGH',
     tags: ['math', 'display-math'],
-    correct: 1,
+    correct: 0,
     stem: {
       en: `${p('Evaluate the integral below.')}${display('\\int_{0}^{1} \\left(3x^{2} + 2x\\right)\\,dx')}${p(`The antiderivative is ${inline('x^{3} + x^{2}')}.`)}${STEPS}`,
       hi: `${p('नीचे दिए समाकल का मान ज्ञात कीजिए।')}${display('\\int_{0}^{1} \\left(3x^{2} + 2x\\right)\\,dx')}${p(`प्रतिअवकलज ${inline('x^{3} + x^{2}')} है।`)}${STEPS}`,
@@ -278,9 +278,9 @@ const CORPUS = [
     tags: ['long'],
     correct: 3,
     stem: {
-      en: `${p('Six candidates — P, Q, R, S, T and U — sit in one row facing north. P is third from the left. Q sits immediately right of P and immediately left of R. S is at one end and is not adjacent to T. U is not at either end and sits somewhere left of P. Every seat is taken and no two candidates share one.')}${RULES}${p('Who sits at the right end?')}`,
-      hi: `${p('छह अभ्यर्थी — P, Q, R, S, T और U — एक पंक्ति में उत्तर की ओर मुख करके बैठे हैं। P बाएँ से तीसरा है। Q, P के ठीक दाएँ और R के ठीक बाएँ बैठा है। S किसी एक छोर पर है और T के निकट नहीं है। U किसी छोर पर नहीं है और P के बाईं ओर कहीं बैठा है।')}${RULES}${p('दाएँ छोर पर कौन बैठा है?')}`,
-      te: `${p('ఆరుగురు అభ్యర్థులు — P, Q, R, S, T మరియు U — ఉత్తరం వైపు చూస్తూ ఒకే వరుసలో కూర్చున్నారు. P ఎడమ నుండి మూడవవాడు. Q, P కి కుడివైపున, R కి ఎడమవైపున ఉన్నాడు. S ఒక చివర ఉన్నాడు, T పక్కన లేడు. U ఏ చివరా లేడు, P కి ఎడమవైపు ఎక్కడో ఉన్నాడు.')}${RULES}${p('కుడి చివర ఎవరు కూర్చున్నారు?')}`,
+      en: `${p('Six candidates — P, Q, R, S, T and U — sit in one row facing north. P is third from the left. Q sits immediately right of P and immediately left of R. S is at one end and is not adjacent to U. U is not at either end and sits somewhere left of P. Every seat is taken and no two candidates share one.')}${RULES}${p('Who sits at the right end?')}`,
+      hi: `${p('छह अभ्यर्थी — P, Q, R, S, T और U — एक पंक्ति में उत्तर की ओर मुख करके बैठे हैं। P बाएँ से तीसरा है। Q, P के ठीक दाएँ और R के ठीक बाएँ बैठा है। S किसी एक छोर पर है और U के निकट नहीं है। U किसी छोर पर नहीं है और P के बाईं ओर कहीं बैठा है।')}${RULES}${p('दाएँ छोर पर कौन बैठा है?')}`,
+      te: `${p('ఆరుగురు అభ్యర్థులు — P, Q, R, S, T మరియు U — ఉత్తరం వైపు చూస్తూ ఒకే వరుసలో కూర్చున్నారు. P ఎడమ నుండి మూడవవాడు. Q, P కి కుడివైపున, R కి ఎడమవైపున ఉన్నాడు. S ఒక చివర ఉన్నాడు, U పక్కన లేడు. U ఏ చివరా లేడు, P కి ఎడమవైపు ఎక్కడో ఉన్నాడు.')}${RULES}${p('కుడి చివర ఎవరు కూర్చున్నారు?')}`,
     },
     options: ['P', 'Q', 'T', 'S'],
   },

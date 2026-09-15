@@ -182,6 +182,7 @@ async function writePaper(prisma, stageId, assigned) {
       totalQuestions: TOTAL_QUESTIONS,
       totalMarks: TOTAL_MARKS,
       durationSec: DURATION_SEC,
+      languages: ['EN'],
       shuffleQuestions: false,
       shuffleOptions: false,
       sections: {

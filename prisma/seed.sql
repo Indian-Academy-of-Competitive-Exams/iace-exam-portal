@@ -32,8 +32,8 @@
 -- without this row there is no way into the admin app at all. Every later admin
 -- is created by this one.
 -- ---------------------------------------------------------------------------
-INSERT INTO "Admin" ("id", "email", "fullName", "isSuperAdmin", "isActive", "allBranches")
-VALUES ('admin_root', 'developer@iace.co.in', 'Super Admin', true, true, true)
+INSERT INTO "Admin" ("id", "email", "fullName", "isSuperAdmin", "isActive")
+VALUES ('admin_root', 'developer@iace.co.in', 'Super Admin', true, true)
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
