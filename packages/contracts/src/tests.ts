@@ -512,6 +512,8 @@ export const ADMIN_TEST_ROUTES = {
   remove: (id: string) => `/admin/tests/${id}`,
   /** The cohort rollups this test folded, read whole. Served by the attempts module. */
   analytics: (id: string) => `/admin/tests/${id}/analytics`,
+  /** Asks for the three rollups to be worked out again from the sittings, now. */
+  resyncAnalytics: (id: string) => `/admin/tests/${id}/analytics/resync`,
 } as const;
 
 // ============================================================================

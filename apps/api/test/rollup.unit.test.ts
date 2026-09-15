@@ -4,7 +4,12 @@ import { type Job } from 'bullmq';
 import { type RollupService } from '../src/attempts/rollup.service';
 import { RollupProcessor } from '../src/attempts/rollup.processor';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
-import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS, type RollupJobData } from '../src/queue/queues';
+import {
+  FOLD_PENDING_JOB_ID,
+  ROLLUP_JOBS,
+  ROLLUP_REBUILD_DELAY_MS,
+  type RollupJobData,
+} from '../src/queue/queues';
 import { FakeQueue, fakeQueueFailures } from './support/fakes';
 
 describe('RollupProcessor — dispatching a job to the service', () => {
@@ -45,6 +50,30 @@ describe('RollupOutbox — getting the fold asked for', () => {
         [FOLD_PENDING_JOB_ID, true, true],
         ['rollup-rebuild-tst_1', true, true],
         ['rollup-rebuild-student-stu_1', true, true],
+      ],
+    );
+  });
+
+  /** A debounced rebuild already waiting would swallow a re-sync filed under its id. */
+  it('queues a re-sync now, under its own id, beside a rebuild still waiting out its delay', async () => {
+    const queue = new FakeQueue();
+    const outbox = new RollupOutbox(queue.asQueue());
+
+    await outbox.rebuild('tst_1');
+    await outbox.rebuildNow('tst_1');
+    await outbox.rebuildNow('tst_1');
+
+    assert.deepEqual(
+      queue.jobs.map((job) => [job.name, job.data, job.jobId, job.delay, job.removeOnComplete]),
+      [
+        [
+          ROLLUP_JOBS.REBUILD_TEST,
+          { testId: 'tst_1' },
+          'rollup-rebuild-tst_1',
+          ROLLUP_REBUILD_DELAY_MS,
+          true,
+        ],
+        [ROLLUP_JOBS.REBUILD_TEST, { testId: 'tst_1' }, 'rollup-rebuild-tst_1-now', 0, true],
       ],
     );
   });

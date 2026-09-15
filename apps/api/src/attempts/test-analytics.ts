@@ -66,14 +66,22 @@ const EMPTY_SUMMARY: TestAnalyticsSummary = {
   bands: [],
   topper: null,
   computedAt: null,
+  liveEvaluatedCount: 0,
+  isSettling: false,
 };
 
 export function summaryOf(
   stat: StatTotals | null,
   topper: TestTopper | null,
+  liveEvaluatedCount: number,
 ): TestAnalyticsSummary {
-  if (stat === null) return EMPTY_SUMMARY;
+  const freshness = {
+    liveEvaluatedCount,
+    isSettling: liveEvaluatedCount !== (stat?.evaluatedCount ?? 0),
+  };
+  if (stat === null) return { ...EMPTY_SUMMARY, ...freshness };
   return {
+    ...freshness,
     attemptCount: stat.attemptCount,
     evaluatedCount: stat.evaluatedCount,
     meanScore: perSitting(stat.sumScore, stat.evaluatedCount),

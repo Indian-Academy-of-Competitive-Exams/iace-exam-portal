@@ -103,6 +103,11 @@ export function rollupRebuildJobId(testId: string): string {
   return `${QUEUE_NAMES.ROLLUP}-rebuild-${testId}`;
 }
 
+/** An admin's re-sync, kept apart from the debounced id so a rebuild already waiting cannot swallow it. */
+export function rollupRebuildNowJobId(testId: string): string {
+  return `${rollupRebuildJobId(testId)}-now`;
+}
+
 /** The STUDENT's own: voiding several of their sittings collapses into the one recount they need. */
 export function rollupRebuildStudentJobId(studentId: string): string {
   return `${QUEUE_NAMES.ROLLUP}-rebuild-student-${studentId}`;

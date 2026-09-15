@@ -817,6 +817,10 @@ export const testAnalyticsSummarySchema = z.object({
   bands: z.array(cohortBandSchema),
   topper: testTopperSchema.nullable(),
   computedAt: z.string().nullable(),
+  /** Counted live off the attempts, where `evaluatedCount` is what the fold has reached so far. */
+  liveEvaluatedCount: z.number().int(),
+  /** The fold is behind the sittings: the figures above are about to move. */
+  isSettling: z.boolean(),
 });
 export type TestAnalyticsSummary = z.infer<typeof testAnalyticsSummarySchema>;
 

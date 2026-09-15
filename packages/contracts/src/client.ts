@@ -1053,6 +1053,10 @@ export function createApiClient(options: ApiClientOptions) {
         analytics: (id: string): Promise<TestAnalytics> =>
           get(ADMIN_TEST_ROUTES.analytics(id), testAnalyticsSchema),
 
+        /** Queues an immediate rebuild; the analytics read shows it landing through `computedAt`. */
+        resyncAnalytics: (id: string): Promise<NoContent> =>
+          write('POST', ADMIN_TEST_ROUTES.resyncAnalytics(id), noContentSchema),
+
         /** The paper as it stands, built a question or a section at a time. */
         readPaper: (id: string): Promise<TestPaper> =>
           get(ADMIN_TEST_PAPER_ROUTES.read(id), testPaperSchema),

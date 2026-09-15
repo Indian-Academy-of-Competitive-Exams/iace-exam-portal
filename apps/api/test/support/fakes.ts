@@ -424,6 +424,7 @@ export class FakeQueue {
     jobId?: string;
     removeOnComplete?: boolean;
     removeOnFail?: boolean;
+    delay?: number;
   }[] = [];
 
   /** Set to make the next add throw: the crash between a commit and the queue. */
@@ -432,7 +433,12 @@ export class FakeQueue {
   add(
     name: string,
     data: unknown,
-    options?: { jobId?: string; removeOnComplete?: boolean; removeOnFail?: boolean },
+    options?: {
+      jobId?: string;
+      removeOnComplete?: boolean;
+      removeOnFail?: boolean;
+      delay?: number;
+    },
   ): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
@@ -450,7 +456,15 @@ export class FakeQueue {
       options?.removeOnComplete === undefined ? {} : { removeOnComplete: options.removeOnComplete };
     const removeOnFail =
       options?.removeOnFail === undefined ? {} : { removeOnFail: options.removeOnFail };
-    this.jobs.push({ name, data, jobId: options?.jobId, ...removeOnComplete, ...removeOnFail });
+    const delay = options?.delay === undefined ? {} : { delay: options.delay };
+    this.jobs.push({
+      name,
+      data,
+      jobId: options?.jobId,
+      ...removeOnComplete,
+      ...removeOnFail,
+      ...delay,
+    });
     return Promise.resolve();
   }
 

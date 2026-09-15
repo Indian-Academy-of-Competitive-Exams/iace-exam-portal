@@ -20,6 +20,7 @@ import {
   addToCohortTotals,
   addToStudentTotals,
   bandsAfterBatch,
+  cohortSittingsOf,
   emptyCohortTotals,
   emptyStudentTotals,
   maxOf,
@@ -551,7 +552,7 @@ export class RollupService {
     testId: string,
   ): Promise<{ id: string; score: number }[]> {
     const rows = await tx.attempt.findMany({
-      where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED },
+      where: cohortSittingsOf(testId),
       orderBy: [{ evaluatedAt: 'asc' }, { attemptNo: 'asc' }],
       select: { id: true, studentId: true, score: true },
     });

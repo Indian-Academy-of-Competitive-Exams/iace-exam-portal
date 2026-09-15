@@ -502,6 +502,12 @@ export const QUERY_KEYS = {
   TOPICS: [ADMIN, 'topics'],
 } as const;
 
+/** How often the analytics screen asks again while a re-sync it asked for is landing. */
+export const ANALYTICS_SYNC_POLL_MS = 3_000;
+
+/** Past the rebuild's own two-minute ceiling, polling will not see a sync that has not landed. */
+export const ANALYTICS_SYNC_MAX_MS = 150_000;
+
 /** The two a named student's report can be asked about here: this app offers no series picker. */
 export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.ATTEMPT]: 'This sitting',

@@ -3,7 +3,9 @@
  * fold applies these as deltas; a rebuild sums the same function over every sitting and writes
  * the result outright, so a backfilled table and an accumulated one cannot disagree.
  */
+import { type Prisma } from '@prisma/client';
 import {
+  ATTEMPT_STATUS,
   type AttemptSectionScore,
   type CohortBand,
   type QuestionOption,
@@ -28,6 +30,10 @@ export const COHORT_ROLLUP_TYPES = [
   ROLLUP_TYPE.TEST_SECTION,
   ROLLUP_TYPE.TEST_QUESTION,
 ] as const;
+
+/** The sittings a test's cohort rollups describe: `Attempt_graded_per_test_key` makes these one per student. */
+export const cohortSittingsOf = (testId: string) =>
+  ({ testId, status: ATTEMPT_STATUS.EVALUATED, isGraded: true }) satisfies Prisma.AttemptWhereInput;
 
 /** The student's two, which a retake feeds and the cohort's three never see. */
 export const STUDENT_ROLLUP_TYPES = [ROLLUP_TYPE.STUDENT, ROLLUP_TYPE.STUDENT_SUBJECT] as const;

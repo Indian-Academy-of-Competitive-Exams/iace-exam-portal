@@ -1,7 +1,8 @@
 /**
- * One test's cohort, read off the three rollup tables and nowhere else. Every query here is a
- * `testId`-keyed read of a pre-folded row — no `groupBy`, no attempt scan, no new rollup. Only
- * ranked first sittings ever fold, so what comes back describes the ranked cohort by construction.
+ * One test's cohort, read off the three rollup tables. Every query is a `testId`-keyed read of a
+ * pre-folded row — no `groupBy`, no attempt scan, no new rollup — plus one indexed count of the
+ * sittings those rows should hold, so a fold still catching up reads as settling. Only ranked first
+ * sittings ever fold, so what comes back describes the ranked cohort by construction.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -18,7 +19,8 @@ import { stemPreviewOf } from '../questions';
 import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
 import { bandsIn } from './performance-analytics';
-import { optionCountsIn, optionsIn } from './rollup-fold';
+import { cohortSittingsOf, optionCountsIn, optionsIn } from './rollup-fold';
+import { RollupOutbox } from './rollup-outbox';
 import {
   itemsOf,
   sectionsOf,
@@ -55,28 +57,48 @@ type ItemRow = Prisma.TestQuestionStatGetPayload<{ select: typeof ITEM_SELECT }>
 
 @Injectable()
 export class TestAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rollups: RollupOutbox,
+  ) {}
 
   async forTest(testId: string): Promise<TestAnalytics> {
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      select: { id: true, title: true },
-    });
-    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NO_TEST);
+    const test = await this.requireTest(testId);
 
-    const [stat, sections, items] = await Promise.all([
+    const [stat, sections, items, liveEvaluatedCount] = await Promise.all([
       this.statOf(testId),
       this.sectionsOf(testId),
       this.itemsOf(testId),
+      // The one live read here: a count on [testId, status], so settling costs no attempt scan.
+      this.prisma.attempt.count({ where: cohortSittingsOf(testId) }),
     ]);
 
     return {
       testId: test.id,
       title: test.title,
-      summary: summaryOf(stat, await this.topperOf(stat?.topperAttemptId ?? null)),
+      summary: summaryOf(
+        stat,
+        await this.topperOf(stat?.topperAttemptId ?? null),
+        liveEvaluatedCount,
+      ),
       sections: sectionsOf(sections),
       items: itemsOf(items),
     };
+  }
+
+  /** An admin's re-sync: the rebuild is queued, never run on the request. */
+  async resync(testId: string): Promise<void> {
+    await this.requireTest(testId);
+    await this.rollups.rebuildNow(testId);
+  }
+
+  private async requireTest(testId: string): Promise<{ id: string; title: string | null }> {
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: { id: true, title: true },
+    });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NO_TEST);
+    return test;
   }
 
   private async statOf(

@@ -1,8 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { RefreshCw } from 'lucide-react';
 import {
+  FEATURE_KEYS,
   ITEM_SIGNALS,
+  PERMISSION_LEVELS,
   distractorThatWon,
   percentLabel,
   worthInspecting,
@@ -16,6 +19,7 @@ import {
   EMPTY_STATE_KINDS,
   Alert,
   Badge,
+  Button,
   ChartFigure,
   DataTable,
   DistributionPlot,
@@ -31,12 +35,20 @@ import {
   StatRow,
   TruncatedText,
   plural,
+  toast,
   type DataTableColumn,
   type DistributionMarker,
   type MeasureBar,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import {
+  ANALYTICS_SYNC_MAX_MS,
+  ANALYTICS_SYNC_POLL_MS,
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+} from '../lib/constants';
+import { useAuth } from '../providers/auth';
 import { durationLabel, secondsLabel } from '../lib/duration';
 
 const DASH = '—';
@@ -51,14 +63,55 @@ const ITEM_SIGNAL_LABELS = {
   [ITEM_SIGNALS.NEGATIVE_DISCRIMINATION]: 'Negative discrimination',
 } as const satisfies Record<ItemSignal, string>;
 
+/** Where the figures stood when a re-sync was asked for, so the screen can tell it has landed. */
+interface SyncMark {
+  computedAt: string | null;
+  wasSettling: boolean;
+}
+
+/** A rebuild writes `computedAt`, and a fold that catches up clears settling: either one is the answer. */
+function hasLanded(mark: SyncMark, summary: TestAnalytics['summary'] | undefined): boolean {
+  if (summary === undefined) return false;
+  return summary.computedAt !== mark.computedAt || (mark.wasSettling && !summary.isSettling);
+}
+
 /** How a test performed across the cohort that sat it, off the rollups folded at scoring time. */
 export function TestAnalyticsPage() {
   const { id = '' } = useParams();
+  const { can } = useAuth();
+  const canSync = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [sync, setSync] = useState<SyncMark | null>(null);
 
   const analytics = useQuery({
     queryKey: [...QUERY_KEYS.TEST_ANALYTICS, id],
     queryFn: () => api.admin.tests.analytics(id),
+    refetchInterval: (query) =>
+      sync !== null && !hasLanded(sync, query.state.data?.summary) ? ANALYTICS_SYNC_POLL_MS : false,
   });
+
+  const resync = useMutation({
+    mutationFn: () => api.admin.tests.resyncAnalytics(id),
+    onSuccess: () => {
+      const summary = analytics.data?.summary;
+      setSync({
+        computedAt: summary?.computedAt ?? null,
+        wasSettling: summary?.isSettling ?? false,
+      });
+    },
+  });
+
+  // Reset during render, not in an effect: polling has already stopped, and the button should let go with it.
+  if (sync !== null && hasLanded(sync, analytics.data?.summary)) setSync(null);
+
+  // A sync still unlanded past the rebuild's own ceiling is not coming by polling.
+  useEffect(() => {
+    if (sync === null) return;
+    const giveUp = setTimeout(() => {
+      setSync(null);
+      toast.info('Still recalculating. The figures change here once it finishes.');
+    }, ANALYTICS_SYNC_MAX_MS);
+    return () => clearTimeout(giveUp);
+  }, [sync]);
 
   if (analytics.isPending) {
     return (
@@ -96,15 +149,97 @@ export function TestAnalyticsPage() {
             />
           }
           title={title}
-          meta={`${plural(report.summary.evaluatedCount, 'ranked sitting')} of ${plural(
-            report.summary.attemptCount,
-            'sitting',
-          )}`}
+          meta={
+            <>
+              {`${plural(report.summary.evaluatedCount, 'ranked sitting')} of ${plural(
+                report.summary.attemptCount,
+                'sitting',
+              )}`}
+              {report.summary.computedAt === null ? null : (
+                <>
+                  {' · as of '}
+                  <AsOf at={report.summary.computedAt} />
+                </>
+              )}
+            </>
+          }
+          action={
+            <Freshness
+              summary={report.summary}
+              canSync={canSync}
+              syncing={sync !== null || resync.isPending}
+              onSync={() => resync.mutate()}
+            />
+          }
         />
       }
     >
       <Body report={report} />
     </PageFrame>
+  );
+}
+
+const RELATIVE_TIME = new Intl.RelativeTimeFormat('en-IN', { numeric: 'auto' });
+
+/** Largest first, so an age reads in the biggest unit it has reached. */
+const AGE_UNITS = [
+  { unit: 'day', seconds: 86_400 },
+  { unit: 'hour', seconds: 3_600 },
+  { unit: 'minute', seconds: 60 },
+] as const;
+
+const AGE_TICK_MS = 15_000;
+
+/** A difference of two instants, so no zone is involved; a server clock ahead of this one reads as now. */
+function ageLabel(at: string, now: number): string {
+  const ageSec = Math.min(0, Math.round((Date.parse(at) - now) / 1000));
+  const unit = AGE_UNITS.find((entry) => -ageSec >= entry.seconds);
+  return unit
+    ? RELATIVE_TIME.format(Math.round(ageSec / unit.seconds), unit.unit)
+    : RELATIVE_TIME.format(ageSec, 'second');
+}
+
+/** Re-renders itself on a slow tick, so "as of" keeps ageing while nobody touches the page. */
+function AsOf({ at }: Readonly<{ at: string }>) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), AGE_TICK_MS);
+    return () => clearInterval(tick);
+  }, []);
+  return <time dateTime={at}>{ageLabel(at, now)}</time>;
+}
+
+function Freshness({
+  summary,
+  canSync,
+  syncing,
+  onSync,
+}: Readonly<{
+  summary: TestAnalytics['summary'];
+  canSync: boolean;
+  syncing: boolean;
+  onSync: () => void;
+}>) {
+  if (!summary.isSettling && !canSync) return null;
+  return (
+    <div className="flex items-center gap-2">
+      {summary.isSettling ? (
+        <Badge variant="neutral">
+          {`Updating — ${summary.evaluatedCount} of ${summary.liveEvaluatedCount} folded`}
+        </Badge>
+      ) : null}
+      {canSync ? (
+        <Button
+          variant="outline"
+          size="sm"
+          icon={<RefreshCw aria-hidden />}
+          loading={syncing}
+          onClick={onSync}
+        >
+          {syncing ? 'Recalculating…' : 'Sync now'}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
