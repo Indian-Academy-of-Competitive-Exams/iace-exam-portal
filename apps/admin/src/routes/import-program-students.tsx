@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
@@ -18,12 +18,11 @@ import {
   TableRow,
   TableState,
   TruncatedText,
-  linkVariants,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
-import { COHORT_TABS, NAV_ITEMS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS } from '../lib/constants';
 
 export function ImportProgramStudentsPage() {
   const { code = '' } = useParams();
@@ -69,18 +68,9 @@ export function ImportProgramStudentsPage() {
       }}
       fileErrors={plan?.fileErrors}
       outcome={
-        intake.result ? (
-          <>
-            {intake.result.enrolled} enrolled, {intake.result.alreadyEnrolled} already carried it,{' '}
-            {intake.result.skipped} skipped.{' '}
-            <Link
-              to={`${ROUTES.COHORTS}?tab=${COHORT_TABS.PROGRAMS}`}
-              className={linkVariants({ variant: 'inline' })}
-            >
-              Back to programs
-            </Link>
-          </>
-        ) : null
+        intake.result
+          ? `${intake.result.enrolled} enrolled, ${intake.result.alreadyEnrolled} already carried it, ${intake.result.skipped} skipped.`
+          : null
       }
       stats={
         plan

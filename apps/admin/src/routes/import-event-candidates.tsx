@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   CANDIDATE_IMPORT_TEMPLATE_FILENAME,
@@ -18,12 +18,11 @@ import {
   TableRow,
   TableState,
   TruncatedText,
-  linkVariants,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
-import { COHORT_TABS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 
 const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
   create: 'New candidate',
@@ -80,18 +79,9 @@ export function ImportEventCandidatesPage() {
       }}
       fileErrors={plan?.fileErrors}
       outcome={
-        intake.result ? (
-          <>
-            {intake.result.created} created, {intake.result.added} on the event,{' '}
-            {intake.result.skipped} skipped.{' '}
-            <Link
-              to={`${ROUTES.COHORTS}?tab=${COHORT_TABS.EVENTS}`}
-              className={linkVariants({ variant: 'inline' })}
-            >
-              Back to events
-            </Link>
-          </>
-        ) : null
+        intake.result
+          ? `${intake.result.created} created, ${intake.result.added} on the event, ${intake.result.skipped} skipped.`
+          : null
       }
       stats={
         plan

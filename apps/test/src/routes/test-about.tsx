@@ -134,7 +134,7 @@ export function TestAboutPage() {
               </SurfaceCard>
             </div>
 
-            <Exits testId={testId} listed={listed} now={now} hasPast={past.length > 0} />
+            <Exits testId={testId} listed={listed} now={now} />
 
             {past.length > 0 ? (
               <Section title="Past attempts" meta={plural(past.length, 'attempt')}>
@@ -206,12 +206,10 @@ function Exits({
   testId,
   listed,
   now,
-  hasPast,
 }: Readonly<{
   testId: string;
   listed: StudentCatalogTest | undefined;
   now: Date;
-  hasPast: boolean;
 }>) {
   const action = listed ? testAction(listed) : null;
 
@@ -226,11 +224,6 @@ function Exits({
       ) : (
         <Button disabled>{listed ? shutReason(listed, now) : 'Not open to you'}</Button>
       )}
-      {hasPast ? (
-        <Button asChild variant="outline">
-          <Link to={ROUTES.TESTS}>Back to your tests</Link>
-        </Button>
-      ) : null}
     </div>
   );
 }
