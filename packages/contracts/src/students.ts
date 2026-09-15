@@ -3,6 +3,7 @@ import {
   civilDate,
   csvIdQuery,
   csvQuery,
+  emailSchema,
   matchModeQuery,
   mobileSchema,
   optionalBooleanQuery,
@@ -61,7 +62,7 @@ export function todayISO(): string {
 export const personNameSchema = z
   .string()
   .trim()
-  .min(1)
+  .min(2, 'A name needs at least two letters')
   .max(120)
   .regex(/^\p{L}[\p{L}\p{M}\s.'-]*$/u, 'Use letters only — no digits, commas or other characters');
 
@@ -260,7 +261,7 @@ export const updateStudentProfileSchema = z.object({
   motherName: blankClears(personNameSchema),
   fatherName: blankClears(personNameSchema),
   dob: blankClears(dobSchema),
-  email: z.string().trim().max(160).nullish(),
+  email: blankClears(emailSchema.pipe(z.string().max(160))),
   address: z.string().trim().max(500).nullish(),
   gender: genderSchema.nullish(),
   educationDetails: z.array(educationEntrySchema).max(PROFILE_LIST_MAX).optional(),

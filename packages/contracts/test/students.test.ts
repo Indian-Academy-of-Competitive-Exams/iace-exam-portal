@@ -108,6 +108,24 @@ describe('updateStudentSchema — a patch, where a cleared box clears the field'
   it('replaces the enrolments wholesale, including down to none', () => {
     assert.deepEqual(updateStudentSchema.parse({ enrolledExams: [] }).enrolledExams, []);
   });
+
+  it('refuses a one-letter name and takes a two-letter one', () => {
+    assert.equal(updateStudentSchema.safeParse({ fullName: 'C' }).success, false);
+    assert.equal(updateStudentSchema.safeParse({ profile: { motherName: 'A' } }).success, false);
+    assert.equal(updateStudentSchema.parse({ fullName: 'Om' }).fullName, 'Om');
+  });
+
+  it('refuses an email that is not an address, and clears it when the box is emptied', () => {
+    const typo = updateStudentSchema.safeParse({ profile: { email: 'not-an-email' } });
+    assert.equal(typo.success, false);
+
+    assert.equal(
+      updateStudentSchema.parse({ profile: { email: ' Ravi@Example.com ' } }).profile?.email,
+      'ravi@example.com',
+    );
+    assert.equal(updateStudentSchema.parse({ profile: { email: '' } }).profile?.email, null);
+    assert.equal(updateStudentSchema.parse({ profile: {} }).profile?.email, undefined);
+  });
 });
 
 describe('the roster reads both states', () => {
