@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, type AnswerChange } from '@iace/contracts';
+import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { type PrismaService } from '../src/prisma/prisma.service';
+import { redisKeys } from '../src/redis/redis.keys';
+import { FakeRedis } from './support/fakes';
 import {
   applyBatch,
   isInTime,
@@ -198,5 +202,58 @@ describe('isInTime', () => {
 
   it('refuses one past the grace', () => {
     assert.equal(isInTime(held(), at('2026-09-01T05:30:31.000Z')), false);
+  });
+});
+
+describe('pending — what a flush has left to write', () => {
+  const saved = (questionIds: readonly string[], revision: number) => ({
+    revision,
+    answers: questionIds.map((questionId) => change({ questionId })),
+  });
+
+  it('records every question a save touched', () => {
+    const next = applyBatch(held(), saved(['q1', 'q2'], 1));
+
+    assert.deepEqual(next.pending, ['q1', 'q2']);
+  });
+
+  /** The point of the list: a later pass rewrites the two that moved, not the eighty that did not. */
+  it('adds to what an earlier save left, and never lists one twice', () => {
+    const first = applyBatch(held(), saved(['q1', 'q2'], 1));
+    const second = applyBatch(first, saved(['q2', 'q3'], 2));
+
+    assert.deepEqual(second.pending, ['q1', 'q2', 'q3']);
+  });
+
+  it('leaves the list alone for a batch a newer save already carried', () => {
+    const first = applyBatch(held(), saved(['q1'], 5));
+
+    assert.deepEqual(applyBatch(first, saved(['q9'], 5)).pending, ['q1']);
+  });
+});
+
+describe('AttemptStateService.clearPending', () => {
+  const service = (redis: FakeRedis) =>
+    new AttemptStateService({} as PrismaService, redis.asService());
+
+  /** The failure this prevents: a save landing mid-pass cleared unwritten, so its answer never lands. */
+  it('clears only what the pass wrote, keeping a mark made while it ran', async () => {
+    const redis = new FakeRedis();
+    await redis.setJson(redisKeys.attemptState('att_1'), held({ pending: ['q1', 'q2'] }), 60);
+
+    await service(redis).clearPending('att_1', ['q1']);
+
+    const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
+    assert.deepEqual(after?.pending, ['q2']);
+  });
+
+  it('writes nothing when the pass wrote nothing', async () => {
+    const redis = new FakeRedis();
+    await redis.setJson(redisKeys.attemptState('att_1'), held({ pending: ['q1'] }), 60);
+
+    await service(redis).clearPending('att_1', []);
+
+    const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
+    assert.deepEqual(after?.pending, ['q1']);
   });
 });

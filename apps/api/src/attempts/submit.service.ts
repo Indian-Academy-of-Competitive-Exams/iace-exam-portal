@@ -16,7 +16,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
-import { rowsToFlush, writeRows } from './attempt-flush';
+import { STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
 import { ScoringOutbox } from './scoring-outbox';
 import { MetricsService } from '../common/metrics';
 
@@ -31,9 +31,6 @@ const ATTEMPT_SELECT = {
 } as const satisfies Prisma.AttemptSelect;
 
 type AttemptRow = Prisma.AttemptGetPayload<{ select: typeof ATTEMPT_SELECT }>;
-
-/** Ahead of the claim, so a call that lost the race cannot write over the winner's answers. */
-const STILL_LIVE = { attempt: { status: ATTEMPT_STATUS.IN_PROGRESS } } as const;
 
 @Injectable()
 export class SubmitService {

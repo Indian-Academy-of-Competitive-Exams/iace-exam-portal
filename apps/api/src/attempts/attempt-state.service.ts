@@ -48,6 +48,7 @@ export class AttemptStateService {
       endsAt: attempt.endsAt.toISOString(),
       revision: 0,
       answers: {},
+      pending: [],
       sections: {},
     });
   }
@@ -142,8 +143,19 @@ export class AttemptStateService {
     return this.redis.client.smembers(redisKeys.attemptsDirty);
   }
 
-  async clearDirty(attemptId: string): Promise<void> {
-    await this.redis.client.srem(redisKeys.attemptsDirty, attemptId);
+  async clearDirty(...attemptIds: string[]): Promise<void> {
+    if (attemptIds.length === 0) return;
+    await this.redis.client.srem(redisKeys.attemptsDirty, ...attemptIds);
+  }
+
+  /** Only what this pass wrote: a save landing mid-flush keeps the mark it just made. */
+  async clearPending(attemptId: string, written: readonly string[]): Promise<void> {
+    if (written.length === 0) return;
+    const gone = new Set(written);
+    await this.patch(attemptId, (held) => ({
+      ...held,
+      pending: (held.pending ?? []).filter((questionId) => !gone.has(questionId)),
+    }));
   }
 
   private async write(state: HeldState): Promise<void> {
@@ -192,6 +204,7 @@ export class AttemptStateService {
       endsAt: attempt.endsAt.toISOString(),
       revision: 0,
       answers: answersFromRows(durable),
+      pending: [],
       sections: {},
     };
   }
@@ -212,6 +225,7 @@ function mergedOver(durable: HeldState, held: HeldState): HeldState {
     ...durable,
     revision: held.revision,
     answers: { ...durable.answers, ...held.answers },
+    pending: held.pending,
     sections: held.sections,
   };
 }

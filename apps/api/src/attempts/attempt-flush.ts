@@ -1,5 +1,5 @@
 import { type Prisma } from '@prisma/client';
-import { type AnswerState, type LiveAnswer } from '@iace/contracts';
+import { ATTEMPT_STATUS, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { type PrismaService } from '../prisma/prisma.service';
 import { type HeldState } from './attempt-state';
 
@@ -17,19 +17,28 @@ export interface FlushRow {
   };
 }
 
+/** How many sittings one pass writes at a time. Lanes, not workers: one pass owns the dirty set. */
+export const FLUSH_LANES = 8;
+
+/** Ahead of the claim, so a call that lost the race cannot write over the winner's answers. */
+export const STILL_LIVE = { attempt: { status: ATTEMPT_STATUS.IN_PROGRESS } } as const;
+
 /** Every value comes off the held state and none off the clock, so running it twice is a no-op. */
-export function rowsToFlush(held: HeldState): FlushRow[] {
-  return Object.entries(held.answers).map(([questionId, answer]) => ({
-    questionId,
-    data: {
-      selectedOptionId: answer.selectedOptionId,
-      typedAnswer: answer.typedAnswer,
-      state: answer.state,
-      timeSpentSec: answer.timeSpentSec,
-      answeredAt: answer.answeredAt === null ? null : new Date(answer.answeredAt),
-      firstActionAt: answer.firstActionAt === null ? null : new Date(answer.firstActionAt),
-    },
-  }));
+export function rowsToFlush(held: HeldState, only?: readonly string[]): FlushRow[] {
+  const wanted = only === undefined ? null : new Set(only);
+  return Object.entries(held.answers)
+    .filter(([questionId]) => wanted === null || wanted.has(questionId))
+    .map(([questionId, answer]) => ({
+      questionId,
+      data: {
+        selectedOptionId: answer.selectedOptionId,
+        typedAnswer: answer.typedAnswer,
+        state: answer.state,
+        timeSpentSec: answer.timeSpentSec,
+        answeredAt: answer.answeredAt === null ? null : new Date(answer.answeredAt),
+        firstActionAt: answer.firstActionAt === null ? null : new Date(answer.firstActionAt),
+      },
+    }));
 }
 
 /** What a durable answer row carries back into the live state. */

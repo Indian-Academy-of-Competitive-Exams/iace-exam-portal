@@ -1,11 +1,11 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
-import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
-import { rowsToFlush, writeRows } from './attempt-flush';
+import { type HeldState } from './attempt-state';
+import { FLUSH_LANES, STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
 /** Redis to `AttemptQuestion` on a timer. A failed run costs the durable copy a minute, not answers. */
@@ -28,35 +28,33 @@ export class AttemptFlushProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.ATTEMPT_FLUSH, job, error);
   }
 
+  /** One pass owns the dirty set, so the lanes below are its own and never a second worker's. */
   async process(): Promise<void> {
-    for (const attemptId of await this.state.dirtyIds()) {
-      // One attempt's failure is its own: the next one still gets its answers written.
-      await this.flush(attemptId).catch((error: unknown) => {
-        this.logger.error(`Flushing attempt ${attemptId} failed; it stays dirty`, error);
-      });
+    const dirty = await this.state.dirtyIds();
+
+    for (let at = 0; at < dirty.length; at += FLUSH_LANES) {
+      const lane = dirty.slice(at, at + FLUSH_LANES);
+      const held = await this.state.readMany(lane);
+      const done = await Promise.all(lane.map((id) => this.flush(id, held.get(id))));
+      await this.state.clearDirty(...done.filter((id): id is string => id !== null));
     }
   }
 
-  private async flush(attemptId: string): Promise<void> {
-    const held = await this.state.read(attemptId);
-    if (!held) {
-      await this.state.clearDirty(attemptId);
-      return;
+  /** The id once it is written, or null to leave it dirty for the next pass to try again. */
+  private async flush(attemptId: string, held: HeldState | undefined): Promise<string | null> {
+    // A key that has gone was taken by submit, which writes the final answers itself.
+    if (!held) return attemptId;
+
+    // No list means a key written before this shipped, whose whole paper is still the safe write.
+    const written = held.pending ?? Object.keys(held.answers);
+    try {
+      // Gated rather than asked: an ended sitting matches no rows, so its status costs no query.
+      await writeRows(this.prisma, attemptId, rowsToFlush(held, written), STILL_LIVE);
+      await this.state.clearPending(attemptId, written);
+      return attemptId;
+    } catch (error) {
+      this.logger.error(`Flushing attempt ${attemptId} failed; it stays dirty`, error);
+      return null;
     }
-
-    const attempt = await this.prisma.attempt.findUnique({
-      where: { id: attemptId },
-      select: { id: true, status: true },
-    });
-    // Submit writes its final answers around the flip, so anything ended is already durable.
-    if (attempt?.status !== ATTEMPT_STATUS.IN_PROGRESS) {
-      await this.state.clearDirty(attemptId);
-      return;
-    }
-
-    await writeRows(this.prisma, attemptId, rowsToFlush(held));
-
-    // Cleared last: a save landing mid-flush re-marks it, and the next run picks the newer state.
-    await this.state.clearDirty(attemptId);
   }
 }

@@ -20,6 +20,8 @@ export interface HeldState {
   endsAt: string;
   revision: number;
   answers: Record<string, LiveAnswer>;
+  /** Questions changed since the last flush. Absent on a key written before this shipped. */
+  pending?: string[];
   sections: Record<string, SectionProgress>;
 }
 
@@ -84,6 +86,7 @@ export function applyBatch(
     ...held,
     revision: batch.revision,
     answers,
+    pending: [...new Set([...(held.pending ?? []), ...batch.answers.map((c) => c.questionId)])],
     sections: batch.sections ? { ...held.sections, ...batch.sections } : held.sections,
   };
 }

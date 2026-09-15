@@ -55,6 +55,25 @@ describe('rowsToFlush', () => {
     assert.equal(unanswered?.data.state, ANSWER_STATE.NOT_ANSWERED);
   });
 
+  /** The whole point of the pass: the eighty answers that did not move are not rewritten. */
+  it('writes only the questions it is given', () => {
+    const rows = rowsToFlush(held, ['q2']);
+
+    assert.deepEqual(
+      rows.map((row) => row.questionId),
+      ['q2'],
+    );
+  });
+
+  /** Submit passes no list on purpose: the final write is the whole paper, changed or not. */
+  it('writes every touched question when it is given no list', () => {
+    assert.equal(rowsToFlush(held).length, 2);
+  });
+
+  it('writes nothing when nothing changed', () => {
+    assert.deepEqual(rowsToFlush(held, []), []);
+  });
+
   /** The failure this prevents: a rebuilt live key handing the student back an empty paper. */
   it('reads back into the same answers a lost key is put together from', () => {
     const durable = rowsToFlush(held).map((row) => ({ questionId: row.questionId, ...row.data }));
