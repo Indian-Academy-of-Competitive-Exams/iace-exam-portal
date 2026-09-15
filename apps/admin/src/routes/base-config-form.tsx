@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm, useWatch, type Path, type UseFormReturn } from 'react-hook-form';
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -455,11 +455,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               {existing ? 'Save configuration' : 'Create configuration'}
             </Button>
           </>
-        ) : (
-          <Button variant="outline" asChild>
-            <Link to={ROUTES.BASE_CONFIGS}>Back to configs</Link>
-          </Button>
-        )
+        ) : null
       }
       header={
         <>
