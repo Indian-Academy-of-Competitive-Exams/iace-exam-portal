@@ -42,7 +42,7 @@ function Navigation() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={Boolean(identity)}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
       </Stack.Protected>
       <Stack.Protected guard={!identity}>
         <Stack.Screen name="login" />
