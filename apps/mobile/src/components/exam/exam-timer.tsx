@@ -7,8 +7,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
 import { clockText, secondsLeft, type ExamClock } from '@iace/contracts';
+import { useCountdown } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
-import { useCountdown } from './use-countdown';
 
 /** Under this the clock turns urgent — five minutes is the warning every exam hall gives. */
 const URGENT_SEC = 5 * 60;

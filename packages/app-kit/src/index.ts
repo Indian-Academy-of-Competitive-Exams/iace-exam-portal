@@ -25,6 +25,7 @@ export {
   type EndedSitting,
 } from './exam/use-exam-view';
 export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
+export { useCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
 export { pollDelayMs, shouldKeepPolling } from './poll-policy';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';

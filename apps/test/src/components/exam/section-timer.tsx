@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Hourglass } from 'lucide-react';
 import { clockText } from '@iace/contracts';
 import { cn } from '@iace/ui';
-import { useCountdown } from './use-countdown';
+import { useCountdown } from '@iace/app-kit';
 
 /** A section's own clock, keyed by the section: entering one starts it and nothing else has to. */
 

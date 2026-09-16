@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { AlarmClock } from 'lucide-react';
 import { clockText, secondsLeft, type ExamClock } from '@iace/contracts';
 import { cn } from '@iace/ui';
-import { useCountdown } from './use-countdown';
+import { useCountdown } from '@iace/app-kit';
 
 /** The countdown. It counts to the SERVER's deadline; the device clock only measures elapsed time. */
 
