@@ -355,6 +355,7 @@ export const studentCatalogTestSchema = z.object({
   title: z.string().nullable(),
   /** What the paper IS, not what this student may do with it — static, so it caches safely. */
   durationSec: z.number().int(),
+  sectionCount: z.number().int(),
   totalQuestions: z.number().int(),
   totalMarks: z.number(),
   /** Position in the series. Ordering only — sequential gating is the series' own flag. */

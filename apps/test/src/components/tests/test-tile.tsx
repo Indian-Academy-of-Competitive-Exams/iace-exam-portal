@@ -57,6 +57,7 @@ export function TestTile({
         </Link>
 
         <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted px-3 py-2">
+          <StatRow label="Sections" value={row.test.sectionCount} />
           <StatRow label="Questions" value={row.test.totalQuestions} />
           <StatRow label="Duration (minutes)" value={Math.round(row.test.durationSec / 60)} />
           {opens ? <StatRow label="Opens" value={opens} /> : null}
