@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -39,6 +39,11 @@ export function TestInstructionsPage() {
   const fullscreen = useFullscreen();
   const [declared, setDeclared] = useState(false);
   const [language, setLanguage] = useState<LanguageCode | ''>('');
+
+  // The paper's code is fetched while they read, so pressing begin never waits on a download.
+  useEffect(() => {
+    void import('./exam');
+  }, []);
 
   const brief = useQuery({
     ...briefQuery(testId),
