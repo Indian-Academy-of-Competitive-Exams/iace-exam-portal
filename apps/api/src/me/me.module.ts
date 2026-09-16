@@ -5,7 +5,6 @@ import { AuthModule } from '../auth';
 import { StorageModule } from '../storage/storage.module';
 import { StudentsModule } from '../students';
 import { AccessModule } from '../access';
-import { AttemptsModule } from '../attempts';
 import { NotificationsModule } from '../notifications';
 import { MeController } from './me.controller';
 import { MeService } from './me.service';
@@ -17,7 +16,6 @@ import { MeService } from './me.service';
     AuthModule,
     StudentsModule,
     AccessModule,
-    AttemptsModule,
     NotificationsModule,
     StorageModule,
     // The ceiling is applied while the body arrives, not after multer has

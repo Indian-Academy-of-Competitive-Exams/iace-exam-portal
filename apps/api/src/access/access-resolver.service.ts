@@ -409,7 +409,7 @@ const NONE_WAITING = -1;
 /** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
   // A sat test stays startable: a paper may always be sat again, and Done is only where it sorts.
-  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now), sittingCount: null };
+  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now) };
 }
 
 /** Why a sitting may not begin: not open YET is a different fact from having no access at all. */

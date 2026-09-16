@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DOCUMENT_KINDS } from '@iace/contracts';
 import { type AccessResolverService } from '../src/access';
-import { type LeaderboardService } from '../src/attempts';
 import { AuditContext } from '../src/audit';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { type BranchesService } from '../src/branches/branches.service';
@@ -47,13 +46,7 @@ async function build(over: { fullName?: string; motherName?: string | null } = {
     new FakeEventBus().asService(),
     new NotificationOutbox(new FakeQueue().asQueue()),
   );
-  const me = new MeService(
-    students,
-    storage,
-    {} as AccessResolverService,
-    {} as LeaderboardService,
-    auditContext,
-  );
+  const me = new MeService(students, storage, {} as AccessResolverService, auditContext);
   /** Runs the edit inside a live AuditContext and hands back what the interceptor would read. */
   const recorded = (edit: () => Promise<unknown>) =>
     auditContext.run(async () => {

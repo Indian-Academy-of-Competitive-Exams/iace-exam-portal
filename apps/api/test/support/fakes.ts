@@ -584,17 +584,15 @@ export function makeStanding(overrides: Partial<FakeStanding> = {}): FakeStandin
   };
 }
 
-/** The live ranking as its consumers see it. Postgres counts it, so a test fills the maps in. */
+/** The live ranking as its consumers see it. Postgres counts it, so a test fills the map in. */
 export class FakeLeaderboard implements Pick<
   LeaderboardService,
-  'standing' | 'standingsOfStudent' | 'sittingCounts'
+  'standing' | 'standingsOfStudent'
 > {
   readonly standings = new Map<string, FakeStanding>();
-  readonly counts = new Map<string, number>();
 
-  constructor(standings: readonly FakeStanding[] = [], counts: Record<string, number> = {}) {
+  constructor(standings: readonly FakeStanding[] = []) {
     for (const standing of standings) this.standings.set(standing.attemptId, standing);
-    for (const [testId, count] of Object.entries(counts)) this.counts.set(testId, count);
   }
 
   standing(testId: string, attemptId: string): Promise<Standing | null> {
@@ -623,14 +621,6 @@ export class FakeLeaderboard implements Pick<
         ]),
       ),
     );
-  }
-
-  sittingCounts(testIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
-    const counted = testIds.flatMap((testId) => {
-      const count = this.counts.get(testId);
-      return count === undefined ? [] : [[testId, count] as const];
-    });
-    return Promise.resolve(new Map(counted));
   }
 
   asService(): LeaderboardService {
