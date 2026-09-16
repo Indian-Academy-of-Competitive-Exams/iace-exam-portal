@@ -7,7 +7,7 @@ import {
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
-import { type Sittable, type TestResult } from '../../lib/catalog';
+import { type Sittable, type TestResult } from '@iace/app-kit';
 
 /** The wash is scanned across a shelf; the pill is read. Held under the pill so it stays legible. */
 const STATES = {

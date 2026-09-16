@@ -2,9 +2,9 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
+import { minutes } from '@iace/app-kit';
 import { type PerformanceReport, type SectionalStanding } from '@iace/contracts';
 import { attemptReportQuery } from '../lib/queries';
-import { minutes } from '../lib/catalog';
 import { PageBody, ReportSkeleton, Section } from '../components/ui';
 
 const DASH = '—';

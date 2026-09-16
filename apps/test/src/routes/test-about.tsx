@@ -15,6 +15,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
+import { shutReason } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
   LANGUAGE_LABELS,
@@ -29,7 +30,6 @@ import {
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { briefQuery, catalogQuery, performanceQuery } from '../lib/queries';
-import { shutReason } from '../lib/catalog';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import {
   BandSkeleton,

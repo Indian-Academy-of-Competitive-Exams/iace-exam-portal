@@ -17,7 +17,14 @@ import {
   type PlotBand,
   type PlotReference,
 } from '@iace/ui';
-import { newestFirst } from '@iace/app-kit';
+import {
+  continueWith,
+  newestFirst,
+  openNow,
+  sittablesOf,
+  upNext,
+  type Sittable,
+} from '@iace/app-kit';
 import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
   instituteDateTimeLabel,
@@ -40,7 +47,6 @@ import {
 import { api } from '../lib/api';
 import { catalogQuery, overviewQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, ROUTES, TEST_DAYS_QUERY_KEY } from '../lib/constants';
-import { continueWith, openNow, sittablesOf, upNext, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
 
 /** The institute's clock, never the device's — a student abroad is still on an IST morning. */

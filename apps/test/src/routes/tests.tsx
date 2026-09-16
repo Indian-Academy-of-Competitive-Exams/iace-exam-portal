@@ -5,6 +5,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
 import {
+  matching,
+  resultsByTest,
+  sittablesOf,
+  type Sittable,
+  type TestResult,
+} from '@iace/app-kit';
+import {
   Alert,
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -23,13 +30,6 @@ import {
 } from '@iace/contracts';
 import { catalogQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS } from '../lib/constants';
-import {
-  matching,
-  resultsByTest,
-  sittablesOf,
-  type Sittable,
-  type TestResult,
-} from '../lib/catalog';
 import { SeriesShelf } from '../components/tests/series-shelf';
 import { PageBody } from '../components/ui';
 

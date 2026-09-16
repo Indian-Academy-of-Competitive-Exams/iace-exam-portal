@@ -43,3 +43,20 @@ export {
   type NavLayout,
 } from './nav';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
+export {
+  averageAccuracy,
+  bestRank,
+  continueWith,
+  matching,
+  minutes,
+  openNow,
+  resultsByTest,
+  seriesProgress,
+  shutReason,
+  sittablesOf,
+  sittingHint,
+  upNext,
+  type SeriesProgress,
+  type Sittable,
+  type TestResult,
+} from './catalog';

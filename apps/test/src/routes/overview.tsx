@@ -21,7 +21,7 @@ import {
   TimeReturnFigure,
   WeakestSubjectsFigure,
 } from '@iace/app-kit/browser';
-import { newestFirst } from '@iace/app-kit';
+import { newestFirst, sittingHint } from '@iace/app-kit';
 import {
   TEST_SCOPE_LABELS,
   civilDate,
@@ -36,7 +36,6 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import { overviewQuery, performanceQuery } from '../lib/queries';
-import { sittingHint } from '../lib/catalog';
 import { ANY_SCOPE, NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
 import {
   BlockPairSkeleton,

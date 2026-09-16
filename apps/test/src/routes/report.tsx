@@ -11,10 +11,9 @@ import {
   TooltipTrigger,
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import { REPORT_TABS, newestFirst, reportTabOf } from '@iace/app-kit';
+import { REPORT_TABS, newestFirst, reportTabOf, sittingHint } from '@iace/app-kit';
 import { type PerformancePoint, type ScoreCard } from '@iace/contracts';
 import { performanceQuery, scoreCardQuery } from '../lib/queries';
-import { sittingHint } from '../lib/catalog';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
 
 const UNTITLED = 'Untitled test';

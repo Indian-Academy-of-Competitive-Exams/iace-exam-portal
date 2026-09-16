@@ -8,6 +8,7 @@ import {
   TrajectoryFigure,
   type Benchmark,
 } from '@iace/app-kit/browser';
+import { minutes } from '@iace/app-kit';
 import {
   paperCounts,
   type CohortCurve,
@@ -16,7 +17,6 @@ import {
   type SectionalStanding,
 } from '@iace/contracts';
 import { attemptReportQuery, scoreCardQuery } from '../lib/queries';
-import { minutes } from '../lib/catalog';
 import { Hero, HeroFigure, PageBody, ReportSkeleton, StatTile, TileGrid } from '../components/ui';
 
 export function ScoreCardPanel() {
