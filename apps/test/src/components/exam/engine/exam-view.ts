@@ -68,6 +68,8 @@ export interface ExamView {
 
   isSaving: boolean;
   hasUnsaved: boolean;
+  /** This tab no longer holds the sitting: it was opened in another tab or on another device. */
+  takenOver: boolean;
 
   openQuestion: (questionId: string) => void;
   nextQuestion: () => void;

@@ -182,4 +182,8 @@ export const PROFILE_QUERY_KEY = ['me'] as const;
 export const STORAGE_KEYS = {
   // Named for the app, not the audience: the student portal is a separate SPA on this origin.
   AUTH: 'iace.test.auth',
+  /** Per tab, in sessionStorage: what tells the server which tab is answering. */
+  TAB: 'iace.test.tab',
+  /** Answers a save has not delivered yet, so a reload mid-outage does not lose them. */
+  QUEUED_ANSWERS: 'iace.test.queued',
 } as const;

@@ -9,6 +9,7 @@ import { type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
+import { tabId } from '../lib/tab-id';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
 import { useExamView, type EndedSitting } from '../components/exam/engine/use-exam-view';
@@ -25,7 +26,7 @@ export function ExamPage() {
 
   const attempt = useQuery({
     queryKey: ['me', 'attempt', testId],
-    queryFn: () => api.me.startAttempt(testId, { languages: began.languages }),
+    queryFn: () => api.me.startAttempt(testId, { languages: began.languages, tab: tabId() }),
     enabled: testId !== '',
     // The sitting is started once; a refetch would be a second start, which the server resumes.
     staleTime: Infinity,
@@ -88,6 +89,20 @@ function ExamHall(
   }>,
 ) {
   const view = useExamView(sitting);
+
+  if (view.takenOver) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.REFUSED}
+          title="This paper is being answered somewhere else"
+          /* ui-copy-ok: consequence — continuing here is what stops the other one */
+          hint="Your answers are saved. Continuing here stops the other tab or device."
+          action={<Button onClick={() => window.location.reload()}>Continue here</Button>}
+        />
+      </div>
+    );
+  }
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
 }

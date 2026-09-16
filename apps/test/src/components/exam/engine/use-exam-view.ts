@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  AppException,
   omrStateFor,
   nextOpenSectionId,
   nextQuestionId,
@@ -22,6 +23,7 @@ import {
 import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../../../lib/api';
 import { CATALOG_QUERY_KEY } from '../../../lib/constants';
+import { tabId } from '../../../lib/tab-id';
 import { useAttemptState, type AnswerIntent } from '../../../lib/use-attempt-state';
 import type { ExamView } from './exam-view';
 
@@ -80,8 +82,11 @@ export function useExamView({
       // The question still on screen has cost time too; bank it before the last save goes.
       state.bankOpen();
       await state.flush();
-      return api.me.submitAttempt(paper.attemptId);
+      return api.me.submitAttempt(paper.attemptId, { tab: tabId() });
     },
+    // A refusal is an answer; only a connection that never landed is worth asking again.
+    retry: (count, error) => count < 3 && !AppException.is(error),
+    retryDelay: (count) => Math.min(1_000 * 2 ** count, 8_000),
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done, and the server has already dropped its own copy.
       await queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEY });
@@ -174,6 +179,7 @@ export function useExamView({
 
     isSaving: state.isSaving,
     hasUnsaved: state.hasUnsaved,
+    takenOver: state.takenOver,
 
     openQuestion: move,
     nextQuestion,
