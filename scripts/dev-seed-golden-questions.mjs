@@ -145,7 +145,7 @@ const attr = (value) =>
   value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 
 const p = (text) => `<p>${text}</p>`;
-const img = (key, alt) => `<p><img src="${urlOf(key)}" alt="${attr(alt)}"></p>`;
+const img = (key, alt) => `<p><img data-key="${key}" alt="${attr(alt)}"></p>`;
 const inline = (latex) => `<span data-type="inline-math" data-latex="${attr(latex)}"></span>`;
 const display = (latex) => `<div data-type="block-math" data-latex="${attr(latex)}"></div>`;
 
