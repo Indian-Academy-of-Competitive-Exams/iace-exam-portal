@@ -185,7 +185,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - `SINGLE` serves the one language picked, narrowed to what the config actually offers; `DUAL` serves
   every language it offers and there is nothing to toggle.
 - **Live state lives in Redis, and the key existing is what "this sitting is open" means.** Autosave
-  batches what changed roughly every 25 seconds and the server merges it. A save that finds no key
+  batches what changed roughly every 25 seconds and the server merges it, answering with the
+  revision and the clock rather than the sheet — the screen already holds what it just sent, and
+  reads the whole state back only where it starts from nothing. A save that finds no key
   falls back to Postgres, which refuses anything not in progress — so a save after a submit cannot
   be accepted. A save is still taken up to 30 seconds past the deadline: a slow network is not a
   cheat.

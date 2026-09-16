@@ -190,7 +190,7 @@ export const liveAnswerSchema = z.object({
 });
 export type LiveAnswer = z.infer<typeof liveAnswerSchema>;
 
-/** What Redis holds for one sitting. Returned on every save, so the screen can reconcile. */
+/** What Redis holds for one sitting, read back whole only where a screen starts from nothing. */
 export const liveAttemptStateSchema = z.object({
   attemptId: z.string(),
   revision: z.number().int(),
@@ -201,6 +201,14 @@ export const liveAttemptStateSchema = z.object({
   serverNow: z.string(),
 });
 export type LiveAttemptState = z.infer<typeof liveAttemptStateSchema>;
+
+/** What a save answers with: the counter the screen reads, and the clock it sets itself by. */
+export const attemptSaveAckSchema = z.object({
+  revision: z.number().int(),
+  endsAt: z.string(),
+  serverNow: z.string(),
+});
+export type AttemptSaveAck = z.infer<typeof attemptSaveAckSchema>;
 
 /** What a student reads BEFORE the clock starts. No question and no answer is in here. */
 export const examBriefSchema = z.object({

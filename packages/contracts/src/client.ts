@@ -162,9 +162,11 @@ import {
   performanceTrendSchema,
   scoreCardSchema,
   solutionReportSchema,
+  attemptSaveAckSchema,
   liveAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
+  type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
@@ -699,8 +701,8 @@ export function createApiClient(options: ApiClientOptions) {
       saveAttemptState: (
         attemptId: string,
         input: SaveAttemptStateInput,
-      ): Promise<LiveAttemptState> =>
-        write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema, input),
+      ): Promise<AttemptSaveAck> =>
+        write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), attemptSaveAckSchema, input),
 
       /** What the server is holding, so a reloaded tab can seed its answers instead of starting blank. */
       attemptState: (attemptId: string): Promise<LiveAttemptState> =>

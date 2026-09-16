@@ -11,6 +11,7 @@ import {
   AppException,
   ATTEMPT_STATUS,
   ErrorCodes,
+  type AttemptSaveAck,
   type LiveAttemptState,
   type SaveAttemptStateBody,
 } from '@iace/contracts';
@@ -70,12 +71,13 @@ export class AttemptStateService {
     await this.redis.client.set(key, attemptId, 'EX', STATE_TTL_SEC);
   }
 
+  /** Answers with the ack, never the sheet: the screen already holds what it just sent. */
   async save(
     studentId: string,
     attemptId: string,
     batch: SaveAttemptStateBody,
     now: Date = new Date(),
-  ): Promise<LiveAttemptState> {
+  ): Promise<AttemptSaveAck> {
     const held = await this.require(studentId, attemptId);
     if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
     if (!holdsSitting(held, batch.tab)) {
@@ -87,7 +89,7 @@ export class AttemptStateService {
     // Marked AFTER the write: a mark whose state never landed would flush yesterday's answers.
     await this.redis.client.sadd(redisKeys.attemptsDirty, attemptId);
 
-    return shown(next, now);
+    return acked(next, now);
   }
 
   /** What a reloaded screen needs. `require` already refuses another student and rebuilds a lost key. */
@@ -248,6 +250,11 @@ function mergedOver(durable: HeldState, held: HeldState): HeldState {
     pending: held.pending,
     sections: held.sections,
   };
+}
+
+/** A save carries the clock back with the counter, so answering is also how the timer stays honest. */
+function acked(state: HeldState, now: Date): AttemptSaveAck {
+  return { revision: state.revision, endsAt: state.endsAt, serverNow: now.toISOString() };
 }
 
 /** The student never sees whose attempt it is — they know — and never the raw held shape. */

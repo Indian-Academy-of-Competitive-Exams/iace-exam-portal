@@ -4,6 +4,7 @@ import {
   saveAttemptStateSchema,
   startAttemptSchema,
   submitAttemptSchema,
+  type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
@@ -103,7 +104,7 @@ export class AttemptsController {
     @Param('id') id: string,
     @Body(new ZodBody(saveAttemptStateSchema)) body: SaveAttemptStateBody,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<LiveAttemptState> {
+  ): Promise<AttemptSaveAck> {
     return this.state.save(user.id, id, body);
   }
 
