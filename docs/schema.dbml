@@ -1,5 +1,5 @@
-// IACE — generated from prisma/schema.prisma
-// Source of truth is the Prisma schema. Regenerate with the schema-to-dbml script.
+// IACE — generated from prisma/schema.prisma by scripts/schema-to-dbml.mjs
+// Regenerate: node scripts/schema-to-dbml.mjs prisma/schema.prisma docs/schema.dbml
 // Arrays are marked note:'array' (DBML has no native array type); native DB types are lifted from @db.*
 
 Enum Gender {
@@ -897,19 +897,6 @@ Table TestQuestionStat {
   }
 }
 
-Table NotificationPreference {
-  id text [pk, default: `cuid()`]
-  studentId text [not null]
-  channel DeliveryChannel [not null]
-  type NotificationType
-  enabled boolean [not null, default: true]
-  updatedAt timestamptz(3) [not null]
-  indexes {
-    (studentId, channel, type) [unique]
-    (studentId)
-  }
-}
-
 Table PushSubscription {
   id text [pk, default: `cuid()`]
   studentId text [not null]
@@ -1017,7 +1004,6 @@ Ref: TestSectionStat.baseConfigSectionId > BaseConfigSection.id
 Ref: TestQuestionStat.testId > Test.id [delete: cascade]
 Ref: TestQuestionStat.paperQuestionId > PaperQuestion.id [delete: cascade]
 Ref: TestQuestionStat.questionId > Question.id
-Ref: NotificationPreference.studentId > Student.id [delete: cascade]
 Ref: PushSubscription.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.questionId > Question.id
@@ -1092,7 +1078,6 @@ TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   Notification
   Announcement
   NotificationDelivery
-  NotificationPreference
   PushSubscription
   OutboxEvent
   ProcessedRollup
