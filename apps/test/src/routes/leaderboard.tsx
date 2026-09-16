@@ -72,7 +72,7 @@ export function LeaderboardPage() {
   });
   const seriesRows = series.data ?? [];
 
-  // The empty row falls back to sat[0] (testsSat sorts most-recent-first), so it wears that title.
+  // The empty row IS sat[0] (testsSat sorts most-recent-first), so sat[0] is not listed again.
   const TEST_FILTER = {
     key: 'testId',
     kind: 'choice',
@@ -80,7 +80,7 @@ export function LeaderboardPage() {
     primary: true,
     items: [
       { value: '', label: sat[0]?.title ?? UNTITLED },
-      ...sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
+      ...sat.slice(1).map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
     ],
   } as const;
 
@@ -92,7 +92,7 @@ export function LeaderboardPage() {
     primary: true,
     items: [
       { value: '', label: seriesRows[0]?.name ?? 'First series' },
-      ...seriesRows.map((row) => ({ value: row.id, label: row.name })),
+      ...seriesRows.slice(1).map((row) => ({ value: row.id, label: row.name })),
     ],
   } as const;
 
