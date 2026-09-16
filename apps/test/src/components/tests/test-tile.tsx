@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Button, Card, TruncatedText, cn, linkVariants, plural } from '@iace/ui';
+import { Button, Card, StatRow, TruncatedText, cn, linkVariants } from '@iace/ui';
 import {
   instituteDayLabel,
   ATTEMPT_STATUS,
@@ -36,6 +36,7 @@ export function TestTile({
   result,
 }: Readonly<{ row: Sittable; now: Date; result?: TestResult }>) {
   const state = STATES[stateOf(row)];
+  const opens = opensOn(row.test, now);
 
   return (
     <Card
@@ -55,8 +56,11 @@ export function TestTile({
           </TruncatedText>
         </Link>
 
-        <p className="text-xs text-muted-foreground">{paperLine(row.test)}</p>
-        <p className="text-xs text-muted-foreground">{whenLine(row.test, now)}</p>
+        <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted px-3 py-2">
+          <StatRow label="Questions" value={row.test.totalQuestions} />
+          <StatRow label="Duration (minutes)" value={Math.round(row.test.durationSec / 60)} />
+          {opens ? <StatRow label="Opens" value={opens} /> : null}
+        </div>
 
         <div className="mt-auto pt-1">
           <TileFoot row={row} result={result} />
@@ -114,15 +118,8 @@ function pillOf(label: string, result?: TestResult): string {
   return label;
 }
 
-const paperLine = (test: StudentCatalogTest) =>
-  [plural(test.totalQuestions, 'question'), `${Math.round(test.durationSec / 60)} minutes`].join(
-    ' · ',
-  );
-
-/** A test opens and never shuts, so there are only two things to say about when. */
-function whenLine(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
-    return `Opens ${instituteDayLabel(test.opensAt)}`;
-  }
-  return 'Any time';
+/** A test opens and never shuts, so the only date worth naming is one still ahead. */
+function opensOn(test: StudentCatalogTest, now: Date): string | null {
+  if (test.opensAt === null || Date.parse(test.opensAt) <= now.getTime()) return null;
+  return instituteDayLabel(test.opensAt);
 }
