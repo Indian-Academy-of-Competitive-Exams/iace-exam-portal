@@ -190,11 +190,3 @@ keeps a NULL time and ranks as the slowest, so stop the workers first or re-run 
 `VACUUM (ANALYZE) "Attempt"` after the backfill. A Test SPA tab loaded before the deploy cannot
 start a test until it is reloaded, because its live-attempt schema still requires `lastRank` and
 `lastPercentile`.
-
-**Re-sanitising legacy question content.** Content stored before the write guard (`c582e39`) never
-passed through DOMPurify, so crafted legacy markup can still slip a tracking image past the render
-guard. Run `pnpm --filter @iace/api backfill:sanitize-content` once per environment after deploy,
-outside a live test window — it rewrites each `QuestionVersion` in place, batched with a transaction
-per batch, so it holds no long lock. It is idempotent (a re-run changes nothing) and it already
-recomputes `stemHash` for any question whose current version changed, so `backfill:stem-hashes` need
-not be run separately for it.
