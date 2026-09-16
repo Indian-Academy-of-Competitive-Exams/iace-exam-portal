@@ -56,6 +56,9 @@ export const redisKeys = {
   /** Attempts holding writes Postgres has not seen. A SET, so draining needs no SCAN. */
   attemptsDirty: 'attempt:dirty',
 
+  /** The one sitting this student is answering. Opening another stands the previous one down. */
+  sittingClaim: (studentId: string) => `sitting:claim:${studentId}`,
+
   /** One public report, keyed by a DIGEST of its link — a key name must never carry a credential. */
   sharedReport: (linkDigest: string) => `share:report:${linkDigest}`,
 

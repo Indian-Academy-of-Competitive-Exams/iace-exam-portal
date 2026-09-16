@@ -18,6 +18,7 @@ export const ErrorCodes = {
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
+  SITTING_TAKEN_OVER: 'SITTING_TAKEN_OVER',
   RATE_LIMITED: 'RATE_LIMITED',
   OTP_INVALID: 'OTP_INVALID',
   OTP_EXPIRED: 'OTP_EXPIRED',
@@ -40,6 +41,7 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.FORBIDDEN]: 403,
   [ErrorCodes.NOT_FOUND]: 404,
   [ErrorCodes.CONFLICT]: 409,
+  [ErrorCodes.SITTING_TAKEN_OVER]: 409,
   [ErrorCodes.RATE_LIMITED]: 429,
   // A wrong or stale credential is an authentication failure, not a malformed
   // request — the body was perfectly well-formed.
@@ -63,6 +65,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.FORBIDDEN]: 'You do not have access to this',
   [ErrorCodes.NOT_FOUND]: 'Not found',
   [ErrorCodes.CONFLICT]: 'That already exists',
+  [ErrorCodes.SITTING_TAKEN_OVER]: 'This test was continued somewhere else',
   [ErrorCodes.RATE_LIMITED]: 'Too many requests — please wait a moment',
   [ErrorCodes.OTP_INVALID]: 'Incorrect code',
   [ErrorCodes.OTP_EXPIRED]: 'That code has expired — request a new one',

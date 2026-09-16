@@ -168,6 +168,13 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - **Resume is not a start.** A live sitting is re-entered without asking the start gate again. A
   test may be sat again any number of times, and nothing counts or caps re-entries into one sitting.
   Two racing starts resolve to one sitting.
+- **A student answers one sitting at a time, on one tab.** Starting or resuming a sitting hands it to
+  the tab that asked, and stands down whichever tab held the student's last one — the same rule
+  whether that was another tab, another device, or another test. A save or a submit from a tab that
+  no longer holds its sitting is refused with `SITTING_TAKEN_OVER`; nothing it already wrote is lost,
+  and the sitting it was stood down from stays live and resumable. A sitting held by nobody, because
+  its key was rebuilt from Postgres, is adopted by the first tab back. **The clock does not stop**:
+  a paper left to sit another runs to the deadline it was given at start.
 - `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
   Sections keep the config's order; questions shuffle within a section.
 - The whole served paper is written as `AttemptQuestion` rows at start, not only what the student

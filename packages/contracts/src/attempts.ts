@@ -114,6 +114,8 @@ export const attemptSchema = z.object({
 /** Which languages this student sits in. Must be ones the config offers. */
 export const startAttemptSchema = z.object({
   languages: z.array(languageCodeSchema).min(1).optional(),
+  /** The tab taking the sitting on. A student answers from one tab at a time, on one device. */
+  tab: z.string().min(1).optional(),
 });
 export type StartAttemptInput = z.input<typeof startAttemptSchema>;
 export type StartAttemptBody = z.infer<typeof startAttemptSchema>;
@@ -162,7 +164,16 @@ export const saveAttemptStateSchema = z.object({
   revision: z.number().int().min(0),
   answers: z.array(answerChangeSchema).max(SAVE_BATCH_MAX),
   sections: z.record(z.string(), sectionProgressSchema).optional(),
+  /** Which tab is answering. One that no longer holds the sitting is refused, never merged. */
+  tab: z.string().min(1).optional(),
 });
+
+/** Submitting names its tab too: a tab stood down elsewhere must not end a sitting in progress. */
+export const submitAttemptSchema = z.object({
+  tab: z.string().min(1).optional(),
+});
+export type SubmitAttemptInput = z.input<typeof submitAttemptSchema>;
+export type SubmitAttemptBody = z.infer<typeof submitAttemptSchema>;
 export type SaveAttemptStateInput = z.input<typeof saveAttemptStateSchema>;
 export type SaveAttemptStateBody = z.infer<typeof saveAttemptStateSchema>;
 

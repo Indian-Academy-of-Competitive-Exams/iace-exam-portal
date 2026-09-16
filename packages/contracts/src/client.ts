@@ -172,6 +172,7 @@ import {
   type ScoreCard,
   type SolutionReport,
   type SaveAttemptStateInput,
+  type SubmitAttemptInput,
   type StartAttemptInput,
   type SubmittedAttempt,
   type LiveAttemptState,
@@ -706,8 +707,11 @@ export function createApiClient(options: ApiClientOptions) {
         get(ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema),
 
       /** Ends it. A second call reports the first one's outcome rather than refusing. */
-      submitAttempt: (attemptId: string): Promise<SubmittedAttempt> =>
-        write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema),
+      submitAttempt: (
+        attemptId: string,
+        input: SubmitAttemptInput = {},
+      ): Promise<SubmittedAttempt> =>
+        write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema, input),
 
       /** Marks, standing and their own answers. Refused until the paper has been marked. */
       scoreCard: (attemptId: string): Promise<ScoreCard> =>

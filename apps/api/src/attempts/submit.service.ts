@@ -17,10 +17,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
+import { holdsSitting } from './attempt-state';
 import { ScoringOutbox } from './scoring-outbox';
 import { MetricsService } from '../common/metrics';
 
 const NOT_YOURS = 'No such attempt';
+const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
 
 const ATTEMPT_SELECT = {
   id: true,
@@ -45,11 +47,18 @@ export class SubmitService {
   ) {}
 
   /** The student's own. Another student's id reads as missing, never as refused. */
-  async submit(studentId: string, attemptId: string): Promise<SubmittedAttempt> {
+  async submit(studentId: string, attemptId: string, tab?: string): Promise<SubmittedAttempt> {
     const attempt = await this.require(attemptId);
     if (attempt.studentId !== studentId) {
       this.metrics.countSubmit('refused');
       throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    }
+
+    // A tab stood down elsewhere must not end a sitting the student is answering somewhere else.
+    const held = await this.state.read(attemptId);
+    if (held && !holdsSitting(held, tab)) {
+      this.metrics.countSubmit('refused');
+      throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
     }
 
     const ended = await this.end(attempt);

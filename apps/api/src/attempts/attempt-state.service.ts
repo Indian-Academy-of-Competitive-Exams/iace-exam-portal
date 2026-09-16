@@ -17,7 +17,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
-import { applyBatch, isInTime, type HeldState } from './attempt-state';
+import { applyBatch, holdsSitting, isInTime, type HeldState } from './attempt-state';
 import { DURABLE_ANSWER_SELECT, answersFromRows } from './attempt-flush';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
@@ -29,6 +29,7 @@ const PATCH_TRIES = 5;
 const NOT_YOURS = 'No such attempt';
 const BEING_ANSWERED = 'This sitting is being written to right now. Try again in a moment.';
 const ALREADY_ENDED = 'This sitting has ended, so nothing more can be saved to it.';
+const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
 
 @Injectable()
 export class AttemptStateService {
@@ -38,19 +39,35 @@ export class AttemptStateService {
   ) {}
 
   /** Seeded when the sitting starts, so no later save has to ask Postgres whose attempt this is. */
-  async open(attempt: { id: string; studentId: string; endsAt: Date }): Promise<void> {
+  async open(
+    attempt: { id: string; studentId: string; endsAt: Date },
+    tab?: string,
+  ): Promise<void> {
     const held = await this.read(attempt.id);
-    if (held) return;
+    await (held
+      ? this.write({ ...held, tab: tab ?? held.tab })
+      : this.write({
+          attemptId: attempt.id,
+          studentId: attempt.studentId,
+          endsAt: attempt.endsAt.toISOString(),
+          revision: 0,
+          answers: {},
+          pending: [],
+          sections: {},
+          tab,
+        }));
 
-    await this.write({
-      attemptId: attempt.id,
-      studentId: attempt.studentId,
-      endsAt: attempt.endsAt.toISOString(),
-      revision: 0,
-      answers: {},
-      pending: [],
-      sections: {},
-    });
+    if (tab !== undefined) await this.takeClaim(attempt.studentId, attempt.id);
+  }
+
+  /** One sitting at a time per student: opening this one stands down whatever tab held the last. */
+  private async takeClaim(studentId: string, attemptId: string): Promise<void> {
+    const key = redisKeys.sittingClaim(studentId);
+    const previous = await this.redis.client.get(key);
+    if (previous !== null && previous !== attemptId) {
+      await this.patch(previous, (stood) => ({ ...stood, tab: null }));
+    }
+    await this.redis.client.set(key, attemptId, 'EX', STATE_TTL_SEC);
   }
 
   async save(
@@ -61,8 +78,11 @@ export class AttemptStateService {
   ): Promise<LiveAttemptState> {
     const held = await this.require(studentId, attemptId);
     if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
+    if (!holdsSitting(held, batch.tab)) {
+      throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
+    }
 
-    const next = applyBatch(held, batch, now);
+    const next = { ...applyBatch(held, batch, now), tab: batch.tab ?? held.tab };
     await this.write(next);
     // Marked AFTER the write: a mark whose state never landed would flush yesterday's answers.
     await this.redis.client.sadd(redisKeys.attemptsDirty, attemptId);
