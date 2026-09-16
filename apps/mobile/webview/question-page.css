@@ -146,8 +146,8 @@ body {
 
 /* Held with a thumb, not a pointer, so it is larger than the web's 28px bubble. */
 .bubble {
-  width: var(--control-h-md);
-  height: var(--control-h-md);
+  width: var(--control-h-lg);
+  height: var(--control-h-lg);
   border-width: 2px;
   touch-action: none;
 }
