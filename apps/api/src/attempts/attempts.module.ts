@@ -13,18 +13,12 @@ import { AdminPerformanceController, MePerformanceController } from './performan
 import { AdminOverviewController, MeOverviewController } from './overview.controller';
 import { MeLeaderboardController } from './leaderboard.controller';
 import {
-  AdminPerformanceShareController,
-  MePerformanceShareController,
-  PublicReportController,
-} from './performance-share.controller';
-import {
   AdminQuestionReportController,
   MeQuestionReportController,
 } from './question-report.controller';
 import { QuestionReportService } from './question-report.service';
 import { AdminTestAnalyticsController } from './test-analytics.controller';
 import { TestAnalyticsService } from './test-analytics.service';
-import { PerformanceShareService } from './performance-share.service';
 import { LeaderboardViewService } from './leaderboard-view.service';
 import { PerformanceAnalyticsService } from './performance.service';
 import { StudentOverviewService } from './overview.service';
@@ -55,9 +49,6 @@ import { SubmitService } from './submit.service';
     MeOverviewController,
     AdminOverviewController,
     MeLeaderboardController,
-    PublicReportController,
-    MePerformanceShareController,
-    AdminPerformanceShareController,
     MeQuestionReportController,
     AdminQuestionReportController,
     AdminTestAnalyticsController,
@@ -72,7 +63,6 @@ import { SubmitService } from './submit.service';
     LeaderboardService,
     LeaderboardViewService,
     PerformanceAnalyticsService,
-    PerformanceShareService,
     StudentOverviewService,
     QuestionReportService,
     TestAnalyticsService,

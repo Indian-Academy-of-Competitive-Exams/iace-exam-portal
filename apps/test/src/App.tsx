@@ -45,9 +45,6 @@ const SolutionPanel = React.lazy(() =>
 const SavedPage = React.lazy(() =>
   import('./routes/saved').then((module) => ({ default: module.SavedPage })),
 );
-const SharedReportPage = React.lazy(() =>
-  import('./routes/shared-report').then((module) => ({ default: module.SharedReportPage })),
-);
 
 /** Each chunk waits on the shape it is about to become, never on one spinner standing in for all of them. */
 const whileLoading = (page: React.ReactNode, fallback: React.ReactNode) => (
@@ -61,11 +58,6 @@ export function App() {
   return (
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-      {/* Outside the guard on purpose: a shared report is read by somebody with no account. */}
-      <Route
-        path={ROUTES.SHARED_REPORT_PATTERN}
-        element={whileLoading(<SharedReportPage />, <ReportSkeleton />)}
-      />
       <Route
         element={
           <ProtectedRoute

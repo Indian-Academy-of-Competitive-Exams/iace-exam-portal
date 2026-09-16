@@ -111,7 +111,6 @@ export const envSchema = z.object({
   RATE_LIMIT_DEFAULT_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(120),
   RATE_LIMIT_SITTING_PER_MIN: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_SHARE_PER_MIN: z.coerce.number().int().positive().default(60),
 
   // Proxies in front. 0 trusts nothing; behind a load balancer this MUST be its hop count.
   TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),

@@ -8,7 +8,7 @@ import { ErrorCodes } from '@iace/contracts';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { throttlerOptionsFrom } from '../src/common/throttling/throttling.module';
-import { AuthRateLimit, ShareRateLimit } from '../src/common/throttling/rate-limits';
+import { AuthRateLimit, SittingRateLimit } from '../src/common/throttling/rate-limits';
 import { windowRecord } from '../src/common/throttling/rate-limit';
 
 /** The real policy over a counting map, so the names, the skipping and the 429 envelope are all real. */
@@ -32,9 +32,9 @@ class ProbeController {
     return { ok: true };
   }
 
-  @ShareRateLimit()
-  @Get('report')
-  report() {
+  @SittingRateLimit()
+  @Get('save')
+  save() {
     return { ok: true };
   }
 
@@ -46,9 +46,7 @@ class ProbeController {
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot(
-      throttlerOptionsFrom({ default: 50, auth: 2, sitting: 2, share: 3 }, counting()),
-    ),
+    ThrottlerModule.forRoot(throttlerOptionsFrom({ default: 50, auth: 2, sitting: 3 }, counting())),
   ],
   controllers: [ProbeController],
   providers: [
@@ -96,8 +94,8 @@ describe('rate limiting (e2e)', () => {
 
   /** The whole point of naming them: exhausting one window must not close another. */
   it('counts a differently-marked route on its own allowance', async () => {
-    for (let i = 0; i < 3; i += 1) assert.equal((await call('/probe/report')).status, 200);
-    assert.equal((await call('/probe/report')).status, 429);
+    for (let i = 0; i < 3; i += 1) assert.equal((await call('/probe/save')).status, 200);
+    assert.equal((await call('/probe/save')).status, 429);
   });
 
   it('leaves an unmarked route on the generous default', async () => {

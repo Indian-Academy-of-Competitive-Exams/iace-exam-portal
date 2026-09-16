@@ -221,8 +221,6 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   shuts, so there is no moment when everyone has sat it to wait for.
 - Answer-level detail is captured from day one — option chosen, verdict, marked-for-review state, and
   time per question and per section — so analytics derive later without re-instrumenting.
-- `PerformanceShare` is the only unauthenticated door onto a report: a random token rather than a
-  walkable id, revocable and expirable.
 - **A void is an archive, never a delete.** The support console stands a sitting down — `VOIDED`,
   with who did it and why — and it then counts nowhere: every fold, board and cohort read selects
   `EVALUATED`, which the status no longer is. Voiding one already marked asks for the test's cohort

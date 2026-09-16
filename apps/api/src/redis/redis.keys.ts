@@ -62,12 +62,6 @@ export const redisKeys = {
   /** The one sitting this student is answering. Opening another stands the previous one down. */
   sittingClaim: (studentId: string) => `sitting:claim:${studentId}`,
 
-  /** One public report, keyed by a DIGEST of its link — a key name must never carry a credential. */
-  sharedReport: (linkDigest: string) => `share:report:${linkDigest}`,
-
-  /** How often one link has missed that cache in the current window. TTL = what is left of it. */
-  sharedReportReads: (linkDigest: string) => `share:reads:${linkDigest}`,
-
   /** One caller's hits in one rate-limit window. The tracker is a subject id or an address, never a credential. */
   rateLimit: (name: string, tracker: string) => `ratelimit:${name}:${tracker}`,
 

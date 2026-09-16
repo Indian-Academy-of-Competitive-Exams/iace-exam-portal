@@ -122,20 +122,20 @@ Only the owning module writes these tables. Every model in `prisma/schema.prisma
 model with no owner is a model any module may quietly start writing, which is how the boundary
 erodes.
 
-| Module        | Owns (Prisma models)                                                                                                                                                       |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| admins        | `Admin`, `AdminFeaturePermission`                                                                                                                                          |
-| students      | `Student`, `StudentProfile`, `StudentConsent`                                                                                                                              |
-| branches      | `Branch`                                                                                                                                                                   |
-| access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                                                    |
-| events        | `Event`, `EventCandidate`                                                                                                                                                  |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `QuestionFlag`                                                                                                          |
-| configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                                                                 |
-| tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                                               |
-| attempts      | `Attempt`, `AttemptQuestion`, `PerformanceShare`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
-| audit         | `RowActionLog`, `ImportLog`                                                                                                                                                |
-| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `Announcement`                                                                                                 |
-| saved         | `SavedQuestion`                                                                                                                                                            |
+| Module        | Owns (Prisma models)                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| admins        | `Admin`, `AdminFeaturePermission`                                                                                                                      |
+| students      | `Student`, `StudentProfile`, `StudentConsent`                                                                                                          |
+| branches      | `Branch`                                                                                                                                               |
+| access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                                |
+| events        | `Event`, `EventCandidate`                                                                                                                              |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `QuestionFlag`                                                                                      |
+| configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                                             |
+| tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                           |
+| attempts      | `Attempt`, `AttemptQuestion`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
+| audit         | `RowActionLog`, `ImportLog`                                                                                                                            |
+| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `Announcement`                                                                             |
+| saved         | `SavedQuestion`                                                                                                                                        |
 
 `auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
@@ -156,19 +156,6 @@ owns the sitting owns the derivation.
 - the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
   the one crossing that is infra rather than domain: retention is a property of the buffer, not of
   the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.
-
-**`PerformanceShare` is the one unauthenticated route to student data in the platform.** A row is a
-revocable public link onto one sitting's curated report, addressed by a random token rather than by
-its cuid id, which is time-ordered and walkable. `GET /public/reports/:token` is the only
-unauthenticated route outside auth, health and the token-gated metrics scrape; minting and revoking
-both need a signed-in identity, and either the student or an admin holding `STUDENT_PERFORMANCE` may
-revoke. Revocation and expiry are read on the same request that would have served the payload, and
-every refusal — unknown, revoked, expired, sitting gone — answers in identical words, so nothing is
-learnt from being told no. The payload is a whitelist in `packages/contracts/src/shares.ts`: the
-shared student's own name, branch, marks, standing, an anonymous cohort distribution and section
-scores. Never an answer key, never per-question correctness, never a second student — the
-leaderboard's named rows stay signed-in-only. The attempt foreign key restricts deletion, so a link
-can never outlive what it opens.
 
 **There is no group table and access is not a link row.** A series' `kind` decides who reaches it:
 FREE reaches everyone; STANDARD reaches a student whose current branch is on the series' branch list

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { instituteDayLabel } from './common';
 import { TEST_SCOPES, paperQuestionStatusSchema, testScopeSchema, type TestScope } from './tests';
 import { todayISO } from './students';
 import {
@@ -602,6 +603,22 @@ export type PerformanceReport = z.infer<typeof performanceReportSchema>;
 // which sittings belong to one of them, and which of those went best. Marks are
 // only ever compared WITHIN a test here — across papers they mean nothing.
 // ============================================================================
+
+/** A sitting a student's report can open on, and whether it holds the ranked slot. */
+export const reportSittingSchema = z.object({
+  attemptId: z.string(),
+  testTitle: z.string().nullable(),
+  submittedAt: z.string().nullable(),
+  isGraded: z.boolean(),
+});
+export type ReportSitting = z.infer<typeof reportSittingSchema>;
+
+/** How a sitting is named wherever one is picked: the paper, and the day it was sat. */
+export function sittingLabel(sitting: Pick<ReportSitting, 'testTitle' | 'submittedAt'>): string {
+  const day = instituteDayLabel(sitting.submittedAt);
+  const title = sitting.testTitle ?? 'Untitled test';
+  return day === null ? title : `${title} · ${day}`;
+}
 
 /** One paper a student has sat, and the sitting that dates it. */
 export interface SatTest {
