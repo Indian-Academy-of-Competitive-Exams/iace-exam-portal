@@ -9,6 +9,9 @@
     "android": {
       "package": "in.co.iace.mobile"
     },
-    "plugins": ["expo-router"]
+    "plugins": ["expo-router"],
+    "extra": {
+      "apiUrl": "http://localhost:3000"
+    }
   }
 }

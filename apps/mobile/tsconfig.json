@@ -6,6 +6,8 @@
   "include": [
     "app/**/*.ts",
     "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     "nativewind-env.d.ts",
     "expo-env.d.ts",
     "tailwind.config.js"
