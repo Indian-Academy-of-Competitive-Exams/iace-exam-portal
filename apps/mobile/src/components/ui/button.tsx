@@ -4,10 +4,22 @@ import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-n
 import { useUnstableNativeVariable } from 'nativewind';
 import { cn } from '../../lib/cn';
 
-const VARIANTS = { default: 'bg-primary', ghost: 'bg-transparent' } as const;
-const TEXT_VARIANTS = { default: 'text-primary-foreground', ghost: 'text-foreground' } as const;
+const VARIANTS = {
+  default: 'bg-primary',
+  outline: 'border border-border bg-surface',
+  ghost: 'bg-transparent',
+} as const;
+const TEXT_VARIANTS = {
+  default: 'text-primary-foreground',
+  outline: 'text-foreground',
+  ghost: 'text-foreground',
+} as const;
 /** The native `ActivityIndicator.color` prop takes a resolved value, not a class — read the token. */
-const SPINNER_TOKEN = { default: '--primary-foreground', ghost: '--foreground' } as const;
+const SPINNER_TOKEN = {
+  default: '--primary-foreground',
+  outline: '--foreground',
+  ghost: '--foreground',
+} as const;
 
 export interface ButtonProps extends Omit<PressableProps, 'children'> {
   variant?: keyof typeof VARIANTS;

@@ -18,5 +18,20 @@ export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'
 /** The session call doubles as the reachability check — its success proves both facts at once. */
 export const SYSTEM_CHECK_QUERY_KEY = ['me', 'system-check'] as const;
 
-/** The search param carrying the language choice to `/exam/[id]` — Task 6 reads this exact name. */
+/** The search param carrying the language choice to `/exam/[testId]`. */
 export const EXAM_LANGUAGES_PARAM = 'languages' as const;
+
+/** The sitting, keyed by TEST — the web app's own key, so a refetch can never be a second start. */
+export const startedAttemptQueryKey = (testId: string) => ['me', 'attempt', testId] as const;
+
+/** The paper an attempt draws, stamped with when it landed — the web app's own key. */
+export const attemptPaperQueryKey = (attemptId: string) =>
+  ['me', 'attempt-paper', attemptId] as const;
+
+/** Marks and standing, refused until marking lands — the web app's own key. */
+export const scoreCardQueryKey = (attemptId: string) =>
+  ['me', 'attempts', attemptId, 'score-card'] as const;
+
+/** What a sitting knew about itself as it ended. Put in the cache by the exam, never fetched. */
+export const endedSittingQueryKey = (attemptId: string) =>
+  ['me', 'attempts', attemptId, 'ended'] as const;

@@ -40,7 +40,9 @@ export const DETAIL_ROUTES = {
   SERIES: (seriesId: string) => `/series/${seriesId}` as const,
   TEST: (testId: string) => `/test/${testId}` as const,
   TEST_INSTRUCTIONS: (testId: string) => `/test/${testId}/instructions` as const,
-  /** `/exam/[id]` does not exist until Task 6 starts the attempt on arrival there. */
+  /** Keyed by TEST: no attempt exists until this screen starts one on arrival. */
   EXAM: (testId: string, languages: readonly LanguageCode[]) =>
     `/exam/${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}` as const,
+  /** The web's own path, so a report screen can land beside it as `/attempts/[attemptId]/report`. */
+  SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted` as const,
 } as const;

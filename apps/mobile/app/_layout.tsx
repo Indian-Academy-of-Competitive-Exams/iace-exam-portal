@@ -34,7 +34,7 @@ export default function RootLayout() {
   );
 }
 
-/** Guards the two routes that exist today; a route with no guard stays reachable either way. */
+/** Every route is registered under a guard; a route with no guard stays reachable either way. */
 function Navigation() {
   const { identity, isLoading } = useAuth();
   if (isLoading) return null;
@@ -46,6 +46,12 @@ function Navigation() {
         <Stack.Screen name="series/[id]" options={{ headerShown: true }} />
         <Stack.Screen name="test/[id]/index" options={{ headerShown: true }} />
         <Stack.Screen name="test/[id]/instructions" options={{ headerShown: true }} />
+        {/* No swipe back out of a running paper; Android's Back is intercepted by the screen itself. */}
+        <Stack.Screen name="exam/[testId]" options={{ gestureEnabled: false }} />
+        <Stack.Screen
+          name="attempts/[attemptId]/submitted"
+          options={{ headerShown: true, headerBackVisible: false, title: 'Handed in' }}
+        />
       </Stack.Protected>
       <Stack.Protected guard={!identity}>
         <Stack.Screen name="login" />
