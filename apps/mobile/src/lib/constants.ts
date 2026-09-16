@@ -8,3 +8,6 @@ export const ME_QUERY_KEY = ['auth', 'me'] as const;
 
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
+
+/** Every test this student has sat — the web app's own key, so the two never disagree. */
+export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;
