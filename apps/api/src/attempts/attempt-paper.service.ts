@@ -193,9 +193,7 @@ export class AttemptPaperService {
   /** Content on disk holds only the image KEY, so the sitting signs its own, long enough to last. */
   private async withImages(questions: ExamQuestion[]): Promise<ExamQuestion[]> {
     const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
-    return urls.size === 0
-      ? questions
-      : questions.map((question) => signedQuestion(question, urls));
+    return questions.map((question) => signedQuestion(question, urls));
   }
 }
 

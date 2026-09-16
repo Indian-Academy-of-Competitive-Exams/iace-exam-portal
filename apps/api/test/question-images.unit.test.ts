@@ -186,3 +186,47 @@ describe('the image src, on the way in and out', () => {
     assert.equal(stripImageSrc(applyImageUrls(stored, urls)), stored);
   });
 });
+
+/** Every src served is one the server just signed: anything else is a pixel tracking the student. */
+describe('applyImageUrls, on content stored before the write guard', () => {
+  const tracker = 'https://tracker.example/x.gif';
+  const signed = new Map([['questions/images/a.png', 'https://s3/fresh']]);
+
+  it('drops an image that carries no key', () => {
+    assert.equal(applyImageUrls(`<p>Look<img src="${tracker}"></p>`, signed), '<p>Look</p>');
+  });
+
+  it('serves no src for a key nothing signed, and keeps the key', () => {
+    const html = `<img data-key="questions/images/a.png" src="${tracker}">`;
+
+    assert.equal(applyImageUrls(html, new Map()), '<img data-key="questions/images/a.png">');
+  });
+
+  it('replaces whatever src a signed key carried with the signed one', () => {
+    const served = applyImageUrls(
+      `<img data-key="questions/images/a.png" src="${tracker}">`,
+      signed,
+    );
+
+    assert.match(served, /src="https:\/\/s3\/fresh"/);
+    assert.doesNotMatch(served, /tracker/);
+  });
+
+  it('keeps a url signed by local MinIO, which is plain http', () => {
+    const local = new Map([['questions/images/a.png', 'http://localhost:9000/iace/a.png?sig=1']]);
+
+    const served = applyImageUrls('<img data-key="questions/images/a.png">', local);
+
+    assert.match(served, /src="http:\/\/localhost:9000\/iace\/a\.png\?sig=1"/);
+  });
+
+  /** A parser keeps the first of two srcs, so one quoted past the strip must not come first. */
+  it('puts the signed src ahead of one it could not strip', () => {
+    const served = applyImageUrls(
+      `<img data-key="questions/images/a.png" src='${tracker}'>`,
+      signed,
+    );
+
+    assert.equal(/\ssrc=["']([^"']*)/.exec(served)?.[1], 'https://s3/fresh');
+  });
+});

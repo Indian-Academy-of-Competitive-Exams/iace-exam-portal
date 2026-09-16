@@ -63,6 +63,7 @@ const question = {
 };
 
 interface Sat {
+  stem?: string;
   languages?: LanguageCode[];
   languageMode?: LanguageMode;
   shuffleOptions?: boolean;
@@ -71,9 +72,15 @@ interface Sat {
 
 /** One student's sitting of a two-question paper in a twenty-minute section, due at ENDS_AT. */
 async function sitting(over: Sat = {}) {
+  const asked = over.stem
+    ? {
+        ...question,
+        content: { ...question.content, en: { stem: [{ type: 'TEXT', text: over.stem }] } },
+      }
+    : question;
   const paper = await makePaper(prisma, {
     sections: ['Reasoning'],
-    questions: [question, question],
+    questions: [asked, asked],
   });
   // The section's clock first: a SECTIONAL_LOCKED config refuses a section without one.
   await prisma.baseConfigSection.update({
@@ -223,6 +230,19 @@ describe('AttemptPaperService — language', () => {
     // The stem has Telugu; the options do not, and an empty key would render as a blank option.
     assert.deepEqual(Object.keys(paper.questions[0]?.content ?? {}).sort(), ['en', 'te']);
     assert.deepEqual(Object.keys(paper.questions[0]?.options[0]?.text ?? {}), ['en']);
+  });
+});
+
+describe('AttemptPaperService — images', () => {
+  /** Stored before the write guard, content can quote any host, and every candidate would fetch it. */
+  it('serves no image it did not sign itself', async () => {
+    const { student, attemptId } = await sitting({
+      stem: '<p>Look<img src="https://tracker.example/x.gif"></p>',
+    });
+
+    const paper = await service.paper(student, attemptId);
+
+    assert.equal(paper.questions[0]?.content.en?.stem[0]?.text, '<p>Look</p>');
   });
 });
 

@@ -74,6 +74,7 @@ export function checkQuestionImage(file: UploadedImage | undefined): CheckedImag
 export { imageKeysIn } from '@iace/contracts';
 
 const IMG_TAG = /<img\b[^>]*>/gi;
+const IMG_OPEN = '<img';
 const DATA_KEY = /\bdata-key="([^"]+)"/i;
 // A single `\s`, never `\s+`: it backtracks, and `\s?` would match the src inside data-src.
 const SRC_ATTR = /\ssrc="[^"]*"/gi;
@@ -91,16 +92,13 @@ export function stripImageSrc(html: string): string {
     .replace(IMG_TAG, (tag) => tag.replace(DATA_URI_SRC, ''));
 }
 
-/** Puts a freshly signed src back for the reader. Content on disk still holds only the key. */
+/** Serves only a src it just signed: content stored before the write guard may point anywhere. */
 export function applyImageUrls(html: string, urls: ReadonlyMap<string, string>): string {
-  return html.replace(IMG_TAG, (tag) => {
+  return withoutForeignImages(html).replace(IMG_TAG, (tag) => {
+    const bare = tag.replace(SRC_ATTR, '');
     const key = DATA_KEY.exec(tag)?.[1];
     const url = key ? urls.get(key) : undefined;
-    if (!url) return tag;
-
-    // Sliced rather than matched: every tag here ends in `>`, so a regex only adds backtracking.
-    const bare = tag.replace(SRC_ATTR, '');
-    const open = bare.endsWith('/>') ? bare.slice(0, -2) : bare.slice(0, -1);
-    return `${open.trimEnd()} src="${url}">`;
+    // First, because a parser keeps the first of two srcs, however the other one was quoted.
+    return url ? `${IMG_OPEN} src="${url}"${bare.slice(IMG_OPEN.length)}` : bare;
   });
 }

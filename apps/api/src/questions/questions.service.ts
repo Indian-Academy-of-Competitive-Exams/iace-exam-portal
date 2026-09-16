@@ -108,8 +108,6 @@ export class QuestionsService {
     const keys = new Set(
       details.flatMap((detail) => mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn)),
     );
-    if (keys.size === 0) return details;
-
     const urls = new Map(
       await Promise.all(
         [...keys].map(
