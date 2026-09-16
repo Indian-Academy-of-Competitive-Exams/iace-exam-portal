@@ -541,6 +541,8 @@ model PaperQuestion {
   marks               Decimal             @db.Decimal(6, 2)
   negativeMarks       Decimal             @db.Decimal(6, 2)
   status              PaperQuestionStatus @default(ACTIVE)
+  // The pinned version's option ids in stored order, copied by trigger; an answer sheet stores a position into this.
+  optionIds           String[]            @default([])
 
   test              Test               @relation(fields: [testId, baseConfigId], references: [id, baseConfigId], onDelete: Cascade, onUpdate: NoAction)
   baseConfigSection BaseConfigSection  @relation(fields: [baseConfigId, baseConfigSectionId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
@@ -596,6 +598,7 @@ model Attempt {
   test             Test              @relation(fields: [testId], references: [id])
   student          Student           @relation(fields: [studentId], references: [id])
   questions        AttemptQuestion[]
+  sheet            AttemptSheet?
   processedRollups ProcessedRollup[]
   topperOf         TestStat[]
 
@@ -637,6 +640,16 @@ model AttemptQuestion {
   @@index([paperQuestionId])
   @@index([baseConfigSectionId])
   @@index([attemptId, order])
+}
+
+// One sitting's answers in one row: `answers` holds a slot per paper row in paper order, `verdicts` the scorer's marks for each.
+model AttemptSheet {
+  attemptId String   @id
+  answers   Json
+  verdicts  Json?
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
 }
 
 // ============================================================================
