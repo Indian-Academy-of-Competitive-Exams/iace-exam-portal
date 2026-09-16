@@ -131,8 +131,9 @@ export function TestInstructionsPage() {
 
         {fullscreen.isSupported ? (
           <Alert variant="info">
-            The paper opens full screen, and leaving it is recorded. Your mobile number is printed
-            faintly across every question, so a photograph of one leads back to you.
+            The paper opens full screen, and the clock keeps running if you leave it. Your mobile
+            number is printed faintly across every question, so a photograph of one leads back to
+            you.
           </Alert>
         ) : null}
 
