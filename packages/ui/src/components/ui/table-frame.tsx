@@ -92,7 +92,7 @@ function FrameFilterRow({
       className={cn(
         'shrink-0 [--surface:var(--background)]',
         // Beside a title the controls belong at the region's edge, not adrift in the middle.
-        beside && 'flex min-w-0 flex-1 justify-end',
+        beside && 'flex min-w-0 flex-auto justify-end',
       )}
     >
       <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
@@ -150,7 +150,7 @@ function FrameTop({
   if (beside) {
     return (
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
-        <div className="min-w-0 flex-1">{header}</div>
+        <div className="min-w-0 flex-auto">{header}</div>
         <FrameFilterRow filters={filters} beside />
       </div>
     );
