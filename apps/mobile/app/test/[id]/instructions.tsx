@@ -111,8 +111,8 @@ function InstructionsContent({
       <SystemCheck />
 
       <Alert>
-        Leaving this screen once the paper is open is recorded, and your mobile number is printed
-        faintly across every question.
+        Leaving the app once the paper is open does not stop the clock, and your mobile number is
+        printed faintly across every question.
       </Alert>
 
       {dual ? (
