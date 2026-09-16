@@ -57,12 +57,14 @@ const DROPPED = new Set([
 ]);
 
 const MATH_CLASS = 'math-render';
+const IMAGE_KEY = 'data-key';
 const SCROLL_CLASS = 'rich-scroll';
 
 /** Anything that is not a fetchable image — `javascript:` above all — loses the tag with it. */
 function drawable(src: string): boolean {
   try {
     const url = new URL(src, 'https://iace.invalid/');
+    // `http:` stays: local MinIO signs plain http urls, and this runs with no environment to ask.
     return url.protocol === 'https:' || url.protocol === 'http:';
   } catch {
     return false;
@@ -87,8 +89,10 @@ function keepAttributes(element: Element, allowed: readonly string[]): void {
   }
 }
 
+// Read before keepAttributes strips the key: only a src the server signed arrives carrying one.
 const undrawable = (element: Element): boolean =>
-  element.tagName === 'IMG' && !drawable(element.getAttribute('src') ?? '');
+  element.tagName === 'IMG' &&
+  (!element.getAttribute(IMAGE_KEY) || !drawable(element.getAttribute('src') ?? ''));
 
 function clean(element: Element, document: Document): void {
   const authored = element instanceof HTMLElement ? element.dataset : undefined;
