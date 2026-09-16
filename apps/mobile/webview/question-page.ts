@@ -7,6 +7,7 @@
 import { richHtml } from '../../../packages/ui/src/lib/rich-html';
 import {
   PAGE_MESSAGE,
+  PRELOAD_IMAGES,
   SHOW_QUESTION,
   type PageMessage,
   type QuestionScreen,
@@ -198,5 +199,21 @@ root.addEventListener('pointerup', release);
 root.addEventListener('pointercancel', release);
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 
-Object.assign(window, { [SHOW_QUESTION]: show });
+// Sanitised first, so only an image richHtml would actually draw is ever fetched; parsed inert, so none of this touches the visible page.
+function preload(html: readonly string[]): void {
+  const seen = new Set<string>();
+  for (const raw of html) {
+    const holder = document.createElement('template');
+    holder.innerHTML = richHtml(raw);
+    for (const image of holder.content.querySelectorAll('img')) {
+      const src = image.getAttribute('src');
+      if (src !== null && !seen.has(src)) {
+        seen.add(src);
+        new Image().src = src;
+      }
+    }
+  }
+}
+
+Object.assign(window, { [SHOW_QUESTION]: show, [PRELOAD_IMAGES]: preload });
 post({ type: PAGE_MESSAGE.READY });

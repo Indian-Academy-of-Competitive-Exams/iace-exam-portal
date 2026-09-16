@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { type LiveAttempt } from '@iace/contracts';
+import { type ExamQuestion, type LiveAttempt } from '@iace/contracts';
 import { useExamView, type EndedSitting, type ExamSitting, type ExamView } from '@iace/app-kit';
 import { api } from '../../src/lib/api';
 import {
@@ -25,6 +25,9 @@ import { appStateSource, useAppFocus } from '../../src/components/exam/use-app-f
 import { ExamSkin } from '../../src/components/exam/exam-skin';
 import { Button } from '../../src/components/ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
+
+/** Stable identity: a `[]` literal at the call site would re-run the preload memo on every render. */
+const NO_QUESTIONS: readonly ExamQuestion[] = [];
 
 export default function ExamScreen() {
   const { testId = '', [EXAM_LANGUAGES_PARAM]: languagesParam } = useLocalSearchParams<{
@@ -110,7 +113,7 @@ export default function ExamScreen() {
 
   return (
     <View className="flex-1">
-      <ExamSkin view={view} />
+      <ExamSkin view={view} paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS} />
       {paper.data && attempt.data ? (
         <SittingEngine
           paper={paper.data.paper}

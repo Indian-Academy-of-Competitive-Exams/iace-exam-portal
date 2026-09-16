@@ -10,8 +10,11 @@ export const PAGE_MESSAGE = {
   BUBBLE: 'BUBBLE',
 } as const;
 
-/** The page's one entry point: native calls it with the whole screen, every time. */
+/** Native calls this with the whole screen, every time. */
 export const SHOW_QUESTION = 'iaceShowQuestion' as const;
+
+/** Native calls this once per READY, with every shown-language question HTML string to cache images from. */
+export const PRELOAD_IMAGES = 'iacePreloadImages' as const;
 
 export type PageMessage =
   | { type: typeof PAGE_MESSAGE.READY }

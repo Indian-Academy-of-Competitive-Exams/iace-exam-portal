@@ -4,14 +4,21 @@
  * native state goes in whole on every change, and a tap comes back only as an
  * intent that `readPageMessage` has vouched for.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import { type ExamQuestion } from '@iace/contracts';
 import { QUESTION_PAGE_HTML } from '../../../webview/dist/question-page';
 import { Skeleton } from '../ui/skeleton';
 import { PAGE_MESSAGE, type QuestionScreen } from './question-bridge';
-import { questionScreen, readPageMessage, showScript, type ScreenInput } from './question-protocol';
+import {
+  preloadHtmlOf,
+  preloadScript,
+  questionScreen,
+  readPageMessage,
+  showScript,
+  type ScreenInput,
+} from './question-protocol';
 
 /** An inline HTML source loads at about:blank on both platforms, and nothing else may load. */
 const PAGE_URL = 'about:blank';
@@ -33,6 +40,8 @@ const NOTHING_ON_SCREEN: QuestionScreen = {
 export interface QuestionContentProps extends Omit<ScreenInput, 'question'> {
   /** Absent while the paper is on its way: the page still loads, so its cost is not the clock's. */
   question: ExamQuestion | undefined;
+  /** Every question in the paper, all sections — for pre-loading images, never for navigation. */
+  paperQuestions: readonly ExamQuestion[];
   onSelect: (optionId: string) => void;
   onBubble: (optionId: string, fill: number) => void;
 }
@@ -41,24 +50,40 @@ export function QuestionContent({
   onSelect,
   onBubble,
   question,
+  paperQuestions,
   ...input
 }: Readonly<QuestionContentProps>) {
   const web = useRef<WebView>(null);
   const { fontScale } = useWindowDimensions();
   // Bumped when the page says it is ready and after every intent, so the page redraws native's truth.
   const [echo, setEcho] = useState(0);
+  // Bumped only on READY, since a full re-send belongs to a fresh page, not to every tap.
+  const [readyTick, setReadyTick] = useState(0);
   const [pageKey, setPageKey] = useState(0);
   const screen = question ? questionScreen({ ...input, question }) : NOTHING_ON_SCREEN;
   const script = question ? showScript(screen) : null;
+  const preload = useMemo(
+    () =>
+      paperQuestions.length > 0
+        ? preloadScript(preloadHtmlOf(paperQuestions, input.languages, input.languageMode))
+        : null,
+    [paperQuestions, input.languages, input.languageMode],
+  );
 
   useEffect(() => {
     if (echo > 0 && script) web.current?.injectJavaScript(script);
   }, [script, echo]);
 
+  // Sent on READY, and again whenever the paper's questions arrive after a READY that found none yet.
+  useEffect(() => {
+    if (readyTick > 0 && preload) web.current?.injectJavaScript(preload);
+  }, [preload, readyTick]);
+
   const onMessage = (event: WebViewMessageEvent) => {
     const message = readPageMessage(event.nativeEvent.data, screen);
     if (message?.type === PAGE_MESSAGE.CHOOSE) onSelect(message.optionId);
     if (message?.type === PAGE_MESSAGE.BUBBLE) onBubble(message.optionId, message.fill);
+    if (message?.type === PAGE_MESSAGE.READY) setReadyTick((count) => count + 1);
     if (message) setEcho((count) => count + 1);
   };
 

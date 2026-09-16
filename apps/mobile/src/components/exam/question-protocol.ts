@@ -20,6 +20,7 @@ import {
 import { htmlOf, shownLanguages } from '@iace/app-kit';
 import {
   PAGE_MESSAGE,
+  PRELOAD_IMAGES,
   SHOW_QUESTION,
   type PageMessage,
   type QuestionScreen,
@@ -70,6 +71,24 @@ export function questionScreen({
 /** JSON is valid JavaScript, so the screen goes in as a literal and is never parsed from a string. */
 export const showScript = (screen: QuestionScreen): string =>
   `window.${SHOW_QUESTION}(${JSON.stringify(screen)});true;`;
+
+/** Every shown-language stem and option, raw and deduped; the page sanitises before it looks for images. */
+export function preloadHtmlOf(
+  questions: readonly ExamQuestion[],
+  languages: readonly LanguageCode[],
+  languageMode: LanguageMode,
+): readonly string[] {
+  const shown = shownLanguages(languages, languageMode).map(contentLanguageOf);
+  const html = questions.flatMap((question) => [
+    ...shown.map((language) => htmlOf(question.content[language]?.stem)),
+    ...question.options.flatMap((option) => shown.map((language) => htmlOf(option.text[language]))),
+  ]);
+  return [...new Set(html)];
+}
+
+/** Same JSON-literal pattern as `showScript`; the page reads the array itself, native never parses HTML. */
+export const preloadScript = (html: readonly string[]): string =>
+  `window.${PRELOAD_IMAGES}(${JSON.stringify(html)});true;`;
 
 const optionIdSchema = z.string().min(1);
 

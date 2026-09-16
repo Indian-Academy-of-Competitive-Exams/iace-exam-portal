@@ -7,7 +7,7 @@
 import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI } from '@iace/contracts';
+import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { plural } from '../../lib/plural';
@@ -25,6 +25,7 @@ const MOBILE_SKIN = EXAM_TEMPLATE.DEFAULT;
 /** Before the paper lands: the page loads and waits, and a tap has nothing to reach. */
 const WAITING: QuestionContentProps = {
   question: undefined,
+  paperQuestions: [],
   languages: [],
   languageMode: LANGUAGE_MODE.SINGLE,
   testUi: TEST_UI.CBT,
@@ -38,7 +39,13 @@ const WAITING: QuestionContentProps = {
 /** Enough repeats to reach the corners of a tall phone without measuring it. */
 const WATERMARK_TILES = Array.from({ length: 24 }, (_, index) => index);
 
-export function ExamSkin({ view }: Readonly<{ view: ExamView | null }>) {
+export interface ExamSkinProps {
+  view: ExamView | null;
+  /** The paper's full question list, all sections, so a dead zone still shows a figure not yet reached. */
+  paperQuestions: readonly ExamQuestion[];
+}
+
+export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
   const insets = useSafeAreaInsets();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -49,7 +56,7 @@ export function ExamSkin({ view }: Readonly<{ view: ExamView | null }>) {
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
     >
       {view ? <SittingHead view={view} onPalette={() => setPaletteOpen(true)} /> : <OpeningBar />}
-      <QuestionBody view={view} />
+      <QuestionBody view={view} paperQuestions={paperQuestions} />
       {view ? (
         <SittingFoot
           view={view}
@@ -160,13 +167,17 @@ function SectionTab({
   );
 }
 
-function QuestionBody({ view }: Readonly<{ view: ExamView | null }>) {
+function QuestionBody({
+  view,
+  paperQuestions,
+}: Readonly<{ view: ExamView | null; paperQuestions: readonly ExamQuestion[] }>) {
   return (
     <View className="relative flex-1">
       {/* One slot, one type in both branches: React keeps the same WebView when the paper lands. */}
       {view ? (
         <QuestionContent
           question={view.question}
+          paperQuestions={paperQuestions}
           languages={view.languages}
           languageMode={view.languageMode}
           testUi={view.testUi}
@@ -177,7 +188,7 @@ function QuestionBody({ view }: Readonly<{ view: ExamView | null }>) {
           onBubble={view.bubbleAnswer}
         />
       ) : (
-        <QuestionContent {...WAITING} />
+        <QuestionContent {...WAITING} paperQuestions={paperQuestions} />
       )}
 
       {view && !view.question ? (
