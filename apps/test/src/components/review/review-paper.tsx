@@ -23,7 +23,7 @@ import {
   type ScoreCardQuestion,
   type SolutionQuestion,
 } from '@iace/contracts';
-import { htmlOf, shownLanguages } from '../exam/content';
+import { htmlOf, shownLanguages } from '@iace/app-kit';
 
 /** One question as the review holds it: always their own answer, and the key only past the gate. */
 export type ReviewedQuestion = ScoreCardQuestion & Partial<SolutionQuestion>;
