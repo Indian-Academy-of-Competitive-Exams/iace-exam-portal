@@ -40,10 +40,19 @@ export interface BuiltQuestion {
 /** Markup is not content: the `<p></p>` an emptied editor box posts is an unanswered field. */
 const blank = (value: string | undefined): boolean => !hasText(value);
 
-/** The one place content is written, so sanitizing, the div root and the src stripping happen here only. */
+const sanitizePass = (html: string): string =>
+  asContentHtml(stripImageSrc(sanitizeContentHtml(html)));
+
+/** One node's html: sanitised, src-stripped, div-rooted. Twice, so a re-run over stored bytes is a no-op. */
+export function sanitizeContentNode(html: string): string {
+  return sanitizePass(sanitizePass(html));
+}
+
+/** The one place content is written, so the shared node transform runs here and only here. */
 const textNode = (value: string | undefined): RichContent => {
-  const safe = value === undefined || blank(value) ? '' : sanitizeContentHtml(value);
-  return blank(safe) ? [] : [{ type: 'TEXT', text: asContentHtml(stripImageSrc(safe)) }];
+  if (value === undefined || blank(value)) return [];
+  const text = sanitizeContentNode(value);
+  return blank(text) ? [] : [{ type: 'TEXT', text }];
 };
 
 /**
