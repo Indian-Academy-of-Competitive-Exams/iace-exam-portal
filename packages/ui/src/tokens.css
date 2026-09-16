@@ -549,8 +549,9 @@
    edit, and re-skinning to an exact exam means editing one block.
    ========================================================================== */
 
-/* Default — the polished house skin: softer contrast, roomier cells. */
-[data-exam-template='default'] {
+/* Default — the polished house skin; the class is React Native's way in, as NativeWind drops attribute selectors. */
+[data-exam-template='default'],
+.exam-template-default {
   --exam-surface: var(--surface);
   --exam-surface-2: var(--surface-2);
   --exam-ink: var(--foreground);
