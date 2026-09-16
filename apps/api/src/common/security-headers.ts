@@ -19,6 +19,9 @@ export const helmetOptions: HelmetOptions = {
   contentSecurityPolicy: { useDefaults: false, directives: DIRECTIVES },
 };
 
+/** How long a browser may skip the preflight. Chromium caps it here; without it, five seconds. */
+export const PREFLIGHT_CACHE_SEC = 7200;
+
 /** In production the env schema has already refused an empty list, so `false` only ever bites in dev. */
 export function corsOrigin(origins: readonly string[], isProduction: boolean): string[] | boolean {
   if (origins.length > 0) return [...origins];
