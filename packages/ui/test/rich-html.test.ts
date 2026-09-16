@@ -74,7 +74,7 @@ describe('richHtml', () => {
   });
 
   /** A parser reads `<image>` as `<img>`, which a server-side pattern looking for `<img` misses. */
-  it('drops the keyless image a parser makes out of an image tag', () => {
+  it('drops a keyless <image> element a parser rewrites to an img', () => {
     assert.doesNotMatch(richHtml('<image src="https://tracker.example/x.gif">'), /<img/);
   });
 

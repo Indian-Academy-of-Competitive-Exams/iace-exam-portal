@@ -89,7 +89,7 @@ function keepAttributes(element: Element, allowed: readonly string[]): void {
   }
 }
 
-// Read before keepAttributes strips the key: only a src the server signed arrives carrying one.
+// Keeps an img only with a key and a drawable src; it cannot tell a signed key from an authored one.
 const undrawable = (element: Element): boolean =>
   element.tagName === 'IMG' &&
   (!element.getAttribute(IMAGE_KEY) || !drawable(element.getAttribute('src') ?? ''));
