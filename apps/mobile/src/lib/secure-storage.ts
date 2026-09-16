@@ -28,8 +28,12 @@ export function createSecureStorage(
     },
     hydrate: async () => {
       for (const key of keys) {
-        const held = await vault.getItemAsync(key);
-        if (held !== null) mirror.set(key, held);
+        try {
+          const held = await vault.getItemAsync(key);
+          if (held !== null) mirror.set(key, held);
+        } catch {
+          // Unreadable is the same as signed out — a corrupt keystore must not hang the splash.
+        }
       }
     },
   };

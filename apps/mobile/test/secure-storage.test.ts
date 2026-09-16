@@ -44,3 +44,17 @@ test('clearing removes it from both', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(vault.read()['iace.mobile.auth'], undefined);
 });
+
+test('a vault that rejects on read hydrates as signed-out, not a hung promise', async () => {
+  const vault = {
+    getItemAsync: async () => {
+      throw new Error('keystore unreadable');
+    },
+    setItemAsync: async () => {},
+    deleteItemAsync: async () => {},
+  };
+  const { storage, hydrate } = createSecureStorage(['iace.mobile.auth'], vault);
+
+  await assert.doesNotReject(hydrate());
+  assert.equal(storage.getItem('iace.mobile.auth'), null);
+});
