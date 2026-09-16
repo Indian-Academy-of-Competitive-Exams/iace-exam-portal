@@ -6,6 +6,8 @@ import {
   User,
   type LucideIcon,
 } from 'lucide-react-native';
+import { type LanguageCode } from '@iace/contracts';
+import { EXAM_LANGUAGES_PARAM } from './constants';
 
 /** Route paths for the tab shell — the tab layout's screen names and Home's CTA both read from here. */
 export const ROUTES = {
@@ -37,4 +39,8 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
 export const DETAIL_ROUTES = {
   SERIES: (seriesId: string) => `/series/${seriesId}` as const,
   TEST: (testId: string) => `/test/${testId}` as const,
+  TEST_INSTRUCTIONS: (testId: string) => `/test/${testId}/instructions` as const,
+  /** `/exam/[id]` does not exist until Task 6 starts the attempt on arrival there. */
+  EXAM: (testId: string, languages: readonly LanguageCode[]) =>
+    `/exam/${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}` as const,
 } as const;

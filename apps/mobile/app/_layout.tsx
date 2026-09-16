@@ -44,6 +44,8 @@ function Navigation() {
       <Stack.Protected guard={Boolean(identity)}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="series/[id]" options={{ headerShown: true }} />
+        <Stack.Screen name="test/[id]/index" options={{ headerShown: true }} />
+        <Stack.Screen name="test/[id]/instructions" options={{ headerShown: true }} />
       </Stack.Protected>
       <Stack.Protected guard={!identity}>
         <Stack.Screen name="login" />

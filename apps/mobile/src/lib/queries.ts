@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { api } from './api';
-import { CATALOG_QUERY_KEY, PERFORMANCE_QUERY_KEY } from './constants';
+import { briefQueryKey, CATALOG_QUERY_KEY, PERFORMANCE_QUERY_KEY } from './constants';
 
 /** The reads the tests tab and the series page share, each keyed once. */
 
@@ -13,3 +13,6 @@ export const performanceQuery = queryOptions({
   queryKey: PERFORMANCE_QUERY_KEY,
   queryFn: () => api.me.performance(),
 });
+
+export const briefQuery = (testId: string) =>
+  queryOptions({ queryKey: briefQueryKey(testId), queryFn: () => api.me.testBrief(testId) });

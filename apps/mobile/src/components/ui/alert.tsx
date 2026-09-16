@@ -6,6 +6,7 @@ import { cn } from '../../lib/cn';
 // No `--destructive-subtle` token exists, so danger reads as a solid fill rather than a tint.
 const VARIANTS = {
   info: { box: 'border-info bg-info-subtle', text: 'text-info-ink' },
+  warning: { box: 'border-warning bg-warning-subtle', text: 'text-warning-ink' },
   danger: { box: 'border-destructive bg-destructive', text: 'text-destructive-foreground' },
 } as const;
 
