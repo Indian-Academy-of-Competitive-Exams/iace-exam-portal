@@ -10,6 +10,7 @@
     "./eslint": "./eslint.config.js",
     "./eslint-react": "./eslint.react.config.js",
     "./eslint-no-dom": "./eslint.no-dom.js",
+    "./eslint-no-web-ui": "./eslint.no-web-ui.js",
     "./eslint-api-boundaries": "./eslint.api-boundaries.js"
   },
   "files": [
@@ -19,6 +20,7 @@
     "eslint.config.js",
     "eslint.react.config.js",
     "eslint.no-dom.js",
+    "eslint.no-web-ui.js",
     "eslint.api-boundaries.js",
     "eslint-rules"
   ],

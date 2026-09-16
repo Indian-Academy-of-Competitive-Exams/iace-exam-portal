@@ -1,0 +1,5 @@
+/* Relative path, not the @iace/ui specifier: that form hangs Metro's CSS transform as the first @import. */
+@import '../../packages/ui/src/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

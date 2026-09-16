@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "IACE",
+    "slug": "iace-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "iace-mobile",
+    "android": {
+      "package": "in.co.iace.mobile"
+    },
+    "plugins": ["expo-router"]
+  }
+}

@@ -17,13 +17,6 @@
    Your v0.1 colour work is preserved except two corrections, marked FIX.
    ========================================================================== */
 
-/* Self-hosted so a timed test never waits on a font CDN. Nunito is brand-only. */
-@import '@fontsource-variable/inter/wght.css';
-@import '@fontsource/nunito/latin-800.css';
-/* Each carries a unicode-range, so a question with no Indic glyph downloads neither. */
-@import '@fontsource-variable/noto-sans-devanagari/wght.css';
-@import '@fontsource-variable/noto-sans-telugu/wght.css';
-
 :root,
 :root[data-theme='light'] {
   color-scheme: light;

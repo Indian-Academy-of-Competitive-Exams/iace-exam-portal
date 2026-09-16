@@ -1,6 +1,7 @@
 // Design tokens first: every colour, radius and shadow in the app resolves
 // against these CSS variables. Static imports, so the bundler can see them.
 import '@iace/ui/tokens.css';
+import '@iace/ui/fonts.css';
 import '@iace/ui/components.css';
 // A paper carries equations, so the exam renders them with the same stylesheet the author saw.
 import '@iace/ui/katex.css';
