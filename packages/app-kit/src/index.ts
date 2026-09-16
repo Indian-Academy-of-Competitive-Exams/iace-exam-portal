@@ -6,11 +6,17 @@ export {
 } from './token-store';
 export { type SignOutSignal } from './sign-out-signal';
 export { createAppApiClient } from './api-client';
+export { type AppApiClient } from './api-client';
 export { createAuth, type AuthState, type CreateAuthOptions } from './create-auth';
 export { createAppQueryClient, type AppMutationMeta, type Notifier } from './query-client';
 export { applyFieldErrors, bannerMessage } from './form-errors';
 export { numberOr, optionalNumber } from './form-numbers';
 export { autosaveDelayMs, seedRevision, shouldFlushNow } from './autosave-policy';
+export {
+  useAttemptState,
+  type AnswerIntent,
+  type AttemptStateHandle,
+} from './exam/use-attempt-state';
 export { pollDelayMs, shouldKeepPolling } from './poll-policy';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';

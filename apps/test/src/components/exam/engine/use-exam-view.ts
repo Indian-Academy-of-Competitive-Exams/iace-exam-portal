@@ -20,9 +20,9 @@ import {
   type SectionEffort,
 } from '@iace/contracts';
 import { useFullscreen } from '@iace/app-kit/browser';
+import { useAttemptState, type AnswerIntent } from '@iace/app-kit';
 import { api } from '../../../lib/api';
 import { CATALOG_QUERY_KEY } from '../../../lib/constants';
-import { useAttemptState, type AnswerIntent } from '../../../lib/use-attempt-state';
 import type { ExamView } from './exam-view';
 
 /** What the sitting knows about itself the moment it ends, before anything has been marked. */
@@ -57,7 +57,7 @@ export function useExamView({
   const queryClient = useQueryClient();
   const fullscreen = useFullscreen();
   const [ignoringFullscreen, setIgnoringFullscreen] = useState(0);
-  const state = useAttemptState(paper.attemptId);
+  const state = useAttemptState(paper.attemptId, api);
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);

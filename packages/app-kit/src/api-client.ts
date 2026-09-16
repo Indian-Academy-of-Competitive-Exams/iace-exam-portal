@@ -24,3 +24,6 @@ export function createAppApiClient(options: {
     },
   });
 }
+
+/** The whole typed client, as the one seam a portable hook takes instead of importing an app's. */
+export type AppApiClient = ReturnType<typeof createAppApiClient>;

@@ -4,7 +4,7 @@
  * on the server, and what a save could not deliver stays queued for the next one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { autosaveDelayMs, seedRevision, shouldFlushNow } from '@iace/app-kit';
+import { autosaveDelayMs, seedRevision, shouldFlushNow } from '../autosave-policy';
 import {
   ANSWER_STATE,
   type AnswerChange,
@@ -12,7 +12,7 @@ import {
   type LiveAnswer,
   type SectionProgress,
 } from '@iace/contracts';
-import { api } from './api';
+import { type AppApiClient } from '../api-client';
 
 export interface AttemptStateHandle {
   answers: Readonly<Record<string, LiveAnswer>>;
@@ -48,7 +48,7 @@ export interface AnswerIntent {
   marked?: boolean;
 }
 
-export function useAttemptState(attemptId: string): AttemptStateHandle {
+export function useAttemptState(attemptId: string, api: AppApiClient): AttemptStateHandle {
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>({});
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
   const [isSaving, setIsSaving] = useState(false);
