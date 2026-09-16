@@ -3,7 +3,7 @@ import noWebUi from '@iace/config/eslint-no-web-ui';
 
 /** Native build output the shared ignores (dist/node_modules/.turbo) don't know about. */
 export default [
-  { ignores: ['.expo/**', 'android/**', 'ios/**'] },
+  { ignores: ['.expo/**', 'android/**', 'ios/**', 'webview/dist/**'] },
   ...config,
   ...noWebUi,
   {
