@@ -4,6 +4,8 @@
  * screen that finds itself out of fullscreen can only ask, not take.
  */
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { type FullscreenHandle } from '../src/exam/focus-guard';
+export { type FullscreenHandle };
 
 /** Safari still answers to the prefixed names, and students sit exams on iPads. */
 interface PrefixedDocument extends Document {
@@ -18,17 +20,6 @@ const elementOf = (): Element | null => {
   const doc = document as PrefixedDocument;
   return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
 };
-
-export interface FullscreenHandle {
-  isFullscreen: boolean;
-  /** False where the browser has no Fullscreen API at all — then nothing here is asked for. */
-  isSupported: boolean;
-  /** How many times it has been left since this page loaded. */
-  exits: number;
-  enter: () => Promise<void>;
-  /** Hands the screen back when the sitting is over; a caller that also counts exits must ignore its own. */
-  exit: () => Promise<void>;
-}
 
 /** Subscribed rather than mirrored into state: the DOM owns this, and it is right on the first render. */
 function subscribe(onChange: () => void): () => void {

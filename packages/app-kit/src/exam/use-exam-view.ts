@@ -5,7 +5,7 @@
  * that is read from the config rather than branched into a second screen.
  */
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
   omrStateFor,
@@ -19,11 +19,17 @@ import {
   type ExamPaper,
   type SectionEffort,
 } from '@iace/contracts';
-import { useFullscreen } from '@iace/app-kit/browser';
-import { useAttemptState, type AnswerIntent } from '@iace/app-kit';
-import { api } from '../../../lib/api';
-import { CATALOG_QUERY_KEY } from '../../../lib/constants';
+import { type AppApiClient } from '../api-client';
+import { type FullscreenHandle } from './focus-guard';
+import { useAttemptState, type AnswerIntent } from './use-attempt-state';
 import type { ExamView } from './exam-view';
+
+/** What the engine cannot know: whose API, whose cache key, and how this platform reports focus. */
+export interface ExamEngineDeps {
+  api: AppApiClient;
+  focus: FullscreenHandle;
+  catalogQueryKey: QueryKey;
+}
 
 /** What the sitting knows about itself the moment it ends, before anything has been marked. */
 export interface EndedSitting {
@@ -47,15 +53,11 @@ export interface ExamSitting {
 const isMarked = (state: string | undefined): boolean =>
   state === ANSWER_STATE.MARKED_REVIEW || state === ANSWER_STATE.ANSWERED_MARKED;
 
-export function useExamView({
-  paper,
-  arrivedAt,
-  title,
-  watermark,
-  onEnded,
-}: Readonly<ExamSitting>): ExamView {
+export function useExamView(
+  { paper, arrivedAt, title, watermark, onEnded }: Readonly<ExamSitting>,
+  { api, focus, catalogQueryKey }: Readonly<ExamEngineDeps>,
+): ExamView {
   const queryClient = useQueryClient();
-  const fullscreen = useFullscreen();
   const [ignoringFullscreen, setIgnoringFullscreen] = useState(0);
   const state = useAttemptState(paper.attemptId, api);
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
@@ -84,9 +86,9 @@ export function useExamView({
     },
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done, and the server has already dropped its own copy.
-      await queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: catalogQueryKey });
       // The hall gives the screen back before the next one draws; `nagging` is already stood down.
-      await fullscreen.exit();
+      await focus.exit();
       onEnded({
         attemptId: submitted.attemptId,
         sections: effort,
@@ -140,10 +142,10 @@ export function useExamView({
   const nagging =
     !submit.isSuccess &&
     !submit.isPending &&
-    fullscreen.isSupported &&
-    !fullscreen.isFullscreen &&
-    fullscreen.exits > 0 &&
-    fullscreen.exits > ignoringFullscreen;
+    focus.isSupported &&
+    !focus.isFullscreen &&
+    focus.exits > 0 &&
+    focus.exits > ignoringFullscreen;
 
   return {
     title: title ?? 'Your test',
@@ -210,9 +212,9 @@ export function useExamView({
 
     fullscreen: {
       nagging,
-      exits: fullscreen.exits,
-      enter: () => void fullscreen.enter(),
-      ignore: () => setIgnoringFullscreen(fullscreen.exits),
+      exits: focus.exits,
+      enter: () => void focus.enter(),
+      ignore: () => setIgnoringFullscreen(focus.exits),
     },
   };
 }

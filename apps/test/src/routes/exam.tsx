@@ -7,11 +7,12 @@ import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
+import { useExamView, type EndedSitting } from '@iace/app-kit';
+import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { CATALOG_QUERY_KEY, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
-import { useExamView, type EndedSitting } from '../components/exam/engine/use-exam-view';
 
 interface BeganWith {
   languages?: LanguageCode[];
@@ -87,7 +88,8 @@ function ExamHall(
     onEnded: (ended: EndedSitting) => void;
   }>,
 ) {
-  const view = useExamView(sitting);
+  const focus = useFullscreen();
+  const view = useExamView(sitting, { api, focus, catalogQueryKey: CATALOG_QUERY_KEY });
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
 }

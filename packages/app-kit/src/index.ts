@@ -17,6 +17,14 @@ export {
   type AnswerIntent,
   type AttemptStateHandle,
 } from './exam/use-attempt-state';
+export { type FullscreenHandle } from './exam/focus-guard';
+export {
+  useExamView,
+  type ExamEngineDeps,
+  type ExamSitting,
+  type EndedSitting,
+} from './exam/use-exam-view';
+export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
 export { pollDelayMs, shouldKeepPolling } from './poll-policy';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';

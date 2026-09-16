@@ -5,8 +5,8 @@
  */
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, ConfirmDialog, plural } from '@iace/ui';
+import { type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
-import type { ExamView } from './exam-view';
 
 export function ExamShell({
   examTemplate,

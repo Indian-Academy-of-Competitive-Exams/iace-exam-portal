@@ -15,12 +15,11 @@ import {
   PageHeader,
   plural,
 } from '@iace/ui';
-import { pollDelayMs, shouldKeepPolling } from '@iace/app-kit';
+import { pollDelayMs, shouldKeepPolling, type EndedSitting } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { scoreCardQuery } from '../lib/queries';
 import { DividedList, DividedRow, PageBody, Section } from '../components/ui';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
-import { type EndedSitting } from '../components/exam/engine/use-exam-view';
 
 /** A queued marking job is the only reason the card 409s; anything else is a real failure. */
 const isPending = (error: unknown): boolean =>
