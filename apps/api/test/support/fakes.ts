@@ -222,6 +222,7 @@ const DEFAULT_ENV = {
   OTP_TTL_SEC: 300,
   OTP_RESEND_COOLDOWN_SEC: 45,
   OTP_MAX_VERIFY_ATTEMPTS: 5,
+  OTP_MAX_PER_DAY: 5,
   OTP_SENDER: 'console',
   PIN_PEPPER: 'pin-pepper-that-is-long-enough-000000',
   PIN_MAX_ATTEMPTS: 5,

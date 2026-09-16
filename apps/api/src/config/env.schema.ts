@@ -92,6 +92,7 @@ export const envSchema = z.object({
   OTP_TTL_SEC: z.coerce.number().int().positive().default(300),
   OTP_RESEND_COOLDOWN_SEC: z.coerce.number().int().nonnegative().default(45),
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  OTP_MAX_PER_DAY: z.coerce.number().int().positive().default(5),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
   // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the
