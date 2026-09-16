@@ -55,7 +55,7 @@ describe('PaperQuestion triggers', () => {
     assert.deepEqual(row.optionIds, await optionIdsOf(other.versionId));
   });
 
-  it('refuses to add, remove or reprice a row once somebody has sat the paper', async () => {
+  it('refuses to add, remove, reprice, repoint or reorder a row once somebody has sat the paper', async () => {
     const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
     const [first] = paper.items;
     await sitPaper(prisma, {
@@ -75,6 +75,20 @@ describe('PaperQuestion triggers', () => {
       prisma.paperQuestion.update({
         where: { id: first?.paperQuestionId ?? '' },
         data: { marks: 3 },
+      }),
+      SAT_PAPER,
+    );
+    await assert.rejects(
+      prisma.paperQuestion.update({
+        where: { id: first?.paperQuestionId ?? '' },
+        data: { questionId: extra.id, questionVersionId: extra.versionId },
+      }),
+      SAT_PAPER,
+    );
+    await assert.rejects(
+      prisma.paperQuestion.update({
+        where: { id: first?.paperQuestionId ?? '' },
+        data: { order: 9 },
       }),
       SAT_PAPER,
     );

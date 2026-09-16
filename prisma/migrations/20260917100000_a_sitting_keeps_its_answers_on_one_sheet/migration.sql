@@ -32,6 +32,8 @@ ALTER TABLE "AttemptSheet" ADD CONSTRAINT "AttemptSheet_attemptId_fkey" FOREIGN 
 
 ALTER TABLE "AttemptSheet" SET (fillfactor = 50);
 
+ALTER TABLE "AttemptSheet" ADD CONSTRAINT "AttemptSheet_answers_is_array" CHECK (jsonb_typeof("answers") = 'array');
+
 -- The pinned version's option ids, in stored order, onto every paper row.
 CREATE FUNCTION paper_question_option_ids() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -48,7 +50,7 @@ BEGIN
 END $$;
 
 CREATE TRIGGER paper_question_option_ids
-  BEFORE INSERT OR UPDATE OF "questionVersionId" ON "PaperQuestion"
+  BEFORE INSERT OR UPDATE OF "questionVersionId", "optionIds" ON "PaperQuestion"
   FOR EACH ROW EXECUTE FUNCTION paper_question_option_ids();
 
 UPDATE "PaperQuestion" SET "questionVersionId" = "questionVersionId";
@@ -114,16 +116,16 @@ WHERE NOT EXISTS (SELECT 1 FROM "AttemptSheet" sheet WHERE sheet."attemptId" = s
 -- Once anyone has sat a test, its paper rows may only change status.
 CREATE FUNCTION paper_question_sat_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM "Attempt" WHERE "testId" IN (NEW."testId", OLD."testId")) THEN
-    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  -- A status-only update (a drop, a bonus) never blocks a student starting: no lock, no lookup.
+  IF TG_OP = 'UPDATE' AND (to_jsonb(NEW) - 'status') IS NOT DISTINCT FROM (to_jsonb(OLD) - 'status') THEN
     RETURN NEW;
   END IF;
-  IF TG_OP = 'UPDATE' AND
-     (NEW."testId", NEW."baseConfigId", NEW."baseConfigSectionId", NEW."questionId", NEW."questionVersionId",
-      NEW."order", NEW."marks", NEW."negativeMarks", NEW."optionIds")
-     IS NOT DISTINCT FROM
-     (OLD."testId", OLD."baseConfigId", OLD."baseConfigSectionId", OLD."questionId", OLD."questionVersionId",
-      OLD."order", OLD."marks", OLD."negativeMarks", OLD."optionIds") THEN
+  -- FOR UPDATE on the paper's Test row conflicts with the KEY SHARE lock an Attempt insert's FK
+  -- check takes on that same row, so a real paper edit and the first sitting serialize here
+  -- instead of racing the EXISTS below.
+  PERFORM 1 FROM "Test" WHERE "id" IN (NEW."testId", OLD."testId") FOR UPDATE;
+  IF NOT EXISTS (SELECT 1 FROM "Attempt" WHERE "testId" IN (NEW."testId", OLD."testId")) THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
   END IF;
   RAISE EXCEPTION 'A paper somebody has sat cannot change: only a question''s status may move'
