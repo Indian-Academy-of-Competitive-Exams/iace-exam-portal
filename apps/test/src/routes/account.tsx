@@ -1,12 +1,12 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PIN_LENGTH, changePinSchema, type ChangePinInput } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { Alert, Button, PageFrame, PageHeader, PinField } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS } from '../lib/constants';
+import { ACTIVE_DEVICES_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
 import { PageBody, SurfaceCard } from '../components/ui';
 import { ActiveDevices } from '../components/account/active-devices';
 import { useAuth } from '../providers/auth';
@@ -34,6 +34,7 @@ export function AccountPage() {
 
 export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean }>) {
   const { signIn } = useAuth();
+  const queryClient = useQueryClient();
 
   const form = useForm<ChangePinInput>({
     resolver: zodResolver(changePinSchema),
@@ -47,6 +48,8 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
       form.reset();
       // Not optional: the change revoked every session opened with the old PIN, including this one.
       signIn(session);
+      // The change ended every other session, so the list below is out of date.
+      void queryClient.invalidateQueries({ queryKey: ACTIVE_DEVICES_QUERY_KEY });
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
   });

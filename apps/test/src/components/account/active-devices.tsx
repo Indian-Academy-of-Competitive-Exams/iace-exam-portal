@@ -52,10 +52,9 @@ function DeviceRow({ session }: Readonly<{ session: DeviceSession }>) {
   const signOut = useMutation({
     meta: { success: 'Signed out' },
     mutationFn: (id: string) => api.me.signOutSession(id),
-    onSuccess: () => {
-      setConfirming(false);
-      void queryClient.invalidateQueries({ queryKey: ACTIVE_DEVICES_QUERY_KEY });
-    },
+    onSuccess: () => setConfirming(false),
+    // Also on failure: a NOT_FOUND means the list is already out of date.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ACTIVE_DEVICES_QUERY_KEY }),
   });
 
   return (

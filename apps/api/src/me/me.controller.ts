@@ -204,7 +204,8 @@ export class MeController {
 
   /** Signs another of this student's devices out. Refused for the device asking, and for one that is not theirs. */
   @Delete('sessions/:id')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  // 200, not 204: Express drops a 204's body, and the client reads the envelope.
+  @HttpCode(HttpStatus.OK)
   signOutDevice(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<void> {
     return this.auth.signOutDevice(user, id);
   }

@@ -82,7 +82,8 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     useEffect(
       () =>
         signOutSignal.subscribe((reason) => {
-          setSignedOutReason(reason ?? null);
+          // A later sign-out with no reason must not erase why the first one happened.
+          if (reason) setSignedOutReason(reason);
           clearSession();
         }),
       [clearSession],

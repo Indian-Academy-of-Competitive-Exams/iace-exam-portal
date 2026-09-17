@@ -472,10 +472,10 @@ export function createApiClient(options: ApiClientOptions) {
   }
 
   async function refreshTokens(): Promise<AuthTokens | null> {
+    refreshFailure = undefined;
     const refreshToken = getRefreshToken();
     if (!refreshToken) return null;
 
-    refreshFailure = undefined;
     try {
       const envelope = await parse(
         await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null),
@@ -519,13 +519,11 @@ export function createApiClient(options: ApiClientOptions) {
 
     if (!refreshed) {
       onUnauthorized?.(refreshFailure);
-      throw peeked
-        ? AppException.fromFailure(peeked, 401)
-        : new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
+      throw endedBy(refreshFailure, peeked);
     }
 
     const retried = await send(path, method, body, refreshed.accessToken);
-    if (retried.status === 401) onUnauthorized?.();
+    if (retried.status === 401) onUnauthorized?.(await failureOf(retried));
     return parse(retried, schema);
   }
 
@@ -1309,6 +1307,22 @@ function fileBody(file: File): FormData {
 }
 
 /** Reads a failure body. Outside the factory because it closes over nothing. */
+/** The typed failure a 401 carried, so a sign-out can say why. */
+async function failureOf(response: Response): Promise<AppException | undefined> {
+  const failed = await peekFailure(response);
+  return failed ? AppException.fromFailure(failed, response.status) : undefined;
+}
+
+/** Why a request is over: a replacement names itself, else the 401 that sent it to refresh. */
+function endedBy(
+  refreshFailure: AppException | undefined,
+  peeked: Awaited<ReturnType<typeof peekFailure>>,
+): AppException {
+  if (refreshFailure?.code === ErrorCodes.SESSION_REPLACED) return refreshFailure;
+  if (peeked) return AppException.fromFailure(peeked, 401);
+  return new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
+}
+
 async function peekFailure(response: Response) {
   try {
     const parsed = apiFailureSchema.safeParse(await response.clone().json());

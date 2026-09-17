@@ -160,7 +160,7 @@ export const PALETTE_LEGEND: readonly {
 /** The account screens, under the user menu, above Log out. */
 export const USER_MENU_ITEMS: readonly NavItem[] = [
   { to: ROUTES.PROFILE, label: 'Profile', icon: User },
-  { to: ROUTES.ACCOUNT, label: 'Change PIN', icon: KeyRound },
+  { to: ROUTES.ACCOUNT, label: 'Account', icon: KeyRound },
 ];
 
 /** The signed-in student's identity, cached under one key. */

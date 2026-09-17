@@ -216,8 +216,30 @@ describe('typed client — 401 handling', () => {
       { access: 'stale', refresh: 'r1' },
     );
 
-    await assert.rejects(api.request('/thing', { schema }));
+    await assert.rejects(
+      api.request('/thing', { schema }),
+      (e: unknown) => AppException.is(e) && e.code === 'SESSION_REPLACED',
+      'the replacement is the error, not the expired token that led to the refresh',
+    );
     assert.equal((causes[0] as AppException).code, 'SESSION_REPLACED');
+  });
+
+  it('says why when a replacement lands between the refresh and the retry', async () => {
+    const { api, causes } = clientWith(
+      [
+        failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
+        success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
+        failure(401, {
+          code: 'SESSION_REPLACED',
+          message: 'Replaced',
+          details: { replacedBy: 'WEB' },
+        }),
+      ],
+      { access: 'stale', refresh: 'r1' },
+    );
+
+    await assert.rejects(api.request('/thing', { schema }));
+    assert.equal((causes[0] as AppException | undefined)?.code, 'SESSION_REPLACED');
   });
 });
 
