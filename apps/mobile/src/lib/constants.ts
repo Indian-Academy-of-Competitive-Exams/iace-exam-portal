@@ -63,6 +63,9 @@ export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] 
 export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
   ['me', 'saved', kind, 'facets'] as const;
 
+/** The window is the server's to choose, so the key has nothing to vary on. */
+export const TEST_DAYS_QUERY_KEY = ['me', 'test-days'] as const;
+
 /** Their own record, under the web app's own key. */
 export const PROFILE_QUERY_KEY = ['me'] as const;
 
