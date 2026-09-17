@@ -1,12 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import {
-  ATTEMPT_STATUS,
-  NOTIFICATION_TYPE,
-  PAPER_QUESTION_STATUS,
-  type AttemptSectionScore,
-} from '@iace/contracts';
+import { ATTEMPT_STATUS, NOTIFICATION_TYPE, PAPER_QUESTION_STATUS } from '@iace/contracts';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { sectionScoresIn } from '../src/attempts/score-paper';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
@@ -98,7 +94,7 @@ describe('ScoringProcessor — what it writes', () => {
         [null, 0],
       ],
     );
-    assert.equal((attempt.sectionScores as AttemptSectionScore[] | null)?.[0]?.score, 1.5);
+    assert.equal(sectionScoresIn(attempt.sectionScores)?.[0]?.score, 1.5);
   });
 
   it('records the time the sitting took beside its marks, and never more than a day', async () => {

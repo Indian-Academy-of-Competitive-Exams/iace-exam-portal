@@ -16,7 +16,7 @@ import { timeTakenSec } from './leaderboard-score';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { NotificationOutbox } from '../notifications';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
-import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
+import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
 import { PaperSheetService, type LiveTerm, type PaperTerm } from './paper-sheet.service';
@@ -134,7 +134,7 @@ export class ScoringProcessor extends WorkerHost {
           correctCount: scored.correctCount,
           wrongCount: scored.wrongCount,
           unattemptedCount: scored.unattemptedCount,
-          sectionScores: scored.sections,
+          sectionScores: packedSections(scored.sections),
           timeTakenSec: timeTakenSec(attempt.startedAt, attempt.submittedAt),
         },
       });
