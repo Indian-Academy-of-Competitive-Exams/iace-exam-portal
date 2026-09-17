@@ -120,37 +120,46 @@ export class ScoringProcessor extends WorkerHost {
     terms: readonly PaperTerm[],
   ): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
-      // Claimed, never rewritten: two racing workers must not disagree about when this was scored.
-      const claimed = await tx.attempt.updateMany({
-        where: { id: attempt.id, evaluatedAt: null, status: { in: [...SCORABLE] } },
-        data: { evaluatedAt: new Date() },
-      });
-      // Guarded on the status this run READ: a void landing mid-score must not be written back.
-      const marked = await tx.attempt.updateMany({
-        where: { id: attempt.id, status: { in: [...SCORABLE] } },
-        data: {
-          status: ATTEMPT_STATUS.EVALUATED,
-          score: scored.score,
-          correctCount: scored.correctCount,
-          wrongCount: scored.wrongCount,
-          unattemptedCount: scored.unattemptedCount,
-          sectionScores: packedSections(scored.sections),
-          timeTakenSec: timeTakenSec(attempt.startedAt, attempt.submittedAt),
-        },
-      });
-      if (marked.count === 0) return { applied: false, evaluation: null };
+      const first = await this.mark(tx, attempt, scored);
+      if (first === null) return { applied: false, evaluation: null };
+
       await tx.attemptSheet.update({
         where: { attemptId: attempt.id },
         data: { verdicts: verdictsOf(scored.questions, terms) },
       });
-      // The claim's row count IS the signal: one row means nothing had evaluated this before.
-      if (claimed.count === 1) {
-        return { applied: true, evaluation: await this.announce(tx, attempt) };
-      }
+      if (first) return { applied: true, evaluation: await this.announce(tx, attempt) };
 
       await this.announceCorrection(tx, attempt, scored.score);
       return { applied: true, evaluation: null };
     });
+  }
+
+  /** Marks and claim in ONE write: true on a first evaluation, false on a re-score, null when the status moved. */
+  private async mark(
+    tx: Prisma.TransactionClient,
+    attempt: ScoringRow,
+    scored: PaperScore,
+  ): Promise<boolean | null> {
+    const now = new Date();
+    // Locked by the CTE, so the status this statement checks cannot move under it.
+    const rows = await tx.$queryRaw<{ first: boolean }[]>`
+      WITH held AS (
+        SELECT "id", "evaluatedAt" IS NULL AS first FROM "Attempt" WHERE "id" = ${attempt.id} FOR UPDATE
+      )
+      UPDATE "Attempt" a SET
+        "status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus",
+        "evaluatedAt" = COALESCE(a."evaluatedAt", ${now}),
+        "score" = ${scored.score},
+        "correctCount" = ${scored.correctCount},
+        "wrongCount" = ${scored.wrongCount},
+        "unattemptedCount" = ${scored.unattemptedCount},
+        "sectionScores" = ${JSON.stringify(packedSections(scored.sections))}::jsonb,
+        "timeTakenSec" = ${timeTakenSec(attempt.startedAt, attempt.submittedAt)},
+        "updatedAt" = ${now}
+      FROM held h
+      WHERE a."id" = h."id" AND a."status" = ANY(${[...SCORABLE]}::"AttemptStatus"[])
+      RETURNING h.first`;
+    return rows[0]?.first ?? null;
   }
 
   /** Written with the score's own transaction: an evaluated sitting always carries one of these. */
