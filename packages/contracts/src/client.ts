@@ -32,11 +32,13 @@ import {
   authSessionResponseSchema,
   authIdentitySchema,
   authTokensSchema,
+  deviceSessionSchema,
   otpRequestResponseSchema,
   pinSetupTicketSchema,
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
+  type DeviceSession,
   type OtpRequestResponse,
   type PinSetupTicket,
   type RequestAdminOtpInput,
@@ -648,6 +650,14 @@ export function createApiClient(options: ApiClientOptions) {
 
       changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
         write('POST', ME_ROUTES.changePin, authSessionResponseSchema, input),
+
+      /** Where this account is signed in, newest activity first; the asking device is marked. */
+      sessions: (): Promise<DeviceSession[]> =>
+        get(ME_ROUTES.sessions, deviceSessionSchema.array()),
+
+      /** Signs another device out. Refused for the device asking — use logout for that. */
+      signOutSession: (id: string): Promise<NoContent> =>
+        write('DELETE', ME_ROUTES.session(id), noContentSchema),
 
       /** Every series this student reaches, with what is open right now. */
       catalog: (): Promise<StudentCatalog> => get(ME_ROUTES.catalog, studentCatalogSchema),

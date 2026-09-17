@@ -96,6 +96,9 @@ export const ME_ROUTES = {
   document: (kind: DocumentKind) => `/me/documents/${kind}`,
   /** Irreversible, and not a delete: every sitting stays, and none of them names anybody. */
   erasure: '/me/erasure',
+  /** Where this student is signed in; DELETE on one signs that device out. */
+  sessions: '/me/sessions',
+  session: (id: string) => `/me/sessions/${id}`,
 } as const;
 
 /** The multipart field an upload arrives under. Server and client must agree. */

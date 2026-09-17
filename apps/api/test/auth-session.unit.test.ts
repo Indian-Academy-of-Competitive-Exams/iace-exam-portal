@@ -262,3 +262,55 @@ describe('SessionService — one session per app kind', () => {
     );
   });
 });
+
+describe('SessionService — active devices', () => {
+  const web = { ...NO_DEVICE, client: CLIENT_KINDS.WEB, deviceName: 'Chrome on macOS' };
+  const mobile = { ...NO_DEVICE, client: CLIENT_KINDS.MOBILE, deviceName: 'Pixel 8' };
+
+  it('lists both devices and marks the one asking', async () => {
+    const { sessions } = build();
+    const browser = await openSession(sessions, 'r1', web);
+    await openSession(sessions, 'r2', mobile);
+
+    const devices = await sessions.devicesFor(ActorTypes.STUDENT, SUBJECT, browser);
+    assert.equal(devices.length, 2);
+    assert.deepEqual(devices.map((d) => [d.deviceName, d.current]).sort(), [
+      ['Chrome on macOS', true],
+      ['Pixel 8', false],
+    ]);
+  });
+
+  it('signs another device out, with no replaced message for it', async () => {
+    const { sessions } = build();
+    const browser = await openSession(sessions, 'r1', web);
+    const phone = await openSession(sessions, 'r2', mobile);
+
+    await sessions.signOutOther(ActorTypes.STUDENT, SUBJECT, browser, phone);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, phone), false);
+    assert.equal(await sessions.replacedBy(ActorTypes.STUDENT, SUBJECT, phone), null);
+  });
+
+  it('refuses to sign out the device asking', async () => {
+    const { sessions } = build();
+    const browser = await openSession(sessions, 'r1', web);
+
+    await assert.rejects(
+      () => sessions.signOutOther(ActorTypes.STUDENT, SUBJECT, browser, browser),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.CONFLICT,
+    );
+  });
+
+  it("refuses another student's session as if it did not exist", async () => {
+    const { sessions } = build();
+    const mine = await openSession(sessions, 'r1', web);
+    const theirs = sessions.newSessionId();
+    await sessions.create(ActorTypes.STUDENT, 'stu_2', theirs, 'r9', web, TTL);
+
+    await assert.rejects(
+      () => sessions.signOutOther(ActorTypes.STUDENT, SUBJECT, mine, theirs),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.NOT_FOUND,
+    );
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, 'stu_2', theirs), true);
+  });
+});

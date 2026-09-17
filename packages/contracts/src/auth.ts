@@ -182,6 +182,21 @@ export const authSessionResponseSchema = z.object({
 export type AuthSessionResponse = z.infer<typeof authSessionResponseSchema>;
 
 // ============================================================================
+// Active devices — see ME_ROUTES.sessions / session
+// ============================================================================
+
+/** One place a student is signed in. `current` marks the device asking. */
+export const deviceSessionSchema = z.object({
+  id: z.string(),
+  client: clientKindSchema.nullable(),
+  deviceName: z.string().nullable(),
+  createdAt: z.string(),
+  lastSeenAt: z.string(),
+  current: z.boolean(),
+});
+export type DeviceSession = z.infer<typeof deviceSessionSchema>;
+
+// ============================================================================
 // Refresh / logout / me
 // ============================================================================
 

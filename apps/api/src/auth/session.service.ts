@@ -6,6 +6,7 @@ import {
   ErrorCodes,
   type ActorType,
   type ClientKind,
+  type DeviceSession,
 } from '@iace/contracts';
 import { sameHex } from '../common/same-hex';
 import { RedisService } from '../redis/redis.service';
@@ -143,6 +144,40 @@ export class SessionService {
       if (session) listed.push({ ...session, id, client: session.client ?? null });
     }
     return listed;
+  }
+
+  /** The account's devices, newest activity first, with the asking device marked. */
+  async devicesFor(
+    actor: ActorType,
+    subjectId: string,
+    currentSessionId: string,
+  ): Promise<DeviceSession[]> {
+    const listed = await this.list(actor, subjectId);
+    return listed
+      .map((s) => ({
+        id: s.id,
+        client: s.client,
+        deviceName: s.deviceName,
+        createdAt: s.createdAt,
+        lastSeenAt: s.lastSeenAt,
+        current: s.id === currentSessionId,
+      }))
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+  }
+
+  /** Ends one of the subject's OTHER sessions; the device asking signs itself out with logout. */
+  async signOutOther(
+    actor: ActorType,
+    subjectId: string,
+    currentSessionId: string,
+    sessionId: string,
+  ): Promise<void> {
+    if (sessionId === currentSessionId) {
+      throw new AppException(ErrorCodes.CONFLICT, 'Use Sign out to end the session on this device');
+    }
+    const owned = (await this.list(actor, subjectId)).some((s) => s.id === sessionId);
+    if (!owned) throw new AppException(ErrorCodes.NOT_FOUND, 'No such session');
+    await this.revoke(actor, subjectId, sessionId);
   }
 
   /** Why a missing session ended: who replaced it, or null when it ended any other way. */

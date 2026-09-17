@@ -25,6 +25,7 @@ import {
   type ConsentState,
   type ConsentStatus,
   DOCUMENT_FILE_FIELD,
+  type DeviceSession,
   type DocumentKind,
   type ErasureReceipt,
   type Me,
@@ -193,5 +194,18 @@ export class MeController {
     @Req() request: Request,
   ): Promise<AuthSessionResponse> {
     return this.auth.changeStudentPin(user.id, body.currentPin, body.newPin, deviceFrom(request));
+  }
+
+  /** Where this account is signed in, newest activity first, with the asking device marked. */
+  @Get('sessions')
+  activeDevices(@CurrentUser() user: AuthenticatedUser): Promise<DeviceSession[]> {
+    return this.auth.activeDevices(user);
+  }
+
+  /** Signs another of this student's devices out. Refused for the device asking, and for one that is not theirs. */
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  signOutDevice(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<void> {
+    return this.auth.signOutDevice(user, id);
   }
 }
