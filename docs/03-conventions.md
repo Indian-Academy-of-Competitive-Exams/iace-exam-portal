@@ -20,7 +20,7 @@ unpick a boundary after ten modules have hardened on it.
 - **One home per reusable thing.** Apps and modules stay thin.
 - **Boundaries before hardening.** A module drawn as a bounded context becomes a service by gaining
   an entrypoint, not by being rewritten.
-- **A DOM-free logic tier.** A future Expo app reuses the logic packages untouched.
+- **A DOM-free logic tier.** The Expo app (`apps/mobile`) reuses the logic packages untouched.
 - **Enforcement over discipline.** A rule lands as a lint rule or a CI step, or it does not land.
 
 **Rule of three.** Nothing is abstracted below three real uses. Deliberately not doing:
@@ -31,17 +31,23 @@ that legitimately differ — login flows, dashboards, per-app nav and constants,
 
 ## 2. Packaging — where a thing lives
 
-| Layer                 | Package                          | Holds                                                                                                                                                                                | Mobile reuses |
-| --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
-| Shapes                | `packages/contracts`             | Per-endpoint zod schemas and inferred types, the envelope and error codes, canonical naming, shared enums, the typed client.                                                         | yes           |
-| DOM-free logic        | `packages/app-kit`               | React and logic with zero `window`/`document`/`localStorage`: API client, token-store interface, query client, form-error mapping, list and pagination hooks, the auth factory, nav. | yes           |
-| Web UI                | `packages/ui`                    | Tailwind + shadcn components, design tokens, charts, the Tailwind preset. Web-only.                                                                                                  | no            |
-| Tooling               | `packages/config`                | tsconfig, eslint and node presets, plus the enforcement lint rules of §12.                                                                                                           | n/a           |
-| Backend cross-cutting | `apps/api/src/common` (+ `auth`) | Envelope interceptor, exception filter, request id, zod pipe, guards, throttling, messaging, metrics, the event bus, institute time, importer helpers.                               | n/a           |
-| App entrypoints       | `apps/*`                         | Thin. Routes, nav, storage keys, login screen, dashboard — what genuinely differs.                                                                                                   | —             |
+| Layer                 | Package                          | Holds                                                                                                                                                                                                                                                                 | Mobile reuses |
+| --------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| Shapes                | `packages/contracts`             | Per-endpoint zod schemas and inferred types, the envelope and error codes, canonical naming, shared enums, the typed client.                                                                                                                                          | yes           |
+| DOM-free logic        | `packages/app-kit`               | React and logic with zero `window`/`document`/`localStorage`: API client, token-store interface, query client, form-error mapping, list and pagination hooks, the auth factory, nav, catalog rules, and the exam engine (sitting state, autosave, countdown, submit). | yes           |
+| Web UI                | `packages/ui`                    | Tailwind + shadcn components, design tokens, charts, the Tailwind preset. Web-only.                                                                                                                                                                                   | no            |
+| Tooling               | `packages/config`                | tsconfig, eslint and node presets, plus the enforcement lint rules of §12.                                                                                                                                                                                            | n/a           |
+| Backend cross-cutting | `apps/api/src/common` (+ `auth`) | Envelope interceptor, exception filter, request id, zod pipe, guards, throttling, messaging, metrics, the event bus, institute time, importer helpers.                                                                                                                | n/a           |
+| App entrypoints       | `apps/*`                         | Thin. Routes, nav, storage keys, login screen, dashboard — what genuinely differs.                                                                                                                                                                                    | —             |
 
-**The portability rule:** anything a future mobile app could reuse must not touch the DOM.
+**The portability rule:** anything the mobile app could reuse must not touch the DOM.
 `contracts` and `app-kit/src` are DOM-free; `ui` is web-only and mobile never imports it.
+
+**The one exception is web code in a web context.** `apps/mobile` draws a question inside a
+WebView, and that page (`apps/mobile/webview`) bundles `packages/ui`'s `richHtml`, `tokens.css` and
+`components.css` by relative path, so a phone renders a question with the web's own code. React
+Native code still never imports `@iace/ui` or `@iace/app-kit/browser`; `eslint.no-web-ui.js` refuses
+both.
 
 ---
 
@@ -50,9 +56,15 @@ that legitimately differ — login flows, dashboards, per-app nav and constants,
 - **`app-kit` is DOM-free.** No `window`, `document`, `localStorage` or `sessionStorage` anywhere in
   the `src` of `app-kit` or `contracts`, enforced by lint (§12). Storage and the sign-out signal are
   injected adapters: `TokenStore` and `SignOutSignal` are the seam, the browser supplies a
-  `localStorage`-backed store and a window-event emitter, Expo will supply SecureStore and its own.
-  The browser adapters ship as `@iace/app-kit/browser` — one copy for both SPAs, outside `src/` so
-  the lint rule's scope _is_ the boundary.
+  `localStorage`-backed store and a window-event emitter, and `apps/mobile` supplies SecureStore and
+  its own. The browser adapters ship as `@iace/app-kit/browser` — one copy for both SPAs, outside
+  `src/` so the lint rule's scope _is_ the boundary.
+- **The exam engine is injected the same way.** `useExamView` takes `ExamEngineDeps`: the API, a
+  `FullscreenHandle` (the browser's fullscreen, or the app's foreground state), the catalog query key,
+  the `tab` id and the `answerQueue` store. The web passes `sessionStorage` under `iace.test.*` keys
+  and a tab id per browser tab; mobile passes `expo-sqlite`'s key-value store under `iace.mobile.*`
+  and a tab id per install. The engine reads its deps once, at mount: a call site's inline object
+  must never restart autosave on each render.
 - **Scaffolding is shared, not copied.** The bootstrap and providers, `createAuth`,
   `ProtectedRoute`, and `AppShell` (chrome shared, nav injected) live in `app-kit` and `ui`.
 - **Form and list kits are shared.** The field/form set wires react-hook-form + zod + the envelope's

@@ -25,6 +25,13 @@
       "isIgnored": true
     },
     {
+      "label": "React Native requires the exact React it ships with, so the mobile app keeps that React instead of the web apps' — its Expo SDK decides the version, not this monorepo.",
+      "dependencyTypes": ["prod"],
+      "packages": ["@iace/mobile"],
+      "dependencies": ["react"],
+      "isIgnored": true
+    },
+    {
       "label": "Internal packages are always workspace:*, never a published version.",
       "dependencyTypes": ["dev", "prod"],
       "packages": ["**"],

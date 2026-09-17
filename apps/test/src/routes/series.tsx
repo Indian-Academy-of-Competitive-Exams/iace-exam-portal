@@ -18,6 +18,13 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  averageAccuracy,
+  bestRank,
+  seriesProgress,
+  shutReason,
+  type SeriesProgress,
+} from '@iace/app-kit';
+import {
   instituteDateTimeLabel,
   TEST_BUCKET,
   testAction,
@@ -35,13 +42,6 @@ import {
   TileGrid,
   TilesSkeleton,
 } from '../components/ui';
-import {
-  averageAccuracy,
-  bestRank,
-  seriesProgress,
-  type SeriesProgress,
-  shutReason,
-} from '../lib/catalog';
 
 const BUCKET_BADGE: Readonly<Record<string, 'success' | 'neutral' | 'warning'>> = {
   [TEST_BUCKET.DONE]: 'success',

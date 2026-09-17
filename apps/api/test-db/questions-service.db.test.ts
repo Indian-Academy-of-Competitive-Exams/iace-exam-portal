@@ -25,11 +25,13 @@ import { TaxonomyService } from '../src/questions/taxonomy.service';
 import { FakeStorage } from '../test/support/fakes';
 import {
   BANK,
+  fourOptions,
   makeBankQuestion,
   makeCatalog,
   makeQuestion,
   makeQuestionBank,
   makeSection,
+  makeSubject,
   makeTest,
   resetDatabase,
   testPrisma,
@@ -977,5 +979,27 @@ describe('QuestionsService — an open proof-reading flag blocks the way into ci
     const page = await questions.list(listQuery());
 
     assert.equal(page.items[0]?.openFlags, 1);
+  });
+});
+
+describe('QuestionsService — serving legacy images', () => {
+  /** Fails if signedAll's `keys.size === 0` shortcut returns: a key-less legacy image would survive. */
+  it('strips an external src a key-less legacy image quotes, on a detail read', async () => {
+    const { questions } = await build();
+    const subject = (await makeSubject(prisma)).id;
+    const created = await makeQuestion(prisma, {
+      subjectId: subject,
+      content: {
+        en: {
+          stem: [{ type: 'TEXT', text: '<p>Look<img src="https://tracker.example/x.gif"></p>' }],
+        },
+      },
+      options: fourOptions(),
+    });
+
+    const stem = (await questions.detail(created.id)).content.en?.stem?.[0]?.text ?? '';
+
+    assert.doesNotMatch(stem, /tracker\.example/);
+    assert.doesNotMatch(stem, /<img/);
   });
 });

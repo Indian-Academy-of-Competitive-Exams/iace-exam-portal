@@ -24,6 +24,7 @@ SI/Constable), replacing ThinkExam.
 - **V1 = the mock-test feature.** One developer + AI pair, ~45 days.
 - **Scale:** ~2K concurrent normal, handle 4K, 5K with minor infra additions. Not 10K.
 - **Portals:** **Test** (`apps/test`, V1) and **Admin** (`apps/admin`, V1); a broad Student portal later.
+  A **mobile** student client (`apps/mobile`, Expo, Android first) is in progress and not yet shipped.
 - **Rollout:** internal IACE students first, by branch and enrolment; public later.
 
 ## Tech stack (locked)
@@ -66,5 +67,6 @@ Do not break these — they are why the live test holds at 4–5K:
 - `graft/` — the wiring graph of every TypeScript and JavaScript file, queried with the `graft` CLI
   or the `graft` skill. Git-ignored, so run `graft build` once in a fresh clone.
 - `packages/ui/src/index.ts` — the component inventory.
-- `packages/app-kit/` — SPA plumbing (tokens/session, API client, form errors, page size).
+- `packages/app-kit/` — client plumbing shared by the SPAs and mobile (tokens/session, API client,
+  form errors, page size) and the exam engine; DOM-free, with web adapters in `app-kit/browser`.
 - `pnpm docs:check` — the doc-drift report, on a schedule and gating nothing (`docs/03` §12).

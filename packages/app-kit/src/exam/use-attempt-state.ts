@@ -4,7 +4,6 @@
  * on the server, and what a save could not deliver stays queued for the next one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { autosaveDelayMs, seedRevision, shouldFlushNow } from '@iace/app-kit';
 import {
   ANSWER_STATE,
   AppException,
@@ -14,16 +13,34 @@ import {
   type LiveAnswer,
   type SectionProgress,
 } from '@iace/contracts';
-import { api } from './api';
-import { STORAGE_KEYS } from './constants';
-import { tabId } from './tab-id';
+import { type AppApiClient } from '../api-client';
+import { autosaveDelayMs, seedRevision, shouldFlushNow } from '../autosave-policy';
+import { type KeyValueStorage } from '../token-store';
 
-const queueKeyFor = (attemptId: string) => `${STORAGE_KEYS.QUEUED_ANSWERS}.${attemptId}`;
+/** Where unsent answers wait: a synchronous store, so the last answer before the app dies is kept. */
+export interface AnswerQueue {
+  storage: KeyValueStorage;
+  /** The app's own namespace; the attempt id is appended. */
+  keyPrefix: string;
+}
+
+/** What the autosave cannot know: whose API, which tab or device is answering, and where answers wait. */
+export interface AttemptStateDeps {
+  api: AppApiClient;
+  tab: string;
+  answerQueue: AnswerQueue;
+}
+
+/** A refusal because another tab or device holds the sitting now. */
+export const isTakenOver = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER;
+
+const queueKeyFor = ({ keyPrefix }: AnswerQueue, attemptId: string) => `${keyPrefix}.${attemptId}`;
 
 /** Undelivered answers outlive a reload here, because the queue they sit in does not. */
-function queuedIn(attemptId: string): AnswerChange[] {
+function queuedIn(queue: AnswerQueue, attemptId: string): AnswerChange[] {
   try {
-    const held = sessionStorage.getItem(queueKeyFor(attemptId));
+    const held = queue.storage.getItem(queueKeyFor(queue, attemptId));
     return held === null ? [] : (JSON.parse(held) as AnswerChange[]);
   } catch {
     return [];
@@ -45,6 +62,8 @@ export interface AttemptStateHandle {
   hasUnsaved: boolean;
   /** True once this tab stopped holding the sitting, because it was opened somewhere else. */
   takenOver: boolean;
+  /** Stops saving and says why: another tab or device holds the sitting now. */
+  standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
   answer: (questionId: string, next: AnswerIntent) => void;
   /** Which question is on screen now, so the time on the last one can be banked. */
@@ -72,15 +91,19 @@ export interface AnswerIntent {
   marked?: boolean;
 }
 
-export function useAttemptState(attemptId: string): AttemptStateHandle {
+export function useAttemptState(
+  attemptId: string,
+  deps: Readonly<AttemptStateDeps>,
+): AttemptStateHandle {
+  // As of mount, in a ref: callers pass an inline object, and depending on it would restart autosave every render.
+  const mounted = useRef(deps);
   // Read once, at mount: what a save could not deliver before a reload is queued and drawn again.
-  const [queued] = useState(() => queuedIn(attemptId));
+  const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
-  const tab = useRef(tabId());
   const stopped = useRef(false);
 
   // Refs, not state: the timer closes over them once and must still see the latest edit.
@@ -91,8 +114,8 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
   const revision = useRef(0);
   const inFlight = useRef(false);
 
-  // Kept level with the state by every writer below, so banking never waits for a re-render.
-  const answersNow = useRef<Record<string, LiveAnswer>>({});
+  // Starts from the queue, then kept level with the state by every writer below, so banking never waits.
+  const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const remember = (next: Record<string, LiveAnswer>): Record<string, LiveAnswer> => {
     answersNow.current = next;
     return next;
@@ -101,7 +124,7 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
   // Seeded once from the server: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
     let live = true;
-    void api.me.attemptState(attemptId).then((held) => {
+    void mounted.current.api.me.attemptState(attemptId).then((held) => {
       if (!live) return;
       // Merged under, never over: an answer given while this flew is the newer one.
       setAnswers((mine) => remember({ ...held.answers, ...mine }));
@@ -114,11 +137,17 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     };
   }, [attemptId]);
 
+  const standDown = useCallback(() => {
+    stopped.current = true;
+    setTakenOver(true);
+  }, []);
+
   const keepQueue = useCallback(() => {
     const queued = [...pending.current.values()];
-    const key = queueKeyFor(attemptId);
-    if (queued.length === 0) sessionStorage.removeItem(key);
-    else sessionStorage.setItem(key, JSON.stringify(queued));
+    const { answerQueue } = mounted.current;
+    const key = queueKeyFor(answerQueue, attemptId);
+    if (queued.length === 0) answerQueue.storage.removeItem(key);
+    else answerQueue.storage.setItem(key, JSON.stringify(queued));
   }, [attemptId]);
 
   const flush = useCallback(async () => {
@@ -144,11 +173,12 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     };
 
     try {
+      const { api, tab } = mounted.current;
       const saved = await api.me.saveAttemptState(attemptId, {
         revision: sent,
         answers: changes,
         sections: movedSections,
-        tab: tab.current,
+        tab,
       });
       // A server already past what we sent dropped this batch as stale and answered 200 anyway.
       const dropped = saved.revision > sent;
@@ -159,16 +189,13 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
       requeue();
       setHasUnsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
-      if (AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER) {
-        stopped.current = true;
-        setTakenOver(true);
-      }
+      if (isTakenOver(error)) standDown();
     } finally {
       keepQueue();
       inFlight.current = false;
       setIsSaving(false);
     }
-  }, [attemptId, keepQueue]);
+  }, [attemptId, keepQueue, standDown]);
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
   useEffect(() => {
@@ -239,6 +266,7 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     isSaving,
     hasUnsaved,
     takenOver,
+    standDown,
     answer,
     open,
     bankOpen,

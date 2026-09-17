@@ -4,8 +4,8 @@ import {
   type LanguageCode,
   type LanguageMode,
 } from '@iace/contracts';
+import { htmlOf, shownLanguages } from '@iace/app-kit';
 import { Badge, RichContent } from '@iace/ui';
-import { htmlOf, shownLanguages } from './content';
 
 /** The question itself. A DUAL paper shows both languages, with nothing to choose. */
 

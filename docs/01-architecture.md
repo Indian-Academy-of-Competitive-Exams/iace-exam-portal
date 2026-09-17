@@ -16,7 +16,8 @@ simplify some, upgrade some, discard the rest.
 
 - **Load:** ~2K concurrent normal, must hold 4K, 5K with minor infra additions. Not 10K.
 - **Portals:** Test (`apps/test`) — sitting a test and reading the report; Admin (`apps/admin`) —
-  everything that builds and runs one; a broad Student portal later.
+  everything that builds and runs one; Mobile (`apps/mobile`) — the student side on Android, in
+  progress; a broad Student portal later.
 - **Rollout:** internal IACE students first, by branch and enrolment; public later.
 
 ## 2. Locked stack
@@ -24,28 +25,48 @@ simplify some, upgrade some, discard the rest.
 TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API shape changes once in
 `packages/contracts` and every client sees it.
 
-| Layer                     | Choice                                                                           | Why                                                                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Backend API**           | NestJS                                                                           | One decoupled API serves the SPAs now and mobile later. Modules, DI, guards and validation keep a small team's code honest. |
-| **Frontends**             | Vite + React SPAs                                                                | Both apps sit behind login, so there is nothing for SSR to do. No Next.js.                                                  |
-| **Server data**           | TanStack Query over the typed client from `packages/contracts`                   | One way to fetch, cache and invalidate.                                                                                     |
-| **Design**                | Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark                      | One source for colour, type, spacing and components — never redefined per screen. Charts are Recharts on `--series-*`.      |
-| **Client state**          | Zustand, only where React Query does not fit                                     | Server data is not client state; keeping the two apart is what stops cache drift.                                           |
-| **Database**              | PostgreSQL via Prisma                                                            | Highly relational. `prisma/schema.prisma` is the target of record.                                                          |
-| **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, OTP, sessions, device binding, rate limiting; scoring, flush, sweep and rollup jobs.                    |
-| **Auth**                  | Self-built JWT + refresh; students mobile-OTP then 4-digit PIN, admins email-OTP | OTP, sessions and device binding live in Redis, never the DB.                                                               |
-| **Outbound messaging**    | SMS for OTP and the roster PIN; everything else in-app + web push                | Those two are what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.          |
-| **OTP transport**         | `OTP_SENDER` selects console or SMS                                              | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.                |
-| **WhatsApp**              | Interakt only, wired and off — future scope                                      | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.        |
-| **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                     |
-| **Realtime**              | None — no WebSockets                                                             | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.         |
-| **Payments**              | Separate portal, not V1                                                          | The platform reads entitlements later; it never owns money.                                                                 |
-| **Mobile**                | React Native + Expo, post-V1                                                     | Another client on the same types and the same API.                                                                          |
-| **Infra**                 | Docker + env, cloud-agnostic, AWS-leaning                                        | Nothing is tied to one host.                                                                                                |
+| Layer                     | Choice                                                                           | Why                                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Backend API**           | NestJS                                                                           | One decoupled API serves both SPAs and the mobile app. Modules, DI, guards and validation keep a small team's code honest. |
+| **Frontends**             | Vite + React SPAs                                                                | Both apps sit behind login, so there is nothing for SSR to do. No Next.js.                                                 |
+| **Server data**           | TanStack Query over the typed client from `packages/contracts`                   | One way to fetch, cache and invalidate.                                                                                    |
+| **Design**                | Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark                      | One source for colour, type, spacing and components — never redefined per screen. Charts are Recharts on `--series-*`.     |
+| **Client state**          | Zustand, only where React Query does not fit                                     | Server data is not client state; keeping the two apart is what stops cache drift.                                          |
+| **Database**              | PostgreSQL via Prisma                                                            | Highly relational. `prisma/schema.prisma` is the target of record.                                                         |
+| **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, OTP, sessions, device binding, rate limiting; scoring, flush, sweep and rollup jobs.                   |
+| **Auth**                  | Self-built JWT + refresh; students mobile-OTP then 4-digit PIN, admins email-OTP | OTP, sessions and device binding live in Redis, never the DB.                                                              |
+| **Outbound messaging**    | SMS for OTP and the roster PIN; everything else in-app + web push                | Those two are what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.         |
+| **OTP transport**         | `OTP_SENDER` selects console or SMS                                              | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.               |
+| **WhatsApp**              | Interakt only, wired and off — future scope                                      | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.       |
+| **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                    |
+| **Realtime**              | None — no WebSockets                                                             | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.        |
+| **Payments**              | Separate portal, not V1                                                          | The platform reads entitlements later; it never owns money.                                                                |
+| **Mobile**                | React Native + Expo in `apps/mobile`, Android first, in progress                 | Another client on the same types and the same API. Sign-in through sitting a test is built; nothing has shipped.           |
+| **Infra**                 | Docker + env, cloud-agnostic, AWS-leaning                                        | Nothing is tied to one host.                                                                                               |
 
 Deliberately out, and the schema blocks none of them: deep per-question time and accuracy analytics,
-question types beyond single-answer MCQ, Word/PDF import, native apps, live proctoring, discussion,
-adaptive practice, certificates.
+question types beyond single-answer MCQ, Word/PDF import, live proctoring, discussion, adaptive
+practice, certificates.
+
+**The mobile client** holds four decisions the code cannot state on its own:
+
+- **A question is drawn in one persistent WebView.** Stems and options are authored HTML with KaTeX,
+  tables and Indic script, and `richHtml` needs a DOM, so the page runs a bundled copy of the web's
+  own `richHtml` and stylesheets and is swapped, not remounted, between questions. It is a view: the
+  answer, the clock and autosave stay native, and a message the page posts is refused unless it is
+  well formed and names something the question on screen lets a student do.
+- **The Android navigation guard fails open.** `react-native-webview` lets a navigation through when
+  JS has not answered within 250ms, so `onShouldStartLoadWithRequest` is a backstop. The defences
+  are `richHtml`'s tag whitelist, which lets no link through, and a CSP whose only script source is
+  the page script's own hash.
+- **`apps/mobile/turbo.json` exists because the page is reached by path.** The WebView page imports
+  `packages/ui` source by relative path, not as a workspace dependency, so turbo cannot see the
+  edge; the file adds `packages/ui/src` to the build and typecheck inputs so a change there rebuilds
+  the page instead of hitting the cache.
+- **Unsent answers are kept on the phone, in `expo-sqlite`'s key-value store, not SecureStore.** The
+  queue is neither a secret nor small, and the engine writes it synchronously after every answer, so
+  the last answer before the app dies is still there on relaunch. The same store holds the device's
+  tab id, minted once per install, so an app relaunch keeps the sitting the way a web reload does.
 
 ## 3. V1 boundary
 
@@ -86,7 +107,7 @@ flowchart TB
     subgraph Clients
         TW[Test SPA - Vite + React]
         AW[Admin SPA - Vite + React]
-        MOB[Mobile later - Expo]
+        MOB[Mobile - Expo, Android first]
     end
 
     CF[CloudFront CDN]
@@ -135,6 +156,20 @@ clock.
 lives in Redis and the key existing is what "this sitting is open" means, so a save arriving after a
 submit finds no key and is refused. A background job patches what changed into the sitting's one
 answer sheet on a timer, so a failed run costs the copy a minute, not the answers.
+
+**Every write of the live key is a compare-and-swap.** A save, a resume that hands the sitting to
+another tab or device, and a rebuild of a lost key each read the key's bytes and write through one
+Lua script that lands only on those same bytes, retrying a few times before refusing with
+`CONFLICT`. Two devices writing one sitting can then never lose an acknowledged answer or put back
+a tab that was just stood down. An uncontended save is still three Redis round trips (GET, EVAL,
+SADD), and Postgres stays off the path.
+
+**A client that cannot reach the server keeps its answers and asks again, boundedly.** Answers a
+save could not deliver are queued on the client (the tab's `sessionStorage` on the web, the phone's
+own store on mobile) and re-sent on the next save or after a reload. A submit is retried only when
+the request never reached the server, at most three times at 1s, 2s and 4s, inside the server's 30s
+grace after `endsAt`; a refusal or a server error that did land is never retried, and the countdown
+fires expiry once, so a whole hall hitting zero together cannot become a retry storm.
 
 **Submit is buffered through a queue.** On submit — or auto-submit at time-up — the scoring request
 is inserted in the same transaction that flips the sitting to `SUBMITTED`, so no crash can strand an

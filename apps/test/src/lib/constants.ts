@@ -50,6 +50,9 @@ export const ROUTES = {
   NOT_FOUND: '*',
 } as const;
 
+/** The exam hall's param naming the sitting that Continue here reclaims. */
+export const RESUME_PARAM = 'resume';
+
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },

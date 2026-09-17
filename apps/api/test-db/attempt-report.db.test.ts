@@ -356,6 +356,32 @@ describe('the Solution Report', () => {
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
+
+  /** Fails if solutions' `urls.size === 0` shortcut returns: a key-less legacy image would survive. */
+  it('strips an external src a key-less legacy solution image quotes', async () => {
+    const onPaper = await makePaper(prisma, {
+      questions: [
+        {
+          subject: 'Quant',
+          content: {
+            en: {
+              stem: text('What is 7 × 6?'),
+              solution: text('<p>Because<img src="https://tracker.example/x.gif"></p>'),
+            },
+          },
+          options: [
+            { id: 'o_wrong', position: 1, isCorrect: false, text: { en: text('41') } },
+            { id: RIGHT, position: 2, isCorrect: true, text: { en: text('42') } },
+          ],
+        },
+      ],
+    });
+    const { studentId, attemptId } = await sat(onPaper, ['o_wrong'], { languages: ['EN'] });
+
+    const shown = JSON.stringify((await reports().solutions(studentId, attemptId)).questions[0]);
+
+    assert.doesNotMatch(shown, /tracker\.example/);
+  });
 });
 
 describe('the trend across every test a student has sat', () => {

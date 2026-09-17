@@ -17,6 +17,13 @@ export const browserStorage: KeyValueStorage = {
   removeItem: (key) => localStorage.removeItem(key),
 };
 
+/** `sessionStorage`, narrowed the same way: one per tab, surviving a reload of it. */
+export const browserSessionStorage: KeyValueStorage = {
+  getItem: (key) => sessionStorage.getItem(key),
+  setItem: (key, value) => sessionStorage.setItem(key, value),
+  removeItem: (key) => sessionStorage.removeItem(key),
+};
+
 /** Broadcast when a refresh fails, so the auth context can drop the session. */
 export const SIGNED_OUT_EVENT = 'iace:signed-out';
 

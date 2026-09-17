@@ -1,0 +1,50 @@
+{
+  "name": "@iace/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "node webview/build.mjs && expo start",
+    "android": "node webview/build.mjs && expo run:android",
+    "build": "node webview/build.mjs && expo export --platform android",
+    "typecheck": "node webview/build.mjs && tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json && tsc -p webview/tsconfig.json",
+    "lint": "eslint .",
+    "test": "TSX_TSCONFIG_PATH=test/tsconfig.json node --import tsx --test \"test/**/*.test.ts\"",
+    "clean": "rm -rf dist webview/dist .expo .turbo"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "5.7.1",
+    "@iace/app-kit": "workspace:*",
+    "@iace/contracts": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
+    "expo": "57.0.23",
+    "expo-constants": "57.0.18",
+    "expo-crypto": "57.0.3",
+    "expo-linking": "57.0.10",
+    "expo-router": "57.0.21",
+    "expo-secure-store": "57.0.4",
+    "expo-splash-screen": "57.0.9",
+    "expo-sqlite": "57.0.3",
+    "lucide-react-native": "1.31.0",
+    "nativewind": "4.2.7",
+    "react": "19.2.3",
+    "react-hook-form": "7.85.0",
+    "react-native": "0.86.3",
+    "react-native-css-interop": "0.2.7",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-svg": "15.15.4",
+    "react-native-webview": "13.16.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@iace/config": "workspace:*",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "babel-preset-expo": "57.0.12",
+    "esbuild": "0.28.2",
+    "eslint": "10.8.1",
+    "tailwindcss": "3.4.19",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  }
+}

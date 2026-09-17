@@ -18,12 +18,12 @@ import {
   Watermark,
   cn,
 } from '@iace/ui';
+import { type ExamView } from '@iace/app-kit';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
 import { QuestionStem } from '../../question-stem';
 import { SectionTimer } from '../../section-timer';
-import type { ExamView } from '../../engine/exam-view';
 
 /** Every slot is handed the same view, so a skin changes how the sitting LOOKS, never what it does. */
 export interface ExamSlotProps {

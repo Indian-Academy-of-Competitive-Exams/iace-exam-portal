@@ -116,6 +116,8 @@ export const startAttemptSchema = z.object({
   languages: z.array(languageCodeSchema).min(1).optional(),
   /** The tab taking the sitting on. A student answers from one tab at a time, on one device. */
   tab: z.string().min(1).optional(),
+  /** The sitting this start continues, and only that one: never a new sitting if it has ended. */
+  resume: z.string().optional(),
 });
 export type StartAttemptInput = z.input<typeof startAttemptSchema>;
 export type StartAttemptBody = z.infer<typeof startAttemptSchema>;

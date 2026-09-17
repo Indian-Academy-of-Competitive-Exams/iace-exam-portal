@@ -313,6 +313,31 @@ describe('AttemptsService — resuming what is already running', () => {
   });
 });
 
+describe('AttemptsService — a reclaim names its sitting', () => {
+  /** The failure this prevents: Continue here, after a hand-in elsewhere, opening a blank paper. */
+  it('refuses to resume a sitting already handed in, and starts no other', async () => {
+    const { service, student, paper } = await hall();
+    const handedIn = await sitPaper(prisma, { paper, studentId: student, chosen: [] });
+
+    await assert.rejects(
+      () => service.start(student, paper.testId, { resume: handedIn.id }),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED,
+    );
+    assert.equal(await sittingsOf(paper), 1);
+  });
+
+  it('resumes the running sitting it names', async () => {
+    const { service, student, paper } = await hall();
+    const live = await running(paper, student);
+
+    const resumed = await service.start(student, paper.testId, { resume: live.id });
+
+    assert.equal(resumed.id, live.id);
+    assert.equal(resumed.startedByThisCall, false);
+    assert.equal(await sittingsOf(paper), 1);
+  });
+});
+
 describe('AttemptsService — the blueprint stops moving', () => {
   /** The failure this prevents: a config edited to a different shape under a paper being sat. */
   it('locks the config when the first student starts', async () => {

@@ -10,8 +10,8 @@ import {
   type LanguageMode,
   type TestUi,
 } from '@iace/contracts';
+import { htmlOf, shownLanguages } from '@iace/app-kit';
 import { FillBubble, RichContent, cn } from '@iace/ui';
-import { htmlOf, shownLanguages } from './content';
 
 /** The answers on offer. One radio group per question, lettered the way a paper letters them. */
 

@@ -8,7 +8,7 @@ const LOCK_HELD = '1';
 
 /** Redis runs one script at a time, so the compare and the set cannot be interleaved. */
 const REPLACE_IF_UNCHANGED = `
-if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+if (redis.call('GET', KEYS[1]) or '') ~= ARGV[1] then return 0 end
 redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
 return 1
 `;
@@ -103,13 +103,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client.get(key);
   }
 
-  /** Compare-and-set on the exact bytes read, so a write that lost the race changes nothing. */
-  async replaceJson(key: string, was: string, value: unknown, ttlSec: number): Promise<boolean> {
+  /** Compare-and-set on the exact bytes read, null for no key, so a lost race changes nothing. */
+  async replaceJson(
+    key: string,
+    was: string | null,
+    value: unknown,
+    ttlSec: number,
+  ): Promise<boolean> {
     const applied = await this.client.eval(
       REPLACE_IF_UNCHANGED,
       1,
       key,
-      was,
+      // No JSON value is empty, so '' can stand for the key being absent.
+      was ?? '',
       JSON.stringify(value),
       String(ttlSec),
     );

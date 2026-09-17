@@ -5,10 +5,9 @@
  * that is read from the config rather than branched into a second screen.
  */
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
-  AppException,
   omrStateFor,
   nextOpenSectionId,
   nextQuestionId,
@@ -20,12 +19,21 @@ import {
   type ExamPaper,
   type SectionEffort,
 } from '@iace/contracts';
-import { useFullscreen } from '@iace/app-kit/browser';
-import { api } from '../../../lib/api';
-import { CATALOG_QUERY_KEY } from '../../../lib/constants';
-import { tabId } from '../../../lib/tab-id';
-import { useAttemptState, type AnswerIntent } from '../../../lib/use-attempt-state';
+import { shouldRetrySubmit, submitRetryDelayMs } from '../autosave-policy';
+import { type FullscreenHandle } from './focus-guard';
+import {
+  isTakenOver,
+  useAttemptState,
+  type AnswerIntent,
+  type AttemptStateDeps,
+} from './use-attempt-state';
 import type { ExamView } from './exam-view';
+
+/** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
+export interface ExamEngineDeps extends AttemptStateDeps {
+  focus: FullscreenHandle;
+  catalogQueryKey: QueryKey;
+}
 
 /** What the sitting knows about itself the moment it ends, before anything has been marked. */
 export interface EndedSitting {
@@ -49,17 +57,14 @@ export interface ExamSitting {
 const isMarked = (state: string | undefined): boolean =>
   state === ANSWER_STATE.MARKED_REVIEW || state === ANSWER_STATE.ANSWERED_MARKED;
 
-export function useExamView({
-  paper,
-  arrivedAt,
-  title,
-  watermark,
-  onEnded,
-}: Readonly<ExamSitting>): ExamView {
+export function useExamView(
+  { paper, arrivedAt, title, watermark, onEnded }: Readonly<ExamSitting>,
+  deps: Readonly<ExamEngineDeps>,
+): ExamView {
+  const { api, focus, catalogQueryKey, tab } = deps;
   const queryClient = useQueryClient();
-  const fullscreen = useFullscreen();
   const [ignoringFullscreen, setIgnoringFullscreen] = useState(0);
-  const state = useAttemptState(paper.attemptId);
+  const state = useAttemptState(paper.attemptId, deps);
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -82,16 +87,18 @@ export function useExamView({
       // The question still on screen has cost time too; bank it before the last save goes.
       state.bankOpen();
       await state.flush();
-      return api.me.submitAttempt(paper.attemptId, { tab: tabId() });
+      return api.me.submitAttempt(paper.attemptId, { tab });
     },
-    // A refusal is an answer; only a connection that never landed is worth asking again.
-    retry: (count, error) => count < 3 && !AppException.is(error),
-    retryDelay: (count) => Math.min(1_000 * 2 ** count, 8_000),
+    retry: shouldRetrySubmit,
+    retryDelay: submitRetryDelayMs,
+    onError: (error) => {
+      if (isTakenOver(error)) state.standDown();
+    },
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done, and the server has already dropped its own copy.
-      await queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: catalogQueryKey });
       // The hall gives the screen back before the next one draws; `nagging` is already stood down.
-      await fullscreen.exit();
+      await focus.exit();
       onEnded({
         attemptId: submitted.attemptId,
         sections: effort,
@@ -104,7 +111,7 @@ export function useExamView({
   });
 
   const end = () => {
-    if (!submit.isPending && !submit.isSuccess) submit.mutate();
+    if (!submit.isPending && !submit.isSuccess && !state.takenOver) submit.mutate();
   };
 
   const move = (to: string | null): void => {
@@ -143,12 +150,13 @@ export function useExamView({
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
   // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
   const nagging =
+    !state.takenOver &&
     !submit.isSuccess &&
     !submit.isPending &&
-    fullscreen.isSupported &&
-    !fullscreen.isFullscreen &&
-    fullscreen.exits > 0 &&
-    fullscreen.exits > ignoringFullscreen;
+    focus.isSupported &&
+    !focus.isFullscreen &&
+    focus.exits > 0 &&
+    focus.exits > ignoringFullscreen;
 
   return {
     title: title ?? 'Your test',
@@ -202,7 +210,7 @@ export function useExamView({
     outOfTime: end,
 
     submit: {
-      asking,
+      asking: asking && !state.takenOver,
       isPending: submit.isPending,
       unanswered,
       markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
@@ -216,9 +224,9 @@ export function useExamView({
 
     fullscreen: {
       nagging,
-      exits: fullscreen.exits,
-      enter: () => void fullscreen.enter(),
-      ignore: () => setIgnoringFullscreen(fullscreen.exits),
+      exits: focus.exits,
+      enter: () => void focus.enter(),
+      ignore: () => setIgnoringFullscreen(focus.exits),
     },
   };
 }

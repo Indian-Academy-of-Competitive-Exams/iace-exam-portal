@@ -6,11 +6,37 @@ export {
 } from './token-store';
 export { type SignOutSignal } from './sign-out-signal';
 export { createAppApiClient } from './api-client';
+export { type AppApiClient } from './api-client';
 export { createAuth, type AuthState, type CreateAuthOptions } from './create-auth';
 export { createAppQueryClient, type AppMutationMeta, type Notifier } from './query-client';
 export { applyFieldErrors, bannerMessage } from './form-errors';
 export { numberOr, optionalNumber } from './form-numbers';
-export { autosaveDelayMs, seedRevision, shouldFlushNow } from './autosave-policy';
+export {
+  autosaveDelayMs,
+  seedRevision,
+  shouldFlushNow,
+  shouldRetrySubmit,
+  submitRetryDelayMs,
+} from './autosave-policy';
+export {
+  useAttemptState,
+  isTakenOver,
+  type AnswerIntent,
+  type AnswerQueue,
+  type AttemptStateDeps,
+  type AttemptStateHandle,
+} from './exam/use-attempt-state';
+export { tabIdFrom } from './exam/tab-id';
+export { type FullscreenHandle } from './exam/focus-guard';
+export {
+  useExamView,
+  type ExamEngineDeps,
+  type ExamSitting,
+  type EndedSitting,
+} from './exam/use-exam-view';
+export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
+export { useCountdown } from './exam/use-countdown';
+export { htmlOf, shownLanguages } from './exam/content';
 export { pollDelayMs, shouldKeepPolling } from './poll-policy';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';
@@ -29,3 +55,20 @@ export {
   type NavLayout,
 } from './nav';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
+export {
+  averageAccuracy,
+  bestRank,
+  continueWith,
+  matching,
+  minutes,
+  openNow,
+  resultsByTest,
+  seriesProgress,
+  shutReason,
+  sittablesOf,
+  sittingHint,
+  upNext,
+  type SeriesProgress,
+  type Sittable,
+  type TestResult,
+} from './catalog';

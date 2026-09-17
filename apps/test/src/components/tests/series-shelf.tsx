@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { TruncatedText, cn, linkVariants, plural } from '@iace/ui';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
-import { seriesProgress, type Sittable, type TestResult } from '../../lib/catalog';
+import { seriesProgress, type Sittable, type TestResult } from '@iace/app-kit';
 import { Shelf } from '../ui';
 import { TestTile } from './test-tile';
 

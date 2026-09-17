@@ -287,7 +287,7 @@ export class AttemptReportService {
         questionCount: section.questionCount,
         durationSec: section.durationSec,
       })),
-      questions: urls.size === 0 ? questions : questions.map((row) => signedQuestion(row, urls)),
+      questions: questions.map((row) => signedQuestion(row, urls)),
     };
   }
 

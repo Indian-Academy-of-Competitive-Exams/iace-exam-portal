@@ -37,6 +37,37 @@ const tabOf = async (redis: FakeRedis, attemptId: string): Promise<string | null
   return state?.tab;
 };
 
+const heldOf = (redis: FakeRedis): Promise<HeldState | null> =>
+  redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
+
+const answer = (questionId: string) => ({
+  questionId,
+  state: 'ANSWERED' as const,
+  selectedOptionId: 'opt_a',
+  timeSpentSec: 12,
+});
+
+const refusal = (pending: Promise<unknown>): Promise<AppException | null> =>
+  pending.then(() => null).catch((error: AppException) => error);
+
+/** Runs `meanwhile` after a read of att_1's key and before its reader goes on, for `times` reads. */
+function interleave(redis: FakeRedis, meanwhile: () => Promise<unknown>, times = 1): void {
+  const key = redisKeys.attemptState('att_1');
+  let left = times;
+  const after = async <T>(read: Promise<T>, readKey: string): Promise<T> => {
+    const value = await read;
+    if (readKey === key && left > 0) {
+      left -= 1;
+      await meanwhile();
+    }
+    return value;
+  };
+  const getRaw = redis.getRaw.bind(redis);
+  const getJson = redis.getJson.bind(redis);
+  redis.getRaw = (readKey) => after(getRaw(readKey), readKey);
+  redis.getJson = <T>(readKey: string) => after(getJson<T>(readKey), readKey);
+}
+
 describe('holdsSitting — who may answer', () => {
   it('lets the tab holding it answer', () => {
     assert.equal(holdsSitting(held({ tab: 'tab_a' }), 'tab_a'), true);
@@ -126,5 +157,86 @@ describe('AttemptStateService — one sitting at a time, across tabs and devices
     const stood = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
     assert.equal(stood?.answers.q1?.selectedOptionId, 'opt_a');
     assert.equal(stood?.tab, null);
+  });
+});
+
+describe('AttemptStateService — a handover racing a save', () => {
+  /** The failure this prevents: an acknowledged answer erased by a resume that read before it landed. */
+  it("keeps the answer a save landed while another device's resume was mid-handover", async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(sitting('att_1'), 'tab_a');
+    interleave(redis, () =>
+      state.save('stu_1', 'att_1', { revision: 1, answers: [answer('q1')], tab: 'tab_a' }),
+    );
+
+    await state.open(sitting('att_1'), 'tab_b');
+
+    const after = await heldOf(redis);
+    assert.equal(after?.answers.q1?.selectedOptionId, 'opt_a');
+    assert.equal(after?.tab, 'tab_b');
+  });
+
+  /** The failure this prevents: a stale save putting its tab back, locking out the device that reclaimed. */
+  it('refuses a save that read before another device reclaimed the sitting', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(sitting('att_1'), 'tab_a');
+    interleave(redis, () => state.open(sitting('att_1'), 'tab_b'));
+
+    const refused = await refusal(
+      state.save('stu_1', 'att_1', { revision: 1, answers: [answer('q1')], tab: 'tab_a' }),
+    );
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_TAKEN_OVER);
+    assert.equal((await heldOf(redis))?.tab, 'tab_b');
+    const ack = await state.save('stu_1', 'att_1', {
+      revision: 2,
+      answers: [answer('q2')],
+      tab: 'tab_b',
+    });
+    assert.equal(ack.revision, 2);
+  });
+
+  /** Two starts both finding no key: the second must not seed over what the first already saved. */
+  it('does not seed over a sitting another device opened and answered meanwhile', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    interleave(redis, async () => {
+      await state.open(sitting('att_1'), 'tab_a');
+      await state.save('stu_1', 'att_1', { revision: 1, answers: [answer('q1')], tab: 'tab_a' });
+    });
+
+    await state.open(sitting('att_1'), 'tab_b');
+
+    const after = await heldOf(redis);
+    assert.equal(after?.answers.q1?.selectedOptionId, 'opt_a');
+    assert.equal(after?.tab, 'tab_b');
+  });
+
+  it('refuses a save that keeps losing the race, rather than writing over', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(sitting('att_1'), 'tab_a');
+    let written = held({ tab: 'tab_a' });
+    let racing = true;
+    interleave(
+      redis,
+      async () => {
+        if (!racing) return;
+        written = { ...written, revision: written.revision + 1 };
+        await redis.setJson(redisKeys.attemptState('att_1'), written, 60);
+      },
+      Number.POSITIVE_INFINITY,
+    );
+
+    const refused = await refusal(
+      state.save('stu_1', 'att_1', { revision: 99, answers: [answer('q1')], tab: 'tab_a' }),
+    );
+    racing = false;
+
+    assert.equal(refused?.code, ErrorCodes.CONFLICT);
+    assert.deepEqual(await heldOf(redis), written);
+    assert.deepEqual(await state.dirtyIds(), []);
   });
 });

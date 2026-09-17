@@ -1,17 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createTokenStore, type KeyValueStorage } from '../src/token-store';
-
-/** A storage adapter with a Map behind it. */
-function fakeStorage(): KeyValueStorage & { entries: Map<string, string> } {
-  const entries = new Map<string, string>();
-  return {
-    entries,
-    getItem: (key) => entries.get(key) ?? null,
-    setItem: (key, value) => void entries.set(key, value),
-    removeItem: (key) => void entries.delete(key),
-  };
-}
+import { fakeStorage } from './support/fake-storage';
 
 const tokens = { accessToken: 'access', refreshToken: 'refresh', expiresInSec: 900 };
 

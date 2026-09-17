@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import {
   AUTOSAVE_AT_COUNT,
   AUTOSAVE_EVERY_MS,
@@ -7,6 +8,8 @@ import {
   autosaveDelayMs,
   seedRevision,
   shouldFlushNow,
+  shouldRetrySubmit,
+  submitRetryDelayMs,
 } from '../src/autosave-policy';
 
 describe('when a sitting saves what it has', () => {
@@ -66,5 +69,34 @@ describe('when a sitting picks its revision counter back up', () => {
       assert.ok(seedRevision(current, held) >= current, `fell below the client's ${current}`);
       assert.ok(seedRevision(current, held) >= held, `fell below the server's ${held}`);
     }
+  });
+});
+
+describe('when a submit decides whether to try again', () => {
+  /** The failure this prevents: an automatic hand-in at time-out that never lands is never retried. */
+  it('retries a request that never landed, up to 3 times', () => {
+    const offline = new AppException(ErrorCodes.INTERNAL, 'x', { httpStatus: 0 });
+    assert.equal(shouldRetrySubmit(0, offline), true);
+    assert.equal(shouldRetrySubmit(1, offline), true);
+    assert.equal(shouldRetrySubmit(2, offline), true);
+    assert.equal(shouldRetrySubmit(3, offline), false);
+  });
+
+  it('never retries a refusal the server actually answered', () => {
+    const refused = new AppException(ErrorCodes.SITTING_TAKEN_OVER);
+    assert.equal(shouldRetrySubmit(0, refused), false);
+  });
+
+  it('never retries a server error that did land', () => {
+    const landed = new AppException(ErrorCodes.INTERNAL);
+    assert.equal(landed.httpStatus === 0, false, 'INTERNAL default status is not 0');
+    assert.equal(shouldRetrySubmit(0, landed), false);
+  });
+
+  it('delays 1s, 2s, 4s, never more than 8s', () => {
+    assert.equal(submitRetryDelayMs(0), 1_000);
+    assert.equal(submitRetryDelayMs(1), 2_000);
+    assert.equal(submitRetryDelayMs(2), 4_000);
+    assert.equal(submitRetryDelayMs(5), 8_000);
   });
 });

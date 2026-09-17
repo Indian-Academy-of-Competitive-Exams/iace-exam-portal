@@ -78,11 +78,13 @@ export class AttemptsService {
   async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = await this.liveAttempt(studentId, testId);
-    if (live) {
+    if (live && (input.resume === undefined || live.id === input.resume)) {
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
       await this.state.resume(live, input.tab);
       return toLiveAttempt(live, await this.requireTest(testId), false);
     }
+    // A reclaim of a sitting handed in elsewhere must land on its result, not on a fresh paper.
+    if (input.resume !== undefined) throw new AppException(ErrorCodes.SITTING_ENDED);
 
     await this.access.assertCanStart(studentId, testId);
 

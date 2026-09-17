@@ -31,7 +31,9 @@ describe('richHtml', () => {
   });
 
   it('keeps an image the bank hosts, with its alt text', () => {
-    const html = richHtml('<img src="https://s3.example.com/q/1.png" alt="Figure 1">');
+    const html = richHtml(
+      '<img data-key="questions/images/1.png" src="https://s3.example.com/q/1.png" alt="Figure 1">',
+    );
 
     assert.match(html, /src="https:\/\/s3\.example\.com\/q\/1\.png"/);
     assert.match(html, /alt="Figure 1"/);
@@ -47,14 +49,41 @@ describe('richHtml', () => {
   });
 
   it('drops the handler an image would fire, and keeps the image', () => {
-    const html = richHtml('<img src="https://s3.example.com/q/1.png" onerror="alert(1)">');
+    const html = richHtml(
+      '<img data-key="k" src="https://s3.example.com/q/1.png" onerror="alert(1)">',
+    );
 
     assert.doesNotMatch(html, /onerror/i);
     assert.match(html, /<img src="https:\/\/s3\.example\.com\/q\/1\.png">/);
   });
 
   it('removes an image whose source is not fetchable', () => {
-    assert.doesNotMatch(richHtml('<img src="javascript:alert(1)">'), /<img/);
+    assert.doesNotMatch(richHtml('<img data-key="k" src="javascript:alert(1)">'), /<img/);
+  });
+
+  /** A src the server signed always rides with a key; anything else is a pixel tracking the student. */
+  it('drops an image that carries no key, wherever it points', () => {
+    const html = richHtml('<p>Look</p><img src="https://tracker.example/x.gif">');
+
+    assert.doesNotMatch(html, /<img|tracker/);
+    assert.match(html, /Look/);
+  });
+
+  it('drops an image whose key is empty', () => {
+    assert.doesNotMatch(richHtml('<img data-key="" src="https://tracker.example/x.gif">'), /<img/);
+  });
+
+  /** A parser reads `<image>` as `<img>`, which a server-side pattern looking for `<img` misses. */
+  it('drops a keyless <image> element a parser rewrites to an img', () => {
+    assert.doesNotMatch(richHtml('<image src="https://tracker.example/x.gif">'), /<img/);
+  });
+
+  it('keeps a signed image from storage or from local MinIO, without echoing its key', () => {
+    for (const src of ['https://s3.example.com/q/1.png', 'http://localhost:9000/iace/q/1.png']) {
+      const html = richHtml(`<img data-key="questions/images/1.png" src="${src}">`);
+
+      assert.equal(html, `<img src="${src}">`);
+    }
   });
 
   it('unwraps a tag it does not know, so the words survive the tag', () => {
