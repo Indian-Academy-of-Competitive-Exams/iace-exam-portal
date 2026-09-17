@@ -8,11 +8,12 @@ import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS } from '../lib/constants';
 import { PageBody, SurfaceCard } from '../components/ui';
+import { ActiveDevices } from '../components/account/active-devices';
 import { useAuth } from '../providers/auth';
 
 const FORM_FIELDS = ['currentPin', 'newPin'] as const;
 
-/** Changing the PIN. Also where the forced replacement lands for an import's default PIN. */
+/** Changing the PIN and where this account is signed in. Also where a forced default-PIN reset lands. */
 export function AccountPage() {
   const { identity: student } = useAuth();
   const onDefaultPin = student?.hasDefaultPin ?? false;
@@ -20,11 +21,12 @@ export function AccountPage() {
   return (
     <PageFrame
       header={
-        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} size="display" title="PIN" />
+        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} size="display" title="Account" />
       }
     >
       <PageBody>
         <ChangePinCard onDefaultPin={onDefaultPin} />
+        <ActiveDevices />
       </PageBody>
     </PageFrame>
   );

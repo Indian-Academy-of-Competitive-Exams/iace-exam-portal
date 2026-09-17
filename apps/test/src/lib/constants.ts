@@ -169,6 +169,9 @@ export const ME_QUERY_KEY = ['auth', 'me'] as const;
 /** The student's RECORD — profile and photo. A different key from the identity above. */
 export const PROFILE_QUERY_KEY = ['me'] as const;
 
+/** Where this student is signed in, for the Account page's Active devices list. */
+export const ACTIVE_DEVICES_QUERY_KEY = ['me', 'sessions'] as const;
+
 /**
  * localStorage keys owned by this app, namespaced so the SPAs never read each other's.
  * The theme key is absent on purpose: it belongs to @iace/ui and is shared.

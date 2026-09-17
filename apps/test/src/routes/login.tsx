@@ -35,7 +35,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
 import { useAuth } from '../providers/auth';
 /** Why the student is going through the OTP flow — it only changes the words. */
 const OTP_INTENTS = {
@@ -63,7 +63,7 @@ type Step =
   | { kind: 'pin'; intent: OtpIntent; mobile: string; ticket: PinSetupTicket };
 
 export function LoginPage() {
-  const { identity: student, signIn } = useAuth();
+  const { identity: student, signIn, signedOutReason } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'signIn' });
 
@@ -85,6 +85,12 @@ export function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
           <Brandmark size="lg" className="justify-center px-6 pt-7" />
+
+          {signedOutMessage(signedOutReason) ? (
+            <div className="px-6 pt-4">
+              <Alert variant="warning">{signedOutMessage(signedOutReason)}</Alert>
+            </div>
+          ) : null}
 
           {step.kind === 'signIn' ? (
             <SignInStep
