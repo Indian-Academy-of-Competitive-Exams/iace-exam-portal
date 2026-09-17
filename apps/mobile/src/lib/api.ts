@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { createAppApiClient, createTokenStore } from '@iace/app-kit';
 import { createSecureStorage } from './secure-storage';
@@ -13,7 +12,12 @@ export { hydrate };
 export const signOutSignal = createSignOutSignal();
 export const tokenStore = createTokenStore(STORAGE_KEYS.AUTH, storage);
 
-const apiUrl: string = Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000';
+const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+if (!apiUrl) {
+  throw new Error(
+    'EXPO_PUBLIC_API_URL is not set: add it to apps/mobile/.env (see .env.example) and restart Expo.',
+  );
+}
 
 export const api = createAppApiClient({
   baseUrl: apiUrl,
