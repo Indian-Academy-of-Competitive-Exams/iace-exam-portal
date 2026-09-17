@@ -7,6 +7,9 @@ export interface SecureVault {
   deleteItemAsync: (key: string) => Promise<void>;
 }
 
+const reportFailedWrite = (error: unknown) =>
+  console.warn('SecureStore write failed; the next launch will not see this change.', error);
+
 /** SecureStore is async and KeyValueStorage is not, so the keys are mirrored in memory. */
 export function createSecureStorage(
   keys: readonly string[],
@@ -19,11 +22,11 @@ export function createSecureStorage(
       getItem: (key) => mirror.get(key) ?? null,
       setItem: (key, value) => {
         mirror.set(key, value);
-        void vault.setItemAsync(key, value);
+        vault.setItemAsync(key, value).catch(reportFailedWrite);
       },
       removeItem: (key) => {
         mirror.delete(key);
-        void vault.deleteItemAsync(key);
+        vault.deleteItemAsync(key).catch(reportFailedWrite);
       },
     },
     hydrate: async () => {

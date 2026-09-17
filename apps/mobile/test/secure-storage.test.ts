@@ -58,3 +58,25 @@ test('a vault that rejects on read hydrates as signed-out, not a hung promise', 
   await assert.doesNotReject(hydrate());
   assert.equal(storage.getItem('iace.mobile.auth'), null);
 });
+
+test('a vault that rejects a write keeps the session readable and logs it', async (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const vault = {
+    getItemAsync: async () => null,
+    setItemAsync: async () => {
+      throw new Error('keystore full');
+    },
+    deleteItemAsync: async () => {
+      throw new Error('keystore locked');
+    },
+  };
+  const { storage } = createSecureStorage(['iace.mobile.auth'], vault);
+
+  assert.doesNotThrow(() => storage.setItem('iace.mobile.auth', 'token'));
+  assert.equal(storage.getItem('iace.mobile.auth'), 'token', 'the mirror still holds the write');
+  assert.doesNotThrow(() => storage.removeItem('iace.mobile.auth'));
+
+  // node:test fails this test on its own if either rejection goes unhandled while it waits.
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(warn.mock.callCount(), 2, 'each failed write is logged');
+});
