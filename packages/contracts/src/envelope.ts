@@ -89,6 +89,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
 // Shapes
 // ============================================================================
 
+/** The header every response echoes the request id in; the envelope's `meta` carries the same value. */
+export const REQUEST_ID_HEADER = 'x-request-id';
+
 /** On every response. `requestId` is echoed in the header and the log line for the same request. */
 export const metaSchema = z.object({
   requestId: z.string(),

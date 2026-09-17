@@ -1,8 +1,7 @@
 import { Injectable, type NestMiddleware } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { type NextFunction, type Request, type Response } from 'express';
-
-export const REQUEST_ID_HEADER = 'x-request-id';
+import { REQUEST_ID_HEADER } from '@iace/contracts';
 
 /**
  * Only an id we would have generated ourselves is trusted from the caller — bounded, and with no

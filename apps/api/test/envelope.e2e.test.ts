@@ -13,10 +13,10 @@ import {
 import { APP_FILTER, APP_INTERCEPTOR, NestFactory } from '@nestjs/core';
 import type { INestApplication } from '@nestjs/common';
 import { z } from 'zod';
-import { AppException, ErrorCodes } from '@iace/contracts';
+import { AppException, ErrorCodes, REQUEST_ID_HEADER } from '@iace/contracts';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
-import { RequestIdMiddleware, REQUEST_ID_HEADER } from '../src/common/request-id';
+import { RequestIdMiddleware } from '../src/common/request-id';
 import { ZodBody } from '../src/common/zod-validation.pipe';
 
 /**

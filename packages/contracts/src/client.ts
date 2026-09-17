@@ -6,6 +6,7 @@ import {
   apiSuccessSchema,
   errorCodeForStatus,
   noContentSchema,
+  REQUEST_ID_HEADER,
   type ApiSuccess,
   type NoContent,
   type Paginated,
@@ -431,6 +432,7 @@ export function createApiClient(options: ApiClientOptions) {
 
   /** Both halves are validated: an unrecognised shape must never reach a caller typed as data. */
   async function parse<T>(response: Response, schema: ZodType<T>): Promise<ApiSuccess<T>> {
+    if (response.status === NO_CONTENT) return noContentOf(response, schema);
     const text = await response.text();
 
     let payload: unknown;
@@ -1307,6 +1309,24 @@ function fileBody(file: File): FormData {
 }
 
 /** Reads a failure body. Outside the factory because it closes over nothing. */
+const NO_CONTENT = 204;
+
+/** A 204 never has a body (Express drops one), so it can only mean null; a schema that refuses null is a real mismatch. */
+function noContentOf<T>(response: Response, schema: ZodType<T>): ApiSuccess<T> {
+  const data = schema.safeParse(null);
+  if (!data.success) {
+    throw new AppException(ErrorCodes.INTERNAL, 'Unexpected response shape from API', {
+      httpStatus: response.status,
+      details: data.error.issues,
+    });
+  }
+  return {
+    success: true,
+    data: data.data,
+    meta: { requestId: response.headers.get(REQUEST_ID_HEADER) ?? '' },
+  };
+}
+
 /** The typed failure a 401 carried, so a sign-out can say why. */
 async function failureOf(response: Response): Promise<AppException | undefined> {
   const failed = await peekFailure(response);

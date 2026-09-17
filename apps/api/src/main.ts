@@ -5,9 +5,9 @@ import { NestFactory } from '@nestjs/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import compression from 'compression';
 import helmet from 'helmet';
+import { REQUEST_ID_HEADER } from '@iace/contracts';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
-import { REQUEST_ID_HEADER } from './common/request-id';
 import { PREFLIGHT_CACHE_SEC, corsOrigin, helmetOptions } from './common/security-headers';
 
 /** Longer than any load balancer's idle timeout, or it hangs up on a connection still being reused. */

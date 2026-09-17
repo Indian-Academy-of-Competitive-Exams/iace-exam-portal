@@ -6,6 +6,7 @@ import {
   queryString,
   AppException,
   ErrorCodes,
+  noContentSchema,
   type ApiFailure,
   type Meta,
 } from '../src/index';
@@ -65,6 +66,21 @@ function clientWith(
 const schema = z.object({ id: z.string() });
 
 describe('typed client — success', () => {
+  it('reads a 204 with no body as no content, since Express drops the envelope', async () => {
+    const { api } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
+
+    assert.equal(await api.request('/thing', { schema: noContentSchema }), null);
+  });
+
+  it('still refuses a 204 where the call expected data', async () => {
+    const { api } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
+
+    await assert.rejects(
+      api.request('/thing', { schema }),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.INTERNAL,
+    );
+  });
+
   it('returns data, not the envelope', async () => {
     const { api } = clientWith([success({ id: 'abc' })]);
 

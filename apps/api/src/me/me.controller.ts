@@ -143,7 +143,7 @@ export class MeController {
 
   /** This browser's push endpoint. Idempotent: the same device resubscribing is the same row. */
   @Post('push-subscription')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   subscribeToPush(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(pushSubscriptionSchema)) body: PushSubscriptionBody,
@@ -152,7 +152,7 @@ export class MeController {
   }
 
   @Delete('push-subscription')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   unsubscribeFromPush(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(dropPushSubscriptionSchema)) body: DropPushSubscriptionBody,
