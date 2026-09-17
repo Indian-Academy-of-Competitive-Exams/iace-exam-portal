@@ -9,6 +9,8 @@ describe('rowsToFlush', () => {
   const held = {
     attemptId: 'att_1',
     studentId: 'stu_1',
+    testId: 'test_1',
+    startedAt: '2026-09-01T05:00:00.000Z',
     endsAt: ENDS_AT.toISOString(),
     revision: 2,
     sections: {},

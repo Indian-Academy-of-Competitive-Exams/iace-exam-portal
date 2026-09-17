@@ -81,13 +81,14 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
   const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
   const student = (await makeStudent(prisma)).id;
   const endsAt = over.endsAt ?? ENDS_AT;
+  const startedAt = new Date(endsAt.getTime() - HOUR_MS);
   const attempt = await sitPaper(prisma, {
     paper,
     studentId: student,
     chosen: [null, null],
     timeSpent: [0, 0],
     status: over.status ?? ATTEMPT_STATUS.IN_PROGRESS,
-    startedAt: new Date(endsAt.getTime() - HOUR_MS),
+    startedAt,
     submittedAt: over.submittedAt ?? null,
   });
   const [q1 = '', q2 = ''] = paper.items.map((item) => item.questionId);
@@ -125,7 +126,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     outbox,
     submit,
     change,
-    live: { id: attempt.id, studentId: student, endsAt },
+    live: { id: attempt.id, studentId: student, testId: paper.testId, startedAt, endsAt },
     sweeper: new AttemptSweeperProcessor(
       prisma,
       submit,

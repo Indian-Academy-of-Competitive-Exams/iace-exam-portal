@@ -46,10 +46,16 @@ export class AttemptFlushProcessor extends WorkerHost {
     if (!held) return attemptId;
 
     // No list means a key written before this shipped, whose whole paper is still the safe write.
-    const written = held.pending ?? Object.keys(held.answers);
+    const ids = held.pending ?? Object.keys(held.answers);
+    const written = Object.fromEntries(
+      ids.flatMap((id) => {
+        const answer = held.answers[id];
+        return answer ? [[id, answer] as const] : [];
+      }),
+    );
     try {
       // Gated rather than asked: an ended sitting matches no rows, so its status costs no query.
-      await writeRows(this.prisma, attemptId, rowsToFlush(held, written), STILL_LIVE);
+      await writeRows(this.prisma, attemptId, rowsToFlush(held, ids), STILL_LIVE);
       await this.state.clearPending(attemptId, written);
       return attemptId;
     } catch (error) {

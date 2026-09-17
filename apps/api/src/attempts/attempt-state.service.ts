@@ -12,13 +12,14 @@ import {
   ATTEMPT_STATUS,
   ErrorCodes,
   type AttemptSaveAck,
+  type LiveAnswer,
   type LiveAttemptState,
   type SaveAttemptStateBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
-import { applyBatch, holdsSitting, isInTime, type HeldState } from './attempt-state';
+import { applyBatch, holdsSitting, isInTime, pendingAfter, type HeldState } from './attempt-state';
 import { DURABLE_ANSWER_SELECT, answersFromRows } from './attempt-flush';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
@@ -41,7 +42,7 @@ export class AttemptStateService {
 
   /** Seeded when the sitting starts, so no later save has to ask Postgres whose attempt this is. */
   async open(
-    attempt: { id: string; studentId: string; endsAt: Date },
+    attempt: { id: string; studentId: string; testId: string; startedAt: Date; endsAt: Date },
     tab?: string,
   ): Promise<void> {
     const held = await this.read(attempt.id);
@@ -50,6 +51,8 @@ export class AttemptStateService {
       : this.write({
           attemptId: attempt.id,
           studentId: attempt.studentId,
+          testId: attempt.testId,
+          startedAt: attempt.startedAt.toISOString(),
           endsAt: attempt.endsAt.toISOString(),
           revision: 0,
           answers: {},
@@ -170,14 +173,13 @@ export class AttemptStateService {
     await this.redis.client.srem(redisKeys.attemptsDirty, ...attemptIds);
   }
 
-  /** Only what this pass wrote: a save landing mid-flush keeps the mark it just made. */
-  async clearPending(attemptId: string, written: readonly string[]): Promise<void> {
-    if (written.length === 0) return;
-    const gone = new Set(written);
-    await this.patch(attemptId, (held) => ({
-      ...held,
-      pending: (held.pending ?? []).filter((questionId) => !gone.has(questionId)),
-    }));
+  /** Only answers still as this pass wrote them: a save landing mid-flush keeps its mark. */
+  async clearPending(
+    attemptId: string,
+    written: Readonly<Record<string, LiveAnswer>>,
+  ): Promise<void> {
+    if (Object.keys(written).length === 0) return;
+    await this.patch(attemptId, (held) => ({ ...held, pending: pendingAfter(held, written) }));
   }
 
   private async write(state: HeldState): Promise<void> {
@@ -204,7 +206,14 @@ export class AttemptStateService {
   private async durableState(studentId: string, attemptId: string): Promise<HeldState> {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
-      select: { id: true, studentId: true, endsAt: true, status: true },
+      select: {
+        id: true,
+        studentId: true,
+        testId: true,
+        startedAt: true,
+        endsAt: true,
+        status: true,
+      },
     });
     // Another student's id reads as missing: an id is not a thing to confirm the existence of.
     if (attempt?.studentId !== studentId) {
@@ -223,6 +232,8 @@ export class AttemptStateService {
     return {
       attemptId: attempt.id,
       studentId: attempt.studentId,
+      testId: attempt.testId,
+      startedAt: attempt.startedAt.toISOString(),
       endsAt: attempt.endsAt.toISOString(),
       revision: 0,
       answers: answersFromRows(durable),

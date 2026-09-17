@@ -33,13 +33,14 @@ after(() => prisma.$disconnect());
 async function build(durable = false) {
   const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
   const student = (await makeStudent(prisma)).id;
+  const startedAt = new Date(ENDS_AT.getTime() - HOUR_MS);
   const attempt = await sitPaper(prisma, {
     paper,
     studentId: student,
     chosen: durable ? [RIGHT_OPTION, null] : [null, null],
     timeSpent: [durable ? 20 : 0, 0],
     status: ATTEMPT_STATUS.IN_PROGRESS,
-    startedAt: new Date(ENDS_AT.getTime() - HOUR_MS),
+    startedAt,
     submittedAt: null,
   });
   const [q1 = '', q2 = ''] = paper.items.map((item) => item.questionId);
@@ -51,7 +52,13 @@ async function build(durable = false) {
   }
   const redis = new FakeRedis();
   const service = new AttemptStateService(prisma, redis.asService());
-  const live = { id: attempt.id, studentId: student, endsAt: ENDS_AT };
+  const live = {
+    id: attempt.id,
+    studentId: student,
+    testId: paper.testId,
+    startedAt,
+    endsAt: ENDS_AT,
+  };
   const change = (over: Partial<AnswerChange> = {}): AnswerChange => ({
     questionId: q1,
     state: ANSWER_STATE.ANSWERED,
@@ -182,6 +189,24 @@ describe('AttemptStateService', () => {
     await service.open(live);
 
     assert.equal((await service.read(attemptId))?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+  });
+
+  /** The failure this prevents: a flush clearing a mark whose answer changed again while it wrote. */
+  it('keeps an answer pending when a save changes it while a flush is writing the old one', async () => {
+    const { service, student, attemptId, live, q1, change } = await build();
+    await service.open(live);
+    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+    const read = await service.read(attemptId);
+
+    await service.save(
+      student,
+      attemptId,
+      { revision: 2, answers: [change({ selectedOptionId: 'o3' })] },
+      NOW,
+    );
+    await service.clearPending(attemptId, read?.answers ?? {});
+
+    assert.deepEqual((await service.read(attemptId))?.pending, [q1]);
   });
 
   describe('reading a sitting back', () => {

@@ -9,6 +9,7 @@ import { makePaper, makeStudent, resetDatabase, sitPaper, testPrisma } from './s
 
 const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
 const NOW = new Date('2026-09-01T05:00:00.000Z');
+const HOUR_MS = 60 * 60 * 1000;
 
 const prisma = testPrisma();
 
@@ -29,7 +30,13 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
   });
   const questionId = paper.items[0]?.questionId ?? '';
   const state = new AttemptStateService(prisma, new FakeRedis().asService());
-  await state.open({ id: attempt.id, studentId, endsAt: ENDS_AT });
+  await state.open({
+    id: attempt.id,
+    studentId,
+    testId: paper.testId,
+    startedAt: new Date(ENDS_AT.getTime() - HOUR_MS),
+    endsAt: ENDS_AT,
+  });
   if (saved) {
     const answer = {
       questionId,

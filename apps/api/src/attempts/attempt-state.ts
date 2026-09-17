@@ -16,6 +16,10 @@ export const SAVE_GRACE_SEC = 30;
 export interface HeldState {
   attemptId: string;
   studentId: string;
+  /** The paper and the start a flush places and times answers against. */
+  testId: string;
+  /** ISO. */
+  startedAt: string;
   /** ISO, the server's own deadline — the client's clock never decides whether a save is late. */
   endsAt: string;
   revision: number;
@@ -97,6 +101,28 @@ export function applyBatch(
     pending: [...new Set([...(held.pending ?? []), ...batch.answers.map((c) => c.questionId)])],
     sections: batch.sections ? { ...held.sections, ...batch.sections } : held.sections,
   };
+}
+
+function sameAnswer(a: LiveAnswer | undefined, b: LiveAnswer | undefined): boolean {
+  if (a === undefined || b === undefined) return false;
+  return (
+    a.state === b.state &&
+    a.selectedOptionId === b.selectedOptionId &&
+    a.typedAnswer === b.typedAnswer &&
+    a.timeSpentSec === b.timeSpentSec &&
+    a.answeredAt === b.answeredAt &&
+    a.firstActionAt === b.firstActionAt
+  );
+}
+
+/** What stays pending once a flush wrote `written`: an answer a save changed since then has not landed. */
+export function pendingAfter(
+  held: HeldState,
+  written: Readonly<Record<string, LiveAnswer>>,
+): string[] {
+  return (held.pending ?? []).filter(
+    (questionId) => !sameAnswer(held.answers[questionId], written[questionId]),
+  );
 }
 
 /** Whether a save arriving now is still in time. Past the deadline and its grace, it is not. */

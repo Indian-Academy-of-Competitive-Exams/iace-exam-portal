@@ -12,6 +12,8 @@ const ENDS_AT = '2099-01-01T00:00:00.000Z';
 const held = (over: Partial<HeldState> = {}): HeldState => ({
   attemptId: 'att_1',
   studentId: 'stu_1',
+  testId: 'test_1',
+  startedAt: '2026-01-01T00:00:00.000Z',
   endsAt: ENDS_AT,
   revision: 0,
   answers: {},
@@ -22,6 +24,8 @@ const held = (over: Partial<HeldState> = {}): HeldState => ({
 const sitting = (id: string) => ({
   id,
   studentId: 'stu_1',
+  testId: 'test_1',
+  startedAt: new Date('2026-01-01T00:00:00.000Z'),
   endsAt: new Date(ENDS_AT),
 });
 

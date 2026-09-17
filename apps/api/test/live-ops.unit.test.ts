@@ -32,6 +32,8 @@ function held(over: Partial<HeldState> = {}): HeldState {
   return {
     attemptId: 'att_1',
     studentId: 'stu_1',
+    testId: 'test_1',
+    startedAt: STARTED_AT.toISOString(),
     endsAt: ENDS_AT.toISOString(),
     revision: 3,
     answers: {},

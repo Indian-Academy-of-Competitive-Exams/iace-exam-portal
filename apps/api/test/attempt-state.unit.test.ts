@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, type AnswerChange } from '@iace/contracts';
+import { ANSWER_STATE, type AnswerChange, type LiveAnswer } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
@@ -9,6 +9,7 @@ import {
   applyBatch,
   isInTime,
   isStale,
+  pendingAfter,
   SAVE_GRACE_SEC,
   stateOf,
   type HeldState,
@@ -19,6 +20,8 @@ const ENDS_AT = '2026-09-01T05:30:00.000Z';
 const held = (over: Partial<HeldState> = {}): HeldState => ({
   attemptId: 'att_1',
   studentId: 'stu_1',
+  testId: 'test_1',
+  startedAt: '2026-09-01T05:00:00.000Z',
   endsAt: ENDS_AT,
   revision: 0,
   answers: {},
@@ -236,12 +239,25 @@ describe('AttemptStateService.clearPending', () => {
   const service = (redis: FakeRedis) =>
     new AttemptStateService({} as PrismaService, redis.asService());
 
+  const answer: LiveAnswer = {
+    state: ANSWER_STATE.ANSWERED,
+    selectedOptionId: 'o1',
+    typedAnswer: null,
+    timeSpentSec: 10,
+    answeredAt: '2026-09-01T05:01:00.000Z',
+    firstActionAt: '2026-09-01T05:00:30.000Z',
+  };
+
   /** The failure this prevents: a save landing mid-pass cleared unwritten, so its answer never lands. */
   it('clears only what the pass wrote, keeping a mark made while it ran', async () => {
     const redis = new FakeRedis();
-    await redis.setJson(redisKeys.attemptState('att_1'), held({ pending: ['q1', 'q2'] }), 60);
+    await redis.setJson(
+      redisKeys.attemptState('att_1'),
+      held({ pending: ['q1', 'q2'], answers: { q1: answer } }),
+      60,
+    );
 
-    await service(redis).clearPending('att_1', ['q1']);
+    await service(redis).clearPending('att_1', { q1: answer });
 
     const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
     assert.deepEqual(after?.pending, ['q2']);
@@ -251,9 +267,44 @@ describe('AttemptStateService.clearPending', () => {
     const redis = new FakeRedis();
     await redis.setJson(redisKeys.attemptState('att_1'), held({ pending: ['q1'] }), 60);
 
-    await service(redis).clearPending('att_1', []);
+    await service(redis).clearPending('att_1', {});
 
     const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
     assert.deepEqual(after?.pending, ['q1']);
+  });
+});
+
+describe('pendingAfter', () => {
+  const answer = (selectedOptionId: string): LiveAnswer => ({
+    state: ANSWER_STATE.ANSWERED,
+    selectedOptionId,
+    typedAnswer: null,
+    timeSpentSec: 10,
+    answeredAt: '2026-09-01T05:01:00.000Z',
+    firstActionAt: '2026-09-01T05:00:30.000Z',
+  });
+  const held = (answers: Record<string, LiveAnswer>, pending: string[]): HeldState => ({
+    attemptId: 'att_1',
+    studentId: 'stu_1',
+    testId: 'test_1',
+    startedAt: '2026-09-01T05:00:00.000Z',
+    endsAt: '2026-09-01T06:00:00.000Z',
+    revision: 3,
+    answers,
+    pending,
+    sections: {},
+  });
+
+  it('clears what the flush wrote and nothing a save changed after it read', () => {
+    const written = { q1: answer('o1'), q2: answer('o1') };
+    const now = held({ q1: answer('o1'), q2: answer('o2'), q3: answer('o3') }, ['q1', 'q2', 'q3']);
+
+    assert.deepEqual(pendingAfter(now, written), ['q2', 'q3']);
+  });
+
+  it('leaves nothing pending for a key with no list, whose pass wrote the whole paper', () => {
+    const now = { ...held({ q1: answer('o1') }, []), pending: undefined };
+
+    assert.deepEqual(pendingAfter(now, { q1: answer('o1') }), []);
   });
 });
