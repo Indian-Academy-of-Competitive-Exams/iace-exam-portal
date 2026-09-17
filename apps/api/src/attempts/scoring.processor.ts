@@ -113,7 +113,7 @@ export class ScoringProcessor extends WorkerHost {
     });
   }
 
-  /** One transaction: a sitting whose totals and per-question marks disagree is worse than neither. */
+  /** One transaction: a sitting whose totals and per-question verdicts disagree is worse than neither. */
   private async persist(
     attempt: ScoringRow,
     scored: PaperScore,
@@ -124,7 +124,6 @@ export class ScoringProcessor extends WorkerHost {
         where: { attemptId: attempt.id },
         data: { verdicts: verdictsOf(scored.questions, terms) },
       });
-      await this.markQuestions(tx, attempt.id, scored);
       // Claimed, never rewritten: two racing workers must not disagree about when this was scored.
       const claimed = await tx.attempt.updateMany({
         where: { id: attempt.id, evaluatedAt: null, status: { in: [...SCORABLE] } },
@@ -200,28 +199,6 @@ export class ScoringProcessor extends WorkerHost {
       dedupeKey: `result-updated:${attempt.id}:${score}`,
       testId: attempt.testId,
     });
-  }
-
-  /** One statement per distinct outcome, not per question: a 100-mark paper has a handful. */
-  private async markQuestions(
-    tx: Prisma.TransactionClient,
-    attemptId: string,
-    scored: PaperScore,
-  ): Promise<void> {
-    const buckets = new Map<string, { row: (typeof scored.questions)[number]; ids: string[] }>();
-    for (const question of scored.questions) {
-      const outcome = `${String(question.isCorrect)}:${question.marksAwarded}`;
-      const held = buckets.get(outcome) ?? { row: question, ids: [] };
-      held.ids.push(question.questionId);
-      buckets.set(outcome, held);
-    }
-
-    for (const bucket of buckets.values()) {
-      await tx.attemptQuestion.updateMany({
-        where: { attemptId, questionId: { in: bucket.ids } },
-        data: { isCorrect: bucket.row.isCorrect, marksAwarded: bucket.row.marksAwarded },
-      });
-    }
   }
 }
 

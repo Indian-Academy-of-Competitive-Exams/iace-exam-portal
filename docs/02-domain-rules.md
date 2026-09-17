@@ -177,8 +177,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   a paper left to sit another runs to the deadline it was given at start.
 - `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
   Sections keep the config's order; questions shuffle within a section.
-- The whole served paper is written as `AttemptQuestion` rows at start, not only what the student
-  touches, so scoring reads its marks from the paper row it already has.
+- A sitting keeps its answers on one `AttemptSheet`: a slot per paper row in paper order, seeded
+  untouched at start, patched by the flusher, written whole at submit, and marked by the scorer in a
+  parallel verdict array. The order a student saw is derived from `shuffleSeed`, never stored.
+  **Once anyone sits a test its paper is frozen in the database** — rows may not be added, removed,
+  repointed or repriced; only a question's status moves.
 - `Attempt.isGraded` marks the **one sitting holding the student's ranked slot** on a test —
   normally the first, and a later one only where a void handed the slot back (§8). Any other
   sitting is a retake: marked, never ranked, and never in a cohort.
@@ -294,9 +297,10 @@ and needs no mapping at all.
   that is already live is past the point their reading changes, and an archived one is past caring.
   The server forces `status: DRAFT` rather than filtering on it, so a hand-edited URL cannot widen
   the document; the screen has no Status control, because there is no longer a choice to offer.
-- **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion`,
-  `AttemptQuestion` or `TestQuestionStat` references may be returned to DRAFT or deleted; the rule
-  counts those three tables before it allows the move, so it refuses before a foreign key does.
+- **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion` or
+  `TestQuestionStat` references may be returned to DRAFT or deleted; every served question is a paper
+  row a sat test cannot lose, and the rule counts those two tables before it allows the move, so it
+  refuses before a foreign key does.
 - **Subject and topic settle when the question leaves the draft.** Taxonomy is what a section draws
   on, so moving it afterwards would change what a finalized paper was built from. Returning the
   question to draft is the only way to move it, and the freeze above refuses that once anything uses

@@ -18,7 +18,6 @@ import { AttemptSheetService } from './attempt-sheet.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import {
   deadlineFrom,
-  displayOrder,
   languagesFor,
   slotsAfter,
   testStartBlocker,
@@ -34,7 +33,6 @@ const SITTABLE_INCLUDE = {
       languageMode: true,
       languages: true,
       totalQuestions: true,
-      shuffleQuestions: true,
       locked: true,
       // A scoped test is sat on its own sections' clock, never the whole configuration's.
       sections: {
@@ -136,24 +134,6 @@ export class AttemptsService {
           shuffleSeed: randomInt(SEED_CEILING),
           languages: languagesFor(test.baseConfig.languageMode, test.baseConfig.languages, picked),
         },
-      });
-
-      const paper = await tx.paperQuestion.findMany({
-        where: { testId: test.id },
-        select: { id: true, questionId: true, questionVersionId: true, baseConfigSectionId: true },
-        orderBy: { order: 'asc' },
-      });
-      const served = displayOrder(paper, attempt.shuffleSeed, test.baseConfig.shuffleQuestions);
-
-      await tx.attemptQuestion.createMany({
-        data: served.map((row, index) => ({
-          attemptId: attempt.id,
-          questionId: row.questionId,
-          paperQuestionId: row.id,
-          questionVersionId: row.questionVersionId,
-          baseConfigSectionId: row.baseConfigSectionId,
-          order: index + 1,
-        })),
       });
 
       await this.sheets.create(tx, attempt.id, test.id);

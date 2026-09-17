@@ -104,10 +104,6 @@ describe('the Score Card', () => {
       data: { shuffleQuestions: true },
     });
     const { studentId, attemptId } = await mine(onPaper, { shuffleSeed: 1 });
-    await prisma.attemptQuestion.updateMany({
-      where: { attemptId },
-      data: { selectedOptionId: 'stale', isCorrect: null, marksAwarded: 0 },
-    });
 
     const card = await reports().scoreCard(studentId, attemptId);
 

@@ -133,8 +133,8 @@ clock.
 **Answers autosave to Redis, never Postgres.** The client flushes the in-progress answer sheet every
 20–30 seconds. Redis absorbs that churn; Postgres is never written per keystroke. The live sitting
 lives in Redis and the key existing is what "this sitting is open" means, so a save arriving after a
-submit finds no key and is refused. A background job copies Redis to the durable rows on a timer, so
-a failed run costs the copy a minute, not the answers.
+submit finds no key and is refused. A background job patches what changed into the sitting's one
+answer sheet on a timer, so a failed run costs the copy a minute, not the answers.
 
 **Submit is buffered through a queue.** On submit — or auto-submit at time-up — the scoring request
 is inserted in the same transaction that flips the sitting to `SUBMITTED`, so no crash can strand an

@@ -89,7 +89,7 @@ export class AttemptResolutionService {
     return resolved({ ...attempt, endsAt }, false);
   }
 
-  /** A lost live key, put back from the durable rows — never a marked sitting put back in progress. */
+  /** A lost live key, put back from the sheet — never a marked sitting put back in progress. */
   async reset(attemptId: string, body: ResetAttemptBody): Promise<ResolvedAttempt> {
     const attempt = await this.require(attemptId, SUPPORT_ACTIONS.RESET);
     const held = await this.state.reestablish(attempt.studentId, attemptId);

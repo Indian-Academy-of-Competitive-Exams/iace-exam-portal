@@ -441,11 +441,10 @@ Table PaperQuestion {
   marks decimal(6, 2) [not null]
   negativeMarks decimal(6, 2) [not null]
   status PaperQuestionStatus [not null, default: 'ACTIVE']
+  optionIds text [not null, note: 'array']
   indexes {
     (testId, questionId) [unique]
     (testId, order) [unique]
-    (id, questionId, questionVersionId) [unique]
-    (id, baseConfigSectionId) [unique]
     (questionId)
     (questionVersionId)
     (baseConfigId, baseConfigSectionId)
@@ -485,28 +484,11 @@ Table Attempt {
   }
 }
 
-Table AttemptQuestion {
-  attemptId text [not null]
-  questionId text [not null]
-  paperQuestionId text
-  questionVersionId text [not null]
-  baseConfigSectionId text [not null]
-  order integer [not null]
-  selectedOptionId text
-  typedAnswer text
-  state AnswerState [not null, default: 'NOT_VISITED']
-  timeSpentSec integer [not null, default: 0]
-  isCorrect boolean
-  marksAwarded decimal(6, 2)
-  answeredAt timestamptz(3)
-  firstActionAt timestamptz(3)
-  indexes {
-    (attemptId, questionId) [pk]
-    (questionId)
-    (paperQuestionId)
-    (baseConfigSectionId)
-    (attemptId, order)
-  }
+Table AttemptSheet {
+  attemptId text [pk]
+  answers jsonb [not null]
+  verdicts jsonb
+  updatedAt timestamptz(3) [not null, default: `now()`]
 }
 
 Table Student {
@@ -949,12 +931,7 @@ Ref: PaperQuestion.questionId > Question.id
 Ref: PaperQuestion.(questionId, questionVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
 Ref: Attempt.testId > Test.id
 Ref: Attempt.studentId > Student.id
-Ref: AttemptQuestion.attemptId > Attempt.id [delete: cascade]
-Ref: AttemptQuestion.questionId > Question.id
-Ref: AttemptQuestion.(questionId, questionVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
-Ref: AttemptQuestion.(paperQuestionId, questionId, questionVersionId) > PaperQuestion.(id, questionId, questionVersionId) [delete: restrict]
-Ref: AttemptQuestion.(paperQuestionId, baseConfigSectionId) > PaperQuestion.(id, baseConfigSectionId) [delete: restrict]
-Ref: AttemptQuestion.baseConfigSectionId > BaseConfigSection.id
+Ref: AttemptSheet.attemptId > Attempt.id [delete: cascade]
 Ref: Student.currentBranchId > Branch.id [delete: restrict]
 Ref: StudentProfile.studentId > Student.id [delete: cascade]
 Ref: StudentConsent.studentId > Student.id [delete: cascade]
@@ -1024,7 +1001,7 @@ TableGroup "Tests & Papers" { // color: #2E7D5B
 
 TableGroup "Attempts" { // color: #2563A8
   Attempt
-  AttemptQuestion
+  AttemptSheet
 }
 
 TableGroup "People & Identity" { // color: #6D4AA8

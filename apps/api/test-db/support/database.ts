@@ -488,26 +488,11 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
       (chosen === null && typedAnswer === null ? ANSWER_STATE.NOT_VISITED : ANSWER_STATE.ANSWERED);
     return {
       item,
-      index,
       chosen,
       typedAnswer,
       state,
       timeSpentSec: input.timeSpent?.[index] ?? 30,
     };
-  });
-  await prisma.attemptQuestion.createMany({
-    data: given.map(({ item, index, chosen, typedAnswer, state, timeSpentSec }) => ({
-      attemptId: attempt.id,
-      questionId: item.questionId,
-      questionVersionId: item.versionId,
-      paperQuestionId: item.paperQuestionId,
-      baseConfigSectionId: item.sectionId,
-      order: index + 1,
-      selectedOptionId: chosen,
-      typedAnswer,
-      state,
-      timeSpentSec,
-    })),
   });
   const answers: Record<string, LiveAnswer> = Object.fromEntries(
     given.map(({ item, chosen, typedAnswer, state, timeSpentSec }) => [
@@ -533,7 +518,7 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
   return attempt;
 }
 
-/** A sitting's sheet read back as rows in the order it was served: what the answer rows used to be. */
+/** A sitting's sheet, decoded back into one row per question, in the order it was served. */
 export async function servedAnswers(prisma: PrismaService, attemptId: string) {
   const sitting = await prisma.attempt.findUniqueOrThrow({
     where: { id: attemptId },
@@ -551,29 +536,6 @@ export async function servedAnswers(prisma: PrismaService, attemptId: string) {
     select: { ...SHEET_ROW_SELECT, questionVersionId: true },
   });
   return servedSheet(paper, sitting, sitting.test.baseConfig.shuffleQuestions);
-}
-
-/** One question as a sitting was served it, with the seconds spent on it. */
-export function serveQuestion(
-  prisma: PrismaService,
-  input: {
-    attemptId: string;
-    question: { id: string; versionId: string };
-    sectionId: string;
-    order?: number;
-    timeSpentSec?: number;
-  },
-): Promise<unknown> {
-  return prisma.attemptQuestion.create({
-    data: {
-      attemptId: input.attemptId,
-      questionId: input.question.id,
-      questionVersionId: input.question.versionId,
-      baseConfigSectionId: input.sectionId,
-      order: input.order ?? 1,
-      timeSpentSec: input.timeSpentSec ?? 0,
-    },
-  });
 }
 
 /** An evaluated, graded first sitting unless told otherwise, submitted half an hour in. */

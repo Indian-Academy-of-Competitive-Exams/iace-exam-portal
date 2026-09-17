@@ -87,7 +87,7 @@ async function hall(questionCount = 2) {
     access,
     attempts: new AttemptsService(prisma, access, state, sheets),
     sheet: new AttemptPaperService(prisma, access, noStorage()),
-    flusher: new AttemptFlushProcessor(prisma, state, fakeQueueFailures(), sheets),
+    flusher: new AttemptFlushProcessor(state, sheets, fakeQueueFailures()),
     submit: new SubmitService(
       prisma,
       state,
@@ -107,12 +107,15 @@ const answer = (questionId: string, optionId: string): AnswerChange => ({
   timeSpentSec: 20,
 });
 
-const durable = (attemptId: string) =>
-  prisma.attemptQuestion.findMany({
-    where: { attemptId },
-    orderBy: { questionId: 'asc' },
-    select: { questionId: true, state: true, selectedOptionId: true, timeSpentSec: true },
-  });
+const durable = async (attemptId: string) =>
+  (await servedAnswers(prisma, attemptId))
+    .map((row) => ({
+      questionId: row.questionId,
+      state: row.state,
+      selectedOptionId: row.selectedOptionId,
+      timeSpentSec: row.timeSpentSec,
+    }))
+    .sort((a, b) => a.questionId.localeCompare(b.questionId));
 
 describe('a sitting, end to end', () => {
   it('offers the test in the catalog and starts the very test it offered', async () => {

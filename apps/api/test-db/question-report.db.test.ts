@@ -129,10 +129,6 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
       shuffleSeed: 1,
     });
     await processor.score(attempt.id);
-    await prisma.attemptQuestion.updateMany({
-      where: { attemptId: attempt.id },
-      data: { selectedOptionId: 'stale', isCorrect: null, marksAwarded: 0 },
-    });
 
     const report = await service.forAttempt(student.id, attempt.id);
 

@@ -142,7 +142,7 @@ export class AttemptStateService {
     );
   }
 
-  /** The support console's reset: the key written again from the durable rows, losing nothing. */
+  /** The support console's reset: the key rebuilt from the sheet, losing nothing. */
   async reestablish(studentId: string, attemptId: string): Promise<HeldState> {
     const durable = await this.durableState(studentId, attemptId);
     // Anything the key still holds landed AFTER the last flush, so it wins over the durable copy.

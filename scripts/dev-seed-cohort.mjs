@@ -152,7 +152,6 @@ async function purge(prisma) {
   });
   const attemptIds = attempts.map((row) => row.id);
 
-  await prisma.attemptQuestion.deleteMany({ where: { attemptId: { in: attemptIds } } });
   await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: attemptIds } } });
   await prisma.attempt.deleteMany({ where: { id: { in: attemptIds } } });
   await prisma.paperQuestion.deleteMany({ where: { testId: IDS.test } });
@@ -307,10 +306,33 @@ function answersFor(index, paper) {
   });
 }
 
+/** Mirrors SLOT_STATES in apps/api/src/attempts/answer-sheet.ts: a slot's state is its index. */
+const SLOT_STATES = ['NOT_VISITED', 'NOT_ANSWERED', 'ANSWERED', 'MARKED_REVIEW', 'ANSWERED_MARKED'];
+
+/** Mirrors optionOf in apps/api/src/attempts/answer-sheet.ts: a position into optionIds, or the id itself. */
+function optionOf(selected, optionIds) {
+  if (selected === null) return null;
+  const position = optionIds.indexOf(selected);
+  return position === -1 ? selected : position;
+}
+
+/** Mirrors encodeAnswer: [state, option position, seconds, first touch, last answer], times after the start. */
+function slotOf(answer, optionIds, startedAt, answeredAt) {
+  const answered =
+    answeredAt === null ? null : Math.floor((answeredAt.getTime() - startedAt.getTime()) / 1000);
+  return [
+    SLOT_STATES.indexOf(answer.state),
+    optionOf(answer.selectedOptionId, optionIds),
+    answer.timeSpentSec,
+    null,
+    answered,
+  ];
+}
+
 async function writeSittings(prisma, paper) {
   const openedAt = new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS);
   const attempts = [];
-  const items = [];
+  const sheets = [];
   const events = [];
 
   for (let index = 0; index < STUDENTS; index += 1) {
@@ -332,20 +354,16 @@ async function writeSittings(prisma, paper) {
       languages: ['EN'],
     });
 
-    answers.forEach((answer, position) => {
-      const row = paper[position];
-      items.push({
-        attemptId,
-        questionId: row.questionId,
-        paperQuestionId: row.id,
-        questionVersionId: row.questionVersionId,
-        baseConfigSectionId: row.baseConfigSectionId,
-        order: row.order,
-        selectedOptionId: answer.selectedOptionId,
-        state: answer.state,
-        timeSpentSec: answer.timeSpentSec,
-        answeredAt: answer.selectedOptionId ? openedAt : null,
-      });
+    sheets.push({
+      attemptId,
+      answers: answers.map((answer, position) =>
+        slotOf(
+          answer,
+          paper[position].optionIds,
+          openedAt,
+          answer.selectedOptionId ? openedAt : null,
+        ),
+      ),
     });
 
     events.push({
@@ -358,9 +376,9 @@ async function writeSittings(prisma, paper) {
   }
 
   await chunked(attempts, (batch) => prisma.attempt.createMany({ data: batch }));
-  await chunked(items, (batch) => prisma.attemptQuestion.createMany({ data: batch }));
+  await chunked(sheets, (batch) => prisma.attemptSheet.createMany({ data: batch }));
   await chunked(events, (batch) => prisma.outboxEvent.createMany({ data: batch }));
-  return { attempts: attempts.length, items: items.length };
+  return { attempts: attempts.length, items: sheets.length * paper.length };
 }
 
 // --- run --------------------------------------------------------------------

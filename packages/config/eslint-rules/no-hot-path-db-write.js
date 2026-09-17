@@ -19,7 +19,7 @@ const WRITES = new Set([
   '$transaction',
 ]);
 
-/** `this.prisma.attemptQuestion.updateMany` → ['this','prisma','attemptQuestion','updateMany']. */
+/** `this.prisma.attemptSheet.update` → ['this','prisma','attemptSheet','update']. */
 function memberPath(node) {
   const parts = [];
   let current = node;

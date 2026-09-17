@@ -54,7 +54,7 @@ export interface SheetSitting {
   sheet: { answers: unknown; verdicts?: unknown } | null;
 }
 
-/** What a served answer row used to carry, read off the sheet instead. */
+/** One served question's answer and its verdict, decoded off the sheet. */
 export interface ServedAnswer {
   order: number;
   state: AnswerState;

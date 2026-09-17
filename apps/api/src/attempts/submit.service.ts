@@ -11,7 +11,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
-import { STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
 import { answeredIn, type AnswerSheet } from './answer-sheet';
 import { holdsSitting } from './attempt-state';
 import { ScoringOutbox } from './scoring-outbox';
@@ -74,7 +73,6 @@ export class SubmitService {
 
     // READ, never taken: the live state has to outlive a write that throws.
     const held = await this.state.read(attempt.id);
-    await writeRows(this.prisma, attempt.id, held ? rowsToFlush(held) : [], STILL_LIVE);
     let sheet = held ? await this.sheets.write(held, true) : null;
 
     const requested = await this.claim(attempt, now);
@@ -84,7 +82,6 @@ export class SubmitService {
     const last = await this.state.take(attempt.id);
     // A save that beat the claim: written before the request is handed to a scorer.
     if (last && last.revision !== held?.revision) {
-      await writeRows(this.prisma, attempt.id, rowsToFlush(last));
       sheet = await this.sheets.write(last, false);
     }
 
@@ -136,7 +133,6 @@ export class SubmitService {
   private async closeOff(attemptId: string): Promise<SubmittedAttempt> {
     const stray = await this.state.take(attemptId);
     if (stray) {
-      await writeRows(this.prisma, attemptId, rowsToFlush(stray));
       await this.sheets.write(stray, false);
     }
     return this.alreadySubmitted(attemptId);

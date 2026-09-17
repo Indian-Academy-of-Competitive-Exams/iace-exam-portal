@@ -10,7 +10,7 @@ const GROUPS = [
     ['Subject', 'Topic', 'Question', 'QuestionVersion', 'SavedQuestion', 'QuestionFlag'],
   ],
   ['Tests & Papers', '#2E7D5B', ['Test', 'PaperQuestion']],
-  ['Attempts', '#2563A8', ['Attempt', 'AttemptQuestion']],
+  ['Attempts', '#2563A8', ['Attempt', 'AttemptSheet']],
   ['People & Identity', '#6D4AA8', ['Student', 'StudentProfile', 'Admin', 'StudentConsent']],
   ['Admin Permissions', '#8A4A8F', ['AdminFeaturePermission']],
   [

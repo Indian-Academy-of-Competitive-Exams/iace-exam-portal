@@ -386,7 +386,6 @@ model BaseConfigSection {
   module         BaseConfigModule? @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
   subject        Subject?          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   paperQuestions PaperQuestion[]
-  attemptItems   AttemptQuestion[]
   sectionStats   TestSectionStat[]
 
   @@unique([baseConfigId, moduleId, order])
@@ -446,7 +445,6 @@ model Question {
   currentVersion QuestionVersion?   @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
   versions       QuestionVersion[]  @relation("QuestionVersions")
   paperQuestions PaperQuestion[]
-  attemptItems   AttemptQuestion[]
   questionStats  TestQuestionStat[]
   flags          QuestionFlag[]
   savedBy        SavedQuestion[]
@@ -471,10 +469,9 @@ model QuestionVersion {
   createdById String?
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
-  question       Question          @relation("QuestionVersions", fields: [questionId], references: [id])
-  currentOf      Question[]        @relation("QuestionCurrentVersion")
+  question       Question        @relation("QuestionVersions", fields: [questionId], references: [id])
+  currentOf      Question[]      @relation("QuestionCurrentVersion")
   paperQuestions PaperQuestion[]
-  attemptItems   AttemptQuestion[]
 
   @@unique([questionId, version])
   @@unique([questionId, id])
@@ -548,14 +545,10 @@ model PaperQuestion {
   baseConfigSection BaseConfigSection  @relation(fields: [baseConfigId, baseConfigSectionId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
   question          Question           @relation(fields: [questionId], references: [id])
   questionVersion   QuestionVersion    @relation(fields: [questionId, questionVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
-  attemptItems      AttemptQuestion[]  @relation("AttemptItemPaper")
-  attemptSections   AttemptQuestion[]  @relation("AttemptItemPaperSection")
   questionStats     TestQuestionStat[]
 
   @@unique([testId, questionId])
   @@unique([testId, order])
-  @@unique([id, questionId, questionVersionId])
-  @@unique([id, baseConfigSectionId])
   @@index([questionId])
   @@index([questionVersionId])
   @@index([baseConfigId, baseConfigSectionId])
@@ -597,7 +590,6 @@ model Attempt {
 
   test             Test              @relation(fields: [testId], references: [id])
   student          Student           @relation(fields: [studentId], references: [id])
-  questions        AttemptQuestion[]
   sheet            AttemptSheet?
   processedRollups ProcessedRollup[]
   topperOf         TestStat[]
@@ -606,40 +598,6 @@ model Attempt {
   @@index([studentId, createdAt])
   @@index([testId, status])
   @@index([testId, score])
-}
-
-// One row per question served in an attempt and its response, upserted by one writer; Redis holds the live state.
-model AttemptQuestion {
-  attemptId           String
-  questionId          String
-  // Always set: scoring reads the question's marks from its paper row.
-  paperQuestionId     String?
-  questionVersionId   String
-  baseConfigSectionId String
-  order               Int
-  // An option id inside QuestionVersion.options — app-validated, not a DB FK.
-  selectedOptionId    String?
-  typedAnswer         String?
-  state               AnswerState @default(NOT_VISITED)
-  timeSpentSec        Int         @default(0)
-  isCorrect           Boolean?
-  marksAwarded        Decimal?    @db.Decimal(6, 2)
-  answeredAt          DateTime?   @db.Timestamptz(3)
-  // The first touch of any kind, opening it included. `answeredAt` is the LAST answer, not the first.
-  firstActionAt       DateTime?   @db.Timestamptz(3)
-
-  attempt           Attempt           @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question          Question          @relation(fields: [questionId], references: [id])
-  questionVersion   QuestionVersion   @relation(fields: [questionId, questionVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
-  paperItem         PaperQuestion?    @relation("AttemptItemPaper", fields: [paperQuestionId, questionId, questionVersionId], references: [id, questionId, questionVersionId], onDelete: Restrict, onUpdate: NoAction)
-  paperSection      PaperQuestion?    @relation("AttemptItemPaperSection", fields: [paperQuestionId, baseConfigSectionId], references: [id, baseConfigSectionId], onDelete: Restrict, onUpdate: NoAction)
-  baseConfigSection BaseConfigSection @relation(fields: [baseConfigSectionId], references: [id])
-
-  @@id([attemptId, questionId])
-  @@index([questionId])
-  @@index([paperQuestionId])
-  @@index([baseConfigSectionId])
-  @@index([attemptId, order])
 }
 
 // One sitting's answers in one row: `answers` holds a slot per paper row in paper order, `verdicts` the scorer's marks for each.

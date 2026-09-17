@@ -26,6 +26,7 @@ import {
   makePaper,
   makeStudent,
   resetDatabase,
+  servedAnswers,
   sitPaper,
   testPrisma,
   type Paper,
@@ -102,8 +103,7 @@ async function hall(over: Hall = {}) {
   return { paper, student, service: service(), serviceOn: service };
 }
 
-const served = (attemptId: string) =>
-  prisma.attemptQuestion.findMany({ where: { attemptId }, orderBy: { order: 'asc' } });
+const served = (attemptId: string) => servedAnswers(prisma, attemptId);
 
 const configOf = (paper: Paper) =>
   prisma.baseConfig.findUniqueOrThrow({ where: { id: paper.catalog.baseConfigId } });
@@ -133,7 +133,7 @@ describe('AttemptsService — starting a sitting', () => {
     assert.equal(attempt.startedByThisCall, true);
   });
 
-  it('seeds one row per frozen question, pinning the version each serves', async () => {
+  it('seeds an untouched sheet with one slot per paper question', async () => {
     const { service, student, paper } = await hall();
 
     const attempt = await service.start(student, paper.testId, {});
@@ -160,10 +160,6 @@ describe('AttemptsService — starting a sitting', () => {
     assert.deepEqual(
       rows.map((row) => row.baseConfigSectionId),
       [first, first, first, second, second, second],
-    );
-    assert.deepEqual(
-      rows.map((row) => row.order),
-      [1, 2, 3, 4, 5, 6],
     );
   });
 
@@ -243,7 +239,7 @@ describe('AttemptsService — starting twice', () => {
 
     assert.equal(a.id, b.id);
     assert.equal(await sittingsOf(paper), 1);
-    assert.equal(await prisma.attemptQuestion.count(), 3);
+    assert.equal(await prisma.attemptSheet.count(), 1);
   });
 
   /** No cap exists any more: a student may sit a paper as often as they like, ranked or not. */

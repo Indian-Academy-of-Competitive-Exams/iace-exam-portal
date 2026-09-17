@@ -1,15 +1,16 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { type HeldState } from './attempt-state';
-import { FLUSH_LANES, STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
-/** Redis to `AttemptQuestion` on a timer. A failed run costs the durable copy a minute, not answers. */
+/** How many sittings one pass writes at a time. Lanes, not workers: one pass owns the dirty set. */
+export const FLUSH_LANES = 8;
+
+/** Redis to the sitting's sheet on a timer. A failed run costs the durable copy a minute, not answers. */
 @Processor(QUEUE_NAMES.ATTEMPT_FLUSH, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.ATTEMPT_FLUSH].concurrency,
 })
@@ -17,10 +18,9 @@ export class AttemptFlushProcessor extends WorkerHost {
   private readonly logger = new Logger(AttemptFlushProcessor.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
-    private readonly failures: QueueFailures,
     private readonly sheets: AttemptSheetService,
+    private readonly failures: QueueFailures,
   ) {
     super();
   }
@@ -56,8 +56,6 @@ export class AttemptFlushProcessor extends WorkerHost {
       }),
     );
     try {
-      // Gated rather than asked: an ended sitting matches no rows, so its status costs no query.
-      await writeRows(this.prisma, attemptId, rowsToFlush(held, ids), STILL_LIVE);
       await this.sheets.patch(held, ids);
       await this.state.clearPending(attemptId, written);
       return attemptId;

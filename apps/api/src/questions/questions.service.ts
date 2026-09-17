@@ -57,7 +57,6 @@ const QUESTION_INCLUDE = {
   _count: {
     select: {
       paperQuestions: true,
-      attemptItems: true,
       questionStats: true,
       flags: { where: { status: QUESTION_FLAG_STATUS.OPEN } },
     },
@@ -803,7 +802,7 @@ function toSummary(row: QuestionRow): QuestionSummary {
 /** What the lifecycle turns on, said once for the screen as well as for the rules. */
 function isReferenced(row: QuestionRow): boolean {
   const counts = row._count;
-  return counts.paperQuestions + counts.attemptItems + counts.questionStats > 0;
+  return counts.paperQuestions + counts.questionStats > 0;
 }
 
 function toDetail(row: QuestionRow): QuestionDetail {

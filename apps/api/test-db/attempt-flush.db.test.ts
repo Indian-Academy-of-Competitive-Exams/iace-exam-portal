@@ -61,65 +61,62 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
 
   return {
     attemptId: attempt.id,
+    startedAt,
     state,
-    row: () =>
-      prisma.attemptQuestion.findUniqueOrThrow({
-        where: { attemptId_questionId: { attemptId: attempt.id, questionId } },
-      }),
     processor: new AttemptFlushProcessor(
-      prisma,
       state,
-      fakeQueueFailures(),
       new AttemptSheetService(prisma, new PaperSheetService(prisma)),
+      fakeQueueFailures(),
     ),
   };
 }
 
 describe('AttemptFlushProcessor', () => {
-  it('writes what Redis holds into the durable row, and clears the mark', async () => {
-    const { processor, state, row, attemptId } = await build();
+  it('writes what Redis holds into the sitting’s sheet, and clears the mark', async () => {
+    const { processor, state, attemptId, startedAt } = await build();
 
     await processor.process();
 
-    const written = await row();
-    assert.equal(written.selectedOptionId, 'o1');
-    assert.equal(written.state, ANSWER_STATE.ANSWERED);
-    assert.equal(written.timeSpentSec, 12);
-    assert.deepEqual(written.answeredAt, NOW);
     assert.deepEqual(await state.dirtyIds(), []);
     const [onSheet] = await servedAnswers(prisma, attemptId);
+    // The sheet stores whole seconds after startedAt, so what it reports back is NOW truncated to the second.
+    const flushedAt = new Date(
+      startedAt.getTime() + Math.floor((NOW.getTime() - startedAt.getTime()) / 1000) * 1000,
+    );
     assert.deepEqual(
-      [onSheet?.state, onSheet?.selectedOptionId, onSheet?.timeSpentSec],
-      [ANSWER_STATE.ANSWERED, 'o1', 12],
+      [onSheet?.state, onSheet?.selectedOptionId, onSheet?.timeSpentSec, onSheet?.answeredAt],
+      [ANSWER_STATE.ANSWERED, 'o1', 12, flushedAt],
     );
   });
 
   /** It is a repeatable job, so it WILL run over state nothing has changed. */
   it('changes nothing the second time it runs over the same state', async () => {
-    const { processor, row } = await build();
+    const { processor, attemptId } = await build();
 
     await processor.process();
-    const once = await row();
+    const once = await servedAnswers(prisma, attemptId);
     await processor.process();
 
-    assert.deepEqual(await row(), once);
+    assert.deepEqual(await servedAnswers(prisma, attemptId), once);
   });
 
   it('writes nothing when no attempt is dirty', async () => {
-    const { processor, row } = await build(ATTEMPT_STATUS.IN_PROGRESS, false);
+    const { processor, attemptId } = await build(ATTEMPT_STATUS.IN_PROGRESS, false);
 
     await processor.process();
 
-    assert.equal((await row()).state, ANSWER_STATE.NOT_VISITED);
+    const [onSheet] = await servedAnswers(prisma, attemptId);
+    assert.equal(onSheet?.state, ANSWER_STATE.NOT_VISITED);
   });
 
   /** Submit flushes before it flips the status, so anything finished is already durable. */
   it('skips an attempt that has been submitted, and drops its mark', async () => {
-    const { processor, state, row } = await build(ATTEMPT_STATUS.SUBMITTED);
+    const { processor, state, attemptId } = await build(ATTEMPT_STATUS.SUBMITTED);
 
     await processor.process();
 
-    assert.equal((await row()).state, ANSWER_STATE.NOT_VISITED);
+    const [onSheet] = await servedAnswers(prisma, attemptId);
+    assert.equal(onSheet?.state, ANSWER_STATE.NOT_VISITED);
     assert.deepEqual(await state.dirtyIds(), []);
   });
 

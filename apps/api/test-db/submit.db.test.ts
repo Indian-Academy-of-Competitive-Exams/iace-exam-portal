@@ -43,25 +43,26 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 interface Hooks {
-  /** Runs before the batched flush lands; throwing refuses the write. */
-  beforeFlush?: () => Promise<void>;
+  /** Runs before the sheet write lands; throwing refuses the write. */
+  beforeWrite?: () => Promise<void>;
   /** Runs inside the claim's transaction, just before the UPDATE that ends the sitting. */
   beforeClaim?: () => Promise<void>;
 }
 
-/** The real client, with submit's batched flush and its claim each open to a hook. */
+/** The real client, with submit's sheet write and its claim each open to a hook. */
 function hooked(hooks: Hooks): PrismaService {
   return new Proxy(prisma, {
     get(target, key: string | symbol) {
+      if (key === '$executeRaw') {
+        return async (...args: unknown[]) => {
+          await hooks.beforeWrite?.();
+          return (target.$executeRaw as (...values: unknown[]) => Promise<number>)(...args);
+        };
+      }
       if (key !== '$transaction') return Reflect.get(target, key) as unknown;
-      return async (work: unknown) => {
-        if (Array.isArray(work)) {
-          await hooks.beforeFlush?.();
-          return target.$transaction(work as Prisma.PrismaPromise<unknown>[]);
-        }
-        const inTx = work as (tx: Prisma.TransactionClient) => Promise<unknown>;
-        return target.$transaction((tx) =>
-          inTx(
+      return async (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) =>
+          work(
             new Proxy(tx, {
               get(inner, model: string | symbol) {
                 if (model !== 'attempt') return Reflect.get(inner, model) as unknown;
@@ -75,7 +76,6 @@ function hooked(hooks: Hooks): PrismaService {
             }),
           ),
         );
-      };
     },
   });
 }
@@ -158,11 +158,8 @@ const answered = async ({ state, live, student, attemptId, change }: Built) => {
 const attemptRow = (id: string) => prisma.attempt.findUniqueOrThrow({ where: { id } });
 
 const chosenOn = async (attemptId: string, questionId: string) =>
-  (
-    await prisma.attemptQuestion.findUniqueOrThrow({
-      where: { attemptId_questionId: { attemptId, questionId } },
-    })
-  ).selectedOptionId;
+  (await servedAnswers(prisma, attemptId)).find((row) => row.questionId === questionId)
+    ?.selectedOptionId ?? null;
 
 const requests = () => prisma.outboxEvent.findMany({ orderBy: { createdAt: 'asc' } });
 
@@ -180,11 +177,6 @@ describe('SubmitService', () => {
     assert.equal(result.status, ATTEMPT_STATUS.SUBMITTED);
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
-    assert.equal(
-      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q1)
-        ?.selectedOptionId,
-      RIGHT_OPTION,
-    );
     assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.SUBMITTED);
     const [request] = await requests();
     assert.deepEqual(built.queue.jobs, [
@@ -256,7 +248,7 @@ describe('SubmitService', () => {
   it('keeps the live state and the sitting open when the write fails', async () => {
     const built = await build();
     await answered(built);
-    built.hooks.beforeFlush = () => Promise.reject(new Error('write refused'));
+    built.hooks.beforeWrite = () => Promise.reject(new Error('write refused'));
 
     await assert.rejects(() => built.submit.submit(built.student, built.attemptId));
 
@@ -268,16 +260,11 @@ describe('SubmitService', () => {
     assert.equal(await chosenOn(built.attemptId, built.q1), null);
     assert.equal(await prisma.outboxEvent.count(), 0);
 
-    delete built.hooks.beforeFlush;
+    delete built.hooks.beforeWrite;
     const result = await built.submit.submit(built.student, built.attemptId);
 
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
-    assert.equal(
-      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q1)
-        ?.selectedOptionId,
-      RIGHT_OPTION,
-    );
   });
 
   it('refuses another student with NOT_FOUND, not FORBIDDEN', async () => {
@@ -439,11 +426,6 @@ describe('a save that races the submit', () => {
 
     assert.equal(result.answeredCount, 2);
     assert.equal(await chosenOn(built.attemptId, built.q2), RIGHT_OPTION);
-    assert.equal(
-      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q2)
-        ?.selectedOptionId,
-      RIGHT_OPTION,
-    );
   });
 
   /** The failure this prevents: the one caller that can still write those answers dropping them. */
@@ -460,11 +442,6 @@ describe('a save that races the submit', () => {
     assert.equal(result.submittedByThisCall, false);
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
-    assert.equal(
-      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q1)
-        ?.selectedOptionId,
-      RIGHT_OPTION,
-    );
     // A key outliving its sitting would go on accepting saves for the whole 12h TTL.
     assert.equal(await built.state.read(built.attemptId), null);
   });

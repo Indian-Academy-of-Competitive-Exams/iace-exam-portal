@@ -27,7 +27,7 @@ ruleTester.run('no-hot-path-db-write', noHotPathDbWrite, {
 
   invalid: [
     {
-      code: service('await this.prisma.attemptQuestion.updateMany({ where: {}, data: {} });'),
+      code: service('await this.prisma.attemptSheet.updateMany({ where: {}, data: {} });'),
       errors: [{ messageId: 'hotPathWrite' }],
     },
     {
@@ -35,7 +35,7 @@ ruleTester.run('no-hot-path-db-write', noHotPathDbWrite, {
       errors: [{ messageId: 'hotPathWrite' }],
     },
     {
-      code: service('await prisma.attemptQuestion.createMany({ data: rows });'),
+      code: service('await prisma.attemptSheet.createMany({ data: rows });'),
       errors: [{ messageId: 'hotPathWrite' }],
     },
     {
