@@ -31,6 +31,10 @@ export interface AttemptStateDeps {
   answerQueue: AnswerQueue;
 }
 
+/** A refusal because another tab or device holds the sitting now. */
+export const isTakenOver = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER;
+
 const queueKeyFor = ({ keyPrefix }: AnswerQueue, attemptId: string) => `${keyPrefix}.${attemptId}`;
 
 /** Undelivered answers outlive a reload here, because the queue they sit in does not. */
@@ -58,6 +62,8 @@ export interface AttemptStateHandle {
   hasUnsaved: boolean;
   /** True once this tab stopped holding the sitting, because it was opened somewhere else. */
   takenOver: boolean;
+  /** Stops saving and says why: another tab or device holds the sitting now. */
+  standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
   answer: (questionId: string, next: AnswerIntent) => void;
   /** Which question is on screen now, so the time on the last one can be banked. */
@@ -131,6 +137,11 @@ export function useAttemptState(
     };
   }, [attemptId]);
 
+  const standDown = useCallback(() => {
+    stopped.current = true;
+    setTakenOver(true);
+  }, []);
+
   const keepQueue = useCallback(() => {
     const queued = [...pending.current.values()];
     const { answerQueue } = mounted.current;
@@ -178,16 +189,13 @@ export function useAttemptState(
       requeue();
       setHasUnsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
-      if (AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER) {
-        stopped.current = true;
-        setTakenOver(true);
-      }
+      if (isTakenOver(error)) standDown();
     } finally {
       keepQueue();
       inFlight.current = false;
       setIsSaving(false);
     }
-  }, [attemptId, keepQueue]);
+  }, [attemptId, keepQueue, standDown]);
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
   useEffect(() => {
@@ -258,6 +266,7 @@ export function useAttemptState(
     isSaving,
     hasUnsaved,
     takenOver,
+    standDown,
     answer,
     open,
     bankOpen,

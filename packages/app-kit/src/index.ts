@@ -11,9 +11,16 @@ export { createAuth, type AuthState, type CreateAuthOptions } from './create-aut
 export { createAppQueryClient, type AppMutationMeta, type Notifier } from './query-client';
 export { applyFieldErrors, bannerMessage } from './form-errors';
 export { numberOr, optionalNumber } from './form-numbers';
-export { autosaveDelayMs, seedRevision, shouldFlushNow } from './autosave-policy';
+export {
+  autosaveDelayMs,
+  seedRevision,
+  shouldFlushNow,
+  shouldRetrySubmit,
+  submitRetryDelayMs,
+} from './autosave-policy';
 export {
   useAttemptState,
+  isTakenOver,
   type AnswerIntent,
   type AnswerQueue,
   type AttemptStateDeps,

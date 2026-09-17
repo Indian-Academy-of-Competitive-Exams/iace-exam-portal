@@ -205,3 +205,26 @@ test('a save refused as taken over stops saving and says so', async (t) => {
   await act(async () => void (await result.current.flush()));
   assert.equal(calls.length, 1, 'a tab that lost the sitting does not fight for it');
 });
+
+test('standing down stops saving and says so, the same as a refused save', async (t) => {
+  const calls: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: unknown) => {
+        calls.push(body);
+        return { revision: 1 };
+      },
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  act(() => result.current.standDown());
+  assert.equal(result.current.takenOver, true);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  await act(async () => void (await result.current.flush()));
+  assert.equal(calls.length, 0, 'a stood-down tab sends nothing more');
+});

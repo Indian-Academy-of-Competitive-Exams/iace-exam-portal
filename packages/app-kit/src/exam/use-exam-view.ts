@@ -8,7 +8,6 @@ import { useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
-  AppException,
   omrStateFor,
   nextOpenSectionId,
   nextQuestionId,
@@ -20,8 +19,14 @@ import {
   type ExamPaper,
   type SectionEffort,
 } from '@iace/contracts';
+import { shouldRetrySubmit, submitRetryDelayMs } from '../autosave-policy';
 import { type FullscreenHandle } from './focus-guard';
-import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
+import {
+  isTakenOver,
+  useAttemptState,
+  type AnswerIntent,
+  type AttemptStateDeps,
+} from './use-attempt-state';
 import type { ExamView } from './exam-view';
 
 /** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
@@ -84,9 +89,11 @@ export function useExamView(
       await state.flush();
       return api.me.submitAttempt(paper.attemptId, { tab });
     },
-    // A refusal is an answer; only a connection that never landed is worth asking again.
-    retry: (count, error) => count < 3 && !AppException.is(error),
-    retryDelay: (count) => Math.min(1_000 * 2 ** count, 8_000),
+    retry: shouldRetrySubmit,
+    retryDelay: submitRetryDelayMs,
+    onError: (error) => {
+      if (isTakenOver(error)) state.standDown();
+    },
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done, and the server has already dropped its own copy.
       await queryClient.invalidateQueries({ queryKey: catalogQueryKey });
@@ -104,7 +111,7 @@ export function useExamView(
   });
 
   const end = () => {
-    if (!submit.isPending && !submit.isSuccess) submit.mutate();
+    if (!submit.isPending && !submit.isSuccess && !state.takenOver) submit.mutate();
   };
 
   const move = (to: string | null): void => {
@@ -143,6 +150,7 @@ export function useExamView(
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
   // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
   const nagging =
+    !state.takenOver &&
     !submit.isSuccess &&
     !submit.isPending &&
     focus.isSupported &&
@@ -202,7 +210,7 @@ export function useExamView(
     outOfTime: end,
 
     submit: {
-      asking,
+      asking: asking && !state.takenOver,
       isPending: submit.isPending,
       unanswered,
       markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
