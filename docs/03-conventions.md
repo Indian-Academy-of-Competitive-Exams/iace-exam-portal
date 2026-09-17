@@ -311,6 +311,9 @@ Built and in use. Reach for these rather than adding a second of any of them.
   interceptor would hide which writes actually hold that guarantee.
 - **Caching** is explicit: a JSON value under a versioned Redis key, busted by a counter that an
   event increments. There is no read-through helper, and a cache nobody can bust is worse than none.
+  The one exception is data a database trigger freezes, which nothing needs to bust: it may be held
+  in process memory. `PaperSheetService` is that case — a sat paper's rows and its pinned versions'
+  options and keys, frozen by `paper_question_sat_guard` and `question_version_sat_guard`.
 
 ---
 

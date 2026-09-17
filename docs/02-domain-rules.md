@@ -176,12 +176,20 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   its key was rebuilt from Postgres, is adopted by the first tab back. **The clock does not stop**:
   a paper left to sit another runs to the deadline it was given at start.
 - `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
-  Sections keep the config's order; questions shuffle within a section.
+  Sections keep the config's order; questions shuffle within a section. **The order a seed produces
+  must never change**: every past sitting's review is derived from it, so a new shuffle or PRNG
+  reorders every review already given.
 - A sitting keeps its answers on one `AttemptSheet`: a slot per paper row in paper order, seeded
   untouched at start, patched by the flusher, written whole at submit, and marked by the scorer in a
   parallel verdict array. The order a student saw is derived from `shuffleSeed`, never stored.
   **Once anyone sits a test its paper is frozen in the database** — rows may not be added, removed,
-  repointed or repriced; only a question's status moves.
+  repointed or repriced; only a question's status moves — and so are the options, answer key and
+  content of every version it pins. A slot's state is an index into `SLOT_STATES`, which is
+  therefore **append-only**: reordering or removing a state rereads every stored sheet. For support
+  and ad-hoc SQL, the `AttemptSheetAnswer` view decodes a sheet into one row per slot. A future data
+  migration that must touch a sat paper stands the guards down inside its own transaction and
+  re-enables them there, as `20260827090000_pattern_note_says_what_it_holds` does for the base
+  config's section guards.
 - `Attempt.isGraded` marks the **one sitting holding the student's ranked slot** on a test —
   normally the first, and a later one only where a void handed the slot back (§8). Any other
   sitting is a retake: marked, never ranked, and never in a cohort.
@@ -289,10 +297,11 @@ and needs no mapping at all.
 - **A save that changes nothing writes no version.** Content, options and answer key are
   fingerprinted together, and a save matching the fingerprint keeps the version already current.
 - **A draft is rewritten in place, and everything else is appended.** While a question is a DRAFT
-  and no paper or sitting holds its current version, an edit rewrites that one row — version 1 of a
-  question nobody has drawn stays version 1 however often it is saved. Otherwise the edit inserts a
-  new immutable version and repoints `currentVersionId`, so what a paper pinned never moves under
-  it.
+  and no paper row pins its current version — a sitting's sheet and a rollup only ever reach a
+  version through a paper row — an edit rewrites that one row: version 1 of a question nobody has
+  drawn stays version 1 however often it is saved. Otherwise the edit inserts a new immutable
+  version and repoints `currentVersionId`, so what a paper pinned never moves under it; once the
+  paper is sat, the database refuses that move too.
 - **Proof-reading reads DRAFTS and nothing else.** A reader's flags gate ACTIVATION, so a question
   that is already live is past the point their reading changes, and an archived one is past caring.
   The server forces `status: DRAFT` rather than filtering on it, so a hand-edited URL cannot widen

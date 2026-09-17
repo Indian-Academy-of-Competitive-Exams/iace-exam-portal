@@ -135,6 +135,9 @@ export type LiveAttempt = z.infer<typeof liveAttemptSchema>;
 // moves it, so a student answering a hundred questions writes Postgres never.
 // ============================================================================
 
+/** Seconds on one question: a day, which no sitting reaches, so a crafted total is refused. */
+export const QUESTION_TIME_MAX_SEC = 24 * 60 * 60;
+
 /** One question's change since the last save. A batch is a DELTA, not the whole paper. */
 export const answerChangeSchema = z.object({
   questionId: z.string().min(1),
@@ -143,9 +146,9 @@ export const answerChangeSchema = z.object({
   selectedOptionId: z.string().min(1).nullish(),
   typedAnswer: z.string().nullish(),
   /** Total seconds on this question so far, as the screen has counted them. */
-  timeSpentSec: z.number().int().min(0),
-  /** When this student first touched it. Sent every time; the server keeps only the earliest. */
-  firstActionAt: z.string().nullish(),
+  timeSpentSec: z.number().int().min(0).max(QUESTION_TIME_MAX_SEC),
+  /** When this student first touched it, in UTC. Sent every time; the server keeps only the earliest. */
+  firstActionAt: z.iso.datetime().nullish(),
 });
 export type AnswerChange = z.infer<typeof answerChangeSchema>;
 

@@ -36,6 +36,7 @@ const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
 const HOUR_MS = 60 * 60 * 1000;
 const LATE = new Date(Date.now() - HOUR_MS);
 const SETTLED = new Date(Date.now() - HOUR_MS);
+const WRONG_OPTION = 'o2';
 
 const prisma = testPrisma();
 
@@ -135,6 +136,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     queue,
     busts,
     outbox,
+    sheets,
     submit,
     change,
     live: { id: attempt.id, studentId: student, testId: paper.testId, startedAt, endsAt },
@@ -426,6 +428,30 @@ describe('a save that races the submit', () => {
 
     assert.equal(result.answeredCount, 2);
     assert.equal(await chosenOn(built.attemptId, built.q2), RIGHT_OPTION);
+  });
+
+  /** The failure this prevents: a flush that read an older revision landing after submit's write. */
+  it('keeps the last answer when a stale flush lands between the write and the claim', async () => {
+    const built = await build();
+    await built.state.open(built.live);
+    const first = { ...built.change(), selectedOptionId: WRONG_OPTION };
+    await built.state.save(built.student, built.attemptId, { revision: 1, answers: [first] }, NOW);
+    const stale = await built.state.read(built.attemptId);
+    assert.ok(stale);
+    await built.state.save(
+      built.student,
+      built.attemptId,
+      { revision: 2, answers: [built.change()] },
+      NOW,
+    );
+    built.hooks.beforeClaim = async () => {
+      delete built.hooks.beforeClaim;
+      await built.sheets.patch(stale, [built.q1]);
+    };
+
+    await built.submit.submit(built.student, built.attemptId);
+
+    assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
   });
 
   /** The failure this prevents: the one caller that can still write those answers dropping them. */

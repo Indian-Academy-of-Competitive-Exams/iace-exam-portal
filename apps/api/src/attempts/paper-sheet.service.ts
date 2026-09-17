@@ -1,4 +1,4 @@
-/** A sat paper's frozen rows, read once per process per test: `paper_question_sat_guard` makes caching them safe. */
+/** A sat paper, cached per process: `paper_question_sat_guard` freezes its rows, `question_version_sat_guard` their options and key. */
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import {
@@ -25,7 +25,7 @@ const TERMS_SELECT = {
   questionVersion: { select: { options: true, answerKey: true } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
-/** What a sat paper pays for each row, which only a drop's status or a type edit can still move. */
+/** What a sat paper pays per row, all frozen: status and type still move, so `liveTermsOf` reads them fresh. */
 export interface PaperTerm extends SheetPaperRow {
   marks: number;
   negativeMarks: number;

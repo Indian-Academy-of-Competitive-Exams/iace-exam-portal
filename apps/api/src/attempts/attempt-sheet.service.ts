@@ -27,11 +27,12 @@ export class AttemptSheetService {
   async patch(held: HeldState, questionIds: readonly string[]): Promise<void> {
     const paper = await this.papers.rowsOf(held.testId);
     const startedAt = new Date(held.startedAt);
+    const named = new Set(questionIds);
     let answers = Prisma.sql`"answers"`;
     let patched = 0;
     paper.forEach((row, slot) => {
       const answer = held.answers[row.questionId];
-      if (answer === undefined || !questionIds.includes(row.questionId)) return;
+      if (answer === undefined || !named.has(row.questionId)) return;
       const value = JSON.stringify(encodeAnswer(answer, row.optionIds, startedAt));
       answers = Prisma.sql`jsonb_set(${answers}, ARRAY[${String(slot)}]::text[], ${value}::jsonb)`;
       patched += 1;

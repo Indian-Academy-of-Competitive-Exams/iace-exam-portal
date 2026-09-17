@@ -16,6 +16,11 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 const SAT_PAPER = /A paper somebody has sat cannot change/;
+const SAT_VERSION = /A question version on a paper somebody has sat cannot change/;
+const REKEYED = [
+  { id: 'o1', position: 1, isCorrect: false, text: { en: [{ type: 'TEXT', text: 'Option 1' }] } },
+  { id: 'o2', position: 2, isCorrect: true, text: { en: [{ type: 'TEXT', text: 'Option 2' }] } },
+];
 
 const optionIdsOf = async (versionId: string) => {
   const version = await prisma.questionVersion.findUniqueOrThrow({ where: { id: versionId } });
@@ -123,5 +128,34 @@ describe('PaperQuestion triggers', () => {
       where: { id: first?.paperQuestionId ?? '' },
     });
     assert.equal(row.status, PAPER_QUESTION_STATUS.DROPPED);
+  });
+});
+
+describe('QuestionVersion trigger', () => {
+  /** The failure this prevents: a re-score marking past sittings against a key they never saw. */
+  it('refuses a new option or key on a version a sat paper pins', async () => {
+    const paper = await makePaper(prisma, { questions: ['Reasoning'] });
+    const [first] = paper.items;
+    await sitPaper(prisma, { paper, studentId: (await makeStudent(prisma)).id, chosen: [null] });
+    const where = { id: first?.versionId ?? '' };
+
+    await assert.rejects(
+      prisma.questionVersion.update({ where, data: { options: REKEYED } }),
+      SAT_VERSION,
+    );
+    await assert.rejects(
+      prisma.questionVersion.update({ where, data: { answerKey: { value: 7 } } }),
+      SAT_VERSION,
+    );
+  });
+
+  it('still lets a version on a paper nobody has sat change', async () => {
+    const paper = await makePaper(prisma, { questions: ['Reasoning'] });
+    const where = { id: paper.items[0]?.versionId ?? '' };
+
+    await prisma.questionVersion.update({ where, data: { options: REKEYED } });
+
+    const version = await prisma.questionVersion.findUniqueOrThrow({ where });
+    assert.deepEqual(version.options, REKEYED);
   });
 });

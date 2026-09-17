@@ -155,6 +155,24 @@ describe('servedSheet', () => {
   });
 });
 
+describe('displayOrder', () => {
+  /** The failure this prevents: a PRNG change silently reordering every past sitting's review. */
+  it('keeps the exact order a seed has always produced, section by section', () => {
+    const sectioned = [
+      ...['q1', 'q2', 'q3', 'q4', 'q5'].map((questionId) => ({
+        questionId,
+        baseConfigSectionId: 's1',
+      })),
+      ...['q6', 'q7', 'q8', 'q9'].map((questionId) => ({ questionId, baseConfigSectionId: 's2' })),
+    ];
+
+    assert.deepEqual(
+      displayOrder(sectioned, 7, true).map((row) => row.questionId),
+      ['q4', 'q2', 'q3', 'q5', 'q1', 'q9', 'q6', 'q7', 'q8'],
+    );
+  });
+});
+
 describe('sheet totals', () => {
   it('sums the seconds and counts the answers a stored sheet holds', () => {
     const sheet = sheetOf(

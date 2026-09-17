@@ -120,10 +120,6 @@ export class ScoringProcessor extends WorkerHost {
     terms: readonly PaperTerm[],
   ): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.attemptSheet.update({
-        where: { attemptId: attempt.id },
-        data: { verdicts: verdictsOf(scored.questions, terms) },
-      });
       // Claimed, never rewritten: two racing workers must not disagree about when this was scored.
       const claimed = await tx.attempt.updateMany({
         where: { id: attempt.id, evaluatedAt: null, status: { in: [...SCORABLE] } },
@@ -143,6 +139,10 @@ export class ScoringProcessor extends WorkerHost {
         },
       });
       if (marked.count === 0) return { applied: false, evaluation: null };
+      await tx.attemptSheet.update({
+        where: { attemptId: attempt.id },
+        data: { verdicts: verdictsOf(scored.questions, terms) },
+      });
       // The claim's row count IS the signal: one row means nothing had evaluated this before.
       if (claimed.count === 1) {
         return { applied: true, evaluation: await this.announce(tx, attempt) };

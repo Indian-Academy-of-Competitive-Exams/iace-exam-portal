@@ -10,6 +10,12 @@
 -- database (the composite foreign keys AttemptQuestion held did that job) and copies each pinned
 -- version's option ids onto its paper row, so decoding an option never loads a question version.
 --
+-- A sat paper's pinned versions are frozen the same way: their options, answer key and content may
+-- no longer change. The scorer caches a paper's correct options and keys per process, and nothing
+-- can bust that cache, so the database has to promise they never move. No application path writes
+-- such a version: the question editor rewrites a version in place only while no paper pins it, and
+-- otherwise appends a new one. createdById and createdAt stay writable; they decide no mark.
+--
 -- The backfill refuses to run if any answer row names a question that is no longer on its sitting's
 -- paper: such a row has no slot, and silently dropping an answer is worse than a failed deploy.
 -- AttemptQuestion itself is dropped by the next migration, which ships with this one.
@@ -135,6 +141,31 @@ END $$;
 CREATE TRIGGER paper_question_sat_guard
   BEFORE INSERT OR UPDATE OR DELETE ON "PaperQuestion"
   FOR EACH ROW EXECUTE FUNCTION paper_question_sat_guard();
+
+-- Once anyone has sat a paper, the versions it pins keep what a student was marked against.
+CREATE FUNCTION question_version_sat_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "PaperQuestion" paper
+    JOIN "Attempt" sitting ON sitting."testId" = paper."testId"
+    WHERE paper."questionVersionId" = OLD."id"
+  ) THEN
+    RAISE EXCEPTION 'A question version on a paper somebody has sat cannot change its options, key or content'
+      USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER question_version_sat_guard
+  BEFORE UPDATE ON "QuestionVersion"
+  FOR EACH ROW
+  WHEN (
+    OLD."options" IS DISTINCT FROM NEW."options"
+    OR OLD."answerKey" IS DISTINCT FROM NEW."answerKey"
+    OR OLD."content" IS DISTINCT FROM NEW."content"
+  )
+  EXECUTE FUNCTION question_version_sat_guard();
 
 -- For support and ad-hoc SQL: one row per slot, decoded.
 CREATE VIEW "AttemptSheetAnswer" AS

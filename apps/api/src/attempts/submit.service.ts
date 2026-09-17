@@ -80,8 +80,8 @@ export class SubmitService {
 
     // Taken only behind the claim, so a save arriving after this is refused rather than swallowed.
     const last = await this.state.take(attempt.id);
-    // A save that beat the claim: written before the request is handed to a scorer.
-    if (last && last.revision !== held?.revision) {
+    // Always, even unchanged: a stale flush may have landed since, and the claim shuts out every later one.
+    if (last) {
       sheet = await this.sheets.write(last, false);
     }
 
