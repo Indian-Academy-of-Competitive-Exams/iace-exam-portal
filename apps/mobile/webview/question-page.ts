@@ -143,12 +143,17 @@ function build(screen: QuestionScreen): void {
 }
 
 function paint(screen: QuestionScreen): void {
+  const review = screen.review;
   for (const row of root.querySelectorAll<HTMLElement>(`.${OPTION}`)) {
     const option = screen.options.find(({ id }) => id === row.dataset.optionId);
     const selected = option?.id === screen.selectedOptionId;
     row.toggleAttribute('data-selected', selected);
-    row.toggleAttribute('data-correct', screen.review?.correctOptionId === row.dataset.optionId);
-    row.toggleAttribute('data-yours', screen.review !== undefined && selected);
+    // Guarded on the review itself: an undefined key must never match an unset attribute.
+    row.toggleAttribute(
+      'data-correct',
+      review !== undefined && review.correctOptionId === option?.id,
+    );
+    row.toggleAttribute('data-yours', review !== undefined && selected);
     const bubble = row.querySelector<HTMLElement>(`.${BUBBLE}`);
     if (bubble) {
       ink(bubble, option?.fill ?? 0);
