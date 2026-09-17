@@ -1,11 +1,13 @@
 import { queryOptions, skipToken } from '@tanstack/react-query';
 import { type EndedSitting } from '@iace/app-kit';
+import { PERFORMANCE_SCOPES } from '@iace/contracts';
 import { api } from './api';
 import {
   briefQueryKey,
   CATALOG_QUERY_KEY,
   endedSittingQueryKey,
   PERFORMANCE_QUERY_KEY,
+  performanceReportQueryKey,
   scoreCardQueryKey,
 } from './constants';
 
@@ -33,3 +35,9 @@ export const scoreCardQuery = (attemptId: string) =>
 /** Never fetched: the exam writes it as the paper goes in, and a killed process simply has none. */
 export const endedSittingQuery = (attemptId: string) =>
   queryOptions<EndedSitting>({ queryKey: endedSittingQueryKey(attemptId), queryFn: skipToken });
+
+export const attemptReportQuery = (attemptId: string) =>
+  queryOptions({
+    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
+    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
+  });

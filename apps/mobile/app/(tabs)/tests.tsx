@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { FlatList, Text, TextInput, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useUnstableNativeVariable } from 'nativewind';
 import {
@@ -20,19 +20,14 @@ import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
 import { Skeleton } from '../../src/components/ui/skeleton';
+import { ChipRow, type ChipOption } from '../../src/components/ui/chip-row';
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
-import { cn } from '../../src/lib/cn';
 import { plural } from '../../src/lib/plural';
 
 const ANY = '';
 
 /** Reaching nothing and searching for nothing are different facts, and they read differently. */
 type Emptiness = 'NONE' | 'FILTERED' | null;
-
-interface ChipOption {
-  value: string;
-  label: string;
-}
 
 interface Shelf {
   series: StudentCatalogSeries;
@@ -203,56 +198,6 @@ function TestsHeader({
         />
       ) : null}
     </View>
-  );
-}
-
-function ChipRow({
-  label,
-  options,
-  value,
-  onChange,
-}: Readonly<{
-  label: string;
-  options: readonly ChipOption[];
-  value: string;
-  onChange: (value: string) => void;
-}>) {
-  return (
-    <View className="gap-1.5">
-      <Text className="text-xs font-medium text-muted-foreground">{label}</Text>
-      <View className="flex-row flex-wrap gap-2">
-        {options.map((option) => (
-          <Chip
-            key={option.value}
-            label={option.label}
-            selected={option.value === value}
-            onPress={() => onChange(option.value)}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function Chip({
-  label,
-  selected,
-  onPress,
-}: Readonly<{ label: string; selected: boolean; onPress: () => void }>) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className={cn(
-        'rounded-full border px-3 py-1.5',
-        selected ? 'border-primary bg-primary-subtle' : 'border-border bg-surface',
-      )}
-    >
-      <Text
-        className={cn('text-xs font-medium', selected ? 'text-primary-ink' : 'text-foreground')}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 

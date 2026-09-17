@@ -67,6 +67,7 @@ function Navigation() {
           name="attempts/[attemptId]/submitted"
           options={{ ...page, headerBackVisible: false, title: 'Handed in' }}
         />
+        <Stack.Screen name="attempts/[attemptId]/report" options={{ ...page, title: 'Report' }} />
       </Stack.Protected>
       <Stack.Protected guard={!identity}>
         <Stack.Screen name="login" />

@@ -41,6 +41,7 @@ export const DETAIL_ROUTES = {
   /** Keyed by TEST: no attempt exists until this screen starts one on arrival. */
   EXAM: (testId: string, languages: readonly LanguageCode[]) =>
     `/exam/${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}` as const,
-  /** The web's own path, so a report screen can land beside it as `/attempts/[attemptId]/report`. */
+  /** The web's own path, so the two apps name one sitting the same way. */
   SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted` as const,
+  REPORT: (attemptId: string) => `/attempts/${attemptId}/report` as const,
 } as const;

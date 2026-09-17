@@ -1,3 +1,5 @@
+import { type PerformanceScope } from '@iace/contracts';
+
 /** Storage keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
   AUTH: 'iace.mobile.auth',
@@ -38,6 +40,10 @@ export const attemptPaperQueryKey = (attemptId: string) =>
 /** Marks and standing, refused until marking lands — the web app's own key. */
 export const scoreCardQueryKey = (attemptId: string) =>
   ['me', 'attempts', attemptId, 'score-card'] as const;
+
+/** One report, keyed by what it is OF — the web app's own key, so the two share one read. */
+export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
+  ['me', 'performance', 'report', scope, scopeId] as const;
 
 /** What a sitting knew about itself as it ended. Put in the cache by the exam, never fetched. */
 export const endedSittingQueryKey = (attemptId: string) =>

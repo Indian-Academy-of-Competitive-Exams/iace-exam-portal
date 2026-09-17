@@ -1,8 +1,7 @@
 /**
  * The moment after a paper is handed in, ported from the web's `submitted.tsx`.
  * Marking is a queued job, so this shows what the sitting knows about ITSELF and
- * polls for the score card. No report screen exists here yet, so a landed
- * marking is announced in place rather than navigated to.
+ * polls for the score card. The report opens the moment that lands.
  */
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useUnstableNativeVariable } from 'nativewind';
 import { pollDelayMs, shouldKeepPolling, type EndedSitting } from '@iace/app-kit';
 import { isMarkingPending } from '../../../src/lib/exam-routes';
-import { ROUTES } from '../../../src/lib/nav';
+import { DETAIL_ROUTES, ROUTES } from '../../../src/lib/nav';
 import { plural } from '../../../src/lib/plural';
 import { endedSittingQuery, scoreCardQuery } from '../../../src/lib/queries';
 import { cn } from '../../../src/lib/cn';
@@ -48,6 +47,12 @@ export default function SubmittedScreen() {
         <Text className="text-lg font-semibold text-foreground">Marking</Text>
         <MarkingState marking={markingOf(card)} onRetry={card.refetch} />
       </View>
+
+      {card.isSuccess ? (
+        <Button onPress={() => router.replace(DETAIL_ROUTES.REPORT(attemptId))}>
+          See your result
+        </Button>
+      ) : null}
 
       <Button variant="outline" onPress={() => router.dismissTo(ROUTES.TESTS)}>
         Go to your tests
