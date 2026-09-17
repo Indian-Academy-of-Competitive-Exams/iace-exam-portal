@@ -158,7 +158,13 @@ pnpm dev          # Turborepo runs api + test + admin together
 
 To run just one: `pnpm --filter @iace/api dev` (or `@iace/test`, `@iace/admin`).
 
-**How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 6‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Redis, never Postgres.
+**The mobile app** is not part of `pnpm dev`. It needs `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` or
+the shell (`http://10.0.2.2:3000` from an Android emulator; the machine's LAN address from a phone;
+see `.env.example`), then `pnpm --filter @iace/mobile android` for a build on an emulator or device,
+or `pnpm --filter @iace/mobile dev` for the Expo dev server. Both build the question WebView page
+first.
+
+**How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 4‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Redis, never Postgres.
 
 ## 8. Everyday commands
 
