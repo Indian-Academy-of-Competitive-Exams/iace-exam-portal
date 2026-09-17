@@ -356,7 +356,7 @@ describe('AccessResolverService — when a test opens for one program', () => {
 
 describe('AccessResolverService — what the paper is', () => {
   /** THE failure this prevents: an unstartable test must not blank out what the paper itself is. */
-  it('reports duration, questions and marks though it cannot be started yet', async () => {
+  it('reports duration, sections, questions and marks though it cannot be started yet', async () => {
     const at = await place();
     await prisma.baseConfig.update({
       where: { id: at.catalog.baseConfigId },
@@ -379,7 +379,10 @@ describe('AccessResolverService — what the paper is', () => {
     const test = (await resolverOn().catalog(await studentAt(at), NOW)).series[0]?.tests[0];
 
     assert.equal(test?.canStart, false);
-    assert.deepEqual([test?.durationSec, test?.totalQuestions, test?.totalMarks], [5400, 90, 180]);
+    assert.deepEqual(
+      [test?.durationSec, test?.sectionCount, test?.totalQuestions, test?.totalMarks],
+      [5400, 1, 90, 180],
+    );
   });
 });
 

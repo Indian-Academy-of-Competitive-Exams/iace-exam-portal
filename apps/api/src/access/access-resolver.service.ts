@@ -31,7 +31,7 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v10';
+const CATALOG_SHAPE = 'v11';
 
 const catalogInclude = (programs: string[]) =>
   ({
@@ -76,6 +76,7 @@ interface ResolvedTest {
   title: string | null;
   /** What the paper IS, not what this student may do with it — static, so it caches safely. */
   durationSec: number;
+  sectionCount: number;
   totalQuestions: number;
   totalMarks: number;
   order: number | null;
@@ -375,6 +376,7 @@ function toResolvedTest(
       test.scope,
       (test.scopeRef as TestScopeRef | null) ?? null,
     ),
+    sectionCount: scoped.length,
     totalQuestions: scoped.reduce((total, section) => total + section.questionCount, 0),
     totalMarks: scoped.reduce(
       (total, section) => total + section.questionCount * Number(section.marksPerQuestion),
@@ -409,7 +411,7 @@ const NONE_WAITING = -1;
 /** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
   // A sat test stays startable: a paper may always be sat again, and Done is only where it sorts.
-  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now), sittingCount: null };
+  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now) };
 }
 
 /** Why a sitting may not begin: not open YET is a different fact from having no access at all. */

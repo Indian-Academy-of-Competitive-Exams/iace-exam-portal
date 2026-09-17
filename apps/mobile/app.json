@@ -9,6 +9,6 @@
     "android": {
       "package": "in.co.iace.mobile"
     },
-    "plugins": ["expo-router"]
+    "plugins": ["expo-router", "expo-sqlite"]
   }
 }

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  AppException,
   omrStateFor,
   nextOpenSectionId,
   nextQuestionId,
@@ -19,14 +20,12 @@ import {
   type ExamPaper,
   type SectionEffort,
 } from '@iace/contracts';
-import { type AppApiClient } from '../api-client';
 import { type FullscreenHandle } from './focus-guard';
-import { useAttemptState, type AnswerIntent } from './use-attempt-state';
+import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
 import type { ExamView } from './exam-view';
 
-/** What the engine cannot know: whose API, whose cache key, and how this platform reports focus. */
-export interface ExamEngineDeps {
-  api: AppApiClient;
+/** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
+export interface ExamEngineDeps extends AttemptStateDeps {
   focus: FullscreenHandle;
   catalogQueryKey: QueryKey;
 }
@@ -55,11 +54,12 @@ const isMarked = (state: string | undefined): boolean =>
 
 export function useExamView(
   { paper, arrivedAt, title, watermark, onEnded }: Readonly<ExamSitting>,
-  { api, focus, catalogQueryKey }: Readonly<ExamEngineDeps>,
+  deps: Readonly<ExamEngineDeps>,
 ): ExamView {
+  const { api, focus, catalogQueryKey, tab } = deps;
   const queryClient = useQueryClient();
   const [ignoringFullscreen, setIgnoringFullscreen] = useState(0);
-  const state = useAttemptState(paper.attemptId, api);
+  const state = useAttemptState(paper.attemptId, deps);
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -82,8 +82,11 @@ export function useExamView(
       // The question still on screen has cost time too; bank it before the last save goes.
       state.bankOpen();
       await state.flush();
-      return api.me.submitAttempt(paper.attemptId);
+      return api.me.submitAttempt(paper.attemptId, { tab });
     },
+    // A refusal is an answer; only a connection that never landed is worth asking again.
+    retry: (count, error) => count < 3 && !AppException.is(error),
+    retryDelay: (count) => Math.min(1_000 * 2 ** count, 8_000),
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done, and the server has already dropped its own copy.
       await queryClient.invalidateQueries({ queryKey: catalogQueryKey });
@@ -176,6 +179,7 @@ export function useExamView(
 
     isSaving: state.isSaving,
     hasUnsaved: state.hasUnsaved,
+    takenOver: state.takenOver,
 
     openQuestion: move,
     nextQuestion,

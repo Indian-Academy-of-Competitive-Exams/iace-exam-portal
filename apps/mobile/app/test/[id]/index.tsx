@@ -126,7 +126,7 @@ function AboutContent({
       </View>
 
       <SectionsCard brief={brief} />
-      <PaperCard brief={brief} listed={listed} />
+      <PaperCard brief={brief} />
 
       <Exits testId={testId} listed={listed} now={now} />
     </Fragment>
@@ -168,20 +168,13 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
   );
 }
 
-function PaperCard({
-  brief,
-  listed,
-}: Readonly<{ brief: ExamBrief; listed: StudentCatalogTest | undefined }>) {
-  // Not `=== null` alone: `listed` itself is also optional, and `== null` catches both — 0 must still render.
-  const sittingCount = listed?.sittingCount;
-
+function PaperCard({ brief }: Readonly<{ brief: ExamBrief }>) {
   return (
     <View className="gap-2">
       <Text className="text-lg font-semibold text-foreground">The paper</Text>
       <Card className="gap-3 p-4">
         <InfoRow label="Languages" value={languagesOf(brief)} />
         <InfoRow label="Sectional timing" value={sectionalOf(brief) ? 'Yes' : 'No'} />
-        {sittingCount == null ? null : <InfoRow label="Sat by" value={`${sittingCount}`} />}
       </Card>
     </View>
   );

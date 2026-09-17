@@ -593,12 +593,11 @@ model Attempt {
   voidReason       String?
   voidedById       String?
 
-  test             Test               @relation(fields: [testId], references: [id])
-  student          Student            @relation(fields: [studentId], references: [id])
+  test             Test              @relation(fields: [testId], references: [id])
+  student          Student           @relation(fields: [studentId], references: [id])
   questions        AttemptQuestion[]
   processedRollups ProcessedRollup[]
   topperOf         TestStat[]
-  shares           PerformanceShare[]
 
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
@@ -638,24 +637,6 @@ model AttemptQuestion {
   @@index([paperQuestionId])
   @@index([baseConfigSectionId])
   @@index([attemptId, order])
-}
-
-// The only unauthenticated door onto a report: a random token, not a walkable cuid, and a RESTRICT FK so it outlives nothing.
-model PerformanceShare {
-  id               String    @id @default(cuid())
-  token            String    @unique
-  attemptId        String
-  createdByAdminId String?
-  expiresAt        DateTime? @db.Timestamptz(3)
-  revokedAt        DateTime? @db.Timestamptz(3)
-  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
-
-  attempt        Attempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
-  createdByAdmin Admin?  @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
-
-  @@index([attemptId])
-  @@index([createdByAdminId])
 }
 
 // ============================================================================
@@ -776,7 +757,6 @@ model Admin {
   permissions       AdminFeaturePermission[]
   notifications     Notification[]
   announcementsSent Announcement[]
-  sharesMade        PerformanceShare[]
   // The one createdById with a real relation: a draft names its author on screen and in a filter.
   questionsAuthored Question[]
 }

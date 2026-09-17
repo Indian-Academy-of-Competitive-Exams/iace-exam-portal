@@ -3,6 +3,8 @@ import {
   ActorTypes,
   saveAttemptStateSchema,
   startAttemptSchema,
+  submitAttemptSchema,
+  type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
@@ -12,6 +14,7 @@ import {
   type ScoreCard,
   type SolutionReport,
   type StartAttemptBody,
+  type SubmitAttemptBody,
   type SubmittedAttempt,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
@@ -67,9 +70,10 @@ export class AttemptsController {
   @HttpCode(HttpStatus.OK)
   submit(
     @Param('id') id: string,
+    @Body(new ZodBody(submitAttemptSchema)) body: SubmitAttemptBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SubmittedAttempt> {
-    return this.submitter.submit(user.id, id);
+    return this.submitter.submit(user.id, id, body.tab);
   }
 
   /** Marks, standing and their OWN answers. Carries no correct option, on any question. */
@@ -100,7 +104,7 @@ export class AttemptsController {
     @Param('id') id: string,
     @Body(new ZodBody(saveAttemptStateSchema)) body: SaveAttemptStateBody,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<LiveAttemptState> {
+  ): Promise<AttemptSaveAck> {
     return this.state.save(user.id, id, body);
   }
 

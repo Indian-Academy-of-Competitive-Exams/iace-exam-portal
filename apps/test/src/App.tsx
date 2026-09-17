@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@iace/app-kit/browser';
+import { LoadingState } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
@@ -11,18 +12,15 @@ import { TestsPage } from './routes/tests';
 import { SeriesPage } from './routes/series';
 import { TestAboutPage } from './routes/test-about';
 import { TestInstructionsPage } from './routes/test-instructions';
-import { ExamPage } from './routes/exam';
 import { SubmittedPage } from './routes/submitted';
-import { SolutionPanel } from './routes/review';
 import { QuestionReportPanel } from './routes/question-report';
 import { ReportRedirect, ReportShell } from './routes/report';
 import { LeaderboardPage } from './routes/leaderboard';
 import { NotificationsPage } from './routes/notifications';
 import { NotificationSettingsPage } from './routes/notification-settings';
-import { SavedPage } from './routes/saved';
 import { PageSkeleton, ReportSkeleton } from './components/ui';
 
-/** Every screen that draws charts, so the plotting library stays off the first payload. */
+/** Every screen that draws charts or equations, so the plotting and maths libraries stay off the first payload. */
 const DashboardPage = React.lazy(() =>
   import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
 );
@@ -38,11 +36,17 @@ const SubjectPanel = React.lazy(() =>
 const ComparePanel = React.lazy(() =>
   import('./routes/compare').then((module) => ({ default: module.ComparePanel })),
 );
-const SharedReportPage = React.lazy(() =>
-  import('./routes/shared-report').then((module) => ({ default: module.SharedReportPage })),
+const ExamPage = React.lazy(() =>
+  import('./routes/exam').then((module) => ({ default: module.ExamPage })),
+);
+const SolutionPanel = React.lazy(() =>
+  import('./routes/review').then((module) => ({ default: module.SolutionPanel })),
+);
+const SavedPage = React.lazy(() =>
+  import('./routes/saved').then((module) => ({ default: module.SavedPage })),
 );
 
-/** Each chunk waits on the shape it is about to become, never on one spinner standing in for all six. */
+/** Each chunk waits on the shape it is about to become, never on one spinner standing in for all of them. */
 const whileLoading = (page: React.ReactNode, fallback: React.ReactNode) => (
   <React.Suspense fallback={fallback}>{page}</React.Suspense>
 );
@@ -54,11 +58,6 @@ export function App() {
   return (
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-      {/* Outside the guard on purpose: a shared report is read by somebody with no account. */}
-      <Route
-        path={ROUTES.SHARED_REPORT_PATTERN}
-        element={whileLoading(<SharedReportPage />, <ReportSkeleton />)}
-      />
       <Route
         element={
           <ProtectedRoute
@@ -68,7 +67,10 @@ export function App() {
           />
         }
       >
-        <Route path={ROUTES.EXAM_PATTERN} element={<ExamPage />} />
+        <Route
+          path={ROUTES.EXAM_PATTERN}
+          element={whileLoading(<ExamPage />, <LoadingState>Opening your paper</LoadingState>)}
+        />
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />, <PageSkeleton />)} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
@@ -79,7 +81,7 @@ export function App() {
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
           <Route path={ROUTES.NOTIFICATIONS} element={<NotificationsPage />} />
           <Route path={ROUTES.NOTIFICATION_SETTINGS} element={<NotificationSettingsPage />} />
-          <Route path={ROUTES.SAVED} element={<SavedPage />} />
+          <Route path={ROUTES.SAVED} element={whileLoading(<SavedPage />, <PageSkeleton />)} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
@@ -87,7 +89,7 @@ export function App() {
           <Route path={ROUTES.REPORT_PATTERN} element={<ReportShell />}>
             <Route index element={whileLoading(<ScoreCardPanel />, <ReportSkeleton />)} />
             <Route path="subjects" element={whileLoading(<SubjectPanel />, <ReportSkeleton />)} />
-            <Route path="solutions" element={<SolutionPanel />} />
+            <Route path="solutions" element={whileLoading(<SolutionPanel />, <ReportSkeleton />)} />
             <Route path="questions" element={<QuestionReportPanel />} />
             <Route path="compare" element={whileLoading(<ComparePanel />, <ReportSkeleton />)} />
           </Route>

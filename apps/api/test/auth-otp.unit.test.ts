@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ActorTypes, AppException } from '@iace/contracts';
+import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { OtpService } from '../src/auth/otp/otp.service';
 import { FakeConfig, FakeMessageSender, FakeRedis } from './support/fakes';
 
@@ -90,7 +90,7 @@ describe('OtpService — request', () => {
     await otp.request(ActorTypes.ADMIN, 'same-identifier');
 
     const keys = Object.keys(redis.snapshot()).filter(
-      (k) => k.startsWith('otp:') && !k.includes('cooldown'),
+      (k) => k.startsWith('otp:') && !k.includes('cooldown') && !k.includes('daily'),
     );
     assert.deepEqual(keys.sort(), ['otp:admin:same-identifier', 'otp:student:same-identifier']);
   });
@@ -178,5 +178,44 @@ describe('OtpService — verify', () => {
     const ttl = await redis.ttl(`otp:student:${MOBILE}`);
     assert.ok(ttl > 0, `the key should still exist, got ttl ${ttl}`);
     assert.ok(ttl <= 100, `expected <=100s left, got ${ttl}`);
+  });
+});
+
+describe('OtpService — the day a mobile is allowed', () => {
+  const noCooldown = { OTP_RESEND_COOLDOWN_SEC: 0 };
+  const refusedAsRateLimited = (error: unknown) =>
+    AppException.is(error) && error.code === ErrorCodes.RATE_LIMITED;
+
+  /** The failure this prevents: one phone bombed with codes, 45 seconds apart, on the platform's bill. */
+  it('refuses a code past the day’s allowance, and sends nothing', async () => {
+    const { otp, sender } = build(noCooldown);
+    for (let sent = 0; sent < 5; sent += 1) await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    await assert.rejects(() => otp.request(ActorTypes.STUDENT, MOBILE), refusedAsRateLimited);
+    assert.equal(sender.sent.length, 5);
+  });
+
+  it('lets the number be sent to again once the day has rolled past', async () => {
+    const { otp, redis } = build(noCooldown);
+    for (let sent = 0; sent < 5; sent += 1) await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    redis.advanceSeconds(24 * 60 * 60);
+
+    assert.equal((await otp.request(ActorTypes.STUDENT, MOBILE)).sent, true);
+  });
+
+  it('counts each mobile on its own', async () => {
+    const { otp } = build(noCooldown);
+    for (let sent = 0; sent < 5; sent += 1) await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    assert.equal((await otp.request(ActorTypes.STUDENT, '9123456780')).sent, true);
+  });
+
+  /** Admins sign in by email OTP every time, so a day's cap would lock them out of their own work. */
+  it('never caps an admin', async () => {
+    const { otp, sender } = build(noCooldown);
+    for (let sent = 0; sent < 6; sent += 1) await otp.request(ActorTypes.ADMIN, 'admin@iace.co.in');
+
+    assert.equal(sender.sent.length, 6);
   });
 });

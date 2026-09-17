@@ -15,8 +15,11 @@ export { autosaveDelayMs, seedRevision, shouldFlushNow } from './autosave-policy
 export {
   useAttemptState,
   type AnswerIntent,
+  type AnswerQueue,
+  type AttemptStateDeps,
   type AttemptStateHandle,
 } from './exam/use-attempt-state';
+export { tabIdFrom } from './exam/tab-id';
 export { type FullscreenHandle } from './exam/focus-guard';
 export {
   useExamView,

@@ -1,6 +1,10 @@
-/** SecureStore keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
+/** Storage keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
   AUTH: 'iace.mobile.auth',
+  /** Per install: what tells the server this device is the one answering. */
+  TAB: 'iace.mobile.tab',
+  /** Answers a save has not delivered yet, kept on the phone until one does. */
+  QUEUED_ANSWERS: 'iace.mobile.queued',
 } as const;
 
 /** The signed-in student's identity, cached under one key. */

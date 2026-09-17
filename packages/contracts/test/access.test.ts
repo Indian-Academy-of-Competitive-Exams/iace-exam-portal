@@ -26,6 +26,7 @@ const SERIES = {
       id: 'tst_1',
       title: 'Mock 1',
       durationSec: 3600,
+      sectionCount: 2,
       totalQuestions: 100,
       totalMarks: 200,
       order: 1,
@@ -33,7 +34,6 @@ const SERIES = {
       closesAt: null,
       attemptStatus: null,
       canStart: true,
-      sittingCount: 1284,
     },
   ],
 };
@@ -98,13 +98,13 @@ describe('testBucket', () => {
     id: 'tst_1',
     title: 'Mock 1',
     durationSec: 3600,
+    sectionCount: 2,
     totalQuestions: 100,
     totalMarks: 200,
     order: 1,
     opensAt: null,
     attemptStatus: null,
     canStart: true,
-    sittingCount: null,
     ...over,
   });
 

@@ -1,12 +1,7 @@
-/** Rank, percentile and "N sat", counted live from Postgres on every read. Nothing is saved. */
+/** Rank and percentile, counted live from Postgres on every read. Nothing is saved. */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  sittingCountsSql,
-  standingsSql,
-  type SittingCountRow,
-  type StandingRow,
-} from './ranking-sql';
+import { standingsSql, type StandingRow } from './ranking-sql';
 
 /** One sitting's place in its cohort, as of this read. */
 export interface Standing {
@@ -40,13 +35,6 @@ export class LeaderboardService {
         { attemptId: row.attempt_id, testId: row.test_id, ...standingOf(row) },
       ]),
     );
-  }
-
-  /** The cohort size a score card names, per test. A test nobody ranks on is left out, never zero. */
-  async sittingCounts(testIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
-    if (testIds.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<SittingCountRow[]>(sittingCountsSql(testIds));
-    return new Map(rows.map((row) => [row.test_id, row.sat]));
   }
 }
 

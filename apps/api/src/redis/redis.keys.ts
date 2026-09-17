@@ -12,6 +12,9 @@ export const redisKeys = {
   otpCooldown: (actor: ActorType, identifier: string) =>
     `otp:cooldown:${actor.toLowerCase()}:${identifier}`,
 
+  /** Codes sent to one mobile in the last 24 hours. Set on the first, so the window rolls. */
+  otpDaily: (mobile: string) => `otp:daily:${mobile}`,
+
   /**
    * A student's consecutive failed PIN attempts. Cleared on success, and by its own TTL, so an
    * occasional typo never accumulates into a lockout.
@@ -56,11 +59,8 @@ export const redisKeys = {
   /** Attempts holding writes Postgres has not seen. A SET, so draining needs no SCAN. */
   attemptsDirty: 'attempt:dirty',
 
-  /** One public report, keyed by a DIGEST of its link — a key name must never carry a credential. */
-  sharedReport: (linkDigest: string) => `share:report:${linkDigest}`,
-
-  /** How often one link has missed that cache in the current window. TTL = what is left of it. */
-  sharedReportReads: (linkDigest: string) => `share:reads:${linkDigest}`,
+  /** The one sitting this student is answering. Opening another stands the previous one down. */
+  sittingClaim: (studentId: string) => `sitting:claim:${studentId}`,
 
   /** One caller's hits in one rate-limit window. The tracker is a subject id or an address, never a credential. */
   rateLimit: (name: string, tracker: string) => `ratelimit:${name}:${tracker}`,

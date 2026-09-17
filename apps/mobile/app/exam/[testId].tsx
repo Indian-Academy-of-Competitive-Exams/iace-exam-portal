@@ -16,8 +16,10 @@ import {
   CATALOG_QUERY_KEY,
   EXAM_LANGUAGES_PARAM,
   startedAttemptQueryKey,
+  STORAGE_KEYS,
 } from '../../src/lib/constants';
 import { examLanguagesFrom } from '../../src/lib/exam-routes';
+import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
 import { endedSittingQuery } from '../../src/lib/queries';
 import { useAuth } from '../../src/providers/auth';
@@ -38,6 +40,8 @@ export default function ExamScreen() {
   const queryClient = useQueryClient();
   const { identity: student } = useAuth();
   const [view, setView] = useState<ExamView | null>(null);
+  // Read once per visit: a sync SQLite read on every render would be paid on every tap.
+  const [tab] = useState(deviceTab);
 
   const attempt = useQuery({
     queryKey: startedAttemptQueryKey(testId),
@@ -46,6 +50,7 @@ export default function ExamScreen() {
       // None survived the URL: the server picks, as it does for a web start with no choice made.
       return api.me.startAttempt(testId, {
         languages: languages.length > 0 ? languages : undefined,
+        tab,
       });
     },
     enabled: testId !== '',
@@ -123,6 +128,7 @@ export default function ExamScreen() {
           watermark={student?.mobile ?? ''}
           onEnded={onEnded}
           onView={setView}
+          tab={tab}
         />
       ) : null}
     </View>
@@ -141,10 +147,17 @@ function forgetSitting(queryClient: QueryClient, testId: string): void {
 /** Draws nothing: it runs the engine and hands each view up, so the skin never waits to mount. */
 const SittingEngine = memo(function SittingEngine({
   onView,
+  tab,
   ...sitting
-}: Readonly<ExamSitting & { onView: (view: ExamView) => void }>) {
+}: Readonly<ExamSitting & { onView: (view: ExamView) => void; tab: string }>) {
   const focus = useAppFocus(appStateSource);
-  const view = useExamView(sitting, { api, focus, catalogQueryKey: CATALOG_QUERY_KEY });
+  const view = useExamView(sitting, {
+    api,
+    focus,
+    catalogQueryKey: CATALOG_QUERY_KEY,
+    tab,
+    answerQueue: { storage: sittingStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
+  });
 
   // Before paint, so the skin never shows a view the engine has already moved past.
   useLayoutEffect(() => {

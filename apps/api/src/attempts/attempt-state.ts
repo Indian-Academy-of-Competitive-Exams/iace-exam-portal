@@ -23,6 +23,8 @@ export interface HeldState {
   /** Questions changed since the last flush. Absent on a key written before this shipped. */
   pending?: string[];
   sections: Record<string, SectionProgress>;
+  /** The tab answering: a string holds it, null was stood down, absent is a key put back cold. */
+  tab?: string | null;
 }
 
 const hasAnswer = (change: AnswerChange): boolean =>
@@ -63,6 +65,12 @@ function answerFor(held: LiveAnswer | undefined, change: AnswerChange, now: Date
     // The EARLIEST wins, whichever side it came from: a first touch cannot happen twice.
     firstActionAt: earliest(held?.firstActionAt, change.firstActionAt) ?? now.toISOString(),
   };
+}
+
+/** A tab may answer while it holds the sitting, or while a key put back cold is held by nobody. */
+export function holdsSitting(held: HeldState, tab: string | undefined): boolean {
+  if (tab === undefined) return true;
+  return held.tab === undefined || held.tab === tab;
 }
 
 /** At or below the held revision is a batch a newer save already carried, not one to replay. */

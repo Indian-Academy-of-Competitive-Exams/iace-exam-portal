@@ -28,7 +28,7 @@ export function ExamShell({
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">
           <div className="flex max-w-md flex-col gap-4">
             <Alert variant="danger">
-              {`${leftFullScreen(fullscreen.exits)} Your paper is still running and the clock has not stopped. Leaving full screen is recorded on this sitting.`}
+              {`${leftFullScreen(fullscreen.exits)} Your paper is still running and the clock has not stopped.`}
             </Alert>
             <div className="flex flex-wrap gap-2">
               <Button type="button" onClick={fullscreen.enter}>

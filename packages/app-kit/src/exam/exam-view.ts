@@ -26,7 +26,7 @@ export interface ExamSubmitView {
   confirm: () => void;
 }
 
-/** Leaving full screen is recorded and asked about; a skin cannot decide not to. */
+/** Leaving full screen is asked about; a skin cannot decide not to. */
 export interface ExamFullscreenView {
   nagging: boolean;
   exits: number;
@@ -68,6 +68,8 @@ export interface ExamView {
 
   isSaving: boolean;
   hasUnsaved: boolean;
+  /** This tab no longer holds the sitting: it was opened in another tab or on another device. */
+  takenOver: boolean;
 
   openQuestion: (questionId: string) => void;
   nextQuestion: () => void;

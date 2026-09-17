@@ -2,10 +2,11 @@
  * The database the test tier runs against, guarded and migrated. Shared by scripts/test-db.mjs and
  * scripts/coverage.mjs so the two cannot disagree about which database is safe to fill with rows.
  *
- * It refuses a missing URL, the DATABASE_URL database, and any database not named `*_test`.
+ * It refuses a missing URL, the dev database, a name not ending `_test`, and a second run.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
 
@@ -35,6 +36,29 @@ function refuse(reason) {
   process.exit(1);
 }
 
+/** A pid we can signal is a run still going; one we cannot is a crash that left its lock behind. */
+function running(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Two runs on one database truncate each other's fixtures, and the failures read as broken code. */
+function claimDatabase(url) {
+  const lock = join(tmpdir(), `iace-test-db-${databaseOf(url).replace(/\W/g, '-')}.lock`);
+  const holder = existsSync(lock) ? Number(readFileSync(lock, 'utf8')) : 0;
+  if (holder && holder !== process.pid && running(holder)) {
+    refuse(
+      `another run (pid ${holder}) already holds ${databaseNameOf(url)}. Two runs truncate each other's rows, so this one would fail in ways that look like a code regression. Wait for it, or stop it.`,
+    );
+  }
+  writeFileSync(lock, String(process.pid));
+  process.on('exit', () => rmSync(lock, { force: true }));
+}
+
 /** Migrates the test database and returns the environment every database test must run under. */
 export function prepareTestDatabase() {
   const testUrl = envValue('TEST_DATABASE_URL');
@@ -55,6 +79,8 @@ export function prepareTestDatabase() {
       `TEST_DATABASE_URL names "${databaseNameOf(testUrl)}"; the tests run only on a database whose name ends in "${TEST_DATABASE_SUFFIX}".`,
     );
   }
+
+  claimDatabase(testUrl);
 
   const env = { ...process.env, DATABASE_URL: testUrl, TEST_DATABASE_URL: testUrl };
   try {

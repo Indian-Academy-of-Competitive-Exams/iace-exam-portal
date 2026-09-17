@@ -17,8 +17,12 @@ export const browserStorage: KeyValueStorage = {
   removeItem: (key) => localStorage.removeItem(key),
 };
 
-/** A path on this origin, whole — what a link somebody copies out of the app has to be. */
-export const absoluteUrl = (path: string): string => `${window.location.origin}${path}`;
+/** `sessionStorage`, narrowed the same way: one per tab, surviving a reload of it. */
+export const browserSessionStorage: KeyValueStorage = {
+  getItem: (key) => sessionStorage.getItem(key),
+  setItem: (key, value) => sessionStorage.setItem(key, value),
+  removeItem: (key) => sessionStorage.removeItem(key),
+};
 
 /** Broadcast when a refresh fails, so the auth context can drop the session. */
 export const SIGNED_OUT_EVENT = 'iace:signed-out';
@@ -74,16 +78,3 @@ export { useListScreen } from './use-list-screen';
 export { usePrint } from './use-print';
 export { useScrollList } from './use-scroll-list';
 export { useLocalFilters, type FilterStore } from './use-local-filters';
-
-export {
-  ShareTable,
-  SharePicker,
-  ShareStatusBadge,
-  announceMinted,
-  shareColumns,
-  shareLinkFor,
-  shareTitleOf,
-  useChosenSitting,
-  type SharePickerProps,
-  type ShareTableProps,
-} from './share-links';

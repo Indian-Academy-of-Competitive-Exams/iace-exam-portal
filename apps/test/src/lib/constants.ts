@@ -4,7 +4,6 @@ import {
   ANSWER_STATE,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
-  sharedReportPath,
   type AnswerState,
   type LeaderboardMeasure,
   type LeaderboardScope,
@@ -39,8 +38,6 @@ export const ROUTES = {
   REVIEW_PATTERN: '/attempts/:attemptId/review',
   QUESTION_REPORT_PATTERN: '/attempts/:attemptId/questions',
   PERFORMANCE: '/performance',
-  /** Public: no session, no nav, one student's own report opened by a token. */
-  SHARED_REPORT_PATTERN: sharedReportPath(':token'),
   LEADERBOARD: '/leaderboard',
   /** Both lists, tabbed: what they starred, and what they got wrong. */
   SAVED: '/saved',
@@ -138,12 +135,6 @@ export const PODIUM_LABELS: Readonly<Record<number, string>> = {
   3: '3rd',
 };
 
-/** Every link this student has handed out, and the sittings a new one could open. */
-export const PERFORMANCE_SHARES_QUERY_KEY = ['me', 'performance', 'shares'] as const;
-
-/** The public read, keyed by the token so two links never share a cache entry. */
-export const sharedReportQueryKey = (token: string) => ['public', 'report', token] as const;
-
 /** The series the SERIES scope may be asked about, which only a sitting puts on the list. */
 export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as const;
 
@@ -182,4 +173,8 @@ export const PROFILE_QUERY_KEY = ['me'] as const;
 export const STORAGE_KEYS = {
   // Named for the app, not the audience: the student portal is a separate SPA on this origin.
   AUTH: 'iace.test.auth',
+  /** Per tab, in sessionStorage: what tells the server which tab is answering. */
+  TAB: 'iace.test.tab',
+  /** Answers a save has not delivered yet, so a reload mid-outage does not lose them. */
+  QUEUED_ANSWERS: 'iace.test.queued',
 } as const;

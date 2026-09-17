@@ -509,21 +509,6 @@ Table AttemptQuestion {
   }
 }
 
-Table PerformanceShare {
-  id text [pk, default: `cuid()`]
-  token text [unique, not null]
-  attemptId text [not null]
-  createdByAdminId text
-  expiresAt timestamptz(3)
-  revokedAt timestamptz(3)
-  createdAt timestamptz(3) [not null, default: `now()`]
-  updatedAt timestamptz(3) [not null, default: `now()`]
-  indexes {
-    (attemptId)
-    (createdByAdminId)
-  }
-}
-
 Table Student {
   id text [pk, default: `cuid()`]
   mobile text [not null]
@@ -970,8 +955,6 @@ Ref: AttemptQuestion.(questionId, questionVersionId) > QuestionVersion.(question
 Ref: AttemptQuestion.(paperQuestionId, questionId, questionVersionId) > PaperQuestion.(id, questionId, questionVersionId) [delete: restrict]
 Ref: AttemptQuestion.(paperQuestionId, baseConfigSectionId) > PaperQuestion.(id, baseConfigSectionId) [delete: restrict]
 Ref: AttemptQuestion.baseConfigSectionId > BaseConfigSection.id
-Ref: PerformanceShare.attemptId > Attempt.id [delete: restrict]
-Ref: PerformanceShare.createdByAdminId > Admin.id [delete: restrict]
 Ref: Student.currentBranchId > Branch.id [delete: restrict]
 Ref: StudentProfile.studentId > Student.id [delete: cascade]
 Ref: StudentConsent.studentId > Student.id [delete: cascade]
@@ -1042,7 +1025,6 @@ TableGroup "Tests & Papers" { // color: #2E7D5B
 TableGroup "Attempts" { // color: #2563A8
   Attempt
   AttemptQuestion
-  PerformanceShare
 }
 
 TableGroup "People & Identity" { // color: #6D4AA8

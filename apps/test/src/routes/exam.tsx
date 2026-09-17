@@ -8,9 +8,10 @@ import { useQuery } from '@tanstack/react-query';
 import { type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import { useExamView, type EndedSitting } from '@iace/app-kit';
-import { useFullscreen } from '@iace/app-kit/browser';
+import { browserSessionStorage, useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, ROUTES } from '../lib/constants';
+import { CATALOG_QUERY_KEY, ROUTES, STORAGE_KEYS } from '../lib/constants';
+import { tabId } from '../lib/tab-id';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
 
@@ -26,7 +27,7 @@ export function ExamPage() {
 
   const attempt = useQuery({
     queryKey: ['me', 'attempt', testId],
-    queryFn: () => api.me.startAttempt(testId, { languages: began.languages }),
+    queryFn: () => api.me.startAttempt(testId, { languages: began.languages, tab: tabId() }),
     enabled: testId !== '',
     // The sitting is started once; a refetch would be a second start, which the server resumes.
     staleTime: Infinity,
@@ -89,7 +90,27 @@ function ExamHall(
   }>,
 ) {
   const focus = useFullscreen();
-  const view = useExamView(sitting, { api, focus, catalogQueryKey: CATALOG_QUERY_KEY });
+  const view = useExamView(sitting, {
+    api,
+    focus,
+    catalogQueryKey: CATALOG_QUERY_KEY,
+    tab: tabId(),
+    answerQueue: { storage: browserSessionStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
+  });
+
+  if (view.takenOver) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.REFUSED}
+          title="This paper is being answered somewhere else"
+          /* ui-copy-ok: consequence — continuing here is what stops the other one */
+          hint="Your answers are saved. Continuing here stops the other tab or device."
+          action={<Button onClick={() => window.location.reload()}>Continue here</Button>}
+        />
+      </div>
+    );
+  }
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
 }

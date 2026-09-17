@@ -127,9 +127,6 @@ export function TestAboutPage() {
                 <div className="flex flex-col gap-2">
                   <StatRow label="Languages" value={languagesOf(brief.data)} />
                   <StatRow label="Sectional timing" value={sectionalOf(brief.data)} />
-                  {listed?.sittingCount === null || listed === undefined ? null : (
-                    <StatRow label="Sat by" value={listed.sittingCount} />
-                  )}
                 </div>
               </SurfaceCard>
             </div>

@@ -114,6 +114,8 @@ export const attemptSchema = z.object({
 /** Which languages this student sits in. Must be ones the config offers. */
 export const startAttemptSchema = z.object({
   languages: z.array(languageCodeSchema).min(1).optional(),
+  /** The tab taking the sitting on. A student answers from one tab at a time, on one device. */
+  tab: z.string().min(1).optional(),
 });
 export type StartAttemptInput = z.input<typeof startAttemptSchema>;
 export type StartAttemptBody = z.infer<typeof startAttemptSchema>;
@@ -162,7 +164,16 @@ export const saveAttemptStateSchema = z.object({
   revision: z.number().int().min(0),
   answers: z.array(answerChangeSchema).max(SAVE_BATCH_MAX),
   sections: z.record(z.string(), sectionProgressSchema).optional(),
+  /** Which tab is answering. One that no longer holds the sitting is refused, never merged. */
+  tab: z.string().min(1).optional(),
 });
+
+/** Submitting names its tab too: a tab stood down elsewhere must not end a sitting in progress. */
+export const submitAttemptSchema = z.object({
+  tab: z.string().min(1).optional(),
+});
+export type SubmitAttemptInput = z.input<typeof submitAttemptSchema>;
+export type SubmitAttemptBody = z.infer<typeof submitAttemptSchema>;
 export type SaveAttemptStateInput = z.input<typeof saveAttemptStateSchema>;
 export type SaveAttemptStateBody = z.infer<typeof saveAttemptStateSchema>;
 
@@ -179,7 +190,7 @@ export const liveAnswerSchema = z.object({
 });
 export type LiveAnswer = z.infer<typeof liveAnswerSchema>;
 
-/** What Redis holds for one sitting. Returned on every save, so the screen can reconcile. */
+/** What Redis holds for one sitting, read back whole only where a screen starts from nothing. */
 export const liveAttemptStateSchema = z.object({
   attemptId: z.string(),
   revision: z.number().int(),
@@ -190,6 +201,14 @@ export const liveAttemptStateSchema = z.object({
   serverNow: z.string(),
 });
 export type LiveAttemptState = z.infer<typeof liveAttemptStateSchema>;
+
+/** What a save answers with: the counter the screen reads, and the clock it sets itself by. */
+export const attemptSaveAckSchema = z.object({
+  revision: z.number().int(),
+  endsAt: z.string(),
+  serverNow: z.string(),
+});
+export type AttemptSaveAck = z.infer<typeof attemptSaveAckSchema>;
 
 /** What a student reads BEFORE the clock starts. No question and no answer is in here. */
 export const examBriefSchema = z.object({

@@ -162,9 +162,11 @@ import {
   performanceTrendSchema,
   scoreCardSchema,
   solutionReportSchema,
+  attemptSaveAckSchema,
   liveAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
+  type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
@@ -172,6 +174,7 @@ import {
   type ScoreCard,
   type SolutionReport,
   type SaveAttemptStateInput,
+  type SubmitAttemptInput,
   type StartAttemptInput,
   type SubmittedAttempt,
   type LiveAttemptState,
@@ -181,6 +184,7 @@ import {
   PERFORMANCE_ROUTES,
   performanceReportSchema,
   questionReportSchema,
+  reportSittingSchema,
   satSeriesSchema,
   studentOverviewSchema,
   testAnalyticsSchema,
@@ -188,6 +192,7 @@ import {
   type PerformanceReport,
   type QuestionReport,
   type PerformanceReportQueryInput,
+  type ReportSitting,
   type SatSeries,
   type StudentOverview,
   type TestAnalytics,
@@ -213,18 +218,6 @@ import {
   type ResolvedAttempt,
   type VoidAttemptInput,
 } from './live-ops';
-import {
-  PERFORMANCE_SHARE_ROUTES,
-  performanceShareSchema,
-  performanceSharesSchema,
-  reportSittingSchema,
-  sharedReportSchema,
-  type CreatePerformanceShareInput,
-  type PerformanceShare,
-  type PerformanceShares,
-  type ReportSitting,
-  type SharedReport,
-} from './shares';
 import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
@@ -578,13 +571,6 @@ export function createApiClient(options: ApiClientOptions) {
     requestPaginated,
     requestBlob,
 
-    /** The one unauthenticated read of student data: a shared report, opened by its token. */
-    sharedReport: (token: string): Promise<SharedReport> =>
-      request(PERFORMANCE_SHARE_ROUTES.public(token), {
-        schema: sharedReportSchema,
-        anonymous: true,
-      }),
-
     auth: {
       /** Student signup or PIN reset, step 1. */
       requestStudentOtp: (input: RequestStudentOtpInput): Promise<OtpRequestResponse> =>
@@ -698,16 +684,19 @@ export function createApiClient(options: ApiClientOptions) {
       saveAttemptState: (
         attemptId: string,
         input: SaveAttemptStateInput,
-      ): Promise<LiveAttemptState> =>
-        write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema, input),
+      ): Promise<AttemptSaveAck> =>
+        write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), attemptSaveAckSchema, input),
 
       /** What the server is holding, so a reloaded tab can seed its answers instead of starting blank. */
       attemptState: (attemptId: string): Promise<LiveAttemptState> =>
         get(ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema),
 
       /** Ends it. A second call reports the first one's outcome rather than refusing. */
-      submitAttempt: (attemptId: string): Promise<SubmittedAttempt> =>
-        write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema),
+      submitAttempt: (
+        attemptId: string,
+        input: SubmitAttemptInput = {},
+      ): Promise<SubmittedAttempt> =>
+        write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema, input),
 
       /** Marks, standing and their own answers. Refused until the paper has been marked. */
       scoreCard: (attemptId: string): Promise<ScoreCard> =>
@@ -742,16 +731,6 @@ export function createApiClient(options: ApiClientOptions) {
       /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
       leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
         get(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, leaderboardSchema),
-
-      /** Their own links, live and dead, and the sittings a new one could open. */
-      performanceShares: (): Promise<PerformanceShares> =>
-        get(PERFORMANCE_SHARE_ROUTES.mine, performanceSharesSchema),
-
-      sharePerformance: (input: CreatePerformanceShareInput): Promise<PerformanceShare> =>
-        write('POST', PERFORMANCE_SHARE_ROUTES.mine, performanceShareSchema, input),
-
-      revokePerformanceShare: (id: string): Promise<PerformanceShare> =>
-        write('POST', PERFORMANCE_SHARE_ROUTES.revokeMine(id), performanceShareSchema),
 
       /** One of the two lists, newest first. The kind is required — there is no combined list. */
       savedQuestions: (query: SavedListQueryInput): Promise<Paginated<SavedQuestion>> =>

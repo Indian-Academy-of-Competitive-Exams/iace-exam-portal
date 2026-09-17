@@ -71,8 +71,10 @@ describe('AttemptStateService', () => {
     const { service, redis, student, attemptId, live, q1, change } = await build();
     await service.open(live);
 
-    const state = await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+    const ack = await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
 
+    assert.equal(ack.revision, 1);
+    const state = await service.current(student, attemptId, NOW);
     assert.equal(state.answers[q1]?.state, ANSWER_STATE.ANSWERED);
     assert.deepEqual(await service.dirtyIds(), [attemptId]);
     assert.ok(redis.snapshot()[`attempt:state:${attemptId}`]);
@@ -114,7 +116,8 @@ describe('AttemptStateService', () => {
     await service.take(attemptId);
 
     assert.deepEqual(await service.dirtyIds(), []);
-    const rebuilt = await service.save(student, attemptId, { revision: 2, answers: [] }, NOW);
+    await service.save(student, attemptId, { revision: 2, answers: [] }, NOW);
+    const rebuilt = await service.current(student, attemptId, NOW);
     assert.equal(Object.keys(rebuilt.answers).length, 0);
   });
 

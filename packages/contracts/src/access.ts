@@ -355,6 +355,7 @@ export const studentCatalogTestSchema = z.object({
   title: z.string().nullable(),
   /** What the paper IS, not what this student may do with it — static, so it caches safely. */
   durationSec: z.number().int(),
+  sectionCount: z.number().int(),
   totalQuestions: z.number().int(),
   totalMarks: z.number(),
   /** Position in the series. Ordering only — sequential gating is the series' own flag. */
@@ -364,8 +365,6 @@ export const studentCatalogTestSchema = z.object({
   /** Where this student has got to. Null is never opened; IN_PROGRESS is what Resume reopens. */
   attemptStatus: attemptStatusSchema.nullable(),
   canStart: z.boolean(),
-  /** Ranked sittings on this test's board. Null where it is empty or cold — never cached. */
-  sittingCount: z.number().int().nullable(),
 });
 export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
 

@@ -98,7 +98,7 @@ describe('RedisThrottlerStorage', () => {
     const { storage, hits } = fakeRedis();
 
     await storage.increment('ip:1', 60_000, 2, 0, 'auth');
-    await storage.increment('ip:1', 60_000, 2, 0, 'share');
+    await storage.increment('ip:1', 60_000, 2, 0, 'sitting');
 
     assert.deepEqual([...hits.values()], [1, 1]);
   });

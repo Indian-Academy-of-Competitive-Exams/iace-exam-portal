@@ -80,7 +80,7 @@ export class AttemptsService {
     const live = await this.liveAttempt(studentId, testId);
     if (live) {
       // A resume after the key expired rebuilds it, so answering never falls back to Postgres.
-      await this.state.open(live);
+      await this.state.open(live, input.tab);
       return toLiveAttempt(live, await this.requireTest(testId), false);
     }
 
@@ -97,7 +97,7 @@ export class AttemptsService {
 
     try {
       const started = await this.create(studentId, test, slots, input.languages);
-      await this.state.open(started);
+      await this.state.open(started, input.tab);
       // The catalog caches where this student has got to, and starting is one of two things that move it.
       await this.access.invalidateStudent(studentId);
       return toLiveAttempt(started, test, true);
@@ -108,7 +108,7 @@ export class AttemptsService {
       if (!won) {
         throw new AppException(ErrorCodes.CONFLICT, 'That sitting has just ended. Open it again.');
       }
-      await this.state.open(won);
+      await this.state.open(won, input.tab);
       return toLiveAttempt(won, test, false);
     }
   }

@@ -185,12 +185,6 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
     },
     { key: 'when', header: 'When', cell: (row) => whenLine(row, now) },
     {
-      key: 'sat',
-      header: 'Sat by',
-      numeric: true,
-      cell: (row) => row.sittingCount ?? '—',
-    },
-    {
       key: 'go',
       cell: (row) => {
         const action = testAction(row);

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
@@ -12,7 +12,6 @@ import {
 import { StorageService } from '../storage/storage.service';
 import { StudentsService } from '../students';
 import { AccessResolverService } from '../access';
-import { LeaderboardService } from '../attempts';
 import { AuditContext } from '../audit';
 import { checkDocument, columnFor, documentKey } from './documents';
 
@@ -30,13 +29,10 @@ export const AUDITED_PROFILE_FIELDS = [
 /** The student's own account. */
 @Injectable()
 export class MeService {
-  private readonly logger = new Logger(MeService.name);
-
   constructor(
     private readonly students: StudentsService,
     private readonly storage: StorageService,
     private readonly access: AccessResolverService,
-    private readonly leaderboard: LeaderboardService,
     private readonly auditContext: AuditContext,
   ) {}
 
@@ -49,30 +45,8 @@ export class MeService {
     return { ...student, enrolment: await this.students.enrolmentOf(student) };
   }
 
-  /** The catalog, with each paper's crowd read live off its board rather than out of the cache. */
-  async catalog(studentId: string): Promise<StudentCatalog> {
-    const catalog = await this.access.catalog(studentId);
-    const tests = catalog.series.flatMap((series) => series.tests);
-    const counts = await this.leaderboard
-      .sittingCounts(tests.map((test) => test.id))
-      .catch((error: unknown) => {
-        this.logger.error(
-          'Reading the sitting counts failed; the catalog stands without them',
-          error,
-        );
-        return new Map<string, number>();
-      });
-
-    return {
-      ...catalog,
-      series: catalog.series.map((series) => ({
-        ...series,
-        tests: series.tests.map((test) => ({
-          ...test,
-          sittingCount: counts.get(test.id) ?? null,
-        })),
-      })),
-    };
+  catalog(studentId: string): Promise<StudentCatalog> {
+    return this.access.catalog(studentId);
   }
 
   /** An enrolment cannot arrive here — see updateMeSchema for why. */

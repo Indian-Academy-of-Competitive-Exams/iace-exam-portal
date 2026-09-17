@@ -168,6 +168,13 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - **Resume is not a start.** A live sitting is re-entered without asking the start gate again. A
   test may be sat again any number of times, and nothing counts or caps re-entries into one sitting.
   Two racing starts resolve to one sitting.
+- **A student answers one sitting at a time, on one tab.** Starting or resuming a sitting hands it to
+  the tab that asked, and stands down whichever tab held the student's last one — the same rule
+  whether that was another tab, another device, or another test. A save or a submit from a tab that
+  no longer holds its sitting is refused with `SITTING_TAKEN_OVER`; nothing it already wrote is lost,
+  and the sitting it was stood down from stays live and resumable. A sitting held by nobody, because
+  its key was rebuilt from Postgres, is adopted by the first tab back. **The clock does not stop**:
+  a paper left to sit another runs to the deadline it was given at start.
 - `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
   Sections keep the config's order; questions shuffle within a section.
 - The whole served paper is written as `AttemptQuestion` rows at start, not only what the student
@@ -178,7 +185,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - `SINGLE` serves the one language picked, narrowed to what the config actually offers; `DUAL` serves
   every language it offers and there is nothing to toggle.
 - **Live state lives in Redis, and the key existing is what "this sitting is open" means.** Autosave
-  batches what changed roughly every 25 seconds and the server merges it. A save that finds no key
+  batches what changed roughly every 25 seconds and the server merges it, answering with the
+  revision and the clock rather than the sheet — the screen already holds what it just sent, and
+  reads the whole state back only where it starts from nothing. A save that finds no key
   falls back to Postgres, which refuses anything not in progress — so a save after a submit cannot
   be accepted. A save is still taken up to 30 seconds past the deadline: a slow network is not a
   cheat.
@@ -212,8 +221,6 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   shuts, so there is no moment when everyone has sat it to wait for.
 - Answer-level detail is captured from day one — option chosen, verdict, marked-for-review state, and
   time per question and per section — so analytics derive later without re-instrumenting.
-- `PerformanceShare` is the only unauthenticated door onto a report: a random token rather than a
-  walkable id, revocable and expirable.
 - **A void is an archive, never a delete.** The support console stands a sitting down — `VOIDED`,
   with who did it and why — and it then counts nowhere: every fold, board and cohort read selects
   `EVALUATED`, which the status no longer is. Voiding one already marked asks for the test's cohort

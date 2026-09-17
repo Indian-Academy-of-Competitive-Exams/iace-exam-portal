@@ -21,6 +21,8 @@ import {
 } from '../../common/messaging';
 import { type StoredOtp } from '../auth.types';
 
+const DAY_SEC = 24 * 60 * 60;
+
 /** OTP lifecycle. */
 @Injectable()
 export class OtpService {
@@ -42,6 +44,8 @@ export class OtpService {
         { details: { retryAfterSec: remaining } },
       );
     }
+    // Admins sign in by email OTP on every login, so only a student's SMS is counted against a day.
+    if (actor === ActorTypes.STUDENT) await this.countTowardsDay(identifier);
 
     const ttlSec = this.config.get('OTP_TTL_SEC');
     const cooldownSec = this.config.get('OTP_RESEND_COOLDOWN_SEC');
@@ -70,6 +74,19 @@ export class OtpService {
         ? { devCode: code }
         : {}),
     };
+  }
+
+  /** Counted before sending and never refunded: a refused request past the cap is already over it. */
+  private async countTowardsDay(mobile: string): Promise<void> {
+    const key = redisKeys.otpDaily(mobile);
+    const sent = await this.redis.client.incr(key);
+    if (sent === 1) await this.redis.client.expire(key, DAY_SEC);
+    if (sent > this.config.get('OTP_MAX_PER_DAY')) {
+      throw new AppException(
+        ErrorCodes.RATE_LIMITED,
+        'Too many codes have been sent to this number — try again later',
+      );
+    }
   }
 
   /** WhatsApp first where it is on, SMS the moment it does not — a student is waiting. */
