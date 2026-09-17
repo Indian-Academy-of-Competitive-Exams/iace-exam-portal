@@ -9,8 +9,10 @@ import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { RELAY_BATCH } from '../queue/queues';
+import { servedSheet } from './answer-sheet';
 import { numberOrNull } from './attempt-report';
 import { bandsIn, cohortShapeOf } from './performance-analytics';
+import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { ROLLUP_REQUEST } from './rollup-outbox';
 import { sectionScoresIn } from './score-paper';
 import {
@@ -50,20 +52,40 @@ const FOLD_SELECT = {
   submittedAt: true,
   evaluatedAt: true,
   sectionScores: true,
+  startedAt: true,
+  shuffleSeed: true,
   test: { select: { scope: true } },
-  questions: {
-    select: {
-      paperQuestionId: true,
-      questionId: true,
-      isCorrect: true,
-      timeSpentSec: true,
-      selectedOptionId: true,
-      question: { select: { subjectId: true } },
-    },
-  },
+  sheet: { select: { answers: true, verdicts: true } },
 } as const satisfies Prisma.AttemptSelect;
 
 type FoldRow = Prisma.AttemptGetPayload<{ select: typeof FOLD_SELECT }>;
+
+const FOLD_ROW_SELECT = {
+  ...SHEET_ROW_SELECT,
+  testId: true,
+  question: { select: { subjectId: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type FoldPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof FOLD_ROW_SELECT }>;
+
+/** Each test's paper once for a page of sittings, which a student's rebuild spreads over many tests. */
+async function papersOf(
+  client: Pick<Prisma.TransactionClient, 'paperQuestion'>,
+  testIds: readonly string[],
+): Promise<Map<string, FoldPaperRow[]>> {
+  const rows = await client.paperQuestion.findMany({
+    where: { testId: { in: [...new Set(testIds)] } },
+    orderBy: [{ testId: 'asc' }, { order: 'asc' }],
+    select: FOLD_ROW_SELECT,
+  });
+  const papers = new Map<string, FoldPaperRow[]>();
+  for (const row of rows) {
+    const held = papers.get(row.testId) ?? [];
+    held.push(row);
+    papers.set(row.testId, held);
+  }
+  return papers;
+}
 
 /** Sittings replayed per round trip, so a rebuild of a 5K cohort never holds it all in memory. */
 const REBUILD_PAGE = 200;
@@ -267,7 +289,8 @@ export class RollupService {
       select: FOLD_SELECT,
     });
     if (row === null || row.status !== ATTEMPT_STATUS.EVALUATED) return null;
-    return toFoldable(row);
+    const papers = await papersOf(this.prisma, [row.testId]);
+    return toFoldable(row, papers.get(row.testId) ?? []);
   }
 
   /** The cohort is one row per student: the earliest evaluated graded sitting, and no other. */
@@ -594,7 +617,11 @@ export class RollupService {
         where: { id: { in: ids.slice(at, at + REBUILD_PAGE) } },
         select: FOLD_SELECT,
       });
-      for (const row of rows) fold(toFoldable(row));
+      const papers = await papersOf(
+        tx,
+        rows.map((row) => row.testId),
+      );
+      for (const row of rows) fold(toFoldable(row, papers.get(row.testId) ?? []));
     }
   }
 }
@@ -652,7 +679,7 @@ function cohortCounts(totals: CohortTotals) {
   };
 }
 
-function toFoldable(row: FoldRow): FoldableAttempt {
+function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttempt {
   return {
     id: row.id,
     testId: row.testId,
@@ -667,8 +694,8 @@ function toFoldable(row: FoldRow): FoldableAttempt {
     evaluatedAt: row.evaluatedAt,
     scope: row.test.scope,
     sections: sectionScoresIn(row.sectionScores) ?? [],
-    questions: row.questions.map((question) => ({
-      paperQuestionId: question.paperQuestionId,
+    questions: servedSheet(paper, row, false).map((question) => ({
+      paperQuestionId: question.id,
       questionId: question.questionId,
       subjectId: question.question.subjectId,
       isCorrect: question.isCorrect,

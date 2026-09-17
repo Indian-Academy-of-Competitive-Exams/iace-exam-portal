@@ -10,15 +10,12 @@ import {
 } from '@iace/contracts';
 import { SavedQuestionsService } from '../src/saved/saved-questions.service';
 import {
-  makeCatalog,
-  makeQuestion,
-  makeSection,
+  makePaper,
   makeSitting,
   makeStudent,
-  makeSubject,
   makeTest,
   resetDatabase,
-  serveQuestion,
+  sitPaper,
   testPrisma,
 } from './support/database';
 
@@ -32,28 +29,37 @@ const codeOf = (error: unknown) => (AppException.is(error) ? error.code : null);
 
 /** A marked sitting on "Mock 1" that served two Reasoning questions, and a second student. */
 async function world(status: AttemptStatus = ATTEMPT_STATUS.EVALUATED) {
-  const catalog = await makeCatalog(prisma);
-  const test = await makeTest(prisma, catalog, { title: 'Mock 1' });
-  const section = await makeSection(prisma, catalog);
-  const subject = await makeSubject(prisma, 'Reasoning');
-  const first = await makeQuestion(prisma, { subjectId: subject.id, stem: 'Stem for q_1' });
-  const second = await makeQuestion(prisma, { subjectId: subject.id, stem: 'Stem for q_2' });
+  const paper = await makePaper(prisma, {
+    title: 'Mock 1',
+    questions: [
+      { subject: 'Reasoning', stem: 'Stem for q_1' },
+      { subject: 'Reasoning', stem: 'Stem for q_2' },
+    ],
+  });
   const student = await makeStudent(prisma);
   const other = await makeStudent(prisma);
-  const sitting = await makeSitting(prisma, {
-    testId: test.id,
+  const sitting = await sitPaper(prisma, {
+    paper,
     studentId: student.id,
-    score: 0,
+    chosen: [null, null],
+    timeSpent: [0, 0],
     status,
+    score: 0,
   });
-  await serveQuestion(prisma, { attemptId: sitting.id, question: first, sectionId: section.id });
-  await serveQuestion(prisma, {
-    attemptId: sitting.id,
-    question: second,
-    sectionId: section.id,
-    order: 2,
-  });
-  return { catalog, test, section, subject, first, second, student, other, sitting };
+  const [one, two] = paper.items;
+  const first = { id: one?.questionId ?? '', versionId: one?.versionId ?? '' };
+  const second = { id: two?.questionId ?? '', versionId: two?.versionId ?? '' };
+  return {
+    catalog: paper.catalog,
+    test: { id: paper.testId },
+    section: { id: paper.sectionIds[0] ?? '' },
+    subject: { id: one?.subjectId ?? '' },
+    first,
+    second,
+    student,
+    other,
+    sitting,
+  };
 }
 
 function star(
@@ -162,18 +168,16 @@ describe('SavedQuestionsService — the two lists', () => {
 
 describe('SavedQuestionsService — what a revision list is filtered and read by', () => {
   it('carries the paper each row was met on, and what it cost there', async () => {
-    const { student, section, subject } = await world();
-    const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog, { title: 'Mock 2' });
-    const question = await makeQuestion(prisma, { subjectId: subject.id });
-    const sitting = await makeSitting(prisma, { testId: test.id, studentId: student.id, score: 0 });
-    await serveQuestion(prisma, {
-      attemptId: sitting.id,
-      question,
-      sectionId: section.id,
-      timeSpentSec: 47,
+    const { student } = await world();
+    const paper = await makePaper(prisma, { title: 'Mock 2', questions: ['Reasoning'] });
+    const sitting = await sitPaper(prisma, {
+      paper,
+      studentId: student.id,
+      chosen: [null],
+      timeSpent: [47],
+      score: 0,
     });
-    await star(student.id, question.id, sitting.id);
+    await star(student.id, paper.items[0]?.questionId ?? '', sitting.id);
 
     const page = await saved.list(student.id, {
       kind: SAVED_QUESTION_KIND.BOOKMARK,

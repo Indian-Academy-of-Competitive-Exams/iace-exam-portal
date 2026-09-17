@@ -304,13 +304,11 @@ export class QuestionsService {
     const questionVersionId = question.currentVersionId;
     if (!questionVersionId || question.status !== QUESTION_STATUS.DRAFT) return null;
 
-    // The guard no status can give: a version a paper or an attempt holds must never move under it.
-    const [papers, attempts] = await Promise.all([
-      tx.paperQuestion.count({ where: { questionId: question.id, questionVersionId } }),
-      tx.attemptQuestion.count({ where: { questionId: question.id, questionVersionId } }),
-    ]);
-
-    return papers + attempts > 0 ? null : questionVersionId;
+    // The guard no status can give: a version a paper holds must never move, and every served version is on one.
+    const papers = await tx.paperQuestion.count({
+      where: { questionId: question.id, questionVersionId },
+    });
+    return papers > 0 ? null : questionVersionId;
   }
 
   /** Version 1 of a question nobody has drawn stays version 1, however often it is saved. */
@@ -436,12 +434,11 @@ export class QuestionsService {
     if (ids.length === 0) return false;
 
     const questionId = { in: ids };
-    const [papers, attempts, stats] = await Promise.all([
+    const [papers, stats] = await Promise.all([
       tx.paperQuestion.count({ where: { questionId } }),
-      tx.attemptQuestion.count({ where: { questionId } }),
       tx.testQuestionStat.count({ where: { questionId } }),
     ]);
-    return papers + attempts + stats > 0;
+    return papers + stats > 0;
   }
 
   private isUsed(tx: Prisma.TransactionClient, questionId: string): Promise<boolean> {

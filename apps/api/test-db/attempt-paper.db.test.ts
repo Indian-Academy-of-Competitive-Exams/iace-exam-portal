@@ -13,6 +13,8 @@ import {
   type TimerTemplate,
 } from '@iace/contracts';
 import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
+import { AttemptReportService } from '../src/attempts/attempt-report.service';
+import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
   makePaper,
   makeStudent,
@@ -39,6 +41,7 @@ const noStorage = () =>
   ({ createDownloadUrl: () => Promise.reject(new Error('unexpected sign')) }) as never;
 
 const service = new AttemptPaperService(prisma, reachAll(), noStorage());
+const reports = () => new AttemptReportService(prisma, new LeaderboardService(prisma), noStorage());
 
 /** Content in three languages, and options as the column holds them — `isCorrect` and all. */
 const question = {
@@ -261,6 +264,44 @@ describe('AttemptPaperService — a paper read twice', () => {
     assert.deepEqual(
       optionIds(paper).map((ids) => [...ids].sort()),
       [LETTERS, LETTERS],
+    );
+  });
+});
+
+describe('AttemptPaperService and AttemptReportService — one derived order', () => {
+  /** A seed that really reorders a 2+2-section paper — established by the score card's own test. */
+  it('serves the exam paper in the same order the solutions review does, and not the paper’s own', async () => {
+    const onPaper = await makePaper(prisma, {
+      sections: ['Section A', 'Section B'],
+      questions: [
+        'Reasoning',
+        'Reasoning',
+        { subject: 'Reasoning', section: 1 },
+        { subject: 'Reasoning', section: 1 },
+      ],
+    });
+    await prisma.baseConfig.update({
+      where: { id: onPaper.catalog.baseConfigId },
+      data: { shuffleQuestions: true },
+    });
+    const student = (await makeStudent(prisma)).id;
+    const attempt = await sitPaper(prisma, {
+      paper: onPaper,
+      studentId: student,
+      chosen: [null, null, null, null],
+      status: ATTEMPT_STATUS.EVALUATED,
+      shuffleSeed: 1,
+    });
+
+    const paper = await service.paper(student, attempt.id);
+    const solutions = await reports().solutions(student, attempt.id);
+
+    const paperOrder = paper.questions.map((row) => row.questionId);
+    const solutionOrder = solutions.questions.map((row) => row.questionId);
+    assert.deepEqual(solutionOrder, paperOrder);
+    assert.notDeepEqual(
+      paperOrder,
+      onPaper.items.map((item) => item.questionId),
     );
   });
 });

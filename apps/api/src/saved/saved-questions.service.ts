@@ -12,6 +12,7 @@ import {
   SAVED_QUESTION_KIND,
   type BookmarkQuestionBody,
   type BookmarkedInAttempt,
+  type LiveAnswer,
   type LocalizedContent,
   type Paginated,
   type SavedListQuery,
@@ -19,6 +20,7 @@ import {
   type SavedQuestionKind,
   type SavedFacets,
 } from '@iace/contracts';
+import { answersOf } from '../attempts';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { stemPreviewOf } from '../questions';
@@ -90,28 +92,38 @@ export class SavedQuestionsService {
     return rows.map((row) => row.id);
   }
 
-  /** The paper each row was met on and what it cost — two lookups, because `attemptId` is a scalar. */
+  /** The paper each row was met on and what it cost — the sheet read once per sitting, not per row. */
   private async satContext(rows: readonly SavedRow[]): Promise<Map<string, SatContext>> {
     const attemptIds = [...new Set(rows.flatMap((row) => (row.attemptId ? [row.attemptId] : [])))];
     if (attemptIds.length === 0) return new Map();
 
-    const [attempts, timings] = await Promise.all([
-      this.prisma.attempt.findMany({
-        where: { id: { in: attemptIds } },
-        select: { id: true, testId: true, test: { select: { title: true } } },
-      }),
-      this.prisma.attemptQuestion.findMany({
-        where: {
-          attemptId: { in: attemptIds },
-          questionId: { in: [...new Set(rows.map((row) => row.questionId))] },
-        },
-        select: { attemptId: true, questionId: true, timeSpentSec: true },
-      }),
-    ]);
-
+    const attempts = await this.prisma.attempt.findMany({
+      where: { id: { in: attemptIds } },
+      select: {
+        id: true,
+        testId: true,
+        startedAt: true,
+        test: { select: { title: true } },
+        sheet: { select: { answers: true } },
+      },
+    });
+    const paperRows = await this.prisma.paperQuestion.findMany({
+      where: { testId: { in: [...new Set(attempts.map((row) => row.testId))] } },
+      orderBy: [{ testId: 'asc' }, { order: 'asc' }],
+      select: { testId: true, questionId: true, optionIds: true },
+    });
     const paper = new Map(attempts.map((row) => [row.id, row]));
     const spent = new Map(
-      timings.map((row) => [`${row.attemptId}:${row.questionId}`, row.timeSpentSec]),
+      attempts.map((row) => {
+        const rows = paperRows.filter((paperRow) => paperRow.testId === row.testId);
+        return [
+          row.id,
+          {
+            onPaper: new Set(rows.map((r) => r.questionId)),
+            answers: answersOf(row.sheet?.answers, rows, row.startedAt),
+          },
+        ] as const;
+      }),
     );
 
     return new Map(
@@ -124,7 +136,7 @@ export class SavedQuestionsService {
             {
               testId: on.testId,
               testTitle: on.test.title,
-              timeSpentSec: spent.get(`${row.attemptId}:${row.questionId}`) ?? null,
+              timeSpentSec: spentOn(spent.get(row.attemptId ?? ''), row.questionId),
             },
           ] as const,
         ];
@@ -198,10 +210,17 @@ export class SavedQuestionsService {
 
   /** Matched on the questions this sitting SERVED, so one starred in an earlier paper still shows. */
   async bookmarkedIn(studentId: string, attemptId: string): Promise<BookmarkedInAttempt> {
-    const served = await this.prisma.attemptQuestion.findMany({
-      where: { attemptId, attempt: { studentId } },
-      select: { questionId: true },
+    const sitting = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: { testId: true },
     });
+    const served =
+      sitting === null
+        ? []
+        : await this.prisma.paperQuestion.findMany({
+            where: { testId: sitting.testId },
+            select: { questionId: true },
+          });
     if (served.length === 0) return { attemptId, bookmarks: [] };
 
     const rows = await this.prisma.savedQuestion.findMany({
@@ -223,31 +242,23 @@ export class SavedQuestionsService {
     studentId: string,
     input: BookmarkQuestionBody,
   ): Promise<{ paperQuestionId: string | null }> {
-    const served = await this.prisma.attemptQuestion.findFirst({
-      where: {
-        attemptId: input.attemptId,
-        questionId: input.questionId,
-        attempt: { studentId },
-      },
-      select: {
-        paperQuestionId: true,
-        attempt: {
-          select: {
-            testId: true,
-            status: true,
-            test: {
-              select: { baseConfig: { select: { durationSec: true } } },
-            },
-          },
-        },
-      },
+    const sitting = await this.prisma.attempt.findFirst({
+      where: { id: input.attemptId, studentId },
+      select: { testId: true, status: true },
     });
-    if (!served) throw new AppException(ErrorCodes.NOT_FOUND, NOT_SAT);
-    if (served.attempt.status !== ATTEMPT_STATUS.EVALUATED) {
+    const served =
+      sitting === null
+        ? null
+        : await this.prisma.paperQuestion.findUnique({
+            where: { testId_questionId: { testId: sitting.testId, questionId: input.questionId } },
+            select: { id: true },
+          });
+    if (!sitting || !served) throw new AppException(ErrorCodes.NOT_FOUND, NOT_SAT);
+    if (sitting.status !== ATTEMPT_STATUS.EVALUATED) {
       throw new AppException(ErrorCodes.CONFLICT, NOT_REVIEWABLE);
     }
 
-    return { paperQuestionId: served.paperQuestionId };
+    return { paperQuestionId: served.id };
   }
 }
 
@@ -255,6 +266,15 @@ interface SatContext {
   testId: string;
   testTitle: string | null;
   timeSpentSec: number | null;
+}
+
+/** A served question nobody touched spent nothing; one off the paper has no figure at all. */
+function spentOn(
+  sat: { onPaper: ReadonlySet<string>; answers: Readonly<Record<string, LiveAnswer>> } | undefined,
+  questionId: string,
+): number | null {
+  if (!sat?.onPaper.has(questionId)) return null;
+  return sat.answers[questionId]?.timeSpentSec ?? 0;
 }
 
 /** A filter reads by name, so the map is turned into rows and sorted the way a reader scans. */

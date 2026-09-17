@@ -30,7 +30,6 @@ import {
   makeQuestion,
   makeQuestionBank,
   makeSection,
-  makeStudent,
   makeTest,
   resetDatabase,
   testPrisma,
@@ -108,9 +107,9 @@ const conflict = (error: unknown) => AppException.is(error) && error.code === Er
 
 const missing = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND;
 
-const HOLDERS = ['paper', 'attempt', 'stat'] as const;
+const HOLDERS = ['paper', 'stat'] as const;
 
-/** Something that keys on this version of the question: a paper row, a served attempt row, or a rollup. */
+/** Something that keys on this version of the question: a paper row, or a rollup pointing at one. */
 async function heldBy(
   holder: (typeof HOLDERS)[number],
   questionId: string,
@@ -135,27 +134,6 @@ async function heldBy(
     });
   if (holder === 'paper') {
     await paperRow(questionId, questionVersionId);
-  } else if (holder === 'attempt') {
-    const attempt = await prisma.attempt.create({
-      data: {
-        id: uid('attempt'),
-        testId: test.id,
-        studentId: (await makeStudent(prisma)).id,
-        attemptNo: 1,
-        startedAt: new Date(),
-        endsAt: new Date(Date.now() + 3_600_000),
-        shuffleSeed: 1,
-      },
-    });
-    await prisma.attemptQuestion.create({
-      data: {
-        attemptId: attempt.id,
-        questionId,
-        questionVersionId,
-        baseConfigSectionId: section.id,
-        order: 1,
-      },
-    });
   } else {
     // A rollup row points at its paper row by id alone, so another question's row carries it.
     const other = await makeQuestion(prisma, { subjectId: BANK.QUANT });
@@ -498,21 +476,19 @@ describe('QuestionsService.update — a draft is still being written', () => {
     assert.notEqual(await currentVersionOf(created.id), versionId);
   });
 
-  /** Status is the rule; this is the belt: a held version must not rewrite itself, ever. */
-  for (const holder of ['paper', 'attempt'] as const) {
-    it(`versions a draft whose version a ${holder} holds`, async () => {
-      const { questions } = await build();
-      const created = await questions.create(asDraft(), ADMIN);
-      const versionId = await currentVersionOf(created.id);
-      await heldBy(holder, created.id, versionId);
+  /** Status is the rule; this is the belt: a version a paper holds must not rewrite itself, ever. */
+  it('versions a draft whose version a paper holds', async () => {
+    const { questions } = await build();
+    const created = await questions.create(asDraft(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    await heldBy('paper', created.id, versionId);
 
-      const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
 
-      assert.equal(edited.version, 2);
-      assert.equal((await versions()).length, 2);
-      assert.notEqual(await currentVersionOf(created.id), versionId);
-    });
-  }
+    assert.equal(edited.version, 2);
+    assert.equal((await versions()).length, 2);
+    assert.notEqual(await currentVersionOf(created.id), versionId);
+  });
 
   /** Publishing is the freeze: what was revisable a moment ago now grows a version instead. */
   it('stops revising in place once the draft is published', async () => {

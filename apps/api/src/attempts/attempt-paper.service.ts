@@ -16,6 +16,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
+import { displayOrder } from './attempt-rules';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
@@ -24,6 +25,7 @@ import { seededRandom, shuffle } from '../common/seeded-shuffle';
 /** Named field by field, never `include`: the sitting's own scored columns never load at all. */
 const PAPER_SELECT = {
   id: true,
+  testId: true,
   endsAt: true,
   languages: true,
   shuffleSeed: true,
@@ -40,6 +42,7 @@ const PAPER_SELECT = {
           navigation: true,
           calculatorEnabled: true,
           shuffleOptions: true,
+          shuffleQuestions: true,
           sections: {
             select: {
               id: true,
@@ -55,22 +58,21 @@ const PAPER_SELECT = {
       },
     },
   },
-  questions: {
-    // `answerKey` never loads; `content` and `options` are whole JSON, so the mappers below strip them.
-    select: {
-      questionId: true,
-      order: true,
-      baseConfigSectionId: true,
-      question: { select: { type: true } },
-      questionVersion: { select: { content: true, options: true } },
-      paperItem: { select: { marks: true, negativeMarks: true } },
-    },
-    orderBy: { order: 'asc' },
-  },
 } as const satisfies Prisma.AttemptSelect;
 
-type PaperRow = Prisma.AttemptGetPayload<{ select: typeof PAPER_SELECT }>;
-type ServedQuestion = PaperRow['questions'][number];
+/** `answerKey` never loads; `content` and `options` are whole JSON, so the mappers below strip them. */
+const EXAM_ROW_SELECT = {
+  questionId: true,
+  baseConfigSectionId: true,
+  marks: true,
+  negativeMarks: true,
+  question: { select: { type: true } },
+  questionVersion: { select: { content: true, options: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type ServedQuestion = Prisma.PaperQuestionGetPayload<{ select: typeof EXAM_ROW_SELECT }> & {
+  order: number;
+};
 
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
 @Injectable()
@@ -160,6 +162,13 @@ export class AttemptPaperService {
     const languages = attempt.languages;
     const random = seededRandom(attempt.shuffleSeed);
 
+    const rows = await this.prisma.paperQuestion.findMany({
+      where: { testId: attempt.testId },
+      orderBy: { order: 'asc' },
+      select: EXAM_ROW_SELECT,
+    });
+    const served = displayOrder(rows, attempt.shuffleSeed, config.shuffleQuestions);
+
     return {
       attemptId: attempt.id,
       endsAt: attempt.endsAt.toISOString(),
@@ -183,8 +192,8 @@ export class AttemptPaperService {
         durationSec: section.durationSec,
       })),
       questions: await this.withImages(
-        attempt.questions.map((row) =>
-          toExamQuestion(row, languages, config.shuffleOptions, random),
+        served.map((row, index) =>
+          toExamQuestion({ ...row, order: index + 1 }, languages, config.shuffleOptions, random),
         ),
       ),
     };
@@ -213,8 +222,8 @@ function toExamQuestion(
     order: row.order,
     baseConfigSectionId: row.baseConfigSectionId,
     type: row.question.type,
-    marks: Number(row.paperItem?.marks ?? 0),
-    negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
+    marks: Number(row.marks),
+    negativeMarks: Number(row.negativeMarks),
     // The STEM only: `solution` explains the answer, so it stays behind.
     content: narrowTo(
       row.questionVersion.content as LocalizedContent | null,

@@ -2,3 +2,4 @@
 export { AttemptsModule } from './attempts.module';
 export { LeaderboardService } from './leaderboard.service';
 export { ScoringOutbox } from './scoring-outbox';
+export { answersOf } from './answer-sheet';

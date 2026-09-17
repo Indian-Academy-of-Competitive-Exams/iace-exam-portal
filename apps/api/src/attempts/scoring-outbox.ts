@@ -65,27 +65,20 @@ export class ScoringOutbox {
   }
 
   /** Written with the caller's transaction: a drop and its re-scores commit together or not. */
-  async rescore(
-    tx: Prisma.TransactionClient,
-    served: { testId: string; questionId: string },
-  ): Promise<number> {
-    // By question, which on a test's one paper is the same thing as by its row.
-    const sittings = await tx.attemptQuestion.findMany({
-      where: {
-        questionId: served.questionId,
-        attempt: { testId: served.testId, status: { in: [...ENDED] } },
-      },
-      select: { attemptId: true },
-      distinct: ['attemptId'],
+  async rescore(tx: Prisma.TransactionClient, testId: string): Promise<number> {
+    // Every sitting of a test was served its whole paper, so every ended one is reached.
+    const sittings = await tx.attempt.findMany({
+      where: { testId, status: { in: [...ENDED] } },
+      select: { id: true },
     });
     if (sittings.length === 0) return 0;
 
     await tx.outboxEvent.createMany({
       data: sittings.map((row) => ({
         aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: row.attemptId,
+        aggregateId: row.id,
         eventType: SCORING_REQUEST.EVENT_TYPE,
-        payload: { testId: served.testId },
+        payload: { testId },
       })),
     });
     return sittings.length;

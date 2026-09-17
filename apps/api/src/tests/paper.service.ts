@@ -317,7 +317,7 @@ export class PaperService {
       if (moved.count === 0) return null;
       return {
         rows: moved.count,
-        sittings: await this.outbox.rescore(tx, { testId, questionId: row.questionId }),
+        sittings: await this.outbox.rescore(tx, testId),
       };
     });
 

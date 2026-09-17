@@ -19,8 +19,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
+import { answersOf } from './answer-sheet';
 import { applyBatch, holdsSitting, isInTime, pendingAfter, type HeldState } from './attempt-state';
-import { DURABLE_ANSWER_SELECT, answersFromRows } from './attempt-flush';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
 const STATE_TTL_SEC = 12 * 60 * 60;
@@ -227,6 +227,7 @@ export class AttemptStateService {
         startedAt: true,
         endsAt: true,
         status: true,
+        sheet: { select: { answers: true } },
       },
     });
     // Another student's id reads as missing: an id is not a thing to confirm the existence of.
@@ -237,11 +238,17 @@ export class AttemptStateService {
       throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
     }
 
-    // TOUCHED rows only: the whole paper is seeded at start, and a flush writes a row per entry.
-    const durable = await this.prisma.attemptQuestion.findMany({
-      where: { attemptId, state: { not: ANSWER_STATE.NOT_VISITED } },
-      select: DURABLE_ANSWER_SELECT,
+    const paper = await this.prisma.paperQuestion.findMany({
+      where: { testId: attempt.testId },
+      orderBy: { order: 'asc' },
+      select: { questionId: true, optionIds: true },
     });
+    // TOUCHED answers only: an untouched slot is not an answer to put back.
+    const answers = Object.fromEntries(
+      Object.entries(answersOf(attempt.sheet?.answers, paper, attempt.startedAt)).filter(
+        ([, answer]) => answer.state !== ANSWER_STATE.NOT_VISITED,
+      ),
+    );
 
     return {
       attemptId: attempt.id,
@@ -250,7 +257,7 @@ export class AttemptStateService {
       startedAt: attempt.startedAt.toISOString(),
       endsAt: attempt.endsAt.toISOString(),
       revision: 0,
-      answers: answersFromRows(durable),
+      answers,
       pending: [],
       sections: {},
     };

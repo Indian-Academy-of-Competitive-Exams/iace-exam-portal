@@ -359,6 +359,7 @@ export interface PaperQuestionSpec {
   subject: string;
   /** Index into the paper's sections; the first when left out. */
   section?: number;
+  stem?: string;
   difficulty?: DifficultyLevel;
   type?: QuestionType;
   options?: Prisma.InputJsonValue;

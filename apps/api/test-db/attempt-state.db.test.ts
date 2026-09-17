@@ -9,6 +9,8 @@ import {
   type AnswerChange,
 } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { sheetOf } from '../src/attempts/answer-sheet';
+import { SHEET_ROW_SELECT } from '../src/attempts/paper-sheet.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from '../test/support/fakes';
 import {
@@ -46,9 +48,24 @@ async function build(durable = false) {
   });
   const [q1 = '', q2 = ''] = paper.items.map((item) => item.questionId);
   if (durable) {
-    await prisma.attemptQuestion.update({
-      where: { attemptId_questionId: { attemptId: attempt.id, questionId: q1 } },
-      data: { answeredAt: new Date('2026-09-01T05:01:00.000Z') },
+    const held = {
+      [q1]: {
+        state: ANSWER_STATE.ANSWERED,
+        selectedOptionId: RIGHT_OPTION,
+        typedAnswer: null,
+        timeSpentSec: 20,
+        answeredAt: '2026-09-01T05:01:00.000Z',
+        firstActionAt: null,
+      },
+    };
+    const paperRows = await prisma.paperQuestion.findMany({
+      where: { testId: paper.testId },
+      orderBy: { order: 'asc' },
+      select: SHEET_ROW_SELECT,
+    });
+    await prisma.attemptSheet.update({
+      where: { attemptId: attempt.id },
+      data: { answers: sheetOf(held, paperRows, new Date(ENDS_AT.getTime() - HOUR_MS)) },
     });
   }
   const redis = new FakeRedis();
