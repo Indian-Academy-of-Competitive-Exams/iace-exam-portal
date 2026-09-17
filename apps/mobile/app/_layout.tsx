@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -11,7 +12,10 @@ import '../global.css';
 
 void SplashScreen.preventAutoHideAsync();
 
-const queryClient = createAppQueryClient();
+// A failure no field on screen shows is said out loud, as the web's toast does; success stays quiet.
+const queryClient = createAppQueryClient({
+  notify: { error: (message) => Alert.alert(message), success: () => undefined },
+});
 
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
