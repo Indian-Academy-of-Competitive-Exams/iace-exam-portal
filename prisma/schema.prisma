@@ -597,7 +597,6 @@ model Attempt {
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
   @@index([testId, status])
-  @@index([testId, score])
 }
 
 // One sitting's answers in one row: `answers` holds a slot per paper row in paper order, `verdicts` the scorer's marks for each.
