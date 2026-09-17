@@ -48,6 +48,17 @@ Deliberately out, and the schema blocks none of them: deep per-question time and
 question types beyond single-answer MCQ, Word/PDF import, live proctoring, discussion, adaptive
 practice, certificates.
 
+**A student holds one web session and one mobile session.**
+
+- **The rule:** every request says which app sent it (`x-client: WEB|MOBILE`, plus
+  `x-device-name`). A new student sign-in revokes that student's sessions of the same kind, and any
+  from before kinds were recorded; the other kind stays. Admins are not limited.
+- **The replaced device:** a replaced session leaves a Redis tombstone for the refresh lifetime, so
+  that device is refused with `SESSION_REPLACED` and its sign-in screen says why. It is read only
+  once a session is already missing, so a request that succeeds pays nothing.
+- **Active devices:** both Account screens list the account's sessions and sign another one out
+  (`/me/sessions`). "Last active" moves on refresh, never per request.
+
 **The mobile client** holds four decisions the code cannot state on its own:
 
 - **A question is drawn in one persistent WebView.** Stems and options are authored HTML with KaTeX,
@@ -216,6 +227,10 @@ A handful of managed services, containerised so nothing is tied to a single host
 | Secrets Manager / SSM        | DB, Redis, S3 and SMS credentials         | No secrets in code or in a committed env file — `.env.example` only.           |
 | SMS provider (external)      | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                     |
 | Web push (external)          | Every other message to a student          | VAPID direct to the browser's push service. No vendor and no per-message cost. |
+
+**Anything in front of the API must pass `x-client` and `x-device-name` through.** A load balancer or
+CDN that strips them makes every sign-in kind-less, so each new sign-in replaces all of a student's
+other sessions: one session in total, not one web plus one mobile.
 
 **Deploying the ranking change.** Migration `20260911190000` holds ACCESS EXCLUSIVE on `Attempt`
 through its backfill and its index build, so run it outside a live test window. Code from before
