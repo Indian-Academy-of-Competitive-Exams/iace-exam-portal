@@ -10,7 +10,7 @@ import {
 import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { type AuthIdentity, type AuthSessionResponse } from '@iace/contracts';
 import { type TokenStore } from './token-store';
-import { type SignOutSignal } from './sign-out-signal';
+import { type SignOutReason, type SignOutSignal } from './sign-out-signal';
 
 /**
  * The session as a screen sees it. `identity` is null with no token, a dead token,
@@ -21,6 +21,7 @@ export interface AuthState<TIdentity> {
   isLoading: boolean;
   signIn: (session: AuthSessionResponse) => void;
   signOut: () => Promise<void>;
+  signedOutReason: SignOutReason | null;
 }
 
 /** What the factory needs to know about an app. Everything else is identical. */
@@ -59,6 +60,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
      * writing to it notifies nothing that renders.
      */
     const [hasToken, setHasToken] = useState(() => tokenStore.get() !== null);
+    const [signedOutReason, setSignedOutReason] = useState<SignOutReason | null>(null);
 
     // /auth/me re-reads the identity, so a permission change lands on reload.
     const { data, isLoading } = useQuery({
@@ -77,10 +79,18 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
 
     // Raised by the API client when a refresh fails — the session is
     // unrecoverable, and nothing else is going to notice.
-    useEffect(() => signOutSignal.subscribe(clearSession), [clearSession]);
+    useEffect(
+      () =>
+        signOutSignal.subscribe((reason) => {
+          setSignedOutReason(reason ?? null);
+          clearSession();
+        }),
+      [clearSession],
+    );
 
     const signIn = useCallback(
       (session: AuthSessionResponse) => {
+        setSignedOutReason(null);
         tokenStore.set(session.tokens);
         setHasToken(true);
         queryClient.setQueryData(queryKey, session.identity);
@@ -109,9 +119,10 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
         isLoading: isLoading && hasToken,
         signIn,
         signOut,
+        signedOutReason,
         ...(extend?.(identity) ?? ({} as TExtra)),
       } as AuthState<TIdentity> & TExtra;
-    }, [data, hasToken, isLoading, signIn, signOut]);
+    }, [data, hasToken, isLoading, signIn, signOut, signedOutReason]);
 
     return <AuthContext value={value}>{children}</AuthContext>;
   }

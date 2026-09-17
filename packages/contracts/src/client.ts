@@ -366,7 +366,9 @@ export interface ApiClientOptions {
   /** Called after a successful silent refresh so the caller can persist rotation. */
   onTokensRefreshed?: (tokens: AuthTokens) => void;
   /** Called when the session is unrecoverable — the caller should sign out. */
-  onUnauthorized?: () => void;
+  onUnauthorized?: (cause?: AppException) => void;
+  /** Sent on every request, e.g. which app this is. */
+  headers?: Readonly<Record<string, string>>;
   fetchImpl?: typeof fetch;
 }
 
@@ -388,6 +390,7 @@ export function createApiClient(options: ApiClientOptions) {
     getRefreshToken,
     onTokensRefreshed,
     onUnauthorized,
+    headers = {},
     fetchImpl = globalThis.fetch,
   } = options;
 
@@ -395,6 +398,8 @@ export function createApiClient(options: ApiClientOptions) {
 
   /** Single-flight guard: many parallel 401s trigger exactly one refresh call. */
   let refreshInFlight: Promise<AuthTokens | null> | null = null;
+  /** The AppException from the last failed refresh, so `onUnauthorized` can say why. */
+  let refreshFailure: AppException | undefined;
 
   async function send(path: string, method: string, body: unknown, token: string | null) {
     // FormData: the browser must set its own Content-Type, boundary included.
@@ -404,6 +409,7 @@ export function createApiClient(options: ApiClientOptions) {
       return await fetchImpl(url(path), {
         method,
         headers: {
+          ...headers,
           ...(body === undefined || isFormData ? {} : { 'Content-Type': 'application/json' }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
@@ -469,6 +475,7 @@ export function createApiClient(options: ApiClientOptions) {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return null;
 
+    refreshFailure = undefined;
     try {
       const envelope = await parse(
         await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null),
@@ -476,8 +483,9 @@ export function createApiClient(options: ApiClientOptions) {
       );
       onTokensRefreshed?.(envelope.data);
       return envelope.data;
-    } catch {
+    } catch (error) {
       // Refresh failing is a normal end-of-session, not an error to propagate.
+      refreshFailure = AppException.is(error) ? error : undefined;
       return null;
     }
   }
@@ -490,8 +498,16 @@ export function createApiClient(options: ApiClientOptions) {
     const response = await send(path, method, body, getAccessToken());
     if (response.status !== 401) return parse(response, schema);
 
-    // Only an expired session is worth retrying: refreshing on a wrong PIN hides the real code.
     const peeked = await peekFailure(response);
+
+    // A replaced session is over for good; refreshing would only be refused the same way.
+    if (peeked?.error.code === ErrorCodes.SESSION_REPLACED) {
+      const replaced = AppException.fromFailure(peeked, response.status);
+      onUnauthorized?.(replaced);
+      throw replaced;
+    }
+
+    // Only an expired session is worth retrying: refreshing on a wrong PIN hides the real code.
     if (peeked && peeked.error.code !== 'UNAUTHENTICATED') {
       throw AppException.fromFailure(peeked, response.status);
     }
@@ -502,7 +518,7 @@ export function createApiClient(options: ApiClientOptions) {
     const refreshed = await refreshInFlight;
 
     if (!refreshed) {
-      onUnauthorized?.();
+      onUnauthorized?.(refreshFailure);
       throw peeked
         ? AppException.fromFailure(peeked, 401)
         : new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });

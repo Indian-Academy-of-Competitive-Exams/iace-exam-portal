@@ -1,5 +1,10 @@
 import { MutationCache, QueryCache, QueryClient, type Mutation } from '@tanstack/react-query';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { bannerMessage } from './form-errors';
+
+/** A replaced session is said once, on the sign-in screen, not by every request it cut short. */
+const isReplaced = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SESSION_REPLACED;
 
 /** What a mutation declares about itself, for the central handler below. */
 /** What a query may declare. `silent` opts out of the central reporting. */
@@ -28,7 +33,7 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
     queryCache: new QueryCache({
       onError: (error, query) => {
         const meta = (query.meta ?? {}) as AppQueryMeta;
-        if (!notify || meta.silent) return;
+        if (!notify || meta.silent || isReplaced(error)) return;
 
         const message = bannerMessage(error);
         if (message) notify.error(message);
@@ -38,7 +43,7 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) => {
         const meta = metaOf(mutation);
-        if (!notify || meta.silent) return;
+        if (!notify || meta.silent || isReplaced(error)) return;
 
         // Null when every message is already on a field — see bannerMessage.
         const message = bannerMessage(error, meta.fields ?? []);

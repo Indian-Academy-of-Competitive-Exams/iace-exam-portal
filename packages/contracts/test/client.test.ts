@@ -28,8 +28,13 @@ const failure = (status: number, error: ApiFailure['error']) =>
   json(status, { success: false, error, meta } satisfies ApiFailure);
 
 /** Builds a client over a scripted queue of responses, recording each call. */
-function clientWith(responses: Response[], tokens: { access?: string; refresh?: string } = {}) {
-  const calls: { url: string; authorization: string | null }[] = [];
+function clientWith(
+  responses: Response[],
+  tokens: { access?: string; refresh?: string } = {},
+  headers?: Readonly<Record<string, string>>,
+) {
+  const calls: { url: string; authorization: string | null; client: string | null }[] = [];
+  const causes: unknown[] = [];
   let accessToken = tokens.access ?? null;
 
   const api = createApiClient({
@@ -39,10 +44,14 @@ function clientWith(responses: Response[], tokens: { access?: string; refresh?: 
     onTokensRefreshed: (next) => {
       accessToken = next.accessToken;
     },
+    onUnauthorized: (cause) => causes.push(cause),
+    headers,
     fetchImpl: ((url: string, init?: RequestInit) => {
+      const requestHeaders = new Headers(init?.headers);
       calls.push({
         url,
-        authorization: new Headers(init?.headers).get('Authorization'),
+        authorization: requestHeaders.get('Authorization'),
+        client: requestHeaders.get('x-client'),
       });
       const next = responses.shift();
       if (!next) throw new Error(`unexpected extra request to ${url}`);
@@ -50,7 +59,7 @@ function clientWith(responses: Response[], tokens: { access?: string; refresh?: 
     }) as unknown as typeof fetch,
   });
 
-  return { api, calls };
+  return { api, calls, causes };
 }
 
 const schema = z.object({ id: z.string() });
@@ -83,6 +92,12 @@ describe('typed client — success', () => {
       assert.equal(error.code, 'INTERNAL');
       return true;
     });
+  });
+
+  it('sends the app kind on every request', async () => {
+    const { api, calls } = clientWith([success({ id: 'abc' })], {}, { 'x-client': 'MOBILE' });
+    await api.request('/thing', { schema });
+    assert.equal(calls[0]?.client, 'MOBILE');
   });
 });
 
@@ -166,6 +181,43 @@ describe('typed client — 401 handling', () => {
     // One call only: refreshing here would hide the real code, and could sign
     // a perfectly good session out.
     assert.equal(calls.length, 1);
+  });
+
+  it('signs out at once, without refreshing, when the session was replaced', async () => {
+    const { api, calls, causes } = clientWith(
+      [
+        failure(401, {
+          code: 'SESSION_REPLACED',
+          message: 'Replaced',
+          details: { replacedBy: 'WEB' },
+        }),
+      ],
+      { access: 'valid', refresh: 'r1' },
+    );
+
+    await assert.rejects(
+      api.request('/thing', { schema }),
+      (e: unknown) => AppException.is(e) && e.code === 'SESSION_REPLACED',
+    );
+    assert.equal(calls.length, 1, 'a refresh would only be refused the same way');
+    assert.equal((causes[0] as AppException).code, 'SESSION_REPLACED');
+  });
+
+  it('passes on why a refresh failed', async () => {
+    const { api, causes } = clientWith(
+      [
+        failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
+        failure(401, {
+          code: 'SESSION_REPLACED',
+          message: 'Replaced',
+          details: { replacedBy: 'MOBILE' },
+        }),
+      ],
+      { access: 'stale', refresh: 'r1' },
+    );
+
+    await assert.rejects(api.request('/thing', { schema }));
+    assert.equal((causes[0] as AppException).code, 'SESSION_REPLACED');
   });
 });
 

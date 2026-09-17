@@ -1,6 +1,7 @@
 import {
   createTokenStore,
   type KeyValueStorage,
+  type SignOutReason,
   type SignOutSignal,
   type TokenStore,
 } from '../src';
@@ -29,10 +30,12 @@ export const SIGNED_OUT_EVENT = 'iace:signed-out';
 
 /** A window event: the API client that raises it has no reference to the React tree. */
 export const browserSignOutSignal: SignOutSignal = {
-  emit: () => window.dispatchEvent(new Event(SIGNED_OUT_EVENT)),
+  emit: (reason) => window.dispatchEvent(new CustomEvent(SIGNED_OUT_EVENT, { detail: reason })),
   subscribe: (handler) => {
-    window.addEventListener(SIGNED_OUT_EVENT, handler);
-    return () => window.removeEventListener(SIGNED_OUT_EVENT, handler);
+    const listener = (event: Event) =>
+      handler((event as CustomEvent<SignOutReason | undefined>).detail);
+    window.addEventListener(SIGNED_OUT_EVENT, listener);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, listener);
   },
 };
 

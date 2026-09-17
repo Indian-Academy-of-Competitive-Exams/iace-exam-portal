@@ -4,7 +4,8 @@ export {
   type StoredTokens,
   type TokenStore,
 } from './token-store';
-export { type SignOutSignal } from './sign-out-signal';
+export { type SignOutReason, type SignOutSignal } from './sign-out-signal';
+export { signOutReasonOf, signedOutMessage } from './signed-out-message';
 export { createAppApiClient } from './api-client';
 export { type AppApiClient } from './api-client';
 export { createAuth, type AuthState, type CreateAuthOptions } from './create-auth';
