@@ -28,6 +28,27 @@ describe('browserLabel', () => {
     assert.equal(browserLabel(null), 'A web browser');
     assert.equal(browserLabel('curl/8.0'), 'A web browser');
   });
+
+  it('names the browsers that wear another engine', () => {
+    assert.equal(
+      browserLabel(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0 Mobile/15E148 Safari/604.1',
+      ),
+      'Chrome on iOS',
+    );
+    assert.equal(
+      browserLabel(
+        'Mozilla/5.0 (Linux; Android 15; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36',
+      ),
+      'Samsung Internet on Android',
+    );
+    assert.equal(
+      browserLabel(
+        'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36 EdgA/140.0',
+      ),
+      'Edge on Android',
+    );
+  });
 });
 
 describe('deviceFrom', () => {

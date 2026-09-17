@@ -84,13 +84,9 @@ export class SessionService {
     ttlSec: number,
   ): Promise<void> {
     const key = redisKeys.session(actor, subjectId, sessionId);
-    const session = await this.redis.getJson<StoredSession>(key);
-    if (!session) {
-      const replaced = await this.replacedBy(actor, subjectId, sessionId);
-      if (replaced)
-        throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
-      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired — sign in again');
-    }
+    const raw = await this.redis.getRaw(key);
+    const session = raw ? (JSON.parse(raw) as StoredSession) : null;
+    if (!session) return this.throwEnded(actor, subjectId, sessionId);
 
     if (!sameHex(this.hash(presentedToken), session.refreshTokenHash)) {
       await this.revoke(actor, subjectId, sessionId);
@@ -107,15 +103,27 @@ export class SessionService {
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session is bound to a different device');
     }
 
-    await this.redis.setJson(
-      key,
-      {
-        ...session,
-        refreshTokenHash: this.hash(nextToken),
-        lastSeenAt: new Date().toISOString(),
-      } satisfies StoredSession,
-      ttlSec,
-    );
+    const next = {
+      ...session,
+      refreshTokenHash: this.hash(nextToken),
+      lastSeenAt: new Date().toISOString(),
+    } satisfies StoredSession;
+    // Lands only on the bytes read: a replacement or sign-out racing this refresh wins.
+    if (!(await this.redis.replaceJson(key, raw, next, ttlSec))) {
+      return this.throwEnded(actor, subjectId, sessionId);
+    }
+    // A refreshing session keeps its place in the index, or revokeAll and the one-per-kind rule lose it.
+    const indexKey = redisKeys.sessionIndex(actor, subjectId);
+    await this.redis.client.sadd(indexKey, sessionId);
+    await this.redis.client.expire(indexKey, ttlSec);
+  }
+
+  /** A session that is gone: replaced says so, anything else is an ordinary end. */
+  private async throwEnded(actor: ActorType, subjectId: string, sessionId: string): Promise<never> {
+    const replaced = await this.replacedBy(actor, subjectId, sessionId);
+    if (replaced)
+      throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
+    throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired — sign in again');
   }
 
   async revoke(actor: ActorType, subjectId: string, sessionId: string): Promise<void> {
@@ -136,14 +144,13 @@ export class SessionService {
   /** Every live session of a subject with its id; an index entry whose key has expired is skipped. */
   async list(actor: ActorType, subjectId: string): Promise<ListedSession[]> {
     const ids = await this.redis.client.smembers(redisKeys.sessionIndex(actor, subjectId));
-    const listed: ListedSession[] = [];
-    for (const id of ids) {
-      const session = await this.redis.getJson<StoredSession>(
-        redisKeys.session(actor, subjectId, id),
-      );
-      if (session) listed.push({ ...session, id, client: session.client ?? null });
-    }
-    return listed;
+    const found = await this.redis.mgetJson<StoredSession>(
+      ids.map((id) => redisKeys.session(actor, subjectId, id)),
+    );
+    return ids.flatMap((id, index) => {
+      const session = found[index];
+      return session ? [{ ...session, id, client: session.client ?? null }] : [];
+    });
   }
 
   /** The account's devices, newest activity first, with the asking device marked. */
@@ -200,12 +207,13 @@ export class SessionService {
   ): Promise<void> {
     for (const listed of await this.list(actor, subjectId)) {
       if (listed.client !== null && listed.client !== client) continue;
-      await this.revoke(actor, subjectId, listed.id);
+      // Written before the revoke: a request landing in between still finds why, not UNAUTHENTICATED.
       await this.redis.setJson(
         redisKeys.sessionReplaced(actor, subjectId, listed.id),
         { replacedBy: client } satisfies SessionReplacement,
         ttlSec,
       );
+      await this.revoke(actor, subjectId, listed.id);
     }
   }
 

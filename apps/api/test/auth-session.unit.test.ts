@@ -314,3 +314,52 @@ describe('SessionService — active devices', () => {
     assert.equal(await sessions.exists(ActorTypes.STUDENT, 'stu_2', theirs), true);
   });
 });
+
+describe('SessionService — a session that keeps refreshing', () => {
+  const web = { ...NO_DEVICE, client: CLIENT_KINDS.WEB };
+
+  it('stays in reach of the one-per-kind rule after the first index lifetime', async () => {
+    const { sessions, redis } = build();
+    const first = await openSession(sessions, 'r1', web);
+    redis.advanceSeconds(TTL - 60);
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r2', web, TTL);
+    redis.advanceSeconds(TTL - 60);
+
+    await openSession(sessions, 'r3', web);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, first), false);
+  });
+
+  it('stays in reach of sign-out-everywhere after the first index lifetime', async () => {
+    const { sessions, redis } = build();
+    const first = await openSession(sessions, 'r1', web);
+    redis.advanceSeconds(TTL - 60);
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r2', web, TTL);
+    redis.advanceSeconds(TTL - 60);
+
+    await sessions.revokeAll(ActorTypes.STUDENT, SUBJECT);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, first), false);
+  });
+
+  it('does not bring back a session its own replacement ended mid-refresh', async () => {
+    const { sessions, redis } = build();
+    const first = await openSession(sessions, 'r1', web);
+    const getRaw = redis.getRaw.bind(redis);
+    let raced = false;
+    redis.getRaw = async (key: string) => {
+      const value = await getRaw(key);
+      if (!raced) {
+        raced = true;
+        await openSession(sessions, 'r2', web);
+      }
+      return value;
+    };
+
+    await assert.rejects(
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r1b', web, TTL),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.SESSION_REPLACED,
+    );
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, first), false);
+  });
+});

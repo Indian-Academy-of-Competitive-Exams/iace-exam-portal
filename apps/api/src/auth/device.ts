@@ -4,22 +4,28 @@ import { type DeviceContext } from './auth.types';
 
 const MAX_NAME = 128;
 
-/** Order matters: Edge and Opera also claim Chrome, and Chrome also claims Safari. */
+/** Order matters: Edge, Opera, Samsung Internet and iOS engines all also claim Chrome or Safari. */
 const BROWSERS = [
+  ['EdgA/', 'Edge'],
+  ['EdgiOS/', 'Edge'],
+  ['SamsungBrowser/', 'Samsung Internet'],
   ['Edg/', 'Edge'],
   ['OPR/', 'Opera'],
+  ['CriOS/', 'Chrome'],
+  ['FxiOS/', 'Firefox'],
   ['Firefox/', 'Firefox'],
   ['Chrome/', 'Chrome'],
   ['Safari/', 'Safari'],
 ] as const;
 
-/** Order matters: iPhone and iPad also claim Mac OS X, and Android also claims Linux. */
+/** Order matters: iPhone and iPad also claim Mac OS X, Android also claims Linux, and ChromeOS also claims Linux. */
 const SYSTEMS = [
   ['Windows', 'Windows'],
   ['Android', 'Android'],
   ['iPhone', 'iOS'],
   ['iPad', 'iPadOS'],
   ['Mac OS X', 'macOS'],
+  ['CrOS', 'ChromeOS'],
   ['Linux', 'Linux'],
 ] as const;
 
