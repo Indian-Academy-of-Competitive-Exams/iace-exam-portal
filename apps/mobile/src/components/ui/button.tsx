@@ -48,8 +48,9 @@ export function Button({
       accessibilityState={{ disabled: isOff, busy: loading }}
       disabled={isOff}
       className={cn(
-        'flex-row items-center justify-center gap-2 rounded-md',
-        size === 'sm' ? 'h-8 px-3' : 'h-11 px-4',
+        // h-11 is --control-h-lg, the 44px touch floor: a small button narrows, never shortens.
+        'h-11 flex-row items-center justify-center gap-2 rounded-md',
+        size === 'sm' ? 'px-3' : 'px-4',
         VARIANTS[variant],
         isOff && 'opacity-50',
         className,

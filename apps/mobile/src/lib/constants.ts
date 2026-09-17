@@ -1,4 +1,4 @@
-/** localStorage keys owned by this app, namespaced so the SPAs never read each other's. */
+/** SecureStore keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
   AUTH: 'iace.mobile.auth',
 } as const;
