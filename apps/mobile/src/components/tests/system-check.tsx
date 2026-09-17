@@ -1,7 +1,8 @@
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useUnstableNativeVariable } from 'nativewind';
-import { Check, X } from 'lucide-react-native';
+import Check from 'lucide-react-native/icons/check';
+import X from 'lucide-react-native/icons/x';
 import { api } from '../../lib/api';
 import { SYSTEM_CHECK_QUERY_KEY } from '../../lib/constants';
 import { Alert } from '../ui/alert';

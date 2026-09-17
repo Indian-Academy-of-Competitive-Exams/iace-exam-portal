@@ -2,7 +2,11 @@
 import { type ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { useUnstableNativeVariable } from 'nativewind';
-import { CircleX, Inbox, Lock, SearchX, type LucideIcon } from 'lucide-react-native';
+import { type LucideIcon } from 'lucide-react-native';
+import CircleX from 'lucide-react-native/icons/circle-x';
+import Inbox from 'lucide-react-native/icons/inbox';
+import Lock from 'lucide-react-native/icons/lock';
+import SearchX from 'lucide-react-native/icons/search-x';
 import { cn } from '../../lib/cn';
 import { Button } from './button';
 

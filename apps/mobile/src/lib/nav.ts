@@ -1,11 +1,9 @@
-import {
-  BarChart3,
-  Bookmark,
-  ClipboardList,
-  Home,
-  User,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { type LucideIcon } from 'lucide-react-native';
+import Bookmark from 'lucide-react-native/icons/bookmark';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
+import ClipboardList from 'lucide-react-native/icons/clipboard-list';
+import House from 'lucide-react-native/icons/house';
+import User from 'lucide-react-native/icons/user';
 import { type LanguageCode } from '@iace/contracts';
 import { EXAM_LANGUAGES_PARAM } from './constants';
 
@@ -28,9 +26,9 @@ export interface MobileNavItem {
 }
 
 export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
-  { name: 'index', to: ROUTES.HOME, label: 'Home', icon: Home },
+  { name: 'index', to: ROUTES.HOME, label: 'Home', icon: House },
   { name: 'tests', to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
-  { name: 'performance', to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
+  { name: 'performance', to: ROUTES.PERFORMANCE, label: 'Performance', icon: ChartColumn },
   { name: 'saved', to: ROUTES.SAVED, label: 'Saved', icon: Bookmark },
   { name: 'account', to: ROUTES.ACCOUNT, label: 'Account', icon: User },
 ];

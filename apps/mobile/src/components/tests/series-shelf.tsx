@@ -1,7 +1,7 @@
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useUnstableNativeVariable } from 'nativewind';
-import { ChevronRight } from 'lucide-react-native';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { seriesProgress, type Sittable, type TestResult } from '@iace/app-kit';
 import { plural } from '../../lib/plural';
