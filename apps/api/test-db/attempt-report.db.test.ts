@@ -97,7 +97,13 @@ describe('the Score Card', () => {
     });
 
   it('reads each answer and its marks off the sheet, in the order the sitting was served', async () => {
-    const { studentId, attemptId } = await mine(await paper());
+    const onPaper = await paper();
+    // Shuffled, and with a seed that really moves Section B — so a reader ignoring it still fails.
+    await prisma.baseConfig.update({
+      where: { id: onPaper.catalog.baseConfigId },
+      data: { shuffleQuestions: true },
+    });
+    const { studentId, attemptId } = await mine(onPaper, { shuffleSeed: 1 });
     await prisma.attemptQuestion.updateMany({
       where: { attemptId },
       data: { selectedOptionId: 'stale', isCorrect: null, marksAwarded: 0 },
@@ -105,6 +111,10 @@ describe('the Score Card', () => {
 
     const card = await reports().scoreCard(studentId, attemptId);
 
+    assert.notDeepEqual(
+      card.questions.map((row) => row.questionId),
+      onPaper.items.map((item) => item.questionId),
+    );
     assert.deepEqual(
       card.questions.map((row) => [
         row.questionId,

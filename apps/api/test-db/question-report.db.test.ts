@@ -113,14 +113,33 @@ async function sittings() {
 
 describe('QuestionReportService — the cohort half, which needs no gate', () => {
   it('reads each answer and its marks off the sheet, in the order the sitting was served', async () => {
-    const { mine } = await sittings();
+    const onPaper = await makePaper(prisma, {
+      questions: ['Reasoning', 'Reasoning', 'Reasoning', 'Reasoning'],
+    });
+    // Shuffled, and with a seed that really reorders this section — so a reader ignoring it still fails.
+    await prisma.baseConfig.update({
+      where: { id: onPaper.catalog.baseConfigId },
+      data: { shuffleQuestions: true },
+    });
+    const student = await makeStudent(prisma);
+    const attempt = await sitPaper(prisma, {
+      paper: onPaper,
+      studentId: student.id,
+      chosen: [RIGHT_OPTION, 'o3', null, null],
+      shuffleSeed: 1,
+    });
+    await processor.score(attempt.id);
     await prisma.attemptQuestion.updateMany({
-      where: { attemptId: mine.attemptId },
+      where: { attemptId: attempt.id },
       data: { selectedOptionId: 'stale', isCorrect: null, marksAwarded: 0 },
     });
 
-    const report = await service.forAttempt(mine.studentId, mine.attemptId);
+    const report = await service.forAttempt(student.id, attempt.id);
 
+    assert.notDeepEqual(
+      report.questions.map((row) => row.questionId),
+      onPaper.items.map((item) => item.questionId),
+    );
     assert.deepEqual(
       report.questions.map((row) => [
         row.questionId,
@@ -129,7 +148,7 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
         row.isCorrect,
         row.marksAwarded,
       ]),
-      (await servedAnswers(prisma, mine.attemptId)).map((row) => [
+      (await servedAnswers(prisma, attempt.id)).map((row) => [
         row.questionId,
         row.order,
         row.selectedOptionId,
@@ -154,7 +173,7 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     assert.equal(first?.cohortAverageTimeSec, 30);
   });
 
-  it('carries the topper clock without ever reading their answers', async () => {
+  it('carries the topper clock without ever exposing who they are', async () => {
     const { mine, topper } = await sittings();
 
     const report = await service.forAttempt(mine.studentId, mine.attemptId);

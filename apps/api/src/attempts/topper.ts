@@ -1,7 +1,8 @@
 /**
  * The paper's topper, read for their CLOCK. `TestStat.topperAttemptId` already names them, so this
- * is one read per report rather than one per row — and its select carries time, marks and sections
- * and nothing else. A topper is right more often than not, so their answers would be a key.
+ * is one read per report rather than one per row. The select reads their answers too, to decode
+ * the sheet, but only time and marks ever leave this file — a topper is right often enough that
+ * their answers would be a key.
  */
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +10,7 @@ import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 
-/** No `questionVersion`, no option: nothing here says what the right answer was. */
+/** No `questionVersion`: the sheet is read to decode it, but only time and marks leave here. */
 const TOPPER_SELECT = {
   testId: true,
   startedAt: true,
