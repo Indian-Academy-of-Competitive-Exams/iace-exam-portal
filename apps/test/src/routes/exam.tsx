@@ -3,14 +3,21 @@
  * chosen template draw it — the screen itself decides nothing about how a
  * sitting behaves, and a skin decides nothing about what it saves.
  */
-import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { type ExamPaper, type LanguageCode } from '@iace/contracts';
+import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import { useExamView, type EndedSitting } from '@iace/app-kit';
 import { browserSessionStorage, useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, ROUTES, STORAGE_KEYS } from '../lib/constants';
+import { CATALOG_QUERY_KEY, RESUME_PARAM, ROUTES, STORAGE_KEYS } from '../lib/constants';
 import { tabId } from '../lib/tab-id';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
@@ -24,10 +31,12 @@ export function ExamPage() {
   const navigate = useNavigate();
   const { identity: student } = useAuth();
   const began = (useLocation().state ?? {}) as BeganWith;
+  const resume = useSearchParams()[0].get(RESUME_PARAM) ?? undefined;
 
   const attempt = useQuery({
-    queryKey: ['me', 'attempt', testId],
-    queryFn: () => api.me.startAttempt(testId, { languages: began.languages, tab: tabId() }),
+    queryKey: ['me', 'attempt', testId, resume],
+    queryFn: () =>
+      api.me.startAttempt(testId, { languages: began.languages, tab: tabId(), resume }),
     enabled: testId !== '',
     // The sitting is started once; a refetch would be a second start, which the server resumes.
     staleTime: Infinity,
@@ -44,6 +53,10 @@ export function ExamPage() {
   });
 
   if (attempt.isError) {
+    const { error } = attempt;
+    if (resume && AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED) {
+      return <Navigate to={ROUTES.SUBMITTED(resume)} replace />;
+    }
     return (
       <div className="p-6">
         <EmptyState
@@ -106,11 +119,20 @@ function ExamHall(
           title="This paper is being answered somewhere else"
           /* ui-copy-ok: consequence — continuing here is what stops the other one */
           hint="Your answers are saved. Continuing here stops the other tab or device."
-          action={<Button onClick={() => window.location.reload()}>Continue here</Button>}
+          action={
+            <Button onClick={() => continueHere(sitting.paper.attemptId)}>Continue here</Button>
+          }
         />
       </div>
     );
   }
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
+}
+
+/** Names the sitting, so a paper handed in elsewhere lands on its result instead of restarting. */
+function continueHere(attemptId: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set(RESUME_PARAM, attemptId);
+  window.location.replace(url);
 }
