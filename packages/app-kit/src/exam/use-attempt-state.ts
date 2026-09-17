@@ -87,10 +87,12 @@ export interface AnswerIntent {
 
 export function useAttemptState(
   attemptId: string,
-  { api, tab, answerQueue }: Readonly<AttemptStateDeps>,
+  deps: Readonly<AttemptStateDeps>,
 ): AttemptStateHandle {
+  // As of mount, in a ref: callers pass an inline object, and depending on it would restart autosave every render.
+  const mounted = useRef(deps);
   // Read once, at mount: what a save could not deliver before a reload is queued and drawn again.
-  const [queued] = useState(() => queuedIn(answerQueue, attemptId));
+  const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -116,7 +118,7 @@ export function useAttemptState(
   // Seeded once from the server: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
     let live = true;
-    void api.me.attemptState(attemptId).then((held) => {
+    void mounted.current.api.me.attemptState(attemptId).then((held) => {
       if (!live) return;
       // Merged under, never over: an answer given while this flew is the newer one.
       setAnswers((mine) => remember({ ...held.answers, ...mine }));
@@ -131,6 +133,7 @@ export function useAttemptState(
 
   const keepQueue = useCallback(() => {
     const queued = [...pending.current.values()];
+    const { answerQueue } = mounted.current;
     const key = queueKeyFor(answerQueue, attemptId);
     if (queued.length === 0) answerQueue.storage.removeItem(key);
     else answerQueue.storage.setItem(key, JSON.stringify(queued));
@@ -159,6 +162,7 @@ export function useAttemptState(
     };
 
     try {
+      const { api, tab } = mounted.current;
       const saved = await api.me.saveAttemptState(attemptId, {
         revision: sent,
         answers: changes,

@@ -29,7 +29,7 @@ function apiThatFails(calls: unknown[]): AppApiClient {
   } as unknown as AppApiClient;
 }
 
-test('a flush that succeeds clears pending and advances the revision', async () => {
+test('a flush that succeeds clears pending and advances the revision', async (t) => {
   const sent: Array<{ revision: number; answers: unknown[]; tab?: string }> = [];
   const api = {
     me: {
@@ -46,6 +46,7 @@ test('a flush that succeeds clears pending and advances the revision', async () 
 
   const deps = depsFor(api);
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
   await act(async () => void (await result.current.flush()));
@@ -57,13 +58,13 @@ test('a flush that succeeds clears pending and advances the revision', async () 
 
   await act(async () => void (await result.current.flush()));
   assert.equal(sent.length, 1, 'an empty flush sends nothing');
-  unmount();
 });
 
-test('a failed flush requeues its changes and reports unsaved work', async () => {
+test('a failed flush requeues its changes and reports unsaved work', async (t) => {
   const calls: unknown[] = [];
   const deps = depsFor(apiThatFails(calls));
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
   await act(async () => void (await result.current.flush()));
@@ -74,10 +75,9 @@ test('a failed flush requeues its changes and reports unsaved work', async () =>
   await act(async () => void (await result.current.flush()));
   assert.equal(calls.length, 2, 'the requeued change is sent again rather than dropped');
   assert.equal(result.current.takenOver, false, 'an ordinary failure is not a takeover');
-  unmount();
 });
 
-test('a newer edit made during a failed flush is not overwritten by the requeue', async () => {
+test('a newer edit made during a failed flush is not overwritten by the requeue', async (t) => {
   const calls: Array<{ answers: Array<{ questionId: string; selectedOptionId: string | null }> }> =
     [];
   let release = () => {};
@@ -94,6 +94,7 @@ test('a newer edit made during a failed flush is not overwritten by the requeue'
 
   const deps = depsFor(api);
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
   let flying: Promise<void> = Promise.resolve();
@@ -109,10 +110,9 @@ test('a newer edit made during a failed flush is not overwritten by the requeue'
   act(() => void result.current.flush());
   const resent = calls[1]?.answers.find((row) => row.questionId === 'q1');
   assert.equal(resent?.selectedOptionId, 'opt-2', 'the newer edit survived the requeue');
-  unmount();
 });
 
-test('answers a save could not deliver are drawn again and re-sent after a remount', async () => {
+test('answers a save could not deliver are drawn again and re-sent after a remount', async (t) => {
   const storage = fakeStorage();
   const offlineDeps = depsFor(apiThatFails([]), storage);
   const offline = renderHook(() => useAttemptState('attempt-1', offlineDeps));
@@ -133,16 +133,16 @@ test('answers a save could not deliver are drawn again and re-sent after a remou
   } as unknown as AppApiClient;
   const deps = depsFor(api, storage);
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
 
   assert.equal(result.current.answers.q1?.selectedOptionId, 'opt-1', 'on screen before any save');
   await act(async () => void (await result.current.flush()));
   const resent = sent[0]?.answers.find((row) => row.questionId === 'q1');
   assert.equal(resent?.selectedOptionId, 'opt-1', 'and sent again');
   assert.equal(storage.getItem(QUEUE_KEY), null, 'a delivered queue is not kept');
-  unmount();
 });
 
-test('banking the open question keeps an answer redrawn from the queue', async () => {
+test('banking the open question keeps an answer redrawn from the queue', async (t) => {
   const storage = fakeStorage();
   storage.setItem(
     QUEUE_KEY,
@@ -171,6 +171,7 @@ test('banking the open question keeps an answer redrawn from the queue', async (
   } as unknown as AppApiClient;
   const deps = depsFor(api, storage);
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
 
   act(() => result.current.open('q1'));
   act(() => result.current.bankOpen());
@@ -179,10 +180,9 @@ test('banking the open question keeps an answer redrawn from the queue', async (
   assert.equal(result.current.answers.q1?.selectedOptionId, 'opt-1', 'still on screen');
   const banked = sent[0]?.answers.find((row) => row.questionId === 'q1');
   assert.equal(banked?.selectedOptionId, 'opt-1', 'and still what is sent');
-  unmount();
 });
 
-test('a save refused as taken over stops saving and says so', async () => {
+test('a save refused as taken over stops saving and says so', async (t) => {
   const calls: unknown[] = [];
   const api = {
     me: {
@@ -195,6 +195,7 @@ test('a save refused as taken over stops saving and says so', async () => {
   } as unknown as AppApiClient;
   const deps = depsFor(api);
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
   await act(async () => void (await result.current.flush()));
@@ -203,5 +204,4 @@ test('a save refused as taken over stops saving and says so', async () => {
   act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
   await act(async () => void (await result.current.flush()));
   assert.equal(calls.length, 1, 'a tab that lost the sitting does not fight for it');
-  unmount();
 });
