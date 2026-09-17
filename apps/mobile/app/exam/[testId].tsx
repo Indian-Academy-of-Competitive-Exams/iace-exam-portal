@@ -42,6 +42,8 @@ export default function ExamScreen() {
   const [view, setView] = useState<ExamView | null>(null);
   // Read once per visit: a sync SQLite read on every render would be paid on every tap.
   const [tab] = useState(deviceTab);
+  // Bumped by Continue here, so the engine mounts fresh: a new queue read, and saving no longer stopped.
+  const [reclaims, setReclaims] = useState(0);
 
   const attempt = useQuery({
     queryKey: startedAttemptQueryKey(testId),
@@ -77,12 +79,19 @@ export default function ExamScreen() {
     [queryClient, router],
   );
 
+  // The one intended second start: removing the cached start while mounted refetches it with this tab.
+  const continueHere = useCallback(() => {
+    forgetSitting(queryClient, testId);
+    setView(null);
+    setReclaims((count) => count + 1);
+  }, [queryClient, testId]);
+
   // On unmount, never in onEnded: a still-mounted query rebuilds what was removed, and that fetch IS a second start.
   useEffect(() => () => forgetSitting(queryClient, testId), [queryClient, testId]);
 
   // Android's Back would drop a running paper; in a sitting the only way out is handing it in.
   useEffect(() => {
-    if (!view) return;
+    if (!view || view.takenOver) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       view.submit.ask();
       return true;
@@ -121,6 +130,7 @@ export default function ExamScreen() {
       <ExamSkin view={view} paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS} />
       {paper.data && attempt.data ? (
         <SittingEngine
+          key={reclaims}
           paper={paper.data.paper}
           arrivedAt={paper.data.arrivedAt}
           title={attempt.data.testTitle}
@@ -130,6 +140,18 @@ export default function ExamScreen() {
           onView={setView}
           tab={tab}
         />
+      ) : null}
+      {view?.takenOver ? (
+        // Over the skin, not instead of it: the question WebView stays warm for the reclaim.
+        <View className="absolute inset-0 justify-center bg-background p-6">
+          <EmptyState
+            kind={EMPTY_STATE_KINDS.REFUSED}
+            title="This paper is being answered somewhere else"
+            /* ui-copy-ok: consequence — continuing here is what stops the other one */
+            hint="Your answers are saved. Continuing here stops the other tab or device."
+            action={<Button onPress={continueHere}>Continue here</Button>}
+          />
+        </View>
       ) : null}
     </View>
   );

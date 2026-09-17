@@ -115,8 +115,8 @@ function SittingHead({ view, onPalette }: Readonly<{ view: ExamView; onPalette: 
 
       {view.hasUnsaved ? (
         <Alert variant="warning" className="mx-4 mt-2">
-          Your latest answers are not saved yet and will be sent when the connection is back. Keep
-          the app open until then; closing it loses them, and the clock does not wait.
+          Your latest answers are not saved yet. They are kept on this phone and sent when the
+          connection is back, but the clock does not wait.
         </Alert>
       ) : null}
 
