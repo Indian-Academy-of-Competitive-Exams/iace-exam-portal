@@ -4,6 +4,7 @@
  * a student is shown can never disagree with the grid it explains.
  */
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ANSWER_STATE, ANSWER_STATES, type AnswerState } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
@@ -50,12 +51,17 @@ export function QuestionPalette({
   onClose,
 }: Readonly<{ view: ExamView; open: boolean; onClose: () => void }>) {
   const currentId = view.question?.questionId ?? null;
+  const insets = useSafeAreaInsets();
 
   return (
     <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-[var(--overlay-bg)]">
         <Pressable accessibilityLabel="Close" className="flex-1" onPress={onClose} />
-        <View className="max-h-[85%] gap-4 rounded-t-2xl bg-exam-surface pb-6 pt-2">
+        <View
+          className="max-h-[85%] gap-4 rounded-t-2xl bg-exam-surface pt-2"
+          // The last row of numbers stays above the home indicator, never under it.
+          style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+        >
           <View className="flex-row items-center justify-between px-4">
             <Text className="text-lg font-semibold text-exam-ink">Question palette</Text>
             <Button variant="ghost" onPress={onClose}>
