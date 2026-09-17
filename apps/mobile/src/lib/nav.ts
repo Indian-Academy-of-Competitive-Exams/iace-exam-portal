@@ -33,6 +33,13 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
   { name: 'account', to: ROUTES.ACCOUNT, label: 'Account', icon: User },
 ];
 
+/** The Account tab's own pushed screens. */
+export const ACCOUNT_ROUTES = {
+  PROFILE: '/profile',
+  CHANGE_PIN: '/change-pin',
+  NOTIFICATIONS: '/notifications',
+} as const;
+
 /** Pushed over the tab shell, outside `(tabs)` — a series and a test each get their own stack screen. */
 export const DETAIL_ROUTES = {
   SERIES: (seriesId: string) => `/series/${seriesId}` as const,

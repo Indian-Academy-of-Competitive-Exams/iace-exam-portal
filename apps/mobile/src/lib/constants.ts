@@ -63,6 +63,15 @@ export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] 
 export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
   ['me', 'saved', kind, 'facets'] as const;
 
+/** Their own record, under the web app's own key. */
+export const PROFILE_QUERY_KEY = ['me'] as const;
+
+/** The bell's own count, kept apart from the list so paging never disturbs it. */
+export const UNREAD_QUERY_KEY = ['me', 'notifications', 'unread'] as const;
+
+export const notificationsQueryKey = (unreadOnly: boolean) =>
+  ['me', 'notifications', { unreadOnly }] as const;
+
 /** The whole career off the two rollup tables — what Performance opens on. */
 export const OVERVIEW_QUERY_KEY = ['me', 'overview'] as const;
 
