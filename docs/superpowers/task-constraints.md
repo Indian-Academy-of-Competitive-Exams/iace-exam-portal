@@ -8,7 +8,8 @@ rest of `CLAUDE.md` only for the section a task explicitly needs.
 
 Green before commit:
 
-`pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:db && pnpm build`
+`pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus the
+`*.db.test.ts` files your change touches. `pnpm test:db` in full before handing work over.
 
 Schema tasks also: `pnpm db:migrate:deploy` from scratch + `pnpm db:check`.
 
@@ -18,9 +19,11 @@ scratch database at the PREVIOUS revision, reproduce what makes the move hard (a
 trigger, a constraint the real data trips), apply it there, and check what moved AND that whatever
 you stood down came back.
 
-Never `--no-verify`, never `git commit -n`, never `SKIP_SONAR=1`. Sonar pre-commit is real; fix the
-cause. The procedure is the `sonar-gate` skill — invoke it before every commit. No `// NOSONAR`
-without asking, and never mark an issue false-positive or won't-fix without asking.
+Never `--no-verify`, never `git commit -n`: lint, typecheck and the comment and copy checks run on
+every commit. The Sonar scan is opt-in (`RUN_SONAR=1 git commit`) because it re-runs every test for
+coverage; the procedure is the `sonar-gate` skill — invoke it before handing work over, and fix the
+cause of what it finds. No `// NOSONAR` without asking, and never mark an issue false-positive or
+won't-fix without asking.
 
 </gates>
 

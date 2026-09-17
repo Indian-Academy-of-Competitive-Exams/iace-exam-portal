@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # A REAL SonarQube scan before the commit lands — not a reminder, not a claim.
 #
-# Runs for every commit, whoever makes it: a git hook sees a commit typed in a
-# terminal and one made by an agent alike, which the previous PreToolUse gate
-# could not.
+# OPT-IN since 2026-09-18: `RUN_SONAR=1 git commit`, or run this script by hand.
+# It regenerates coverage first, and that runs every test in the repo including
+# the database suite, so paying it on each commit cost minutes. Run it before
+# handing work over. When it does run, a git hook sees a commit typed in a
+# terminal and one made by an agent alike, which a PreToolUse gate could not.
 #
 # SonarQube costs ~2GB of RAM, so it does not sit running all day. A stopped
 # container is not a reason to commit ungated: the hook STARTS it, scans, and

@@ -341,8 +341,10 @@ push is a worse version of a check that takes five seconds before the commit exi
 - **Shell and Prisma get their own formatters**, being the two things prettier does not parse.
 - **commitlint** on the message: the history is a changelog and a bisect target, and both stop
   working when the subject line stops saying what changed.
-- **The script gates** run after lint-staged — one-line comments, screen copy that does not explain
-  itself, and a real SonarQube scan with its quality gate. Never bypass one.
+- **The script gates** run after lint-staged — one-line comments, and screen copy that does not
+  explain itself. Never bypass one.
+- **The SonarQube scan is opt-in** (`RUN_SONAR=1 git commit`): it regenerates coverage by running
+  every test, so it belongs before handing work over rather than on each commit.
 - **syncpack** (`pnpm deps:check`) keeps one version of a library across every workspace.
 
 ---

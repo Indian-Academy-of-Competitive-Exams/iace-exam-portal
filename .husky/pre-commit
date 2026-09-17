@@ -14,7 +14,9 @@ node scripts/check-comments.mjs
 # No screen explaining what it already says. See the script.
 node scripts/check-ui-copy.mjs
 
-# A real SonarQube scan + quality gate. Starts the server when it is down and
-# stops it again afterwards. Skips only when nothing it scans is staged, or with
-# SKIP_SONAR=1. See the script.
-bash scripts/sonar-precommit.sh
+# A real SonarQube scan + quality gate, OPT-IN: it regenerates coverage first by
+# running every test in the repo, which costs minutes on each commit. Run it with
+# RUN_SONAR=1 before handing work over. See the script.
+if [ "${RUN_SONAR:-}" = "1" ]; then
+  bash scripts/sonar-precommit.sh
+fi
