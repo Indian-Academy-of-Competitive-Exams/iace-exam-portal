@@ -363,3 +363,16 @@ describe('SessionService — a session that keeps refreshing', () => {
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, first), false);
   });
 });
+
+describe('SessionService — a corrupt stored session', () => {
+  it('ends like a missing one, not with a server error', async () => {
+    const { sessions, redis } = build();
+    const id = await openSession(sessions, 'r1', NO_DEVICE);
+    await redis.client.set(`session:student:${SUBJECT}:${id}`, '{not json', 'EX', TTL);
+
+    await assert.rejects(
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, id, 'r1', 'r2', NO_DEVICE, TTL),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.UNAUTHENTICATED,
+    );
+  });
+});

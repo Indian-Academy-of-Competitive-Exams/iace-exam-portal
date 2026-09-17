@@ -85,7 +85,7 @@ export class SessionService {
   ): Promise<void> {
     const key = redisKeys.session(actor, subjectId, sessionId);
     const raw = await this.redis.getRaw(key);
-    const session = raw ? (JSON.parse(raw) as StoredSession) : null;
+    const session = raw ? parsedSession(raw) : null;
     if (!session) return this.throwEnded(actor, subjectId, sessionId);
 
     if (!sameHex(this.hash(presentedToken), session.refreshTokenHash)) {
@@ -221,5 +221,14 @@ export class SessionService {
     // The token is already a high-entropy signed JWT, so a plain digest is the
     // right tool here — this is theft detection, not password storage.
     return createHash('sha256').update(token).digest('hex');
+  }
+}
+
+/** A value that does not parse is no session at all, as getJson treats one. */
+function parsedSession(raw: string): StoredSession | null {
+  try {
+    return JSON.parse(raw) as StoredSession;
+  } catch {
+    return null;
   }
 }
