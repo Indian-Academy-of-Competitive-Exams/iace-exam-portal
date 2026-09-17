@@ -1,6 +1,6 @@
 /**
  * What a student reads before the clock starts — ported from the web's `test-instructions.tsx`.
- * This screen never starts the attempt; `startAttempt` is Task 6's, called on arrival at `/exam/[id]`.
+ * It never starts the attempt: the exam screen calls `startAttempt` on arrival at `/exam/[testId]`.
  */
 import { Fragment, useState } from 'react';
 import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
@@ -22,14 +22,15 @@ import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile } from '../../../src/components/ui/stat-tile';
 import { SystemCheck } from '../../../src/components/tests/system-check';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
+import { isBriefRefused } from '../../../src/lib/exam-routes';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
 
-type Phase = 'LOADING' | 'ERROR' | 'READY';
+type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
-function phaseOf(brief: { isLoading: boolean; isError: boolean }): Phase {
+function phaseOf(brief: { isLoading: boolean; isError: boolean; error: unknown }): Phase {
   if (brief.isLoading) return 'LOADING';
-  if (brief.isError) return 'ERROR';
+  if (brief.isError) return isBriefRefused(brief.error) ? 'REFUSED' : 'ERROR';
   return 'READY';
 }
 
@@ -48,6 +49,7 @@ export default function TestInstructionsScreen() {
         <InstructionsContent
           phase={phaseOf(brief)}
           paper={brief.data}
+          onRetry={brief.refetch}
           declared={declared}
           onDeclaredChange={setDeclared}
           language={language}
@@ -62,6 +64,7 @@ export default function TestInstructionsScreen() {
 function InstructionsContent({
   phase,
   paper,
+  onRetry,
   declared,
   onDeclaredChange,
   language,
@@ -70,6 +73,7 @@ function InstructionsContent({
 }: Readonly<{
   phase: Phase;
   paper: ExamBrief | undefined;
+  onRetry: () => void;
   declared: boolean;
   onDeclaredChange: (value: boolean) => void;
   language: LanguageCode | '';
@@ -85,8 +89,18 @@ function InstructionsContent({
     );
   }
 
-  if (phase === 'ERROR' || !paper) {
+  if (phase === 'REFUSED') {
     return <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This test is not open to you" />;
+  }
+
+  if (phase === 'ERROR' || !paper) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This test did not load"
+        onRetry={onRetry}
+      />
+    );
   }
 
   const dual = paper.languageMode === LANGUAGE_MODE.DUAL;
