@@ -1,5 +1,8 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { createAppApiClient, createTokenStore } from '@iace/app-kit';
+import { devApiUrl } from './dev-api-url';
 import { createSecureStorage } from './secure-storage';
 import { createSignOutSignal } from './sign-out-signal';
 import { STORAGE_KEYS } from './constants';
@@ -12,10 +15,13 @@ export { hydrate };
 export const signOutSignal = createSignOutSignal();
 export const tokenStore = createTokenStore(STORAGE_KEYS.AUTH, storage);
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+// Set, it wins; unset in development, the machine serving the bundle is the machine serving the API.
+const apiUrl =
+  process.env.EXPO_PUBLIC_API_URL ??
+  (__DEV__ ? devApiUrl(Constants.expoConfig?.hostUri, Platform.OS) : undefined);
 if (!apiUrl) {
   throw new Error(
-    'EXPO_PUBLIC_API_URL is not set: add it to apps/mobile/.env (see .env.example) and restart Expo.',
+    'EXPO_PUBLIC_API_URL is not set: a release build needs it in apps/mobile/.env (see .env.example).',
   );
 }
 
