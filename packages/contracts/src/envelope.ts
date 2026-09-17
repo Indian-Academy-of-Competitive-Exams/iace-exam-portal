@@ -15,6 +15,7 @@ import { z, type ZodType } from 'zod';
 export const ErrorCodes = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   UNAUTHENTICATED: 'UNAUTHENTICATED',
+  SESSION_REPLACED: 'SESSION_REPLACED',
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
@@ -39,6 +40,7 @@ export const errorCodeSchema = z.enum(ErrorCodes);
 export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.VALIDATION_ERROR]: 400,
   [ErrorCodes.UNAUTHENTICATED]: 401,
+  [ErrorCodes.SESSION_REPLACED]: 401,
   [ErrorCodes.FORBIDDEN]: 403,
   [ErrorCodes.NOT_FOUND]: 404,
   [ErrorCodes.CONFLICT]: 409,
@@ -64,6 +66,7 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.VALIDATION_ERROR]: 'Some of the details are not valid',
   [ErrorCodes.UNAUTHENTICATED]: 'Please sign in to continue',
+  [ErrorCodes.SESSION_REPLACED]: 'This account was signed in on another device',
   [ErrorCodes.FORBIDDEN]: 'You do not have access to this',
   [ErrorCodes.NOT_FOUND]: 'Not found',
   [ErrorCodes.CONFLICT]: 'That already exists',
@@ -85,6 +88,9 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
 // ============================================================================
 // Shapes
 // ============================================================================
+
+/** The header every response echoes the request id in; the envelope's `meta` carries the same value. */
+export const REQUEST_ID_HEADER = 'x-request-id';
 
 /** On every response. `requestId` is echoed in the header and the log line for the same request. */
 export const metaSchema = z.object({

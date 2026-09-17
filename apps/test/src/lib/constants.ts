@@ -160,7 +160,7 @@ export const PALETTE_LEGEND: readonly {
 /** The account screens, under the user menu, above Log out. */
 export const USER_MENU_ITEMS: readonly NavItem[] = [
   { to: ROUTES.PROFILE, label: 'Profile', icon: User },
-  { to: ROUTES.ACCOUNT, label: 'Change PIN', icon: KeyRound },
+  { to: ROUTES.ACCOUNT, label: 'Account', icon: KeyRound },
 ];
 
 /** The signed-in student's identity, cached under one key. */
@@ -168,6 +168,9 @@ export const ME_QUERY_KEY = ['auth', 'me'] as const;
 
 /** The student's RECORD — profile and photo. A different key from the identity above. */
 export const PROFILE_QUERY_KEY = ['me'] as const;
+
+/** Where this student is signed in, for the Account page's Active devices list. */
+export const ACTIVE_DEVICES_QUERY_KEY = ['me', 'sessions'] as const;
 
 /**
  * localStorage keys owned by this app, namespaced so the SPAs never read each other's.

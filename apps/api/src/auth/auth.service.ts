@@ -9,6 +9,7 @@ import {
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
+  type DeviceSession,
   type OtpRequestResponse,
   type PinSetupTicket,
   type StudentIdentity,
@@ -282,6 +283,14 @@ export class AuthService {
 
   async logout(user: AuthenticatedUser): Promise<void> {
     await this.sessions.revoke(user.actor, user.id, user.sessionId);
+  }
+
+  async activeDevices(user: AuthenticatedUser): Promise<DeviceSession[]> {
+    return this.sessions.devicesFor(user.actor, user.id, user.sessionId);
+  }
+
+  async signOutDevice(user: AuthenticatedUser, sessionId: string): Promise<void> {
+    await this.sessions.signOutOther(user.actor, user.id, user.sessionId, sessionId);
   }
 
   /** Read fresh from Postgres, so a permission change lands without re-login. */

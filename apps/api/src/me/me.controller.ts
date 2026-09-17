@@ -25,6 +25,7 @@ import {
   type ConsentState,
   type ConsentStatus,
   DOCUMENT_FILE_FIELD,
+  type DeviceSession,
   type DocumentKind,
   type ErasureReceipt,
   type Me,
@@ -142,7 +143,7 @@ export class MeController {
 
   /** This browser's push endpoint. Idempotent: the same device resubscribing is the same row. */
   @Post('push-subscription')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   subscribeToPush(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(pushSubscriptionSchema)) body: PushSubscriptionBody,
@@ -151,7 +152,7 @@ export class MeController {
   }
 
   @Delete('push-subscription')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   unsubscribeFromPush(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(dropPushSubscriptionSchema)) body: DropPushSubscriptionBody,
@@ -193,5 +194,19 @@ export class MeController {
     @Req() request: Request,
   ): Promise<AuthSessionResponse> {
     return this.auth.changeStudentPin(user.id, body.currentPin, body.newPin, deviceFrom(request));
+  }
+
+  /** Where this account is signed in, newest activity first, with the asking device marked. */
+  @Get('sessions')
+  activeDevices(@CurrentUser() user: AuthenticatedUser): Promise<DeviceSession[]> {
+    return this.auth.activeDevices(user);
+  }
+
+  /** Signs another of this student's devices out. Refused for the device asking, and for one that is not theirs. */
+  @Delete('sessions/:id')
+  // 200, not 204: Express drops a 204's body, and the client reads the envelope.
+  @HttpCode(HttpStatus.OK)
+  signOutDevice(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<void> {
+    return this.auth.signOutDevice(user, id);
   }
 }

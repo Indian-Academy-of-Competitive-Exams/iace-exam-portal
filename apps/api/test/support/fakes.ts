@@ -503,6 +503,7 @@ export const NO_DEVICE: DeviceContext = {
   deviceName: null,
   ip: null,
   userAgent: null,
+  client: null,
 };
 
 /** The admins facade as auth sees it: the grant map a token carries. */

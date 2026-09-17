@@ -68,7 +68,7 @@ export class SavedController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<void> {
     return this.saved.remove(user.id, id);
   }

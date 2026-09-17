@@ -1,18 +1,19 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PIN_LENGTH, changePinSchema, type ChangePinInput } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { Alert, Button, PageFrame, PageHeader, PinField } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS } from '../lib/constants';
+import { ACTIVE_DEVICES_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
 import { PageBody, SurfaceCard } from '../components/ui';
+import { ActiveDevices } from '../components/account/active-devices';
 import { useAuth } from '../providers/auth';
 
 const FORM_FIELDS = ['currentPin', 'newPin'] as const;
 
-/** Changing the PIN. Also where the forced replacement lands for an import's default PIN. */
+/** Changing the PIN and where this account is signed in. Also where a forced default-PIN reset lands. */
 export function AccountPage() {
   const { identity: student } = useAuth();
   const onDefaultPin = student?.hasDefaultPin ?? false;
@@ -20,11 +21,12 @@ export function AccountPage() {
   return (
     <PageFrame
       header={
-        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} size="display" title="PIN" />
+        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} size="display" title="Account" />
       }
     >
       <PageBody>
         <ChangePinCard onDefaultPin={onDefaultPin} />
+        <ActiveDevices />
       </PageBody>
     </PageFrame>
   );
@@ -32,6 +34,7 @@ export function AccountPage() {
 
 export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean }>) {
   const { signIn } = useAuth();
+  const queryClient = useQueryClient();
 
   const form = useForm<ChangePinInput>({
     resolver: zodResolver(changePinSchema),
@@ -45,6 +48,8 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
       form.reset();
       // Not optional: the change revoked every session opened with the old PIN, including this one.
       signIn(session);
+      // The change ended every other session, so the list below is out of date.
+      void queryClient.invalidateQueries({ queryKey: ACTIVE_DEVICES_QUERY_KEY });
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
   });

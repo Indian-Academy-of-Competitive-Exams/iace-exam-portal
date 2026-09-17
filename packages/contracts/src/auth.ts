@@ -48,6 +48,14 @@ export type OtpRequestResponse = z.infer<typeof otpRequestResponseSchema>;
 // OTP verify
 // ============================================================================
 
+/** Which app a request comes from; a student keeps one session of each. */
+export const CLIENT_KINDS = { WEB: 'WEB', MOBILE: 'MOBILE' } as const;
+export const clientKindSchema = z.enum(CLIENT_KINDS);
+export type ClientKind = z.infer<typeof clientKindSchema>;
+
+/** Sent on every request by an app's API client, so every way a session starts knows its kind. */
+export const CLIENT_HEADERS = { KIND: 'x-client', DEVICE_NAME: 'x-device-name' } as const;
+
 /** Optional client-supplied device label; the server binds the session to a
  *  fingerprint derived from this plus the request, and stores it in Redis. */
 export const deviceInfoSchema = z
@@ -172,6 +180,21 @@ export const authSessionResponseSchema = z.object({
   identity: authIdentitySchema,
 });
 export type AuthSessionResponse = z.infer<typeof authSessionResponseSchema>;
+
+// ============================================================================
+// Active devices — see ME_ROUTES.sessions / session
+// ============================================================================
+
+/** One place a student is signed in. `current` marks the device asking. */
+export const deviceSessionSchema = z.object({
+  id: z.string(),
+  client: clientKindSchema.nullable(),
+  deviceName: z.string().nullable(),
+  createdAt: z.string(),
+  lastSeenAt: z.string(),
+  current: z.boolean(),
+});
+export type DeviceSession = z.infer<typeof deviceSessionSchema>;
 
 // ============================================================================
 // Refresh / logout / me

@@ -1,7 +1,9 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
 import { createAppApiClient, createTokenStore } from '@iace/app-kit';
+import { CLIENT_KINDS } from '@iace/contracts';
 import { devApiUrl } from './dev-api-url';
 import { createSecureStorage } from './secure-storage';
 import { createSignOutSignal } from './sign-out-signal';
@@ -29,4 +31,5 @@ export const api = createAppApiClient({
   baseUrl: apiUrl,
   tokenStore,
   signOutSignal,
+  client: { kind: CLIENT_KINDS.MOBILE, deviceName: Device.modelName },
 });

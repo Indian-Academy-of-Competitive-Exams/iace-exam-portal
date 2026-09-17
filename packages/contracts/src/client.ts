@@ -6,6 +6,7 @@ import {
   apiSuccessSchema,
   errorCodeForStatus,
   noContentSchema,
+  REQUEST_ID_HEADER,
   type ApiSuccess,
   type NoContent,
   type Paginated,
@@ -32,11 +33,13 @@ import {
   authSessionResponseSchema,
   authIdentitySchema,
   authTokensSchema,
+  deviceSessionSchema,
   otpRequestResponseSchema,
   pinSetupTicketSchema,
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
+  type DeviceSession,
   type OtpRequestResponse,
   type PinSetupTicket,
   type RequestAdminOtpInput,
@@ -364,7 +367,9 @@ export interface ApiClientOptions {
   /** Called after a successful silent refresh so the caller can persist rotation. */
   onTokensRefreshed?: (tokens: AuthTokens) => void;
   /** Called when the session is unrecoverable — the caller should sign out. */
-  onUnauthorized?: () => void;
+  onUnauthorized?: (cause?: AppException) => void;
+  /** Sent on every request, e.g. which app this is. */
+  headers?: Readonly<Record<string, string>>;
   fetchImpl?: typeof fetch;
 }
 
@@ -386,6 +391,7 @@ export function createApiClient(options: ApiClientOptions) {
     getRefreshToken,
     onTokensRefreshed,
     onUnauthorized,
+    headers = {},
     fetchImpl = globalThis.fetch,
   } = options;
 
@@ -393,6 +399,8 @@ export function createApiClient(options: ApiClientOptions) {
 
   /** Single-flight guard: many parallel 401s trigger exactly one refresh call. */
   let refreshInFlight: Promise<AuthTokens | null> | null = null;
+  /** The AppException from the last failed refresh, so `onUnauthorized` can say why. */
+  let refreshFailure: AppException | undefined;
 
   async function send(path: string, method: string, body: unknown, token: string | null) {
     // FormData: the browser must set its own Content-Type, boundary included.
@@ -402,6 +410,7 @@ export function createApiClient(options: ApiClientOptions) {
       return await fetchImpl(url(path), {
         method,
         headers: {
+          ...headers,
           ...(body === undefined || isFormData ? {} : { 'Content-Type': 'application/json' }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
@@ -423,6 +432,7 @@ export function createApiClient(options: ApiClientOptions) {
 
   /** Both halves are validated: an unrecognised shape must never reach a caller typed as data. */
   async function parse<T>(response: Response, schema: ZodType<T>): Promise<ApiSuccess<T>> {
+    if (response.status === NO_CONTENT) return noContentOf(response, schema);
     const text = await response.text();
 
     let payload: unknown;
@@ -464,6 +474,7 @@ export function createApiClient(options: ApiClientOptions) {
   }
 
   async function refreshTokens(): Promise<AuthTokens | null> {
+    refreshFailure = undefined;
     const refreshToken = getRefreshToken();
     if (!refreshToken) return null;
 
@@ -474,8 +485,9 @@ export function createApiClient(options: ApiClientOptions) {
       );
       onTokensRefreshed?.(envelope.data);
       return envelope.data;
-    } catch {
+    } catch (error) {
       // Refresh failing is a normal end-of-session, not an error to propagate.
+      refreshFailure = AppException.is(error) ? error : undefined;
       return null;
     }
   }
@@ -488,8 +500,16 @@ export function createApiClient(options: ApiClientOptions) {
     const response = await send(path, method, body, getAccessToken());
     if (response.status !== 401) return parse(response, schema);
 
-    // Only an expired session is worth retrying: refreshing on a wrong PIN hides the real code.
     const peeked = await peekFailure(response);
+
+    // A replaced session is over for good; refreshing would only be refused the same way.
+    if (peeked?.error.code === ErrorCodes.SESSION_REPLACED) {
+      const replaced = AppException.fromFailure(peeked, response.status);
+      onUnauthorized?.(replaced);
+      throw replaced;
+    }
+
+    // Only an expired session is worth retrying: refreshing on a wrong PIN hides the real code.
     if (peeked && peeked.error.code !== 'UNAUTHENTICATED') {
       throw AppException.fromFailure(peeked, response.status);
     }
@@ -500,14 +520,12 @@ export function createApiClient(options: ApiClientOptions) {
     const refreshed = await refreshInFlight;
 
     if (!refreshed) {
-      onUnauthorized?.();
-      throw peeked
-        ? AppException.fromFailure(peeked, 401)
-        : new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
+      onUnauthorized?.(refreshFailure);
+      throw endedBy(refreshFailure, peeked);
     }
 
     const retried = await send(path, method, body, refreshed.accessToken);
-    if (retried.status === 401) onUnauthorized?.();
+    if (retried.status === 401) onUnauthorized?.(await failureOf(retried));
     return parse(retried, schema);
   }
 
@@ -648,6 +666,14 @@ export function createApiClient(options: ApiClientOptions) {
 
       changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
         write('POST', ME_ROUTES.changePin, authSessionResponseSchema, input),
+
+      /** Where this account is signed in, newest activity first; the asking device is marked. */
+      sessions: (): Promise<DeviceSession[]> =>
+        get(ME_ROUTES.sessions, deviceSessionSchema.array()),
+
+      /** Signs another device out. Refused for the device asking — use logout for that. */
+      signOutSession: (id: string): Promise<NoContent> =>
+        write('DELETE', ME_ROUTES.session(id), noContentSchema),
 
       /** Every series this student reaches, with what is open right now. */
       catalog: (): Promise<StudentCatalog> => get(ME_ROUTES.catalog, studentCatalogSchema),
@@ -1283,6 +1309,40 @@ function fileBody(file: File): FormData {
 }
 
 /** Reads a failure body. Outside the factory because it closes over nothing. */
+const NO_CONTENT = 204;
+
+/** A 204 never has a body (Express drops one), so it can only mean null; a schema that refuses null is a real mismatch. */
+function noContentOf<T>(response: Response, schema: ZodType<T>): ApiSuccess<T> {
+  const data = schema.safeParse(null);
+  if (!data.success) {
+    throw new AppException(ErrorCodes.INTERNAL, 'Unexpected response shape from API', {
+      httpStatus: response.status,
+      details: data.error.issues,
+    });
+  }
+  return {
+    success: true,
+    data: data.data,
+    meta: { requestId: response.headers.get(REQUEST_ID_HEADER) ?? '' },
+  };
+}
+
+/** The typed failure a 401 carried, so a sign-out can say why. */
+async function failureOf(response: Response): Promise<AppException | undefined> {
+  const failed = await peekFailure(response);
+  return failed ? AppException.fromFailure(failed, response.status) : undefined;
+}
+
+/** Why a request is over: a replacement names itself, else the 401 that sent it to refresh. */
+function endedBy(
+  refreshFailure: AppException | undefined,
+  peeked: Awaited<ReturnType<typeof peekFailure>>,
+): AppException {
+  if (refreshFailure?.code === ErrorCodes.SESSION_REPLACED) return refreshFailure;
+  if (peeked) return AppException.fromFailure(peeked, 401);
+  return new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
+}
+
 async function peekFailure(response: Response) {
   try {
     const parsed = apiFailureSchema.safeParse(await response.clone().json());

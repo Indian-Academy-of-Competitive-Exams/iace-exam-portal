@@ -19,7 +19,7 @@ import {
   type RequestStudentOtpBody,
   type StudentLoginBody,
 } from '@iace/contracts';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
 import { api } from '../src/lib/api';
 import { useAuth } from '../src/providers/auth';
 import { Alert } from '../src/components/ui/alert';
@@ -50,8 +50,9 @@ const sanitizeDigits = (maxLength: number) => (raw: string) =>
   raw.replace(/\D/g, '').slice(0, maxLength);
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, signedOutReason } = useAuth();
   const [step, setStep] = useState<Step>({ kind: 'signIn' });
+  const message = signedOutMessage(signedOutReason);
 
   const onSignedIn = (session: AuthSessionResponse) => signIn(session);
 
@@ -70,6 +71,8 @@ export default function LoginScreen() {
               IACE
             </Text>
           </View>
+
+          {message ? <Alert variant="warning">{message}</Alert> : null}
 
           {step.kind === 'signIn' ? (
             <SignInStep
