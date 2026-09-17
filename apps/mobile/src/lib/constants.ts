@@ -55,6 +55,10 @@ export const bookmarksInAttemptQueryKey = (attemptId: string) =>
 /** One page of either saved list, keyed by which of the two it is. */
 export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
 
+/** Both filters' options, which span the whole set and so do not move when a page does. */
+export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
+  ['me', 'saved', kind, 'facets'] as const;
+
 /** One report, keyed by what it is OF — the web app's own key, so the two share one read. */
 export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
   ['me', 'performance', 'report', scope, scopeId] as const;
