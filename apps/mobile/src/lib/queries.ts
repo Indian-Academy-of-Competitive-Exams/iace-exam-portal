@@ -8,7 +8,9 @@ import {
   endedSittingQueryKey,
   PERFORMANCE_QUERY_KEY,
   performanceReportQueryKey,
+  questionReportQueryKey,
   scoreCardQueryKey,
+  solutionsQueryKey,
 } from './constants';
 
 /** The reads the tests tab and the series page share, each keyed once. */
@@ -40,4 +42,16 @@ export const attemptReportQuery = (attemptId: string) =>
   queryOptions({
     queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
     queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
+  });
+
+export const solutionsQuery = (attemptId: string) =>
+  queryOptions({
+    queryKey: solutionsQueryKey(attemptId),
+    queryFn: () => api.me.solutions(attemptId),
+  });
+
+export const questionReportQuery = (attemptId: string) =>
+  queryOptions({
+    queryKey: questionReportQueryKey(attemptId),
+    queryFn: () => api.me.questionReport(attemptId),
   });

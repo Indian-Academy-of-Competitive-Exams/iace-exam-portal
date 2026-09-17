@@ -1,4 +1,4 @@
-import { type PerformanceScope } from '@iace/contracts';
+import { type PerformanceScope, type SavedQuestionKind } from '@iace/contracts';
 
 /** Storage keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
@@ -40,6 +40,20 @@ export const attemptPaperQueryKey = (attemptId: string) =>
 /** Marks and standing, refused until marking lands — the web app's own key. */
 export const scoreCardQueryKey = (attemptId: string) =>
   ['me', 'attempts', attemptId, 'score-card'] as const;
+
+/** One sitting's worked solutions, and the per-question table beside them — the web's own keys. */
+export const solutionsQueryKey = (attemptId: string) =>
+  ['me', 'attempts', attemptId, 'solutions'] as const;
+
+export const questionReportQueryKey = (attemptId: string) =>
+  ['me', 'attempts', attemptId, 'question-report'] as const;
+
+/** What the review reads to draw its stars — one read per sitting, not one per question. */
+export const bookmarksInAttemptQueryKey = (attemptId: string) =>
+  ['me', 'saved', 'attempts', attemptId] as const;
+
+/** One page of either saved list, keyed by which of the two it is. */
+export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
 
 /** One report, keyed by what it is OF — the web app's own key, so the two share one read. */
 export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>

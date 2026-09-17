@@ -13,6 +13,7 @@ import {
   type QuestionScreen,
   type ScreenContent,
   type ScreenOption,
+  type ScreenReview,
 } from '../src/components/exam/question-bridge';
 
 declare global {
@@ -28,6 +29,7 @@ const FULL = 1;
 
 const OPTION = 'option';
 const BUBBLE = 'bubble';
+const DASH = '\u2014';
 
 interface Hold {
   optionId: string;
@@ -71,6 +73,40 @@ function ink(bubble: HTMLElement, fill: number): void {
   bubble.setAttribute('aria-checked', String(fill >= FULL));
 }
 
+function answerRow(term: string, value: string): HTMLElement {
+  const row = element('div', 'answer');
+  const name = element('span', 'answer-term');
+  name.textContent = term;
+  const said = element('span', 'answer-value');
+  said.textContent = value;
+  row.append(name, said);
+  return row;
+}
+
+/** What a typed answer was compared against, and the worked solution — neither exists in a sitting. */
+function reviewBlocks(review: ScreenReview): HTMLElement[] {
+  const blocks: HTMLElement[] = [];
+
+  if (review.typedAnswer !== null || review.answerKey !== null) {
+    const answers = element('section', 'answers');
+    answers.append(
+      answerRow('Your answer', review.typedAnswer ?? DASH),
+      answerRow('Correct answer', review.answerKey ?? DASH),
+    );
+    blocks.push(answers);
+  }
+
+  if (review.solution.length > 0) {
+    const solution = element('section', 'solution');
+    const heading = element('h2', 'solution-title');
+    heading.textContent = 'Solution';
+    solution.append(heading, ...richBlocks(review.solution));
+    blocks.push(solution);
+  }
+
+  return blocks;
+}
+
 function build(screen: QuestionScreen): void {
   const stem = element('section', 'stem');
   stem.append(...richBlocks(screen.stem));
@@ -101,7 +137,8 @@ function build(screen: QuestionScreen): void {
     options.append(item);
   });
 
-  root.replaceChildren(stem, options);
+  const review = screen.review ? reviewBlocks(screen.review) : [];
+  root.replaceChildren(stem, options, ...review);
   window.scrollTo(0, 0);
 }
 
@@ -110,6 +147,8 @@ function paint(screen: QuestionScreen): void {
     const option = screen.options.find(({ id }) => id === row.dataset.optionId);
     const selected = option?.id === screen.selectedOptionId;
     row.toggleAttribute('data-selected', selected);
+    row.toggleAttribute('data-correct', screen.review?.correctOptionId === row.dataset.optionId);
+    row.toggleAttribute('data-yours', screen.review !== undefined && selected);
     const bubble = row.querySelector<HTMLElement>(`.${BUBBLE}`);
     if (bubble) {
       ink(bubble, option?.fill ?? 0);
@@ -129,6 +168,7 @@ function show(screen: QuestionScreen): void {
     screen.bubbling,
     screen.stem,
     screen.options.map((o) => [o.id, o.content]),
+    screen.review,
   ]);
   if (content !== drawnContent) {
     build(screen);

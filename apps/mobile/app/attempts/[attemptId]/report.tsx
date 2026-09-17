@@ -7,19 +7,21 @@ import { REPORT_TABS, type ReportTab } from '@iace/app-kit';
 import { scoreCardQuery } from '../../../src/lib/queries';
 import { ChipRow, type ChipOption } from '../../../src/components/ui/chip-row';
 import { ComparePanel } from '../../../src/components/report/compare-panel';
+import { QuestionsPanel } from '../../../src/components/report/questions-panel';
 import { ScoreCardPanel } from '../../../src/components/report/score-card-panel';
+import { SolutionsPanel } from '../../../src/components/report/solutions-panel';
 import { SubjectsPanel } from '../../../src/components/report/subjects-panel';
 
 const SCORE_CARD: ReportTab = '';
 const SUBJECTS: ReportTab = 'subjects';
+const SOLUTIONS: ReportTab = 'solutions';
+const QUESTIONS: ReportTab = 'questions';
 const COMPARE: ReportTab = 'compare';
 
-/** The panels this app draws; the web's solution and question tabs are not built here yet. */
-const BUILT: readonly ReportTab[] = [SCORE_CARD, SUBJECTS, COMPARE];
-
-const TABS: readonly ChipOption[] = REPORT_TABS.filter((tab) => BUILT.includes(tab.path)).map(
-  (tab) => ({ value: tab.path, label: tab.label }),
-);
+const TABS: readonly ChipOption[] = REPORT_TABS.map((tab) => ({
+  value: tab.path,
+  label: tab.label,
+}));
 
 /** One sitting, whole. The tabs are a switch rather than routes: nobody deep-links on a phone. */
 export default function ReportScreen() {
@@ -39,6 +41,8 @@ export default function ReportScreen() {
       </View>
 
       {tab === SUBJECTS ? <SubjectsPanel attemptId={attemptId} /> : null}
+      {tab === SOLUTIONS ? <SolutionsPanel attemptId={attemptId} /> : null}
+      {tab === QUESTIONS ? <QuestionsPanel attemptId={attemptId} /> : null}
       {tab === COMPARE ? <ComparePanel attemptId={attemptId} /> : null}
       {tab === SCORE_CARD ? <ScoreCardPanel attemptId={attemptId} /> : null}
     </View>

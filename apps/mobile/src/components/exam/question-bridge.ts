@@ -34,6 +34,15 @@ export interface ScreenOption {
   content: ScreenContent[];
 }
 
+/** Only the review sends this: what the key said, and the worked solution under the options. */
+export interface ScreenReview {
+  correctOptionId: string | null;
+  /** TEXT_FIELD only: what they typed, and what it was compared against. */
+  typedAnswer: string | null;
+  answerKey: string | null;
+  solution: ScreenContent[];
+}
+
 /** Everything the page draws. It holds nothing else, so native's copy is the only truth. */
 export interface QuestionScreen {
   /** The `data-exam-template` value that picks the skin's tokens. */
@@ -43,4 +52,6 @@ export interface QuestionScreen {
   selectedOptionId: string | null;
   stem: ScreenContent[];
   options: ScreenOption[];
+  /** Absent during a sitting: the key only ever reaches the page after the paper is marked. */
+  review?: ScreenReview;
 }
