@@ -186,8 +186,13 @@ export class FakeRedis {
   }
 
   /** One thread, so the compare and the set are already atomic — the real one needs a script. */
-  async replaceJson(key: string, was: string, value: unknown, ttlSec: number): Promise<boolean> {
-    if (this.text(key) !== was) return false;
+  async replaceJson(
+    key: string,
+    was: string | null,
+    value: unknown,
+    ttlSec: number,
+  ): Promise<boolean> {
+    if ((this.text(key) ?? null) !== was) return false;
     await this.setJson(key, value, ttlSec);
     return true;
   }

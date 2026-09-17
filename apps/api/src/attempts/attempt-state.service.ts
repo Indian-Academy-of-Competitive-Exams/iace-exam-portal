@@ -1,8 +1,8 @@
 /**
  * The live sitting, in Redis. The answering path reads and writes nothing else.
- * The KEY EXISTING is what "this sitting is open" means: `open` writes it, `close`
- * removes it at submit, and a save that finds no key falls back to Postgres, which
- * refuses anything not IN_PROGRESS. So a save after a submit cannot be accepted.
+ * The KEY EXISTING is what "this sitting is open" means: `open` writes it, `take` removes
+ * it at submit, and a save that finds no key falls back to Postgres, which refuses anything
+ * not IN_PROGRESS. Every write is a compare-and-swap, so none lands on a state it did not read.
  */
 
 import { Injectable } from '@nestjs/common';
@@ -44,19 +44,20 @@ export class AttemptStateService {
     attempt: { id: string; studentId: string; endsAt: Date },
     tab?: string,
   ): Promise<void> {
-    const held = await this.read(attempt.id);
-    await (held
-      ? this.write({ ...held, tab: tab ?? held.tab })
-      : this.write({
-          attemptId: attempt.id,
-          studentId: attempt.studentId,
-          endsAt: attempt.endsAt.toISOString(),
-          revision: 0,
-          answers: {},
-          pending: [],
-          sections: {},
-          tab,
-        }));
+    await this.patch(
+      attempt.id,
+      (held) => ({ ...held, tab: tab ?? held.tab }),
+      () => ({
+        attemptId: attempt.id,
+        studentId: attempt.studentId,
+        endsAt: attempt.endsAt.toISOString(),
+        revision: 0,
+        answers: {},
+        pending: [],
+        sections: {},
+        tab,
+      }),
+    );
 
     if (tab !== undefined) await this.takeClaim(attempt.studentId, attempt.id);
   }
@@ -78,14 +79,11 @@ export class AttemptStateService {
     batch: SaveAttemptStateBody,
     now: Date = new Date(),
   ): Promise<AttemptSaveAck> {
-    const held = await this.require(studentId, attemptId);
-    if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
-    if (!holdsSitting(held, batch.tab)) {
-      throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
-    }
-
-    const next = { ...applyBatch(held, batch, now), tab: batch.tab ?? held.tab };
-    await this.write(next);
+    const next = await this.patch(
+      attemptId,
+      (held) => answered(held, studentId, batch, now),
+      () => this.durableState(studentId, attemptId),
+    );
     // Marked AFTER the write: a mark whose state never landed would flush yesterday's answers.
     await this.redis.client.sadd(redisKeys.attemptsDirty, attemptId);
 
@@ -129,11 +127,11 @@ export class AttemptStateService {
   async reestablish(studentId: string, attemptId: string): Promise<HeldState> {
     const durable = await this.durableState(studentId, attemptId);
     // Anything the key still holds landed AFTER the last flush, so it wins over the durable copy.
-    const merged = await this.patch(attemptId, (held) => mergedOver(durable, held));
-    if (merged) return merged;
-
-    await this.write(durable);
-    return durable;
+    return this.patch(
+      attemptId,
+      (held) => mergedOver(durable, held),
+      () => durable,
+    );
   }
 
   /** The clock the student is watching. Moved here too, or the screen would count to the old one. */
@@ -141,19 +139,28 @@ export class AttemptStateService {
     await this.patch(attemptId, (held) => ({ ...held, endsAt: endsAt.toISOString() }));
   }
 
-  /** Gives way to a save that beat it rather than writing over one. Null when the key has gone. */
+  /** Every write of the key, giving way to one that beat it. Null when gone and nothing seeds it. */
+  private patch(
+    attemptId: string,
+    change: (held: HeldState) => HeldState,
+    seed: () => HeldState | Promise<HeldState>,
+  ): Promise<HeldState>;
+  private patch(
+    attemptId: string,
+    change: (held: HeldState) => HeldState,
+  ): Promise<HeldState | null>;
   private async patch(
     attemptId: string,
     change: (held: HeldState) => HeldState,
+    seed?: () => HeldState | Promise<HeldState>,
   ): Promise<HeldState | null> {
     const key = redisKeys.attemptState(attemptId);
     for (let tries = 0; tries < PATCH_TRIES; tries += 1) {
       const raw = await this.redis.getRaw(key);
-      if (raw === null) return null;
+      const held = (raw === null ? null : parsedHeld(raw)) ?? (await seed?.());
+      if (!held) return null;
 
-      const held = parsedHeld(raw);
-      if (held === null) return null;
-
+      // A change may refuse by throwing; a lost swap judges it again against the fresh read.
       const next = change(held);
       if (await this.redis.replaceJson(key, raw, next, STATE_TTL_SEC)) return next;
     }
@@ -180,24 +187,16 @@ export class AttemptStateService {
     }));
   }
 
-  private async write(state: HeldState): Promise<void> {
-    await this.redis.setJson(redisKeys.attemptState(state.attemptId), state, STATE_TTL_SEC);
-  }
-
-  /** Redis first, Postgres only if the key has gone — paying on a rare resume, not on every save. */
+  /** Redis first, Postgres only if the key has gone — paying on a rare resume, not on every read. */
   private async require(studentId: string, attemptId: string): Promise<HeldState> {
-    const held = await this.read(attemptId);
-    if (held) {
-      if (held.studentId !== studentId) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-      return held;
-    }
-    return this.rebuild(studentId, attemptId);
-  }
-
-  private async rebuild(studentId: string, attemptId: string): Promise<HeldState> {
-    const rebuilt = await this.durableState(studentId, attemptId);
-    await this.write(rebuilt);
-    return rebuilt;
+    const held =
+      (await this.read(attemptId)) ??
+      (await this.patch(
+        attemptId,
+        (found) => found,
+        () => this.durableState(studentId, attemptId),
+      ));
+    return yours(held, studentId);
   }
 
   /** The sitting as Postgres holds it, whether or not anything is going to be written back. */
@@ -239,6 +238,27 @@ function parsedHeld(raw: string): HeldState | null {
   } catch {
     return null;
   }
+}
+
+/** Another student's id reads as missing, as it does on the Postgres side. */
+function yours(held: HeldState, studentId: string): HeldState {
+  if (held.studentId !== studentId) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+  return held;
+}
+
+/** The batch on top of what was held, or the refusal that stands against it. */
+function answered(
+  held: HeldState,
+  studentId: string,
+  batch: SaveAttemptStateBody,
+  now: Date,
+): HeldState {
+  yours(held, studentId);
+  if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
+  if (!holdsSitting(held, batch.tab)) {
+    throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
+  }
+  return { ...applyBatch(held, batch, now), tab: batch.tab ?? held.tab };
 }
 
 /** The row's own deadline stands, because an extension moves it there first. */
