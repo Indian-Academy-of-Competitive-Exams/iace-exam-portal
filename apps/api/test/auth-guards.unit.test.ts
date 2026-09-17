@@ -7,6 +7,8 @@ import { type ExecutionContext } from '@nestjs/common';
 import {
   ActorTypes,
   AppException,
+  CLIENT_KINDS,
+  ErrorCodes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   type AdminPermissions,
@@ -90,11 +92,12 @@ describe('JwtAuthGuard', () => {
       allBranches?: boolean;
       branchIds?: string[];
     } = {},
+    device = NO_DEVICE,
   ) {
     const sub = claims.sub ?? SUBJECT;
     const actor = claims.actor ?? ActorTypes.STUDENT;
     const sid = ctx.sessions.newSessionId();
-    await ctx.sessions.create(actor, sub, sid, 'refresh-token', NO_DEVICE, 3600);
+    await ctx.sessions.create(actor, sub, sid, 'refresh-token', device, 3600);
     const token = await ctx.tokens.signAccess({
       sub,
       actor,
@@ -239,6 +242,30 @@ describe('JwtAuthGuard', () => {
     });
 
     assert.equal(await guard.canActivate(context), true);
+  });
+
+  it('tells a replaced session why, and an ordinarily ended one nothing more', async () => {
+    const ctx = build();
+    const web = { ...NO_DEVICE, client: CLIENT_KINDS.WEB };
+    const first = await signIn(ctx, {}, web);
+    await signIn(ctx, {}, web);
+
+    const replaced = probe(ProbeController.prototype.plainRoute, authed(first.token));
+    await assert.rejects(
+      () => ctx.guard.canActivate(replaced.context),
+      (e: unknown) =>
+        AppException.is(e) &&
+        e.code === ErrorCodes.SESSION_REPLACED &&
+        (e.details as { replacedBy?: string }).replacedBy === CLIENT_KINDS.WEB,
+    );
+
+    const other = await signIn(ctx, { sub: 'stu_2' }, web);
+    await ctx.sessions.revoke(ActorTypes.STUDENT, other.sub, other.sid);
+    const ended = probe(ProbeController.prototype.plainRoute, authed(other.token));
+    await assert.rejects(
+      () => ctx.guard.canActivate(ended.context),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.UNAUTHENTICATED,
+    );
   });
 });
 

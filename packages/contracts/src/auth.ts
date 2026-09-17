@@ -48,6 +48,14 @@ export type OtpRequestResponse = z.infer<typeof otpRequestResponseSchema>;
 // OTP verify
 // ============================================================================
 
+/** Which app a request comes from; a student keeps one session of each. */
+export const CLIENT_KINDS = { WEB: 'WEB', MOBILE: 'MOBILE' } as const;
+export const clientKindSchema = z.enum(CLIENT_KINDS);
+export type ClientKind = z.infer<typeof clientKindSchema>;
+
+/** Sent on every request by an app's API client, so every way a session starts knows its kind. */
+export const CLIENT_HEADERS = { KIND: 'x-client', DEVICE_NAME: 'x-device-name' } as const;
+
 /** Optional client-supplied device label; the server binds the session to a
  *  fingerprint derived from this plus the request, and stores it in Redis. */
 export const deviceInfoSchema = z

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ActorTypes, AppException } from '@iace/contracts';
+import {
+  ActorTypes,
+  type ActorType,
+  AppException,
+  CLIENT_KINDS,
+  ErrorCodes,
+} from '@iace/contracts';
 import { SessionService } from '../src/auth/session.service';
 import { FakeRedis, NO_DEVICE } from './support/fakes';
 
@@ -17,9 +23,14 @@ function build() {
   return { redis, sessions: new SessionService(redis.asService()) };
 }
 
-async function openSession(sessions: SessionService, token = 'refresh-1', device = NO_DEVICE) {
+async function openSession(
+  sessions: SessionService,
+  token = 'refresh-1',
+  device = NO_DEVICE,
+  actor: ActorType = ActorTypes.STUDENT,
+) {
   const sessionId = sessions.newSessionId();
-  await sessions.create(ActorTypes.STUDENT, SUBJECT, sessionId, token, device, TTL);
+  await sessions.create(actor, SUBJECT, sessionId, token, device, TTL);
   return sessionId;
 }
 
@@ -186,5 +197,68 @@ describe('SessionService', () => {
     redis.advanceSeconds(TTL + 1);
 
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
+  });
+});
+
+describe('SessionService — one session per app kind', () => {
+  const web = { ...NO_DEVICE, client: CLIENT_KINDS.WEB };
+  const mobile = { ...NO_DEVICE, client: CLIENT_KINDS.MOBILE };
+
+  it('a second web sign-in replaces the first and keeps the phone', async () => {
+    const { sessions } = build();
+    const firstWeb = await openSession(sessions, 'r1', web);
+    const phone = await openSession(sessions, 'r2', mobile);
+    await openSession(sessions, 'r3', web);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, firstWeb), false);
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, phone), true);
+    assert.deepEqual(await sessions.replacedBy(ActorTypes.STUDENT, SUBJECT, firstWeb), {
+      replacedBy: CLIENT_KINDS.WEB,
+    });
+  });
+
+  it('a second phone replaces the first and keeps the browser', async () => {
+    const { sessions } = build();
+    const browser = await openSession(sessions, 'r1', web);
+    const firstPhone = await openSession(sessions, 'r2', mobile);
+    await openSession(sessions, 'r3', mobile);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, firstPhone), false);
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, browser), true);
+  });
+
+  it('a sign-in of either kind replaces a session from before kinds were kept', async () => {
+    const { sessions } = build();
+    const legacy = await openSession(sessions, 'r1', NO_DEVICE);
+    await openSession(sessions, 'r2', mobile);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, legacy), false);
+  });
+
+  it('never replaces an admin session', async () => {
+    const { sessions } = build();
+    const first = await openSession(sessions, 'r1', web, ActorTypes.ADMIN);
+    await openSession(sessions, 'r2', web, ActorTypes.ADMIN);
+
+    assert.equal(await sessions.exists(ActorTypes.ADMIN, SUBJECT, first), true);
+  });
+
+  it('a session signed out on purpose leaves no replacement behind', async () => {
+    const { sessions } = build();
+    const id = await openSession(sessions, 'r1', web);
+    await sessions.revoke(ActorTypes.STUDENT, SUBJECT, id);
+
+    assert.equal(await sessions.replacedBy(ActorTypes.STUDENT, SUBJECT, id), null);
+  });
+
+  it('a replaced session refreshing is told it was replaced', async () => {
+    const { sessions } = build();
+    const first = await openSession(sessions, 'r1', web);
+    await openSession(sessions, 'r2', web);
+
+    await assert.rejects(
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r1b', web, TTL),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SESSION_REPLACED,
+    );
   });
 });

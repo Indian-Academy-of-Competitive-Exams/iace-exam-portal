@@ -38,6 +38,10 @@ export const redisKeys = {
   sessionIndex: (actor: ActorType, subjectId: string) =>
     `sessions:${actor.toLowerCase()}:${subjectId}`,
 
+  /** Tombstone of a session a newer sign-in of its kind replaced. TTL = refresh lifetime. */
+  sessionReplaced: (actor: ActorType, subjectId: string, sessionId: string) =>
+    `session-replaced:${actor.toLowerCase()}:${subjectId}:${sessionId}`,
+
   /** Held while one worker archives one UTC day of audit rows, keyed `YYYY-MM-DD`. */
   auditArchiveDay: (day: string) => `audit:archive:${day}`,
 

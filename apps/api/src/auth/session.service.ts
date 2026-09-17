@@ -1,10 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
-import { AppException, ErrorCodes, type ActorType } from '@iace/contracts';
+import {
+  ActorTypes,
+  AppException,
+  ErrorCodes,
+  type ActorType,
+  type ClientKind,
+} from '@iace/contracts';
 import { sameHex } from '../common/same-hex';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
-import { type DeviceContext, type StoredSession } from './auth.types';
+import {
+  type DeviceContext,
+  type ListedSession,
+  type SessionReplacement,
+  type StoredSession,
+} from './auth.types';
 
 /**
  * Sessions and device binding — Redis only, never Postgres. A session's TTL is the refresh-token
@@ -28,6 +39,10 @@ export class SessionService {
     device: DeviceContext,
     ttlSec: number,
   ): Promise<void> {
+    // One session per app kind for a student: the newest sign-in of a kind replaces the last.
+    if (actor === ActorTypes.STUDENT)
+      await this.replaceSameKind(actor, subjectId, device.client, ttlSec);
+
     const now = new Date().toISOString();
     const session: StoredSession = {
       refreshTokenHash: this.hash(refreshToken),
@@ -37,6 +52,7 @@ export class SessionService {
       userAgent: device.userAgent,
       createdAt: now,
       lastSeenAt: now,
+      client: device.client,
     };
 
     await this.redis.setJson(redisKeys.session(actor, subjectId, sessionId), session, ttlSec);
@@ -68,8 +84,12 @@ export class SessionService {
   ): Promise<void> {
     const key = redisKeys.session(actor, subjectId, sessionId);
     const session = await this.redis.getJson<StoredSession>(key);
-    if (!session)
+    if (!session) {
+      const replaced = await this.replacedBy(actor, subjectId, sessionId);
+      if (replaced)
+        throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired — sign in again');
+    }
 
     if (!sameHex(this.hash(presentedToken), session.refreshTokenHash)) {
       await this.revoke(actor, subjectId, sessionId);
@@ -110,6 +130,48 @@ export class SessionService {
       ...sessionIds.map((id) => redisKeys.session(actor, subjectId, id)),
       indexKey,
     );
+  }
+
+  /** Every live session of a subject with its id; an index entry whose key has expired is skipped. */
+  async list(actor: ActorType, subjectId: string): Promise<ListedSession[]> {
+    const ids = await this.redis.client.smembers(redisKeys.sessionIndex(actor, subjectId));
+    const listed: ListedSession[] = [];
+    for (const id of ids) {
+      const session = await this.redis.getJson<StoredSession>(
+        redisKeys.session(actor, subjectId, id),
+      );
+      if (session) listed.push({ ...session, id, client: session.client ?? null });
+    }
+    return listed;
+  }
+
+  /** Why a missing session ended: who replaced it, or null when it ended any other way. */
+  async replacedBy(
+    actor: ActorType,
+    subjectId: string,
+    sessionId: string,
+  ): Promise<SessionReplacement | null> {
+    return this.redis.getJson<SessionReplacement>(
+      redisKeys.sessionReplaced(actor, subjectId, sessionId),
+    );
+  }
+
+  /** A kind's own sessions go, and any from before kinds were kept; the other kind stays. */
+  private async replaceSameKind(
+    actor: ActorType,
+    subjectId: string,
+    client: ClientKind | null,
+    ttlSec: number,
+  ): Promise<void> {
+    for (const listed of await this.list(actor, subjectId)) {
+      if (listed.client !== null && listed.client !== client) continue;
+      await this.revoke(actor, subjectId, listed.id);
+      await this.redis.setJson(
+        redisKeys.sessionReplaced(actor, subjectId, listed.id),
+        { replacedBy: client } satisfies SessionReplacement,
+        ttlSec,
+      );
+    }
   }
 
   private hash(token: string): string {
