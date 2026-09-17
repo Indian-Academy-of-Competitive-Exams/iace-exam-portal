@@ -22,6 +22,9 @@ export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'
 /** The session call doubles as the reachability check — its success proves both facts at once. */
 export const SYSTEM_CHECK_QUERY_KEY = ['me', 'system-check'] as const;
 
+/** Where this account is signed in — the web app's own key, so the two never cache separate copies. */
+export const ACTIVE_DEVICES_QUERY_KEY = ['me', 'sessions'] as const;
+
 /** The search param carrying the language choice to `/exam/[testId]`. */
 export const EXAM_LANGUAGES_PARAM = 'languages' as const;
 
