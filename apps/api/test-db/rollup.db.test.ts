@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { PAPER_QUESTION_STATUS, TEST_SCOPE, type TestScope } from '@iace/contracts';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
@@ -43,6 +44,7 @@ function build(rollupClient: PrismaService = prisma) {
       new FakeEventBus().asService(),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
+      new PaperSheetService(prisma),
     ),
     rollup: new RollupService(rollupClient),
   };

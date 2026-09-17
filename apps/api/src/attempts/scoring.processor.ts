@@ -8,9 +8,7 @@ import {
   NOTIFICATION_TYPE,
   PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
-  type AnswerKey,
   type AttemptStatus,
-  type QuestionOption,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
@@ -20,6 +18,8 @@ import { NotificationOutbox } from '../notifications';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
+import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
+import { PaperSheetService, type LiveTerm, type PaperTerm } from './paper-sheet.service';
 
 const SCORING_SELECT = {
   id: true,
@@ -31,23 +31,10 @@ const SCORING_SELECT = {
   isGraded: true,
   startedAt: true,
   submittedAt: true,
-  questions: {
-    select: {
-      questionId: true,
-      baseConfigSectionId: true,
-      selectedOptionId: true,
-      typedAnswer: true,
-      timeSpentSec: true,
-      question: { select: { type: true } },
-      questionVersion: { select: { options: true, answerKey: true } },
-      paperItem: { select: { marks: true, negativeMarks: true, status: true } },
-    },
-    orderBy: { order: 'asc' },
-  },
+  sheet: { select: { answers: true } },
 } as const satisfies Prisma.AttemptSelect;
 
 type ScoringRow = Prisma.AttemptGetPayload<{ select: typeof SCORING_SELECT }>;
-type ServedRow = ScoringRow['questions'][number];
 
 /** What the write did: whether the marks landed at all, and the event a FIRST evaluation raised. */
 interface Written {
@@ -68,6 +55,7 @@ export class ScoringProcessor extends WorkerHost {
     private readonly events: DomainEventBus,
     private readonly notifications: NotificationOutbox,
     private readonly failures: QueueFailures,
+    private readonly papers: PaperSheetService,
   ) {
     super();
   }
@@ -93,13 +81,12 @@ export class ScoringProcessor extends WorkerHost {
     }
     if (!SCORABLE.has(attempt.status)) return null;
 
-    const unpriced = attempt.questions.filter((row) => row.paperItem === null).length;
-    if (unpriced > 0) {
-      this.logger.error(`Attempt ${attemptId} has ${unpriced} questions the paper never priced`);
-    }
-
-    const scored = scorePaper(attempt.questions.map(toScorable));
-    const written = await this.persist(attempt, scored);
+    const [terms, live] = await Promise.all([
+      this.papers.termsOf(attempt.testId),
+      this.papers.liveTermsOf(attempt.testId),
+    ]);
+    const scored = scorePaper(scorableOf(attempt, terms, live));
+    const written = await this.persist(attempt, scored, terms);
     // Stood down while this ran: counting it now would fold a void sitting back in.
     if (!written.applied) return null;
 
@@ -127,8 +114,16 @@ export class ScoringProcessor extends WorkerHost {
   }
 
   /** One transaction: a sitting whose totals and per-question marks disagree is worse than neither. */
-  private async persist(attempt: ScoringRow, scored: PaperScore): Promise<Written> {
+  private async persist(
+    attempt: ScoringRow,
+    scored: PaperScore,
+    terms: readonly PaperTerm[],
+  ): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
+      await tx.attemptSheet.update({
+        where: { attemptId: attempt.id },
+        data: { verdicts: verdictsOf(scored.questions, terms) },
+      });
       await this.markQuestions(tx, attempt.id, scored);
       // Claimed, never rewritten: two racing workers must not disagree about when this was scored.
       const claimed = await tx.attempt.updateMany({
@@ -230,32 +225,34 @@ export class ScoringProcessor extends WorkerHost {
   }
 }
 
-/** A row with no paper item is worth nothing, which is what a question nobody priced is worth. */
-function toScorable(row: ServedRow): ScorableQuestion {
-  return {
-    questionId: row.questionId,
-    baseConfigSectionId: row.baseConfigSectionId,
-    type: row.question.type,
-    marks: Number(row.paperItem?.marks ?? 0),
-    negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
-    status: row.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
-    correctOptionIds: correctOptionIdsIn(row.questionVersion.options),
-    answerKey: row.question.type === QUESTION_TYPE.TEXT_FIELD ? answerKeyIn(row) : null,
-    selectedOptionId: row.selectedOptionId,
-    typedAnswer: row.typedAnswer,
-    timeSpentSec: row.timeSpentSec,
-  };
-}
-
-function correctOptionIdsIn(options: Prisma.JsonValue): string[] {
-  if (!Array.isArray(options)) return [];
-  return (options as unknown as QuestionOption[])
-    .filter((option) => option?.isCorrect === true && typeof option.id === 'string')
-    .map((option) => option.id);
-}
-
-function answerKeyIn(row: ServedRow): AnswerKey | null {
-  const key = row.questionVersion.answerKey;
-  if (typeof key !== 'object' || key === null || Array.isArray(key)) return null;
-  return key as unknown as AnswerKey;
+/** The sheet's answers against the paper's terms; both lists are the one frozen paper, in paper order. */
+function scorableOf(
+  attempt: ScoringRow,
+  terms: readonly PaperTerm[],
+  live: readonly LiveTerm[],
+): ScorableQuestion[] {
+  if (terms.length !== live.length) {
+    throw new Error(`Paper for test ${attempt.testId} changed under a sat sitting`);
+  }
+  const sheet = sheetIn(attempt.sheet?.answers);
+  return terms.map((term, slot) => {
+    const answer = decodeAnswer(sheet[slot], term.optionIds, attempt.startedAt);
+    const { status, type } = live[slot] ?? {
+      status: PAPER_QUESTION_STATUS.ACTIVE,
+      type: QUESTION_TYPE.SINGLE_MCQ,
+    };
+    return {
+      questionId: term.questionId,
+      baseConfigSectionId: term.baseConfigSectionId,
+      type,
+      marks: term.marks,
+      negativeMarks: term.negativeMarks,
+      status,
+      correctOptionIds: term.correctOptionIds,
+      answerKey: type === QUESTION_TYPE.TEXT_FIELD ? term.answerKey : null,
+      selectedOptionId: answer?.selectedOptionId ?? null,
+      typedAnswer: answer?.typedAnswer ?? null,
+      timeSpentSec: answer?.timeSpentSec ?? 0,
+    };
+  });
 }

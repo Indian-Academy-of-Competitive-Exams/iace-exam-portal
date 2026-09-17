@@ -8,6 +8,7 @@ import {
 } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
@@ -39,6 +40,7 @@ const processor = new ScoringProcessor(
   new FakeEventBus().asService(),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
+  new PaperSheetService(prisma),
 );
 
 const reports = (client: PrismaService = prisma) =>

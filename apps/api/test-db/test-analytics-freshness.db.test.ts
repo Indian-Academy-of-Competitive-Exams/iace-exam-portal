@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, AppException, ErrorCodes } from '@iace/contracts';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
@@ -37,6 +38,7 @@ function build() {
       new FakeEventBus().asService(),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
+      new PaperSheetService(prisma),
     ),
   };
 }

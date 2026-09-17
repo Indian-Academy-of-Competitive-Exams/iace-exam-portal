@@ -7,6 +7,7 @@ import {
   type AttemptSectionScore,
 } from '@iace/contracts';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
 import { FakeEventBus, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -15,6 +16,7 @@ import {
   makePaper,
   makeStudent,
   resetDatabase,
+  servedAnswers,
   sitPaper,
   testPrisma,
   uid,
@@ -36,6 +38,7 @@ const processor = new ScoringProcessor(
   new FakeEventBus().asService(),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
+  new PaperSheetService(prisma),
 );
 
 type Sat = Omit<SitInput, 'paper' | 'studentId' | 'chosen'>;
@@ -56,8 +59,7 @@ async function sitting(over: Sat = {}, paper?: Paper) {
 
 const attemptRow = (id: string) => prisma.attempt.findUniqueOrThrow({ where: { id } });
 
-const served = (attemptId: string) =>
-  prisma.attemptQuestion.findMany({ where: { attemptId }, orderBy: { order: 'asc' } });
+const served = (attemptId: string) => servedAnswers(prisma, attemptId);
 
 const notificationIn = async () => {
   const [row] = await prisma.outboxEvent.findMany({
@@ -71,7 +73,7 @@ const marks = async (attemptId: string) =>
 
 describe('ScoringProcessor — what it writes', () => {
   it('scores the paper into the sitting and into every question it served', async () => {
-    const { attemptId } = await sitting();
+    const { paper, attemptId } = await sitting();
 
     await processor.score(attemptId);
 
@@ -82,11 +84,20 @@ describe('ScoringProcessor — what it writes', () => {
       [attempt.correctCount, attempt.wrongCount, attempt.unattemptedCount],
       [1, 1, 1],
     );
-    assert.deepEqual(await marks(attemptId), [
-      [true, 2],
-      [false, -0.5],
-      [null, 0],
-    ]);
+    const byQuestion = new Map(
+      (await served(attemptId)).map((row) => [
+        row.questionId,
+        [row.isCorrect, Number(row.marksAwarded)],
+      ]),
+    );
+    assert.deepEqual(
+      paper.items.map((item) => byQuestion.get(item.questionId)),
+      [
+        [true, 2],
+        [false, -0.5],
+        [null, 0],
+      ],
+    );
     assert.equal((attempt.sectionScores as AttemptSectionScore[] | null)?.[0]?.score, 1.5);
   });
 
@@ -174,7 +185,9 @@ describe('ScoringProcessor — what it writes', () => {
 
     // The wrong answer is paid rather than penalised: 2 + 2 + 0, not 2 − 0.5 + 0.
     assert.equal(Number((await attemptRow(attemptId)).score), 4);
-    const [, dropped] = await served(attemptId);
+    const dropped = (await served(attemptId)).find(
+      (row) => row.questionId === paper.items[1]?.questionId,
+    );
     assert.equal(Number(dropped?.marksAwarded), 2);
     assert.equal(dropped?.isCorrect, false);
   });
@@ -192,17 +205,18 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(await processor.score(uid('attempt')), null);
   });
 
-  it('scores a question the paper never priced at nothing, rather than crashing on it', async () => {
+  it('writes a verdict per paper row, in paper order, whatever order the sitting was shown', async () => {
     const { paper, attemptId } = await sitting();
-    await prisma.attemptQuestion.updateMany({
-      where: { attemptId, questionId: paper.items[0]?.questionId ?? '' },
-      data: { paperQuestionId: null },
-    });
 
     await processor.score(attemptId);
 
-    const [unpriced] = await served(attemptId);
-    assert.equal(Number(unpriced?.marksAwarded), 0);
-    assert.equal(Number((await attemptRow(attemptId)).score), -0.5);
+    const stored = await prisma.attemptSheet.findUniqueOrThrow({ where: { attemptId } });
+    const byQuestion = new Map(
+      (await served(attemptId)).map((row) => [row.questionId, [row.isCorrect, row.marksAwarded]]),
+    );
+    assert.deepEqual(
+      stored.verdicts,
+      paper.items.map((item) => byQuestion.get(item.questionId)),
+    );
   });
 });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { SAVED_QUESTION_KIND } from '@iace/contracts';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
@@ -38,6 +39,7 @@ async function world(chosen: readonly (string | null)[]) {
     new FakeEventBus().asService(),
     new NotificationOutbox(new FakeQueue().asQueue()),
     fakeQueueFailures(),
+    new PaperSheetService(prisma),
   );
   return {
     paper,
