@@ -10,7 +10,6 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  PAPER_QUESTION_STATUS,
   PERFORMANCE_SCOPES,
   PERFORMANCE_SCOPE_FIELD,
   type CohortCurve,
@@ -24,6 +23,8 @@ import {
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
+import { servedSheet, type ServedAnswer } from './answer-sheet';
+import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { requireStudent } from './require-student';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { marksBySection, numberOrNull, perSitting, sectionsWithScores } from './attempt-report';
@@ -56,11 +57,15 @@ const REPORT_SELECT = {
   score: true,
   sectionScores: true,
   submittedAt: true,
+  startedAt: true,
+  shuffleSeed: true,
+  sheet: { select: { answers: true, verdicts: true } },
   test: {
     select: {
       title: true,
       baseConfig: {
         select: {
+          shuffleQuestions: true,
           sections: {
             select: {
               id: true,
@@ -75,24 +80,22 @@ const REPORT_SELECT = {
       },
     },
   },
-  questions: {
-    select: {
-      baseConfigSectionId: true,
-      paperQuestionId: true,
-      state: true,
-      selectedOptionId: true,
-      typedAnswer: true,
-      isCorrect: true,
-      marksAwarded: true,
-      timeSpentSec: true,
-      paperItem: { select: { marks: true, negativeMarks: true, status: true } },
-      question: { select: { difficulty: true, subject: { select: { id: true, name: true } } } },
-    },
-    orderBy: { order: 'asc' },
-  },
 } as const satisfies Prisma.AttemptSelect;
 
 type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
+
+/** Everything a question buckets by off the paper row, and nothing that could carry an answer. */
+const PERFORMANCE_ROW_SELECT = {
+  ...SHEET_ROW_SELECT,
+  marks: true,
+  negativeMarks: true,
+  status: true,
+  question: { select: { difficulty: true, subject: { select: { id: true, name: true } } } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type PerformancePaperRow = Prisma.PaperQuestionGetPayload<{
+  select: typeof PERFORMANCE_ROW_SELECT;
+}>;
 
 @Injectable()
 export class PerformanceAnalyticsService {
@@ -121,7 +124,18 @@ export class PerformanceAnalyticsService {
     const sat = recent.toReversed();
     // Everything but the trajectory describes the anchor, so one payload never mixes two papers.
     const anchor = sat.findLast((row) => row.isGraded) ?? sat.at(-1) ?? null;
-    const rows = anchor === null ? [] : toReported(anchor);
+    const paper =
+      anchor === null
+        ? []
+        : await this.prisma.paperQuestion.findMany({
+            where: { testId: anchor.testId },
+            orderBy: { order: 'asc' },
+            select: PERFORMANCE_ROW_SELECT,
+          });
+    const rows =
+      anchor === null
+        ? []
+        : toReported(servedSheet(paper, anchor, anchor.test.baseConfig.shuffleQuestions));
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
     const [testStats, sectionCohort, topper, standings, series] = await Promise.all([
@@ -145,7 +159,7 @@ export class PerformanceAnalyticsService {
       ),
       cohort: await this.curveOf(query, anchor, standing, testStats),
       composition: compositionOf(rows),
-      sections: sectionalStandingOf(sectionsOf(anchor), sectionCohort, topper.bySection),
+      sections: sectionalStandingOf(sectionsOf(anchor, paper), sectionCohort, topper.bySection),
       time: timeUseOf(rows),
       paceIndex: paceOf(rows, anchor === null ? null : (testStats.get(anchor.testId) ?? null)),
     };
@@ -321,7 +335,10 @@ function toPoint(
   };
 }
 
-function sectionsOf(anchor: ReportRow | null): ScoreCardSection[] {
+function sectionsOf(
+  anchor: ReportRow | null,
+  paper: readonly PerformancePaperRow[],
+): ScoreCardSection[] {
   if (anchor === null) return [];
   return sectionsWithScores(
     anchor.test.baseConfig.sections.map((section) => ({
@@ -330,16 +347,16 @@ function sectionsOf(anchor: ReportRow | null): ScoreCardSection[] {
     })),
     sectionScoresIn(anchor.sectionScores),
     marksBySection(
-      anchor.questions.map((row) => ({
+      paper.map((row) => ({
         baseConfigSectionId: row.baseConfigSectionId,
-        marks: Number(row.paperItem?.marks ?? 0),
+        marks: Number(row.marks),
       })),
     ),
   );
 }
 
-function toReported(row: ReportRow): ReportedQuestion[] {
-  return row.questions.map((question) => ({
+function toReported(served: readonly (PerformancePaperRow & ServedAnswer)[]): ReportedQuestion[] {
+  return served.map((question) => ({
     baseConfigSectionId: question.baseConfigSectionId,
     subjectId: question.question.subject.id,
     subjectName: question.question.subject.name,
@@ -347,12 +364,12 @@ function toReported(row: ReportRow): ReportedQuestion[] {
     state: question.state,
     answered: question.selectedOptionId !== null || (question.typedAnswer?.trim() ?? '') !== '',
     isCorrect: question.isCorrect,
-    marksAwarded: Number(question.marksAwarded ?? 0),
+    marksAwarded: question.marksAwarded ?? 0,
     timeSpentSec: question.timeSpentSec,
-    paperQuestionId: question.paperQuestionId,
-    marks: Number(question.paperItem?.marks ?? 0),
-    negativeMarks: Number(question.paperItem?.negativeMarks ?? 0),
-    disposition: question.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
+    paperQuestionId: question.id,
+    marks: Number(question.marks),
+    negativeMarks: Number(question.negativeMarks),
+    disposition: question.status,
   }));
 }
 

@@ -9,7 +9,6 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  PAPER_QUESTION_STATUS,
   type AnswerKey,
   type LanguageCode,
   type LocalizedContent,
@@ -26,15 +25,16 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
+import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import {
   elapsedSeconds,
   marksBySection,
-  numberOrNull,
   roundHundredths as round,
   percentageOf,
   sectionsWithScores,
@@ -61,6 +61,8 @@ const SCORE_CARD_SELECT = {
   wrongCount: true,
   unattemptedCount: true,
   sectionScores: true,
+  shuffleSeed: true,
+  sheet: { select: { answers: true, verdicts: true } },
   test: {
     select: {
       title: true,
@@ -70,6 +72,7 @@ const SCORE_CARD_SELECT = {
         select: {
           durationSec: true,
           totalQuestions: true,
+          shuffleQuestions: true,
           sections: {
             select: {
               id: true,
@@ -87,22 +90,18 @@ const SCORE_CARD_SELECT = {
       },
     },
   },
-  questions: {
-    select: {
-      questionId: true,
-      order: true,
-      baseConfigSectionId: true,
-      state: true,
-      selectedOptionId: true,
-      typedAnswer: true,
-      isCorrect: true,
-      marksAwarded: true,
-      timeSpentSec: true,
-      paperItem: { select: { marks: true, negativeMarks: true, status: true } },
-    },
-    orderBy: { order: 'asc' },
-  },
 } as const satisfies Prisma.AttemptSelect;
+
+/** The paper's own terms per row; every sitting of a test was served the whole of it. */
+const PRICED_ROW_SELECT = {
+  ...SHEET_ROW_SELECT,
+  marks: true,
+  negativeMarks: true,
+  status: true,
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type PricedRow = Prisma.PaperQuestionGetPayload<{ select: typeof PRICED_ROW_SELECT }> &
+  ServedAnswer;
 
 /** What the GATE needs, and nothing else — this read happens before anybody has been let in. */
 const GATE_SELECT = {
@@ -117,13 +116,16 @@ const SOLUTION_SELECT = {
   id: true,
   testId: true,
   languages: true,
+  startedAt: true,
   shuffleSeed: true,
+  sheet: { select: { answers: true, verdicts: true } },
   test: {
     select: {
       title: true,
       baseConfig: {
         select: {
           shuffleOptions: true,
+          shuffleQuestions: true,
           sections: {
             select: {
               id: true,
@@ -138,18 +140,18 @@ const SOLUTION_SELECT = {
       },
     },
   },
-  questions: {
-    select: {
-      ...SCORE_CARD_SELECT.questions.select,
-      question: { select: { type: true } },
-      questionVersion: { select: { content: true, options: true, answerKey: true } },
-    },
-    orderBy: { order: 'asc' },
-  },
 } as const satisfies Prisma.AttemptSelect;
 
+const SOLUTION_ROW_SELECT = {
+  ...PRICED_ROW_SELECT,
+  question: { select: { type: true } },
+  questionVersion: { select: { content: true, options: true, answerKey: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type SolutionRow = Prisma.PaperQuestionGetPayload<{ select: typeof SOLUTION_ROW_SELECT }> &
+  ServedAnswer;
+
 type ScoreCardRow = Prisma.AttemptGetPayload<{ select: typeof SCORE_CARD_SELECT }>;
-type SolutionRow = Prisma.AttemptGetPayload<{ select: typeof SOLUTION_SELECT }>;
 
 @Injectable()
 export class AttemptReportService {
@@ -166,7 +168,12 @@ export class AttemptReportService {
     }
 
     const config = attempt.test.baseConfig;
-    const questions = attempt.questions.map(toScoreCardQuestion);
+    const paper = await this.prisma.paperQuestion.findMany({
+      where: { testId: attempt.testId },
+      orderBy: { order: 'asc' },
+      select: PRICED_ROW_SELECT,
+    });
+    const questions = servedSheet(paper, attempt, config.shuffleQuestions).map(toScoreCardQuestion);
     const perSection = marksBySection(questions);
 
     const standing = await this.leaderboard.standing(attempt.testId, attempt.id);
@@ -258,8 +265,13 @@ export class AttemptReportService {
     // The same seed the exam used, so the option they remember as "C" is "C" in the review too.
     const random = seededRandom(attempt.shuffleSeed);
     const shuffleOptions = attempt.test.baseConfig.shuffleOptions;
-    const questions = attempt.questions.map((row) =>
-      toSolutionQuestion(row, attempt.languages, shuffleOptions, random),
+    const paper = await this.prisma.paperQuestion.findMany({
+      where: { testId: attempt.testId },
+      orderBy: { order: 'asc' },
+      select: SOLUTION_ROW_SELECT,
+    });
+    const questions = servedSheet(paper, attempt, attempt.test.baseConfig.shuffleQuestions).map(
+      (row) => toSolutionQuestion(row, attempt.languages, shuffleOptions, random),
     );
     const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
 
@@ -290,7 +302,7 @@ export class AttemptReportService {
   }
 }
 
-function toScoreCardQuestion(row: ScoreCardRow['questions'][number]): ScoreCardQuestion {
+function toScoreCardQuestion(row: PricedRow): ScoreCardQuestion {
   return {
     questionId: row.questionId,
     order: row.order,
@@ -299,16 +311,16 @@ function toScoreCardQuestion(row: ScoreCardRow['questions'][number]): ScoreCardQ
     selectedOptionId: row.selectedOptionId,
     typedAnswer: row.typedAnswer,
     isCorrect: row.isCorrect,
-    marksAwarded: numberOrNull(row.marksAwarded),
-    marks: Number(row.paperItem?.marks ?? 0),
-    negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
-    disposition: row.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
+    marksAwarded: row.marksAwarded,
+    marks: Number(row.marks),
+    negativeMarks: Number(row.negativeMarks),
+    disposition: row.status,
     timeSpentSec: row.timeSpentSec,
   };
 }
 
 function toSolutionQuestion(
-  row: SolutionRow['questions'][number],
+  row: SolutionRow,
   languages: readonly LanguageCode[],
   shuffleOptions: boolean,
   random: () => number,
@@ -333,9 +345,8 @@ const TREND_SELECT = {
   score: true,
   correctCount: true,
   wrongCount: true,
-  test: { select: { title: true } },
   // The PAPER's own marks, so one sitting cannot read one percentage here and another on its card.
-  questions: { select: { paperItem: { select: { marks: true } } } },
+  test: { select: { title: true, paperQuestions: { select: { marks: true } } } },
 } as const satisfies Prisma.AttemptSelect;
 
 type TrendRow = Prisma.AttemptGetPayload<{ select: typeof TREND_SELECT }>;
@@ -344,7 +355,7 @@ type TrendRow = Prisma.AttemptGetPayload<{ select: typeof TREND_SELECT }>;
 function toPerformancePoint(row: TrendRow, standing: Standing | undefined): PerformancePoint {
   const score = Number(row.score ?? 0);
   const maxMarks = round(
-    row.questions.reduce((sum, question) => sum + Number(question.paperItem?.marks ?? 0), 0),
+    row.test.paperQuestions.reduce((sum, question) => sum + Number(question.marks), 0),
   );
   const attempted = (row.correctCount ?? 0) + (row.wrongCount ?? 0);
   return {

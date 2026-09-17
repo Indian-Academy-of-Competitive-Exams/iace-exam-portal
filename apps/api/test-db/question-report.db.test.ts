@@ -12,6 +12,7 @@ import {
   makePaper,
   makeStudent,
   resetDatabase,
+  servedAnswers,
   sitPaper,
   testPrisma,
   type Paper,
@@ -111,6 +112,33 @@ async function sittings() {
 }
 
 describe('QuestionReportService — the cohort half, which needs no gate', () => {
+  it('reads each answer and its marks off the sheet, in the order the sitting was served', async () => {
+    const { mine } = await sittings();
+    await prisma.attemptQuestion.updateMany({
+      where: { attemptId: mine.attemptId },
+      data: { selectedOptionId: 'stale', isCorrect: null, marksAwarded: 0 },
+    });
+
+    const report = await service.forAttempt(mine.studentId, mine.attemptId);
+
+    assert.deepEqual(
+      report.questions.map((row) => [
+        row.questionId,
+        row.order,
+        row.selectedOptionId,
+        row.isCorrect,
+        row.marksAwarded,
+      ]),
+      (await servedAnswers(prisma, mine.attemptId)).map((row) => [
+        row.questionId,
+        row.order,
+        row.selectedOptionId,
+        row.isCorrect,
+        row.marksAwarded,
+      ]),
+    );
+  });
+
   it('answers with the rollup beside the student, and the pace they set on it', async () => {
     const { mine } = await sittings();
 

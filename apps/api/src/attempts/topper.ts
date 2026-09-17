@@ -5,20 +5,17 @@
  */
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { numberOrNull } from './attempt-report';
+import { servedSheet } from './answer-sheet';
+import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 
-/** No `questionVersion`, no `selectedOptionId`: nothing here says what the right answer was. */
+/** No `questionVersion`, no option: nothing here says what the right answer was. */
 const TOPPER_SELECT = {
+  testId: true,
+  startedAt: true,
+  shuffleSeed: true,
   sectionScores: true,
-  questions: {
-    select: {
-      paperQuestionId: true,
-      baseConfigSectionId: true,
-      marksAwarded: true,
-      timeSpentSec: true,
-    },
-  },
+  sheet: { select: { answers: true, verdicts: true } },
 } as const satisfies Prisma.AttemptSelect;
 
 export interface TopperQuestion {
@@ -51,13 +48,16 @@ export async function topperOf(prisma: PrismaService, testId: string): Promise<T
   });
   if (topper === null) return NO_TOPPER;
 
+  const paper = await prisma.paperQuestion.findMany({
+    where: { testId: topper.testId },
+    orderBy: { order: 'asc' },
+    select: SHEET_ROW_SELECT,
+  });
+  const served = servedSheet(paper, topper, false);
+
   const byPaperQuestion = new Map<string, TopperQuestion>();
-  for (const row of topper.questions) {
-    if (row.paperQuestionId === null) continue;
-    byPaperQuestion.set(row.paperQuestionId, {
-      timeSpentSec: row.timeSpentSec,
-      marksAwarded: numberOrNull(row.marksAwarded),
-    });
+  for (const row of served) {
+    byPaperQuestion.set(row.id, { timeSpentSec: row.timeSpentSec, marksAwarded: row.marksAwarded });
   }
 
   const bySection = new Map<string, number>();
@@ -67,7 +67,7 @@ export async function topperOf(prisma: PrismaService, testId: string): Promise<T
 
   return {
     byPaperQuestion,
-    bySection: bySection.size > 0 ? bySection : sectionTimesFrom(topper.questions),
+    bySection: bySection.size > 0 ? bySection : sectionTimesFrom(served),
   };
 }
 

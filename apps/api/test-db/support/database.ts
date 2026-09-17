@@ -134,6 +134,8 @@ export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
       totalQuestions: 100,
       totalMarks: 200,
       durationSec: 3600,
+      // Deterministic order: a test naming "questions[0]" means the paper's own first row.
+      shuffleQuestions: false,
     },
     select: { id: true },
   });

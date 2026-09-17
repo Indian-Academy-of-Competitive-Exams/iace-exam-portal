@@ -16,6 +16,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { stemPreviewOf } from '../questions';
+import { timeSpentIn } from './answer-sheet';
 import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
 import { bandsIn } from './performance-analytics';
@@ -162,7 +163,7 @@ export class TestAnalyticsService {
         studentId: true,
         score: true,
         student: { select: { fullName: true } },
-        questions: { select: { timeSpentSec: true } },
+        sheet: { select: { answers: true } },
       },
     });
     if (attempt === null) return null;
@@ -171,7 +172,7 @@ export class TestAnalyticsService {
       studentId: attempt.studentId,
       name: boardName(attempt.student.fullName),
       score: numberOrNull(attempt.score),
-      timeSpentSec: attempt.questions.reduce((total, row) => total + row.timeSpentSec, 0),
+      timeSpentSec: timeSpentIn(attempt.sheet?.answers),
     };
   }
 }

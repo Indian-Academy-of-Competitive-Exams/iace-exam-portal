@@ -19,6 +19,7 @@ import {
   makePaper,
   makeStudent,
   resetDatabase,
+  servedAnswers,
   sitPaper,
   testPrisma,
   type Paper,
@@ -94,6 +95,33 @@ describe('the Score Card', () => {
       submittedAt: new Date(STARTED.getTime() + 20 * MINUTE_MS),
       ...over,
     });
+
+  it('reads each answer and its marks off the sheet, in the order the sitting was served', async () => {
+    const { studentId, attemptId } = await mine(await paper());
+    await prisma.attemptQuestion.updateMany({
+      where: { attemptId },
+      data: { selectedOptionId: 'stale', isCorrect: null, marksAwarded: 0 },
+    });
+
+    const card = await reports().scoreCard(studentId, attemptId);
+
+    assert.deepEqual(
+      card.questions.map((row) => [
+        row.questionId,
+        row.order,
+        row.selectedOptionId,
+        row.isCorrect,
+        row.marksAwarded,
+      ]),
+      (await servedAnswers(prisma, attemptId)).map((row) => [
+        row.questionId,
+        row.order,
+        row.selectedOptionId,
+        row.isCorrect,
+        row.marksAwarded,
+      ]),
+    );
+  });
 
   /** The invariant the whole payload exists to protect. */
   it('never says what the right answer was, on a question they missed', async () => {

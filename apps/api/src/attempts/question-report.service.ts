@@ -10,13 +10,14 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
   type AnswerKey,
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { elapsedSeconds, numberOrNull } from './attempt-report';
+import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { requireStudent } from './require-student';
 import { optionCountsIn, optionsIn } from './rollup-fold';
 import { topperOf, type TopperTimes } from './topper';
@@ -36,12 +37,16 @@ const REPORT_SELECT = {
   id: true,
   testId: true,
   status: true,
+  startedAt: true,
+  shuffleSeed: true,
+  sheet: { select: { answers: true, verdicts: true } },
   test: {
     select: {
       title: true,
       baseConfig: {
         select: {
           durationSec: true,
+          shuffleQuestions: true,
           sections: {
             select: { id: true, name: true, order: true, questionCount: true, durationSec: true },
             orderBy: { order: 'asc' },
@@ -50,37 +55,24 @@ const REPORT_SELECT = {
       },
     },
   },
-  questions: {
-    select: {
-      questionId: true,
-      paperQuestionId: true,
-      order: true,
-      baseConfigSectionId: true,
-      state: true,
-      selectedOptionId: true,
-      typedAnswer: true,
-      isCorrect: true,
-      marksAwarded: true,
-      timeSpentSec: true,
-      answeredAt: true,
-      firstActionAt: true,
-      paperItem: { select: { marks: true, negativeMarks: true, status: true } },
-      question: { select: { difficulty: true } },
-    },
-    orderBy: { order: 'asc' },
-  },
 } as const satisfies Prisma.AttemptSelect;
 
 /** The KEY. A second read, reached only past the gate — never a join onto the one above. */
-const KEY_SELECT = {
-  questions: {
-    select: {
-      questionId: true,
-      question: { select: { type: true } },
-      questionVersion: { select: { options: true, answerKey: true } },
-    },
-  },
-} as const satisfies Prisma.AttemptSelect;
+const KEY_ROW_SELECT = {
+  questionId: true,
+  question: { select: { type: true } },
+  questionVersion: { select: { options: true, answerKey: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+const REPORT_ROW_SELECT = {
+  ...SHEET_ROW_SELECT,
+  marks: true,
+  negativeMarks: true,
+  status: true,
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type ReportPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof REPORT_ROW_SELECT }> &
+  ServedAnswer;
 
 type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
 
@@ -98,14 +90,20 @@ export class QuestionReportService {
       throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
     }
 
-    const [cohort, paper, topper, keyed] = await Promise.all([
+    const [cohort, paper, topper, keyed, rows] = await Promise.all([
       this.cohortItems(attempt.testId),
       this.paperTotals(attempt.testId),
       topperOf(this.prisma, attempt.testId),
-      this.keyOf(attempt.id),
+      this.keyOf(attempt.testId),
+      this.prisma.paperQuestion.findMany({
+        where: { testId: attempt.testId },
+        orderBy: { order: 'asc' },
+        select: REPORT_ROW_SELECT,
+      }),
     ]);
+    const served = servedSheet(rows, attempt, attempt.test.baseConfig.shuffleQuestions);
 
-    return this.assemble(attempt, { cohort, paper, topper, keyed });
+    return this.assemble(attempt, served, { cohort, paper, topper, keyed });
   }
 
   /** The same payload the student reads, for any student the admin's branches reach. */
@@ -116,6 +114,7 @@ export class QuestionReportService {
 
   private assemble(
     attempt: ReportRow,
+    served: readonly ReportPaperRow[],
     held: {
       cohort: ReadonlyMap<string, CohortItem>;
       paper: { evaluatedCount: number; sumTimeSec: number };
@@ -123,17 +122,15 @@ export class QuestionReportService {
       keyed: ReadonlyMap<string, KeyedQuestion>;
     },
   ): QuestionReport {
-    const questions = attempt.questions.map((row) =>
+    const questions = served.map((row) =>
       questionReportRow(
         toSat(row),
-        row.paperQuestionId === null ? null : (held.cohort.get(row.paperQuestionId) ?? null),
-        row.paperQuestionId === null
-          ? null
-          : (held.topper.byPaperQuestion.get(row.paperQuestionId) ?? null),
+        held.cohort.get(row.id) ?? null,
+        held.topper.byPaperQuestion.get(row.id) ?? null,
         held.keyed.get(row.questionId) ?? null,
       ),
     );
-    const yourTimeSec = attempt.questions.reduce((total, row) => total + row.timeSpentSec, 0);
+    const yourTimeSec = served.reduce((total, row) => total + row.timeSpentSec, 0);
 
     return {
       attemptId: attempt.id,
@@ -189,13 +186,13 @@ export class QuestionReportService {
     };
   }
 
-  private async keyOf(attemptId: string): Promise<Map<string, KeyedQuestion>> {
-    const attempt = await this.prisma.attempt.findUnique({
-      where: { id: attemptId },
-      select: KEY_SELECT,
+  private async keyOf(testId: string): Promise<Map<string, KeyedQuestion>> {
+    const rows = await this.prisma.paperQuestion.findMany({
+      where: { testId },
+      select: KEY_ROW_SELECT,
     });
     const keyed = new Map<string, KeyedQuestion>();
-    for (const row of attempt?.questions ?? []) {
+    for (const row of rows) {
       const options = optionsIn(row.questionVersion.options);
       keyed.set(row.questionId, {
         options,
@@ -209,20 +206,20 @@ export class QuestionReportService {
   }
 }
 
-function toSat(row: ReportRow['questions'][number]): SatQuestion {
+function toSat(row: ReportPaperRow): SatQuestion {
   return {
     questionId: row.questionId,
-    paperQuestionId: row.paperQuestionId,
+    paperQuestionId: row.id,
     order: row.order,
     baseConfigSectionId: row.baseConfigSectionId,
     state: row.state,
     selectedOptionId: row.selectedOptionId,
     typedAnswer: row.typedAnswer,
     isCorrect: row.isCorrect,
-    marksAwarded: numberOrNull(row.marksAwarded),
-    marks: Number(row.paperItem?.marks ?? 0),
-    negativeMarks: Number(row.paperItem?.negativeMarks ?? 0),
-    disposition: row.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
+    marksAwarded: row.marksAwarded,
+    marks: Number(row.marks),
+    negativeMarks: Number(row.negativeMarks),
+    disposition: row.status,
     timeSpentSec: row.timeSpentSec,
     // Null unless BOTH instants exist: a sitting from before this was measured has neither.
     timeToRespondSec:
