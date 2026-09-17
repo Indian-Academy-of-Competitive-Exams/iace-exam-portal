@@ -40,12 +40,28 @@ TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API s
 | **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                     |
 | **Realtime**              | None — no WebSockets                                                             | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.         |
 | **Payments**              | Separate portal, not V1                                                          | The platform reads entitlements later; it never owns money.                                                                 |
-| **Mobile**                | React Native + Expo, post-V1                                                     | Another client on the same types and the same API.                                                                          |
+| **Mobile**                | React Native + Expo in `apps/mobile`, Android first, in progress                 | Another client on the same types and the same API. Sign-in through sitting a test is built; nothing has shipped.            |
 | **Infra**                 | Docker + env, cloud-agnostic, AWS-leaning                                        | Nothing is tied to one host.                                                                                                |
 
 Deliberately out, and the schema blocks none of them: deep per-question time and accuracy analytics,
 question types beyond single-answer MCQ, Word/PDF import, native apps, live proctoring, discussion,
 adaptive practice, certificates.
+
+**The mobile client** holds three decisions the code cannot state on its own:
+
+- **A question is drawn in one persistent WebView.** Stems and options are authored HTML with KaTeX,
+  tables and Indic script, and `richHtml` needs a DOM, so the page runs a bundled copy of the web's
+  own `richHtml` and stylesheets and is swapped, not remounted, between questions. It is a view: the
+  answer, the clock and autosave stay native, and a message the page posts is refused unless it is
+  well formed and names something the question on screen lets a student do.
+- **The Android navigation guard fails open.** `react-native-webview` lets a navigation through when
+  JS has not answered within 250ms, so `onShouldStartLoadWithRequest` is a backstop. The defences
+  are `richHtml`'s tag whitelist, which lets no link through, and a CSP whose only script source is
+  the page script's own hash.
+- **`apps/mobile/turbo.json` exists because the page is reached by path.** The WebView page imports
+  `packages/ui` source by relative path, not as a workspace dependency, so turbo cannot see the
+  edge; the file adds `packages/ui/src` to the build and typecheck inputs so a change there rebuilds
+  the page instead of hitting the cache.
 
 ## 3. V1 boundary
 

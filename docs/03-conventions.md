@@ -43,6 +43,12 @@ that legitimately differ — login flows, dashboards, per-app nav and constants,
 **The portability rule:** anything a future mobile app could reuse must not touch the DOM.
 `contracts` and `app-kit/src` are DOM-free; `ui` is web-only and mobile never imports it.
 
+**The one exception is web code in a web context.** `apps/mobile` draws a question inside a
+WebView, and that page (`apps/mobile/webview`) bundles `packages/ui`'s `richHtml`, `tokens.css` and
+`components.css` by relative path, so a phone renders a question with the web's own code. React
+Native code still never imports `@iace/ui` or `@iace/app-kit/browser`; `eslint.no-web-ui.js` refuses
+both.
+
 ---
 
 ## 3. Frontend rules
@@ -50,9 +56,9 @@ that legitimately differ — login flows, dashboards, per-app nav and constants,
 - **`app-kit` is DOM-free.** No `window`, `document`, `localStorage` or `sessionStorage` anywhere in
   the `src` of `app-kit` or `contracts`, enforced by lint (§12). Storage and the sign-out signal are
   injected adapters: `TokenStore` and `SignOutSignal` are the seam, the browser supplies a
-  `localStorage`-backed store and a window-event emitter, Expo will supply SecureStore and its own.
-  The browser adapters ship as `@iace/app-kit/browser` — one copy for both SPAs, outside `src/` so
-  the lint rule's scope _is_ the boundary.
+  `localStorage`-backed store and a window-event emitter, and `apps/mobile` supplies SecureStore and
+  its own. The browser adapters ship as `@iace/app-kit/browser` — one copy for both SPAs, outside
+  `src/` so the lint rule's scope _is_ the boundary.
 - **Scaffolding is shared, not copied.** The bootstrap and providers, `createAuth`,
   `ProtectedRoute`, and `AppShell` (chrome shared, nav injected) live in `app-kit` and `ui`.
 - **Form and list kits are shared.** The field/form set wires react-hook-form + zod + the envelope's
