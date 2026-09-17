@@ -47,7 +47,12 @@ export class AttemptStateService {
   ): Promise<void> {
     const held = await this.read(attempt.id);
     await (held
-      ? this.write({ ...held, tab: tab ?? held.tab })
+      ? this.write({
+          ...held,
+          testId: attempt.testId,
+          startedAt: attempt.startedAt.toISOString(),
+          tab: tab ?? held.tab,
+        })
       : this.write({
           attemptId: attempt.id,
           studentId: attempt.studentId,

@@ -9,6 +9,7 @@ import {
   type AnswerChange,
 } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
@@ -189,6 +190,30 @@ describe('AttemptStateService', () => {
     await service.open(live);
 
     assert.equal((await service.read(attemptId))?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+  });
+
+  /** A key from before testId/startedAt existed must not keep lacking them across a resume. */
+  it('backfills testId and startedAt onto a key written before they existed', async () => {
+    const { service, redis, student, attemptId, live } = await build();
+    await redis.setJson(
+      redisKeys.attemptState(attemptId),
+      {
+        attemptId,
+        studentId: student,
+        endsAt: ENDS_AT.toISOString(),
+        revision: 0,
+        answers: {},
+        pending: [],
+        sections: {},
+      },
+      60,
+    );
+
+    await service.open(live);
+
+    const held = await service.read(attemptId);
+    assert.equal(held?.testId, live.testId);
+    assert.equal(held?.startedAt, live.startedAt.toISOString());
   });
 
   /** The failure this prevents: a flush clearing a mark whose answer changed again while it wrote. */

@@ -20,12 +20,14 @@ after(() => prisma.$disconnect());
 async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved = true) {
   const paper = await makePaper(prisma, { questions: ['Reasoning'] });
   const studentId = (await makeStudent(prisma)).id;
+  const startedAt = new Date(ENDS_AT.getTime() - HOUR_MS);
   const attempt = await sitPaper(prisma, {
     paper,
     studentId,
     chosen: [null],
     timeSpent: [0],
     status,
+    startedAt,
     submittedAt: null,
   });
   const questionId = paper.items[0]?.questionId ?? '';
@@ -34,7 +36,7 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
     id: attempt.id,
     studentId,
     testId: paper.testId,
-    startedAt: new Date(ENDS_AT.getTime() - HOUR_MS),
+    startedAt,
     endsAt: ENDS_AT,
   });
   if (saved) {
