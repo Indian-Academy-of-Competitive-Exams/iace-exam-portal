@@ -6,9 +6,9 @@
  */
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { type ExamQuestion, type LiveAttempt } from '@iace/contracts';
+import { AppException, ErrorCodes, type ExamQuestion, type LiveAttempt } from '@iace/contracts';
 import { useExamView, type EndedSitting, type ExamSitting, type ExamView } from '@iace/app-kit';
 import { api } from '../../src/lib/api';
 import {
@@ -44,6 +44,8 @@ export default function ExamScreen() {
   const [tab] = useState(deviceTab);
   // Bumped by Continue here, so the engine mounts fresh: a new queue read, and saving no longer stopped.
   const [reclaims, setReclaims] = useState(0);
+  // The sitting Continue here names, so one handed in elsewhere is never restarted as a fresh paper.
+  const [resume, setResume] = useState<string>();
 
   const attempt = useQuery({
     queryKey: startedAttemptQueryKey(testId),
@@ -53,6 +55,7 @@ export default function ExamScreen() {
       return api.me.startAttempt(testId, {
         languages: languages.length > 0 ? languages : undefined,
         tab,
+        resume,
       });
     },
     enabled: testId !== '',
@@ -81,6 +84,7 @@ export default function ExamScreen() {
 
   // The one intended second start: removing the cached start while mounted refetches it with this tab.
   const continueHere = useCallback(() => {
+    setResume(queryClient.getQueryData<LiveAttempt>(startedAttemptQueryKey(testId))?.id);
     forgetSitting(queryClient, testId);
     setView(null);
     setReclaims((count) => count + 1);
@@ -100,6 +104,10 @@ export default function ExamScreen() {
   }, [view]);
 
   if (attempt.isError) {
+    const { error } = attempt;
+    if (resume && AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED) {
+      return <Redirect href={DETAIL_ROUTES.SUBMITTED(resume)} />;
+    }
     return (
       <View className="flex-1 justify-center bg-background p-6">
         <EmptyState
