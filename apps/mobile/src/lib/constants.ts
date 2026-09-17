@@ -1,4 +1,8 @@
-import { type PerformanceScope, type SavedQuestionKind } from '@iace/contracts';
+import {
+  type LeaderboardScope,
+  type PerformanceScope,
+  type SavedQuestionKind,
+} from '@iace/contracts';
 
 /** Storage keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
@@ -58,6 +62,16 @@ export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] 
 /** Both filters' options, which span the whole set and so do not move when a page does. */
 export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
   ['me', 'saved', kind, 'facets'] as const;
+
+/** The whole career off the two rollup tables — what Performance opens on. */
+export const OVERVIEW_QUERY_KEY = ['me', 'overview'] as const;
+
+/** The series the SERIES board may be asked about, which only a sitting puts on the list. */
+export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as const;
+
+/** One board, keyed by what it is OF, so swapping scope or paper never reads a stale one. */
+export const leaderboardQueryKey = (scope: LeaderboardScope, scopeId: string) =>
+  ['me', 'leaderboard', scope, scopeId] as const;
 
 /** One report, keyed by what it is OF — the web app's own key, so the two share one read. */
 export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>

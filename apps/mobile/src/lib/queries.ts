@@ -5,6 +5,7 @@ import { api } from './api';
 import {
   briefQueryKey,
   CATALOG_QUERY_KEY,
+  OVERVIEW_QUERY_KEY,
   endedSittingQueryKey,
   PERFORMANCE_QUERY_KEY,
   performanceReportQueryKey,
@@ -18,6 +19,11 @@ import {
 export const catalogQuery = queryOptions({
   queryKey: CATALOG_QUERY_KEY,
   queryFn: () => api.me.catalog(),
+});
+
+export const overviewQuery = queryOptions({
+  queryKey: OVERVIEW_QUERY_KEY,
+  queryFn: () => api.me.overview(),
 });
 
 export const performanceQuery = queryOptions({
