@@ -11,12 +11,12 @@ const refusal = (error: unknown): string => (error instanceof Error ? error.mess
 
 describe('a series name is taken once, across the platform', () => {
   it('refuses a second series of the same name, whatever its case', async () => {
-    const name = uid('SSC CGL Tier 1 mocks');
+    const name = uid();
     const { examStageId } = await makeCatalog(prisma);
-    await prisma.testSeries.create({ data: { id: uid('series'), name, examStageId } });
+    await prisma.testSeries.create({ data: { id: uid(), name, examStageId } });
 
     const error = await prisma.testSeries
-      .create({ data: { id: uid('series'), name: name.toUpperCase(), examStageId } })
+      .create({ data: { id: uid(), name: name.toUpperCase(), examStageId } })
       .catch((e: unknown) => e);
 
     assert.ok(isUniqueViolation(error));
@@ -27,7 +27,7 @@ describe('a series name is taken once, across the platform', () => {
 describe('a test name is taken once inside its series', () => {
   it('refuses a second test of the same name in one series, whatever its case', async () => {
     const catalog = await makeCatalog(prisma);
-    const title = uid('Mock 1');
+    const title = uid();
     await makeTest(prisma, catalog, { title });
 
     const error = await makeTest(prisma, catalog, { title: title.toUpperCase() }).catch(
@@ -40,7 +40,7 @@ describe('a test name is taken once inside its series', () => {
 
   /** Unique WITHIN a series: every series runs its own Mock 1, and they are different papers. */
   it('lets another series hold a test of the same name', async () => {
-    const title = uid('Mock 1');
+    const title = uid();
     const here = await makeCatalog(prisma);
     const elsewhere = await makeCatalog(prisma);
     await makeTest(prisma, here, { title });
@@ -55,7 +55,7 @@ describe('a test name is taken once inside its series', () => {
     const catalog = await makeCatalog(prisma);
     await prisma.test.create({
       data: {
-        id: uid('test'),
+        id: uid(),
         title: null,
         baseConfigId: catalog.baseConfigId,
         examStageId: catalog.examStageId,
@@ -65,7 +65,7 @@ describe('a test name is taken once inside its series', () => {
 
     const second = await prisma.test.create({
       data: {
-        id: uid('test'),
+        id: uid(),
         title: null,
         baseConfigId: catalog.baseConfigId,
         examStageId: catalog.examStageId,

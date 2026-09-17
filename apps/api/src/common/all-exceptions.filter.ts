@@ -20,7 +20,7 @@ import {
   type ApiFailure,
 } from '@iace/contracts';
 import { ensureRequestId, type RequestWithId } from './request-id';
-import { PRISMA_ERROR_CODES } from './prisma-errors';
+import { PRISMA_ERROR_CODES, isMalformedValue } from './prisma-errors';
 
 /**
  * The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma,
@@ -111,7 +111,8 @@ function translate(exception: unknown): Translated {
         },
       };
     }
-    if (exception.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+    // An id that is not a uuid names nothing, which is what a wrong id has always meant here.
+    if (exception.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND || isMalformedValue(exception)) {
       return {
         status: ERROR_CODE_STATUS.NOT_FOUND,
         error: { code: ErrorCodes.NOT_FOUND, message: 'Not found' },

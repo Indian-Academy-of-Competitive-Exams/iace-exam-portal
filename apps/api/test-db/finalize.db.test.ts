@@ -143,7 +143,7 @@ describe('FinalizeService — what it refuses to freeze', () => {
 
   it('refuses a test that does not exist', async () => {
     await assert.rejects(
-      () => service.finalize(uid('test')),
+      () => service.finalize(uid()),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });

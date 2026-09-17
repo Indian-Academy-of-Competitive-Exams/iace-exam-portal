@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
@@ -33,7 +34,7 @@ import {
   type StudentOverrides,
 } from './support/database';
 
-const STUDENT = 'stu_1';
+const STUDENT = randomUUID();
 
 const prisma = testPrisma();
 
@@ -70,8 +71,8 @@ class FakeExams {
   }
 }
 
-const PHYSICAL = { id: 'br_1', name: 'AMEERPET', type: BRANCH_TYPE.PHYSICAL };
-const ONLINE_BRANCH = { id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL };
+const PHYSICAL = { id: randomUUID(), name: 'AMEERPET', type: BRANCH_TYPE.PHYSICAL };
+const ONLINE_BRANCH = { id: randomUUID(), name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL };
 
 interface Bench {
   /** The student, `stu_1`, unless the case is about creating one. */
@@ -256,7 +257,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
         }),
       refusedOn('enrolledExams'),
     );
-    for (const currentBranchId of ['br_missing', PHYSICAL.id]) {
+    for (const currentBranchId of [randomUUID(), PHYSICAL.id]) {
       await assert.rejects(
         () =>
           service.create({
@@ -369,7 +370,7 @@ describe('StudentsService.update — the access fields', () => {
       () => service.update(STUDENT, { enrolledExams: ['SSC CGI'] }),
       refusedOn('enrolledExams'),
     );
-    for (const currentBranchId of ['br_missing', PHYSICAL.id]) {
+    for (const currentBranchId of [randomUUID(), PHYSICAL.id]) {
       await assert.rejects(
         () => service.update(STUDENT, { currentBranchId }),
         refusedOn('currentBranchId'),
@@ -442,7 +443,7 @@ describe('StudentsService.setTestBlocked — separate from sign-in', () => {
     const { service } = await serviceWith(noStudentYet);
 
     await assert.rejects(
-      () => service.setTestBlocked('stu_missing', true),
+      () => service.setTestBlocked(randomUUID(), true),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });
@@ -611,7 +612,7 @@ describe('StudentsService — the seams other modules come through', () => {
     assert.equal((await profileOf())?.photoUrl, 'students/stu_1/photo-1.jpg');
     assert.equal((await row()).profileCompleted, false);
     await assert.rejects(
-      () => service.saveDocumentKey('stu_gone', 'photoUrl', 'k'),
+      () => service.saveDocumentKey(randomUUID(), 'photoUrl', 'k'),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });
@@ -622,7 +623,7 @@ describe('StudentsService — the seams other modules come through', () => {
 
     await assert.doesNotReject(() => service.assertExists(STUDENT));
     await assert.rejects(
-      () => service.assertExists('stu_gone'),
+      () => service.assertExists(randomUUID()),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });

@@ -144,7 +144,7 @@ export class ScoringProcessor extends WorkerHost {
     // Locked by the CTE, so the status this statement checks cannot move under it.
     const rows = await tx.$queryRaw<{ first: boolean }[]>`
       WITH held AS (
-        SELECT "id", "evaluatedAt" IS NULL AS first FROM "Attempt" WHERE "id" = ${attempt.id} FOR UPDATE
+        SELECT "id", "evaluatedAt" IS NULL AS first FROM "Attempt" WHERE "id" = ${attempt.id}::uuid FOR UPDATE
       )
       UPDATE "Attempt" a SET
         "status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus",

@@ -116,7 +116,7 @@ export class PaperService {
     const questions: Awaited<ReturnType<PaperService['requireDrawable']>>[] = [];
     for (const questionId of input.questionIds) {
       const question = await this.requireDrawable(questionId, section.id);
-      await this.assertNotAlreadyOnThePaper(testId, '', question.id);
+      await this.assertNotAlreadyOnThePaper(testId, question.id);
       questions.push(question);
     }
 
@@ -267,7 +267,7 @@ export class PaperService {
 
     const row = await this.requireRow(testId, rowId);
     const question = await this.requireDrawable(input.questionId, row.baseConfigSectionId);
-    await this.assertNotAlreadyOnThePaper(testId, rowId, question.id);
+    await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
     await this.prisma.$transaction(async (tx) => {
       await thaw(tx, test);
@@ -385,11 +385,12 @@ export class PaperService {
   /** `@@unique([testId, questionId])` would refuse it, and a constraint error is not a message. */
   private async assertNotAlreadyOnThePaper(
     testId: string,
-    rowId: string,
     questionId: string,
+    // The row being replaced, which holds this question already and is not in its own way.
+    exceptRowId?: string,
   ): Promise<void> {
     const held = await this.prisma.paperQuestion.findFirst({
-      where: { testId, questionId, id: { not: rowId } },
+      where: { testId, questionId, ...(exceptRowId ? { id: { not: exceptRowId } } : {}) },
       select: { id: true },
     });
     if (held) {

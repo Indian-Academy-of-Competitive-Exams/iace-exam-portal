@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, ErrorCodes, TEST_STATUS } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
@@ -21,7 +22,7 @@ import {
   testPrisma,
 } from './support/database';
 
-const ADMIN = 'adm_1';
+const ADMIN = randomUUID();
 
 const prisma = testPrisma();
 
@@ -30,23 +31,29 @@ after(() => prisma.$disconnect());
 
 /** The SSC CGL Tier 1 shape cut down — three Reasoning, two Quant — over a bank of eight of each. */
 async function builder() {
+  const sections = { reasoning: randomUUID(), quant: randomUUID() };
   await makeBuilder(
     prisma,
     [
-      { id: 'sec_1', name: 'Reasoning', subjectId: BUILDER.REASONING, questionCount: 3 },
-      { id: 'sec_2', name: 'Quant', subjectId: BUILDER.QUANT, questionCount: 2 },
+      { id: sections.reasoning, name: 'Reasoning', subjectId: BUILDER.REASONING, questionCount: 3 },
+      { id: sections.quant, name: 'Quant', subjectId: BUILDER.QUANT, questionCount: 2 },
     ],
     { totalQuestions: 5 },
   );
+  const bank: Record<string, string> = {};
   for (const [prefix, subjectId] of [
     ['r', BUILDER.REASONING],
     ['q', BUILDER.QUANT],
   ] as const) {
-    for (let n = 1; n <= 8; n += 1)
-      await makeBankQuestion(prisma, { id: `${prefix}${n}`, subjectId });
+    for (let n = 1; n <= 8; n += 1) {
+      const id = randomUUID();
+      bank[`${prefix}${n}`] = id;
+      await makeBankQuestion(prisma, { id, subjectId });
+    }
   }
+  const seriesId = randomUUID();
   await prisma.testSeries.create({
-    data: { id: 'srs_1', name: 'SSC CGL 2026 mocks', examStageId: BUILDER.STAGE },
+    data: { id: seriesId, name: 'SSC CGL 2026 mocks', examStageId: BUILDER.STAGE },
   });
   const events = new FakeEventBus();
   const audit = new AuditContext();
@@ -59,23 +66,25 @@ async function builder() {
     audit,
   );
   const draft = await tests.create(
-    { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: 'srs_1' },
+    { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: seriesId },
     ADMIN,
   );
   return {
     draft,
     paper,
+    bank,
+    seriesId,
     finalizer: new FinalizeService(prisma, events.asService()),
     offering: new OfferingService(prisma, events.asService(), audit),
     /** Picked by hand, so this is how a paper is built up to the counts its config asks. */
     pickWholePaper: async () => {
       await paper.addQuestions(draft.id, {
-        baseConfigSectionId: 'sec_1',
-        questionIds: ['r1', 'r2', 'r3'],
+        baseConfigSectionId: sections.reasoning,
+        questionIds: [bank.r1 ?? '', bank.r2 ?? '', bank.r3 ?? ''],
       });
       await paper.addQuestions(draft.id, {
-        baseConfigSectionId: 'sec_2',
-        questionIds: ['q1', 'q2'],
+        baseConfigSectionId: sections.quant,
+        questionIds: [bank.q1 ?? '', bank.q2 ?? ''],
       });
     },
   };
@@ -96,7 +105,7 @@ const testRow = (id: string) => prisma.test.findUniqueOrThrow({ where: { id } })
 
 describe('the Phase-2 milestone — a config becomes a publishable mock', () => {
   it('walks config -> draft -> paper -> finalize -> series -> offered', async () => {
-    const { draft, paper, finalizer, offering, pickWholePaper } = await builder();
+    const { draft, paper, finalizer, offering, pickWholePaper, seriesId } = await builder();
     assert.equal(draft.status, TEST_STATUS.DRAFT);
     assert.equal(draft.totalQuestions, 5);
 
@@ -107,7 +116,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal(frozen.finalizedByThisCall, true);
     assert.equal(frozen.frozenQuestions, 5);
 
-    await offering.moveToSeries(draft.id, { testSeriesId: 'srs_1' });
+    await offering.moveToSeries(draft.id, { testSeriesId: seriesId });
     const status = await offering.setStatus(draft.id, TEST_STATUS.ACTIVE);
 
     // A publishable mock: frozen, carried by a series, and offered.
@@ -134,7 +143,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
 
 describe('the invariants Phase 2 must not have broken', () => {
   it('one paper per sitting: once it is sat it cannot be edited, and a second finalize does nothing', async () => {
-    const { draft, paper, finalizer, pickWholePaper } = await builder();
+    const { draft, paper, finalizer, pickWholePaper, bank } = await builder();
     await pickWholePaper();
     await finalizer.finalize(draft.id);
 
@@ -148,7 +157,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     });
 
     await assert.rejects(
-      () => paper.replaceQuestion(draft.id, before[0]?.id ?? '', { questionId: 'r8' }),
+      () => paper.replaceQuestion(draft.id, before[0]?.id ?? '', { questionId: bank.r8 ?? '' }),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
     );
 
@@ -206,13 +215,13 @@ describe('the invariants Phase 2 must not have broken', () => {
 
   /** Nobody has sat it, so there is nothing to protect — but the freeze cannot survive the edit. */
   it('lets a frozen paper nobody has sat be edited, and thaws it in doing so', async () => {
-    const { draft, paper, finalizer, pickWholePaper } = await builder();
+    const { draft, paper, finalizer, pickWholePaper, bank } = await builder();
     await pickWholePaper();
     await finalizer.finalize(draft.id);
     assert.equal((await testRow(draft.id)).isLocked, true);
 
     await paper.replaceQuestion(draft.id, (await rowsOf(draft.id))[0]?.id ?? '', {
-      questionId: 'r8',
+      questionId: bank.r8 ?? '',
     });
 
     const test = await testRow(draft.id);

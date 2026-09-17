@@ -396,7 +396,7 @@ describe('the performance report — the admin path', () => {
     await world();
 
     await assert.rejects(
-      () => service.forStudent(uid('student'), query({ scope: PERFORMANCE_SCOPES.ALL_TIME })),
+      () => service.forStudent(uid(), query({ scope: PERFORMANCE_SCOPES.ALL_TIME })),
       missing,
     );
   });
@@ -407,7 +407,7 @@ describe('the performance report — the series a student may ask about', () => 
   it('offers the scope picker only the series the student has sat', async () => {
     const { student, seriesId, first } = await world();
     await prisma.testSeries.create({
-      data: { id: uid('series'), name: 'Untouched', examStageId: first.catalog.examStageId },
+      data: { id: uid(), name: 'Untouched', examStageId: first.catalog.examStageId },
     });
 
     assert.deepEqual(await service.satSeries(student), [{ id: seriesId, name: SERIES }]);
@@ -562,6 +562,6 @@ describe('the days a student sat a test on', () => {
   });
 
   it('refuses to answer for a student who is not there', async () => {
-    await assert.rejects(() => service.testDays(uid('student')));
+    await assert.rejects(() => service.testDays(uid()));
   });
 });

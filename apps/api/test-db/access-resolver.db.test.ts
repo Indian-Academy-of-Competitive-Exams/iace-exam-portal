@@ -71,7 +71,7 @@ async function series(at: Place, over: SeriesOverrides = {}): Promise<string> {
   const kind = over.kind ?? TEST_SERIES_KIND.STANDARD;
   const row = await prisma.testSeries.create({
     data: {
-      id: uid('series'),
+      id: uid(),
       name: over.name ?? `${kind} series`,
       kind,
       examStageId: at.catalog.examStageId,
@@ -364,7 +364,7 @@ describe('AccessResolverService — what the paper is', () => {
     });
     await prisma.baseConfigSection.create({
       data: {
-        id: uid('section'),
+        id: uid(),
         baseConfigId: at.catalog.baseConfigId,
         name: 'General Intelligence',
         order: 1,
@@ -568,7 +568,7 @@ describe('AccessResolverService — a series that unlocks in order', () => {
     for (const [index, status] of sittings) {
       await prisma.attempt.create({
         data: {
-          id: uid('attempt'),
+          id: uid(),
           testId: tests[index] ?? '',
           studentId: student,
           attemptNo: 1,

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, ErrorCodes, STUDENT_TYPE } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
@@ -41,6 +42,8 @@ const both = 'mobile,fullName\n9000000001,Asha\n9876543210,Ravi';
 
 const stranger = () => prisma.student.findFirstOrThrow({ where: { mobile: '9876543210' } });
 
+const ADMIN_ID = randomUUID();
+
 describe('an event intake — what one commit leaves behind', () => {
   it('creates the stranger as a NON_IACE account and leaves the student we know alone', async () => {
     const existing = await known();
@@ -49,7 +52,7 @@ describe('an event intake — what one commit leaves behind', () => {
     const result = await service.commitEventCandidates(
       'evt_1',
       sheet('mobile,fullName\n9000000001,Renamed\n9876543210,Ravi'),
-      'adm_1',
+      ADMIN_ID,
     );
 
     assert.deepEqual(
@@ -69,7 +72,7 @@ describe('an event intake — what one commit leaves behind', () => {
     const existing = await known();
     const { events, service } = build();
 
-    await service.commitEventCandidates('evt_1', sheet(both), 'adm_1');
+    await service.commitEventCandidates('evt_1', sheet(both), ADMIN_ID);
 
     assert.deepEqual(events.added, [
       { eventId: 'evt_1', studentIds: [existing.id, (await stranger()).id] },
@@ -82,7 +85,7 @@ describe('an event intake — what one commit leaves behind', () => {
     const result = await service.commitEventCandidates(
       'evt_1',
       sheet('mobile,fullName\n9876543210,Good\nnot-a-number,Bad'),
-      'adm_1',
+      ADMIN_ID,
     );
 
     assert.deepEqual(
@@ -98,13 +101,13 @@ describe('an event intake — what one commit leaves behind', () => {
     await known();
     const { storage, service } = build();
 
-    await service.commitEventCandidates('evt_1', sheet(both), 'adm_1');
+    await service.commitEventCandidates('evt_1', sheet(both), ADMIN_ID);
 
     assert.equal(await prisma.importLog.count(), 1);
     assert.equal(storage.objects.size, 1);
     const rows = await prisma.rowActionLog.findMany();
     assert.equal(rows.length, 2);
-    assert.ok(rows.every((row) => row.actorId === 'adm_1'));
+    assert.ok(rows.every((row) => row.actorId === ADMIN_ID));
   });
 });
 
@@ -114,7 +117,7 @@ describe('an event intake — what it refuses', () => {
     const { storage, events, service } = build(new FakeEventsService([]));
 
     await assert.rejects(
-      () => service.commitEventCandidates('evt_gone', sheet(both), 'adm_1'),
+      () => service.commitEventCandidates('evt_gone', sheet(both), ADMIN_ID),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
     assert.equal(await prisma.student.count(), 0);

@@ -65,7 +65,7 @@ describe('Subscribing this browser', () => {
     const { push, student } = await build();
     await push.subscribe(student, SUBSCRIPTION);
 
-    await push.unsubscribe(uid('student'), SUBSCRIPTION.endpoint);
+    await push.unsubscribe(uid(), SUBSCRIPTION.endpoint);
 
     assert.equal(await prisma.pushSubscription.count(), 1);
 

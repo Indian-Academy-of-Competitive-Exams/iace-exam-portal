@@ -61,7 +61,7 @@ async function entrant(
 /** Two fresh student ids, lower first in the database's own collation. */
 async function idsInOrder(): Promise<[string, string]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-    SELECT id FROM unnest(${[uid('student'), uid('student')]}::text[]) AS id ORDER BY id
+    SELECT id FROM unnest(${[uid(), uid()]}::text[]) AS id ORDER BY id
   `);
   const [lower, higher] = rows.map((row) => row.id);
   assert.ok(lower);

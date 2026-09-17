@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
@@ -23,7 +24,17 @@ import {
   testPrisma,
 } from './support/database';
 
-const TEST = 'tst_1';
+/** One uuid per label, shared across the file so a test can name an id by what it means. */
+const idCache = new Map<string, string>();
+const idFor = (label: string): string => {
+  const cached = idCache.get(label);
+  if (cached) return cached;
+  const id = randomUUID();
+  idCache.set(label, id);
+  return id;
+};
+
+const TEST = idFor('tst_1');
 const PROGRAM = 'FOUNDATION';
 const HOUR_MS = 3_600_000;
 const OPENS_AT = new Date('2026-09-01T04:30:00.000Z');
@@ -45,18 +56,18 @@ const testIn = (data: TestFields & { id: string }) =>
       title: 'Mock 2',
       baseConfigId: BUILDER.CONFIG,
       examStageId: BUILDER.STAGE,
-      testSeriesId: 'srs_1',
+      testSeriesId: idFor('srs_1'),
       ...data,
     },
   });
 
 /** Two series on the config's stage, one test first in the first of them, and the FOUNDATION program. */
 async function serviceWith(test: TestFields = {}, sittings = 0) {
-  await makeBuilder(prisma, [{ id: 'sec_1', name: 'Reasoning' }]);
+  await makeBuilder(prisma, [{ id: idFor('sec_1'), name: 'Reasoning' }]);
   await prisma.testSeries.createMany({
     data: [
-      { id: 'srs_1', name: 'SSC CGL 2026 — Full length', examStageId: BUILDER.STAGE },
-      { id: 'srs_2', name: 'SSC CGL 2026 — Sectionals', examStageId: BUILDER.STAGE },
+      { id: idFor('srs_1'), name: 'SSC CGL 2026 — Full length', examStageId: BUILDER.STAGE },
+      { id: idFor('srs_2'), name: 'SSC CGL 2026 — Sectionals', examStageId: BUILDER.STAGE },
     ],
   });
   await prisma.program.create({ data: { code: PROGRAM, name: 'Foundation' } });
@@ -77,7 +88,7 @@ const FROZEN = { isLocked: true, finalizedAt: new Date('2026-08-01T00:00:00.000Z
 const testRow = () => prisma.test.findUniqueOrThrow({ where: { id: TEST } });
 
 /** The series' own switch, which is what makes the openings a sequence rather than a set. */
-const inOrder = (id = 'srs_1') =>
+const inOrder = (id = idFor('srs_1')) =>
   prisma.testSeries.update({ where: { id }, data: { sequentialTests: true } });
 
 const catalogBusts = (events: FakeEventBus) =>
@@ -93,22 +104,22 @@ describe('OfferingService — a test belongs to one series', () => {
   it('replaces the series on the test itself, names the new one back, and drops the old position', async () => {
     const { service } = await serviceWith();
 
-    const link = await service.moveToSeries(TEST, { testSeriesId: 'srs_2' });
+    const link = await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
 
     assert.deepEqual(link, {
-      testSeriesId: 'srs_2',
+      testSeriesId: idFor('srs_2'),
       name: 'SSC CGL 2026 — Sectionals',
       order: null,
     });
     const row = await testRow();
-    assert.deepEqual([row.testSeriesId, row.seriesOrder], ['srs_2', null]);
+    assert.deepEqual([row.testSeriesId, row.seriesOrder], [idFor('srs_2'), null]);
   });
 
   it('reads back the series a test is already in', async () => {
     const { service } = await serviceWith();
 
     assert.deepEqual(await service.series(TEST), {
-      testSeriesId: 'srs_1',
+      testSeriesId: idFor('srs_1'),
       name: 'SSC CGL 2026 — Full length',
       order: 1,
     });
@@ -118,15 +129,15 @@ describe('OfferingService — a test belongs to one series', () => {
   it('tells the catalog cache about the series it left AND the one it joined', async () => {
     const { service, events } = await serviceWith();
 
-    await service.moveToSeries(TEST, { testSeriesId: 'srs_2' });
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
 
-    assert.deepEqual(new Set(catalogBusts(events)), new Set(['srs_1', 'srs_2']));
+    assert.deepEqual(new Set(catalogBusts(events)), new Set([idFor('srs_1'), idFor('srs_2')]));
   });
 
   it('says nothing to the cache when the series it was given is the one it holds', async () => {
     const { service, events } = await serviceWith();
 
-    await service.moveToSeries(TEST, { testSeriesId: 'srs_1' });
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_1') });
 
     assert.deepEqual(catalogBusts(events), []);
   });
@@ -134,47 +145,47 @@ describe('OfferingService — a test belongs to one series', () => {
   it('refuses a series that no longer exists', async () => {
     const { service } = await serviceWith();
 
-    const error = await refused(service.moveToSeries(TEST, { testSeriesId: 'srs_gone' }));
+    const error = await refused(service.moveToSeries(TEST, { testSeriesId: idFor('srs_gone') }));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal((await testRow()).testSeriesId, 'srs_1');
+    assert.equal((await testRow()).testSeriesId, idFor('srs_1'));
   });
 
   /** The failure this prevents: another stage's series serving this paper to its students. */
   it('refuses a series whose stage the test does not sit on', async () => {
     const { service } = await serviceWith();
     await prisma.testSeries.create({
-      data: { id: 'srs_rrb', name: 'RRB JE mocks', examStageId: BUILDER.OTHER_STAGE },
+      data: { id: idFor('srs_rrb'), name: 'RRB JE mocks', examStageId: BUILDER.OTHER_STAGE },
     });
 
-    const error = await refused(service.moveToSeries(TEST, { testSeriesId: 'srs_rrb' }));
+    const error = await refused(service.moveToSeries(TEST, { testSeriesId: idFor('srs_rrb') }));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.match(error.message, /different exam stage/);
-    assert.equal((await testRow()).testSeriesId, 'srs_1');
+    assert.equal((await testRow()).testSeriesId, idFor('srs_1'));
   });
 
   it('carries a stage-agnostic series, which belongs to no stage and so fits any test', async () => {
     const { service } = await serviceWith();
     await prisma.testSeries.create({
-      data: { id: 'srs_free', name: 'Free mocks', kind: TEST_SERIES_KIND.FREE },
+      data: { id: idFor('srs_free'), name: 'Free mocks', kind: TEST_SERIES_KIND.FREE },
     });
 
-    await service.moveToSeries(TEST, { testSeriesId: 'srs_free' });
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_free') });
 
-    assert.equal((await testRow()).testSeriesId, 'srs_free');
+    assert.equal((await testRow()).testSeriesId, idFor('srs_free'));
   });
 
   /** Moving a sat test would take it out of a series students' results already point through. */
   it('refuses to move a test that has been sat, naming the count, and leaves it where it is', async () => {
     const { service } = await serviceWith({}, 2);
 
-    const error = await refused(service.moveToSeries(TEST, { testSeriesId: 'srs_2' }));
-    await service.moveToSeries(TEST, { testSeriesId: 'srs_1' });
+    const error = await refused(service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') }));
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_1') });
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /2 attempts/);
-    assert.equal((await testRow()).testSeriesId, 'srs_1');
+    assert.equal((await testRow()).testSeriesId, idFor('srs_1'));
   });
 
   /** The defect this closes: the old whole-set save rebuilt the link and dropped the opening with it. */
@@ -187,7 +198,7 @@ describe('OfferingService — a test belongs to one series', () => {
       NOW,
     );
 
-    await service.moveToSeries(TEST, { testSeriesId: 'srs_2' });
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
 
     assert.deepEqual((await testRow()).opensAt, OPENS_AT);
     assert.equal(await prisma.testProgramUnlock.count(), 1);
@@ -196,30 +207,30 @@ describe('OfferingService — a test belongs to one series', () => {
   /** The failure this prevents: a move smuggles a duplicate name past the check the create path makes. */
   it('refuses a move into a series that already holds a test of that name', async () => {
     const { service } = await serviceWith({ title: 'Mock 1' });
-    await testIn({ id: 'tst_9', title: 'mock 1', testSeriesId: 'srs_2' });
+    await testIn({ id: idFor('tst_9'), title: 'mock 1', testSeriesId: idFor('srs_2') });
 
-    const error = await refused(service.moveToSeries(TEST, { testSeriesId: 'srs_2' }));
+    const error = await refused(service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') }));
 
     assert.match(error.fieldErrors?.testSeriesId?.[0] ?? '', /already has a test called Mock 1/);
-    assert.equal((await testRow()).testSeriesId, 'srs_1');
+    assert.equal((await testRow()).testSeriesId, idFor('srs_1'));
   });
 
   /** The failure this prevents: an opening walks into an ordered series behind one already there. */
   it('refuses a move that would land an opening before one the ordered series already holds', async () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
-    await inOrder('srs_2');
+    await inOrder(idFor('srs_2'));
     await testIn({
-      id: 'tst_9',
+      id: idFor('tst_9'),
       title: 'Mock 1',
-      testSeriesId: 'srs_2',
+      testSeriesId: idFor('srs_2'),
       seriesOrder: 1,
       opensAt: A_DAY_LATER_DATE,
     });
 
-    const error = await refused(service.moveToSeries(TEST, { testSeriesId: 'srs_2' }));
+    const error = await refused(service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') }));
 
     assert.match(error.fieldErrors?.[FORM_LEVEL_FIELD]?.[0] ?? '', /Mock 1 comes before it/);
-    assert.equal((await testRow()).testSeriesId, 'srs_1');
+    assert.equal((await testRow()).testSeriesId, idFor('srs_1'));
   });
 });
 
@@ -247,7 +258,7 @@ describe('OfferingService — offering a test', () => {
     await service.setStatus(TEST, TEST_STATUS.INACTIVE);
 
     assert.equal((await testRow()).status, TEST_STATUS.INACTIVE);
-    assert.deepEqual(catalogBusts(events), ['srs_1']);
+    assert.deepEqual(catalogBusts(events), [idFor('srs_1')]);
   });
 
   it('says nothing to the cache when the status did not move', async () => {
@@ -266,7 +277,7 @@ describe('OfferingService — a series and the tests it holds', () => {
       1,
     );
 
-    assert.deepEqual(await service.testsIn('srs_1'), [
+    assert.deepEqual(await service.testsIn(idFor('srs_1')), [
       {
         testId: TEST,
         title: 'Mock 1',
@@ -284,10 +295,15 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('sets when a test opens inside a series, and busts that catalog', async () => {
     const { service, events } = await serviceWith();
 
-    const rows = await service.setUnlock('srs_1', TEST, { unlockAt: OPENS_AT.toISOString() }, NOW);
+    const rows = await service.setUnlock(
+      idFor('srs_1'),
+      TEST,
+      { unlockAt: OPENS_AT.toISOString() },
+      NOW,
+    );
 
     assert.equal(rows[0]?.unlockAt, OPENS_AT.toISOString());
-    assert.deepEqual(catalogBusts(events), ['srs_1']);
+    assert.deepEqual(catalogBusts(events), [idFor('srs_1')]);
   });
 
   /** The failure this prevents: a time already gone is saved, and the test opens the moment it lands. */
@@ -295,7 +311,7 @@ describe('OfferingService — a series and the tests it holds', () => {
     const { service, events } = await serviceWith();
 
     const error = await refused(
-      service.setUnlock('srs_1', TEST, { unlockAt: OPENS_AT.toISOString() }, OPENS_AT),
+      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: OPENS_AT.toISOString() }, OPENS_AT),
     );
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -309,9 +325,9 @@ describe('OfferingService — a series and the tests it holds', () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT }, 1);
 
     const moved = await refused(
-      service.setUnlock('srs_1', TEST, { unlockAt: '2026-10-01T04:30:00.000Z' }, NOW),
+      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: '2026-10-01T04:30:00.000Z' }, NOW),
     );
-    const cleared = await refused(service.setUnlock('srs_1', TEST, { unlockAt: null }));
+    const cleared = await refused(service.setUnlock(idFor('srs_1'), TEST, { unlockAt: null }));
 
     assert.equal(moved.code, ErrorCodes.CONFLICT);
     assert.equal(cleared.code, ErrorCodes.CONFLICT);
@@ -321,9 +337,9 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('opens a test after the one it follows, in a series that opens them in order', async () => {
     const { service } = await serviceWith({ seriesOrder: 2 });
     await inOrder();
-    await testIn({ id: 'tst_0', title: 'Mock 1', seriesOrder: 1, opensAt: OPENS_AT });
+    await testIn({ id: idFor('tst_0'), title: 'Mock 1', seriesOrder: 1, opensAt: OPENS_AT });
 
-    const rows = await service.setUnlock('srs_1', TEST, { unlockAt: A_DAY_LATER }, NOW);
+    const rows = await service.setUnlock(idFor('srs_1'), TEST, { unlockAt: A_DAY_LATER }, NOW);
 
     assert.equal(rows.find((row) => row.testId === TEST)?.unlockAt, A_DAY_LATER);
   });
@@ -332,10 +348,10 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('refuses an opening no later than a test earlier in the order', async () => {
     const { service, events } = await serviceWith({ seriesOrder: 2 });
     await inOrder();
-    await testIn({ id: 'tst_0', title: 'Mock 1', seriesOrder: 1, opensAt: OPENS_AT });
+    await testIn({ id: idFor('tst_0'), title: 'Mock 1', seriesOrder: 1, opensAt: OPENS_AT });
 
     const error = await refused(
-      service.setUnlock('srs_1', TEST, { unlockAt: OPENS_AT.toISOString() }, NOW),
+      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: OPENS_AT.toISOString() }, NOW),
     );
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -347,9 +363,11 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('refuses an opening no earlier than a test later in the order', async () => {
     const { service } = await serviceWith({ seriesOrder: 2 });
     await inOrder();
-    await testIn({ id: 'tst_2', title: 'Mock 3', seriesOrder: 3, opensAt: OPENS_AT });
+    await testIn({ id: idFor('tst_2'), title: 'Mock 3', seriesOrder: 3, opensAt: OPENS_AT });
 
-    const error = await refused(service.setUnlock('srs_1', TEST, { unlockAt: A_DAY_LATER }, NOW));
+    const error = await refused(
+      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: A_DAY_LATER }, NOW),
+    );
 
     assert.match(error.fieldErrors?.unlockAt?.[0] ?? '', /Mock 3 comes after it/);
   });
@@ -357,9 +375,19 @@ describe('OfferingService — a series and the tests it holds', () => {
   /** Together is the other rule: without the order, the openings are each the admin's own business. */
   it('lets a series that opens its tests together put them in any order', async () => {
     const { service } = await serviceWith({ seriesOrder: 2 });
-    await testIn({ id: 'tst_0', title: 'Mock 1', seriesOrder: 1, opensAt: A_DAY_LATER_DATE });
+    await testIn({
+      id: idFor('tst_0'),
+      title: 'Mock 1',
+      seriesOrder: 1,
+      opensAt: A_DAY_LATER_DATE,
+    });
 
-    const rows = await service.setUnlock('srs_1', TEST, { unlockAt: OPENS_AT.toISOString() }, NOW);
+    const rows = await service.setUnlock(
+      idFor('srs_1'),
+      TEST,
+      { unlockAt: OPENS_AT.toISOString() },
+      NOW,
+    );
 
     assert.equal(rows.find((row) => row.testId === TEST)?.unlockAt, OPENS_AT.toISOString());
   });
@@ -368,7 +396,7 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('clears the opening time back to null', async () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
 
-    const rows = await service.setUnlock('srs_1', TEST, { unlockAt: null });
+    const rows = await service.setUnlock(idFor('srs_1'), TEST, { unlockAt: null });
 
     assert.equal(rows[0]?.unlockAt, null);
     assert.equal((await testRow()).opensAt, null);
@@ -377,7 +405,7 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('refuses to set an opening through a series the test is not in', async () => {
     const { service } = await serviceWith();
 
-    await refused(service.setUnlock('srs_2', TEST, { unlockAt: null }));
+    await refused(service.setUnlock(idFor('srs_2'), TEST, { unlockAt: null }));
   });
 });
 
@@ -386,7 +414,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
 
   /** The failure this prevents: a test that opens once for everybody because of the series holding it. */
   it('stores a program opening whichever series the test sits in', async () => {
-    for (const testSeriesId of ['srs_1', 'srs_2']) {
+    for (const testSeriesId of [idFor('srs_1'), idFor('srs_2')]) {
       await resetDatabase(prisma);
       const { service } = await serviceWith({ opensAt: OPENS_AT, testSeriesId });
 
@@ -453,7 +481,12 @@ describe('OfferingService — a program opens a test earlier, never later', () =
   const movedTo = async (unlockAt: Date | null) => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
     await service.setProgramUnlock(TEST, PROGRAM, { opensAt: EARLIER.toISOString() }, NOW);
-    await service.setUnlock('srs_1', TEST, { unlockAt: unlockAt?.toISOString() ?? null }, NOW);
+    await service.setUnlock(
+      idFor('srs_1'),
+      TEST,
+      { unlockAt: unlockAt?.toISOString() ?? null },
+      NOW,
+    );
     return { service, unlocks: await prisma.testProgramUnlock.count() };
   };
 

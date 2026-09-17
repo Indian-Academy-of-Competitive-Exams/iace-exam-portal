@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, AppException, ErrorCodes } from '@iace/contracts';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
@@ -106,7 +107,7 @@ describe('TestAnalyticsService — how fresh the folded figures are', () => {
     const paper = await makePaper(prisma, { questions: ['Reasoning'] });
 
     await world.analytics.resync(paper.testId);
-    const missing = await world.analytics.resync('tst_missing').catch((error: unknown) => error);
+    const missing = await world.analytics.resync(randomUUID()).catch((error: unknown) => error);
 
     assert.deepEqual(
       world.queue.jobs.map((job) => [job.name, job.data, job.delay]),

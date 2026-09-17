@@ -198,7 +198,7 @@ describe('ScoringProcessor — what it writes', () => {
   });
 
   it('reports an attempt that does not exist rather than throwing at the worker', async () => {
-    assert.equal(await processor.score(uid('attempt')), null);
+    assert.equal(await processor.score(uid()), null);
   });
 
   it('writes a verdict per paper row, in paper order, whatever order the sitting was shown', async () => {

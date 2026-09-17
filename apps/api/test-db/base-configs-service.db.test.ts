@@ -11,9 +11,9 @@ import {
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
-import { makeStage, resetDatabase, testPrisma } from './support/database';
+import { makeStage, resetDatabase, testPrisma, uid } from './support/database';
 
-const ADMIN = 'adm_1';
+const ADMIN = uid();
 
 const prisma = testPrisma();
 const service = new BaseConfigsService(

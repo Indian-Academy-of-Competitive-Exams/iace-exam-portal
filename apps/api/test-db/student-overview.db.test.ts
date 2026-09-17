@@ -231,7 +231,7 @@ describe('StudentOverviewService.forStudent', () => {
 
   it('refuses an unknown student', async () => {
     await assert.rejects(
-      build(uid('student')).forStudent(uid('student')),
+      build(uid()).forStudent(uid()),
       (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
     );
   });

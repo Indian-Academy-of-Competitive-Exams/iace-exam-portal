@@ -1,10 +1,11 @@
 /**
  * DEV-ONLY: the corpus the exam renderer is judged against — images, tables, inline and display
- * equations, sup/sub and lists, each in English, Hindi and Telugu. Tagged `golden` and prefixed
- * `qg_`, so `--reset` purges the corpus and nothing else. Refuses a DATABASE_URL that is not local.
+ * equations, sup/sub and lists, each in English, Hindi and Telugu. Tagged `golden`, so `--reset`
+ * purges the corpus and nothing else. Refuses a DATABASE_URL that is not local.
  * Run: node scripts/dev-seed-golden-questions.mjs [--reset]
  */
 import './dev-seed-env.mjs';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { crc32, deflateSync } from 'node:zlib';
 import { PrismaClient } from '@prisma/client';
@@ -438,13 +439,15 @@ function versionOf(entry) {
   return { content, options };
 }
 
+const codeOf = (entry) => `QG-${entry.key.toUpperCase().replaceAll('_', '-')}`;
+
 function rowsFor(entry, subjectId) {
-  const id = `qg_${entry.key}`;
+  const id = randomUUID();
   const { content, options } = versionOf(entry);
   return {
     question: {
       id,
-      questionCode: `QG-${entry.key.toUpperCase().replaceAll('_', '-')}`,
+      questionCode: codeOf(entry),
       type: 'SINGLE_MCQ',
       subjectId,
       difficulty: entry.difficulty,
@@ -455,7 +458,7 @@ function rowsFor(entry, subjectId) {
       stemHash: null,
       fixedUseCount: 0,
     },
-    version: { id: `qvg_${entry.key}`, questionId: id, version: 1, content, options },
+    version: { id: randomUUID(), questionId: id, version: 1, content, options },
   };
 }
 
@@ -503,17 +506,36 @@ async function main() {
     console.log('Uploading the figures…');
     await putFigures();
 
-    const rows = entries.map((entry) => rowsFor(entry, subjects.get(entry.subject)));
-    await prisma.$transaction([
-      prisma.question.createMany({ data: rows.map((r) => r.question), skipDuplicates: true }),
-      prisma.questionVersion.createMany({ data: rows.map((r) => r.version), skipDuplicates: true }),
-    ]);
-    const linked = await prisma.$executeRawUnsafe(
-      `UPDATE "Question" SET "currentVersionId" = 'qvg_' || substring("id" from 4) WHERE 'golden' = ANY("tags") AND "currentVersionId" IS NULL`,
+    // Ids are random, so a re-run tells old from new by questionCode, not by id.
+    const existingCodes = new Set(
+      (
+        await prisma.question.findMany({
+          where: { tags: { has: 'golden' } },
+          select: { questionCode: true },
+        })
+      ).map((q) => q.questionCode),
     );
+    const rows = entries
+      .filter((entry) => !existingCodes.has(codeOf(entry)))
+      .map((entry) => rowsFor(entry, subjects.get(entry.subject)));
+
+    let linked = 0;
+    if (rows.length > 0) {
+      const links = rows
+        .map((r) => `('${r.question.id}'::uuid, '${r.version.id}'::uuid)`)
+        .join(',');
+      const [, , updated] = await prisma.$transaction([
+        prisma.question.createMany({ data: rows.map((r) => r.question) }),
+        prisma.questionVersion.createMany({ data: rows.map((r) => r.version) }),
+        prisma.$executeRawUnsafe(
+          `UPDATE "Question" AS q SET "currentVersionId" = v.vid FROM (VALUES ${links}) AS v(qid, vid) WHERE q.id = v.qid`,
+        ),
+      ]);
+      linked = updated;
+    }
 
     console.log(
-      `\nDone. ${rows.length} golden questions (${linked} linked to versions), tagged 'golden'.`,
+      `\nDone. ${rows.length} golden questions added (${linked} linked to versions); ${entries.length} in the corpus.`,
     );
     console.log(`  Figures: ${FIGURES.map(([key]) => urlOf(key)).join('\n           ')}`);
     console.log(`Purge with: node scripts/dev-seed-golden-questions.mjs --reset`);

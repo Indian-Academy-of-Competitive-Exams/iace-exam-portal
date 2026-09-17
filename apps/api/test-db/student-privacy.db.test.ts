@@ -111,7 +111,7 @@ describe('consent, as a record rather than a flag', () => {
   it('swallows a failed record rather than costing the account', async () => {
     const service = build();
 
-    await assert.doesNotReject(() => service.recordAtSignup(uid('student')));
+    await assert.doesNotReject(() => service.recordAtSignup(uid()));
     assert.equal(await prisma.studentConsent.count(), 0);
   });
 });
@@ -168,7 +168,7 @@ describe('the copy a student may take away', () => {
       ],
     );
 
-    await assert.rejects(service.export(uid('student')), AppException.is);
+    await assert.rejects(service.export(uid()), AppException.is);
   });
 });
 

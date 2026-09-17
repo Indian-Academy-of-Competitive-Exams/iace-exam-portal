@@ -23,13 +23,13 @@ after(() => prisma.$disconnect());
 /** `count` sittings of one test, by as many students, whose clock ran out an hour ago. */
 async function stranded(count: number): Promise<string[]> {
   const test = await makeTest(prisma, await makeCatalog(prisma));
-  const students = Array.from({ length: count }, () => uid('student'));
+  const students = Array.from({ length: count }, () => uid());
   await prisma.student.createMany({
-    data: students.map((id) => ({ id, mobile: uid('mobile'), studentType: STUDENT_TYPE.ONLINE })),
+    data: students.map((id) => ({ id, mobile: uid(), studentType: STUDENT_TYPE.ONLINE })),
   });
   const endsAt = new Date(Date.now() - HOUR_MS);
   const attempts = students.map((studentId) => ({
-    id: uid('attempt'),
+    id: uid(),
     testId: test.id,
     studentId,
     attemptNo: 1,
@@ -119,7 +119,7 @@ describe('AttemptSweeperProcessor — backstop for a died counting pass', () => 
     const pending = await prisma.outboxEvent.create({
       data: {
         aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
-        aggregateId: 'a1',
+        aggregateId: uid(),
         eventType: ROLLUP_REQUEST.EVENT_TYPE,
         payload: { testId: 'test_1' },
         createdAt: new Date(1),

@@ -21,7 +21,7 @@ import {
   uid,
 } from './support/database';
 
-const ADMIN = 'adm_1';
+const ADMIN = uid();
 const PROGRAM = 'SSC CGL FOUNDATION';
 
 const prisma = testPrisma();
@@ -82,8 +82,7 @@ const makeProgram = (isActive = true) =>
     select: { id: true },
   });
 
-const makeEvent = () =>
-  prisma.event.create({ data: { name: uid('Scholarship') }, select: { id: true } });
+const makeEvent = () => prisma.event.create({ data: { name: uid() }, select: { id: true } });
 
 describe('TestSeriesService — branches are the truth about branches', () => {
   /** `branchIds` is what the resolver reads, so this write is the only thing that opens the door. */
@@ -155,7 +154,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft(stageId));
 
     const error = await series
-      .setBranches(created.id, { branchIds: [uid('branch')] })
+      .setBranches(created.id, { branchIds: [uid()] })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -437,7 +436,7 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
     ['an event series naming no event', { kind: TEST_SERIES_KIND.EVENT }, 'eventId'],
     [
       'an event on a series of some other kind',
-      { kind: TEST_SERIES_KIND.STANDARD, eventId: 'ev_1' },
+      { kind: TEST_SERIES_KIND.STANDARD, eventId: uid() },
       'kind',
     ],
   ] as const) {
@@ -693,7 +692,7 @@ describe('StudentGrantsService — the escape hatch', () => {
     const student = await makeStudent(prisma);
 
     await assert.rejects(
-      () => grants.grant(student.id, { testSeriesId: uid('series') }, ADMIN),
+      () => grants.grant(student.id, { testSeriesId: uid() }, ADMIN),
       AppException.is,
     );
   });

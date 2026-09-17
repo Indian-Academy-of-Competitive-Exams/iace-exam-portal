@@ -111,7 +111,7 @@ describe('AttemptStateService', () => {
     await service.open(live);
 
     await assert.rejects(
-      () => service.save(uid('student'), attemptId, { revision: 1, answers: [] }, NOW),
+      () => service.save(uid(), attemptId, { revision: 1, answers: [] }, NOW),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
@@ -290,7 +290,7 @@ describe('AttemptStateService', () => {
       await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
 
       await assert.rejects(
-        () => service.current(uid('student'), attemptId, NOW),
+        () => service.current(uid(), attemptId, NOW),
         refusedWith(ErrorCodes.NOT_FOUND),
       );
     });

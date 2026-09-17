@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
@@ -22,8 +23,8 @@ import {
   testPrisma,
 } from './support/database';
 
-const MINE = 'adm_mine';
-const THEIRS = 'adm_theirs';
+const MINE = randomUUID();
+const THEIRS = randomUUID();
 
 const prisma = testPrisma();
 
@@ -118,41 +119,43 @@ describe('AuthoringService.create', () => {
 
 describe('AuthoringService.history', () => {
   it("shows the author their own work and nobody else's", async () => {
+    const qstMine = randomUUID();
     const authoring = await build([
-      { id: 'qst_mine', createdById: MINE, status: QUESTION_STATUS.DRAFT },
-      { id: 'qst_theirs', createdById: THEIRS, status: QUESTION_STATUS.DRAFT },
-      { id: 'qst_nobody' },
+      { id: qstMine, createdById: MINE, status: QUESTION_STATUS.DRAFT },
+      { id: randomUUID(), createdById: THEIRS, status: QUESTION_STATUS.DRAFT },
+      { id: randomUUID() },
     ]);
 
     const page = await authoring.history(query(), MINE);
 
     assert.deepEqual(
       page.items.map((row) => row.id),
-      ['qst_mine'],
+      [qstMine],
     );
     assert.equal(page.total, 1);
   });
 
   it('lists the archived too, which the bank hides — it is a record of what was written', async () => {
     const authoring = await build([
-      { id: 'qst_1', createdById: MINE, status: QUESTION_STATUS.DRAFT },
-      { id: 'qst_2', createdById: MINE, status: QUESTION_STATUS.ARCHIVED },
+      { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.DRAFT },
+      { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.ARCHIVED },
     ]);
 
     assert.equal((await authoring.history(query(), MINE)).total, 2);
   });
 
   it('narrows to one state when the reader names one', async () => {
+    const qst1 = randomUUID();
     const authoring = await build([
-      { id: 'qst_1', createdById: MINE, status: QUESTION_STATUS.DRAFT },
-      { id: 'qst_2', createdById: MINE, status: QUESTION_STATUS.ACTIVE },
+      { id: qst1, createdById: MINE, status: QUESTION_STATUS.DRAFT },
+      { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.ACTIVE },
     ]);
 
     const page = await authoring.history(query({ status: QUESTION_STATUS.DRAFT }), MINE);
 
     assert.deepEqual(
       page.items.map((row) => row.id),
-      ['qst_1'],
+      [qst1],
     );
   });
 
@@ -171,24 +174,26 @@ describe('AuthoringService.history', () => {
 
 describe('editing from the authoring screen', () => {
   it("will neither open nor change another author's question", async () => {
+    const qst1 = randomUUID();
     const authoring = await build([
-      { id: 'qst_1', createdById: THEIRS, status: QUESTION_STATUS.DRAFT },
+      { id: qst1, createdById: THEIRS, status: QUESTION_STATUS.DRAFT },
     ]);
 
-    await assert.rejects(() => authoring.detail('qst_1', MINE), refusedWith(ErrorCodes.NOT_FOUND));
+    await assert.rejects(() => authoring.detail(qst1, MINE), refusedWith(ErrorCodes.NOT_FOUND));
     await assert.rejects(
-      () => authoring.update('qst_1', draft(), MINE),
+      () => authoring.update(qst1, draft(), MINE),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
 
   it('hands a question that has left review back to the question bank', async () => {
+    const qst1 = randomUUID();
     const authoring = await build([
-      { id: 'qst_1', createdById: MINE, status: QUESTION_STATUS.ACTIVE },
+      { id: qst1, createdById: MINE, status: QUESTION_STATUS.ACTIVE },
     ]);
 
     await assert.rejects(
-      () => authoring.update('qst_1', draft(), MINE),
+      () => authoring.update(qst1, draft(), MINE),
       refusedWith(ErrorCodes.CONFLICT),
     );
   });

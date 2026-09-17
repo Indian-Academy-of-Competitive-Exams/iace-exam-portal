@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
@@ -25,9 +26,19 @@ import {
   testPrisma,
 } from './support/database';
 
-const ADMIN = 'adm_1';
-const TEST = 'tst_1';
-const DRAFT = { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: 'srs_1' };
+/** One uuid per label, shared across the file so a test can name an id by what it means. */
+const idCache = new Map<string, string>();
+const idFor = (label: string): string => {
+  const cached = idCache.get(label);
+  if (cached) return cached;
+  const id = randomUUID();
+  idCache.set(label, id);
+  return id;
+};
+
+const ADMIN = idFor('adm_1');
+const TEST = idFor('tst_1');
+const DRAFT = { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: idFor('srs_1') };
 
 const prisma = testPrisma();
 
@@ -46,12 +57,12 @@ async function serviceWith(over: Bench = {}) {
   await makeBuilder(
     prisma,
     [
-      { id: 'sec_1', name: 'General Intelligence' },
-      { id: 'sec_2', name: 'Quantitative Aptitude' },
+      { id: idFor('sec_1'), name: 'General Intelligence' },
+      { id: idFor('sec_2'), name: 'Quantitative Aptitude' },
     ],
     { totalQuestions: 50, durationSec: 3600, ...over.config },
   );
-  for (const series of over.series ?? [{ id: 'srs_1', name: 'SSC CGL Tier 1 mocks' }]) {
+  for (const series of over.series ?? [{ id: idFor('srs_1'), name: 'SSC CGL Tier 1 mocks' }]) {
     await prisma.testSeries.create({
       data: {
         ...series,
@@ -66,7 +77,7 @@ async function serviceWith(over: Bench = {}) {
         title: 'Mock 1',
         baseConfigId: BUILDER.CONFIG,
         examStageId: BUILDER.STAGE,
-        testSeriesId: 'srs_1',
+        testSeriesId: idFor('srs_1'),
         ...over.test,
       },
     });
@@ -159,7 +170,9 @@ describe('TestsService — creating a draft from a config', () => {
   it('refuses a test in a series that is not there', async () => {
     const { service } = await serviceWith();
 
-    const error = await refused(service.create({ ...DRAFT, testSeriesId: 'srs_gone' }, ADMIN));
+    const error = await refused(
+      service.create({ ...DRAFT, testSeriesId: idFor('srs_gone') }, ADMIN),
+    );
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.ok(error.fieldErrors?.testSeriesId?.[0]);
@@ -169,7 +182,9 @@ describe('TestsService — creating a draft from a config', () => {
   /** The failure this prevents: a Tier 1 paper served to the Tier 2 students the series reaches. */
   it('refuses a series built for another stage, and names it', async () => {
     const { service } = await serviceWith({
-      series: [{ id: 'srs_1', name: 'SSC CHSL Tier 2 mocks', examStageId: BUILDER.OTHER_STAGE }],
+      series: [
+        { id: idFor('srs_1'), name: 'SSC CHSL Tier 2 mocks', examStageId: BUILDER.OTHER_STAGE },
+      ],
     });
 
     const error = await refused(service.create(DRAFT, ADMIN));
@@ -209,7 +224,9 @@ describe('TestsService — the scope has to name a part of the config', () => {
     const { service } = await serviceWith();
 
     const unnamed = await refused(service.create(sectional(), ADMIN));
-    const elsewhere = await refused(service.create(sectional({ sectionId: 'sec_9' }), ADMIN));
+    const elsewhere = await refused(
+      service.create(sectional({ sectionId: idFor('sec_9') }), ADMIN),
+    );
 
     assert.equal(unnamed.code, ErrorCodes.VALIDATION_ERROR);
     assert.ok(unnamed.fieldErrors?.scopeRef?.[0]);
@@ -219,9 +236,9 @@ describe('TestsService — the scope has to name a part of the config', () => {
   it('accepts a section of its own config', async () => {
     const { service } = await serviceWith();
 
-    const created = await service.create(sectional({ sectionId: 'sec_2' }), ADMIN);
+    const created = await service.create(sectional({ sectionId: idFor('sec_2') }), ADMIN);
 
-    assert.deepEqual(created.scopeRef, { sectionId: 'sec_2' });
+    assert.deepEqual(created.scopeRef, { sectionId: idFor('sec_2') });
   });
 });
 
@@ -241,12 +258,12 @@ describe('TestsService — a name belongs to one test inside its series', () => 
     const { service } = await serviceWith({
       test: {},
       series: [
-        { id: 'srs_1', name: 'SSC CGL Tier 1 mocks' },
-        { id: 'srs_2', name: 'SSC CGL Tier 2 mocks' },
+        { id: idFor('srs_1'), name: 'SSC CGL Tier 1 mocks' },
+        { id: idFor('srs_2'), name: 'SSC CGL Tier 2 mocks' },
       ],
     });
 
-    const created = await service.create({ ...DRAFT, testSeriesId: 'srs_2' }, ADMIN);
+    const created = await service.create({ ...DRAFT, testSeriesId: idFor('srs_2') }, ADMIN);
 
     assert.equal(created.title, 'Mock 1');
   });
@@ -356,7 +373,7 @@ describe('TestsService — editing and removing', () => {
 
     assert.deepEqual(
       events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
-      ['srs_1'],
+      [idFor('srs_1')],
     );
   });
 });

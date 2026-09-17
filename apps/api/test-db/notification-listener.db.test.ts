@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { PIN_RESET_REASONS } from '../src/common/events';
@@ -9,7 +10,7 @@ import { resetDatabase, testPrisma } from './support/database';
 
 /** Both are REACTIONS to a committed fact, so neither may ever throw back at what caused it. */
 
-const STUDENT = 'stu_1';
+const STUDENT = randomUUID();
 
 const prisma = testPrisma();
 
@@ -46,7 +47,7 @@ describe('A PIN changing', () => {
       reason: PIN_RESET_REASONS.SELF_CHANGE,
     });
     await listener.onPinReset({
-      studentId: 'stu_2',
+      studentId: randomUUID(),
       mobile: '9876543211',
       reason: PIN_RESET_REASONS.OTP_RESET,
     });

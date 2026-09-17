@@ -1,34 +1,28 @@
 /**
- * DEV-ONLY: one finalized test and ~200 submitted sittings for it, so scoring, ranking and the
- * report have something to compute over. Every row carries a `_cohort_` id, so `--reset` purges
- * the cohort and nothing else. Marks are left NULL because filling them is the worker's job, and
- * writing rows directly raises no domain event. Run: node scripts/dev-seed-cohort.mjs [--reset]
+ * DEV-ONLY: one finalized test and ~200 submitted sittings, so scoring, ranking and the report
+ * have something to compute over. Ids are random; `--reset` re-finds the cohort by the title and
+ * names it owns. Marks are left NULL — filling them is the worker's job.
+ * Run: node scripts/dev-seed-cohort.mjs [--reset]
  */
 import './dev-seed-env.mjs';
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 // --- the shape of the cohort ------------------------------------------------
 
-/** The blueprint is left UNLOCKED: `locked` is one-way by trigger, and --reset has to undo itself. */
-const MARK = '_cohort_';
-const IDS = {
-  branch: `brn${MARK}1`,
-  config: `cfg${MARK}1`,
-  sectionA: `sec${MARK}a`,
-  sectionB: `sec${MARK}b`,
-  test: `tst${MARK}1`,
-  series: `srs${MARK}1`,
-  student: (i) => `stu${MARK}${String(i).padStart(3, '0')}`,
-  attempt: (i) => `att${MARK}${String(i).padStart(3, '0')}`,
-  paper: (order) => `pq${MARK}${String(order).padStart(3, '0')}`,
-};
+/** Ids are random each run; --reset re-finds this cohort by the names below instead. */
+const TEST_TITLE = '[COHORT] Scoring rehearsal — Mock 1';
+const SERIES_NAME = '[COHORT] Scoring rehearsal';
+const CONFIG_NAME = '[COHORT] Scoring rehearsal';
+const BRANCH_NAME = 'COHORT REHEARSAL';
 
 /** Mirrors SCORING_REQUEST in apps/api/src/attempts/scoring-outbox.ts — the relay reads this. */
 const SCORING_REQUEST = { aggregateType: 'Attempt', eventType: 'attempt.scoring_requested' };
 
+/** The blueprint is left UNLOCKED: `locked` is one-way by trigger, and --reset has to undo itself. */
 const SECTIONS = [
-  { id: IDS.sectionA, name: 'Section A', order: 1, questionCount: 20, marks: 2, negative: 0.5 },
-  { id: IDS.sectionB, name: 'Section B', order: 2, questionCount: 10, marks: 1, negative: 0.25 },
+  { id: randomUUID(), name: 'Section A', order: 1, questionCount: 20, marks: 2, negative: 0.5 },
+  { id: randomUUID(), name: 'Section B', order: 2, questionCount: 10, marks: 1, negative: 0.25 },
 ];
 const TOTAL_QUESTIONS = SECTIONS.reduce((sum, section) => sum + section.questionCount, 0);
 const TOTAL_MARKS = SECTIONS.reduce(
@@ -42,6 +36,9 @@ const STUDENTS = 200;
 const CHUNK = 500;
 const DIFFICULTIES = ['LOW', 'MEDIUM', 'HIGH'];
 const SUBMITTED_DAYS_AGO = 2;
+
+/** Fixed once per run and shared by index, so a student and its attempt always pair up. */
+const STUDENT_IDS = Array.from({ length: STUDENTS }, () => randomUUID());
 
 /** Every fifth answer is left flagged, and every third sitting walks away from a question it saw. */
 const MARK_EVERY = 5;
@@ -145,36 +142,45 @@ async function assign(prisma) {
 
 // --- purge ------------------------------------------------------------------
 
+/** Finds the cohort by the title this script owns, then deletes what hangs off it. */
 async function purge(prisma) {
+  const test = await prisma.test.findFirst({
+    where: { title: TEST_TITLE },
+    select: { id: true, testSeriesId: true, baseConfigId: true },
+  });
+  if (!test) return 0;
+
   const attempts = await prisma.attempt.findMany({
-    where: { id: { startsWith: `att${MARK}` } },
-    select: { id: true },
+    where: { testId: test.id },
+    select: { id: true, studentId: true },
   });
   const attemptIds = attempts.map((row) => row.id);
+  const studentIds = attempts.map((row) => row.studentId);
 
   await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: attemptIds } } });
   await prisma.attempt.deleteMany({ where: { id: { in: attemptIds } } });
-  await prisma.paperQuestion.deleteMany({ where: { testId: IDS.test } });
+  await prisma.paperQuestion.deleteMany({ where: { testId: test.id } });
   // Test.testSeriesId is RESTRICT, so the test goes before the series it points at.
-  await prisma.test.deleteMany({ where: { id: IDS.test } });
-  await prisma.testSeries.deleteMany({ where: { id: IDS.series } });
-  await prisma.baseConfigSection.deleteMany({ where: { baseConfigId: IDS.config } });
-  await prisma.baseConfig.deleteMany({ where: { id: IDS.config } });
-  await prisma.studentProfile.deleteMany({ where: { studentId: { startsWith: `stu${MARK}` } } });
-  await prisma.student.deleteMany({ where: { id: { startsWith: `stu${MARK}` } } });
-  await prisma.branch.deleteMany({ where: { id: IDS.branch } });
+  await prisma.test.deleteMany({ where: { id: test.id } });
+  await prisma.testSeries.deleteMany({ where: { id: test.testSeriesId } });
+  await prisma.baseConfigSection.deleteMany({ where: { baseConfigId: test.baseConfigId } });
+  await prisma.baseConfig.deleteMany({ where: { id: test.baseConfigId } });
+  await prisma.studentProfile.deleteMany({ where: { studentId: { in: studentIds } } });
+  await prisma.student.deleteMany({ where: { id: { in: studentIds } } });
+  await prisma.branch.deleteMany({ where: { name: BRANCH_NAME } });
 
   return attemptIds.length;
 }
 
 // --- the paper --------------------------------------------------------------
 
-async function writePaper(prisma, stageId, assigned) {
+async function writePaper(prisma, stageId, seriesId, assigned) {
+  const configId = randomUUID();
   await prisma.baseConfig.create({
     data: {
-      id: IDS.config,
+      id: configId,
       examStageId: stageId,
-      name: '[COHORT] Scoring rehearsal',
+      name: CONFIG_NAME,
       isDefault: false,
       totalQuestions: TOTAL_QUESTIONS,
       totalMarks: TOTAL_MARKS,
@@ -196,14 +202,15 @@ async function writePaper(prisma, stageId, assigned) {
     },
   });
 
+  const testId = randomUUID();
   const finalizedAt = new Date();
   await prisma.test.create({
     data: {
-      id: IDS.test,
-      title: '[COHORT] Scoring rehearsal — Mock 1',
-      baseConfigId: IDS.config,
+      id: testId,
+      title: TEST_TITLE,
+      baseConfigId: configId,
       examStageId: stageId,
-      testSeriesId: IDS.series,
+      testSeriesId: seriesId,
       seriesOrder: 1,
       opensAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
       status: 'ACTIVE',
@@ -219,9 +226,9 @@ async function writePaper(prisma, stageId, assigned) {
     for (const question of questions) {
       order += 1;
       paper.push({
-        id: IDS.paper(order),
-        testId: IDS.test,
-        baseConfigId: IDS.config,
+        id: randomUUID(),
+        testId,
+        baseConfigId: configId,
         baseConfigSectionId: section.id,
         questionId: question.id,
         questionVersionId: question.currentVersionId,
@@ -237,7 +244,7 @@ async function writePaper(prisma, stageId, assigned) {
   await prisma.paperQuestion.createMany({
     data: paper.map(({ correctOptionId: _correct, optionIds: _options, ...row }) => row),
   });
-  return paper;
+  return { paper, testId };
 }
 
 async function writeOffering(prisma, stageId) {
@@ -245,31 +252,32 @@ async function writeOffering(prisma, stageId) {
     where: { deletedAt: null, isActive: true },
     select: { id: true },
   });
-  const branchId = branch?.id ?? IDS.branch;
+  const branchId = branch?.id ?? randomUUID();
   if (!branch) {
     await prisma.branch.create({
-      data: { id: IDS.branch, name: 'COHORT REHEARSAL', type: 'VIRTUAL' },
+      data: { id: branchId, name: BRANCH_NAME, type: 'VIRTUAL' },
     });
   }
 
   // branchIds IS the switch now — only the cohort's branch goes in, nobody else's off-row needed.
+  const seriesId = randomUUID();
   await prisma.testSeries.create({
     data: {
-      id: IDS.series,
-      name: '[COHORT] Scoring rehearsal',
+      id: seriesId,
+      name: SERIES_NAME,
       examStageId: stageId,
       branchIds: [branchId],
       isEnabled: true,
     },
   });
-  return branchId;
+  return { branchId, seriesId };
 }
 
 // --- the cohort -------------------------------------------------------------
 
 async function writeStudents(prisma, branchId, examCode, course) {
   const rows = Array.from({ length: STUDENTS }, (_, index) => ({
-    id: IDS.student(index),
+    id: STUDENT_IDS[index],
     mobile: String(FIRST_MOBILE + index),
     studentType: 'OFFLINE',
     currentBranchId: branchId,
@@ -329,7 +337,7 @@ function slotOf(answer, optionIds, startedAt, answeredAt) {
   ];
 }
 
-async function writeSittings(prisma, paper) {
+async function writeSittings(prisma, testId, paper) {
   const openedAt = new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS);
   const attempts = [];
   const sheets = [];
@@ -338,12 +346,12 @@ async function writeSittings(prisma, paper) {
   for (let index = 0; index < STUDENTS; index += 1) {
     const answers = answersFor(index, paper);
     const spent = answers.reduce((sum, answer) => sum + answer.timeSpentSec, 0);
-    const attemptId = IDS.attempt(index);
+    const attemptId = randomUUID();
 
     attempts.push({
       id: attemptId,
-      testId: IDS.test,
-      studentId: IDS.student(index),
+      testId,
+      studentId: STUDENT_IDS[index],
       attemptNo: 1,
       isGraded: true,
       status: 'SUBMITTED',
@@ -370,7 +378,7 @@ async function writeSittings(prisma, paper) {
       aggregateType: SCORING_REQUEST.aggregateType,
       aggregateId: attemptId,
       eventType: SCORING_REQUEST.eventType,
-      payload: { testId: IDS.test },
+      payload: { testId },
       createdAt: openedAt,
     });
   }
@@ -390,7 +398,7 @@ async function main() {
   const reset = process.argv.includes('--reset');
   const prisma = new PrismaClient();
   try {
-    const standing = await prisma.test.count({ where: { id: IDS.test } });
+    const standing = await prisma.test.count({ where: { title: TEST_TITLE } });
     if (standing > 0 && !reset) {
       console.error(
         'A cohort is already seeded. Re-run with --reset to replace it, or leave it alone.',
@@ -420,10 +428,10 @@ async function main() {
       process.exit(1);
     }
 
-    const branchId = await writeOffering(prisma, stage.id);
-    const paper = await writePaper(prisma, stage.id, assigned);
+    const { branchId, seriesId } = await writeOffering(prisma, stage.id);
+    const { paper, testId } = await writePaper(prisma, stage.id, seriesId, assigned);
     const students = await writeStudents(prisma, branchId, stage.exam.code, stage.exam.course);
-    const { attempts, items } = await writeSittings(prisma, paper);
+    const { attempts, items } = await writeSittings(prisma, testId, paper);
 
     console.log(`\nDone, on stage ${stage.stageKey}.`);
     console.log(`  Paper:    ${paper.length} questions, ${TOTAL_MARKS} marks, ${DURATION_SEC}s`);

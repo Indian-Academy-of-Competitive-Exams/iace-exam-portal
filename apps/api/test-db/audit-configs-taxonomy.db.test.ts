@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DEFAULT_EXAM_COURSE } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
@@ -25,8 +26,9 @@ async function diffOf(audit: AuditContext, edit: () => Promise<unknown>) {
 
 describe('ExamsService.update — driven live, the diff a real edit contributes', () => {
   it('reports a rename, and a re-save of the same name as nothing to log', async () => {
+    const examId = randomUUID();
     await prisma.exam.create({
-      data: { id: 'exam_1', course: DEFAULT_EXAM_COURSE, name: 'SSC CGL', code: 'SSC CGL' },
+      data: { id: examId, course: DEFAULT_EXAM_COURSE, name: 'SSC CGL', code: 'SSC CGL' },
     });
     const audit = new AuditContext();
     const students = new StudentsService(
@@ -42,12 +44,12 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
     );
     const exams = new ExamsService(prisma, students, audit);
 
-    const changed = await diffOf(audit, () => exams.update('exam_1', { name: 'SSC CGL TIER 1' }));
+    const changed = await diffOf(audit, () => exams.update(examId, { name: 'SSC CGL TIER 1' }));
 
     assert.deepEqual(changed, { name: { from: 'SSC CGL', to: 'SSC CGL TIER 1' } });
 
     const resaved = await audit.run(async () => {
-      await exams.update('exam_1', { name: 'SSC CGL TIER 1' });
+      await exams.update(examId, { name: 'SSC CGL TIER 1' });
       return audit.current()?.unchanged;
     });
     assert.equal(resaved, true);

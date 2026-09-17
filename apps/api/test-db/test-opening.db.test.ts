@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { NOTIFICATION_TYPE, TEST_STATUS, type TestStatus } from '@iace/contracts';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
@@ -10,7 +11,7 @@ import { makeCatalog, makeTest, resetDatabase, testPrisma } from './support/data
 
 const NOW = new Date('2026-09-10T05:00:00.000Z');
 const LATER = new Date('2026-09-10T06:00:00.000Z');
-const COHORT = ['stu_1', 'stu_2', 'stu_3'];
+const COHORT = [randomUUID(), randomUUID(), randomUUID()].sort();
 
 const prisma = testPrisma();
 
@@ -53,7 +54,7 @@ describe('Telling a cohort a test has opened', () => {
   });
 
   it('carries the test on the notification, so the bell can open it', async () => {
-    const service = build(['stu_1']);
+    const service = build([randomUUID()]);
     const test = await openingTest({ title: 'Mock 4' });
 
     await service.sweep(NOW);

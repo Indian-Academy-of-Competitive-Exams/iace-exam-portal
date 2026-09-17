@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { BRANCH_TYPE, pinSchema } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
@@ -38,6 +39,8 @@ const sheet = (body: string) => Buffer.from(roster(body));
 
 const pinOf = (hash: string | null | undefined): string => String(hash).replace('hashed:', '');
 
+const ADMIN = randomUUID();
+
 const students = () =>
   prisma.student.findMany({ select: { mobile: true, pinHash: true }, orderBy: { mobile: 'asc' } });
 
@@ -46,7 +49,7 @@ describe('the PIN a roster import issues', () => {
   it('is not derived from the number it belongs to', async () => {
     await importer().commitStudents(
       sheet('mobile,fullName\n9876543210,Asha\n9876500000,Bala'),
-      'adm_1',
+      ADMIN,
     );
 
     const issued = await students();
@@ -61,7 +64,7 @@ describe('the PIN a roster import issues', () => {
   it('is different for every student in one file', async () => {
     const rows = Array.from({ length: 12 }, (_, i) => `98765${String(i).padStart(5, '0')}`);
 
-    await importer().commitStudents(sheet(`mobile\n${rows.join('\n')}`), 'adm_1');
+    await importer().commitStudents(sheet(`mobile\n${rows.join('\n')}`), ADMIN);
 
     const pins = new Set((await students()).map((student) => pinOf(student.pinHash)));
     assert.ok(pins.size > 1, 'every imported student got the same PIN');
@@ -74,7 +77,7 @@ describe('the PIN a roster import issues', () => {
 
     await importer(sender).commitStudents(
       sheet('mobile,fullName\n9876543210,Asha\n9000000001,Renamed'),
-      'adm_1',
+      ADMIN,
     );
 
     assert.equal(sender.sent.length, 1);
@@ -89,7 +92,7 @@ describe('the PIN a roster import issues', () => {
   it('does not fail the import when a message cannot be delivered', async () => {
     const failing = { send: () => Promise.reject(new Error('provider is down')) };
 
-    const result = await importer(failing).commitStudents(sheet('mobile\n9876543210'), 'adm_1');
+    const result = await importer(failing).commitStudents(sheet('mobile\n9876543210'), ADMIN);
 
     assert.equal(result.created, 1);
     assert.equal(await prisma.student.count(), 1);

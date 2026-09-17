@@ -101,7 +101,7 @@ describe('Attempt_ranking_idx', () => {
       await tx.$executeRaw`SET LOCAL enable_seqscan = off`;
       return tx.$queryRaw<PlanRow[]>(Prisma.sql`
         EXPLAIN SELECT count(*) FROM "Attempt"
-        WHERE "testId" = ${uid('test')}
+        WHERE "testId" = ${uid()}::uuid
           AND "isGraded" AND "status" = 'EVALUATED' AND "score" IS NOT NULL
       `);
     });

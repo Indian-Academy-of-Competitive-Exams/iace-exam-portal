@@ -82,13 +82,13 @@ async function populated() {
   await makeStudent(prisma, { deletedAt: new Date() });
   for (let i = 0; i < 4; i += 1) await makeBranch(prisma);
   for (let i = 0; i < 2; i += 1) {
-    await prisma.program.create({ data: { code: uid('PROG'), name: 'Program' } });
+    await prisma.program.create({ data: { code: uid(), name: 'Program' } });
   }
   const catalog = await makeCatalog(prisma);
   await makeTest(prisma, catalog, { status: TEST_STATUS.ACTIVE });
   for (let i = 0; i < 6; i += 1) {
     await prisma.exam.create({
-      data: { course: DEFAULT_EXAM_COURSE, code: uid('EXAM'), name: 'Exam' },
+      data: { course: DEFAULT_EXAM_COURSE, code: uid(), name: 'Exam' },
     });
   }
   const quant = await makeSubject(prisma, 'QUANTITATIVE APTITUDE');
@@ -191,13 +191,14 @@ describe('the open proof-reading flags tile', () => {
   it('appears the moment a flag is open', async () => {
     const subject = await makeSubject(prisma);
     const question = await makeQuestion(prisma, { subjectId: subject.id });
+    const raisedById = uid();
     for (let i = 0; i < 3; i += 1) {
       await prisma.questionFlag.create({
         data: {
           questionId: question.id,
           category: QuestionFlagCategory.INVALID,
           comment: 'Key is wrong',
-          raisedById: 'adm_1',
+          raisedById,
         },
       });
     }
@@ -218,7 +219,7 @@ describe('the sittings series and the windows', () => {
       data: { name: 'SSC CGL Mocks', isEnabled: true },
     });
     const hiddenSeries = await prisma.testSeries.create({
-      data: { name: uid('Hidden'), examStageId: catalog.examStageId, isEnabled: false },
+      data: { name: uid(), examStageId: catalog.examStageId, isEnabled: false },
     });
     const active = TEST_STATUS.ACTIVE;
     const opened = daysFromNow(-13);
