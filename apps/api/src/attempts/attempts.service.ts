@@ -81,8 +81,8 @@ export class AttemptsService {
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = await this.liveAttempt(studentId, testId);
     if (live) {
-      // A resume after the key expired rebuilds it, so answering never falls back to Postgres.
-      await this.state.open(live, input.tab);
+      // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
+      await this.state.resume(live, input.tab);
       return toLiveAttempt(live, await this.requireTest(testId), false);
     }
 

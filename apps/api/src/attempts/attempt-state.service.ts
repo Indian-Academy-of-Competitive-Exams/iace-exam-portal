@@ -69,6 +69,15 @@ export class AttemptStateService {
     if (tab !== undefined) await this.takeClaim(attempt.studentId, attempt.id);
   }
 
+  /** A resume after the key was lost puts back what Postgres holds, never an empty sheet over it. */
+  async resume(
+    attempt: { id: string; studentId: string; testId: string; startedAt: Date; endsAt: Date },
+    tab?: string,
+  ): Promise<void> {
+    if ((await this.read(attempt.id)) === null) await this.rebuild(attempt.studentId, attempt.id);
+    await this.open(attempt, tab);
+  }
+
   /** One sitting at a time per student: opening this one stands down whatever tab held the last. */
   private async takeClaim(studentId: string, attemptId: string): Promise<void> {
     const key = redisKeys.sittingClaim(studentId);

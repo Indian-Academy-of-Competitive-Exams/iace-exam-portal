@@ -20,8 +20,16 @@ import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES } from '../src/queue/queues';
+import { redisKeys } from '../src/redis/redis.keys';
 import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
-import { makeBranch, makePaper, makeStudent, resetDatabase, testPrisma } from './support/database';
+import {
+  makeBranch,
+  makePaper,
+  makeStudent,
+  resetDatabase,
+  servedAnswers,
+  testPrisma,
+} from './support/database';
 
 const SOLUTION = 'Because.';
 
@@ -34,8 +42,8 @@ after(() => prisma.$disconnect());
 const noStorage = () =>
   ({ createDownloadUrl: () => Promise.reject(new Error('unexpected sign')) }) as never;
 
-/** A student at a branch the series is switched on for, and one ACTIVE, frozen, two-question test in it. */
-async function hall() {
+/** A student at a branch the series is switched on for, and one ACTIVE, frozen test in it. */
+async function hall(questionCount = 2) {
   const branch = (await makeBranch(prisma)).id;
   const question = {
     subject: 'Reasoning',
@@ -46,10 +54,12 @@ async function hall() {
       },
     },
   };
-  const paper = await makePaper(prisma, { questions: [question, question] });
+  const paper = await makePaper(prisma, {
+    questions: Array.from({ length: questionCount }, () => question),
+  });
   await prisma.baseConfig.update({
     where: { id: paper.catalog.baseConfigId },
-    data: { durationSec: 1800, totalQuestions: 2, languages: [LANGUAGE_CODE.EN] },
+    data: { durationSec: 1800, totalQuestions: questionCount, languages: [LANGUAGE_CODE.EN] },
   });
   await prisma.testSeries.update({
     where: { id: paper.catalog.testSeriesId },
@@ -184,5 +194,35 @@ describe('a sitting, end to end', () => {
     assert.equal(queue.jobs[0]?.name, QUEUE_NAMES.SCORING);
     const row = await prisma.attempt.findUniqueOrThrow({ where: { id: started.id } });
     assert.equal(row.status, ATTEMPT_STATUS.SUBMITTED);
+  });
+
+  /** The bug this prevents: a Redis restart between the flush and a reload nulling out the sheet. */
+  it('resumes from Postgres rather than blanking the sheet when the key was lost', async () => {
+    const { attempts, state, redis, flusher, submit, student, paper } = await hall(3);
+    const [first, second, third] = paper.items.map((item) => item.questionId);
+    const started = await attempts.start(student, paper.testId, {});
+
+    await state.save(student, started.id, { revision: 1, answers: [answer(first ?? '', 'o2')] });
+    await state.save(student, started.id, { revision: 2, answers: [answer(second ?? '', 'o1')] });
+    await flusher.process();
+
+    await redis.del(redisKeys.attemptState(started.id));
+
+    const resumed = await attempts.start(student, paper.testId, {});
+    assert.equal(resumed.startedByThisCall, false);
+    await state.save(student, started.id, { revision: 1, answers: [answer(third ?? '', 'o3')] });
+
+    const result = await submit.submit(student, started.id);
+
+    assert.equal(result.answeredCount, 3);
+    const sheet = await servedAnswers(prisma, started.id);
+    assert.deepEqual(
+      new Map(sheet.map((row) => [row.questionId, row.selectedOptionId])),
+      new Map([
+        [first, 'o2'],
+        [second, 'o1'],
+        [third, 'o3'],
+      ]),
+    );
   });
 });

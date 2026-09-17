@@ -192,6 +192,27 @@ describe('AttemptStateService', () => {
     assert.equal((await service.read(attemptId))?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
   });
 
+  /** The bug this prevents: a Redis restart wiping 40 flushed answers back to nothing on reload. */
+  it('rebuilds a resume from Postgres rather than seeding it empty when the key is gone', async () => {
+    const { service, attemptId, live, q1 } = await build(true);
+
+    await service.resume(live);
+
+    const held = await service.read(attemptId);
+    assert.deepEqual(Object.keys(held?.answers ?? {}), [q1]);
+    assert.equal(held?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+  });
+
+  it('leaves what a live key already holds alone when resuming', async () => {
+    const { service, student, attemptId, live, q1, change } = await build();
+    await service.open(live);
+    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+    await service.resume(live);
+
+    assert.equal((await service.read(attemptId))?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+  });
+
   /** A key from before testId/startedAt existed must not keep lacking them across a resume. */
   it('backfills testId and startedAt onto a key written before they existed', async () => {
     const { service, redis, student, attemptId, live } = await build();
