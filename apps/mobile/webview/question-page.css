@@ -180,13 +180,37 @@ body {
   background-color: var(--success-subtle);
 }
 
+.option[data-correct] .letter {
+  color: var(--success-ink);
+}
+
+.option[data-correct] .radio {
+  border-color: var(--success);
+}
+
 /* No --destructive-subtle token exists, so a wrong pick is named by its edge and its letter. */
+/* The sitting's blue stands down with it: on a marked paper the verdict is what the row says. */
 .option[data-yours]:not([data-correct]) {
   border-color: var(--destructive);
+  background-color: var(--exam-option-bg);
 }
 
 .option[data-yours]:not([data-correct]) .letter {
   color: var(--destructive);
+}
+
+.option[data-yours] .radio {
+  background-color: currentcolor;
+  box-shadow: inset 0 0 0 var(--space-1) var(--exam-surface);
+}
+
+.option[data-yours]:not([data-correct]) .radio {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+.option[data-correct][data-yours] .radio {
+  color: var(--success);
 }
 
 .answers,
