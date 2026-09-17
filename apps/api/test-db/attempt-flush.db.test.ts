@@ -5,7 +5,16 @@ import { ANSWER_STATE, ATTEMPT_STATUS, type AttemptStatus } from '@iace/contract
 import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { FakeRedis, fakeQueueFailures } from '../test/support/fakes';
-import { makePaper, makeStudent, resetDatabase, sitPaper, testPrisma } from './support/database';
+import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
+import {
+  makePaper,
+  makeStudent,
+  resetDatabase,
+  servedAnswers,
+  sitPaper,
+  testPrisma,
+} from './support/database';
 
 const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
 const NOW = new Date('2026-09-01T05:00:00.000Z');
@@ -57,13 +66,18 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
       prisma.attemptQuestion.findUniqueOrThrow({
         where: { attemptId_questionId: { attemptId: attempt.id, questionId } },
       }),
-    processor: new AttemptFlushProcessor(prisma, state, fakeQueueFailures()),
+    processor: new AttemptFlushProcessor(
+      prisma,
+      state,
+      fakeQueueFailures(),
+      new AttemptSheetService(prisma, new PaperSheetService(prisma)),
+    ),
   };
 }
 
 describe('AttemptFlushProcessor', () => {
   it('writes what Redis holds into the durable row, and clears the mark', async () => {
-    const { processor, state, row } = await build();
+    const { processor, state, row, attemptId } = await build();
 
     await processor.process();
 
@@ -73,6 +87,11 @@ describe('AttemptFlushProcessor', () => {
     assert.equal(written.timeSpentSec, 12);
     assert.deepEqual(written.answeredAt, NOW);
     assert.deepEqual(await state.dirtyIds(), []);
+    const [onSheet] = await servedAnswers(prisma, attemptId);
+    assert.deepEqual(
+      [onSheet?.state, onSheet?.selectedOptionId, onSheet?.timeSpentSec],
+      [ANSWER_STATE.ANSWERED, 'o1', 12],
+    );
   });
 
   /** It is a repeatable job, so it WILL run over state nothing has changed. */

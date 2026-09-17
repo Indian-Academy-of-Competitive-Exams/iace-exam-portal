@@ -6,17 +6,13 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
-import {
-  AppException,
-  ANSWERED_STATES,
-  ATTEMPT_STATUS,
-  ErrorCodes,
-  type SubmittedAttempt,
-} from '@iace/contracts';
+import { AppException, ATTEMPT_STATUS, ErrorCodes, type SubmittedAttempt } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
+import { AttemptSheetService } from './attempt-sheet.service';
 import { STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
+import { answeredIn, type AnswerSheet } from './answer-sheet';
 import { holdsSitting } from './attempt-state';
 import { ScoringOutbox } from './scoring-outbox';
 import { MetricsService } from '../common/metrics';
@@ -44,6 +40,7 @@ export class SubmitService {
     private readonly access: AccessResolverService,
     private readonly outbox: ScoringOutbox,
     private readonly metrics: MetricsService,
+    private readonly sheets: AttemptSheetService,
   ) {}
 
   /** The student's own. Another student's id reads as missing, never as refused. */
@@ -78,6 +75,7 @@ export class SubmitService {
     // READ, never taken: the live state has to outlive a write that throws.
     const held = await this.state.read(attempt.id);
     await writeRows(this.prisma, attempt.id, held ? rowsToFlush(held) : [], STILL_LIVE);
+    let sheet = held ? await this.sheets.write(held, true) : null;
 
     const requested = await this.claim(attempt, now);
     if (requested === null) return this.alreadySubmitted(attempt.id);
@@ -85,8 +83,10 @@ export class SubmitService {
     // Taken only behind the claim, so a save arriving after this is refused rather than swallowed.
     const last = await this.state.take(attempt.id);
     // A save that beat the claim: written before the request is handed to a scorer.
-    if (last && last.revision !== held?.revision)
+    if (last && last.revision !== held?.revision) {
       await writeRows(this.prisma, attempt.id, rowsToFlush(last));
+      sheet = await this.sheets.write(last, false);
+    }
 
     await this.hand(requested);
     // The catalog caches where this student has got to; ending a sitting is what moves it last.
@@ -97,8 +97,18 @@ export class SubmitService {
       status: ATTEMPT_STATUS.SUBMITTED,
       submittedAt: now.toISOString(),
       submittedByThisCall: true,
-      answeredCount: await this.countAnswered(attempt.id),
+      answeredCount: await this.answeredOn(attempt.id, sheet),
     };
+  }
+
+  /** Off the sheet just written when there is one, so a submit reads nothing back to count. */
+  private async answeredOn(attemptId: string, written: AnswerSheet | null): Promise<number> {
+    if (written) return answeredIn(written);
+    const stored = await this.prisma.attemptSheet.findUnique({
+      where: { attemptId },
+      select: { answers: true },
+    });
+    return answeredIn(stored?.answers);
   }
 
   /** The scoring request's id, or null when another call had already ended this sitting. */
@@ -122,16 +132,13 @@ export class SubmitService {
     });
   }
 
-  private async countAnswered(attemptId: string): Promise<number> {
-    return this.prisma.attemptQuestion.count({
-      where: { attemptId, state: { in: [...ANSWERED_STATES] } },
-    });
-  }
-
   /** Found already ended. Taking the state makes this the only caller that can still write it. */
   private async closeOff(attemptId: string): Promise<SubmittedAttempt> {
     const stray = await this.state.take(attemptId);
-    if (stray) await writeRows(this.prisma, attemptId, rowsToFlush(stray));
+    if (stray) {
+      await writeRows(this.prisma, attemptId, rowsToFlush(stray));
+      await this.sheets.write(stray, false);
+    }
     return this.alreadySubmitted(attemptId);
   }
 
@@ -147,7 +154,7 @@ export class SubmitService {
       status: attempt.status,
       submittedAt: (attempt.submittedAt ?? new Date()).toISOString(),
       submittedByThisCall: false,
-      answeredCount: await this.countAnswered(attemptId),
+      answeredCount: await this.answeredOn(attemptId, null),
     };
   }
 

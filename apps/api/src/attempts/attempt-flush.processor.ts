@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
+import { AttemptSheetService } from './attempt-sheet.service';
 import { type HeldState } from './attempt-state';
 import { FLUSH_LANES, STILL_LIVE, rowsToFlush, writeRows } from './attempt-flush';
 import { QueueFailures } from '../common/metrics/queue-failures';
@@ -19,6 +20,7 @@ export class AttemptFlushProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
     private readonly failures: QueueFailures,
+    private readonly sheets: AttemptSheetService,
   ) {
     super();
   }
@@ -56,6 +58,7 @@ export class AttemptFlushProcessor extends WorkerHost {
     try {
       // Gated rather than asked: an ended sitting matches no rows, so its status costs no query.
       await writeRows(this.prisma, attemptId, rowsToFlush(held, ids), STILL_LIVE);
+      await this.sheets.patch(held, ids);
       await this.state.clearPending(attemptId, written);
       return attemptId;
     } catch (error) {

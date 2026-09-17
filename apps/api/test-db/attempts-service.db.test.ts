@@ -16,8 +16,10 @@ import {
   type TestStatus,
 } from '@iace/contracts';
 import type { AccessResolverService } from '../src/access';
+import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptsService } from '../src/attempts/attempts.service';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { FakeRedis } from '../test/support/fakes';
 import {
@@ -95,6 +97,7 @@ async function hall(over: Hall = {}) {
       client,
       resolver(over.permitted),
       new AttemptStateService(client, redis.asService()),
+      new AttemptSheetService(client, new PaperSheetService(client)),
     );
   return { paper, student, service: service(), serviceOn: service };
 }
@@ -139,6 +142,10 @@ describe('AttemptsService — starting a sitting', () => {
     assert.deepEqual(
       (await served(attempt.id)).map((row) => [row.questionId, row.questionVersionId, row.state]),
       paper.items.map((item) => [item.questionId, item.versionId, ANSWER_STATE.NOT_VISITED]),
+    );
+    assert.deepEqual(
+      (await prisma.attemptSheet.findUniqueOrThrow({ where: { attemptId: attempt.id } })).answers,
+      [null, null, null],
     );
   });
 

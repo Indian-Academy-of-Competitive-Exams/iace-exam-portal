@@ -24,11 +24,14 @@ import {
   type ExamCourse,
   type QuestionStatus,
   type QuestionType,
+  type LiveAnswer,
   type StudentType,
   type TestScope,
   type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { sheetOf, servedSheet } from '../../src/attempts/answer-sheet';
+import { SHEET_ROW_SELECT } from '../../src/attempts/paper-sheet.service';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -474,29 +477,77 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
     },
     select: { id: true },
   });
+  const given = input.paper.items.map((item, index) => {
+    const chosen = input.chosen[index] ?? null;
+    const typedAnswer = input.typed?.[index] ?? null;
+    const state =
+      input.states?.[index] ??
+      (chosen === null && typedAnswer === null ? ANSWER_STATE.NOT_VISITED : ANSWER_STATE.ANSWERED);
+    return {
+      item,
+      index,
+      chosen,
+      typedAnswer,
+      state,
+      timeSpentSec: input.timeSpent?.[index] ?? 30,
+    };
+  });
   await prisma.attemptQuestion.createMany({
-    data: input.paper.items.map((item, index) => {
-      const chosen = input.chosen[index] ?? null;
-      const typedAnswer = input.typed?.[index] ?? null;
-      return {
-        attemptId: attempt.id,
-        questionId: item.questionId,
-        questionVersionId: item.versionId,
-        paperQuestionId: item.paperQuestionId,
-        baseConfigSectionId: item.sectionId,
-        order: index + 1,
+    data: given.map(({ item, index, chosen, typedAnswer, state, timeSpentSec }) => ({
+      attemptId: attempt.id,
+      questionId: item.questionId,
+      questionVersionId: item.versionId,
+      paperQuestionId: item.paperQuestionId,
+      baseConfigSectionId: item.sectionId,
+      order: index + 1,
+      selectedOptionId: chosen,
+      typedAnswer,
+      state,
+      timeSpentSec,
+    })),
+  });
+  const answers: Record<string, LiveAnswer> = Object.fromEntries(
+    given.map(({ item, chosen, typedAnswer, state, timeSpentSec }) => [
+      item.questionId,
+      {
+        state,
         selectedOptionId: chosen,
         typedAnswer,
-        state:
-          input.states?.[index] ??
-          (chosen === null && typedAnswer === null
-            ? ANSWER_STATE.NOT_VISITED
-            : ANSWER_STATE.ANSWERED),
-        timeSpentSec: input.timeSpent?.[index] ?? 30,
-      };
-    }),
+        timeSpentSec,
+        answeredAt: null,
+        firstActionAt: null,
+      },
+    ]),
+  );
+  const paperRows = await prisma.paperQuestion.findMany({
+    where: { testId: input.paper.testId },
+    orderBy: { order: 'asc' },
+    select: SHEET_ROW_SELECT,
+  });
+  await prisma.attemptSheet.create({
+    data: { attemptId: attempt.id, answers: sheetOf(answers, paperRows, startedAt) },
   });
   return attempt;
+}
+
+/** A sitting's sheet read back as rows in the order it was served: what the answer rows used to be. */
+export async function servedAnswers(prisma: PrismaService, attemptId: string) {
+  const sitting = await prisma.attempt.findUniqueOrThrow({
+    where: { id: attemptId },
+    select: {
+      testId: true,
+      startedAt: true,
+      shuffleSeed: true,
+      sheet: { select: { answers: true, verdicts: true } },
+      test: { select: { baseConfig: { select: { shuffleQuestions: true } } } },
+    },
+  });
+  const paper = await prisma.paperQuestion.findMany({
+    where: { testId: sitting.testId },
+    orderBy: { order: 'asc' },
+    select: { ...SHEET_ROW_SELECT, questionVersionId: true },
+  });
+  return servedSheet(paper, sitting, sitting.test.baseConfig.shuffleQuestions);
 }
 
 /** One question as a sitting was served it, with the seconds spent on it. */

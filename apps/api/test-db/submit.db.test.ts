@@ -10,8 +10,10 @@ import {
   type AnswerChange,
   type AttemptStatus,
 } from '@iace/contracts';
+import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { SCORING_REQUEST, ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
@@ -23,6 +25,7 @@ import {
   makePaper,
   makeStudent,
   resetDatabase,
+  servedAnswers,
   sitPaper,
   testPrisma,
   uid,
@@ -105,7 +108,15 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     },
   } as never;
   const outbox = new ScoringOutbox(prisma, queue.asQueue());
-  const submit = new SubmitService(client, state, access, outbox, new FakeMetrics().asService());
+  const sheets = new AttemptSheetService(client, new PaperSheetService(client));
+  const submit = new SubmitService(
+    client,
+    state,
+    access,
+    outbox,
+    new FakeMetrics().asService(),
+    sheets,
+  );
   const change = (questionId = q1): AnswerChange => ({
     questionId,
     state: ANSWER_STATE.ANSWERED,
@@ -169,6 +180,11 @@ describe('SubmitService', () => {
     assert.equal(result.status, ATTEMPT_STATUS.SUBMITTED);
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
+    assert.equal(
+      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q1)
+        ?.selectedOptionId,
+      RIGHT_OPTION,
+    );
     assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.SUBMITTED);
     const [request] = await requests();
     assert.deepEqual(built.queue.jobs, [
@@ -257,6 +273,11 @@ describe('SubmitService', () => {
 
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
+    assert.equal(
+      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q1)
+        ?.selectedOptionId,
+      RIGHT_OPTION,
+    );
   });
 
   it('refuses another student with NOT_FOUND, not FORBIDDEN', async () => {
@@ -418,6 +439,11 @@ describe('a save that races the submit', () => {
 
     assert.equal(result.answeredCount, 2);
     assert.equal(await chosenOn(built.attemptId, built.q2), RIGHT_OPTION);
+    assert.equal(
+      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q2)
+        ?.selectedOptionId,
+      RIGHT_OPTION,
+    );
   });
 
   /** The failure this prevents: the one caller that can still write those answers dropping them. */
@@ -434,6 +460,11 @@ describe('a save that races the submit', () => {
     assert.equal(result.submittedByThisCall, false);
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
+    assert.equal(
+      (await servedAnswers(prisma, built.attemptId)).find((row) => row.questionId === built.q1)
+        ?.selectedOptionId,
+      RIGHT_OPTION,
+    );
     // A key outliving its sitting would go on accepting saves for the whole 12h TTL.
     assert.equal(await built.state.read(built.attemptId), null);
   });

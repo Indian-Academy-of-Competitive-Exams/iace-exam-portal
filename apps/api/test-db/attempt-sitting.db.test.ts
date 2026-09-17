@@ -13,8 +13,10 @@ import {
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
 import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
+import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptsService } from '../src/attempts/attempts.service';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES } from '../src/queue/queues';
@@ -65,6 +67,7 @@ async function hall() {
   const access = new AccessResolverService(prisma, redis.asService());
   const state = new AttemptStateService(prisma, redis.asService());
   const queue = new FakeQueue();
+  const sheets = new AttemptSheetService(prisma, new PaperSheetService(prisma));
   return {
     paper,
     student,
@@ -72,15 +75,16 @@ async function hall() {
     state,
     queue,
     access,
-    attempts: new AttemptsService(prisma, access, state),
+    attempts: new AttemptsService(prisma, access, state, sheets),
     sheet: new AttemptPaperService(prisma, access, noStorage()),
-    flusher: new AttemptFlushProcessor(prisma, state, fakeQueueFailures()),
+    flusher: new AttemptFlushProcessor(prisma, state, fakeQueueFailures(), sheets),
     submit: new SubmitService(
       prisma,
       state,
       access,
       new ScoringOutbox(prisma, queue.asQueue()),
       new FakeMetrics().asService(),
+      sheets,
     ),
   };
 }

@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
+import { AttemptSheetService } from './attempt-sheet.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import {
   deadlineFrom,
@@ -73,6 +74,7 @@ export class AttemptsService {
     private readonly prisma: PrismaService,
     private readonly access: AccessResolverService,
     private readonly state: AttemptStateService,
+    private readonly sheets: AttemptSheetService,
   ) {}
 
   async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
@@ -153,6 +155,8 @@ export class AttemptsService {
           order: index + 1,
         })),
       });
+
+      await this.sheets.create(tx, attempt.id, test.id);
 
       await this.lockTheBlueprint(tx, test);
 

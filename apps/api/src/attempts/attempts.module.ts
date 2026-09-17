@@ -28,6 +28,8 @@ import { LiveOpsService } from './live-ops.service';
 import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
+import { PaperSheetService } from './paper-sheet.service';
+import { AttemptSheetService } from './attempt-sheet.service';
 import { AttemptFlushProcessor } from './attempt-flush.processor';
 import { AttemptSweeperProcessor } from './attempt-sweeper.processor';
 import { LeaderboardService } from './leaderboard.service';
@@ -60,6 +62,8 @@ import { SubmitService } from './submit.service';
     AttemptPaperService,
     AttemptReportService,
     AttemptStateService,
+    PaperSheetService,
+    AttemptSheetService,
     LeaderboardService,
     LeaderboardViewService,
     PerformanceAnalyticsService,
