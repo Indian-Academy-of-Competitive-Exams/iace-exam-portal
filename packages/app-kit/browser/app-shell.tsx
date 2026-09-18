@@ -22,6 +22,9 @@ import { UserMenu } from './app-shell/user-menu';
 import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
 
 /** How wide the content runs beside the sidebar. `wide` caps sprawl, it does not create a margin. */
+/** The skip link's target. One id, so the anchor and the landmark cannot drift apart. */
+const MAIN_CONTENT_ID = 'main-content';
+
 const WIDTHS = {
   narrow: 'max-w-5xl',
   wide: 'max-w-none',
@@ -99,6 +102,19 @@ export function AppShell({
     // dvh, not vh: mobile browser chrome would crop the bottom of the frame.
     <NavBadgeProvider badges={navBadges ?? {}}>
       <div className="flex h-dvh flex-col overflow-hidden bg-background">
+        {/* `fixed`, not `absolute`: an sr-only child of a scrollport resolves against the page and grows it. */}
+        <a
+          href={`#${MAIN_CONTENT_ID}`}
+          className={cn(
+            'sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4',
+            'focus-visible:z-[--z-toast] focus-visible:rounded-md focus-visible:border focus-visible:border-border',
+            'focus-visible:bg-surface focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm',
+            'focus-visible:font-medium focus-visible:text-foreground focus-visible:shadow-focus',
+            'focus-visible:outline-none',
+          )}
+        >
+          Skip to content
+        </a>
         {immersive ? null : (
           <header className="flex-none border-b border-border bg-surface">
             <div className="flex items-center gap-3 px-4 py-2">
@@ -170,7 +186,7 @@ export function AppShell({
             </div>
           ) : null}
 
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <main id={MAIN_CONTENT_ID} className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* No padding and no cap while immersive: the page asked for the window, not a column in it. */}
             <div
               className={
