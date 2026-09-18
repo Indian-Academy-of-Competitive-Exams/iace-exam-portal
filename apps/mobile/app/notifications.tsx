@@ -47,7 +47,7 @@ export default function NotificationsScreen() {
     <>
       <Stack.Screen
         options={{
-          headerRight: () => <FilterTrigger state={state} filters={NOTIFICATION_FILTERS} />,
+          headerRight: () => <FilterTrigger bare state={state} filters={NOTIFICATION_FILTERS} />,
         }}
       />
       <FlatList

@@ -19,8 +19,12 @@ export interface FilterProps {
   filters: readonly FilterSpec[];
 }
 
-/** The control a header holds: one tap to every filter, with what is set counted on it. */
-export function FilterTrigger({ state, filters }: Readonly<FilterProps>) {
+/** One tap to every filter, with what is set counted on it. */
+export function FilterTrigger({
+  state,
+  filters,
+  bare = false,
+}: Readonly<FilterProps & { bare?: boolean }>) {
   const [open, setOpen] = useState(false);
   const glyph = useTokenColor('--foreground');
   const chosen = filters.filter((filter) => filter.kind !== 'search');
@@ -33,7 +37,8 @@ export function FilterTrigger({ state, filters }: Readonly<FilterProps>) {
         accessibilityRole="button"
         accessibilityLabel={state.activeCount > 0 ? `Filters, ${state.activeCount} set` : 'Filters'}
         onPress={() => setOpen(true)}
-        className="h-11 w-11 items-center justify-center rounded-full border border-border bg-surface"
+        // A native header draws its own round button behind this one; a page draws nothing.
+        className={`h-11 w-11 items-center justify-center rounded-full ${bare ? '' : 'border border-border bg-surface'}`}
       >
         <SlidersHorizontal size={18} color={glyph} />
         {state.activeCount > 0 ? (
