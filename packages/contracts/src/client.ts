@@ -73,6 +73,7 @@ import {
   type DocumentKind,
   type Me,
   type UpdateMeInput,
+  type UploadFile,
 } from './me';
 import {
   SAVED_ROUTES,
@@ -658,9 +659,10 @@ export function createApiClient(options: ApiClientOptions) {
 
       /** Returns a FRESH session — the caller must store these tokens. */
       /** A photo or an identity document. Returns the refreshed profile. */
-      uploadDocument: (kind: DocumentKind, file: File): Promise<Me> => {
+      uploadDocument: (kind: DocumentKind, file: UploadFile): Promise<Me> => {
         const form = new FormData();
-        form.append(DOCUMENT_FILE_FIELD, file);
+        // React Native passes a { uri, name, type } descriptor where a browser passes a File.
+        form.append(DOCUMENT_FILE_FIELD, file as Blob);
         return write('POST', ME_ROUTES.document(kind), meSchema, form);
       },
 

@@ -5,13 +5,25 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { applyFieldErrors } from '@iace/app-kit';
-import { GENDERS, updateMeSchema, type Gender, type Me, type UpdateMeInput } from '@iace/contracts';
+import {
+  DOCUMENT_KINDS,
+  EARLIEST_BIRTH_DATE,
+  GENDERS,
+  todayISO,
+  updateMeSchema,
+  type Gender,
+  type Me,
+  type UpdateMeInput,
+} from '@iace/contracts';
 import { api } from '../src/lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../src/lib/constants';
+import { DocumentCard } from '../src/components/account/document-card';
+import { HistoryEditor, type HistoryColumn } from '../src/components/account/history-editor';
 import { Alert } from '../src/components/ui/alert';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
 import { ChipRow, type ChipOption } from '../src/components/ui/chip-row';
+import { DateField } from '../src/components/ui/date-field';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { Skeleton } from '../src/components/ui/skeleton';
 import { TextField } from '../src/components/ui/text-field';
@@ -105,13 +117,12 @@ export default function ProfileScreen() {
             <TextField control={form.control} name="fullName" label="Full name" />
             <TextField control={form.control} name="profile.motherName" label="Mother's name" />
             <TextField control={form.control} name="profile.fatherName" label="Father's name" />
-            <TextField
+            <DateField
               control={form.control}
               name="profile.dob"
               label="Date of birth"
-              // ui-copy-ok: format — the field takes a typed date, not a calendar
-              hint="YYYY-MM-DD"
-              keyboardType="numbers-and-punctuation"
+              minimum={EARLIEST_BIRTH_DATE}
+              maximum={todayISO()}
             />
             <TextField
               control={form.control}
@@ -141,6 +152,26 @@ export default function ProfileScreen() {
               )}
             />
 
+            <HistoryEditor
+              control={form.control}
+              name="profile.educationDetails"
+              title="Education"
+              addLabel="Add a qualification"
+              empty="Nothing added yet"
+              columns={EDUCATION_COLUMNS}
+              emptyRow={EMPTY_EDUCATION}
+            />
+
+            <HistoryEditor
+              control={form.control}
+              name="profile.pastExamHistory"
+              title="Exams sat elsewhere"
+              addLabel="Add an exam"
+              empty="Nothing added yet"
+              columns={EXAM_COLUMNS}
+              emptyRow={EMPTY_EXAM}
+            />
+
             <View className="flex-row gap-2">
               <Button
                 variant="outline"
@@ -168,8 +199,13 @@ export default function ProfileScreen() {
             <Button variant="outline" onPress={() => setIsEditing(true)}>
               Edit your details
             </Button>
+
+            <History title="Education" lines={educationLines(me.data)} />
+            <History title="Exams sat elsewhere" lines={examLines(me.data)} />
           </View>
         )}
+
+        <Documents me={me.data} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -223,6 +259,78 @@ const detailsOf = (me: Me): DetailRow[] => [
   { label: 'Gender', value: me.profile?.gender },
 ];
 
+const EDUCATION_COLUMNS: readonly HistoryColumn[] = [
+  { key: 'level', label: 'Qualification' },
+  { key: 'board', label: 'Board or university' },
+  { key: 'institution', label: 'Institution' },
+  { key: 'year', label: 'Year', numeric: true },
+  { key: 'percentage', label: 'Percentage', numeric: true },
+];
+
+const EXAM_COLUMNS: readonly HistoryColumn[] = [
+  { key: 'exam', label: 'Exam' },
+  { key: 'year', label: 'Year', numeric: true },
+  { key: 'result', label: 'Result' },
+];
+
+const EMPTY_EDUCATION = { level: '', board: '', institution: '', year: '', percentage: '' };
+const EMPTY_EXAM = { exam: '', year: '', result: '' };
+
+/** The photo goes on a hall ticket; the marksheet is a certificate, and both are theirs to replace. */
+function Documents({ me }: Readonly<{ me: Me }>) {
+  return (
+    <View className="gap-4">
+      <Text className="text-lg font-semibold text-foreground">Documents</Text>
+      <View className="flex-row gap-3">
+        <DocumentCard
+          kind={DOCUMENT_KINDS.PHOTO}
+          label="Photo"
+          url={me.profile?.photoUrl ?? null}
+        />
+        <DocumentCard
+          kind={DOCUMENT_KINDS.TENTH_MARKSHEET}
+          label="10th marksheet"
+          url={me.profile?.tenthMarksheetUrl ?? null}
+        />
+      </View>
+    </View>
+  );
+}
+
+function History({ title, lines }: Readonly<{ title: string; lines: readonly string[] }>) {
+  if (lines.length === 0) return null;
+
+  return (
+    <View className="gap-3">
+      <Text className="text-lg font-semibold text-foreground">{title}</Text>
+      <Card>
+        {lines.map((line, index) => (
+          <View key={line} className={index > 0 ? 'border-t border-border p-4' : 'p-4'}>
+            <Text className="text-sm text-foreground">{line}</Text>
+          </View>
+        ))}
+      </Card>
+    </View>
+  );
+}
+
+const educationLines = (me: Me): string[] =>
+  (me.profile?.educationDetails ?? []).map((row) =>
+    [row.level, row.institution, row.board, row.year, percent(row.percentage)]
+      .filter((part) => Boolean(part))
+      .join(' · '),
+  );
+
+const examLines = (me: Me): string[] =>
+  (me.profile?.pastExamHistory ?? []).map((row) =>
+    [row.exam, row.year, row.result].filter((part) => Boolean(part)).join(' · '),
+  );
+
+const percent = (value: number | undefined) => (value === undefined ? '' : `${value}%`);
+
+/** A number in the record is a string in the form, or its field renders blank and saves blank. */
+const typed = (value: number | undefined) => (value === undefined ? '' : String(value));
+
 function valuesOf(me: Me): UpdateMeInput {
   return {
     fullName: me.fullName ?? '',
@@ -233,6 +341,15 @@ function valuesOf(me: Me): UpdateMeInput {
       email: me.profile?.email ?? '',
       address: me.profile?.address ?? '',
       gender: me.profile?.gender ?? undefined,
+      educationDetails: (me.profile?.educationDetails ?? []).map((row) => ({
+        ...row,
+        year: typed(row.year),
+        percentage: typed(row.percentage),
+      })),
+      pastExamHistory: (me.profile?.pastExamHistory ?? []).map((row) => ({
+        ...row,
+        year: typed(row.year),
+      })),
     },
   };
 }

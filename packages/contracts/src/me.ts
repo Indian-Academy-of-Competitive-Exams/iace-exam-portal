@@ -104,6 +104,9 @@ export const ME_ROUTES = {
 /** The multipart field an upload arrives under. Server and client must agree. */
 export const DOCUMENT_FILE_FIELD = 'file';
 
+/** A browser File, or the descriptor React Native's own FormData takes in place of one. */
+export type UploadFile = File | { uri: string; name: string; type: string };
+
 // ============================================================================
 // DPDP — consent, the copy a student may take away, and erasure
 // ============================================================================

@@ -9,6 +9,16 @@
     "android": {
       "package": "in.co.iace.mobile"
     },
-    "plugins": ["expo-router", "expo-sqlite"]
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "IACE uses your photos so you can add the one that goes on your hall ticket."
+        }
+      ]
+    ]
   }
 }
