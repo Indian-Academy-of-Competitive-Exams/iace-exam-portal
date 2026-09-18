@@ -1234,6 +1234,25 @@ export function createApiClient(options: ApiClientOptions) {
         /** Resolved or dismissed — either one clears the block on going ACTIVE. */
         settle: (flagId: string, input: SettleQuestionFlagInput): Promise<QuestionFlag> =>
           write('PATCH', ADMIN_PROOFREADING_ROUTES.settle(flagId), questionFlagSchema, input),
+
+        /** A section reads in full: the typist's own questions and the bank picks beside them. */
+        forAssignment: (assignmentId: string): Promise<ProofreadQuestion[]> =>
+          get(
+            ADMIN_PROOFREADING_ROUTES.forAssignment(assignmentId),
+            proofreadQuestionSchema.array(),
+          ),
+
+        editQuestion: (
+          assignmentId: string,
+          questionId: string,
+          input: QuestionDraftInput,
+        ): Promise<QuestionDetail> =>
+          write(
+            'PATCH',
+            ADMIN_PROOFREADING_ROUTES.editQuestion(assignmentId, questionId),
+            questionDetailSchema,
+            input,
+          ),
       },
 
       /** Who types a section and who reads it, and the queue each of them works from. */

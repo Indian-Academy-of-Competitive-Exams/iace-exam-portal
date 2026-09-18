@@ -44,7 +44,14 @@ export function ProofreadQuestionBlock({
   question,
   index,
   canWrite,
-}: Readonly<{ question: ProofreadQuestion; index: number; canWrite: boolean }>) {
+  action,
+}: Readonly<{
+  question: ProofreadQuestion;
+  index: number;
+  canWrite: boolean;
+  /** What this reader can do to the question here — the section screen hangs its Edit on it. */
+  action?: React.ReactNode;
+}>) {
   const [flagging, setFlagging] = useState(false);
 
   return (
@@ -70,11 +77,12 @@ export function ProofreadQuestionBlock({
           </Badge>
           <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
           {canWrite ? (
-            <span data-print-hide>
+            <span data-print-hide className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => setFlagging(true)}>
                 <Flag aria-hidden />
                 Flag
               </Button>
+              {action}
             </span>
           ) : null}
         </div>

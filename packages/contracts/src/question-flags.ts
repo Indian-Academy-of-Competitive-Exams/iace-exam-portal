@@ -82,4 +82,10 @@ export const ADMIN_PROOFREADING_ROUTES = {
   document: '/admin/proofreading/questions',
   raise: (questionId: string) => `/admin/proofreading/questions/${questionId}/flags`,
   settle: (flagId: string) => `/admin/proofreading/flags/${flagId}`,
+  /** One section of one test, as the reader assigned to it sees it. */
+  forAssignment: (assignmentId: string) =>
+    `/admin/proofreading/assignments/${assignmentId}/questions`,
+  /** The assignment is in the path because it is the authority the edit rests on. */
+  editQuestion: (assignmentId: string, questionId: string) =>
+    `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}`,
 } as const;

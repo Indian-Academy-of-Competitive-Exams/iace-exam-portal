@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ASSIGNMENT_ROLES,
   AppException,
   ErrorCodes,
   QUESTION_FLAG_STATUS,
@@ -8,6 +9,8 @@ import {
   type CreateQuestionFlagBody,
   type Paginated,
   type ProofreadQuestion,
+  type QuestionDetail,
+  type QuestionDraft,
   type QuestionFlag,
   type QuestionFlagActor,
   type QuestionListQuery,
@@ -37,7 +40,7 @@ const FLAG_ORDER: Prisma.QuestionFlagOrderByWithRelationInput[] = [
   { createdAt: 'desc' },
 ];
 
-/** Owns `QuestionFlag` (docs/03 §5). The document itself is the question bank's own page. */
+/** Owns `QuestionFlag` (docs/03 §5), and the one section a proof-reader reads and fixes. */
 @Injectable()
 export class ProofreadingService {
   constructor(
@@ -49,7 +52,56 @@ export class ProofreadingService {
   async document(query: QuestionListQuery): Promise<Paginated<ProofreadQuestion>> {
     // Forced, not filtered: proof-reading gates ACTIVATION, so a live question is past reading (§11).
     const page = await this.questions.page(query, { status: QUESTION_STATUS.DRAFT });
-    const ids = page.items.map((question) => question.id);
+    return { ...page, items: await this.withFlags(page.items) };
+  }
+
+  /** The section this reader was handed: what its typist wrote, and what the paper picked into it. */
+  async forAssignment(assignmentId: string, adminId: string): Promise<ProofreadQuestion[]> {
+    const assignment = await this.requireOwnSection(assignmentId, adminId);
+    return this.withFlags(await this.questions.allIn(sectionScope(assignment)));
+  }
+
+  /** The reader FIXES what they find, over the one service that owns the tables — never a second path. */
+  async editQuestion(
+    assignmentId: string,
+    questionId: string,
+    draft: QuestionDraft,
+    adminId: string,
+  ): Promise<QuestionDetail> {
+    const assignment = await this.requireOwnSection(assignmentId, adminId);
+    if (assignment.finalizedAt) throw alreadyRead();
+
+    const question = await this.prisma.question.findFirst({
+      where: { id: questionId, ...sectionScope(assignment) },
+      select: { status: true },
+    });
+    if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+
+    // Reading a section is no licence to promote out of it: the status stays the one it arrived with.
+    return this.questions.update(questionId, { ...draft, status: question.status }, adminId);
+  }
+
+  /** Not theirs reads as not there — the same guard `finalize` uses on the assignment itself. */
+  private async requireOwnSection(assignmentId: string, adminId: string): Promise<SectionRef> {
+    const row = await this.prisma.questionAssignment.findUnique({
+      where: { id: assignmentId },
+      select: {
+        testId: true,
+        baseConfigSectionId: true,
+        assigneeId: true,
+        role: true,
+        finalizedAt: true,
+      },
+    });
+    if (!row || row.assigneeId !== adminId || row.role !== ASSIGNMENT_ROLES.PROOFREADER) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+    }
+    return row;
+  }
+
+  /** Every flag on a set of questions, with the names behind the ids, in one pass over the whole set. */
+  private async withFlags(items: QuestionDetail[]): Promise<ProofreadQuestion[]> {
+    const ids = items.map((question) => question.id);
 
     const [rows, versions] = await Promise.all([
       this.prisma.questionFlag.findMany({
@@ -72,13 +124,7 @@ export class ProofreadingService {
       byQuestion.set(row.questionId, flags);
     }
 
-    return {
-      ...page,
-      items: page.items.map((question) => ({
-        ...question,
-        flags: byQuestion.get(question.id) ?? [],
-      })),
-    };
+    return items.map((question) => ({ ...question, flags: byQuestion.get(question.id) ?? [] }));
   }
 
   /** The version is the server's: it is the one the reader was served, not one the client names. */
@@ -171,3 +217,26 @@ const alreadySettled = () =>
     'Somebody else has already settled this flag. Open the document again.',
     { fieldErrors: { status: ['This flag is no longer open'] } },
   );
+
+const alreadyRead = () =>
+  new AppException(
+    ErrorCodes.CONFLICT,
+    'You have marked this section read, so it is no longer yours to change.',
+  );
+
+interface SectionRef {
+  testId: string;
+  baseConfigSectionId: string;
+  finalizedAt: Date | null;
+}
+
+/** Spec §7.1, held to the SECTION the assignment is: what was written for it, and what was picked into it. */
+const sectionScope = (section: SectionRef): Prisma.QuestionWhereInput => {
+  const { testId, baseConfigSectionId } = section;
+  return {
+    OR: [
+      { assignment: { testId, baseConfigSectionId } },
+      { paperQuestions: { some: { testId, baseConfigSectionId } } },
+    ],
+  };
+};

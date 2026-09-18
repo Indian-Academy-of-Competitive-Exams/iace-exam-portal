@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { ASSIGNMENT_ROLES } from '@iace/contracts';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { useAuth } from './providers/auth';
 import { AppShell } from './components/app-shell';
@@ -17,9 +18,10 @@ import { QuestionFormPage } from './routes/question-form';
 import { QuestionApprovalsPage } from './routes/question-approvals';
 import { ImportQuestionsPage } from './routes/import-questions';
 import { ProofreadingPage } from './routes/proofreading';
+import { AssignmentQueuePage } from './routes/assignment-queue';
+import { ProofreadingSectionPage } from './routes/proofreading-section';
 import { AuthoringEditorPage } from './routes/authoring-editor';
 import { AuthoringHistoryPage } from './routes/authoring-history';
-import { AuthoringAssignmentsPage } from './routes/authoring-assignments';
 import { TaxonomyPage } from './routes/taxonomy';
 import { BaseConfigsPage } from './routes/base-configs';
 import { BaseConfigFormPage } from './routes/base-config-form';
@@ -73,10 +75,18 @@ export function App() {
           <Route path={ROUTES.IMPORT_QUESTIONS} element={<ImportQuestionsPage />} />
           <Route path={ROUTES.TAXONOMY} element={<TaxonomyPage />} />
           <Route path={ROUTES.QUESTION_PATTERN} element={<QuestionFormPage />} />
+          <Route
+            path={ROUTES.PROOFREADING_ASSIGNMENTS}
+            element={<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />}
+          />
+          <Route path={ROUTES.PROOFREADING_SECTION_PATTERN} element={<ProofreadingSectionPage />} />
           <Route path={ROUTES.AUTHORING_EDITOR} element={<AuthoringEditorPage />} />
           {/* Before the :id route, or "history" would be read as a question id. */}
           <Route path={ROUTES.AUTHORING_HISTORY} element={<AuthoringHistoryPage />} />
-          <Route path={ROUTES.AUTHORING_ASSIGNMENTS} element={<AuthoringAssignmentsPage />} />
+          <Route
+            path={ROUTES.AUTHORING_ASSIGNMENTS}
+            element={<AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />}
+          />
           <Route path={ROUTES.AUTHORING_FOR_ASSIGNMENT_PATTERN} element={<AuthoringEditorPage />} />
           <Route path={ROUTES.AUTHORING_EDITOR_PATTERN} element={<AuthoringEditorPage />} />
           <Route path={ROUTES.BASE_CONFIGS} element={<BaseConfigsPage />} />

@@ -73,6 +73,10 @@ export const ROUTES = {
   QUESTION_NEW: '/questions/new',
   QUESTION_APPROVALS: '/questions/approvals',
   PROOFREADING: '/questions/proofreading',
+  /** The reader's own queue, and one section under it — nested, so the trail reads off the nav. */
+  PROOFREADING_ASSIGNMENTS: '/proofreading/assignments',
+  PROOFREADING_SECTION: (assignmentId: string) => `/proofreading/assignments/${assignmentId}`,
+  PROOFREADING_SECTION_PATTERN: '/proofreading/assignments/:assignmentId',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
@@ -82,10 +86,10 @@ export const ROUTES = {
   AUTHORING_QUESTION: (id: string) => `/authoring/${id}`,
   AUTHORING_EDITOR_PATTERN: '/authoring/:id',
   AUTHORING_HISTORY: '/authoring/history',
-  /** The typist's own queue, and the editor scoped to one row of it. */
+  /** The typist's own queue, and the editor under it — nested, so the rail marks the row it came from. */
   AUTHORING_ASSIGNMENTS: '/authoring/assignments',
-  AUTHORING_FOR_ASSIGNMENT: (assignmentId: string) => `/authoring/assignment/${assignmentId}`,
-  AUTHORING_FOR_ASSIGNMENT_PATTERN: '/authoring/assignment/:assignmentId',
+  AUTHORING_FOR_ASSIGNMENT: (assignmentId: string) => `/authoring/assignments/${assignmentId}`,
+  AUTHORING_FOR_ASSIGNMENT_PATTERN: '/authoring/assignments/:assignmentId',
   /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
   BASE_CONFIGS: '/tests/configs',
   BASE_CONFIG_NEW: '/tests/configs/new',
@@ -412,12 +416,15 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
-  /** Its own section, on a key of its own: a reviewer reads and flags, and edits nothing. */
+  /** Its own section, on a key of its own: a reader reads the bank, and fixes the sections they hold. */
   {
     label: 'Proof-reading',
     icon: SpellCheck,
     featureKey: FEATURE_KEYS.QUESTION_PROOFREAD,
-    children: [{ to: ROUTES.PROOFREADING, label: 'Reader', icon: FileText }],
+    children: [
+      { to: ROUTES.PROOFREADING, label: 'Reader', icon: FileText },
+      { to: ROUTES.PROOFREADING_ASSIGNMENTS, label: 'My sections', icon: ListChecks },
+    ],
   },
   /** Its own section, on a key of its own: a typist gets this and not the bank above it. */
   {

@@ -6,6 +6,7 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   QUESTION_FLAG_STATUS,
+  QUESTION_SORTS,
   QUESTION_STATUS,
   TEST_STATUS,
   fieldDiff,
@@ -152,6 +153,16 @@ export class QuestionsService {
     const [rows, total] = await this.pageOf(query, scope);
     const items = await this.signedAll(rows.map(toDetail));
     return paged(query, items, total);
+  }
+
+  /** A scope bounded by something other than a filter — a section, whose size its own config caps. */
+  async allIn(scope: Prisma.QuestionWhereInput): Promise<QuestionDetail[]> {
+    const rows = await this.prisma.question.findMany({
+      where: scope,
+      include: QUESTION_INCLUDE,
+      orderBy: questionOrderBy(QUESTION_SORTS.OLDEST),
+    });
+    return this.signedAll(rows.map(toDetail));
   }
 
   private async pageOf(
