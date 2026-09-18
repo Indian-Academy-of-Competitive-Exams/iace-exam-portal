@@ -166,6 +166,35 @@ served it from. Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` only to point it
 
 **How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 4‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Redis, never Postgres.
 
+## 7b. Mobile push (optional, Android)
+
+Push is off until a Firebase project is wired to it, and the channel reports itself unavailable
+rather than failing per send — so skip this unless you are working on notifications.
+
+1. **Create the project** at <https://console.firebase.google.com> (Analytics is not needed).
+2. **Add an Android app** to it. The package name must be exactly `in.co.iace.mobile`, the value in
+   `apps/mobile/app.json`; a mismatch registers a token FCM will not deliver to. No SHA-1 is needed
+   — that is for Google Sign-In, not messaging.
+3. **Download `google-services.json`** and put it at `apps/mobile/google-services.json`. It is
+   gitignored: it names one project's app, so every environment drops in its own.
+4. **Project settings → Service accounts → Generate new private key.** From the JSON it downloads,
+   three fields go in the root `.env` — and the file itself goes nowhere near the repo:
+
+   ```
+   FCM_PROJECT_ID=<project_id>
+   FCM_CLIENT_EMAIL=<client_email>
+   FCM_PRIVATE_KEY="<private_key, in double quotes, its \n escapes left as they are>"
+   ```
+
+5. **Restart the API.** It logs `Mobile push is not configured` on boot until all three are set.
+6. **Build a development client.** Expo Go cannot receive remote push at all — it was removed in
+   SDK 53 — so `npx expo run:android` (Android Studio and an SDK required), or an EAS development
+   build. There is no EAS project id to set: the app registers the phone's own FCM token, not an
+   Expo push token.
+
+Signing in on that build registers the phone; a `PushDevice` row is the proof. iOS is not wired:
+Expo hands back an APNs token there, which FCM cannot address without the Firebase iOS SDK.
+
 ## 8. Everyday commands
 
 | Command                                           | What it does                                |
