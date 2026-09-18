@@ -6,6 +6,7 @@ import {
   type SaveAttemptStateBody,
   type SectionProgress,
 } from '@iace/contracts';
+import { decodeAnswer, encodeAnswer, type AnswerSlot } from './answer-sheet';
 
 /** The rules a live sitting merges by. Pure: handed the held state and a batch, it returns the next. */
 
@@ -29,6 +30,49 @@ export interface HeldState {
   sections: Record<string, SectionProgress>;
   /** The tab answering: a string holds it, null was stood down, absent is a key put back cold. */
   tab?: string | null;
+}
+
+/** What the KEY holds: the sheet's own slot per answer, still keyed by question. */
+export interface StoredState extends Omit<HeldState, 'answers'> {
+  answers: Record<string, AnswerSlot>;
+}
+
+/** The option stays an id here: placing it in the paper's order would mean reading the paper. */
+const KEPT_AS_AN_ID: readonly string[] = [];
+
+/** By position: a save rewrites the whole key, and named cost 24.6 KB a sitting against 10.3. */
+export function packHeld(held: HeldState): StoredState {
+  const startedAt = new Date(held.startedAt);
+  return {
+    ...held,
+    answers: Object.fromEntries(
+      Object.entries(held.answers).map(([questionId, answer]) => [
+        questionId,
+        encodeAnswer(answer, KEPT_AS_AN_ID, startedAt),
+      ]),
+    ),
+  };
+}
+
+/** Anything this cannot read is no key at all, so the sitting is rebuilt from Postgres instead. */
+export function heldIn(stored: unknown): HeldState | null {
+  if (!isStoredState(stored)) return null;
+  const startedAt = new Date(stored.startedAt);
+  const answers: Record<string, LiveAnswer> = {};
+  for (const [questionId, slot] of Object.entries(stored.answers)) {
+    const answer = decodeAnswer(slot, KEPT_AS_AN_ID, startedAt);
+    if (answer) answers[questionId] = answer;
+  }
+  return { ...stored, answers };
+}
+
+/** A key written before this shipped holds objects where slots go, and is not half-read. */
+function isStoredState(stored: unknown): stored is StoredState {
+  if (typeof stored !== 'object' || stored === null) return false;
+  const held = stored as Partial<StoredState>;
+  if (typeof held.attemptId !== 'string' || typeof held.startedAt !== 'string') return false;
+  if (typeof held.answers !== 'object' || held.answers === null) return false;
+  return Object.values(held.answers).every((slot) => Array.isArray(slot));
 }
 
 const hasAnswer = (change: AnswerChange): boolean =>

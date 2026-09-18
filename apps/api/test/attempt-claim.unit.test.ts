@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ErrorCodes, type AppException } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
-import { holdsSitting, type HeldState } from '../src/attempts/attempt-state';
+import { heldIn, holdsSitting, type HeldState } from '../src/attempts/attempt-state';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from './support/fakes';
@@ -37,8 +37,8 @@ const tabOf = async (redis: FakeRedis, attemptId: string): Promise<string | null
   return state?.tab;
 };
 
-const heldOf = (redis: FakeRedis): Promise<HeldState | null> =>
-  redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
+const heldOf = async (redis: FakeRedis): Promise<HeldState | null> =>
+  heldIn(await redis.getJson<unknown>(redisKeys.attemptState('att_1')));
 
 const answer = (questionId: string) => ({
   questionId,
@@ -154,7 +154,7 @@ describe('AttemptStateService — one sitting at a time, across tabs and devices
 
     await state.open(sitting('att_2'), 'tab_b');
 
-    const stood = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
+    const stood = await heldOf(redis);
     assert.equal(stood?.answers.q1?.selectedOptionId, 'opt_a');
     assert.equal(stood?.tab, null);
   });

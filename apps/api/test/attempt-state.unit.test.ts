@@ -7,8 +7,10 @@ import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from './support/fakes';
 import {
   applyBatch,
+  heldIn,
   isInTime,
   isStale,
+  packHeld,
   pendingAfter,
   SAVE_GRACE_SEC,
   stateOf,
@@ -253,7 +255,7 @@ describe('AttemptStateService.clearPending', () => {
     const redis = new FakeRedis();
     await redis.setJson(
       redisKeys.attemptState('att_1'),
-      held({ pending: ['q1', 'q2'], answers: { q1: answer } }),
+      packHeld(held({ pending: ['q1', 'q2'], answers: { q1: answer } })),
       60,
     );
 
@@ -265,7 +267,7 @@ describe('AttemptStateService.clearPending', () => {
 
   it('writes nothing when the pass wrote nothing', async () => {
     const redis = new FakeRedis();
-    await redis.setJson(redisKeys.attemptState('att_1'), held({ pending: ['q1'] }), 60);
+    await redis.setJson(redisKeys.attemptState('att_1'), packHeld(held({ pending: ['q1'] })), 60);
 
     await service(redis).clearPending('att_1', {});
 
@@ -306,5 +308,50 @@ describe('pendingAfter', () => {
     const now = { ...held({ q1: answer('o1') }, []), pending: undefined };
 
     assert.deepEqual(pendingAfter(now, { q1: answer('o1') }), []);
+  });
+});
+
+describe('the live key — written by position, read back by name', () => {
+  const answered: LiveAnswer = {
+    state: ANSWER_STATE.ANSWERED_MARKED,
+    selectedOptionId: 'opt_a',
+    typedAnswer: null,
+    timeSpentSec: 35,
+    answeredAt: '2026-09-01T05:00:40.000Z',
+    firstActionAt: '2026-09-01T05:00:12.000Z',
+  };
+  const typed: LiveAnswer = {
+    state: ANSWER_STATE.ANSWERED,
+    selectedOptionId: null,
+    typedAnswer: '42.5',
+    timeSpentSec: 12,
+    answeredAt: '2026-09-01T05:01:00.000Z',
+    firstActionAt: null,
+  };
+
+  /** The failure this prevents: a sitting coming back from Redis with somebody else's answers. */
+  it('reads back every answer it wrote', () => {
+    const state = held({ answers: { q1: answered, q2: typed }, pending: ['q2'], tab: 'tab_a' });
+
+    assert.deepEqual(heldIn(packHeld(state)), state);
+  });
+
+  it('writes an answer as the sheet does, with the option still an id', () => {
+    const stored = packHeld(held({ answers: { q1: answered } }));
+
+    assert.deepEqual(stored.answers.q1, [4, 'opt_a', 35, 12, 40]);
+  });
+
+  /** A key from before this shipped holds objects where slots go: rebuilt from Postgres, not half-read. */
+  it('reads a key in the shape before this one as no key at all', () => {
+    const before = { ...held(), answers: { q1: answered } };
+
+    assert.equal(heldIn(before), null);
+  });
+
+  it('reads a value that is not a held sitting as no key at all', () => {
+    assert.equal(heldIn(null), null);
+    assert.equal(heldIn('gone'), null);
+    assert.equal(heldIn({ attemptId: 'att_1' }), null);
   });
 });

@@ -20,7 +20,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { answersOf } from './answer-sheet';
-import { applyBatch, holdsSitting, isInTime, pendingAfter, type HeldState } from './attempt-state';
+import {
+  applyBatch,
+  heldIn,
+  holdsSitting,
+  isInTime,
+  packHeld,
+  pendingAfter,
+  type HeldState,
+} from './attempt-state';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
 const STATE_TTL_SEC = 12 * 60 * 60;
@@ -118,23 +126,24 @@ export class AttemptStateService {
 
   /** The last read, which also shuts the door — one command, so a race has no in-between to lose. */
   async take(attemptId: string): Promise<HeldState | null> {
-    const held = await this.redis.takeJson<HeldState>(redisKeys.attemptState(attemptId));
+    const held = await this.redis.takeJson<unknown>(redisKeys.attemptState(attemptId));
     await this.clearDirty(attemptId);
-    return held;
+    return heldIn(held);
   }
 
   async read(attemptId: string): Promise<HeldState | null> {
-    return this.redis.getJson<HeldState>(redisKeys.attemptState(attemptId));
+    return heldIn(await this.redis.getJson<unknown>(redisKeys.attemptState(attemptId)));
   }
 
   /** Several at once, for a screen watching a hall. A GET, never a take: this must evict nothing. */
   async readMany(attemptIds: readonly string[]): Promise<Map<string, HeldState>> {
-    const held = await this.redis.mgetJson<HeldState>(
+    const held = await this.redis.mgetJson<unknown>(
       attemptIds.map((id) => redisKeys.attemptState(id)),
     );
     return new Map(
-      held.flatMap((state, index) => {
+      held.flatMap((stored, index) => {
         const attemptId = attemptIds[index];
+        const state = heldIn(stored);
         return state === null || attemptId === undefined ? [] : [[attemptId, state] as const];
       }),
     );
@@ -179,7 +188,7 @@ export class AttemptStateService {
 
       // A change may refuse by throwing; a lost swap judges it again against the fresh read.
       const next = change(held);
-      if (await this.redis.replaceJson(key, raw, next, STATE_TTL_SEC)) return next;
+      if (await this.redis.replaceJson(key, raw, packHeld(next), STATE_TTL_SEC)) return next;
     }
     throw new AppException(ErrorCodes.CONFLICT, BEING_ANSWERED);
   }
@@ -266,7 +275,7 @@ export class AttemptStateService {
 /** A corrupt value reads as no key at all, which is what both callers of `patch` already repair. */
 function parsedHeld(raw: string): HeldState | null {
   try {
-    return JSON.parse(raw) as HeldState;
+    return heldIn(JSON.parse(raw));
   } catch {
     return null;
   }
