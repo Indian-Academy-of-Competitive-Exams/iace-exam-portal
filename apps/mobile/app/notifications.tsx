@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-kit';
 import { instituteDayLabel, type Notification } from '@iace/contracts';
@@ -11,7 +11,7 @@ import { useTokenColor } from '../src/lib/use-token-color';
 import { asText, useFilterState } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
 import { Card } from '../src/components/ui/card';
-import { FilterBar } from '../src/components/ui/filter-bar';
+import { FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { Skeleton } from '../src/components/ui/skeleton';
 
@@ -44,20 +44,27 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <FlatList
-      className="flex-1 bg-background"
-      contentContainerStyle={CONTENT_STYLE}
-      data={list.items}
-      keyExtractor={(row) => row.id}
-      onEndReachedThreshold={0.5}
-      onEndReached={list.loadMore}
-      renderItem={({ item }) => <Row row={item} onPress={() => open(item)} />}
-      ListHeaderComponent={<FilterBar state={state} filters={NOTIFICATION_FILTERS} />}
-      ListEmptyComponent={<ListBody list={list} unreadOnly={unreadOnly} />}
-      ListFooterComponent={
-        list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null
-      }
-    />
+    <>
+      <Stack.Screen
+        options={{
+          headerRight: () => <FilterTrigger state={state} filters={NOTIFICATION_FILTERS} />,
+        }}
+      />
+      <FlatList
+        className="flex-1 bg-background"
+        contentContainerStyle={CONTENT_STYLE}
+        data={list.items}
+        keyExtractor={(row) => row.id}
+        onEndReachedThreshold={0.5}
+        onEndReached={list.loadMore}
+        renderItem={({ item }) => <Row row={item} onPress={() => open(item)} />}
+        ListHeaderComponent={<FilterSummary state={state} filters={NOTIFICATION_FILTERS} />}
+        ListEmptyComponent={<ListBody list={list} unreadOnly={unreadOnly} />}
+        ListFooterComponent={
+          list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null
+        }
+      />
+    </>
   );
 }
 

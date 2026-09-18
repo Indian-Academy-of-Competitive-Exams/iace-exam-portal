@@ -1,8 +1,8 @@
 /// <reference types="nativewind/types" />
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SAVED_FILTER_FIELDS, savedFilters, useInfinitePages } from '@iace/app-kit';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { SAVED_FILTER_FIELDS, useInfinitePages } from '@iace/app-kit';
 import {
   instituteDayLabel,
   SAVED_QUESTION_KIND,
@@ -12,12 +12,11 @@ import {
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import { api } from '../../lib/api';
 import { savedFacetsQueryKey, savedQueryKey } from '../../lib/constants';
-import { asSet, useFilterState } from '../../lib/filters';
+import { asSet, type FilterState } from '../../lib/filters';
 import { useTokenColor } from '../../lib/use-token-color';
 import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Card } from '../ui/card';
-import { FilterBar } from '../ui/filter-bar';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
@@ -30,19 +29,18 @@ const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
     'Added when a marked answer was wrong. Clearing one brings it back only if you miss it again.',
 };
 
-export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
+export interface SavedListProps {
+  kind: SavedQuestionKind;
+  /** The screen's title row owns the filters; the list only reads what was chosen in them. */
+  state: FilterState;
+}
+
+export function SavedList({ kind, state }: Readonly<SavedListProps>) {
   const queryClient = useQueryClient();
   const [reading, setReading] = useState<SavedQuestion | null>(null);
   const [dropping, setDropping] = useState<SavedQuestion | null>(null);
   const spinner = useTokenColor('--muted-foreground');
 
-  const facets = useQuery({
-    queryKey: savedFacetsQueryKey(kind),
-    queryFn: () => api.me.savedFacets({ kind }),
-  });
-
-  const filters = useMemo(() => savedFilters(facets.data), [facets.data]);
-  const state = useFilterState(filters);
   const subjectId = asSet(state.values[SAVED_FILTER_FIELDS.SUBJECT.key]);
   const testId = asSet(state.values[SAVED_FILTER_FIELDS.TEST.key]);
 
@@ -82,10 +80,9 @@ export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
           <SavedRow row={item} onRead={() => setReading(item)} onDrop={() => setDropping(item)} />
         )}
         ListHeaderComponent={
-          <View className="gap-3 pb-1">
-            <Alert variant="info">{KIND_NOTE[kind]}</Alert>
-            <FilterBar state={state} filters={filters} />
-          </View>
+          <Alert variant="info" className="mb-1">
+            {KIND_NOTE[kind]}
+          </Alert>
         }
         ListEmptyComponent={<ListBody kind={kind} list={list} filtered={filtered} />}
         ListFooterComponent={

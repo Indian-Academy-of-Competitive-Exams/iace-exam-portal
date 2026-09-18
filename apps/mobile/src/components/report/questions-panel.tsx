@@ -16,7 +16,7 @@ import { asText, useFilterState, type FilterState } from '../../lib/filters';
 import { Alert } from '../ui/alert';
 import { Badge, type BadgeVariant } from '../ui/badge';
 import { Card } from '../ui/card';
-import { FilterBar } from '../ui/filter-bar';
+import { FilterSummary, FilterTrigger } from '../ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { Skeleton } from '../ui/skeleton';
@@ -103,8 +103,13 @@ function Header({
         />
       </View>
 
-      <FilterBar state={state} filters={QUESTION_REPORT_FILTERS} />
-      <Text className="text-xs text-muted-foreground">{`${showing} of ${report.questions.length}`}</Text>
+      <View className="flex-row items-center justify-between gap-3">
+        <Text className="flex-1 text-sm text-muted-foreground">
+          {`${showing} of ${report.questions.length}`}
+        </Text>
+        <FilterTrigger state={state} filters={QUESTION_REPORT_FILTERS} />
+      </View>
+      <FilterSummary state={state} filters={QUESTION_REPORT_FILTERS} />
     </View>
   );
 }

@@ -1,6 +1,8 @@
 /// <reference types="nativewind/types" />
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { savedFilters } from '@iace/app-kit';
 import {
   SAVED_QUESTION_KIND,
   SAVED_QUESTION_KIND_LABELS,
@@ -8,7 +10,11 @@ import {
   type SavedQuestionKind,
 } from '@iace/contracts';
 import { ChipRow, type ChipOption } from '../../src/components/ui/chip-row';
+import { FilterSummary, FilterTrigger } from '../../src/components/ui/filter-bar';
 import { SavedList } from '../../src/components/saved/saved-list';
+import { api } from '../../src/lib/api';
+import { savedFacetsQueryKey } from '../../src/lib/constants';
+import { useFilterState } from '../../src/lib/filters';
 
 const KINDS: readonly ChipOption[] = SAVED_QUESTION_KINDS.map((kind) => ({
   value: kind,
@@ -19,14 +25,36 @@ const KINDS: readonly ChipOption[] = SAVED_QUESTION_KINDS.map((kind) => ({
 export default function SavedScreen() {
   const [kind, setKind] = useState<SavedQuestionKind>(SAVED_QUESTION_KIND.BOOKMARK);
 
+  const facets = useQuery({
+    queryKey: savedFacetsQueryKey(kind),
+    queryFn: () => api.me.savedFacets({ kind }),
+  });
+  const filters = useMemo(() => savedFilters(facets.data), [facets.data]);
+  const state = useFilterState(filters);
+
   return (
     <View className="flex-1 bg-background">
       <View className="gap-3 px-5 pt-6">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Saved questions</Text>
-        <ChipRow options={KINDS} value={kind} onChange={(next) => setKind(asKind(next))} />
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="flex-1 text-2xl font-bold tracking-tight text-foreground">
+            Saved questions
+          </Text>
+          <FilterTrigger state={state} filters={filters} />
+        </View>
+
+        <ChipRow
+          options={KINDS}
+          value={kind}
+          onChange={(next) => {
+            setKind(asKind(next));
+            // Each list spans its own subjects, so the other's choice would filter this to nothing.
+            state.clearFilters();
+          }}
+        />
+        <FilterSummary state={state} filters={filters} />
       </View>
 
-      <SavedList key={kind} kind={kind} />
+      <SavedList key={kind} kind={kind} state={state} />
     </View>
   );
 }

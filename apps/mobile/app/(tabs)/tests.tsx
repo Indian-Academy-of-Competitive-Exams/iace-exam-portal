@@ -15,7 +15,7 @@ import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
 import { Skeleton } from '../../src/components/ui/skeleton';
-import { FilterBar } from '../../src/components/ui/filter-bar';
+import { FilterSearch, FilterSummary, FilterTrigger } from '../../src/components/ui/filter-bar';
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
 import { asText, useFilterState, type FilterSpec, type FilterState } from '../../src/lib/filters';
 import { plural } from '../../src/lib/plural';
@@ -134,9 +134,12 @@ interface TestsHeaderProps {
 function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeaderProps>) {
   return (
     <View className="gap-4 pb-2">
-      <View>
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Tests</Text>
-        <Text className="text-sm text-muted-foreground">{plural(count, 'test')}</Text>
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="flex-1">
+          <Text className="text-2xl font-bold tracking-tight text-foreground">Tests</Text>
+          <Text className="text-sm text-muted-foreground">{plural(count, 'test')}</Text>
+        </View>
+        <FilterTrigger state={state} filters={filters} />
       </View>
 
       {testBlocked ? (
@@ -145,7 +148,8 @@ function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeade
         </Alert>
       ) : null}
 
-      <FilterBar state={state} filters={filters} />
+      <FilterSearch state={state} filters={filters} />
+      <FilterSummary state={state} filters={filters} />
     </View>
   );
 }

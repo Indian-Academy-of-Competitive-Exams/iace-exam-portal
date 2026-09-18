@@ -1,86 +1,105 @@
 /**
- * A spec as a bar: the search inline, the primary filters as chips under it, and the rest folded
- * into a sheet — the web folds them behind a button, and a phone has room for nothing else.
- * Clear appears only when it would do something; a permanently greyed one teaches nobody.
+ * The web's filter bar, folded all the way: every filter lives in one sheet, opened from the
+ * control in the screen's header, and what is set reads back as a line under the title. Same spec,
+ * same counts and the same Clear — a phone has no room for a row of comboboxes.
  */
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnstableNativeVariable } from 'nativewind';
-import {
-  activeFilterCount,
-  asSet,
-  asText,
-  type FilterSpec,
-  type FilterState,
-} from '../../lib/filters';
+import SlidersHorizontal from 'lucide-react-native/icons/sliders-horizontal';
+import { asSet, asText, summaryOf, type FilterSpec, type FilterState } from '../../lib/filters';
+import { useTokenColor } from '../../lib/use-token-color';
 import { Button } from './button';
 import { Chip, ChipRow } from './chip-row';
 
-export interface FilterBarProps {
+export interface FilterProps {
   state: FilterState;
   filters: readonly FilterSpec[];
 }
 
-export function FilterBar({ state, filters }: Readonly<FilterBarProps>) {
+/** The control a header holds: one tap to every filter, with what is set counted on it. */
+export function FilterTrigger({ state, filters }: Readonly<FilterProps>) {
   const [open, setOpen] = useState(false);
-  const placeholderColor = useUnstableNativeVariable('--placeholder');
+  const glyph = useTokenColor('--foreground');
+  const chosen = filters.filter((filter) => filter.kind !== 'search');
 
-  const search = filters.find((filter) => filter.kind === 'search');
-  const primary = filters.filter((filter) => filter.kind !== 'search' && filter.primary);
-  const folded = filters.filter((filter) => filter.kind !== 'search' && !filter.primary);
-  const foldedCount = activeFilterCount(state.values, folded);
+  if (chosen.length === 0) return null;
 
   return (
-    <View className="gap-3">
-      {search ? (
-        <TextInput
-          value={asText(state.values[search.key])}
-          onChangeText={(next) => state.setFilter(search.key, next)}
-          placeholder={search.kind === 'search' ? search.placeholder : undefined}
-          placeholderTextColor={typeof placeholderColor === 'string' ? placeholderColor : undefined}
-          accessibilityLabel={search.label}
-          className="h-11 rounded-md border border-input bg-surface px-3 text-base text-foreground"
-        />
-      ) : null}
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={state.activeCount > 0 ? `Filters, ${state.activeCount} set` : 'Filters'}
+        onPress={() => setOpen(true)}
+        className="h-11 w-11 items-center justify-center rounded-md border border-border bg-surface"
+      >
+        <SlidersHorizontal size={18} color={glyph} />
+        {state.activeCount > 0 ? (
+          <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1">
+            <Text className="text-2xs font-semibold text-primary-foreground">
+              {state.activeCount}
+            </Text>
+          </View>
+        ) : null}
+      </Pressable>
 
-      {primary.map((filter) => (
-        <FilterControl key={filter.key} filter={filter} state={state} />
-      ))}
+      <FilterSheet
+        open={open}
+        filters={chosen}
+        state={state}
+        onClose={() => setOpen(false)}
+        // One filter has nothing to combine with, so choosing IS the whole visit.
+        closeOnChoice={chosen.length === 1}
+      />
+    </>
+  );
+}
 
-      {folded.length > 0 || state.activeCount > 0 ? (
-        <View className="flex-row items-center gap-2">
-          {folded.length > 0 ? (
-            <Button variant="outline" size="sm" onPress={() => setOpen(true)}>
-              {foldedCount > 0 ? `Filters (${foldedCount})` : 'Filters'}
-            </Button>
-          ) : null}
-          {state.activeCount > 0 ? (
-            <Button variant="ghost" size="sm" onPress={state.clearFilters}>
-              Clear filters
-            </Button>
-          ) : null}
-        </View>
-      ) : null}
+/** What is narrowing the list, in the reader's own words. Absent until something is set. */
+export function FilterSummary({ state, filters }: Readonly<FilterProps>) {
+  const set = summaryOf(filters, state.values);
+  if (set.length === 0) return null;
 
-      <FilterSheet open={open} filters={folded} state={state} onClose={() => setOpen(false)} />
+  return (
+    <View className="flex-row items-center gap-3">
+      <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+        {set.join(' · ')}
+      </Text>
+      {/* Shown only when it would do something — a permanently greyed Clear teaches nobody. */}
+      <Pressable accessibilityRole="button" onPress={state.clearFilters} className="py-1">
+        <Text className="text-sm font-medium text-primary-ink">Clear</Text>
+      </Pressable>
     </View>
   );
 }
 
-/** The fold, as the sheet a phone reads it in. The controls are the same ones the bar draws. */
+/** A search says what you are looking for rather than narrowing a choice, so it stays on screen. */
+export function FilterSearch({ state, filters }: Readonly<FilterProps>) {
+  const placeholderColor = useUnstableNativeVariable('--placeholder');
+  const search = filters.find((filter) => filter.kind === 'search');
+  if (!search) return null;
+
+  return (
+    <TextInput
+      value={asText(state.values[search.key])}
+      onChangeText={(next) => state.setFilter(search.key, next)}
+      placeholder={search.placeholder}
+      placeholderTextColor={typeof placeholderColor === 'string' ? placeholderColor : undefined}
+      accessibilityLabel={search.label}
+      className="h-11 rounded-md border border-input bg-surface px-3 text-base text-foreground"
+    />
+  );
+}
+
 function FilterSheet({
   open,
   filters,
   state,
   onClose,
-}: Readonly<{
-  open: boolean;
-  filters: readonly FilterSpec[];
-  state: FilterState;
-  onClose: () => void;
-}>) {
+  closeOnChoice,
+}: Readonly<FilterProps & { open: boolean; onClose: () => void; closeOnChoice: boolean }>) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -98,9 +117,14 @@ function FilterSheet({
             </Button>
           </View>
 
-          <ScrollView className="shrink grow-0" contentContainerClassName="gap-4 px-4">
+          <ScrollView className="shrink grow-0" contentContainerClassName="gap-5 px-4 pb-2">
             {filters.map((filter) => (
-              <FilterControl key={filter.key} filter={filter} state={state} />
+              <FilterControl
+                key={filter.key}
+                filter={filter}
+                state={state}
+                onChosen={closeOnChoice ? onClose : undefined}
+              />
             ))}
           </ScrollView>
 
@@ -117,8 +141,12 @@ function FilterSheet({
   );
 }
 
-function FilterControl({ filter, state }: Readonly<{ filter: FilterSpec; state: FilterState }>) {
-  // A search draws itself in the bar, and only it comes with no choices to draw.
+function FilterControl({
+  filter,
+  state,
+  onChosen,
+}: Readonly<{ filter: FilterSpec; state: FilterState; onChosen?: () => void }>) {
+  // A search draws itself in the bar, and it is the one kind with no choices to draw.
   const items = filter.items ?? [];
 
   if (filter.kind === 'multi') {
@@ -147,7 +175,10 @@ function FilterControl({ filter, state }: Readonly<{ filter: FilterSpec; state: 
         label={filter.label}
         options={items}
         value={asText(state.values[filter.key])}
-        onChange={(next) => state.setFilter(filter.key, next)}
+        onChange={(next) => {
+          state.setFilter(filter.key, next);
+          onChosen?.();
+        }}
       />
     );
   }
@@ -155,6 +186,6 @@ function FilterControl({ filter, state }: Readonly<{ filter: FilterSpec; state: 
   return null;
 }
 
-/** Choosing nothing already means every one of them, so removing the last is not an empty set to store. */
+/** Choosing nothing already means every one of them, so the last one off is an empty set, not none. */
 const toggled = (held: readonly string[], value: string): string[] =>
   held.includes(value) ? held.filter((one) => one !== value) : [...held, value];
