@@ -472,8 +472,7 @@ function useFocusMode() {
 }
 
 /** Their own sections, so a URL naming somebody else's is refused rather than opened empty. */
-function useTypistAssignment(assignmentId: string | undefined): ScopedSection {
-  const scoped = assignmentId ?? '';
+function useTypistAssignment(scoped = ''): ScopedSection {
   const mine = useQuery({
     queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', ASSIGNMENT_ROLES.TYPIST],
     queryFn: () => api.admin.assignments.mine({ role: ASSIGNMENT_ROLES.TYPIST }),
