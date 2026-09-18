@@ -33,7 +33,7 @@ export function FilterTrigger({ state, filters }: Readonly<FilterProps>) {
         accessibilityRole="button"
         accessibilityLabel={state.activeCount > 0 ? `Filters, ${state.activeCount} set` : 'Filters'}
         onPress={() => setOpen(true)}
-        className="h-11 w-11 items-center justify-center rounded-md border border-border bg-surface"
+        className="h-11 w-11 items-center justify-center rounded-full border border-border bg-surface"
       >
         <SlidersHorizontal size={18} color={glyph} />
         {state.activeCount > 0 ? (
