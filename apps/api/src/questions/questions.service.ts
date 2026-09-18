@@ -7,6 +7,7 @@ import {
   FORM_LEVEL_FIELD,
   QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
+  TEST_STATUS,
   fieldDiff,
   plainTextOf,
   type LocalizedContent,
@@ -229,7 +230,7 @@ export class QuestionsService {
   ): Promise<QuestionDetail> {
     const question = await this.require(id);
     assertScreenIsCurrent(question, draft);
-    assertTaxonomySettled(question, draft);
+    await this.assertTaxonomySettled(this.prisma, question, draft);
     const built = await this.validated(draft);
     if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, id);
 
@@ -254,7 +255,7 @@ export class QuestionsService {
   ): Promise<QuestionRow> {
     const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-    assertTaxonomySettled(question, draft);
+    await this.assertTaxonomySettled(tx, question, draft);
     await this.assertStatusReachable(tx, id, question.status, draft.status);
 
     // Pinned to the row as read, so the version and content this rests on cannot be out of date.
@@ -293,22 +294,33 @@ export class QuestionsService {
       : this.insertVersion(tx, question, built, options, createdById);
   }
 
-  /** The current version when it may be rewritten rather than replaced, or null when it may not. */
+  /** Rewritable until a test students can already reach pins it — the paper must never move under them. */
   private async revisableVersionId(
     tx: Prisma.TransactionClient,
     question: QuestionRow,
   ): Promise<string | null> {
     const questionVersionId = question.currentVersionId;
-    if (!questionVersionId || question.status !== QUESTION_STATUS.DRAFT) return null;
+    if (!questionVersionId) return null;
 
-    // The guard no status can give: a version a paper holds must never move, and every served version is on one.
-    const papers = await tx.paperQuestion.count({
-      where: { questionId: question.id, questionVersionId },
+    const now = new Date();
+    const reached = await tx.paperQuestion.count({
+      where: {
+        questionId: question.id,
+        questionVersionId,
+        test: {
+          status: { not: TEST_STATUS.DRAFT },
+          OR: [
+            { opensAt: null },
+            { opensAt: { lte: now } },
+            { programUnlocks: { some: { opensAt: { lte: now } } } },
+          ],
+        },
+      },
     });
-    return papers > 0 ? null : questionVersionId;
+    return reached > 0 ? null : questionVersionId;
   }
 
-  /** Version 1 of a question nobody has drawn stays version 1, however often it is saved. */
+  /** A version no reachable test pins yet stays this version, however often it is saved. */
   private async revise(
     tx: Prisma.TransactionClient,
     versionId: string,
@@ -416,6 +428,22 @@ export class QuestionsService {
     }
     if (to !== QUESTION_STATUS.DRAFT || from === QUESTION_STATUS.DRAFT) return;
     if (await this.isUsed(tx, id)) throw stillInUse('returned to draft');
+  }
+
+  /** Being depended on is what settles taxonomy, not being published — a drawn row carries no subject. */
+  private async assertTaxonomySettled(
+    tx: Prisma.TransactionClient,
+    before: QuestionRow,
+    draft: QuestionDraft,
+  ): Promise<void> {
+    if (draft.subjectId === before.subjectId && (draft.topicId ?? null) === before.topicId) return;
+    if (!(await this.isUsed(tx, before.id))) return;
+
+    throw refused(
+      'A paper or an attempt already uses this question, so it keeps its subject and topic.',
+      'Something already uses this question',
+      'subjectId',
+    );
   }
 
   /** A reviewer's outstanding objection outranks an approval, whichever screen the approval came from. */
@@ -658,18 +686,6 @@ const stillInUse = (what: string) =>
     `A paper or an attempt already uses this question, so it cannot be ${what}.`,
     'Something already uses this question',
   );
-
-/** Taxonomy is what a paper draws on, so it settles when the question leaves the draft. */
-function assertTaxonomySettled(before: QuestionRow, draft: QuestionDraft): void {
-  if (before.status === QUESTION_STATUS.DRAFT) return;
-  if (draft.subjectId === before.subjectId && (draft.topicId ?? null) === before.topicId) return;
-
-  throw refused(
-    'A question that has left the draft keeps its subject and topic. Return it to draft to move it.',
-    'Settled when the question left the draft',
-    'subjectId',
-  );
-}
 
 /** Someone else moved the row between reading it and writing it; the save is not silently applied. */
 const editedElsewhere = () =>

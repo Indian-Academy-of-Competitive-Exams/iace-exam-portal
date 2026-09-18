@@ -10,6 +10,7 @@ import {
   QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
   QUESTION_TYPE,
+  TEST_STATUS,
   plainTextOf,
   previewTextOf,
   questionDraftSchema,
@@ -105,6 +106,13 @@ function draft(over: Partial<QuestionDraftInput> = {}) {
 
 const REWORDED = { en: 'What is 20% of 150, exactly?', hi: '150 का 20% कितना है?' };
 
+/** One fewer than `draft()` writes, so `optionsWithIds` mints a list of a different length. */
+const THREE_OPTIONS = [
+  { position: 1, isCorrect: false, text: { en: '25', hi: '25' } },
+  { position: 2, isCorrect: true, text: { en: '30', hi: '30' } },
+  { position: 3, isCorrect: false, text: { en: '35', hi: '35' } },
+];
+
 const ELSEWHERE = { subjectId: BANK.GENERAL_AWARENESS, topicId: BANK.HISTORY };
 
 const asDraft = (over: Partial<QuestionDraftInput> = {}) =>
@@ -157,6 +165,33 @@ async function heldBy(
     });
   }
 }
+
+/** A paper row pinning this exact version, on a test the caller can then open. */
+async function pinnedOn(questionId: string, questionVersionId: string) {
+  const catalog = await makeCatalog(prisma);
+  const test = await makeTest(prisma, catalog);
+  const section = await makeSection(prisma, catalog);
+  await prisma.paperQuestion.create({
+    data: {
+      id: uid(),
+      testId: test.id,
+      baseConfigId: catalog.baseConfigId,
+      baseConfigSectionId: section.id,
+      questionId,
+      questionVersionId,
+      order: 1,
+      marks: 2,
+      negativeMarks: 0.5,
+    },
+  });
+  return { testId: test.id };
+}
+
+const openedAgo = (testId: string) =>
+  prisma.test.update({
+    where: { id: testId },
+    data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() - 60_000) },
+  });
 
 const currentVersionOf = async (id: string) => (await questionRow(id)).currentVersionId ?? '';
 
@@ -365,11 +400,13 @@ describe('QuestionsService.update', () => {
 });
 
 describe('QuestionsService.update — what versioning is for', () => {
-  /** A paper and an attempt pin a version; rewriting the row they point at would rewrite every scored result. */
+  /** A paper on a reached test pins a version; rewriting the row it points at would move it under a student. */
   it('inserts a new version and leaves the one a paper already pinned untouched', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
     const [pinned] = await versions();
+    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    await openedAgo(testId);
 
     const edited = await questions.update(
       created.id,
@@ -423,7 +460,7 @@ describe('QuestionsService.update — what versioning is for', () => {
   });
 });
 
-describe('QuestionsService.update — a draft is still being written', () => {
+describe('QuestionsService.update — a working copy is rewritten, not appended', () => {
   /** A draft is a working copy: saving it ten times must not leave ten versions to read through. */
   it('rewrites the one version a draft already has', async () => {
     const { questions } = await build();
@@ -478,20 +515,20 @@ describe('QuestionsService.update — a draft is still being written', () => {
     );
   });
 
-  it('versions a published question rather than rewriting it', async () => {
+  it('rewrites a published question in place while nothing has drawn it', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
     const versionId = await currentVersionOf(created.id);
 
     const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
-    assert.equal(edited.version, 2);
-    assert.equal((await versions()).length, 2);
-    assert.notEqual(await currentVersionOf(created.id), versionId);
+    assert.equal(edited.version, 1);
+    assert.equal((await versions()).length, 1);
+    assert.equal(await currentVersionOf(created.id), versionId);
   });
 
-  /** Status is the rule; this is the belt: a version a paper holds must not rewrite itself, ever. */
-  it('versions a draft whose version a paper holds', async () => {
+  /** An unreached paper is not the belt status used to be — its version still rewrites in place. */
+  it('rewrites in place a version an unreached paper holds, and the paper follows it', async () => {
     const { questions } = await build();
     const created = await questions.create(asDraft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
@@ -499,13 +536,27 @@ describe('QuestionsService.update — a draft is still being written', () => {
 
     const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
 
-    assert.equal(edited.version, 2);
-    assert.equal((await versions()).length, 2);
-    assert.notEqual(await currentVersionOf(created.id), versionId);
+    assert.equal(edited.version, 1);
+    assert.equal((await versions()).length, 1);
+    assert.equal(await currentVersionOf(created.id), versionId);
+    const pinned = await prisma.paperQuestion.findFirstOrThrow({
+      where: { questionId: created.id },
+      select: { questionVersionId: true },
+    });
+    const pinnedVersion = await prisma.questionVersion.findUniqueOrThrow({
+      where: { id: pinned.questionVersionId },
+      select: { content: true },
+    });
+    const stem = (pinnedVersion.content as LocalizedContent).en?.stem;
+    assert.equal(
+      previewTextOf(plainTextOf(stem)),
+      REWORDED.en,
+      'the paper follows the rewrite, so it now reads the new stem',
+    );
   });
 
-  /** Publishing is the freeze: what was revisable a moment ago now grows a version instead. */
-  it('stops revising in place once the draft is published', async () => {
+  /** Publishing is no longer the freeze — a paper students can reach is. */
+  it('keeps revising in place after publishing, while nothing reachable pins it', async () => {
     const { questions } = await build();
     const created = await questions.create(asDraft(), ADMIN);
     await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
@@ -518,8 +569,163 @@ describe('QuestionsService.update — a draft is still being written', () => {
       ADMIN,
     );
 
-    assert.equal(published.version, 2);
+    assert.equal(published.version, 1);
+    assert.equal((await versions()).length, 1);
+  });
+});
+
+describe('QuestionsService.update — revisability follows reachability', () => {
+  it('rewrites in place while the test that pins the version is still a draft', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    await pinnedOn(created.id, versionId);
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal((await versions()).length, 1, 'an unopened paper must not force a new version');
+    assert.equal(edited.version, 1);
+    assert.equal(await currentVersionOf(created.id), versionId);
+  });
+
+  it('appends once the test that pins it has opened', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    const { testId } = await pinnedOn(created.id, versionId);
+    await openedAgo(testId);
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(edited.version, 2);
     assert.equal((await versions()).length, 2);
+    const pinned = await prisma.paperQuestion.findFirstOrThrow({
+      where: { questionId: created.id },
+      select: { questionVersionId: true },
+    });
+    const pinnedVersion = await prisma.questionVersion.findUniqueOrThrow({
+      where: { id: pinned.questionVersionId },
+      select: { content: true },
+    });
+    const stem = (pinnedVersion.content as LocalizedContent).en?.stem;
+    assert.equal(
+      previewTextOf(plainTextOf(stem)),
+      'What is 20% of 150?',
+      'the frozen paper still reads what the student was already shown',
+    );
+  });
+
+  it('appends when only a program unlock has opened, not the test itself', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const program = await prisma.program.create({
+      data: { id: uid(), code: uid(), name: 'Morning batch' },
+      select: { code: true },
+    });
+    await prisma.test.update({
+      where: { id: testId },
+      data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() + 86_400_000) },
+    });
+    await prisma.testProgramUnlock.create({
+      data: { testId, programCode: program.code, opensAt: new Date(Date.now() - 60_000) },
+    });
+
+    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal((await versions()).length, 2, 'a program opens earlier than its test');
+  });
+
+  it('leaves a test that has not been offered unreachable, whatever its opensAt', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    await prisma.test.update({
+      where: { id: testId },
+      data: { opensAt: new Date(Date.now() - 60_000) },
+    });
+
+    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal((await versions()).length, 1, 'a DRAFT test reaches nobody, past opensAt or not');
+  });
+
+  /** The design's central case: offered, so no longer DRAFT, but its own clock has not struck yet. */
+  it('rewrites in place while an offered test has not opened yet', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    const { testId } = await pinnedOn(created.id, versionId);
+    await prisma.test.update({
+      where: { id: testId },
+      data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() + 86_400_000) },
+    });
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal((await versions()).length, 1, 'offered but not yet open must not force a version');
+    assert.equal(edited.version, 1);
+    assert.equal(await currentVersionOf(created.id), versionId);
+  });
+
+  /** `testIsOpen` treats a null opening as open now, everywhere else in this codebase — so here too. */
+  it('appends once an offered test with no opening set at all is reachable now', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    const { testId } = await pinnedOn(created.id, versionId);
+    await prisma.test.update({ where: { id: testId }, data: { status: TEST_STATUS.ACTIVE } });
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(edited.version, 2, 'a null opensAt opens the test now, not never');
+    assert.equal((await versions()).length, 2);
+  });
+
+  it('rewrites in place a version two unreached papers both pin, reaching them together', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    await pinnedOn(created.id, versionId);
+    await pinnedOn(created.id, versionId);
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(edited.version, 1);
+    assert.equal(
+      (await versions()).length,
+      1,
+      'a fix for one unreached paper reaches the other too',
+    );
+    const rows = await prisma.paperQuestion.findMany({
+      where: { questionId: created.id },
+      select: { questionVersionId: true },
+    });
+    assert.equal(rows.length, 2);
+    for (const row of rows) {
+      assert.equal(row.questionVersionId, versionId);
+    }
+  });
+
+  /** The failure this prevents: a sheet's stored position decoding against an array of the old length. */
+  it('shortens the pinning paper’s optionIds when an in-place rewrite drops an option', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    await pinnedOn(created.id, versionId);
+
+    await questions.update(created.id, live({ options: THREE_OPTIONS }), ADMIN);
+
+    const rewritten = await prisma.questionVersion.findUniqueOrThrow({ where: { id: versionId } });
+    const optionIds = (rewritten.options as unknown as { id: string }[]).map((option) => option.id);
+    const row = await prisma.paperQuestion.findFirstOrThrow({ where: { questionId: created.id } });
+
+    assert.equal(optionIds.length, 3);
+    assert.deepEqual(
+      row.optionIds,
+      optionIds,
+      'the paper follows the rewritten option ids in order',
+    );
   });
 });
 
@@ -576,19 +782,39 @@ describe('QuestionsService — a question returns to draft while nothing uses it
     assert.equal((await questionRow(idFor('q_free'))).status, QUESTION_STATUS.ACTIVE);
   });
 
-  /** Taxonomy is what a paper draws on, so it settles when the question leaves the draft. */
-  it('refuses to move a published question to another subject', async () => {
+  /** The failure this prevents: a Quant question served inside the Reasoning section that drew it. */
+  it('refuses to move a draft a paper has drawn to another subject', async () => {
+    const { questions } = await build();
+    const created = await questions.create(asDraft(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
+
+    await assert.rejects(() => questions.update(created.id, asDraft(ELSEWHERE), ADMIN), conflict);
+    assert.equal((await questionRow(created.id)).subjectId, BANK.QUANT);
+  });
+
+  it('refuses to move a published question a paper has drawn', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
 
     await assert.rejects(() => questions.update(created.id, live(ELSEWHERE), ADMIN), conflict);
   });
 
-  it('lets a draft be moved to another subject', async () => {
+  it('lets a draft nothing has drawn be moved to another subject', async () => {
     const { questions } = await build();
     const created = await questions.create(asDraft(), ADMIN);
 
     const moved = await questions.update(created.id, asDraft(ELSEWHERE), ADMIN);
+
+    assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
+  });
+
+  /** Publishing is not the freeze here either, for the same reason it stopped being one for versions. */
+  it('lets a published question nothing has drawn be moved too', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+
+    const moved = await questions.update(created.id, live(ELSEWHERE), ADMIN);
 
     assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
   });
@@ -862,6 +1088,8 @@ describe('QuestionsService.update — a save that changes nothing', () => {
     it(`versions a published question when only ${what} changed`, async () => {
       const { questions } = await build();
       const created = await questions.create(live(), ADMIN);
+      const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+      await openedAgo(testId);
 
       const saved = await questions.update(created.id, live(over), ADMIN);
 

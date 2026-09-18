@@ -3,12 +3,12 @@
  * and the module throws there as it loads, which took the router down with it — so in Expo Go it
  * is never imported at all, and the app runs with no push rather than no screens.
  */
-import Constants from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
 // Type-only, so it is erased: naming the module here must not be what loads it.
 import type * as ExpoNotifications from 'expo-notifications';
 
-/** `executionEnvironment` cannot tell these apart: Expo Go and a development build are both storeClient. */
-export const IN_EXPO_GO = Constants.appOwnership === 'expo';
+/** The library's own check, and the only one either half of this reads. */
+export const IN_EXPO_GO = isRunningInExpoGo();
 
 export type NotificationsModule = typeof ExpoNotifications;
 

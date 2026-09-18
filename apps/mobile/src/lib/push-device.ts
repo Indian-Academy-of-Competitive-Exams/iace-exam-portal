@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { DEVICE_PLATFORM } from '@iace/contracts';
 import { api } from './api';
-import { loadNotifications } from './notifications';
+import { IN_EXPO_GO, loadNotifications } from './notifications';
 
 /** Expo hands back the platform's own token; only Android's IS an FCM one. */
 const FCM_TOKEN_TYPE = 'android';
@@ -17,7 +17,8 @@ let registered: string | null = null;
 
 /** Android only: iOS hands back an APNs token, which FCM cannot address without its own iOS SDK. */
 export async function registerPushDevice(): Promise<void> {
-  if (!Device.isDevice || Platform.OS !== 'android') return;
+  // Expo Go dropped Android push in SDK 53, and asking it for a token THROWS rather than declining.
+  if (IN_EXPO_GO || !Device.isDevice || Platform.OS !== 'android') return;
 
   try {
     const token = await fcmToken();
