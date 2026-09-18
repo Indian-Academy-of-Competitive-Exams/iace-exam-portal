@@ -1,8 +1,9 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { useAuth } from './providers/auth';
 import { AppShell } from './components/app-shell';
 import { LoginPage } from './routes/login';
+import { NotFoundPage } from './routes/not-found';
 import { DashboardPage } from './routes/dashboard';
 import { StudentsPage } from './routes/students';
 import { StudentDetailPage } from './routes/student-detail';
@@ -102,7 +103,7 @@ export function App() {
           <Route path={ROUTES.AUDIT_IMPORTS} element={<AuditImportsPage />} />
         </Route>
       </Route>
-      <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />
+      <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
     </Routes>
   );
 }

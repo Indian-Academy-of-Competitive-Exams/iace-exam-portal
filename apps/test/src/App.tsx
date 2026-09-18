@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { LoadingState } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
+import { NotFoundPage } from './routes/not-found';
 import { AppShell } from './components/app-shell';
 import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
@@ -103,7 +104,7 @@ export function App() {
           <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />
         </Route>
       </Route>
-      <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />
+      <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
     </Routes>
   );
 }
