@@ -541,6 +541,8 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   /** Civil days in Asia/Kolkata, widened to the whole day by the service. */
   from: dateOnlySchema.optional(),
   to: dateOnlySchema.optional(),
+  /** Only what a paper may draw: not archived, carrying a version, and no open flag. */
+  drawable: z.stringbool().optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
   match: matchModeQuery(),
 });

@@ -103,6 +103,9 @@ function baseColumns(): DataTableColumn<QuestionSummary>[] {
             <TruncatedText>{question.stemPreview}</TruncatedText>
           </QuestionLink>
           <span className="flex min-w-0 items-center gap-2">
+            {question.status === QUESTION_STATUS.DRAFT ? (
+              <Badge variant="neutral">{QUESTION_STATUS.DRAFT}</Badge>
+            ) : null}
             <TruncatedText className="text-xs text-muted-foreground">
               {[question.difficulty.toLowerCase(), question.questionCode, question.topic?.name]
                 .filter(Boolean)
@@ -211,7 +214,7 @@ export function QuestionChooser({
     toQuery: (values) => ({
       q: values.q || undefined,
       difficulty: values.difficulty as DifficultyLevel[],
-      status: [QUESTION_STATUS.ACTIVE],
+      drawable: 'true',
       subjectId: section.subjectId ? [section.subjectId] : undefined,
       topicId: spec.topicIds,
     }),

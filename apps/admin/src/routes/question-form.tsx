@@ -337,8 +337,14 @@ export function QuestionFormPage() {
         </>
       }
     >
-      {/* Taxonomy settles when the question leaves the draft: it is what a paper draws on. */}
+      {/* Being drawn settles taxonomy: a paper records no subject, so a move would misfile it. */}
       <FormSection title="Subject and topic">
+        {taxonomySettled ? (
+          <Alert variant="info">
+            A paper or a result already uses this question, so its subject and topic stay as they
+            are. Take it off every paper to move it.
+          </Alert>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormField form={form} name="subjectId" label="Subject">
             {(control) => (

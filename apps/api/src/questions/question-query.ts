@@ -6,6 +6,7 @@ import {
   type QuestionSort,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
+import { DRAWABLE_QUESTION } from './question-core';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 /** A civil day in Asia/Kolkata is a whole day, not the instant its name would parse to. */
@@ -34,6 +35,8 @@ export function questionWhere(
   // Out of circulation is out of the bank: naming a status is how you ask to see them.
   if (query.status) chosen.push({ status: { in: query.status } });
   else always.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
+  // The picker asks the same question the draw asks, so it cannot offer a row fillSection refuses.
+  if (query.drawable) always.push(DRAWABLE_QUESTION);
   if (query.tag) chosen.push({ tags: { has: query.tag } });
   // No picker to choose an author from, so the name typed is matched against what they sign in as.
   if (query.author) {

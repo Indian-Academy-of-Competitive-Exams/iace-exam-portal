@@ -36,7 +36,7 @@ export function DrawSpecEditor({
 }>) {
   const topicIds = spec.topicIds ?? [];
 
-  /** Counted by the database. A page of a hundred is only ever the newest hundred. */
+  /** What the draw itself would find, counted by the database — not everything the bank holds. */
   const available = useQuery({
     queryKey: [...QUERY_KEYS.QUESTIONS, 'available', section.subjectId, topicIds.join(',')],
     queryFn: () =>
@@ -94,14 +94,14 @@ export function DrawSpecEditor({
             {DIFFICULTY_LEVELS.map((level) => `${held[level] ?? 0} ${level.toLowerCase()}`).join(
               ' · ',
             )}
-            {' in the bank'}
+            {' to draw from'}
           </p>
 
           {issue ? <p className="text-sm text-destructive">{issue}</p> : null}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {`${available.data?.total ?? 0} questions in the bank for this section.`}
+          {`${available.data?.total ?? 0} questions this section can draw from.`}
         </p>
       )}
     </div>

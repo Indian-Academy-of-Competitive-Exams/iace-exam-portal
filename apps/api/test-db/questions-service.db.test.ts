@@ -1271,3 +1271,23 @@ describe('QuestionsService.availability — the count a section is about to draw
     assert.equal(held.total, 2, 'the draft counts, the archived, flagged and unversioned do not');
   });
 });
+
+describe('QuestionsService.page — the picker asks for what the draw would find', () => {
+  /** The failure this prevents: the picker offers a row, and fillSection then refuses it. */
+  it('lists drafts as drawable and leaves out the archived and the flagged', async () => {
+    const { questions } = await build([
+      { id: 'live', status: QUESTION_STATUS.ACTIVE },
+      { id: 'draft', status: QUESTION_STATUS.DRAFT },
+      { id: 'archived', status: QUESTION_STATUS.ARCHIVED },
+      { id: 'flagged', status: QUESTION_STATUS.DRAFT },
+    ]);
+    await flag(idFor('flagged'));
+
+    const page = await questions.page(listQuery({ drawable: 'true' }));
+
+    assert.deepEqual(
+      page.items.map((row) => row.id).sort(),
+      [idFor('draft'), idFor('live')].sort(),
+    );
+  });
+});
