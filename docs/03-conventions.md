@@ -292,8 +292,8 @@ Built and in use. Reach for these rather than adding a second of any of them.
   with no producer, because the event and the scheduled job behind them do not exist yet.
 - **The free channels carry everything but the two somebody is waiting on.** A paid message is SMS
   for an OTP and for the starting PIN a roster import issues, and that is the whole list — every
-  other notification and every announcement reaches a student over in-app and web push, which cost
-  nothing per message. This is not a default an admin can drift: `notification-policy.ts` holds no
+  other notification and every announcement reaches a student over in-app, web push and FCM, which
+  cost nothing per message. This is not a default an admin can drift: `notification-policy.ts` holds no
   per-kind chain at all, so paid delivery is a deliberate per-send override priced against
   `NOTIFICATION_COST_*_PAISE`, never a kind's habit. A new kind is free until a send chooses otherwise.
 - **The institute picks the channel, and a student has no switch over it.** There is no per-channel
@@ -303,7 +303,9 @@ Built and in use. Reach for these rather than adding a second of any of them.
   controls wired to nothing — and the one switch it did read, web push, the browser already owns:
   a `PushSubscription` row exists only because the student granted permission, and revoking it
   deletes the row. **The absence of a subscription is the refusal**, which is why push records no
-  skip and costs no table. What a student still controls is their browser and their bell.
+  skip and costs no table. A phone works the same way: a `PushDevice` row exists only because the
+  student allowed notifications, and signing out drops it. What a student still controls is their
+  browser, their phone's own settings, and their bell.
 - **WhatsApp is future scope, wired and off.** One vendor — Interakt, which resells Meta's Cloud
   API — and no selector between two: carrying a spare provider bought a config switch nobody would
   flip mid-incident, and cost a second set of credentials to keep valid. The channel routes nowhere
