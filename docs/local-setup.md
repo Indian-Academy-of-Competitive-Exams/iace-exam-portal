@@ -221,6 +221,8 @@ Expo hands back an APNs token there, which FCM cannot address without the Fireba
 | `pnpm deps:check` / `pnpm deps:fix`               | syncpack — keep shared dep versions aligned |
 | `pnpm db:setup`                                   | new device: generate + migrate + seed       |
 | `pnpm db:migrate` / `db:generate` / `db:studio`   | Prisma workflows                            |
+| `pnpm db:dbml`                                    | redraw `docs/schema.dbml` from the schema   |
+| `pnpm db:seed:questions` / `:golden` / `:cohort`  | dev-only fixtures, local database only      |
 | `pnpm docker:up` / `docker:down` / `docker:reset` | infra up / stop / stop+wipe volumes         |
 
 Before committing, the Husky pre‑commit hook runs format + lint + typecheck (and the Sonar scan if configured). Commits follow the conventional‑commit style.

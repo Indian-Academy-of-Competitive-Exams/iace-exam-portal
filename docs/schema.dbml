@@ -141,6 +141,7 @@ Enum NotificationType {
 Enum DeliveryChannel {
   IN_APP
   WEB_PUSH
+  MOBILE_PUSH
   EMAIL
   SMS
   WHATSAPP
@@ -243,8 +244,13 @@ Enum QuestionFlagStatus {
   DISMISSED
 }
 
+Enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
 Table Exam {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   course ExamCourse [not null]
   code text [unique, not null]
   name text [not null]
@@ -258,8 +264,8 @@ Table Exam {
 }
 
 Table ExamStage {
-  id text [pk, default: `cuid()`]
-  examId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  examId uuid [not null]
   stageKey text [unique, not null]
   name text [not null]
   order integer [not null, default: 0]
@@ -276,11 +282,11 @@ Table ExamStage {
 }
 
 Table BaseConfig {
-  id text [pk, default: `cuid()`]
-  examStageId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  examStageId uuid [not null]
   name text [not null]
   isDefault boolean [not null, default: false]
-  clonedFromId text
+  clonedFromId uuid
   version integer [not null, default: 1]
   isActive boolean [not null, default: true]
   locked boolean [not null, default: false]
@@ -299,7 +305,7 @@ Table BaseConfig {
   calculatorEnabled boolean [not null, default: false]
   featureFlags jsonb
   scoringVersion integer [not null, default: 1]
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -311,8 +317,8 @@ Table BaseConfig {
 }
 
 Table BaseConfigModule {
-  id text [pk, default: `cuid()`]
-  baseConfigId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  baseConfigId uuid [not null]
   name text [not null]
   order integer [not null]
   durationSec integer
@@ -323,12 +329,12 @@ Table BaseConfigModule {
 }
 
 Table BaseConfigSection {
-  id text [pk, default: `cuid()`]
-  baseConfigId text [not null]
-  moduleId text
+  id uuid [pk, default: `uuid(7)`]
+  baseConfigId uuid [not null]
+  moduleId uuid
   name text [not null]
   order integer [not null]
-  subjectId text
+  subjectId uuid
   questionCount integer [not null]
   marksPerQuestion decimal(6, 2) [not null]
   negativeMarks decimal(6, 2) [not null]
@@ -347,14 +353,14 @@ Table BaseConfigSection {
 }
 
 Table Subject {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   name text [unique, not null]
   code text [unique]
 }
 
 Table Topic {
-  id text [pk, default: `cuid()`]
-  subjectId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  subjectId uuid [not null]
   name text [not null]
   indexes {
     (subjectId, name) [unique]
@@ -362,18 +368,18 @@ Table Topic {
 }
 
 Table Question {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   questionCode text [unique]
   type QuestionType [not null, default: 'SINGLE_MCQ']
-  subjectId text [not null]
-  topicId text
+  subjectId uuid [not null]
+  topicId uuid
   difficulty DifficultyLevel [not null]
   status QuestionStatus [not null, default: 'DRAFT']
-  currentVersionId text
+  currentVersionId uuid
   tags text [not null, note: 'array']
   stemHash text
   fixedUseCount integer [not null, default: 0]
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -387,13 +393,13 @@ Table Question {
 }
 
 Table QuestionVersion {
-  id text [pk, default: `cuid()`]
-  questionId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  questionId uuid [not null]
   version integer [not null]
   content jsonb [not null]
   options jsonb
   answerKey jsonb
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (questionId, version) [unique]
@@ -402,10 +408,10 @@ Table QuestionVersion {
 }
 
 Table Test {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   title text
-  baseConfigId text [not null]
-  examStageId text [not null]
+  baseConfigId uuid [not null]
+  examStageId uuid [not null]
   scope TestScope [not null, default: 'FULL']
   scopeRef jsonb
   questionPoolFilter jsonb
@@ -414,10 +420,10 @@ Table Test {
   isLocked boolean [not null, default: false]
   version integer [not null, default: 0]
   finalizedAt timestamptz(3)
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
-  testSeriesId text [not null]
+  testSeriesId uuid [not null]
   seriesOrder integer
   opensAt timestamptz(3)
   announcedAt timestamptz(3)
@@ -431,12 +437,12 @@ Table Test {
 }
 
 Table PaperQuestion {
-  id text [pk, default: `cuid()`]
-  testId text [not null]
-  baseConfigId text [not null]
-  baseConfigSectionId text [not null]
-  questionId text [not null]
-  questionVersionId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  testId uuid [not null]
+  baseConfigId uuid [not null]
+  baseConfigSectionId uuid [not null]
+  questionId uuid [not null]
+  questionVersionId uuid [not null]
   order integer [not null]
   marks decimal(6, 2) [not null]
   negativeMarks decimal(6, 2) [not null]
@@ -452,9 +458,9 @@ Table PaperQuestion {
 }
 
 Table Attempt {
-  id text [pk, default: `cuid()`]
-  testId text [not null]
-  studentId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  testId uuid [not null]
+  studentId uuid [not null]
   attemptNo integer [not null, default: 1]
   isGraded boolean [not null, default: true]
   status AttemptStatus [not null, default: 'IN_PROGRESS']
@@ -475,31 +481,30 @@ Table Attempt {
   updatedAt timestamptz(3) [not null, default: `now()`]
   voidedAt timestamptz(3)
   voidReason text
-  voidedById text
+  voidedById uuid
   indexes {
     (testId, studentId, attemptNo) [unique]
     (studentId, createdAt)
     (testId, status)
-    (testId, score)
   }
 }
 
 Table AttemptSheet {
-  attemptId text [pk]
+  attemptId uuid [pk]
   answers jsonb [not null]
   verdicts jsonb
   updatedAt timestamptz(3) [not null, default: `now()`]
 }
 
 Table Student {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   mobile text [not null]
   externalRef text
   studentType StudentType [not null]
   enrolledCourses ExamCourse [not null, note: 'array']
   programs text [not null, note: 'array']
   enrolledExams text [not null, note: 'array']
-  currentBranchId text
+  currentBranchId uuid
   pinHash text
   pinIsDefault boolean [not null, default: true]
   fullName text
@@ -509,7 +514,7 @@ Table Student {
   isTestBlocked boolean [not null, default: false]
   deletedAt timestamptz(3)
   anonymizedAt timestamptz(3)
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -524,8 +529,8 @@ Table Student {
 }
 
 Table StudentProfile {
-  id text [pk, default: `cuid()`]
-  studentId text [unique, not null]
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid [unique, not null]
   motherName text
   fatherName text
   dob date
@@ -543,8 +548,8 @@ Table StudentProfile {
 }
 
 Table StudentConsent {
-  id text [pk, default: `cuid()`]
-  studentId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid [not null]
   purpose ConsentPurpose [not null]
   version text [not null]
   granted boolean [not null]
@@ -555,18 +560,18 @@ Table StudentConsent {
 }
 
 Table Admin {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   email text [unique, not null]
   fullName text
   isSuperAdmin boolean [not null, default: false]
   isActive boolean [not null, default: true]
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
 }
 
 Table AdminFeaturePermission {
-  adminId text [not null]
+  adminId uuid [not null]
   featureKey text [not null]
   level PermissionLevel [not null]
   indexes {
@@ -576,7 +581,7 @@ Table AdminFeaturePermission {
 }
 
 Table Branch {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   name text [not null]
   type BranchType [not null]
   isActive boolean [not null, default: true]
@@ -589,7 +594,7 @@ Table Branch {
 }
 
 Table Program {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   code text [unique, not null]
   name text [not null]
   isActive boolean [not null, default: true]
@@ -598,16 +603,16 @@ Table Program {
 }
 
 Table TestSeries {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   name text [not null]
-  examStageId text
+  examStageId uuid
   programCode text
   sequentialTests boolean [not null, default: false]
   kind TestSeriesKind [not null, default: 'STANDARD']
-  eventId text
+  eventId uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
-  branchIds text [not null, note: 'array']
+  branchIds uuid [not null, note: 'array']
   isEnabled boolean [not null, default: false]
   indexes {
     (examStageId)
@@ -618,10 +623,10 @@ Table TestSeries {
 }
 
 Table StudentGrant {
-  studentId text [not null]
-  testSeriesId text [not null]
+  studentId uuid [not null]
+  testSeriesId uuid [not null]
   createdAt timestamptz(3) [not null, default: `now()`]
-  createdById text
+  createdById uuid
   indexes {
     (studentId, testSeriesId) [pk]
     (testSeriesId)
@@ -629,18 +634,18 @@ Table StudentGrant {
 }
 
 Table Event {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   name text [not null]
   description text
   isActive boolean [not null, default: true]
-  createdById text
+  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
 }
 
 Table EventCandidate {
-  eventId text [not null]
-  studentId text [not null]
+  eventId uuid [not null]
+  studentId uuid [not null]
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (eventId, studentId) [pk]
@@ -649,7 +654,7 @@ Table EventCandidate {
 }
 
 Table TestProgramUnlock {
-  testId text [not null]
+  testId uuid [not null]
   programCode text [not null]
   opensAt timestamptz(3) [not null]
   createdAt timestamptz(3) [not null, default: `now()`]
@@ -660,10 +665,10 @@ Table TestProgramUnlock {
 }
 
 Table ImportLog {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   feature AuditFeature [not null]
   source ImportSource [not null]
-  actorId text
+  actorId uuid
   fileS3Key text
   total integer [not null, default: 0]
   created integer [not null, default: 0]
@@ -680,15 +685,15 @@ Table ImportLog {
 }
 
 Table RowActionLog {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   feature AuditFeature [not null]
-  entityId text [not null]
+  entityId uuid [not null]
   entityLabel text
   action AuditAction [not null]
   actorType ActorType [not null]
-  actorId text
+  actorId uuid
   changed jsonb
-  importLogId text
+  importLogId uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (feature, entityId, createdAt)
@@ -699,9 +704,9 @@ Table RowActionLog {
 }
 
 Table OutboxEvent {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   aggregateType text [not null]
-  aggregateId text [not null]
+  aggregateId uuid [not null]
   eventType text [not null]
   payload jsonb
   createdAt timestamptz(3) [not null, default: `now()`]
@@ -713,7 +718,7 @@ Table OutboxEvent {
 }
 
 Table ProcessedRollup {
-  attemptId text [not null]
+  attemptId uuid [not null]
   rollupType text [not null]
   processedAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -722,18 +727,18 @@ Table ProcessedRollup {
 }
 
 Table Notification {
-  id text [pk, default: `cuid()`]
-  studentId text
-  adminId text
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid
+  adminId uuid
   type NotificationType [not null]
   title text [not null]
   body text
   data jsonb
   dedupeKey text
   actBy timestamptz(3)
-  testId text
-  testSeriesId text
-  announcementId text
+  testId uuid
+  testSeriesId uuid
+  announcementId uuid
   isRead boolean [not null, default: false]
   openedVia DeliveryChannel
   createdAt timestamptz(3) [not null, default: `now()`]
@@ -747,14 +752,14 @@ Table Notification {
 }
 
 Table Announcement {
-  id text [pk, default: `cuid()`]
+  id uuid [pk, default: `uuid(7)`]
   title text [not null]
   body text [not null]
   audience jsonb [not null]
   paidChannels DeliveryChannel [not null, note: 'array']
   recipientCount integer [not null]
   estimatedCostPaise integer [not null]
-  createdById text [not null]
+  createdById uuid [not null]
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (createdAt)
@@ -763,8 +768,8 @@ Table Announcement {
 }
 
 Table NotificationDelivery {
-  id text [pk, default: `cuid()`]
-  notificationId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  notificationId uuid [not null]
   channel DeliveryChannel [not null]
   status DeliveryStatus [not null, default: 'PENDING']
   skipReason text
@@ -784,7 +789,7 @@ Table NotificationDelivery {
 }
 
 Table StudentStat {
-  studentId text [pk]
+  studentId uuid [pk]
   testsAttempted integer [not null, default: 0]
   testsEvaluated integer [not null, default: 0]
   sumScore decimal(16, 2) [not null, default: 0]
@@ -800,8 +805,8 @@ Table StudentStat {
 }
 
 Table StudentSubjectStat {
-  studentId text [not null]
-  subjectId text [not null]
+  studentId uuid [not null]
+  subjectId uuid [not null]
   scope TestScope [not null]
   attempted integer [not null, default: 0]
   correct integer [not null, default: 0]
@@ -815,7 +820,7 @@ Table StudentSubjectStat {
 }
 
 Table TestStat {
-  testId text [pk]
+  testId uuid [pk]
   attemptCount integer [not null, default: 0]
   evaluatedCount integer [not null, default: 0]
   sumScore decimal(18, 2) [not null, default: 0]
@@ -823,7 +828,7 @@ Table TestStat {
   minScore decimal(8, 2)
   sumTimeSec bigint [not null, default: 0]
   scoreHistogram jsonb
-  topperAttemptId text
+  topperAttemptId uuid
   attemptsIncluded integer [not null, default: 0]
   computedAt timestamptz(3) [not null]
   indexes {
@@ -832,8 +837,8 @@ Table TestStat {
 }
 
 Table TestSectionStat {
-  testId text [not null]
-  baseConfigSectionId text [not null]
+  testId uuid [not null]
+  baseConfigSectionId uuid [not null]
   attempted integer [not null, default: 0]
   sumScore decimal(18, 2) [not null, default: 0]
   sumTimeSec bigint [not null, default: 0]
@@ -845,9 +850,9 @@ Table TestSectionStat {
 }
 
 Table TestQuestionStat {
-  testId text [not null]
-  paperQuestionId text [not null]
-  questionId text [not null]
+  testId uuid [not null]
+  paperQuestionId uuid [not null]
+  questionId uuid [not null]
   attemptedCount integer [not null, default: 0]
   correctCount integer [not null, default: 0]
   wrongCount integer [not null, default: 0]
@@ -865,8 +870,8 @@ Table TestQuestionStat {
 }
 
 Table PushSubscription {
-  id text [pk, default: `cuid()`]
-  studentId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid [not null]
   endpoint text [unique, not null]
   p256dh text [not null]
   auth text [not null]
@@ -878,13 +883,26 @@ Table PushSubscription {
   }
 }
 
+Table PushDevice {
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid [not null]
+  token text [unique, not null]
+  platform DevicePlatform [not null]
+  deviceName text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  lastSeenAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (studentId)
+  }
+}
+
 Table SavedQuestion {
-  id text [pk, default: `cuid()`]
-  studentId text [not null]
-  questionId text [not null]
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid [not null]
+  questionId uuid [not null]
   kind SavedQuestionKind [not null]
-  attemptId text
-  paperQuestionId text
+  attemptId uuid
+  paperQuestionId uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (studentId, questionId, kind) [unique]
@@ -893,14 +911,14 @@ Table SavedQuestion {
 }
 
 Table QuestionFlag {
-  id text [pk, default: `cuid()`]
-  questionId text [not null]
-  versionId text
+  id uuid [pk, default: `uuid(7)`]
+  questionId uuid [not null]
+  versionId uuid
   category QuestionFlagCategory [not null]
   comment text [not null]
   status QuestionFlagStatus [not null, default: 'OPEN']
-  raisedById text [not null]
-  resolvedById text
+  raisedById uuid [not null]
+  resolvedById uuid
   resolvedAt timestamptz(3)
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -965,6 +983,7 @@ Ref: TestQuestionStat.testId > Test.id [delete: cascade]
 Ref: TestQuestionStat.paperQuestionId > PaperQuestion.id [delete: cascade]
 Ref: TestQuestionStat.questionId > Question.id
 Ref: PushSubscription.studentId > Student.id [delete: cascade]
+Ref: PushDevice.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.questionId > Question.id
 Ref: QuestionFlag.questionId > Question.id [delete: cascade]
@@ -1038,6 +1057,7 @@ TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   Announcement
   NotificationDelivery
   PushSubscription
+  PushDevice
   OutboxEvent
   ProcessedRollup
 }

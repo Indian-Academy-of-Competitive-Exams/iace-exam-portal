@@ -33,6 +33,7 @@ const GROUPS = [
       'Announcement',
       'NotificationDelivery',
       'PushSubscription',
+      'PushDevice',
       'OutboxEvent',
       'ProcessedRollup',
     ],
