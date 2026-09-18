@@ -158,11 +158,18 @@ pnpm dev          # Turborepo runs api + test + admin together
 
 To run just one: `pnpm --filter @iace/api dev` (or `@iace/test`, `@iace/admin`).
 
-**The mobile app** is not part of `pnpm dev`. Start it with `pnpm --filter @iace/mobile dev` and open
-it in Expo Go (press `i` for the iOS simulator, `a` for an Android emulator, or scan the QR code on a
-phone on the same Wi-Fi). It needs no `.env` in development: it calls the API on the machine Metro
-served it from. Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` only to point it elsewhere (see
-`.env.example`), and restart Metro after changing it, because the value is baked in at start.
+**The mobile app runs in its own terminal**, and deliberately not under `pnpm dev`: Metro is
+restarted far more often than the API is, and sharing one process makes every reload cost all four.
+
+```bash
+pnpm dev:mobile   # builds what Metro needs, then expo start
+```
+
+Open it in Expo Go (press `i` for the iOS simulator, `a` for an Android emulator, or scan the QR
+code on a phone on the same Wi-Fi). It needs no `.env` in development: it calls the API on the
+machine Metro served it from. Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` only to point it
+elsewhere (see `.env.example`), and restart Metro after changing it, because the value is baked in
+at start.
 
 **How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 4‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Redis, never Postgres.
 
@@ -199,7 +206,8 @@ Expo hands back an APNs token there, which FCM cannot address without the Fireba
 
 | Command                                           | What it does                                |
 | ------------------------------------------------- | ------------------------------------------- |
-| `pnpm dev`                                        | run all apps (watch mode)                   |
+| `pnpm dev`                                        | api + both SPAs (watch mode)                |
+| `pnpm dev:mobile`                                 | Metro on its own, for its own reloads       |
 | `pnpm build`                                      | build everything                            |
 | `pnpm typecheck`                                  | TS typecheck across the monorepo            |
 | `pnpm lint`                                       | ESLint across the monorepo                  |
