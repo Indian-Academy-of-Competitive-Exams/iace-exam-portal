@@ -1,11 +1,12 @@
 import { Prisma } from '@prisma/client';
 import { unfreezing } from './test-rules';
 
-/** Undoing a finalize, including the `fixedUseCount` it added — or a refreeze counts twice. */
+/** Takes the Test lock every paper edit orders on, then undoes a finalize and the `fixedUseCount` it added. */
 export async function thaw(
   tx: Prisma.TransactionClient,
   test: { id: string; isLocked: boolean },
 ): Promise<void> {
+  await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" = ${test.id}::uuid FOR UPDATE`;
   if (!test.isLocked) return;
 
   const paper = await tx.paperQuestion.findMany({

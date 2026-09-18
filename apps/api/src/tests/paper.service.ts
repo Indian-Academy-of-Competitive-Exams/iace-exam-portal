@@ -6,6 +6,7 @@ import {
   DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
   type BaseConfigDetail,
   quotaWithPicks,
@@ -41,6 +42,8 @@ import { AuditContext } from '../audit';
 const NOT_DRAWABLE_MESSAGE =
   'That question is archived, or has no version to pin, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
+const FLAGGED_MESSAGE =
+  'That question has an open proof-reading flag. Resolve or dismiss it before a paper draws it.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
   'Only a finalized paper can have a question dropped or made a bonus. Edit the draft instead.';
@@ -367,12 +370,19 @@ export class PaperService {
         subjectId: true,
         currentVersionId: true,
         difficulty: true,
+        _count: { select: { flags: { where: { status: QUESTION_FLAG_STATUS.OPEN } } } },
       },
     });
 
-    if (question?.status === QUESTION_STATUS.ARCHIVED || !question?.currentVersionId) {
+    if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+    if (question.status === QUESTION_STATUS.ARCHIVED || !question.currentVersionId) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
         fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
+      });
+    }
+    if (question._count.flags > 0) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, FLAGGED_MESSAGE, {
+        fieldErrors: { questionId: [FLAGGED_MESSAGE] },
       });
     }
     if (section?.subjectId && question.subjectId !== section.subjectId) {
@@ -409,7 +419,7 @@ export class PaperService {
     });
   }
 
-  /** Anything not archived and carrying a current version: a paper pins a version, so there must be one. */
+  /** Anything not archived, unflagged and carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
     section: DrawSection,
     spec: SectionDrawSpec | undefined,
@@ -418,6 +428,7 @@ export class PaperService {
       where: {
         status: { not: QUESTION_STATUS.ARCHIVED },
         currentVersionId: { not: null },
+        flags: { none: { status: QUESTION_FLAG_STATUS.OPEN } },
         // The narrowing SQL can do; tags and the split are the engine's.
         ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),
         ...(narrows(spec?.topicIds) ? { topicId: { in: [...spec.topicIds] } } : {}),

@@ -7,6 +7,7 @@ import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
+  QUESTION_FLAG_CATEGORY,
   QUESTION_STATUS,
   TEST_SCOPE,
 } from '@iace/contracts';
@@ -130,6 +131,17 @@ const heldIds = async () => (await rows()).map((row) => row.questionId);
 const sat = async () =>
   makeSitting(prisma, { testId: TEST, studentId: (await makeStudent(prisma)).id, score: 0 });
 
+/** A proof-reader's outstanding objection, which is what takes a question out of the draw. */
+const flagged = (questionId: string) =>
+  prisma.questionFlag.create({
+    data: {
+      questionId,
+      category: QUESTION_FLAG_CATEGORY.INVALID,
+      comment: 'The answer key is wrong.',
+      raisedById: randomUUID(),
+    },
+  });
+
 const refused = async (attempt: Promise<unknown>) => {
   const error = await attempt.catch((caught: unknown) => caught);
   assert.ok(AppException.is(error));
@@ -226,7 +238,7 @@ describe('PaperService — picking a draft paper by hand', () => {
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
   });
 
-  /** A paper pins a version, so a question with none — or out of the bank — has nothing to pin. */
+  /** A paper pins a version, so a question with none has nothing to pin. */
   it('refuses a question that is not live in the bank', async () => {
     const service = await serviceWith({
       questions: [
@@ -235,17 +247,46 @@ describe('PaperService — picking a draft paper by hand', () => {
       ],
     });
 
-    for (const questionId of [idFor('gone'), idFor('unversioned')]) {
-      const error = await refused(
-        service.addQuestions(TEST, {
-          baseConfigSectionId: idFor('sec_2'),
-          questionIds: [questionId],
-        }),
-      );
+    const error = await refused(
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_2'),
+        questionIds: [idFor('unversioned')],
+      }),
+    );
 
-      assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-      assert.ok(error.fieldErrors?.questionId?.[0]);
-    }
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.match(error.fieldErrors?.questionId?.[0] ?? '', /archived/);
+  });
+
+  /** The failure this prevents: "archived" told about a question that was never there at all. */
+  it('says a question that is not in the bank is missing, not archived', async () => {
+    const service = await serviceWith();
+
+    const error = await refused(
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_2'),
+        questionIds: [idFor('gone')],
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  /** Promotion to ACTIVE used to be the only way onto a paper, and it is what checked the flags. */
+  it('refuses a question carrying an open proof-reading flag, naming the flag', async () => {
+    const service = await serviceWith();
+    await flagged(idFor('q1'));
+
+    const error = await refused(
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_2'),
+        questionIds: [idFor('q1')],
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.match(error.message, /open proof-reading flag/);
+    assert.deepEqual(await heldIds(), []);
   });
 });
 
@@ -531,6 +572,23 @@ describe('PaperService — filling a section’s remainder from its own spec', (
       /Reasoning needs 3, and the bank holds 2/,
     );
     assert.deepEqual(await heldIds(), [idFor('r1')]);
+  });
+
+  /** The draw runs on not-ARCHIVED now, so an open flag is the only thing left between it and a student. */
+  it('leaves a question carrying an open proof-reading flag out of the pool', async () => {
+    const service = await serviceWith({
+      questions: [...bank(3, BUILDER.REASONING, 'r'), ...bank(6, BUILDER.QUANT, 'q')],
+    });
+    await flagged(idFor('r3'));
+
+    const error = await refused(service.fillSection(TEST, idFor('sec_1')));
+
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.match(
+      error.fieldErrors?.[idFor('sec_1')]?.[0] ?? '',
+      /Reasoning needs 3, and the bank holds 2/,
+    );
+    assert.deepEqual(await heldIds(), []);
   });
 
   it('refuses a test a student has already sat', async () => {

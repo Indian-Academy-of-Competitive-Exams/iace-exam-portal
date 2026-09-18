@@ -106,6 +106,13 @@ function draft(over: Partial<QuestionDraftInput> = {}) {
 
 const REWORDED = { en: 'What is 20% of 150, exactly?', hi: '150 का 20% कितना है?' };
 
+/** One fewer than `draft()` writes, so `optionsWithIds` mints a list of a different length. */
+const THREE_OPTIONS = [
+  { position: 1, isCorrect: false, text: { en: '25', hi: '25' } },
+  { position: 2, isCorrect: true, text: { en: '30', hi: '30' } },
+  { position: 3, isCorrect: false, text: { en: '35', hi: '35' } },
+];
+
 const ELSEWHERE = { subjectId: BANK.GENERAL_AWARENESS, topicId: BANK.HISTORY };
 
 const asDraft = (over: Partial<QuestionDraftInput> = {}) =>
@@ -568,7 +575,7 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
 });
 
 describe('QuestionsService.update — revisability follows reachability', () => {
-  it('rewrites in place while only an unopened test pins the version', async () => {
+  it('rewrites in place while the test that pins the version is still a draft', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
     const versionId = await currentVersionOf(created.id);
@@ -699,6 +706,27 @@ describe('QuestionsService.update — revisability follows reachability', () => 
       assert.equal(row.questionVersionId, versionId);
     }
   });
+
+  /** The failure this prevents: a sheet's stored position decoding against an array of the old length. */
+  it('shortens the pinning paper’s optionIds when an in-place rewrite drops an option', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    await pinnedOn(created.id, versionId);
+
+    await questions.update(created.id, live({ options: THREE_OPTIONS }), ADMIN);
+
+    const rewritten = await prisma.questionVersion.findUniqueOrThrow({ where: { id: versionId } });
+    const optionIds = (rewritten.options as unknown as { id: string }[]).map((option) => option.id);
+    const row = await prisma.paperQuestion.findFirstOrThrow({ where: { questionId: created.id } });
+
+    assert.equal(optionIds.length, 3);
+    assert.deepEqual(
+      row.optionIds,
+      optionIds,
+      'the paper follows the rewritten option ids in order',
+    );
+  });
 });
 
 describe('QuestionsService — a question returns to draft while nothing uses it', () => {
@@ -754,19 +782,39 @@ describe('QuestionsService — a question returns to draft while nothing uses it
     assert.equal((await questionRow(idFor('q_free'))).status, QUESTION_STATUS.ACTIVE);
   });
 
-  /** Taxonomy is what a paper draws on, so it settles when the question leaves the draft. */
-  it('refuses to move a published question to another subject', async () => {
+  /** The failure this prevents: a Quant question served inside the Reasoning section that drew it. */
+  it('refuses to move a draft a paper has drawn to another subject', async () => {
+    const { questions } = await build();
+    const created = await questions.create(asDraft(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
+
+    await assert.rejects(() => questions.update(created.id, asDraft(ELSEWHERE), ADMIN), conflict);
+    assert.equal((await questionRow(created.id)).subjectId, BANK.QUANT);
+  });
+
+  it('refuses to move a published question a paper has drawn', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
 
     await assert.rejects(() => questions.update(created.id, live(ELSEWHERE), ADMIN), conflict);
   });
 
-  it('lets a draft be moved to another subject', async () => {
+  it('lets a draft nothing has drawn be moved to another subject', async () => {
     const { questions } = await build();
     const created = await questions.create(asDraft(), ADMIN);
 
     const moved = await questions.update(created.id, asDraft(ELSEWHERE), ADMIN);
+
+    assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
+  });
+
+  /** Publishing is not the freeze here either, for the same reason it stopped being one for versions. */
+  it('lets a published question nothing has drawn be moved too', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+
+    const moved = await questions.update(created.id, live(ELSEWHERE), ADMIN);
 
     assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
   });

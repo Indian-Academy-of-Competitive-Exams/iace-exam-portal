@@ -73,7 +73,10 @@ Setup, then paper, then offer. There is no certificate step.
   as many of one difficulty as its mix allows, the next pick of that difficulty is refused and the
   admin is told to take one off first — otherwise the draw could only ever top up a section the hand
   had already made impossible to balance.
-- Only an ACTIVE question carrying a current version is drawable, because a paper pins a version.
+- Any question that is not ARCHIVED, carries a current version, and has no open proof-reading
+  flag is drawable. A paper pins a version, so there has to be one; a DRAFT is drawable because a
+  paper is built before its questions are finished, and the flag check is what still keeps an
+  unresolved objection off a student's screen now that activation no longer gates it.
 - Finalize freezes rows that already exist and draws nothing. The paper must hold every section at
   its exact count or the freeze rolls back naming the shortfall — a paper that is not whole leaves
   the test unlocked.
@@ -298,12 +301,19 @@ and needs no mapping at all.
 
 - **A save that changes nothing writes no version.** Content, options and answer key are
   fingerprinted together, and a save matching the fingerprint keeps the version already current.
-- **A draft is rewritten in place, and everything else is appended.** While a question is a DRAFT
-  and no paper row pins its current version — a sitting's sheet and a rollup only ever reach a
-  version through a paper row — an edit rewrites that one row: version 1 of a question nobody has
-  drawn stays version 1 however often it is saved. Otherwise the edit inserts a new immutable
-  version and repoints `currentVersionId`, so what a paper pinned never moves under it; once the
-  paper is sat, the database refuses that move too.
+- **A version is rewritten in place until a test students can REACH pins it.** Status decides
+  nothing here. Reachable means the test has been offered and its earliest opening has passed —
+  which is a `min()` across program unlocks, not `Test.opensAt` alone, and a null `opensAt` means
+  open now, not never. Until then an edit rewrites the one version row, so a question sitting on two
+  unopened papers can be fixed once and both papers carry the fix. Once a reachable test pins it the
+  edit inserts a new immutable version and repoints `currentVersionId`, so what that paper pinned
+  never moves under a student; once the paper is sat, the database refuses the move too. The service
+  is deliberately stricter than that database guard, which trips only at the first attempt: the
+  service holds the policy and the database is the backstop, and they are not meant to agree.
+- **A rewritten version drags every paper that pins it.** `PaperQuestion.optionIds` is a copy of the
+  pinned version's option ids in stored order and an answer sheet stores a POSITION into it, so a
+  trigger rebuilds that array on every pinning paper whenever a version's options change. Editing
+  one test's copy of a question silently repairs every other unopened paper holding it.
 - **Proof-reading reads DRAFTS and nothing else.** A reader's flags gate ACTIVATION, so a question
   that is already live is past the point their reading changes, and an archived one is past caring.
   The server forces `status: DRAFT` rather than filtering on it, so a hand-edited URL cannot widen
@@ -312,10 +322,11 @@ and needs no mapping at all.
   `TestQuestionStat` references may be returned to DRAFT or deleted; every served question is a paper
   row a sat test cannot lose, and the rule counts those two tables before it allows the move, so it
   refuses before a foreign key does.
-- **Subject and topic settle when the question leaves the draft.** Taxonomy is what a section draws
-  on, so moving it afterwards would change what a finalized paper was built from. Returning the
-  question to draft is the only way to move it, and the freeze above refuses that once anything uses
-  it.
+- **Subject and topic settle when something DEPENDS on the question, not when it is published.**
+  Taxonomy is what a section draws on, so moving it afterwards would change what a finalized paper
+  was built from — and a `PaperQuestion` records no subject of its own, so a moved question would be
+  served inside a section it no longer belongs to and counted there. Leaving the draft was only ever
+  a proxy for this, and it stopped being one when drafts became drawable.
 - **Option ids carry over by position.** A sitting stores the id it was shown, so a position that
   already had an id keeps it and only a genuinely new position gets a new one — editing an option's
   wording can never orphan an answer.
