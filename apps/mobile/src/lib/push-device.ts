@@ -5,9 +5,9 @@
  */
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { DEVICE_PLATFORM } from '@iace/contracts';
 import { api } from './api';
+import { loadNotifications } from './notifications';
 
 /** Expo hands back the platform's own token; only Android's IS an FCM one. */
 const FCM_TOKEN_TYPE = 'android';
@@ -48,12 +48,15 @@ export async function dropPushDevice(): Promise<void> {
 }
 
 async function fcmToken(): Promise<string | null> {
-  const asked = await Notifications.getPermissionsAsync();
+  const notifications = await loadNotifications();
+  if (!notifications) return null;
+
+  const asked = await notifications.getPermissionsAsync();
   const granted = asked.granted
     ? asked
-    : await Notifications.requestPermissionsAsync().catch(() => null);
+    : await notifications.requestPermissionsAsync().catch(() => null);
   if (!granted?.granted) return null;
 
-  const device = await Notifications.getDevicePushTokenAsync();
+  const device = await notifications.getDevicePushTokenAsync();
   return device.type === FCM_TOKEN_TYPE && typeof device.data === 'string' ? device.data : null;
 }
