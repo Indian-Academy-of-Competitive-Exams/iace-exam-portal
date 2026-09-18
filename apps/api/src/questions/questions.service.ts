@@ -822,8 +822,6 @@ function isReferenced(row: QuestionRow): boolean {
 function toDetail(row: QuestionRow): QuestionDetail {
   return {
     ...toSummary(row),
-    // The same two tables anyUsed counts, already on the row — no second round trip to ask again.
-    inUse: row._count.paperQuestions + row._count.questionStats > 0,
     version: row.currentVersion?.version ?? FIRST_VERSION,
     content: contentOf(row),
     options: currentOptionsOf(row),
