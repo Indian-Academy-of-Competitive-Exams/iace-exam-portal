@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
-export const dependencyHealthSchema = z.object({
+const dependencyHealthSchema = z.object({
   status: z.enum(['up', 'down']),
   latencyMs: z.number().optional(),
   error: z.string().optional(),
 });
 
 /** Storage is reported but not required to serve: a signed image URL failing is not a lost sitting. */
-export const healthDependenciesSchema = z.object({
+const healthDependenciesSchema = z.object({
   database: dependencyHealthSchema,
   redis: dependencyHealthSchema,
   storage: dependencyHealthSchema,

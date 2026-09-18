@@ -14,7 +14,7 @@ export const QUESTION_FLAG_CATEGORY = {
   INSUFFICIENT_DATA: 'INSUFFICIENT_DATA',
   OTHER: 'OTHER',
 } as const;
-export const questionFlagCategorySchema = z.enum(QUESTION_FLAG_CATEGORY);
+const questionFlagCategorySchema = z.enum(QUESTION_FLAG_CATEGORY);
 export type QuestionFlagCategory = z.infer<typeof questionFlagCategorySchema>;
 export const QUESTION_FLAG_CATEGORIES = questionFlagCategorySchema.options;
 
@@ -23,20 +23,20 @@ export const QUESTION_FLAG_STATUS = {
   RESOLVED: 'RESOLVED',
   DISMISSED: 'DISMISSED',
 } as const;
-export const questionFlagStatusSchema = z.enum(QUESTION_FLAG_STATUS);
+const questionFlagStatusSchema = z.enum(QUESTION_FLAG_STATUS);
 export type QuestionFlagStatus = z.infer<typeof questionFlagStatusSchema>;
 
 /** An OPEN flag is the only one that gates; the other two are how it is closed. */
-export const questionFlagSettlementSchema = z.enum([
+const questionFlagSettlementSchema = z.enum([
   QUESTION_FLAG_STATUS.RESOLVED,
   QUESTION_FLAG_STATUS.DISMISSED,
 ]);
 export type QuestionFlagSettlement = z.infer<typeof questionFlagSettlementSchema>;
 
-export const FLAG_COMMENT_MAX = 1000;
+const FLAG_COMMENT_MAX = 1000;
 
 /** The admin who raised or settled a flag. Name falls back to the email they sign in with. */
-export const questionFlagActorSchema = z.object({
+const questionFlagActorSchema = z.object({
   id: z.string(),
   name: z.string(),
 });

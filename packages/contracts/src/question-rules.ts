@@ -31,7 +31,7 @@ export const emptyTaxonomy = (): TaxonomyContext => ({
 });
 
 /** Whether KaTeX will render this formula, and why not. Injected: KaTeX is not a contracts dependency. */
-export type MathChecker = (latex: string) => string | null;
+type MathChecker = (latex: string) => string | null;
 
 const CODE = QUESTION_VALIDATION_CODE;
 
@@ -44,7 +44,7 @@ export function languagesIn(stem: LocalizedText): QuestionLanguage[] {
 }
 
 /** Case, spacing, punctuation and markup do not make a question different — but its figures do. */
-export function foldForCompare(value: string | undefined): string {
+function foldForCompare(value: string | undefined): string {
   if (!value) return '';
   return [previewTextOf(value), ...imageKeysIn(value)]
     .join(' ')

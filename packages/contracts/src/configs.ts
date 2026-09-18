@@ -97,11 +97,11 @@ export const MERIT_TYPE = {
   MERIT: 'MERIT',
   QUALIFYING: 'QUALIFYING',
 } as const;
-export const meritTypeSchema = z.enum(MERIT_TYPE);
+const meritTypeSchema = z.enum(MERIT_TYPE);
 export type MeritType = z.infer<typeof meritTypeSchema>;
 export const MERIT_TYPES = meritTypeSchema.options;
 
-export const baseConfigModuleSchema = z.object({
+const baseConfigModuleSchema = z.object({
   id: z.string(),
   baseConfigId: z.string(),
   name: z.string(),
@@ -109,7 +109,7 @@ export const baseConfigModuleSchema = z.object({
   durationSec: z.number().int().nullable(),
 });
 
-export const baseConfigSectionSchema = z.object({
+const baseConfigSectionSchema = z.object({
   id: z.string(),
   baseConfigId: z.string(),
   /** Set only when the config is SESSION_MODULE_LOCKED. */
@@ -185,15 +185,15 @@ export type BaseConfigDetail = z.infer<typeof baseConfigDetailSchema>;
 // it — the way to change a locked one is to clone it.
 // ============================================================================
 
-export const CONFIG_NAME_MAX = 120;
+const CONFIG_NAME_MAX = 120;
 
-export const configNameSchema = displayNameSchema('config', CONFIG_NAME_MAX);
+const configNameSchema = displayNameSchema('config', CONFIG_NAME_MAX);
 
-export const SECTION_NAME_MAX = 80;
-export const sectionNameSchema = displayNameSchema('section', SECTION_NAME_MAX, 1);
+const SECTION_NAME_MAX = 80;
+const sectionNameSchema = displayNameSchema('section', SECTION_NAME_MAX, 1);
 
 /** One section of the paper. `durationSec` is required when the config is SECTIONAL_LOCKED. */
-export const baseConfigSectionDraftSchema = z.object({
+const baseConfigSectionDraftSchema = z.object({
   name: sectionNameSchema,
   order: z.coerce.number().int().min(0).max(99),
   /** Which module this sits in, BY ORDER — a session paper's only. The modules are new rows on
@@ -213,7 +213,7 @@ export const baseConfigSectionDraftSchema = z.object({
 export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
 
 /** A session block above the sections. Only SESSION_MODULE_LOCKED configs carry them. */
-export const baseConfigModuleDraftSchema = z.object({
+const baseConfigModuleDraftSchema = z.object({
   name: displayNameSchema('module', SECTION_NAME_MAX, 1),
   order: z.coerce.number().int().min(0).max(99),
   durationSec: z.coerce.number().int().min(0).nullish(),

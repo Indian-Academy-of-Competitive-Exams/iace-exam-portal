@@ -22,7 +22,7 @@ export const SUPPORTED_LANGUAGES = {
   HI: 'hi',
   TE: 'te',
 } as const;
-export const languageSchema = z.enum(SUPPORTED_LANGUAGES);
+const languageSchema = z.enum(SUPPORTED_LANGUAGES);
 export type QuestionLanguage = z.infer<typeof languageSchema>;
 
 /** `LanguageCode` (EN) is what a row stores, `QuestionLanguage` (en) keys the content JSON. */
@@ -116,7 +116,7 @@ export const ANSWER_MODE = {
   EXACT: 'EXACT',
   NUMERIC: 'NUMERIC',
 } as const;
-export const answerModeSchema = z.enum(ANSWER_MODE);
+const answerModeSchema = z.enum(ANSWER_MODE);
 export type AnswerMode = z.infer<typeof answerModeSchema>;
 export const ANSWER_MODES = answerModeSchema.options;
 
@@ -125,17 +125,17 @@ export const ANSWER_MODES = answerModeSchema.options;
 // node type later, not a parser that has to guess what a string meant.
 // ============================================================================
 
-export const CONTENT_NODE_TYPE = {
+const CONTENT_NODE_TYPE = {
   TEXT: 'TEXT',
 } as const;
 
-export const contentNodeSchema = z.object({
+const contentNodeSchema = z.object({
   type: z.literal(CONTENT_NODE_TYPE.TEXT),
   text: z.string(),
 });
 
 /** One field — a stem, a solution, an option — in one language. */
-export const richContentSchema = z.array(contentNodeSchema);
+const richContentSchema = z.array(contentNodeSchema);
 export type RichContent = z.infer<typeof richContentSchema>;
 
 /** The text of a field, for searching, hashing and a one-line preview. */
@@ -209,7 +209,7 @@ export function latexIn(html: string): string[] {
   return [...html.matchAll(MATH_LATEX)].map((match) => unescapeAttribute(match[1] ?? ''));
 }
 
-export const questionContentSchema = z.object({
+const questionContentSchema = z.object({
   stem: richContentSchema,
   solution: richContentSchema.optional(),
 });
@@ -229,14 +229,14 @@ export type LocalizedRich = z.infer<typeof localizedRichSchema>;
 // topic is a `topic:` tag on the question.
 // ============================================================================
 
-export const SUBJECT_NAME_MAX = 80;
-export const TOPIC_NAME_MAX = 100;
+const SUBJECT_NAME_MAX = 80;
+const TOPIC_NAME_MAX = 100;
 
-export const subjectNameSchema = canonicalNameSchema({ max: SUBJECT_NAME_MAX, label: 'subject' });
+const subjectNameSchema = canonicalNameSchema({ max: SUBJECT_NAME_MAX, label: 'subject' });
 export const topicNameSchema = canonicalNameSchema({ max: TOPIC_NAME_MAX, label: 'topic' });
 
 /** A short code an institute already uses for a subject — QA, GA, ENG. */
-export const subjectCodeSchema = z
+const subjectCodeSchema = z
   .string()
   .transform((value) => value.trim().toUpperCase())
   .pipe(
@@ -247,12 +247,12 @@ export const subjectCodeSchema = z
   );
 
 /** Enough to name any taxonomy row where the screen already knows what it is. */
-export const taxonomyRefSchema = z.object({
+const taxonomyRefSchema = z.object({
   id: z.string(),
   name: z.string(),
 });
 
-export const subjectRefSchema = taxonomyRefSchema;
+const subjectRefSchema = taxonomyRefSchema;
 
 export const subjectSchema = subjectRefSchema.extend({
   code: z.string().nullable(),
@@ -261,7 +261,7 @@ export const subjectSchema = subjectRefSchema.extend({
 });
 export type Subject = z.infer<typeof subjectSchema>;
 
-export const topicRefSchema = z.object({
+const topicRefSchema = z.object({
   id: z.string(),
   name: z.string(),
   subject: subjectRefSchema,
@@ -326,7 +326,7 @@ export const MCQ_OPTION_COUNT = 4;
 export const MCQ_OPTION_MIN = 2;
 export const MCQ_OPTION_MAX = 6;
 
-export const MARKS_MAX = 999.99;
+const MARKS_MAX = 999.99;
 
 /** Marks are Decimal(6,2) in the database; more than two places is not a mark. Used by a
  *  base config's sections, and by an answer tolerance. */
@@ -341,7 +341,7 @@ export const questionMarksSchema = z.coerce
     'Use at most two decimal places',
   );
 
-export const TAG_MAX_LENGTH = 32;
+const TAG_MAX_LENGTH = 32;
 export const TAGS_MAX = 10;
 
 /** Lowercased so `SSC` and `ssc` are one tag, not two facets of the same filter. */
@@ -356,7 +356,7 @@ export const tagSchema = z
       .regex(/^[a-z0-9]+( [a-z0-9]+)*$/, 'Use letters, numbers and single spaces only'),
   );
 
-export const QUESTION_CODE_MAX = 64;
+const QUESTION_CODE_MAX = 64;
 
 /** The institute's own reference for a question, where it has one. Unique across the bank. */
 export const questionCodeSchema = z
@@ -369,7 +369,7 @@ export const questionCodeSchema = z
       .regex(/^[A-Z0-9][A-Z0-9._/-]*$/, 'Use letters, numbers and . _ - / only'),
   );
 
-export const questionOptionDraftSchema = z.object({
+const questionOptionDraftSchema = z.object({
   /** 1-based authored slot. It survives shuffling and editing; correctness is keyed to it. */
   position: z.number().int().min(1).max(MCQ_OPTION_MAX),
   isCorrect: z.boolean(),
@@ -377,7 +377,7 @@ export const questionOptionDraftSchema = z.object({
 });
 
 /** TEXT_FIELD only: what a typed answer is compared against. */
-export const answerKeyDraftSchema = z.object({
+const answerKeyDraftSchema = z.object({
   mode: answerModeSchema,
   /** The accepted answer per language. English is required, like every other field. */
   answers: localizedTextSchema,
@@ -444,14 +444,14 @@ export const QUESTION_VALIDATION_CODE = {
   /** The same stem is already in the bank. */
   DUPLICATE_IN_BANK: 'DUPLICATE_IN_BANK',
 } as const;
-export const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
+const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
 
 /**
  * One problem with one question. `field` is the draft path the form focuses
  * (`stem.en`, `options.2.text.hi`); `column` is what the sheet calls the same
  * thing, so the import preview names a header the admin can see.
  */
-export const validationIssueSchema = z.object({
+const validationIssueSchema = z.object({
   code: questionValidationCodeSchema,
   message: z.string(),
   field: z.string().optional(),
@@ -479,7 +479,7 @@ export const answerKeySchema = z.object({
 export type AnswerKey = z.infer<typeof answerKeySchema>;
 
 /** The admin a question is filed against. Name falls back to the email they sign in with. */
-export const questionAuthorSchema = z.object({
+const questionAuthorSchema = z.object({
   id: z.string(),
   name: z.string(),
 });
@@ -524,10 +524,7 @@ export const QUESTION_SORTS = {
   OLDEST: 'oldest',
 } as const;
 export type QuestionSort = (typeof QUESTION_SORTS)[keyof typeof QUESTION_SORTS];
-export const QUESTION_SORT_VALUES = Object.values(QUESTION_SORTS) as [
-  QuestionSort,
-  ...QuestionSort[],
-];
+const QUESTION_SORT_VALUES = Object.values(QUESTION_SORTS) as [QuestionSort, ...QuestionSort[]];
 
 export const questionListQuerySchema = paginationQuerySchema.extend({
   /** Matches the stem in any language, the question code, and any tag. */
@@ -555,7 +552,7 @@ export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;
  * drawn into no future paper, while every paper that already pinned a version is untouched.
  */
 /** A page of drafts is 100 at most, so a bulk decision can never be larger than what was shown. */
-export const BULK_STATUS_MAX = 100;
+const BULK_STATUS_MAX = 100;
 
 export const setQuestionStatusSchema = z.object({
   status: questionStatusSchema,
@@ -654,7 +651,7 @@ export const QUESTION_IMPORT_COLUMNS = [
   },
 ] as const;
 
-export type QuestionImportColumn = (typeof QUESTION_IMPORT_COLUMNS)[number];
+type QuestionImportColumn = (typeof QUESTION_IMPORT_COLUMNS)[number];
 export type QuestionImportColumnKey = QuestionImportColumn['key'];
 
 export const QUESTION_IMPORT_TEMPLATE_FILENAME = 'iace-questions-template.xlsx';
@@ -680,10 +677,10 @@ export const QUESTION_IMPORT_TAG = 'imported';
  * in this file — skipped, and not an error worth blocking the upload for.
  * `skip` has issues.
  */
-export const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip']);
+const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip']);
 export type QuestionImportAction = z.infer<typeof questionImportActionSchema>;
 
-export const questionImportRowSchema = z.object({
+const questionImportRowSchema = z.object({
   /** 1-based line in the uploaded file, header included, as Excel shows it. */
   line: z.number().int(),
   action: questionImportActionSchema,
@@ -698,7 +695,7 @@ export const questionImportRowSchema = z.object({
 });
 export type QuestionImportRow = z.infer<typeof questionImportRowSchema>;
 
-export const questionImportSummarySchema = z.object({
+const questionImportSummarySchema = z.object({
   total: z.number().int(),
   willCreate: z.number().int(),
   duplicates: z.number().int(),

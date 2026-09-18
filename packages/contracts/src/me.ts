@@ -14,10 +14,7 @@ export const DOCUMENT_KINDS = {
   TENTH_MARKSHEET: 'tenth-marksheet',
 } as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[keyof typeof DOCUMENT_KINDS];
-export const DOCUMENT_KIND_VALUES = Object.values(DOCUMENT_KINDS) as [
-  DocumentKind,
-  ...DocumentKind[],
-];
+const DOCUMENT_KIND_VALUES = Object.values(DOCUMENT_KINDS) as [DocumentKind, ...DocumentKind[]];
 
 export const documentKindSchema = z.enum(DOCUMENT_KIND_VALUES);
 
@@ -25,10 +22,10 @@ export const documentKindSchema = z.enum(DOCUMENT_KIND_VALUES);
 export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** A photo has to BE a photo — a PDF headshot is not one. Checked server-side; the picker mirrors it. */
-export const PHOTO_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+const PHOTO_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 /** A marksheet is usually scanned or photographed, so it takes a PDF as well as an image. */
-export const MARKSHEET_ACCEPTED_TYPES = [...PHOTO_ACCEPTED_TYPES, 'application/pdf'] as const;
+const MARKSHEET_ACCEPTED_TYPES = [...PHOTO_ACCEPTED_TYPES, 'application/pdf'] as const;
 
 /** What each kind will take. The server decides; the picker reads the same map so they agree. */
 export const ACCEPTED_TYPES_FOR: Record<DocumentKind, readonly string[]> = {
@@ -37,7 +34,7 @@ export const ACCEPTED_TYPES_FOR: Record<DocumentKind, readonly string[]> = {
 };
 
 /** One code the student carries, beside the catalog's name for it. */
-export const enrolmentNameSchema = z.object({
+const enrolmentNameSchema = z.object({
   code: z.string(),
   /** A code with no catalog row keeps its own code here, so a row never renders blank. */
   name: z.string(),
@@ -45,7 +42,7 @@ export const enrolmentNameSchema = z.object({
 export type EnrolmentName = z.infer<typeof enrolmentNameSchema>;
 
 /** What the student's record says they stand on, resolved to names a screen can print. */
-export const enrolmentStandingSchema = z.object({
+const enrolmentStandingSchema = z.object({
   programs: z.array(enrolmentNameSchema),
   exams: z.array(enrolmentNameSchema),
   branch: z.string().nullable(),
@@ -115,11 +112,11 @@ export type UploadFile = File | { uri: string; name: string; type: string };
 
 /** One purpose in V1: running the platform for them. A second is a value here, never a column. */
 export const CONSENT_PURPOSE = { PLATFORM: 'PLATFORM' } as const;
-export const consentPurposeSchema = z.enum(CONSENT_PURPOSE);
+const consentPurposeSchema = z.enum(CONSENT_PURPOSE);
 export type ConsentPurpose = z.infer<typeof consentPurposeSchema>;
 
 /** The newest answer for one purpose. Absent means never asked, which is not the same as refused. */
-export const consentStateSchema = z.object({
+const consentStateSchema = z.object({
   purpose: consentPurposeSchema,
   version: z.string(),
   granted: z.boolean(),
@@ -142,7 +139,7 @@ export const recordConsentSchema = z.object({
 export type RecordConsentBody = z.infer<typeof recordConsentSchema>;
 
 /** One sitting, as it appears in a student's own copy of their data — marks, never the paper. */
-export const exportedAttemptSchema = z.object({
+const exportedAttemptSchema = z.object({
   id: z.string(),
   testId: z.string(),
   testName: z.string(),

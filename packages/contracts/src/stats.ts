@@ -3,7 +3,6 @@ import { instituteDayLabel } from './common';
 import { TEST_SCOPES, paperQuestionStatusSchema, testScopeSchema, type TestScope } from './tests';
 import { todayISO } from './students';
 import {
-  analyticsBucketSchema,
   answerStateSchema,
   examSectionSchema,
   scoreCardSectionSchema,
@@ -38,7 +37,7 @@ import {
 export const SUBJECT_SAMPLE_FLOOR = 20;
 
 /** Tallies off `StudentStat`, percentiles live. Every average is null at a zero denominator. */
-export const overviewStandingSchema = z.object({
+const overviewStandingSchema = z.object({
   /** Every folded sitting, retakes included — zero means nothing has been sat at all. */
   testsAttempted: z.number().int(),
   testsEvaluated: z.number().int(),
@@ -54,7 +53,7 @@ export const overviewStandingSchema = z.object({
 export type OverviewStanding = z.infer<typeof overviewStandingSchema>;
 
 /** LIFETIME, across every sitting: `StudentStat` is the only place these three live. */
-export const dispositionSchema = z.object({
+const dispositionSchema = z.object({
   correct: z.number().int(),
   wrong: z.number().int(),
   unattempted: z.number().int(),
@@ -62,16 +61,16 @@ export const dispositionSchema = z.object({
 export type Disposition = z.infer<typeof dispositionSchema>;
 
 /** One `StudentSubjectStat` row as the dashboard reads it — counts only, no derived figure. */
-export const subjectTallySchema = z.object({
+const subjectTallySchema = z.object({
   scope: testScopeSchema,
   attempted: z.number().int(),
   correct: z.number().int(),
   sumTimeSec: z.number().int(),
 });
-export type SubjectTally = z.infer<typeof subjectTallySchema>;
+type SubjectTally = z.infer<typeof subjectTallySchema>;
 
 /** A set of tallies summed to one reading. */
-export const subjectMeasureSchema = z.object({
+const subjectMeasureSchema = z.object({
   attempted: z.number().int(),
   correct: z.number().int(),
   /** Percent. Null at a zero n — a zero would read as every answer wrong. */
@@ -83,7 +82,7 @@ export const subjectMeasureSchema = z.object({
 export type SubjectMeasure = z.infer<typeof subjectMeasureSchema>;
 
 /** Self-referential on purpose: `StudentSubjectStat` holds no cohort, so there is no rank here. */
-export const subjectStandingSchema = z.object({
+const subjectStandingSchema = z.object({
   subjectId: z.string(),
   name: z.string(),
   /** One per scope the student has sat, so a scope filter needs no second call. */
@@ -123,7 +122,7 @@ export function measureOf(
 }
 
 /** A headline tile, whose value the screen renders — a dash for null is design, not contract. */
-export interface StandingTile {
+interface StandingTile {
   key: string;
   label: string;
   value: number | null;
@@ -165,7 +164,7 @@ const retakesFoot = (count: number): string | undefined => {
 // ============================================================================
 
 /** One day on the calendar, and how many sittings landed on it. */
-export const testDaySchema = z.object({
+const testDaySchema = z.object({
   date: z.string(),
   sittings: z.number().int(),
 });
@@ -229,7 +228,7 @@ const daysWithSittings = (sat: readonly TestDay[]) =>
   new Set(sat.filter((day) => day.sittings > 0).map((day) => day.date));
 
 /** The three shares the disposition can answer. LIFETIME: `StudentStat` holds no scope to split by. */
-export interface DispositionRates {
+interface DispositionRates {
   served: number;
   answered: number;
   /** Of everything served, the share actually answered — a finishing problem shows up here first. */
@@ -276,7 +275,7 @@ export function effortPerSitting(
 }
 
 /** Where the hours went against what they bought back, each as a share of the whole. */
-export interface SubjectShare {
+interface SubjectShare {
   subjectId: string;
   name: string;
   attempted: number;
@@ -320,14 +319,14 @@ export function subjectShares(
 }
 
 /** One subject read at one scope, which is the unit every ranking below sorts. */
-export interface RankedSubject {
+interface RankedSubject {
   subjectId: string;
   name: string;
   measure: SubjectMeasure;
 }
 
 /** Weakest first, and what is still too thin to rank — a subject is never branded off five questions. */
-export interface SubjectRanking {
+interface SubjectRanking {
   /** Ascending by accuracy, each one past the floor. */
   weakest: RankedSubject[];
   /** Answered, but under the floor: shown as "not enough data yet" rather than ranked. */
@@ -360,7 +359,7 @@ export function rankSubjectsByWeakness(
 }
 
 /** Two scopes set against each other, per subject: whether a full paper holds what a short one showed. */
-export interface ScopeComparison {
+interface ScopeComparison {
   first: TestScope;
   second: TestScope;
   subjects: {
@@ -440,7 +439,7 @@ export const PERFORMANCE_SCOPES = {
   SERIES: 'SERIES',
   ALL_TIME: 'ALL_TIME',
 } as const;
-export const performanceScopeSchema = z.enum(PERFORMANCE_SCOPES);
+const performanceScopeSchema = z.enum(PERFORMANCE_SCOPES);
 export type PerformanceScope = z.infer<typeof performanceScopeSchema>;
 
 /** Which id each scope is answered by. ALL_TIME needs none — the student IS the scope. */
@@ -472,12 +471,8 @@ export const percentLabel = (value: number | null, empty = '\u2014'): string =>
   value === null ? empty : `${Math.round(value)}%`;
 
 /** A slice with its own n; `accuracy` is NULL when nothing was attempted, never 0. */
-export const measuredBucketSchema = analyticsBucketSchema.extend({
-  accuracy: z.number().nullable(),
-});
-
 /** One point on the trajectory. Percentile, never marks: two papers are not the same paper. */
-export const percentilePointSchema = z.object({
+const percentilePointSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
   testTitle: z.string().nullable(),
@@ -501,7 +496,7 @@ export function placeInSpread(
 }
 
 /** One column of the cohort's score distribution: `from` inclusive, `to` exclusive. */
-export const cohortBandSchema = z.object({
+const cohortBandSchema = z.object({
   from: z.number(),
   to: z.number(),
   count: z.number().int(),
@@ -522,14 +517,14 @@ export type CohortBand = z.infer<typeof cohortBandSchema>;
 /** The shape `TestStat.scoreHistogram` holds. Read defensively — the column is free-form JSON. */
 export const scoreHistogramSchema = z.array(cohortBandSchema);
 
-export const cohortCurveBandSchema = cohortBandSchema.extend({
+const cohortCurveBandSchema = cohortBandSchema.extend({
   /** True on exactly one band: the one holding this score, or the end band nearest it. */
   isYours: z.boolean(),
 });
 export type CohortCurveBand = z.infer<typeof cohortCurveBandSchema>;
 
 /** Where this student sits on the curve the cohort drew. Only a single paper has one. */
-export const cohortCurveSchema = z.object({
+const cohortCurveSchema = z.object({
   testId: z.string(),
   score: z.number(),
   topperScore: z.number().nullable(),
@@ -543,7 +538,7 @@ export const cohortCurveSchema = z.object({
 export type CohortCurve = z.infer<typeof cohortCurveSchema>;
 
 /** Where marks came from and leaked, in MARKS; the three partition `maxMarks`. */
-export const markCompositionSchema = z.object({
+const markCompositionSchema = z.object({
   maxMarks: z.number(),
   earned: z.number(),
   /** Forgone on questions the key marked wrong. */
@@ -558,7 +553,7 @@ export const markCompositionSchema = z.object({
 export type MarkComposition = z.infer<typeof markCompositionSchema>;
 
 /** One section, this student's against the cohort's mean — and the n that mean is over. */
-export const sectionalStandingSchema = scoreCardSectionSchema.extend({
+const sectionalStandingSchema = scoreCardSectionSchema.extend({
   cohortAverageScore: z.number().nullable(),
   cohortAverageTimeSec: z.number().nullable(),
   /** Sittings behind those two averages. Zero means no rollup, not an empty section. */
@@ -673,7 +668,7 @@ export function bestSitting(points: readonly PerformancePoint[]): PerformancePoi
 
 /** How hard the cohort ACTUALLY found a question, as opposed to how hard it was authored. */
 /** GATED: past a p-value of one half, the option with the most votes IS the key, no inference. */
-export const optionShareSchema = z.object({
+const optionShareSchema = z.object({
   optionId: z.string(),
   /** Its place on the paper, so a screen can say "C" without loading the question. */
   position: z.number().int(),
@@ -683,7 +678,7 @@ export const optionShareSchema = z.object({
 export type OptionShare = z.infer<typeof optionShareSchema>;
 
 /** One served question: what this student did with it, and what the cohort did with it. */
-export const questionReportRowSchema = z.object({
+const questionReportRowSchema = z.object({
   questionId: z.string(),
   paperQuestionId: z.string().nullable(),
   order: z.number().int(),
@@ -722,10 +717,10 @@ export const questionReportRowSchema = z.object({
 export type QuestionReportRow = z.infer<typeof questionReportRowSchema>;
 
 /** Above this share of the field answering it, a question the reader left blank was answerable. */
-export const MOST_OF_THE_FIELD = 0.5;
+const MOST_OF_THE_FIELD = 0.5;
 
 /** What one paper says about how it was WORKED, as opposed to how much of it was known. */
-export interface QuestionReportInsights {
+interface QuestionReportInsights {
   /** Left blank while most of the field answered — the questions nerve or the clock cost. */
   blankButAnswerable: number;
   timeOnCorrectSec: number;
@@ -811,7 +806,7 @@ export const PERFORMANCE_ROUTES = {
 // ============================================================================
 
 /** Who topped the paper, off `TestStat.topperAttemptId`. Null until a first sitting is evaluated. */
-export const testTopperSchema = z.object({
+const testTopperSchema = z.object({
   attemptId: z.string(),
   studentId: z.string(),
   name: z.string(),
@@ -860,7 +855,7 @@ export const ITEM_SIGNALS = {
   SLOW: 'SLOW',
   NEGATIVE_DISCRIMINATION: 'NEGATIVE_DISCRIMINATION',
 } as const;
-export const itemSignalSchema = z.enum(ITEM_SIGNALS);
+const itemSignalSchema = z.enum(ITEM_SIGNALS);
 export type ItemSignal = z.infer<typeof itemSignalSchema>;
 
 export const testItemAnalyticsSchema = z.object({
@@ -893,19 +888,19 @@ export const testAnalyticsSchema = z.object({
 export type TestAnalytics = z.infer<typeof testAnalyticsSchema>;
 
 /** At four options this is chance, so below it the cohort was guessing rather than answering. */
-export const LOW_ACCURACY_BELOW = 0.25;
+const LOW_ACCURACY_BELOW = 0.25;
 
 /** Left blank by more of the field than answered it. */
-export const HIGH_SKIP_ABOVE = 0.5;
+const HIGH_SKIP_ABOVE = 0.5;
 
 /** Against the paper's own per-question average, so a slow PAPER does not flag every item on it. */
-export const SLOW_ITEM_MULTIPLE = 2;
+const SLOW_ITEM_MULTIPLE = 2;
 
 /** Below this many sittings on the item, the counts are too thin to read a signal off at all. */
 export const ITEM_SIGNAL_FLOOR = 10;
 
 /** One signal is a property of the question; two is a question worth a person opening it. */
-export const INSPECT_AT_LEAST = 2;
+const INSPECT_AT_LEAST = 2;
 
 export type ItemCounts = Pick<
   TestItemAnalytics,

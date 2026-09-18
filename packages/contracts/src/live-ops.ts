@@ -38,7 +38,7 @@ export type LiveOpsTestQuery = z.infer<typeof liveOpsTestQuerySchema>;
 export type LiveOpsTestQueryInput = z.input<typeof liveOpsTestQuerySchema>;
 
 /** One sitting in flight. `answeredCount` is null when Redis holds no live state for it. */
-export const liveSittingSchema = z.object({
+const liveSittingSchema = z.object({
   attemptId: z.string(),
   studentId: z.string(),
   studentName: z.string().nullable(),
@@ -56,7 +56,7 @@ export const liveSittingSchema = z.object({
 export type LiveSitting = z.infer<typeof liveSittingSchema>;
 
 /** One sitting that has landed. No marks until it is scored, which is what `status` says. */
-export const recentSubmissionSchema = z.object({
+const recentSubmissionSchema = z.object({
   attemptId: z.string(),
   studentId: z.string(),
   studentName: z.string().nullable(),
@@ -69,7 +69,7 @@ export const recentSubmissionSchema = z.object({
 });
 export type RecentSubmission = z.infer<typeof recentSubmissionSchema>;
 
-export const liveOpsCountsSchema = z.object({
+const liveOpsCountsSchema = z.object({
   active: z.number().int(),
   /** Past their own deadline and still open: the sweeper's backlog, not a shut window. */
   stuck: z.number().int(),

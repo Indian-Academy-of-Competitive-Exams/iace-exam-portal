@@ -58,7 +58,7 @@ export const CLIENT_HEADERS = { KIND: 'x-client', DEVICE_NAME: 'x-device-name' }
 
 /** Optional client-supplied device label; the server binds the session to a
  *  fingerprint derived from this plus the request, and stores it in Redis. */
-export const deviceInfoSchema = z
+const deviceInfoSchema = z
   .object({
     deviceId: z.string().max(128).optional(),
     deviceName: z.string().max(128).optional(),
@@ -129,7 +129,7 @@ export const authTokensSchema = z.object({
 });
 export type AuthTokens = z.infer<typeof authTokensSchema>;
 
-export const studentIdentitySchema = z.object({
+const studentIdentitySchema = z.object({
   actor: z.literal(ActorTypes.STUDENT),
   id: z.string(),
   mobile: z.string(),
@@ -156,7 +156,7 @@ export const studentIdentitySchema = z.object({
 });
 export type StudentIdentity = z.infer<typeof studentIdentitySchema>;
 
-export const adminIdentitySchema = z.object({
+const adminIdentitySchema = z.object({
   actor: z.literal(ActorTypes.ADMIN),
   id: z.string(),
   email: z.string(),

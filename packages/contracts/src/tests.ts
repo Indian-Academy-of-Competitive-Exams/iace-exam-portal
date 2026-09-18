@@ -59,7 +59,7 @@ export const paperQuestionStatusSchema = z.enum(PAPER_QUESTION_STATUS);
 export type PaperQuestionStatus = z.infer<typeof paperQuestionStatusSchema>;
 
 /** Which slice of the config a scoped test covers. FULL carries none of it. */
-export const testScopeRefSchema = z.object({
+const testScopeRefSchema = z.object({
   moduleId: z.string().min(1).optional(),
   sectionId: z.string().min(1).optional(),
 });
@@ -93,7 +93,7 @@ export function defaultMixFor(questionCount: number): DifficultyMix {
   return mix;
 }
 
-export const sectionDrawSpecSchema = z.object({
+const sectionDrawSpecSchema = z.object({
   topicIds: z.array(z.string().min(1)).min(1).optional(),
   /** Finer than a topic, which is what a tag is for. ANY of them is enough to be eligible. */
   tags: z.array(tagSchema).min(1).optional(),
@@ -101,13 +101,13 @@ export const sectionDrawSpecSchema = z.object({
 });
 export type SectionDrawSpec = z.infer<typeof sectionDrawSpecSchema>;
 
-export const drawSpecSchema = z.object({
+const drawSpecSchema = z.object({
   sections: z.record(z.string(), sectionDrawSpecSchema),
 });
 export type DrawSpec = z.infer<typeof drawSpecSchema>;
 
 /** The shape a section needs for the scope rule to place it. */
-export interface ScopedSection {
+interface ScopedSection {
   id: string;
   moduleId: string | null;
   questionCount: number;
@@ -204,7 +204,7 @@ export interface PickedQuestion {
 }
 
 /** What one difficulty has taken, against what the split allows it. */
-export interface QuotaBucket {
+interface QuotaBucket {
   chosen: number;
   /** Null where no split bounds it, and the section's own count is the only ceiling. */
   allowed: number | null;
@@ -310,14 +310,6 @@ function offTopic(pick: PickedQuestion, spec: SectionDrawSpec | undefined): bool
   return pick.topicId === null || !spec.topicIds.includes(pick.topicId);
 }
 
-/** A section the bank is too thin to fill, and by how many questions. */
-export interface DrawShortfall {
-  baseConfigSectionId: string;
-  sectionName: string;
-  needed: number;
-  available: number;
-}
-
 export const testSchema = z.object({
   id: z.string(),
   title: z.string().nullable(),
@@ -376,17 +368,17 @@ export const TEST_BUILDER_STEP = {
   PAPER: 'PAPER',
   OFFER: 'OFFER',
 } as const;
-export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
+const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
 export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
 
 /** What a test owes before students can be given it. Each is shown, ticked or not. */
-export const OFFER_REQUIREMENT = {
+const OFFER_REQUIREMENT = {
   PAPER: 'PAPER',
 } as const;
-export type OfferRequirementKey = (typeof OFFER_REQUIREMENT)[keyof typeof OFFER_REQUIREMENT];
+type OfferRequirementKey = (typeof OFFER_REQUIREMENT)[keyof typeof OFFER_REQUIREMENT];
 
-export interface OfferRequirement {
+interface OfferRequirement {
   key: OfferRequirementKey;
   met: boolean;
   /** What has to be true, in the words the checklist shows whether it is or not. */
@@ -465,9 +457,9 @@ export type SetPaperQuestionStatusBody = z.infer<typeof setPaperQuestionStatusSc
 // from — every shape field is read through its config.
 // ============================================================================
 
-export const TEST_TITLE_MAX = 140;
+const TEST_TITLE_MAX = 140;
 
-export const testTitleSchema = displayNameSchema('test', TEST_TITLE_MAX);
+const testTitleSchema = displayNameSchema('test', TEST_TITLE_MAX);
 
 /** Everything a test owns, shared by create and update. `baseConfigId` is only ever set once. */
 const testOwnFieldsSchema = z.object({
@@ -522,7 +514,7 @@ export const ADMIN_TEST_ROUTES = {
 // ============================================================================
 
 /** Enough of a question to READ a row of the paper, not merely to recognise its code. */
-export const paperQuestionRefSchema = z.object({
+const paperQuestionRefSchema = z.object({
   id: z.string(),
   questionCode: z.string().nullable(),
   /** The same shortened stem the bank shows, so both halves of the screen read alike. */
@@ -532,13 +524,13 @@ export const paperQuestionRefSchema = z.object({
   topicId: z.string().nullable(),
 });
 
-export const paperRowSchema = paperQuestionSchema.extend({
+const paperRowSchema = paperQuestionSchema.extend({
   question: paperQuestionRefSchema,
 });
 export type PaperRow = z.infer<typeof paperRowSchema>;
 
 /** One section of the paper, beside the count the config asks it to hold. */
-export const paperSectionSchema = z.object({
+const paperSectionSchema = z.object({
   baseConfigSectionId: z.string(),
   name: z.string(),
   order: z.number().int(),
@@ -580,7 +572,7 @@ export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
 export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
 
 /** What a finalize did. `finalizedByThisCall` is false when another request got there first. */
-export const finalizeResultSchema = z.object({
+const finalizeResultSchema = z.object({
   testId: z.string(),
   finalizedAt: z.string(),
   finalizedByThisCall: z.boolean(),

@@ -17,25 +17,25 @@ export const DASHBOARD_RECENT_TESTS = 12;
 export const DASHBOARD_FEED_ROWS = 8;
 export const DASHBOARD_WINDOW_ROWS = 5;
 
-export const dashboardStudentCountsSchema = z.object({
+const dashboardStudentCountsSchema = z.object({
   total: z.number().int(),
   active: z.number().int(),
   suspended: z.number().int(),
 });
 
-export const dashboardCatalogCountsSchema = z.object({
+const dashboardCatalogCountsSchema = z.object({
   branches: z.number().int(),
   programs: z.number().int(),
   exams: z.number().int(),
 });
 
-export const dashboardTestCountsSchema = z.object({
+const dashboardTestCountsSchema = z.object({
   byStatus: z.partialRecord(testStatusSchema, z.number().int()),
   series: z.number().int(),
 });
 
 /** Band A. Every tile answers to its own key, so a partial grant is a partial row. */
-export const dashboardHeadlineSchema = z.object({
+const dashboardHeadlineSchema = z.object({
   students: dashboardStudentCountsSchema.optional(),
   catalog: dashboardCatalogCountsSchema.optional(),
   questions: z.partialRecord(questionStatusSchema, z.number().int()).optional(),
@@ -43,7 +43,7 @@ export const dashboardHeadlineSchema = z.object({
 });
 export type DashboardHeadline = z.infer<typeof dashboardHeadlineSchema>;
 
-export const dashboardCoverageSchema = z.object({
+const dashboardCoverageSchema = z.object({
   subjectId: z.string(),
   subject: z.string(),
   /** Live questions only: an archived one is not depth an admin can draw a paper from. */
@@ -53,7 +53,7 @@ export const dashboardCoverageSchema = z.object({
 export type DashboardCoverage = z.infer<typeof dashboardCoverageSchema>;
 
 /** Band B. Drafts awaiting review are not repeated here — `headline.questions` carries that count. */
-export const dashboardBankSchema = z.object({
+const dashboardBankSchema = z.object({
   /** Absent until proof-reading has raised one — the tile is skipped, never a zero. */
   openFlags: z.number().int().optional(),
   coverage: z.array(dashboardCoverageSchema),
@@ -61,7 +61,7 @@ export const dashboardBankSchema = z.object({
 export type DashboardBank = z.infer<typeof dashboardBankSchema>;
 
 /** One recent test's folded rollup — the sittings series, read never scanned. */
-export const dashboardSittingSchema = z.object({
+const dashboardSittingSchema = z.object({
   testId: z.string(),
   title: z.string().nullable(),
   opensAt: z.string().nullable(),
@@ -71,13 +71,13 @@ export const dashboardSittingSchema = z.object({
 export type DashboardSitting = z.infer<typeof dashboardSittingSchema>;
 
 /** Band C. The feed is every admin's own trail; the sittings need STUDENT_PERFORMANCE. */
-export const dashboardActivitySchema = z.object({
+const dashboardActivitySchema = z.object({
   feed: z.array(rowActionSchema),
   sittings: z.array(dashboardSittingSchema).optional(),
 });
 export type DashboardActivity = z.infer<typeof dashboardActivitySchema>;
 
-export const dashboardWindowSchema = z.object({
+const dashboardWindowSchema = z.object({
   testId: z.string(),
   title: z.string().nullable(),
   series: z.string(),
@@ -87,7 +87,7 @@ export const dashboardWindowSchema = z.object({
 export type DashboardWindow = z.infer<typeof dashboardWindowSchema>;
 
 /** Band D. */
-export const dashboardWindowsSchema = z.object({
+const dashboardWindowsSchema = z.object({
   open: z.array(dashboardWindowSchema),
   upcoming: z.array(dashboardWindowSchema),
 });

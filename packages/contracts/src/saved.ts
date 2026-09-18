@@ -13,7 +13,7 @@ export const SAVED_QUESTION_KIND = {
   BOOKMARK: 'BOOKMARK',
   MISTAKE: 'MISTAKE',
 } as const;
-export const savedQuestionKindSchema = z.enum(SAVED_QUESTION_KIND);
+const savedQuestionKindSchema = z.enum(SAVED_QUESTION_KIND);
 export type SavedQuestionKind = z.infer<typeof savedQuestionKindSchema>;
 export const SAVED_QUESTION_KINDS = savedQuestionKindSchema.options;
 
@@ -68,7 +68,7 @@ export const bookmarkedInAttemptSchema = z.object({
 export type BookmarkedInAttempt = z.infer<typeof bookmarkedInAttemptSchema>;
 
 /** One filterable value. Read off the student's OWN set, so no choice can find nothing. */
-export const savedFacetSchema = z.object({ id: z.string(), name: z.string() });
+const savedFacetSchema = z.object({ id: z.string(), name: z.string() });
 
 /** Every choice both filters can offer, in one read — two pickers are not two round trips. */
 export const savedFacetsSchema = z.object({

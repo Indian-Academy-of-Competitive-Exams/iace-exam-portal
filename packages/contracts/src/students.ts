@@ -135,10 +135,10 @@ export const pastExamEntrySchema = z.object({
 export const PROFILE_LIST_MAX = 12;
 
 /** `Program.code` values — the coaching programs the student is a candidate for. */
-export const programCodesSchema = z.array(z.string());
+const programCodesSchema = z.array(z.string());
 
 /** Everything the admin may see — note what is NOT here (see the file header). */
-export const studentProfileSchema = z.object({
+const studentProfileSchema = z.object({
   motherName: z.string().nullable(),
   fatherName: z.string().nullable(),
   dob: z.string().nullable(),
@@ -160,7 +160,7 @@ export const studentProfileSchema = z.object({
 });
 
 /** One event a student is a candidate on. Named here because the profile is where they come off it. */
-export const studentEventSchema = z.object({
+const studentEventSchema = z.object({
   id: z.string(),
   name: z.string(),
 });
@@ -184,7 +184,7 @@ export const STUDENT_SORTS = {
   MOBILE: 'mobile',
 } as const;
 export type StudentSort = (typeof STUDENT_SORTS)[keyof typeof STUDENT_SORTS];
-export const STUDENT_SORT_VALUES = Object.values(STUDENT_SORTS) as [StudentSort, ...StudentSort[]];
+const STUDENT_SORT_VALUES = Object.values(STUDENT_SORTS) as [StudentSort, ...StudentSort[]];
 
 export const studentListQuerySchema = paginationQuerySchema.extend({
   /** Matches a mobile number or a name, case-insensitively. */
@@ -257,7 +257,7 @@ export type CreateStudentInput = z.input<typeof createStudentSchema>;
 export type CreateStudentBody = z.infer<typeof createStudentSchema>;
 
 /** Every field optional: this is a patch, and an omitted key means "leave it". */
-export const updateStudentProfileSchema = z.object({
+const updateStudentProfileSchema = z.object({
   motherName: blankClears(personNameSchema),
   fatherName: blankClears(personNameSchema),
   dob: blankClears(dobSchema),

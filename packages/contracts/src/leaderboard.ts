@@ -45,7 +45,7 @@ export const LEADERBOARD_MEASURES = {
   MARKS: 'MARKS',
   PERCENTILE_POINTS: 'PERCENTILE_POINTS',
 } as const;
-export const leaderboardMeasureSchema = z.enum(LEADERBOARD_MEASURES);
+const leaderboardMeasureSchema = z.enum(LEADERBOARD_MEASURES);
 export type LeaderboardMeasure = z.infer<typeof leaderboardMeasureSchema>;
 
 /** The rule the whole feature turns on: two papers are never compared on marks. */
@@ -61,7 +61,7 @@ export const LEADERBOARD_PODIUM = 3;
 /** Seats either side of the reader — the neighbourhood is this wide both ways. */
 export const LEADERBOARD_NEIGHBOURS = 3;
 
-export const leaderboardRowSchema = z.object({
+const leaderboardRowSchema = z.object({
   rank: z.number().int(),
   name: z.string(),
   branch: z.string().nullable(),

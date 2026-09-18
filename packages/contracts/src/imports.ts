@@ -43,10 +43,10 @@ const importPlanSchema = <Row extends z.ZodType, Summary extends z.ZodType>(
   });
 
 /** What a single line would do. `skip` means it has errors and will be left. */
-export const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
+const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
 
 /** The profile columns, as one object — none of them is ever queried, so none of them is a column. */
-export const studentImportProfileSchema = z.object({
+const studentImportProfileSchema = z.object({
   motherName: z.string().nullable(),
   fatherName: z.string().nullable(),
   dob: z.string().nullable(),
@@ -56,7 +56,7 @@ export const studentImportProfileSchema = z.object({
 });
 export type StudentImportProfile = z.infer<typeof studentImportProfileSchema>;
 
-export const studentImportRowSchema = z.object({
+const studentImportRowSchema = z.object({
   /** 1-based line in the uploaded file, header included, as an editor shows it. */
   line: z.number().int(),
   mobile: z.string().nullable(),
@@ -79,7 +79,7 @@ export const studentImportRowSchema = z.object({
 });
 export type StudentImportRow = z.infer<typeof studentImportRowSchema>;
 
-export const studentImportSummarySchema = z.object({
+const studentImportSummarySchema = z.object({
   total: z.number().int(),
   willCreate: z.number().int(),
   willUpdate: z.number().int(),
@@ -101,9 +101,9 @@ export const studentImportResultSchema = studentImportSummarySchema.extend({
 export type StudentImportResult = z.infer<typeof studentImportResultSchema>;
 
 /** An event intake: a candidate list, never a roster, so a number we know is only ADDED to the event. */
-export const candidateImportActionSchema = z.enum(['create', 'add', 'skip']);
+const candidateImportActionSchema = z.enum(['create', 'add', 'skip']);
 
-export const candidateImportRowSchema = z.object({
+const candidateImportRowSchema = z.object({
   line: z.number().int(),
   mobile: z.string().nullable(),
   fullName: z.string().nullable(),
@@ -115,7 +115,7 @@ export const candidateImportRowSchema = z.object({
 });
 export type CandidateImportRow = z.infer<typeof candidateImportRowSchema>;
 
-export const candidateImportSummarySchema = z.object({
+const candidateImportSummarySchema = z.object({
   total: z.number().int(),
   willCreate: z.number().int(),
   willAdd: z.number().int(),
@@ -136,9 +136,9 @@ export const candidateImportResultSchema = candidateImportSummarySchema.extend({
 export type CandidateImportResult = z.infer<typeof candidateImportResultSchema>;
 
 /** A program is something an existing student CARRIES, so a number we do not know is a skip. */
-export const programImportActionSchema = z.enum(['enrol', 'already', 'skip']);
+const programImportActionSchema = z.enum(['enrol', 'already', 'skip']);
 
-export const programImportRowSchema = z.object({
+const programImportRowSchema = z.object({
   line: z.number().int(),
   mobile: z.string().nullable(),
   /** From the sheet, for the admin to recognise the row by — never written to the student. */
@@ -152,7 +152,7 @@ export const programImportRowSchema = z.object({
 });
 export type ProgramImportRow = z.infer<typeof programImportRowSchema>;
 
-export const programImportSummarySchema = z.object({
+const programImportSummarySchema = z.object({
   total: z.number().int(),
   willEnrol: z.number().int(),
   alreadyEnrolled: z.number().int(),

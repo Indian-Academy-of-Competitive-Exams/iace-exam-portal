@@ -73,7 +73,7 @@ const OMR_FILL_BY_STATE: Readonly<Record<AnswerState, number>> = {
 };
 
 /** One section's slice of a scored paper; the column stores it by position (`score-paper.ts`). */
-export const attemptSectionScoreSchema = z.object({
+const attemptSectionScoreSchema = z.object({
   baseConfigSectionId: z.string(),
   score: z.number(),
   correctCount: z.number().int(),
@@ -83,7 +83,7 @@ export const attemptSectionScoreSchema = z.object({
 });
 export type AttemptSectionScore = z.infer<typeof attemptSectionScoreSchema>;
 
-export const attemptSchema = z.object({
+const attemptSchema = z.object({
   id: z.string(),
   testId: z.string(),
   studentId: z.string(),
@@ -155,14 +155,14 @@ export const answerChangeSchema = z.object({
 export type AnswerChange = z.infer<typeof answerChangeSchema>;
 
 /** Where a sectional clock has got to. Absent for a composite paper, which has one clock. */
-export const sectionProgressSchema = z.object({
+const sectionProgressSchema = z.object({
   remainingSec: z.number().int().min(0),
   closed: z.boolean(),
 });
 export type SectionProgress = z.infer<typeof sectionProgressSchema>;
 
 /** A screenful of answers is one save; a paper is 100, so a batch never needs to be larger. */
-export const SAVE_BATCH_MAX = 200;
+const SAVE_BATCH_MAX = 200;
 
 export const saveAttemptStateSchema = z.object({
   /** The screen's own counter. A batch that arrives after a newer one is dropped, not applied. */
@@ -183,7 +183,7 @@ export type SaveAttemptStateInput = z.input<typeof saveAttemptStateSchema>;
 export type SaveAttemptStateBody = z.infer<typeof saveAttemptStateSchema>;
 
 /** One question as the live state holds it — the palette is drawn from exactly this. */
-export const liveAnswerSchema = z.object({
+const liveAnswerSchema = z.object({
   state: answerStateSchema,
   selectedOptionId: z.string().nullable(),
   typedAnswer: z.string().nullable(),
@@ -384,14 +384,14 @@ export type SubmittedAttempt = z.infer<typeof submittedAttemptSchema>;
 // ============================================================================
 
 /** An option as a candidate sees it. `questionOptionSchema` carries `isCorrect`; this cannot. */
-export const examOptionSchema = z.object({
+const examOptionSchema = z.object({
   id: z.string(),
   position: z.number().int(),
   text: localizedRichSchema,
 });
 export type ExamOption = z.infer<typeof examOptionSchema>;
 
-export const examQuestionSchema = z.object({
+const examQuestionSchema = z.object({
   questionId: z.string(),
   /** This student's display order, stored at start — not the paper's. */
   order: z.number().int(),
@@ -442,7 +442,7 @@ export type ExamPaper = z.infer<typeof examPaperSchema>;
 // ============================================================================
 
 /** How one question went FOR THIS STUDENT. There is deliberately no correct option on it. */
-export const scoreCardQuestionSchema = z.object({
+const scoreCardQuestionSchema = z.object({
   questionId: z.string(),
   /** This student's display order, so the palette redraws exactly as they sat it. */
   order: z.number().int(),
@@ -503,7 +503,7 @@ export type ScoreCard = z.infer<typeof scoreCardSchema>;
 // ============================================================================
 
 /** One question, reviewed. `options` carry `isCorrect`, which is why this whole shape is gated. */
-export const solutionQuestionSchema = scoreCardQuestionSchema.extend({
+const solutionQuestionSchema = scoreCardQuestionSchema.extend({
   type: questionTypeSchema,
   /** Stem AND the worked solution, in the languages this sitting was taken in. */
   content: localizedContentSchema,
@@ -529,21 +529,6 @@ export type SolutionReport = z.infer<typeof solutionReportSchema>;
 // nothing here needs a new column or a new event to be true.
 // ============================================================================
 
-/** One slice of a paper: a section, a subject, a difficulty band, or the whole thing. */
-export const analyticsBucketSchema = z.object({
-  key: z.string(),
-  name: z.string(),
-  total: z.number().int(),
-  attempted: z.number().int(),
-  correct: z.number().int(),
-  wrong: z.number().int(),
-  unattempted: z.number().int(),
-  /** Correct over ATTEMPTED. An answer nothing could judge is attempted and neither right nor wrong. */
-  accuracy: z.number(),
-  marks: z.number(),
-  timeSpentSec: z.number().int(),
-});
-
 export const timeUseSchema = z.object({
   totalSec: z.number().int(),
   avgPerQuestionSec: z.number(),
@@ -555,7 +540,7 @@ export const timeUseSchema = z.object({
 export type TimeUse = z.infer<typeof timeUseSchema>;
 
 /** One sat test on the trend line, oldest first — what a chart plots. */
-export const performancePointSchema = z.object({
+const performancePointSchema = z.object({
   attemptId: z.string(),
   attemptNo: z.number().int(),
   testId: z.string(),

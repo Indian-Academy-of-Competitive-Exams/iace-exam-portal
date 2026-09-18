@@ -32,9 +32,9 @@ export const ErrorCodes = {
   INTERNAL: 'INTERNAL',
 } as const;
 
-export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
+type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-export const errorCodeSchema = z.enum(ErrorCodes);
+const errorCodeSchema = z.enum(ErrorCodes);
 
 /** The status each code answers with — right for proxies and caches, even though callers use the code. */
 export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
@@ -93,7 +93,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
 export const REQUEST_ID_HEADER = 'x-request-id';
 
 /** On every response. `requestId` is echoed in the header and the log line for the same request. */
-export const metaSchema = z.object({
+const metaSchema = z.object({
   requestId: z.string(),
   /** List endpoints only. */
   page: z.number().int().optional(),
@@ -106,7 +106,7 @@ export type Meta = z.infer<typeof metaSchema>;
 export const FORM_LEVEL_FIELD = '_';
 
 /** `fieldErrors` feeds react-hook-form directly. `details` is client context, never internals. */
-export const apiErrorSchema = z.object({
+const apiErrorSchema = z.object({
   code: errorCodeSchema,
   message: z.string(),
   fieldErrors: z.record(z.string(), z.array(z.string())).optional(),
@@ -190,7 +190,7 @@ export function isPaginated(value: unknown): value is Paginated<unknown> {
 /** Survives bundling and duplicate module copies, which `instanceof` may not. */
 const APP_EXCEPTION_BRAND = Symbol.for('iace.AppException');
 
-export interface AppExceptionOptions {
+interface AppExceptionOptions {
   fieldErrors?: Record<string, string[]>;
   details?: unknown;
   /** Overrides the code's default status. Rarely needed. */

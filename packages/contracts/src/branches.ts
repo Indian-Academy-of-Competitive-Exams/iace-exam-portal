@@ -16,7 +16,7 @@ export const BRANCH_TYPE = {
   PHYSICAL: 'PHYSICAL',
   VIRTUAL: 'VIRTUAL',
 } as const;
-export const branchTypeSchema = z.enum(BRANCH_TYPE);
+const branchTypeSchema = z.enum(BRANCH_TYPE);
 export type BranchType = z.infer<typeof branchTypeSchema>;
 /** The same values as a list, for building a picker without restating them — as `GENDERS` does. */
 export const BRANCH_TYPES = branchTypeSchema.options;
@@ -31,13 +31,6 @@ export const branchSchema = z.object({
   createdAt: z.string(),
 });
 export type Branch = z.infer<typeof branchSchema>;
-
-/** Just enough to name a branch on screen. */
-export const branchRefSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  type: branchTypeSchema,
-});
 
 export const branchListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),

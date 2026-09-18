@@ -120,7 +120,7 @@ export type AdminListQueryInput = z.input<typeof adminListQuerySchema>;
 
 /** Lowercased on the way in: an email that differs only by case is the same
  *  person, and OTP login looks the row up by exact match. */
-export const adminEmailSchema = z
+const adminEmailSchema = z
   .string()
   .trim()
   .toLowerCase()

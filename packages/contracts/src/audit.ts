@@ -58,7 +58,7 @@ export const AUDIT_ACTOR_TYPE = {
   SCRIPT: 'SCRIPT',
   SYSTEM: 'SYSTEM',
 } as const;
-export const auditActorTypeSchema = z.enum(AUDIT_ACTOR_TYPE);
+const auditActorTypeSchema = z.enum(AUDIT_ACTOR_TYPE);
 export type AuditActorType = z.infer<typeof auditActorTypeSchema>;
 
 export type FieldDiff = Record<string, { from: unknown; to: unknown }>;

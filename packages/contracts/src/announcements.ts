@@ -12,8 +12,8 @@ export const ANNOUNCEMENT_ROUTES = {
 } as const;
 
 /** The paid channels an announcement may opt into. In-app is always sent and never charged. */
-export const ANNOUNCEMENT_CHANNELS = { WHATSAPP: 'WHATSAPP', SMS: 'SMS' } as const;
-export const announcementChannelSchema = z.enum(ANNOUNCEMENT_CHANNELS);
+const ANNOUNCEMENT_CHANNELS = { WHATSAPP: 'WHATSAPP', SMS: 'SMS' } as const;
+const announcementChannelSchema = z.enum(ANNOUNCEMENT_CHANNELS);
 export type AnnouncementChannel = z.infer<typeof announcementChannelSchema>;
 
 /** The filter, minus the parts that describe a PAGE rather than a cohort. */
@@ -50,7 +50,7 @@ export const announcementPreviewSchema = z.object({
 export type AnnouncementPreview = z.infer<typeof announcementPreviewSchema>;
 
 /** What each channel did with it, counted off the delivery ledger. */
-export const announcementStatsSchema = z.object({
+const announcementStatsSchema = z.object({
   readCount: z.number(),
   sent: z.number(),
   delivered: z.number(),

@@ -40,7 +40,7 @@ export type AuthoringHistoryQuery = z.infer<typeof authoringHistoryQuerySchema>;
 export type AuthoringHistoryQueryInput = z.input<typeof authoringHistoryQuerySchema>;
 
 /** One institute day's output, so a gap in the run reads as a zero rather than as no data. */
-export const authoringDaySchema = z.object({
+const authoringDaySchema = z.object({
   date: dateOnlySchema,
   count: z.number().int(),
 });

@@ -361,7 +361,7 @@ export function queryString(params: Record<string, unknown>): string {
   return query ? `?${query}` : '';
 }
 
-export interface ApiClientOptions {
+interface ApiClientOptions {
   baseUrl: string;
   /** Current access token, or null when signed out. */
   getAccessToken: () => string | null;

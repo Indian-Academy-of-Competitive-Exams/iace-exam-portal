@@ -9,7 +9,7 @@ import { civilDate } from './common';
 // ============================================================================
 
 /** What a canonical name looks like once normalised. */
-export const CANONICAL_NAME_PATTERN = /^[A-Z0-9]+( [A-Z0-9]+)*$/;
+const CANONICAL_NAME_PATTERN = /^[A-Z0-9]+( [A-Z0-9]+)*$/;
 
 /** Uppercase, collapse whitespace, trim. Shared, or the form's live preview would lie. */
 export function canonicalName(value: string): string {
@@ -43,7 +43,7 @@ export function displayNameSchema(noun: string, max: number, min = 2) {
     .max(max, `A name cannot be longer than ${max} characters`);
 }
 
-export const BRANCH_NAME_MAX = 60;
+const BRANCH_NAME_MAX = 60;
 
 /** e.g. AMEERPET, RTC X ROADS, ONLINE. */
 export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, label: 'branch' });

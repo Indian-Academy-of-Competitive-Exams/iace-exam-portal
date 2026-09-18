@@ -35,7 +35,7 @@ export const EXAM_MODE = {
   INTERVIEW: 'INTERVIEW',
   DESCRIPTIVE: 'DESCRIPTIVE',
 } as const;
-export const examModeSchema = z.enum(EXAM_MODE);
+const examModeSchema = z.enum(EXAM_MODE);
 export type ExamMode = z.infer<typeof examModeSchema>;
 export const EXAM_MODES = examModeSchema.options;
 
@@ -50,7 +50,7 @@ export const STAGE_DISPOSITION = {
   /** Listed so the journey is complete on screen, never run. */
   CATALOG_ONLY: 'CATALOG_ONLY',
 } as const;
-export const stageDispositionSchema = z.enum(STAGE_DISPOSITION);
+const stageDispositionSchema = z.enum(STAGE_DISPOSITION);
 export type StageDisposition = z.infer<typeof stageDispositionSchema>;
 export const STAGE_DISPOSITIONS = stageDispositionSchema.options;
 
@@ -71,11 +71,11 @@ export const languageCodeSchema = z.enum(LANGUAGE_CODE);
 export type LanguageCode = z.infer<typeof languageCodeSchema>;
 export const LANGUAGE_CODES = languageCodeSchema.options;
 
-export const EXAM_NAME_MAX = 80;
+const EXAM_NAME_MAX = 80;
 export const EXAM_CODE_MAX = 60;
 
 /** Display text — what an admin reads in a list, not what anything stores. */
-export const examNameSchema = displayNameSchema('exam', EXAM_NAME_MAX);
+const examNameSchema = displayNameSchema('exam', EXAM_NAME_MAX);
 
 /** e.g. SSC CGL, RRB JE. Canonical, because enrolments carry this exact string. */
 export const examCodeSchema = canonicalNameSchema({ max: EXAM_CODE_MAX, label: 'exam code' });
@@ -149,16 +149,16 @@ export const ADMIN_EXAM_STAGE_ROUTES = {
   remove: (id: string) => `/admin/exam-stages/${id}`,
 } as const;
 
-export const STAGE_NAME_MAX = 80;
-export const STAGE_KEY_MAX = 60;
+const STAGE_NAME_MAX = 80;
+const STAGE_KEY_MAX = 60;
 
-export const stageNameSchema = displayNameSchema('stage', STAGE_NAME_MAX);
+const stageNameSchema = displayNameSchema('stage', STAGE_NAME_MAX);
 
 /**
  * Human-stable and unique across every exam — "SSC_CGL_T1". Underscores, not spaces: this is
  * what the exam-pattern workbook and every seed script address a stage by.
  */
-export const stageKeySchema = z
+const stageKeySchema = z
   .string()
   .transform((value) =>
     value

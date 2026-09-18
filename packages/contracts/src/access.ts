@@ -18,7 +18,7 @@ export const TEST_SERIES_KIND = {
   PROGRAM: 'PROGRAM',
   EVENT: 'EVENT',
 } as const;
-export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
+const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
 
 export type TestSeriesKind = z.infer<typeof testSeriesKindSchema>;
 export const TEST_SERIES_KINDS = testSeriesKindSchema.options;
@@ -33,7 +33,7 @@ export const NOTIFICATION_TYPE = {
   PIN_CHANGED: 'PIN_CHANGED',
   WELCOME: 'WELCOME',
 } as const;
-export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
+const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 
 /**
@@ -51,16 +51,16 @@ export const programCatalogSchema = z.object({
 });
 export type Program = z.infer<typeof programCatalogSchema>;
 
-export const PROGRAM_CODE_MAX = 40;
-export const PROGRAM_NAME_MAX = 120;
+const PROGRAM_CODE_MAX = 40;
+const PROGRAM_NAME_MAX = 120;
 
 /** Canonical, because a student row and a series both carry this exact string with no FK. */
-export const programCodeSchema = canonicalNameSchema({
+const programCodeSchema = canonicalNameSchema({
   max: PROGRAM_CODE_MAX,
   label: 'program code',
 });
 
-export const programNameSchema = displayNameSchema('program', PROGRAM_NAME_MAX);
+const programNameSchema = displayNameSchema('program', PROGRAM_NAME_MAX);
 
 export const programListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
@@ -98,7 +98,7 @@ export const eventSchema = z.object({
 });
 export type Event = z.infer<typeof eventSchema>;
 
-export const EVENT_NAME_MAX = 120;
+const EVENT_NAME_MAX = 120;
 
 export const createEventSchema = z.object({
   name: displayNameSchema('event', EVENT_NAME_MAX),
@@ -143,7 +143,7 @@ export type AddEventCandidatesInput = z.input<typeof addEventCandidatesSchema>;
 export type AddEventCandidatesBody = z.infer<typeof addEventCandidatesSchema>;
 
 /** The unit of offering. A test reaches a student only through one of these. */
-export const testSeriesSchema = z.object({
+const testSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
   examStageId: z.string().nullable(),
@@ -172,8 +172,8 @@ export const testSeriesSummarySchema = testSeriesSchema.extend({
 });
 export type TestSeriesSummary = z.infer<typeof testSeriesSummarySchema>;
 
-export const SERIES_NAME_MAX = 120;
-export const seriesNameSchema = displayNameSchema('series', SERIES_NAME_MAX);
+const SERIES_NAME_MAX = 120;
+const seriesNameSchema = displayNameSchema('series', SERIES_NAME_MAX);
 
 /** A series is named by who reaches it: a program, its kind, or nothing in particular. */
 export function seriesNameKind(input: {
@@ -222,7 +222,7 @@ export type UpdateTestSeriesInput = z.input<typeof updateTestSeriesSchema>;
 export type UpdateTestSeriesBody = z.infer<typeof updateTestSeriesSchema>;
 
 /** The escape hatch for access that is not exam-, program- or branch-derivable. */
-export const studentGrantSchema = z.object({
+const studentGrantSchema = z.object({
   studentId: z.string(),
   testSeriesId: z.string(),
   createdAt: z.string(),
@@ -242,7 +242,7 @@ export const STUDENT_SERIES_SOURCE = {
   EVENT: 'EVENT',
   GRANT: 'GRANT',
 } as const;
-export const studentSeriesSourceSchema = z.enum(STUDENT_SERIES_SOURCE);
+const studentSeriesSourceSchema = z.enum(STUDENT_SERIES_SOURCE);
 export type StudentSeriesSource = z.infer<typeof studentSeriesSourceSchema>;
 
 /** One series a student reaches, and what opens it — the branch gate has already been applied. */
@@ -333,11 +333,11 @@ export type DropPushSubscriptionBody = z.infer<typeof dropPushSubscriptionSchema
 
 /** Which store issued the registration. Mirrors `DevicePlatform` in prisma/schema.prisma. */
 export const DEVICE_PLATFORM = { ANDROID: 'ANDROID', IOS: 'IOS' } as const;
-export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
+const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
 export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
 
 /** FCM's own cap on a registration token; anything longer is not one. */
-export const DEVICE_TOKEN_MAX = 4096;
+const DEVICE_TOKEN_MAX = 4096;
 
 /** One phone, by the token FCM issued it. The token IS the identity: it rotates, the phone does not. */
 export const pushDeviceSchema = z.object({
@@ -374,7 +374,7 @@ export const OPENING_HAS_PASSED =
 // `canStart` is derived from the clock on every read rather than cached.
 // ============================================================================
 
-export const studentCatalogTestSchema = z.object({
+const studentCatalogTestSchema = z.object({
   id: z.string(),
   title: z.string().nullable(),
   /** What the paper IS, not what this student may do with it — static, so it caches safely. */
