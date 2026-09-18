@@ -76,7 +76,8 @@ Setup, then paper, then offer. There is no certificate step.
 - Any question that is not ARCHIVED, carries a current version, and has no open proof-reading
   flag is drawable. A paper pins a version, so there has to be one; a DRAFT is drawable because a
   paper is built before its questions are finished, and the flag check is what still keeps an
-  unresolved objection off a student's screen now that activation no longer gates it.
+  unresolved objection from being drawn now that activation no longer gates it. It gates the DRAW
+  only: a flag raised after the question is already on a paper leaves it there.
 - Finalize freezes rows that already exist and draws nothing. The paper must hold every section at
   its exact count or the freeze rolls back naming the shortfall — a paper that is not whole leaves
   the test unlocked.
