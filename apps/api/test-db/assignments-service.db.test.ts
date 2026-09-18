@@ -22,7 +22,9 @@ import {
   makeAdmin,
   makeCatalog,
   makePaper,
+  makeQuestion,
   makeSection,
+  makeSubject,
   makeTest,
   resetDatabase,
   testPrisma,
@@ -196,6 +198,23 @@ describe('AssignmentsService — assigning', () => {
         error.code === ErrorCodes.VALIDATION_ERROR &&
         Boolean(error.fieldErrors?.assigneeId),
     );
+  });
+});
+
+describe('AssignmentsService — assignable', () => {
+  it('lists an active admin holding the role’s key, not a stranger or a deactivated holder', async () => {
+    const { assignments } = build();
+    const holder = await makeAdmin(prisma, { fullName: 'Priya' });
+    const stranger = await makeAdmin(prisma, { fullName: 'Kiran' });
+    const deactivated = await makeAdmin(prisma, { fullName: 'Arjun', isActive: false });
+    await grant(holder.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(deactivated.id, FEATURE_KEYS.QUESTION_AUTHORING);
+
+    const typists = await assignments.assignable(ASSIGNMENT_ROLES.TYPIST);
+
+    assert.deepEqual(typists, [{ id: holder.id, fullName: 'Priya' }]);
+    assert.ok(!typists.some((admin) => admin.id === stranger.id));
+    assert.ok(!typists.some((admin) => admin.id === deactivated.id));
   });
 });
 
@@ -485,5 +504,58 @@ describe('the offer gate', () => {
     const result = await finalizer.offer(paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
+  });
+});
+
+describe('AssignmentsService — what a section has written so far', () => {
+  /** The failure this prevents: a reader's row reading 0 forever, because only a typist writes. */
+  it('counts the section, so both roles report the same progress', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const subject = await makeSubject(prisma);
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    const reader = await makeAdmin(prisma, { fullName: 'Arjun' });
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+
+    const typing = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+
+    for (const stem of ['One', 'Two', 'Three']) {
+      const question = await makeQuestion(prisma, { subjectId: subject.id, stem });
+      await prisma.question.update({
+        where: { id: question.id },
+        data: { assignmentId: typing.id },
+      });
+    }
+
+    const rows = await assignments.forTest(test.id);
+
+    assert.deepEqual(
+      rows.map((row) => [row.role, row.writtenCount]).sort(),
+      [
+        [ASSIGNMENT_ROLES.PROOFREADER, 3],
+        [ASSIGNMENT_ROLES.TYPIST, 3],
+      ].sort(),
+      'the reader waits on the same section the typist is filling',
+    );
   });
 });

@@ -341,9 +341,12 @@ import {
 } from './question-flags';
 import {
   ADMIN_ASSIGNMENTS_ROUTES,
+  assignableAdminSchema,
   assignmentSchema,
   assignmentWithTestSchema,
   type Assignment,
+  type AssignableAdmin,
+  type AssignableQueryInput,
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type MineAssignmentsQueryInput,
@@ -1251,6 +1254,12 @@ export function createApiClient(options: ApiClientOptions) {
 
         finalize: (id: string): Promise<Assignment> =>
           write('PATCH', ADMIN_ASSIGNMENTS_ROUTES.finalize(id), assignmentSchema),
+
+        assignable: (query: AssignableQueryInput): Promise<AssignableAdmin[]> =>
+          get(
+            `${ADMIN_ASSIGNMENTS_ROUTES.assignable}${queryString({ ...query })}`,
+            assignableAdminSchema.array(),
+          ),
       },
 
       imports: {

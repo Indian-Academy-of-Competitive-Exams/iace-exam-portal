@@ -9,6 +9,7 @@ import {
   PERMISSION_LEVELS,
   satisfiesLevel,
   type Assignment,
+  type AssignableAdmin,
   type AssignmentRole,
   type AssignmentWithTest,
   type CreateAssignmentBody,
@@ -22,7 +23,6 @@ import { isUniqueViolation } from '../common/prisma-errors';
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: { select: { name: true } },
   assignee: { select: { fullName: true, email: true } },
-  _count: { select: { questions: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentRow = Prisma.QuestionAssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>;
@@ -63,7 +63,13 @@ export class AssignmentsService {
       include: ASSIGNMENT_INCLUDE,
       orderBy: [{ baseConfigSection: { order: 'asc' } }, { role: 'asc' }],
     });
-    return rows.map(toAssignment);
+    const written = await this.sectionWrittenCounts(rows);
+    return rows.map((row) => toAssignment(row, written.get(sectionKey(row)) ?? 0));
+  }
+
+  /** Active admins already holding what a role needs — who the picker offers, and nothing more. */
+  async assignable(role: AssignmentRole): Promise<AssignableAdmin[]> {
+    return this.admins.holdersOf(FEATURE_FOR_ROLE[role], PERMISSION_LEVELS.WRITE);
   }
 
   async assign(testId: string, body: CreateAssignmentBody, actorId: string): Promise<Assignment> {
@@ -86,7 +92,7 @@ export class AssignmentsService {
         },
         include: ASSIGNMENT_INCLUDE,
       });
-      return toAssignment(row);
+      return this.withWrittenCount(row);
     } catch (error) {
       // Two admins raced the same section; the unique picked one. The loser is told why, not how.
       if (!isUniqueViolation(error)) throw error;
@@ -119,7 +125,8 @@ export class AssignmentsService {
       include: WITH_TEST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map(toAssignmentWithTest);
+    const written = await this.sectionWrittenCounts(rows);
+    return rows.map((row) => toAssignmentWithTest(row, written.get(sectionKey(row)) ?? 0));
   }
 
   /** Idempotent: finalising twice hands back the same row rather than erroring on the second call. */
@@ -133,14 +140,42 @@ export class AssignmentsService {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     // One fact per role — "I wrote this" and "I read this" — with no ordering between them.
-    if (row.finalizedAt) return toAssignment(row);
+    if (row.finalizedAt) return this.withWrittenCount(row);
 
     const updated = await this.prisma.questionAssignment.update({
       where: { id },
       data: { finalizedAt: new Date() },
       include: ASSIGNMENT_INCLUDE,
     });
-    return toAssignment(updated);
+    return this.withWrittenCount(updated);
+  }
+
+  /** How many questions any assignment on a row's own (test, section) carries — a section fact. */
+  private async sectionWrittenCounts(
+    rows: readonly { id: string; testId: string; baseConfigSectionId: string }[],
+  ): Promise<Map<string, number>> {
+    const ids = rows.map((row) => row.id);
+    const counts =
+      ids.length === 0
+        ? []
+        : await this.prisma.question.groupBy({
+            by: ['assignmentId'],
+            where: { assignmentId: { in: ids } },
+            _count: { _all: true },
+          });
+    const byAssignmentId = new Map(counts.map((row) => [row.assignmentId, row._count._all]));
+
+    const bySection = new Map<string, number>();
+    for (const row of rows) {
+      const key = sectionKey(row);
+      bySection.set(key, (bySection.get(key) ?? 0) + (byAssignmentId.get(row.id) ?? 0));
+    }
+    return bySection;
+  }
+
+  private async withWrittenCount(row: AssignmentRow): Promise<Assignment> {
+    const written = await this.sectionWrittenCounts([row]);
+    return toAssignment(row, written.get(sectionKey(row)) ?? 0);
   }
 
   private async requireTest(id: string): Promise<{ id: string; baseConfigId: string }> {
@@ -213,7 +248,11 @@ export class AssignmentsService {
   }
 }
 
-function toAssignment(row: AssignmentRow): Assignment {
+/** A section is only unique within its own test — two tests can share a base config's section id. */
+const sectionKey = (row: { testId: string; baseConfigSectionId: string }): string =>
+  `${row.testId}:${row.baseConfigSectionId}`;
+
+function toAssignment(row: AssignmentRow, writtenCount: number): Assignment {
   return {
     id: row.id,
     testId: row.testId,
@@ -224,10 +263,13 @@ function toAssignment(row: AssignmentRow): Assignment {
     role: row.role,
     dueAt: row.dueAt?.toISOString() ?? null,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
-    writtenCount: row._count.questions,
+    writtenCount,
   };
 }
 
-function toAssignmentWithTest(row: AssignmentWithTestRow): AssignmentWithTest {
-  return { ...toAssignment(row), testTitle: row.test.title };
+function toAssignmentWithTest(
+  row: AssignmentWithTestRow,
+  writtenCount: number,
+): AssignmentWithTest {
+  return { ...toAssignment(row, writtenCount), testTitle: row.test.title };
 }

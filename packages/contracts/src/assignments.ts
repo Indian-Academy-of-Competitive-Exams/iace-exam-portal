@@ -26,7 +26,7 @@ export const assignmentSchema = z.object({
   dueAt: z.string().nullable(),
   /** The whole state: null is outstanding, set is done. */
   finalizedAt: z.string().nullable(),
-  /** How many questions carry this assignment's id — progress against the section's questionCount. */
+  /** Questions written under ANY assignment on this section — a section fact, not this row's own. */
   writtenCount: z.number().int(),
 });
 export type Assignment = z.infer<typeof assignmentSchema>;
@@ -53,6 +53,19 @@ export const mineAssignmentsQuerySchema = z.object({
 export type MineAssignmentsQuery = z.infer<typeof mineAssignmentsQuerySchema>;
 export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchema>;
 
+/** id and name only — a picker needs someone to choose, not the directory `admins.list` guards. */
+export const assignableAdminSchema = z.object({
+  id: z.string(),
+  fullName: z.string().nullable(),
+});
+export type AssignableAdmin = z.infer<typeof assignableAdminSchema>;
+
+export const assignableQuerySchema = z.object({
+  role: assignmentRoleSchema,
+});
+export type AssignableQuery = z.infer<typeof assignableQuerySchema>;
+export type AssignableQueryInput = z.input<typeof assignableQuerySchema>;
+
 export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** GET lists a test's assignments; POST to the same path creates one. */
   forTest: (testId: string) => `/admin/assignments/tests/${testId}`,
@@ -60,4 +73,6 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   remove: (id: string) => `/admin/assignments/${id}`,
   mine: '/admin/assignments/mine',
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,
+  /** Who a role can be given to — active admins already holding the feature key it needs. */
+  assignable: '/admin/assignments/assignable',
 } as const;

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { filterNavBy, type NavItem } from '@iace/app-kit';
 import {
+  type AssignmentRole,
   type AttemptStatus,
   type AuditAction,
   type AuditActorType,
@@ -355,6 +356,12 @@ export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>>
   OFFER: 'Offer',
 };
 
+/** Who staffs a section. Written out — never "PR" for a proof-reader. */
+export const ASSIGNMENT_ROLE_LABELS: Readonly<Record<AssignmentRole, string>> = {
+  TYPIST: 'Typist',
+  PROOFREADER: 'Proof-reader',
+};
+
 export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
   DRAFT: 'Draft',
   ACTIVE: 'Active',
@@ -474,6 +481,7 @@ const ADMIN = 'admin';
 /** Every query key this app owns; a raw key that drifts by a character fails silently at invalidation. */
 export const QUERY_KEYS = {
   ADMINS: [ADMIN, 'admins'],
+  ASSIGNMENTS: [ADMIN, 'assignments'],
   AUTHORING: [ADMIN, 'authoring'],
   ANNOUNCEMENTS: [ADMIN, 'announcements'],
   AUDIT: [ADMIN, 'audit'],

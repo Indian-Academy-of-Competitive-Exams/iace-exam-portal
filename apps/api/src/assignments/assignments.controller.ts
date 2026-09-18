@@ -14,9 +14,12 @@ import {
   ActorTypes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  assignableQuerySchema,
   createAssignmentSchema,
   mineAssignmentsQuerySchema,
   type Assignment,
+  type AssignableAdmin,
+  type AssignableQuery,
   type AssignmentWithTest,
   type CreateAssignmentBody,
   type MineAssignmentsQuery,
@@ -81,5 +84,14 @@ export class AssignmentsController {
   @Delete(':id')
   remove(@Param('id') id: string): Promise<void> {
     return this.assignments.remove(id);
+  }
+
+  /** Who a role can be given to — the same key `assign` itself requires, never the admin directory. */
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get('assignable')
+  assignable(
+    @Query(new ZodQuery(assignableQuerySchema)) query: AssignableQuery,
+  ): Promise<AssignableAdmin[]> {
+    return this.assignments.assignable(query.role);
   }
 }

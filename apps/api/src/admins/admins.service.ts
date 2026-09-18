@@ -6,6 +6,7 @@ import {
   FEATURE_KEY_VALUES,
   PERMISSION_LEVELS,
   fieldDiff,
+  satisfiesLevel,
   type Admin as AdminDto,
   type AdminListQuery,
   type AdminPermissions,
@@ -63,6 +64,19 @@ export class AdminsService {
    */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
     return (await this.grantsByAdmin([adminId])).get(adminId) ?? {};
+  }
+
+  /** Id and name only, for a picker that must not leak the directory `admins.list` guards. */
+  async holdersOf(
+    key: FeatureKey,
+    level: PermissionLevel,
+  ): Promise<{ id: string; fullName: string | null }[]> {
+    const rows = await this.prisma.admin.findMany({
+      where: { isActive: true },
+      select: { id: true, fullName: true },
+    });
+    const grants = await this.grantsByAdmin(rows.map((row) => row.id));
+    return rows.filter((row) => satisfiesLevel(grants.get(row.id)?.[key], level));
   }
 
   // ==========================================================================

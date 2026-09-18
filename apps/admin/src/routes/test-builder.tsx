@@ -48,6 +48,7 @@ import {
   type TestFormValues,
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
+import { AssignStep } from './test-builder-assign-step';
 import { PaperStep } from './test-builder-paper-step';
 import { OfferSaveDialog, OfferStep } from './test-builder-offering';
 import { useOfferDraft, type OfferHold } from './use-offer-draft';
@@ -390,7 +391,12 @@ function StepBody({
         <SetupStep form={form} detail={detail} fromSeries={fromSeries} config={config} sat={sat} />
       ) : null}
 
-      {step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} config={config} /> : null}
+      {step === TEST_BUILDER_STEP.PAPER ? (
+        <>
+          <AssignStep detail={detail} config={config} />
+          <PaperStep detail={detail} config={config} />
+        </>
+      ) : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <OfferStep detail={detail} offer={offer} />
       ) : null}
