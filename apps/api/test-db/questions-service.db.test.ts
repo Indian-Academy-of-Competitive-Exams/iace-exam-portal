@@ -393,7 +393,7 @@ describe('QuestionsService.update', () => {
 });
 
 describe('QuestionsService.update — what versioning is for', () => {
-  /** A paper and an attempt pin a version; rewriting the row they point at would rewrite every scored result. */
+  /** A paper on a reached test pins a version; rewriting the row it points at would move it under a student. */
   it('inserts a new version and leaves the one a paper already pinned untouched', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
@@ -536,7 +536,16 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
       where: { questionId: created.id },
       select: { questionVersionId: true },
     });
-    assert.equal(pinned.questionVersionId, versionId, 'the paper followed the rewrite');
+    const pinnedVersion = await prisma.questionVersion.findUniqueOrThrow({
+      where: { id: pinned.questionVersionId },
+      select: { content: true },
+    });
+    const stem = (pinnedVersion.content as LocalizedContent).en?.stem;
+    assert.equal(
+      previewTextOf(plainTextOf(stem)),
+      REWORDED.en,
+      'the paper follows the rewrite, so it now reads the new stem',
+    );
   });
 
   /** Publishing is no longer the freeze — a paper students can reach is. */
@@ -587,7 +596,16 @@ describe('QuestionsService.update — revisability follows reachability', () => 
       where: { questionId: created.id },
       select: { questionVersionId: true },
     });
-    assert.equal(pinned.questionVersionId, versionId, 'an open paper moved under the student');
+    const pinnedVersion = await prisma.questionVersion.findUniqueOrThrow({
+      where: { id: pinned.questionVersionId },
+      select: { content: true },
+    });
+    const stem = (pinnedVersion.content as LocalizedContent).en?.stem;
+    assert.equal(
+      previewTextOf(plainTextOf(stem)),
+      'What is 20% of 150?',
+      'the frozen paper still reads what the student was already shown',
+    );
   });
 
   it('appends when only a program unlock has opened, not the test itself', async () => {
@@ -623,6 +641,63 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1, 'a DRAFT test reaches nobody, past opensAt or not');
+  });
+
+  /** The design's central case: offered, so no longer DRAFT, but its own clock has not struck yet. */
+  it('rewrites in place while an offered test has not opened yet', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    const { testId } = await pinnedOn(created.id, versionId);
+    await prisma.test.update({
+      where: { id: testId },
+      data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() + 86_400_000) },
+    });
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal((await versions()).length, 1, 'offered but not yet open must not force a version');
+    assert.equal(edited.version, 1);
+    assert.equal(await currentVersionOf(created.id), versionId);
+  });
+
+  /** `testIsOpen` treats a null opening as open now, everywhere else in this codebase — so here too. */
+  it('appends once an offered test with no opening set at all is reachable now', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    const { testId } = await pinnedOn(created.id, versionId);
+    await prisma.test.update({ where: { id: testId }, data: { status: TEST_STATUS.ACTIVE } });
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(edited.version, 2, 'a null opensAt opens the test now, not never');
+    assert.equal((await versions()).length, 2);
+  });
+
+  it('rewrites in place a version two unreached papers both pin, reaching them together', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    await pinnedOn(created.id, versionId);
+    await pinnedOn(created.id, versionId);
+
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(edited.version, 1);
+    assert.equal(
+      (await versions()).length,
+      1,
+      'a fix for one unreached paper reaches the other too',
+    );
+    const rows = await prisma.paperQuestion.findMany({
+      where: { questionId: created.id },
+      select: { questionVersionId: true },
+    });
+    assert.equal(rows.length, 2);
+    for (const row of rows) {
+      assert.equal(row.questionVersionId, versionId);
+    }
   });
 });
 

@@ -364,12 +364,13 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.deepEqual(idsOf(paper, idFor('sec_2')), [idFor('q1')]);
   });
 
-  /** A paper pins a version, so a question without one has nothing to pin. */
+  /** A DRAFT question is drawable now; only ARCHIVED, or nothing to pin, keeps one out. */
   it('draws from any question not archived, that carries a version', async () => {
     const service = await serviceWith({
       questions: [
         ...bank(3, BUILDER.REASONING, 'r'),
-        ...bank(2, BUILDER.QUANT, 'q'),
+        ...bank(1, BUILDER.QUANT, 'q'),
+        { id: idFor('draft'), subjectId: BUILDER.QUANT, status: QUESTION_STATUS.DRAFT },
         { id: idFor('archived'), subjectId: BUILDER.QUANT, status: QUESTION_STATUS.ARCHIVED },
         { id: idFor('unversioned'), subjectId: BUILDER.QUANT, versioned: false },
       ],
@@ -377,7 +378,10 @@ describe('PaperService — filling a section’s remainder from its own spec', (
 
     const paper = await service.fillSection(TEST, idFor('sec_2'));
 
-    assert.deepEqual([...idsOf(paper, idFor('sec_2'))].sort(), [idFor('q1'), idFor('q2')].sort());
+    assert.deepEqual(
+      [...idsOf(paper, idFor('sec_2'))].sort(),
+      [idFor('q1'), idFor('draft')].sort(),
+    );
   });
 
   /** The failure this prevents: the engine hands the pins back, so a fill writes them a second time. */

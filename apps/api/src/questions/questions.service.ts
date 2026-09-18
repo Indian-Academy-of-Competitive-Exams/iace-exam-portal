@@ -309,14 +309,18 @@ export class QuestionsService {
         questionVersionId,
         test: {
           status: { not: TEST_STATUS.DRAFT },
-          OR: [{ opensAt: { lte: now } }, { programUnlocks: { some: { opensAt: { lte: now } } } }],
+          OR: [
+            { opensAt: null },
+            { opensAt: { lte: now } },
+            { programUnlocks: { some: { opensAt: { lte: now } } } },
+          ],
         },
       },
     });
     return reached > 0 ? null : questionVersionId;
   }
 
-  /** Version 1 of a question nobody has drawn stays version 1, however often it is saved. */
+  /** A version no reachable test pins yet stays this version, however often it is saved. */
   private async revise(
     tx: Prisma.TransactionClient,
     versionId: string,

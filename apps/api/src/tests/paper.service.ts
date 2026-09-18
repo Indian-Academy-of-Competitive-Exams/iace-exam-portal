@@ -38,7 +38,8 @@ import { stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
-const NOT_DRAWABLE_MESSAGE = 'That question is not live, so no paper can serve it.';
+const NOT_DRAWABLE_MESSAGE =
+  'That question is archived, or has no version to pin, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
