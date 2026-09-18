@@ -31,6 +31,7 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-sta
 import { RefreshScroll } from '../../src/components/ui/refresh-scroll';
 import { Skeleton } from '../../src/components/ui/skeleton';
 import { StatTile } from '../../src/components/ui/stat-tile';
+import { ScoreTrend } from '../../src/components/performance/score-trend';
 import { TestTile } from '../../src/components/tests/test-tile';
 import { useAuth } from '../../src/providers/auth';
 
@@ -82,6 +83,8 @@ export default function HomeScreen() {
           <StatTile label="Longest streak" value={days(longestStreak(testDays.data.days))} />
         </View>
       ) : null}
+
+      <ScoreTrend points={trend.data?.points ?? []} />
 
       <Recent recent={recent} />
     </RefreshScroll>

@@ -28,6 +28,7 @@ import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
 import { StatTile } from '../ui/stat-tile';
+import { ScoreTrend } from './score-trend';
 
 const DASH = '—';
 const EVERY_SCOPE = '';
@@ -94,6 +95,8 @@ function Body({
           onChange={setScope}
         />
       ) : null}
+
+      <ScoreTrend points={sittings} />
 
       <Subjects overview={overview} scope={chosen} />
       <Effort overview={overview} />
