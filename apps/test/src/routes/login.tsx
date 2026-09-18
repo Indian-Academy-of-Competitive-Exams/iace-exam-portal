@@ -75,7 +75,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
+    <div className="relative flex min-h-[100dvh] flex-col bg-background">
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
