@@ -1,5 +1,4 @@
 /// <reference types="nativewind/types" />
-import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,24 +8,34 @@ import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
 import { useTokenColor } from '../src/lib/use-token-color';
+import { asText, useFilterState, type Filter } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
 import { Card } from '../src/components/ui/card';
-import { ChipRow, type ChipOption } from '../src/components/ui/chip-row';
+import { FilterBar } from '../src/components/ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { Skeleton } from '../src/components/ui/skeleton';
 
 const EVERY = 'every';
 const UNREAD = 'unread';
 
-const SHOWING: readonly ChipOption[] = [
-  { value: EVERY, label: 'Everything' },
-  { value: UNREAD, label: 'Unread' },
+/** Two choices and a phone has room for both, so this one stays on the screen rather than folding. */
+const FILTERS: readonly Filter[] = [
+  {
+    key: 'showing',
+    kind: 'choice',
+    label: 'Showing',
+    primary: true,
+    items: [
+      { value: EVERY, label: 'Everything' },
+      { value: UNREAD, label: 'Unread' },
+    ],
+  },
 ];
 
 /** What the institute has told this student, newest first. Opening one marks it read. */
 export default function NotificationsScreen() {
-  const [showing, setShowing] = useState(EVERY);
-  const unreadOnly = showing === UNREAD;
+  const state = useFilterState(FILTERS);
+  const unreadOnly = asText(state.values.showing) === UNREAD;
   const queryClient = useQueryClient();
   const router = useRouter();
   const spinner = useTokenColor('--muted-foreground');
@@ -60,7 +69,7 @@ export default function NotificationsScreen() {
       onEndReachedThreshold={0.5}
       onEndReached={list.loadMore}
       renderItem={({ item }) => <Row row={item} onPress={() => open(item)} />}
-      ListHeaderComponent={<ChipRow options={SHOWING} value={showing} onChange={setShowing} />}
+      ListHeaderComponent={<FilterBar state={state} filters={FILTERS} />}
       ListEmptyComponent={<ListBody list={list} unreadOnly={unreadOnly} />}
       ListFooterComponent={
         list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null

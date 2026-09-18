@@ -22,6 +22,7 @@ import { overviewQuery, performanceQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
+import { Hero, HeroFigure } from '../ui/hero';
 import { ChipRow, type ChipOption } from '../ui/chip-row';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
@@ -111,27 +112,16 @@ function Standing({ overview }: Readonly<{ overview: StudentOverview }>) {
   if (overview.standing.testsEvaluated === 0) return null;
 
   return (
-    <Card className="gap-1 p-5">
-      <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Average percentile
-      </Text>
-      <View className="flex-row items-baseline gap-1">
-        <Text className="text-3xl font-bold tracking-tight text-foreground">
-          {avgPercentile ?? DASH}
-        </Text>
-        {avgPercentile === null ? null : (
-          <Text className="text-lg font-semibold text-muted-foreground">th</Text>
-        )}
-      </View>
-      <Text className="text-sm text-muted-foreground">
-        {bestPercentile === null ? 'nothing marked yet' : `best ${bestPercentile}`}
-      </Text>
-      {lastAttemptAt === null ? null : (
-        <Text className="text-xs text-muted-foreground">
-          {`Last sat ${instituteDayLabel(lastAttemptAt)}`}
-        </Text>
-      )}
-    </Card>
+    <Hero
+      eyebrow="Average percentile"
+      meta={lastAttemptAt === null ? undefined : `Last sat ${instituteDayLabel(lastAttemptAt)}`}
+    >
+      <HeroFigure
+        value={avgPercentile ?? DASH}
+        unit={avgPercentile === null ? undefined : 'th'}
+        caption={bestPercentile === null ? 'nothing marked yet' : `best ${bestPercentile}`}
+      />
+    </Hero>
   );
 }
 

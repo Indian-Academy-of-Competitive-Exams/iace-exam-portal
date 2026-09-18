@@ -22,7 +22,7 @@ export default function SavedScreen() {
   return (
     <View className="flex-1 bg-background">
       <View className="gap-3 px-5 pt-6">
-        <Text className="text-3xl font-bold tracking-tight text-foreground">Saved questions</Text>
+        <Text className="text-2xl font-bold tracking-tight text-foreground">Saved questions</Text>
         <ChipRow options={KINDS} value={kind} onChange={(next) => setKind(asKind(next))} />
       </View>
 

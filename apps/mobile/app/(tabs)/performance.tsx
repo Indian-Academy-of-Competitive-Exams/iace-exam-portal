@@ -20,7 +20,7 @@ export default function PerformanceScreen() {
   return (
     <View className="flex-1 bg-background">
       <View className="gap-3 px-5 pt-6">
-        <Text className="text-3xl font-bold tracking-tight text-foreground">Performance</Text>
+        <Text className="text-2xl font-bold tracking-tight text-foreground">Performance</Text>
         <ChipRow options={VIEWS} value={view} onChange={setView} />
       </View>
 

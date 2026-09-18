@@ -11,10 +11,11 @@ import {
   type QuestionReportRow,
 } from '@iace/contracts';
 import { questionReportQuery } from '../../lib/queries';
+import { asText, useFilterState, type Filter, type FilterState } from '../../lib/filters';
 import { Alert } from '../ui/alert';
 import { Badge, type BadgeVariant } from '../ui/badge';
 import { Card } from '../ui/card';
-import { ChipRow, type ChipOption } from '../ui/chip-row';
+import { FilterBar } from '../ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { Skeleton } from '../ui/skeleton';
@@ -29,17 +30,26 @@ const RESULTS: Readonly<Record<string, { label: string; variant: BadgeVariant }>
   LEFT: { label: 'Skipped', variant: 'neutral' },
 };
 
-const FILTERS: readonly ChipOption[] = [
-  { value: QUESTION_FILTERS.ALL, label: 'Any result' },
-  { value: QUESTION_FILTERS.CORRECT, label: 'Correct' },
-  { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
-  { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
+/** One filter, and a phone has room for it: it stays on the screen rather than folding. */
+const FILTERS: readonly Filter[] = [
+  {
+    key: 'result',
+    kind: 'choice',
+    label: 'Result',
+    primary: true,
+    items: [
+      { value: QUESTION_FILTERS.ALL, label: 'Any result' },
+      { value: QUESTION_FILTERS.CORRECT, label: 'Correct' },
+      { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
+      { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
+    ],
+  },
 ];
 
 /** Every question of one sitting against the field's, which is where a clock is actually read. */
 export function QuestionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const report = useQuery(questionReportQuery(attemptId));
-  const [filter, setFilter] = useState<string>(QUESTION_FILTERS.ALL);
+  const state = useFilterState(FILTERS);
 
   if (report.isLoading) {
     return (
@@ -62,18 +72,12 @@ export function QuestionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
     );
   }
 
-  return <Body report={report.data} filter={filter} onFilter={setFilter} />;
+  return <Body report={report.data} state={state} />;
 }
 
-function Body({
-  report,
-  filter,
-  onFilter,
-}: Readonly<{
-  report: QuestionReport;
-  filter: string;
-  onFilter: (filter: string) => void;
-}>) {
+function Body({ report, state }: Readonly<{ report: QuestionReport; state: FilterState }>) {
+  // The list's own "Any result" row is the unset value, which is how a choice filter reads as off.
+  const filter = asText(state.values.result) || QUESTION_FILTERS.ALL;
   const rows = useMemo(
     () => report.questions.filter((row) => matches(row, filter)),
     [report.questions, filter],
@@ -86,9 +90,7 @@ function Body({
       data={rows}
       keyExtractor={(row) => row.questionId}
       renderItem={({ item }) => <Question row={item} />}
-      ListHeaderComponent={
-        <Header report={report} filter={filter} onFilter={onFilter} showing={rows.length} />
-      }
+      ListHeaderComponent={<Header report={report} state={state} showing={rows.length} />}
       ListEmptyComponent={<EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing matches" />}
     />
   );
@@ -98,15 +100,9 @@ const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40
 
 function Header({
   report,
-  filter,
-  onFilter,
+  state,
   showing,
-}: Readonly<{
-  report: QuestionReport;
-  filter: string;
-  onFilter: (filter: string) => void;
-  showing: number;
-}>) {
+}: Readonly<{ report: QuestionReport; state: FilterState; showing: number }>) {
   const insights = questionReportInsights(report.questions);
 
   return (
@@ -122,7 +118,7 @@ function Header({
         />
       </View>
 
-      <ChipRow scroll options={FILTERS} value={filter} onChange={onFilter} />
+      <FilterBar state={state} filters={FILTERS} />
       <Text className="text-xs text-muted-foreground">{`${showing} of ${report.questions.length}`}</Text>
     </View>
   );

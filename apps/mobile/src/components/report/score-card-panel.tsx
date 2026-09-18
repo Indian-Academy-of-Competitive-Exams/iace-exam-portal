@@ -5,6 +5,7 @@ import { minutes } from '@iace/app-kit';
 import { type MarkComposition, type ScoreCard } from '@iace/contracts';
 import { attemptReportQuery, scoreCardQuery } from '../../lib/queries';
 import { Card } from '../ui/card';
+import { Hero, HeroFigure } from '../ui/hero';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
@@ -73,20 +74,13 @@ function Headline({ card }: Readonly<{ card: ScoreCard }>) {
   const ranked = card.percentile !== null;
 
   return (
-    <Card className="gap-1 p-5">
-      <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Your result
-      </Text>
-      <View className="flex-row items-baseline gap-1">
-        <Text className="text-3xl font-bold tracking-tight text-foreground">
-          {ranked ? card.percentile : card.score}
-        </Text>
-        <Text className="text-lg font-semibold text-muted-foreground">
-          {ranked ? 'th' : `/ ${card.maxMarks}`}
-        </Text>
-      </View>
-      <Text className="text-sm text-muted-foreground">{ranked ? beaten(card) : 'marks'}</Text>
-    </Card>
+    <Hero eyebrow="Your result">
+      <HeroFigure
+        value={ranked ? (card.percentile ?? 0) : card.score}
+        unit={ranked ? 'th' : `/ ${card.maxMarks}`}
+        caption={ranked ? beaten(card) : 'marks'}
+      />
+    </Hero>
   );
 }
 

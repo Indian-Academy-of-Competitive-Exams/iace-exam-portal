@@ -11,11 +11,9 @@ import { ACTIVE_DEVICES_QUERY_KEY } from '../src/lib/constants';
 import { useAuth } from '../src/providers/auth';
 import { Alert } from '../src/components/ui/alert';
 import { Button } from '../src/components/ui/button';
-import { TextField } from '../src/components/ui/text-field';
+import { PinField } from '../src/components/ui/pin-field';
 
 const FORM_FIELDS = ['currentPin', 'newPin'] as const;
-
-const digits = (raw: string) => raw.replace(/\D/g, '').slice(0, PIN_LENGTH);
 
 /** Also where a student still on the PIN they were given comes to choose their own. */
 export default function ChangePinScreen() {
@@ -59,24 +57,22 @@ export default function ChangePinScreen() {
           {onDefaultPin ? 'Choose your own PIN' : 'Change your PIN'}
         </Text>
 
-        <TextField
+        <PinField
           control={form.control}
           name="currentPin"
           label={onDefaultPin ? 'PIN you were given' : 'Current PIN'}
-          keyboardType="number-pad"
-          secureTextEntry
-          sanitize={digits}
+          length={PIN_LENGTH}
+          masked
           // ui-copy-ok: format — where the given PIN comes from is not on the screen
           hint={onDefaultPin ? 'The first four digits of your mobile number.' : undefined}
         />
 
-        <TextField
+        <PinField
           control={form.control}
           name="newPin"
           label={`New PIN (${PIN_LENGTH} digits)`}
-          keyboardType="number-pad"
-          secureTextEntry
-          sanitize={digits}
+          length={PIN_LENGTH}
+          masked
         />
 
         <View>

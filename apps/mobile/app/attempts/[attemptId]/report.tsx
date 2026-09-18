@@ -33,7 +33,7 @@ export default function ReportScreen() {
     <View className="flex-1 bg-background">
       <View className="gap-3 px-5 pt-4">
         {title ? (
-          <Text className="text-2xl font-bold tracking-tight text-foreground" numberOfLines={2}>
+          <Text className="text-xl font-bold tracking-tight text-foreground" numberOfLines={2}>
             {title}
           </Text>
         ) : null}

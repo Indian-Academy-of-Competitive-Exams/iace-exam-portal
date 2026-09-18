@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
@@ -13,17 +13,21 @@ import {
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import { api } from '../../lib/api';
 import { savedFacetsQueryKey, savedQueryKey } from '../../lib/constants';
+import { asText, useFilterState, type Filter, type FilterOption } from '../../lib/filters';
 import { useTokenColor } from '../../lib/use-token-color';
 import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Card } from '../ui/card';
-import { ChipRow, type ChipOption } from '../ui/chip-row';
+import { FilterBar } from '../ui/filter-bar';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { SavedQuestionSheet } from './saved-question-sheet';
 
 const ANY = '';
+
+/** The keys this list filters on, named once so the spec and the query cannot drift. */
+const KEYS = { SUBJECT: 'subjectId', TEST: 'testId' } as const;
 
 /** What each list is for, said once at the top rather than on every row. */
 const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
@@ -34,8 +38,6 @@ const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
 
 export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
   const queryClient = useQueryClient();
-  const [subjectId, setSubjectId] = useState(ANY);
-  const [testId, setTestId] = useState(ANY);
   const [reading, setReading] = useState<SavedQuestion | null>(null);
   const [dropping, setDropping] = useState<SavedQuestion | null>(null);
   const spinner = useTokenColor('--muted-foreground');
@@ -44,6 +46,11 @@ export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
     queryKey: savedFacetsQueryKey(kind),
     queryFn: () => api.me.savedFacets({ kind }),
   });
+
+  const filters = useMemo(() => filterSpec(facets.data), [facets.data]);
+  const state = useFilterState(filters);
+  const subjectId = asText(state.values[KEYS.SUBJECT]);
+  const testId = asText(state.values[KEYS.TEST]);
 
   const list = useInfinitePages({
     queryKey: [...savedQueryKey(kind), { subjectId, testId }],
@@ -65,7 +72,7 @@ export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
     },
   });
 
-  const filtered = subjectId !== ANY || testId !== ANY;
+  const filtered = state.activeCount > 0;
 
   return (
     <>
@@ -82,20 +89,7 @@ export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
         ListHeaderComponent={
           <View className="gap-3 pb-1">
             <Alert variant="info">{KIND_NOTE[kind]}</Alert>
-            <ChipRow
-              scroll
-              label="Subject"
-              options={facetOptions(facets.data?.subjects, 'Any subject')}
-              value={subjectId}
-              onChange={setSubjectId}
-            />
-            <ChipRow
-              scroll
-              label="Test"
-              options={facetOptions(facets.data?.tests, 'Any test')}
-              value={testId}
-              onChange={setTestId}
-            />
+            <FilterBar state={state} filters={filters} />
           </View>
         }
         ListEmptyComponent={<ListBody kind={kind} list={list} filtered={filtered} />}
@@ -202,8 +196,26 @@ const removalOf = (kind: SavedQuestionKind) =>
     ? 'It leaves your bookmarks. Star it again from the solution review to bring it back.'
     : 'It leaves your mistakes. It comes back only if you get it wrong again.';
 
+/** Both fold: a subject list and a paper list are longer than a phone's width either way. */
+function filterSpec(facets: SavedFacets | undefined): Filter[] {
+  return [
+    {
+      key: KEYS.SUBJECT,
+      kind: 'choice',
+      label: 'Subject',
+      items: facetOptions(facets?.subjects, 'Any subject'),
+    },
+    {
+      key: KEYS.TEST,
+      kind: 'choice',
+      label: 'Test',
+      items: facetOptions(facets?.tests, 'Any test'),
+    },
+  ];
+}
+
 /** Only what their own set spans: a filter must offer no choice that finds nothing. */
-const facetOptions = (rows: SavedFacets['subjects'] | undefined, any: string): ChipOption[] => [
+const facetOptions = (rows: SavedFacets['subjects'] | undefined, any: string): FilterOption[] => [
   { value: ANY, label: any },
   ...(rows ?? []).map((row) => ({ value: row.id, label: row.name })),
 ];

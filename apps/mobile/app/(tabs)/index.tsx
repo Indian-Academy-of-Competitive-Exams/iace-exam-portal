@@ -67,7 +67,7 @@ export default function HomeScreen() {
 
   return (
     <RefreshScroll refreshing={catalog.isRefetching} onRefresh={refresh}>
-      <Text className="text-3xl font-bold tracking-tight text-foreground">
+      <Text className="text-2xl font-bold tracking-tight text-foreground">
         {greetingFor(now, identity?.fullName)}
       </Text>
 

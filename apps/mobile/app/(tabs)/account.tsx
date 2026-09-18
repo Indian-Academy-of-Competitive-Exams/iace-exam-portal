@@ -33,7 +33,7 @@ export default function AccountScreen() {
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-6 px-5 py-6">
       <View className="gap-1">
-        <Text className="text-3xl font-bold tracking-tight text-foreground">Account</Text>
+        <Text className="text-2xl font-bold tracking-tight text-foreground">Account</Text>
         {identity?.fullName ? (
           <Text className="text-sm text-muted-foreground">{identity.fullName}</Text>
         ) : null}

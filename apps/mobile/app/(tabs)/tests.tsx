@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { FlatList, Text, TextInput, View } from 'react-native';
+import { useMemo } from 'react';
+import { FlatList, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useUnstableNativeVariable } from 'nativewind';
 import {
   matching,
   resultsByTest,
@@ -20,11 +19,21 @@ import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
 import { Skeleton } from '../../src/components/ui/skeleton';
-import { ChipRow, type ChipOption } from '../../src/components/ui/chip-row';
+import { FilterBar } from '../../src/components/ui/filter-bar';
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
+import {
+  asText,
+  useFilterState,
+  type Filter,
+  type FilterOption,
+  type FilterState,
+} from '../../src/lib/filters';
 import { plural } from '../../src/lib/plural';
 
 const ANY = '';
+
+/** The keys this screen filters on, named once so the spec and the reads cannot drift. */
+const KEYS = { SEARCH: 'q', COURSE: 'course', STATE: 'state', SERIES: 'seriesId' } as const;
 
 /** Reaching nothing and searching for nothing are different facts, and they read differently. */
 type Emptiness = 'NONE' | 'FILTERED' | null;
@@ -37,17 +46,21 @@ interface Shelf {
 export default function TestsScreen() {
   const catalog = useQuery(catalogQuery);
   const trend = useQuery(performanceQuery);
-  const [q, setQ] = useState('');
-  const [course, setCourse] = useState('');
-  const [state, setState] = useState('');
-  const [seriesId, setSeriesId] = useState('');
+
+  const reaches = useMemo(() => catalog.data?.series ?? [], [catalog.data]);
+  const filters = useMemo(() => filterSpec(reaches), [reaches]);
+  const state = useFilterState(filters);
+
+  const q = asText(state.values[KEYS.SEARCH]);
+  const course = asText(state.values[KEYS.COURSE]);
+  const bucket = asText(state.values[KEYS.STATE]);
+  const seriesId = asText(state.values[KEYS.SERIES]);
 
   const now = new Date();
-  const reaches = catalog.data?.series ?? [];
   const filteredSeries = reaches
     .filter((row) => course === ANY || row.examStage?.course === course)
     .filter((row) => seriesId === ANY || row.id === seriesId);
-  const rows = inState(matching(sittablesOf(filteredSeries), q), state);
+  const rows = inState(matching(sittablesOf(filteredSeries), q), bucket);
   const emptiness = emptyReasonOf(reaches.length, rows.length);
   const results = resultsByTest(trend.data?.points ?? []);
 
@@ -62,16 +75,8 @@ export default function TestsScreen() {
         <TestsHeader
           count={rows.length}
           testBlocked={catalog.data?.testBlocked ?? false}
-          q={q}
-          onChangeQ={setQ}
-          course={course}
-          onChangeCourse={setCourse}
-          courseOptions={courseOptionsOf(reaches)}
+          filters={filters}
           state={state}
-          onChangeState={setState}
-          seriesId={seriesId}
-          onChangeSeries={setSeriesId}
-          seriesOptions={seriesOptionsOf(reaches)}
         />
       }
       ListEmptyComponent={
@@ -135,38 +140,15 @@ function CatalogBody({
 interface TestsHeaderProps {
   count: number;
   testBlocked: boolean;
-  q: string;
-  onChangeQ: (value: string) => void;
-  course: string;
-  onChangeCourse: (value: string) => void;
-  courseOptions: readonly ChipOption[];
-  state: string;
-  onChangeState: (value: string) => void;
-  seriesId: string;
-  onChangeSeries: (value: string) => void;
-  seriesOptions: readonly ChipOption[];
+  filters: readonly Filter[];
+  state: FilterState;
 }
 
-function TestsHeader({
-  count,
-  testBlocked,
-  q,
-  onChangeQ,
-  course,
-  onChangeCourse,
-  courseOptions,
-  state,
-  onChangeState,
-  seriesId,
-  onChangeSeries,
-  seriesOptions,
-}: Readonly<TestsHeaderProps>) {
-  const placeholderColor = useUnstableNativeVariable('--placeholder');
-
+function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeaderProps>) {
   return (
     <View className="gap-4 pb-2">
       <View>
-        <Text className="text-3xl font-bold tracking-tight text-foreground">Tests</Text>
+        <Text className="text-2xl font-bold tracking-tight text-foreground">Tests</Text>
         <Text className="text-sm text-muted-foreground">{plural(count, 'test')}</Text>
       </View>
 
@@ -176,33 +158,36 @@ function TestsHeader({
         </Alert>
       ) : null}
 
-      <TextInput
-        value={q}
-        onChangeText={onChangeQ}
-        placeholder="Search your tests"
-        placeholderTextColor={typeof placeholderColor === 'string' ? placeholderColor : undefined}
-        className="h-11 rounded-md border border-input bg-surface px-3 text-base text-foreground"
-      />
-
-      {/* Offering only "Any" offers nothing, so this waits for a real second option. */}
-      {courseOptions.length > 2 ? (
-        <ChipRow label="Exam" options={courseOptions} value={course} onChange={onChangeCourse} />
-      ) : null}
-      <ChipRow label="State" options={STATE_OPTIONS} value={state} onChange={onChangeState} />
-      {seriesOptions.length > 2 ? (
-        <ChipRow
-          label="Series"
-          options={seriesOptions}
-          value={seriesId}
-          onChange={onChangeSeries}
-        />
-      ) : null}
+      <FilterBar state={state} filters={filters} />
     </View>
   );
 }
 
+/** One spec: the search and the state a shelf is scanned for stay out; the long lists fold. */
+function filterSpec(series: readonly StudentCatalogSeries[]): Filter[] {
+  const courses = courseOptionsOf(series);
+  const seriesRows = seriesOptionsOf(series);
+
+  return [
+    {
+      key: KEYS.SEARCH,
+      kind: 'search',
+      label: 'Search your tests',
+      placeholder: 'Search your tests',
+    },
+    { key: KEYS.STATE, kind: 'choice', label: 'State', primary: true, items: STATE_OPTIONS },
+    // Offering only "Any" offers nothing, so each waits for a real second option.
+    ...(courses.length > 2
+      ? [{ key: KEYS.COURSE, kind: 'choice' as const, label: 'Exam', items: courses }]
+      : []),
+    ...(seriesRows.length > 2
+      ? [{ key: KEYS.SERIES, kind: 'choice' as const, label: 'Series', items: seriesRows }]
+      : []),
+  ];
+}
+
 /** Where a paper stands for this student — the one thing they scan a shelf for. */
-const STATE_OPTIONS: readonly ChipOption[] = [
+const STATE_OPTIONS: readonly FilterOption[] = [
   { value: ANY, label: 'Any state' },
   { value: TEST_BUCKET.OPEN, label: 'Open now' },
   { value: TEST_BUCKET.LATER, label: 'Scheduled' },
@@ -225,7 +210,7 @@ function shelvesOf(series: readonly StudentCatalogSeries[], rows: readonly Sitta
 }
 
 /** Only the exams this student actually reaches; a filter offering nothing is noise. */
-function courseOptionsOf(series: readonly StudentCatalogSeries[]): ChipOption[] {
+function courseOptionsOf(series: readonly StudentCatalogSeries[]): FilterOption[] {
   const held = new Set(
     series.map((row) => row.examStage?.course).filter((one): one is ExamCourse => Boolean(one)),
   );
@@ -239,7 +224,7 @@ function courseOptionsOf(series: readonly StudentCatalogSeries[]): ChipOption[] 
 }
 
 /** Only the series this student reaches; a filter offering one row is a filter offering nothing. */
-function seriesOptionsOf(series: readonly StudentCatalogSeries[]): ChipOption[] {
+function seriesOptionsOf(series: readonly StudentCatalogSeries[]): FilterOption[] {
   return [
     { value: ANY, label: 'Any series' },
     ...series.map((row) => ({ value: row.id, label: row.name })),

@@ -25,6 +25,7 @@ import { useAuth } from '../src/providers/auth';
 import { Alert } from '../src/components/ui/alert';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
+import { PinField } from '../src/components/ui/pin-field';
 import { TextField } from '../src/components/ui/text-field';
 
 /** Why the student is going through the OTP flow — it only changes the words. */
@@ -46,8 +47,6 @@ type Step =
 
 const sanitizeMobile = (raw: string) =>
   normaliseMobile(raw.replace(/\D/g, '')).slice(0, MOBILE_DIGITS);
-const sanitizeDigits = (maxLength: number) => (raw: string) =>
-  raw.replace(/\D/g, '').slice(0, maxLength);
 
 export default function LoginScreen() {
   const { signIn, signedOutReason } = useAuth();
@@ -151,15 +150,7 @@ function SignInStep({
         sanitize={sanitizeMobile}
         autoFocus
       />
-      <TextField
-        control={form.control}
-        name="pin"
-        label="PIN"
-        keyboardType="number-pad"
-        secureTextEntry
-        maxLength={PIN_LENGTH}
-        sanitize={sanitizeDigits(PIN_LENGTH)}
-      />
+      <PinField control={form.control} name="pin" label="PIN" length={PIN_LENGTH} masked />
 
       <Button
         loading={login.isPending}
@@ -267,14 +258,12 @@ function CodeStep({
       <Text className="text-center text-lg font-semibold text-foreground">Enter the code</Text>
       <Text className="text-center text-sm text-muted-foreground">Sent to +91 {mobile}</Text>
 
-      <TextField
+      <PinField
         control={form.control}
         name="code"
         label="One-time code"
-        keyboardType="number-pad"
         // The server decides how long a code is; the field follows it rather than assuming six.
-        maxLength={challenge.codeLength}
-        sanitize={sanitizeDigits(challenge.codeLength)}
+        length={challenge.codeLength}
         autoFocus
       />
 
@@ -332,25 +321,21 @@ function SetPinStep({
         {ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}
       </Text>
 
-      <TextField
+      <PinField
         control={form.control}
         name="pin"
         label="New PIN"
-        keyboardType="number-pad"
-        secureTextEntry
-        maxLength={PIN_LENGTH}
-        sanitize={sanitizeDigits(PIN_LENGTH)}
+        length={PIN_LENGTH}
+        masked
         autoFocus
         /* ui-copy-ok: rule */ hint="Not a run like 1234, and not all one digit"
       />
-      <TextField
+      <PinField
         control={form.control}
         name="confirmPin"
         label="Confirm PIN"
-        keyboardType="number-pad"
-        secureTextEntry
-        maxLength={PIN_LENGTH}
-        sanitize={sanitizeDigits(PIN_LENGTH)}
+        length={PIN_LENGTH}
+        masked
       />
 
       <Button
