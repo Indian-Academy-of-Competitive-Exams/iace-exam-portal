@@ -56,17 +56,12 @@ describe('question version option ids', () => {
     }
   });
 
-  it('follows a reorder so a stored position still names the option it showed', async () => {
+  it("follows a reorder in the version's stored array order, not its position field", async () => {
     const paper = await makePaper(prisma, { questions: ['Maths'] });
     const [item] = paper.items;
     assert.ok(item);
 
-    const reversed = renamedOptions()
-      .reverse()
-      .map((option, index) => ({
-        ...option,
-        position: index + 1,
-      }));
+    const reversed = renamedOptions().reverse();
     await prisma.questionVersion.update({
       where: { id: item.versionId },
       data: { options: reversed },
