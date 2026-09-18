@@ -19,6 +19,7 @@ import { ImportQuestionsPage } from './routes/import-questions';
 import { ProofreadingPage } from './routes/proofreading';
 import { AuthoringEditorPage } from './routes/authoring-editor';
 import { AuthoringHistoryPage } from './routes/authoring-history';
+import { AuthoringAssignmentsPage } from './routes/authoring-assignments';
 import { TaxonomyPage } from './routes/taxonomy';
 import { BaseConfigsPage } from './routes/base-configs';
 import { BaseConfigFormPage } from './routes/base-config-form';
@@ -75,6 +76,8 @@ export function App() {
           <Route path={ROUTES.AUTHORING_EDITOR} element={<AuthoringEditorPage />} />
           {/* Before the :id route, or "history" would be read as a question id. */}
           <Route path={ROUTES.AUTHORING_HISTORY} element={<AuthoringHistoryPage />} />
+          <Route path={ROUTES.AUTHORING_ASSIGNMENTS} element={<AuthoringAssignmentsPage />} />
+          <Route path={ROUTES.AUTHORING_FOR_ASSIGNMENT_PATTERN} element={<AuthoringEditorPage />} />
           <Route path={ROUTES.AUTHORING_EDITOR_PATTERN} element={<AuthoringEditorPage />} />
           <Route path={ROUTES.BASE_CONFIGS} element={<BaseConfigsPage />} />
           {/* Before the :id route, or "new" would be read as a config id. */}

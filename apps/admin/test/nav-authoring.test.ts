@@ -13,14 +13,14 @@ const sections = (keys: FeatureKey[]) =>
   filterNavByPermission(NAV_ITEMS, holding(...keys)).map((item) => item.label);
 
 describe('the Authoring section', () => {
-  it('is there for an admin who holds the key, with both of its rows', () => {
+  it('is there for an admin who holds the key, with all three of its rows', () => {
     const shown = filterNavByPermission(NAV_ITEMS, holding(FEATURE_KEYS.QUESTION_AUTHORING));
     const authoring = shown.find((item) => item.label === 'Authoring');
 
     assert.ok(authoring);
     assert.deepEqual(
       authoring.children?.map((child) => child.to),
-      [ROUTES.AUTHORING_EDITOR, ROUTES.AUTHORING_HISTORY],
+      [ROUTES.AUTHORING_EDITOR, ROUTES.AUTHORING_ASSIGNMENTS, ROUTES.AUTHORING_HISTORY],
     );
   });
 

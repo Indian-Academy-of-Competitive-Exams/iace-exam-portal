@@ -4,6 +4,7 @@ import { paginationQuerySchema } from './envelope';
 import {
   difficultyLevelSchema,
   questionDetailSchema,
+  questionDraftSchema,
   questionStatusSchema,
   questionTypeSchema,
   tagSchema,
@@ -38,6 +39,12 @@ export const authoringHistoryQuerySchema = paginationQuerySchema.extend({
 });
 export type AuthoringHistoryQuery = z.infer<typeof authoringHistoryQuerySchema>;
 export type AuthoringHistoryQueryInput = z.input<typeof authoringHistoryQuerySchema>;
+
+/** A create ties the question to the section it was written for — refused if not the caller's own. */
+export const authoringCreateSchema = questionDraftSchema.extend({
+  assignmentId: z.string().nullable().optional(),
+});
+export type AuthoringCreateInput = z.infer<typeof authoringCreateSchema>;
 
 /** One institute day's output, so a gap in the run reads as a zero rather than as no data. */
 const authoringDaySchema = z.object({

@@ -8,6 +8,7 @@ import {
   FolderTree,
   GraduationCap,
   History,
+  ListChecks,
   Megaphone,
   KeyRound,
   Layers,
@@ -81,6 +82,10 @@ export const ROUTES = {
   AUTHORING_QUESTION: (id: string) => `/authoring/${id}`,
   AUTHORING_EDITOR_PATTERN: '/authoring/:id',
   AUTHORING_HISTORY: '/authoring/history',
+  /** The typist's own queue, and the editor scoped to one row of it. */
+  AUTHORING_ASSIGNMENTS: '/authoring/assignments',
+  AUTHORING_FOR_ASSIGNMENT: (assignmentId: string) => `/authoring/assignment/${assignmentId}`,
+  AUTHORING_FOR_ASSIGNMENT_PATTERN: '/authoring/assignment/:assignmentId',
   /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
   BASE_CONFIGS: '/tests/configs',
   BASE_CONFIG_NEW: '/tests/configs/new',
@@ -421,6 +426,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     featureKey: FEATURE_KEYS.QUESTION_AUTHORING,
     children: [
       { to: ROUTES.AUTHORING_EDITOR, label: 'Editor', icon: PenLine },
+      { to: ROUTES.AUTHORING_ASSIGNMENTS, label: 'My sections', icon: ListChecks },
       { to: ROUTES.AUTHORING_HISTORY, label: 'History', icon: History },
     ],
   },

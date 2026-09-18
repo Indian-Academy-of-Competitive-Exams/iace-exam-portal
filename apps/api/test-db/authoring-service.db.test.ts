@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   DIFFICULTY_LEVEL,
   ErrorCodes,
   QUESTION_STATUS,
@@ -18,9 +19,13 @@ import { FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   makeBankQuestion,
+  makeCatalog,
   makeQuestionBank,
+  makeSection,
+  makeTest,
   resetDatabase,
   testPrisma,
+  uid,
 } from './support/database';
 
 const MINE = randomUUID();
@@ -114,6 +119,47 @@ describe('AuthoringService.create', () => {
         AppException.is(error) &&
         Boolean(error.fieldErrors?.['stem.en']),
     );
+  });
+});
+
+describe('AuthoringService.create — assignment provenance', () => {
+  async function makeAssignment(assigneeId: string) {
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const section = await makeSection(prisma, catalog);
+    return prisma.questionAssignment.create({
+      data: {
+        id: uid(),
+        testId: test.id,
+        baseConfigId: catalog.baseConfigId,
+        baseConfigSectionId: section.id,
+        assigneeId,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      },
+      select: { id: true },
+    });
+  }
+
+  it('ties a created question to the caller’s own assignment', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(MINE);
+
+    const { question } = await authoring.create(draft(), MINE, assignment.id);
+
+    const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    assert.equal(row.assignmentId, assignment.id);
+  });
+
+  /** Not theirs reads as not there: the same guard `finalize` uses on the assignment itself. */
+  it('refuses an assignment that is not the caller’s own', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(THEIRS);
+
+    await assert.rejects(
+      () => authoring.create(draft(), MINE, assignment.id),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    assert.equal(await prisma.question.count(), 0);
   });
 });
 

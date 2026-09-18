@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
 import {
+  ASSIGNMENT_ROLES,
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
   LANGUAGE_LABELS,
@@ -12,6 +13,7 @@ import {
   QUESTION_STATUS,
   hasText,
   validateQuestion,
+  type AssignmentWithTest,
   type QuestionDraft,
   type QuestionLanguage,
 } from '@iace/contracts';
@@ -19,11 +21,15 @@ import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Kbd,
   LoadingState,
+  StatRow,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  TruncatedText,
   INDIC_SCRIPTS,
   mathErrorIn,
   type IndicScript,
@@ -80,7 +86,7 @@ const SCRIPT_OF: Readonly<Partial<Record<QuestionLanguage, IndicScript>>> = {
 };
 
 export function AuthoringEditorPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id, assignmentId } = useParams<{ id?: string; assignmentId?: string }>();
   const queryClient = useQueryClient();
   const { identity } = useAuth();
   const storageKey = `${STORAGE_KEYS.AUTHORING_DRAFT}.${identity?.id ?? ''}`;
@@ -109,6 +115,14 @@ export function AuthoringEditorPage() {
     queryFn: () => api.admin.authoring.detail(editingId),
     enabled: editingId !== '',
   });
+
+  const scopedTo = assignmentId ?? '';
+  const assignments = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', ASSIGNMENT_ROLES.TYPIST],
+    queryFn: () => api.admin.assignments.mine({ role: ASSIGNMENT_ROLES.TYPIST }),
+    enabled: scopedTo !== '',
+  });
+  const assignment = assignments.data?.find((row) => row.id === scopedTo) ?? null;
 
   const loadedId = useRef<string | null>(null);
   useEffect(() => {
@@ -151,7 +165,9 @@ export function AuthoringEditorPage() {
   const save = useMutation({
     meta: { success: id ? 'Question saved.' : 'Question saved. Next one.' },
     mutationFn: () =>
-      id ? api.admin.authoring.update(id, draft) : api.admin.authoring.create(draft),
+      id
+        ? api.admin.authoring.update(id, draft)
+        : api.admin.authoring.create({ ...draft, assignmentId: scopedTo || null }),
     onSuccess: async (result) => {
       setDuplicate(result.duplicateOf?.stemPreview ?? null);
       if (!id) {
@@ -161,6 +177,7 @@ export function AuthoringEditorPage() {
         setBoxVersion((version) => version + 1);
       }
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
+      if (scopedTo) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
     },
   });
 
@@ -225,8 +242,14 @@ export function AuthoringEditorPage() {
         }
       />
 
+      {scopedTo && assignment ? <AssignmentContext assignment={assignment} /> : null}
+
       {id && editing.isPending ? (
         <LoadingState>Loading the question</LoadingState>
+      ) : scopedTo && assignments.isPending ? (
+        <LoadingState>Loading the assignment</LoadingState>
+      ) : scopedTo && !assignment ? (
+        <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This section is not assigned to you" />
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
           <section className="flex min-h-0 flex-col border-border lg:border-r">
@@ -338,6 +361,39 @@ function EditorActions({
         <TooltipContent>{immersive ? 'Leave full screen' : 'Full screen'}</TooltipContent>
       </Tooltip>
     </>
+  );
+}
+
+/** The section a scoped editor is writing for: its target, and its mix when the test sets one. */
+function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWithTest }>) {
+  const remaining = Math.max(assignment.sectionQuestionCount - assignment.writtenCount, 0);
+  const mix = assignment.sectionMix;
+
+  return (
+    <div className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-border bg-muted/40 px-4 py-2">
+      <div className="min-w-0">
+        <TruncatedText className="text-sm font-medium">{assignment.sectionName}</TruncatedText>
+        <TruncatedText className="text-xs text-muted-foreground">
+          {assignment.testTitle ?? 'Untitled test'}
+        </TruncatedText>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+        <StatRow
+          className="w-auto"
+          label="Written"
+          value={`${assignment.writtenCount} / ${assignment.sectionQuestionCount}`}
+        />
+        <StatRow className="w-auto" label="Remaining" value={remaining} />
+        {mix ? (
+          <StatRow
+            className="w-auto"
+            label="Mix"
+            value={`${mix.LOW} low · ${mix.MEDIUM} medium · ${mix.HIGH} high`}
+          />
+        ) : null}
+      </div>
+    </div>
   );
 }
 

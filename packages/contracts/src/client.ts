@@ -16,6 +16,7 @@ import {
   ADMIN_AUTHORING_ROUTES,
   authoringSaveResultSchema,
   authoringStatsSchema,
+  type AuthoringCreateInput,
   type AuthoringHistoryQueryInput,
   type AuthoringSaveResult,
   type AuthoringStats,
@@ -1168,7 +1169,7 @@ export function createApiClient(options: ApiClientOptions) {
         detail: (id: string): Promise<QuestionDetail> =>
           get(ADMIN_AUTHORING_ROUTES.get(id), questionDetailSchema),
 
-        create: (input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
+        create: (input: AuthoringCreateInput): Promise<AuthoringSaveResult> =>
           write('POST', ADMIN_AUTHORING_ROUTES.create, authoringSaveResultSchema, input),
 
         update: (id: string, input: QuestionDraftInput): Promise<AuthoringSaveResult> =>

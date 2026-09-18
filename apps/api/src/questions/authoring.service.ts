@@ -32,9 +32,15 @@ export class AuthoringService {
   ) {}
 
   /** Always a DRAFT: promoting one into circulation is the question bank's decision, not this one. */
-  async create(draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
+  async create(
+    draft: QuestionDraft,
+    adminId: string,
+    assignmentId: string | null = null,
+  ): Promise<AuthoringSaveResult> {
+    if (assignmentId) await this.assertOwnAssignment(assignmentId, adminId);
     const question = await this.questions.create(asDraftEntry(draft), adminId, {
       allowDuplicate: true,
+      assignmentId,
     });
     return { question, duplicateOf: await this.duplicateFor(draft, question.id) };
   }
@@ -135,6 +141,17 @@ export class AuthoringService {
         ErrorCodes.CONFLICT,
         'This question has left review. It is changed in the question bank now',
       );
+    }
+  }
+
+  /** Not theirs reads as not there — the same guard `finalize` uses on the assignment itself. */
+  private async assertOwnAssignment(id: string, adminId: string) {
+    const row = await this.prisma.questionAssignment.findUnique({
+      where: { id },
+      select: { assigneeId: true },
+    });
+    if (!row || row.assigneeId !== adminId) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
   }
 }

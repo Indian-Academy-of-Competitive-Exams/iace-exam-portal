@@ -13,6 +13,8 @@ import {
   type AssignmentRole,
   type AssignmentWithTest,
   type CreateAssignmentBody,
+  type DifficultyMix,
+  type DrawSpec,
   type FeatureKey,
   type MineAssignmentsQuery,
 } from '@iace/contracts';
@@ -21,15 +23,16 @@ import { AdminsService } from '../admins';
 import { isUniqueViolation } from '../common/prisma-errors';
 
 const ASSIGNMENT_INCLUDE = {
-  baseConfigSection: { select: { name: true } },
+  baseConfigSection: { select: { name: true, questionCount: true } },
   assignee: { select: { fullName: true, email: true } },
+  test: { select: { questionPoolFilter: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentRow = Prisma.QuestionAssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>;
 
 const WITH_TEST_INCLUDE = {
   ...ASSIGNMENT_INCLUDE,
-  test: { select: { title: true } },
+  test: { select: { title: true, questionPoolFilter: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentWithTestRow = Prisma.QuestionAssignmentGetPayload<{
@@ -121,7 +124,11 @@ export class AssignmentsService {
 
   async mine(adminId: string, query: MineAssignmentsQuery): Promise<AssignmentWithTest[]> {
     const rows = await this.prisma.questionAssignment.findMany({
-      where: { assigneeId: adminId, ...(query.outstanding ? { finalizedAt: null } : {}) },
+      where: {
+        assigneeId: adminId,
+        ...(query.outstanding ? { finalizedAt: null } : {}),
+        ...(query.role ? { role: query.role } : {}),
+      },
       include: WITH_TEST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
@@ -264,7 +271,15 @@ function toAssignment(row: AssignmentRow, writtenCount: number): Assignment {
     dueAt: row.dueAt?.toISOString() ?? null,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     writtenCount,
+    sectionQuestionCount: row.baseConfigSection.questionCount,
+    sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
   };
+}
+
+/** Absent means the section draws every difficulty, not zero of each — never defaulted here. */
+function sectionMixOf(questionPoolFilter: unknown, sectionId: string): DifficultyMix | null {
+  const spec = questionPoolFilter as DrawSpec | null;
+  return spec?.sections?.[sectionId]?.mix ?? null;
 }
 
 function toAssignmentWithTest(

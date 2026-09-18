@@ -5,8 +5,10 @@ import {
   AUDIT_FEATURE,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  authoringCreateSchema,
   authoringHistoryQuerySchema,
   questionDraftSchema,
+  type AuthoringCreateInput,
   type AuthoringHistoryQuery,
   type AuthoringSaveResult,
   type AuthoringStats,
@@ -55,10 +57,11 @@ export class AuthoringController {
   @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
   @Post('questions')
   create(
-    @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
+    @Body(new ZodBody(authoringCreateSchema)) body: AuthoringCreateInput,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AuthoringSaveResult> {
-    return this.authoring.create(body, user.id);
+    const { assignmentId, ...draft } = body;
+    return this.authoring.create(draft, user.id, assignmentId ?? null);
   }
 
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)

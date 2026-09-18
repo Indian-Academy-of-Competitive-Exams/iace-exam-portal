@@ -87,6 +87,8 @@ const QUESTION_IMAGE_URL_TTL_SEC = 3600;
 /** What a caller may relax. The bank refuses a duplicate; the authoring editor reports it. */
 export interface WriteOptions {
   allowDuplicate?: boolean;
+  /** Which assignment a freshly created question was written for — ownership is the caller's job. */
+  assignmentId?: string | null;
 }
 
 /** Owns `Question` and `QuestionVersion` (docs/03 §5) — the only module that writes them. */
@@ -200,7 +202,11 @@ export class QuestionsService {
 
     const row = await this.prisma.$transaction(async (tx) => {
       const question = await tx.question.create({
-        data: { ...this.columnsOf(draft, built), createdById },
+        data: {
+          ...this.columnsOf(draft, built),
+          createdById,
+          assignmentId: options.assignmentId ?? null,
+        },
       });
       const version = await tx.questionVersion.create({
         data: versionDataOf(

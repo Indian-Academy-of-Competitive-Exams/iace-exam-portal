@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { optionalBooleanQuery } from './common';
+import { difficultyMixSchema } from './tests';
 
 // ============================================================================
 // Authoring assignments. A section of a test's paper assigned to a typist and
@@ -28,6 +29,10 @@ export const assignmentSchema = z.object({
   finalizedAt: z.string().nullable(),
   /** Questions written under ANY assignment on this section — a section fact, not this row's own. */
   writtenCount: z.number().int(),
+  /** The section's own target — a section fact, same as `writtenCount`. */
+  sectionQuestionCount: z.number().int(),
+  /** The test's own draw spec for this section. Absent means every difficulty, not zero of each. */
+  sectionMix: difficultyMixSchema.nullable(),
 });
 export type Assignment = z.infer<typeof assignmentSchema>;
 
@@ -49,6 +54,8 @@ export type AssignmentWithTest = z.infer<typeof assignmentWithTestSchema>;
 export const mineAssignmentsQuerySchema = z.object({
   /** Unfinalized only — what a work queue opens to by default. */
   outstanding: optionalBooleanQuery(),
+  /** Absent reads both roles; a role's own queue always sends its own. */
+  role: assignmentRoleSchema.optional(),
 });
 export type MineAssignmentsQuery = z.infer<typeof mineAssignmentsQuerySchema>;
 export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchema>;

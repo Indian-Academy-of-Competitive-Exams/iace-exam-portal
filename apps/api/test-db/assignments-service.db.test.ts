@@ -300,6 +300,105 @@ describe('AssignmentsService — mine', () => {
     assert.deepEqual(mine.map((row) => row.testTitle).sort(), ['First mock', 'Second mock']);
   });
 
+  it('the role filter narrows a work queue to its own role', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const section = await makeSection(prisma, catalog);
+    const admin = await makeAdmin(prisma);
+    await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(admin.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const typing = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: admin.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      admin.id,
+    );
+
+    const typistQueue = await assignments.mine(admin.id, {
+      outstanding: undefined,
+      role: ASSIGNMENT_ROLES.TYPIST,
+    });
+
+    assert.deepEqual(
+      typistQueue.map((row) => row.id),
+      [typing.id],
+    );
+  });
+
+  /** A section fact, same as `writtenCount` — what the queue's progress column reads. */
+  it('carries the section’s own question count', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const section = await makeSection(prisma, catalog);
+    const reader = await makeAdmin(prisma);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+
+    const mine = await assignments.mine(reader.id, mineAssignmentsQuerySchema.parse({}));
+
+    assert.equal(mine[0]?.sectionQuestionCount, 10);
+  });
+
+  /** The typist's real target, not a computed guess — docs/02-domain-rules.md §3: absent is every difficulty, not zero. */
+  it('reports the test’s own draw-spec mix for the section, and null when the test sets none', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const withMix = await makeTest(prisma, catalog);
+    const withoutMix = await makeTest(prisma, catalog);
+    const sectionA = await makeSection(prisma, catalog, { order: 1 });
+    const sectionB = await makeSection(prisma, catalog, { order: 2 });
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await prisma.test.update({
+      where: { id: withMix.id },
+      data: {
+        questionPoolFilter: {
+          sections: { [sectionA.id]: { mix: { LOW: 2, MEDIUM: 5, HIGH: 3 } } },
+        },
+      },
+    });
+    await assignments.assign(
+      withMix.id,
+      body({
+        baseConfigSectionId: sectionA.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    await assignments.assign(
+      withoutMix.id,
+      body({
+        baseConfigSectionId: sectionB.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+
+    const mine = await assignments.mine(typist.id, mineAssignmentsQuerySchema.parse({}));
+
+    assert.deepEqual(mine.find((row) => row.testId === withMix.id)?.sectionMix, {
+      LOW: 2,
+      MEDIUM: 5,
+      HIGH: 3,
+    });
+    assert.equal(mine.find((row) => row.testId === withoutMix.id)?.sectionMix, null);
+  });
+
   it('the outstanding filter narrows to unfinalized rows', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
