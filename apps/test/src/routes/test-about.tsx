@@ -46,7 +46,7 @@ const PAST_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
     header: 'Sat',
     cell: (row) => (row.submittedAt ? instituteDateTimeLabel(row.submittedAt) : '—'),
   },
-  { key: 'marks', header: 'Marks', cell: (row) => `${row.score} / ${row.maxMarks}` },
+  { key: 'marks', header: 'Marks', numeric: true, cell: (row) => `${row.score} / ${row.maxMarks}` },
   { key: 'rank', header: 'Rank', numeric: true, cell: (row) => row.rank ?? '—' },
   { key: 'percentile', header: 'Percentile', numeric: true, cell: (row) => row.percentile ?? '—' },
   {

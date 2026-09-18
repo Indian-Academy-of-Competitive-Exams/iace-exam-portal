@@ -324,6 +324,7 @@ function submissionColumns(canResolve: boolean): DataTableColumn<RecentSubmissio
     {
       key: 'score',
       header: 'Score',
+      numeric: true,
       cell: (row) => row.score ?? <span className="text-muted-foreground">—</span>,
     },
   ];

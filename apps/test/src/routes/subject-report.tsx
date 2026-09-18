@@ -54,7 +54,7 @@ const COLUMNS: readonly DataTableColumn<SectionalStanding>[] = [
     className: 'max-w-[14rem]',
     cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
   },
-  { key: 'marks', header: 'Marks', cell: (row) => `${row.score} / ${row.maxMarks}` },
+  { key: 'marks', header: 'Marks', numeric: true, cell: (row) => `${row.score} / ${row.maxMarks}` },
   { key: 'correct', header: 'Correct', numeric: true, cell: (row) => row.correctCount },
   { key: 'wrong', header: 'Wrong', numeric: true, cell: (row) => row.wrongCount },
   { key: 'left', header: 'Unattempted', numeric: true, cell: (row) => row.unattemptedCount },
