@@ -270,7 +270,8 @@ export function QuestionFormPage() {
   // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
   const type = useWatch({ control: form.control, name: 'type' });
   const subjectId = useWatch({ control: form.control, name: 'subjectId' });
-  const taxonomySettled = loaded !== undefined && loaded.status !== QUESTION_STATUS.DRAFT;
+  // Being drawn settles taxonomy, not being published: a drawn draft would move under its section.
+  const taxonomySettled = loaded?.inUse === true;
   const topicId = useWatch({ control: form.control, name: 'topicId' });
   // However many it has: a form that always drew four would drop a fifth on the next save.
   const optionCount = useWatch({ control: form.control, name: 'options' }).length;

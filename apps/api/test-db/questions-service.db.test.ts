@@ -13,6 +13,7 @@ import {
   TEST_STATUS,
   plainTextOf,
   previewTextOf,
+  questionAvailabilityQuerySchema,
   questionDraftSchema,
   questionListQuerySchema,
   type LocalizedContent,
@@ -1248,5 +1249,25 @@ describe('QuestionsService — serving legacy images', () => {
 
     assert.doesNotMatch(stem, /tracker\.example/);
     assert.doesNotMatch(stem, /<img/);
+  });
+});
+
+describe('QuestionsService.availability — the count a section is about to draw from', () => {
+  /** The failure this prevents: the builder promises three and fillSection then refuses with two. */
+  it('counts exactly what a paper may draw, drafts included and flagged ones out', async () => {
+    const { questions } = await build([
+      { id: 'live', status: QUESTION_STATUS.ACTIVE },
+      { id: 'draft', status: QUESTION_STATUS.DRAFT },
+      { id: 'archived', status: QUESTION_STATUS.ARCHIVED },
+      { id: 'flagged', status: QUESTION_STATUS.DRAFT },
+      { id: 'unversioned', status: QUESTION_STATUS.ACTIVE, versioned: false },
+    ]);
+    await flag(idFor('flagged'));
+
+    const held = await questions.availability(
+      questionAvailabilityQuerySchema.parse({ subjectId: BANK.QUANT }),
+    );
+
+    assert.equal(held.total, 2, 'the draft counts, the archived, flagged and unversioned do not');
   });
 });

@@ -39,6 +39,7 @@ import {
 import { escapeForContent, mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
+  DRAWABLE_QUESTION,
   buildContent,
   languagesIn,
   stemPreviewOf,
@@ -173,8 +174,7 @@ export class QuestionsService {
   /** Counted in the database, because a page of a hundred is not what a section can draw from. */
   async availability(query: QuestionAvailabilityQuery): Promise<QuestionAvailability> {
     const where: Prisma.QuestionWhereInput = {
-      status: QUESTION_STATUS.ACTIVE,
-      currentVersionId: { not: null },
+      ...DRAWABLE_QUESTION,
       ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
       ...(query.topicId ? { topicId: { in: query.topicId } } : {}),
     };
@@ -822,6 +822,8 @@ function isReferenced(row: QuestionRow): boolean {
 function toDetail(row: QuestionRow): QuestionDetail {
   return {
     ...toSummary(row),
+    // The same two tables anyUsed counts, already on the row — no second round trip to ask again.
+    inUse: row._count.paperQuestions + row._count.questionStats > 0,
     version: row.currentVersion?.version ?? FIRST_VERSION,
     content: contentOf(row),
     options: currentOptionsOf(row),

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import {
   ANSWER_MODE,
   DEFAULT_LANGUAGE,
+  QUESTION_FLAG_STATUS,
+  QUESTION_STATUS,
   canonicalStemKey,
   hasText,
   languagesIn,
@@ -117,3 +120,10 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
   const stem = previewTextOf(plainTextOf(content[DEFAULT_LANGUAGE]?.stem));
   return stem.length > limit ? `${stem.slice(0, limit - 1)}…` : stem;
 }
+
+/** What a paper may draw, in one place: the preview count and the draw itself must not drift apart. */
+export const DRAWABLE_QUESTION = {
+  status: { not: QUESTION_STATUS.ARCHIVED },
+  currentVersionId: { not: null },
+  flags: { none: { status: QUESTION_FLAG_STATUS.OPEN } },
+} as const satisfies Prisma.QuestionWhereInput;

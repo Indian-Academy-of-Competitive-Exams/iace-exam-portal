@@ -516,6 +516,8 @@ export const questionDetailSchema = questionSummarySchema.extend({
   options: z.array(questionOptionSchema),
   answerKey: answerKeySchema.nullable(),
   createdAt: z.string(),
+  /** A paper or a rollup already references it, which is what settles subject and topic. */
+  inUse: z.boolean(),
 });
 export type QuestionDetail = z.infer<typeof questionDetailSchema>;
 

@@ -35,7 +35,7 @@ import {
 } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
 import { thaw } from './thaw';
-import { stemPreviewOf } from '../questions';
+import { DRAWABLE_QUESTION, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
@@ -426,9 +426,7 @@ export class PaperService {
   ): Promise<DrawCandidate[]> {
     const rows = await this.prisma.question.findMany({
       where: {
-        status: { not: QUESTION_STATUS.ARCHIVED },
-        currentVersionId: { not: null },
-        flags: { none: { status: QUESTION_FLAG_STATUS.OPEN } },
+        ...DRAWABLE_QUESTION,
         // The narrowing SQL can do; tags and the split are the engine's.
         ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),
         ...(narrows(spec?.topicIds) ? { topicId: { in: [...spec.topicIds] } } : {}),

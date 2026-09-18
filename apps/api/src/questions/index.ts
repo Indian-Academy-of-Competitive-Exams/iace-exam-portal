@@ -11,3 +11,5 @@ export { TaxonomyService } from './taxonomy.service';
 export { stemPreviewOf } from './question-core';
 /** Content that carries images is the bank's shape, so signing one is the bank's rule to lend. */
 export { applyImageUrls, imageKeysIn } from './question-images';
+/** What a paper may draw is the bank's rule; the draw and its preview count read the one copy. */
+export { DRAWABLE_QUESTION } from './question-core';
