@@ -23,6 +23,7 @@ import { EventsModule } from './events';
 import { NotificationsModule } from './notifications';
 import { ImportsModule } from './imports/imports.module';
 import { QuestionsModule } from './questions';
+import { AssignmentsModule } from './assignments';
 import { TestsModule } from './tests';
 import { AttemptsModule } from './attempts';
 import { SavedModule } from './saved';
@@ -60,6 +61,7 @@ import { RequestIdMiddleware } from './common/request-id';
     NotificationsModule,
     ImportsModule,
     QuestionsModule,
+    AssignmentsModule,
     TestsModule,
     AttemptsModule,
     SavedModule,

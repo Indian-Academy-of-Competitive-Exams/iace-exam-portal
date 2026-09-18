@@ -339,6 +339,15 @@ import {
   type QuestionFlag,
   type SettleQuestionFlagInput,
 } from './question-flags';
+import {
+  ADMIN_ASSIGNMENTS_ROUTES,
+  assignmentSchema,
+  assignmentWithTestSchema,
+  type Assignment,
+  type AssignmentWithTest,
+  type CreateAssignmentInput,
+  type MineAssignmentsQueryInput,
+} from './assignments';
 
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
 export function queryString(params: Record<string, unknown>): string {
@@ -1221,6 +1230,27 @@ export function createApiClient(options: ApiClientOptions) {
         /** Resolved or dismissed — either one clears the block on going ACTIVE. */
         settle: (flagId: string, input: SettleQuestionFlagInput): Promise<QuestionFlag> =>
           write('PATCH', ADMIN_PROOFREADING_ROUTES.settle(flagId), questionFlagSchema, input),
+      },
+
+      /** Who types a section and who reads it, and the queue each of them works from. */
+      assignments: {
+        forTest: (testId: string): Promise<Assignment[]> =>
+          get(ADMIN_ASSIGNMENTS_ROUTES.forTest(testId), assignmentSchema.array()),
+
+        assign: (testId: string, input: CreateAssignmentInput): Promise<Assignment> =>
+          write('POST', ADMIN_ASSIGNMENTS_ROUTES.assign(testId), assignmentSchema, input),
+
+        remove: (id: string): Promise<NoContent> =>
+          write('DELETE', ADMIN_ASSIGNMENTS_ROUTES.remove(id), noContentSchema),
+
+        mine: (query: MineAssignmentsQueryInput = {}): Promise<AssignmentWithTest[]> =>
+          get(
+            `${ADMIN_ASSIGNMENTS_ROUTES.mine}${queryString({ ...query })}`,
+            assignmentWithTestSchema.array(),
+          ),
+
+        finalize: (id: string): Promise<Assignment> =>
+          write('PATCH', ADMIN_ASSIGNMENTS_ROUTES.finalize(id), assignmentSchema),
       },
 
       imports: {

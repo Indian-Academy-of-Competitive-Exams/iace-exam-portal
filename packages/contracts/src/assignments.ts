@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { optionalBooleanQuery } from './common';
 
 // ============================================================================
 // Authoring assignments. A section of a test's paper assigned to a typist and
@@ -38,3 +39,25 @@ export const createAssignmentSchema = z.object({
 });
 export type CreateAssignmentInput = z.input<typeof createAssignmentSchema>;
 export type CreateAssignmentBody = z.infer<typeof createAssignmentSchema>;
+
+/** One row plus the test it is on — a work queue needs that; a section's own list already knows it. */
+export const assignmentWithTestSchema = assignmentSchema.extend({
+  testTitle: z.string().nullable(),
+});
+export type AssignmentWithTest = z.infer<typeof assignmentWithTestSchema>;
+
+export const mineAssignmentsQuerySchema = z.object({
+  /** Unfinalized only — what a work queue opens to by default. */
+  outstanding: optionalBooleanQuery(),
+});
+export type MineAssignmentsQuery = z.infer<typeof mineAssignmentsQuerySchema>;
+export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchema>;
+
+export const ADMIN_ASSIGNMENTS_ROUTES = {
+  /** GET lists a test's assignments; POST to the same path creates one. */
+  forTest: (testId: string) => `/admin/assignments/tests/${testId}`,
+  assign: (testId: string) => `/admin/assignments/tests/${testId}`,
+  remove: (id: string) => `/admin/assignments/${id}`,
+  mine: '/admin/assignments/mine',
+  finalize: (id: string) => `/admin/assignments/${id}/finalize`,
+} as const;

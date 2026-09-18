@@ -45,6 +45,7 @@ export class FinalizeService {
   /** One transaction: as two calls, a failure between them froze a test and offered it to nobody. */
   async offer(testId: string): Promise<OfferResult> {
     const test = await this.requireTest(testId);
+    await this.assertAssignmentsRead(testId);
 
     const frozen = test.isLocked
       ? await this.openAlreadyFrozen(test)
@@ -138,6 +139,21 @@ export class FinalizeService {
 
     throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
+    });
+  }
+
+  /** A section still being typed or read is not ready for a student to sit. No rows, no gate. */
+  private async assertAssignmentsRead(testId: string): Promise<void> {
+    const outstanding = await this.prisma.questionAssignment.findMany({
+      where: { testId, finalizedAt: null },
+      select: { baseConfigSection: { select: { name: true } } },
+    });
+    if (outstanding.length === 0) return;
+
+    const names = [...new Set(outstanding.map((row) => row.baseConfigSection.name))];
+    const message = `${names.length} section${names.length === 1 ? ' is' : 's are'} still being proof-read: ${names.join(', ')}`;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
     });
   }
 
