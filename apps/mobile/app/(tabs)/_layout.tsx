@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, type ColorValue } from 'react-native';
+import { type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type LucideIcon } from 'lucide-react-native';
 import { MOBILE_NAV_ITEMS } from '../../src/lib/nav';
@@ -8,35 +8,22 @@ import { useTokenColor } from '../../src/lib/use-token-color';
 /** A stable render-prop per icon, rather than a component defined inline on every render. */
 const renderTabIcon =
   (Icon: LucideIcon) =>
-  ({ focused, color, size }: { focused: boolean; color: ColorValue; size: number }) => (
-    <TabIcon Icon={Icon} focused={focused} color={color} size={size} />
-  );
+  ({ color, size }: { color: ColorValue; size: number }) => <Icon color={color} size={size} />;
 
-/** The tab you are on wears a pill; the bar's own item is square-cornered and full height. */
-function TabIcon({
-  Icon,
-  focused,
-  color,
-  size,
-}: Readonly<{ Icon: LucideIcon; focused: boolean; color: ColorValue; size: number }>) {
-  const held = useTokenColor('--primary-subtle');
-
-  return (
-    <View style={[styles.pill, focused ? { backgroundColor: held } : null]}>
-      <Icon color={color} size={size} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  pill: { alignItems: 'center', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 3 },
-});
+/** The tab you are on wears a pill; the bar draws that fill square, so the item clips it round. */
+const ITEM_STYLE = {
+  borderRadius: 16,
+  overflow: 'hidden',
+  marginHorizontal: 6,
+  marginVertical: 4,
+} as const;
 
 /** The five-tab shell every signed-in screen lives under. */
 export default function TabLayout() {
   const activeColor = useTokenColor('--primary');
   const inactiveColor = useTokenColor('--muted-foreground');
   const barColor = useTokenColor('--surface');
+  const heldColor = useTokenColor('--primary-subtle');
   const borderColor = useTokenColor('--border');
   const pageColor = useTokenColor('--background');
   const insets = useSafeAreaInsets();
@@ -49,6 +36,8 @@ export default function TabLayout() {
         sceneStyle: { paddingTop: insets.top, backgroundColor: pageColor },
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
+        tabBarActiveBackgroundColor: heldColor,
+        tabBarItemStyle: ITEM_STYLE,
         tabBarStyle: { backgroundColor: barColor, borderTopColor: borderColor },
       }}
     >
