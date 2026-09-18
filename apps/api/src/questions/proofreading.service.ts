@@ -93,7 +93,7 @@ export class ProofreadingService {
         finalizedAt: true,
       },
     });
-    if (!row || row.assigneeId !== adminId || row.role !== ASSIGNMENT_ROLES.PROOFREADER) {
+    if (row?.assigneeId !== adminId || row.role !== ASSIGNMENT_ROLES.PROOFREADER) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     return row;

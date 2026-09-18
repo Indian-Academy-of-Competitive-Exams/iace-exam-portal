@@ -14,6 +14,8 @@ import {
   hasText,
   validateQuestion,
   type AssignmentWithTest,
+  type AuthoringSaveResult,
+  type QuestionDetail,
   type QuestionDraft,
   type QuestionLanguage,
 } from '@iace/contracts';
@@ -39,7 +41,11 @@ import { api } from '../lib/api';
 import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
-import { AuthoringChecks, AuthoringPreview } from '../components/authoring/authoring-preview';
+import {
+  AuthoringChecks,
+  AuthoringPreview,
+  type Check,
+} from '../components/authoring/authoring-preview';
 import { checksFor } from '../components/authoring/authoring-checks';
 import {
   emptyState,
@@ -63,6 +69,8 @@ const PREVIEW_DEBOUNCE_MS = 600;
 /** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
 const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
 
+const uploadImage = async (file: File) => api.admin.questions.uploadImage(file);
+
 const startingHeader = (): AuthoringHeader => ({
   subjectId: '',
   topicId: '',
@@ -79,6 +87,14 @@ interface Saved {
   romanised: boolean;
 }
 
+/** The section a scoped editor writes for, and why the panes are not its to open yet. */
+interface ScopedSection {
+  scoped: string;
+  section: AssignmentWithTest | null;
+  loading: boolean;
+  refused: boolean;
+}
+
 /** Which script a language is written in. English is typed as it is read. */
 const SCRIPT_OF: Readonly<Partial<Record<QuestionLanguage, IndicScript>>> = {
   hi: INDIC_SCRIPTS.DEVANAGARI,
@@ -87,27 +103,21 @@ const SCRIPT_OF: Readonly<Partial<Record<QuestionLanguage, IndicScript>>> = {
 
 export function AuthoringEditorPage() {
   const { id, assignmentId } = useParams<{ id?: string; assignmentId?: string }>();
-  const queryClient = useQueryClient();
   const { identity } = useAuth();
   const storageKey = `${STORAGE_KEYS.AUTHORING_DRAFT}.${identity?.id ?? ''}`;
 
   const restored = useMemo(() => restore(storageKey), [storageKey]);
-  const [header, setHeader] = useState<AuthoringHeader>(restored?.header ?? startingHeader());
-  const [state, setState] = useState<AuthoringState>(restored?.state ?? emptyState());
-  const [language, setLanguage] = useState<QuestionLanguage>(
-    restored?.language ?? DEFAULT_LANGUAGE,
-  );
-  const [written, setWritten] = useState(restored?.written ?? 0);
-  const [romanised, setRomanised] = useState(restored?.romanised ?? true);
+  const [header, setHeader] = useState<AuthoringHeader>(restored.header);
+  const [state, setState] = useState<AuthoringState>(restored.state);
+  const [language, setLanguage] = useState<QuestionLanguage>(restored.language);
+  const [written, setWritten] = useState(restored.written);
+  const [romanised, setRomanised] = useState(restored.romanised);
   const [duplicate, setDuplicate] = useState<string | null>(null);
   // Bumped whenever the box must be rebuilt: a language, a type, or a question loaded into it.
   const [boxVersion, setBoxVersion] = useState(0);
+  const rebuildBox = useCallback(() => setBoxVersion((version) => version + 1), []);
 
-  const fullscreen = useFullscreen();
-  // The exit count when focus was asked for: Escape and F11 raise it, so leaving is derived.
-  const [focusedAt, setFocusedAt] = useState<number | null>(null);
-  const immersive = focusedAt !== null && fullscreen.exits === focusedAt;
-  useWorkspace(immersive);
+  const focus = useFocusMode();
 
   const editingId = id ?? '';
   const editing = useQuery({
@@ -115,104 +125,58 @@ export function AuthoringEditorPage() {
     queryFn: () => api.admin.authoring.detail(editingId),
     enabled: editingId !== '',
   });
+  const assignment = useTypistAssignment(assignmentId);
 
-  const scopedTo = assignmentId ?? '';
-  const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', ASSIGNMENT_ROLES.TYPIST],
-    queryFn: () => api.admin.assignments.mine({ role: ASSIGNMENT_ROLES.TYPIST }),
-    enabled: scopedTo !== '',
-  });
-  const assignment = assignments.data?.find((row) => row.id === scopedTo) ?? null;
-
-  const loadedId = useRef<string | null>(null);
-  useEffect(() => {
-    const question = editing.data;
-    if (!question || loadedId.current === question.id) return;
-    loadedId.current = question.id;
+  useFilledOnce(editing.data, (question) => {
     setHeader(headerOf(question));
     setState(stateOf(question));
     setLanguage(DEFAULT_LANGUAGE);
-    setBoxVersion((version) => version + 1);
-  }, [editing.data]);
-
-  // A closed tab loses nothing, and nothing half-written reaches the bank: only a save writes a row.
-  useEffect(() => {
-    if (id) return;
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({ header, state, language, written, romanised }),
-    );
-  }, [id, storageKey, header, state, language, written, romanised]);
-
-  const draft = useMemo(() => toDraft(state, header), [state, header]);
-  const issues = useChecked(draft, header);
-  const missing = LANGUAGE_ORDER.filter(
-    (code) => code !== DEFAULT_LANGUAGE && !hasText(state.content[code].stem),
-  );
-  const checks = useMemo(
-    () =>
-      checksFor(
-        state,
-        issues,
-        missing.map((code) => LANGUAGE_LABELS[code]),
-        duplicate,
-      ),
-    [state, issues, missing, duplicate],
-  );
-
-  const upload = useCallback(async (file: File) => api.admin.questions.uploadImage(file), []);
-
-  const save = useMutation({
-    meta: { success: id ? 'Question saved.' : 'Question saved. Next one.' },
-    mutationFn: () =>
-      id
-        ? api.admin.authoring.update(id, draft)
-        : api.admin.authoring.create({ ...draft, assignmentId: scopedTo || null }),
-    onSuccess: async (result) => {
-      setDuplicate(result.duplicateOf?.stemPreview ?? null);
-      if (!id) {
-        // The header survives: the next fifty questions are the same subject at the same level.
-        setState(emptyState(state.type));
-        setWritten((count) => count + 1);
-        setBoxVersion((version) => version + 1);
-      }
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
-      if (scopedTo) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
-    },
+    rebuildBox();
   });
 
-  const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
-  const blocking = issues.length > 0;
-  const readOnly = Boolean(id) && editing.data?.status !== QUESTION_STATUS.DRAFT;
-  const canSave = !blocking && !readOnly && !save.isPending;
+  const saved = useMemo(
+    () => ({ header, state, language, written, romanised }),
+    [header, state, language, written, romanised],
+  );
+  usePersistedDraft(storageKey, editingId === '', saved);
+
+  const draft = useMemo(() => toDraft(state, header), [state, header]);
+  const { issues, checks } = useChecked(draft, header, state, duplicate);
+
+  const save = useSaveQuestion(editingId, draft, assignment.scoped, (result) => {
+    setDuplicate(result.duplicateOf?.stemPreview ?? null);
+    if (editingId) return;
+    // The header survives: the next fifty questions are the same subject at the same level.
+    setState(emptyState(state.type));
+    setWritten((count) => count + 1);
+    rebuildBox();
+  });
+
+  const readOnly = editingId !== '' && editing.data?.status !== QUESTION_STATUS.DRAFT;
+  const canSave = issues.length === 0 && !readOnly && !save.isPending;
 
   const cycleLanguage = useCallback(() => {
     setLanguage((current) => {
       const at = LANGUAGE_ORDER.indexOf(current);
       return LANGUAGE_ORDER[(at + 1) % LANGUAGE_ORDER.length] ?? current;
     });
-    setBoxVersion((version) => version + 1);
-  }, []);
+    rebuildBox();
+  }, [rebuildBox]);
 
-  const switchLanguage = useCallback((next: QuestionLanguage) => {
-    setLanguage(next);
-    setBoxVersion((version) => version + 1);
-  }, []);
+  const switchLanguage = useCallback(
+    (next: QuestionLanguage) => {
+      setLanguage(next);
+      rebuildBox();
+    },
+    [rebuildBox],
+  );
 
   const onRegions = useCallback(
     (regions: ScaffoldRegion[]) => setState((current) => stateFrom(current, language, regions)),
     [language],
   );
 
-  const toggleFocus = () => {
-    if (immersive) {
-      setFocusedAt(null);
-      void fullscreen.exit();
-      return;
-    }
-    setFocusedAt(fullscreen.exits);
-    void fullscreen.enter();
-  };
+  const gate = editorGate(editing.isPending && editingId !== '', assignment);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
@@ -225,74 +189,125 @@ export function AuthoringEditorPage() {
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
-          setBoxVersion((version) => version + 1);
+          rebuildBox();
         }}
         onLanguageChange={switchLanguage}
         actions={
           <EditorActions
             language={language}
             romanised={romanised}
-            immersive={immersive}
+            immersive={focus.immersive}
             canSave={canSave}
             saveLabel={id ? 'Save' : 'Save and next'}
             onSave={() => save.mutate()}
             onRomanised={() => setRomanised((on) => !on)}
-            onFocus={toggleFocus}
+            onFocus={focus.toggle}
           />
         }
       />
 
-      {scopedTo && assignment ? <AssignmentContext assignment={assignment} /> : null}
+      {assignment.section ? <AssignmentContext assignment={assignment.section} /> : null}
 
-      {id && editing.isPending ? (
-        <LoadingState>Loading the question</LoadingState>
-      ) : scopedTo && assignments.isPending ? (
-        <LoadingState>Loading the assignment</LoadingState>
-      ) : scopedTo && !assignment ? (
-        <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This section is not assigned to you" />
-      ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-          <section className="flex min-h-0 flex-col border-border lg:border-r">
-            <PanelHeading title="Editor" />
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              {readOnly ? (
-                <div className="p-4">
-                  <Alert variant="info">
-                    This question has left review. Changing it now belongs to the question bank.
-                  </Alert>
-                </div>
-              ) : null}
-
-              <ScaffoldEditor
-                aria-label="Question"
-                regions={regionsFor(state, language)}
-                docKey={`${id ?? 'new'}:${language}:${state.type}:${boxVersion}`}
-                onChange={onRegions}
-                onSave={() => {
-                  if (canSave) save.mutate();
-                }}
-                onCycleLanguage={cycleLanguage}
-                onUploadImage={upload}
-                imageLimits={IMAGE_LIMITS}
-                disabled={readOnly}
-                lang={language}
-                script={script}
-                className="flex-1 rounded-none border-0 shadow-none"
-              />
-            </div>
-          </section>
-
-          <section className="flex min-h-0 flex-col">
-            <PanelHeading title="Preview and validation" />
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-              <AuthoringPreview state={state} language={language} />
-              <AuthoringChecks checks={checks} />
-            </div>
-          </section>
-        </div>
+      {gate ?? (
+        <EditorPanes
+          questionId={editingId}
+          state={state}
+          language={language}
+          romanised={romanised}
+          readOnly={readOnly}
+          canSave={canSave}
+          boxVersion={boxVersion}
+          checks={checks}
+          onRegions={onRegions}
+          onCycleLanguage={cycleLanguage}
+          onSave={() => save.mutate()}
+        />
       )}
 
       <Legend language={language} />
+    </div>
+  );
+}
+
+/** Nothing to edit yet, or nothing they may edit: what stands in for the panes. */
+function editorGate(loadingQuestion: boolean, assignment: ScopedSection): React.ReactNode {
+  if (loadingQuestion) return <LoadingState>Loading the question</LoadingState>;
+  if (assignment.loading) return <LoadingState>Loading the assignment</LoadingState>;
+  if (assignment.refused) {
+    return (
+      <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This section is not assigned to you" />
+    );
+  }
+  return null;
+}
+
+/** The two columns the typist works in: what they are writing, and what it looks like. */
+function EditorPanes({
+  questionId,
+  state,
+  language,
+  romanised,
+  readOnly,
+  canSave,
+  boxVersion,
+  checks,
+  onRegions,
+  onCycleLanguage,
+  onSave,
+}: Readonly<{
+  questionId: string;
+  state: AuthoringState;
+  language: QuestionLanguage;
+  romanised: boolean;
+  readOnly: boolean;
+  canSave: boolean;
+  boxVersion: number;
+  checks: readonly Check[];
+  onRegions: (regions: ScaffoldRegion[]) => void;
+  onCycleLanguage: () => void;
+  onSave: () => void;
+}>) {
+  const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+      <section className="flex min-h-0 flex-col border-border lg:border-r">
+        <PanelHeading title="Editor" />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {readOnly ? (
+            <div className="p-4">
+              <Alert variant="info">
+                This question has left review. Changing it now belongs to the question bank.
+              </Alert>
+            </div>
+          ) : null}
+
+          <ScaffoldEditor
+            aria-label="Question"
+            regions={regionsFor(state, language)}
+            docKey={`${questionId || 'new'}:${language}:${state.type}:${boxVersion}`}
+            onChange={onRegions}
+            onSave={() => {
+              if (canSave) onSave();
+            }}
+            onCycleLanguage={onCycleLanguage}
+            onUploadImage={uploadImage}
+            imageLimits={IMAGE_LIMITS}
+            disabled={readOnly}
+            lang={language}
+            script={script}
+            className="flex-1 rounded-none border-0 shadow-none"
+          />
+        </div>
+      </section>
+
+      <section className="flex min-h-0 flex-col">
+        <PanelHeading title="Preview and validation" />
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          <AuthoringPreview state={state} language={language} />
+          <AuthoringChecks checks={checks} />
+        </div>
+      </section>
     </div>
   );
 }
@@ -436,8 +451,96 @@ function Shortcut({
   );
 }
 
+/** Escape and F11 raise the exit count, so leaving full screen is derived, not listened for. */
+function useFocusMode() {
+  const fullscreen = useFullscreen();
+  const [focusedAt, setFocusedAt] = useState<number | null>(null);
+  const immersive = focusedAt !== null && fullscreen.exits === focusedAt;
+  useWorkspace(immersive);
+
+  const toggle = () => {
+    if (immersive) {
+      setFocusedAt(null);
+      void fullscreen.exit();
+      return;
+    }
+    setFocusedAt(fullscreen.exits);
+    void fullscreen.enter();
+  };
+
+  return { immersive, toggle };
+}
+
+/** Their own sections, so a URL naming somebody else's is refused rather than opened empty. */
+function useTypistAssignment(assignmentId: string | undefined): ScopedSection {
+  const scoped = assignmentId ?? '';
+  const mine = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', ASSIGNMENT_ROLES.TYPIST],
+    queryFn: () => api.admin.assignments.mine({ role: ASSIGNMENT_ROLES.TYPIST }),
+    enabled: scoped !== '',
+  });
+  const section = mine.data?.find((row) => row.id === scoped) ?? null;
+
+  return {
+    scoped,
+    section,
+    loading: scoped !== '' && mine.isPending,
+    refused: scoped !== '' && !mine.isPending && section === null,
+  };
+}
+
+/** Saving is all the server hears: a new question, or the draft this editor was opened on. */
+function useSaveQuestion(
+  questionId: string,
+  draft: QuestionDraft,
+  assignmentId: string,
+  onSaved: (result: AuthoringSaveResult) => void,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: { success: questionId ? 'Question saved.' : 'Question saved. Next one.' },
+    mutationFn: () =>
+      questionId
+        ? api.admin.authoring.update(questionId, draft)
+        : api.admin.authoring.create({ ...draft, assignmentId: assignmentId || null }),
+    onSuccess: async (result) => {
+      onSaved(result);
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
+      if (assignmentId) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
+    },
+  });
+}
+
+/** The fetched question fills the boxes once; a refetch must not overwrite what is being typed. */
+function useFilledOnce(
+  question: QuestionDetail | undefined,
+  fill: (question: QuestionDetail) => void,
+) {
+  const filledId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!question || filledId.current === question.id) return;
+    filledId.current = question.id;
+    fill(question);
+  }, [question, fill]);
+}
+
+/** A closed tab loses nothing, and nothing half-written reaches the bank: only a save writes a row. */
+function usePersistedDraft(key: string, enabled: boolean, saved: Saved) {
+  useEffect(() => {
+    if (!enabled) return;
+    window.localStorage.setItem(key, JSON.stringify(saved));
+  }, [key, enabled, saved]);
+}
+
 /** The rules the save and the sheet are judged by, debounced so the panel settles as you type. */
-function useChecked(draft: QuestionDraft, header: AuthoringHeader) {
+function useChecked(
+  draft: QuestionDraft,
+  header: AuthoringHeader,
+  state: AuthoringState,
+  duplicate: string | null,
+) {
   const [issues, setIssues] = useState<ReturnType<typeof validateQuestion>>([]);
 
   useEffect(() => {
@@ -448,14 +551,35 @@ function useChecked(draft: QuestionDraft, header: AuthoringHeader) {
     return () => clearTimeout(timer);
   }, [draft, header]);
 
-  return issues;
+  const checks = useMemo(() => {
+    const missing = LANGUAGE_ORDER.filter(
+      (code) => code !== DEFAULT_LANGUAGE && !hasText(state.content[code].stem),
+    );
+    return checksFor(
+      state,
+      issues,
+      missing.map((code) => LANGUAGE_LABELS[code]),
+      duplicate,
+    );
+  }, [state, issues, duplicate]);
+
+  return { issues, checks };
 }
 
-function restore(key: string): Saved | null {
+/** What a reopened tab starts from: the draft it left, over the blanks a first visit gets. */
+function restore(key: string): Saved {
+  const blank: Saved = {
+    header: startingHeader(),
+    state: emptyState(),
+    language: DEFAULT_LANGUAGE,
+    written: 0,
+    romanised: true,
+  };
+
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Saved) : null;
+    return raw ? { ...blank, ...(JSON.parse(raw) as Partial<Saved>) } : blank;
   } catch {
-    return null;
+    return blank;
   }
 }

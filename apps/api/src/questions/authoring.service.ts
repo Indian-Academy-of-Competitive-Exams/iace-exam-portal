@@ -150,7 +150,7 @@ export class AuthoringService {
       where: { id },
       select: { assigneeId: true },
     });
-    if (!row || row.assigneeId !== adminId) {
+    if (row?.assigneeId !== adminId) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
   }

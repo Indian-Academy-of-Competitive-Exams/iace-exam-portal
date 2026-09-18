@@ -23,30 +23,47 @@ export function questionWhere(
   query: QuestionListQuery,
   matchedIds: string[] | null,
 ): Prisma.QuestionWhereInput {
-  /** What the match toggle governs. */
-  const chosen: Prisma.QuestionWhereInput[] = [];
-  /** What narrows the bank whichever mode is chosen. */
-  const always: Prisma.QuestionWhereInput[] = [];
+  const and = matchFilters(narrowsTheBank(query, matchedIds), whatWasAsked(query), query.match);
 
-  // A set, or undefined — never [], which Prisma reads as "match nothing" rather than "any".
-  if (query.subjectId) chosen.push({ subjectId: { in: query.subjectId } });
-  if (query.topicId) chosen.push({ topicId: { in: query.topicId } });
-  if (query.type) chosen.push({ type: { in: query.type } });
-  if (query.difficulty) chosen.push({ difficulty: { in: query.difficulty } });
+  return and.length > 0 ? { AND: and } : {};
+}
+
+/** What narrows the bank whichever mode is chosen — the match toggle does not reach these. */
+function narrowsTheBank(
+  query: QuestionListQuery,
+  matchedIds: string[] | null,
+): Prisma.QuestionWhereInput[] {
+  const filters: Prisma.QuestionWhereInput[] = [];
+
   // Out of circulation is out of the bank: naming a status is how you ask to see them.
-  if (query.status) chosen.push({ status: { in: query.status } });
-  else always.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
+  if (!query.status) filters.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
   // The picker asks the same question the draw asks, so it cannot offer a row fillSection refuses.
-  if (query.drawable) always.push(DRAWABLE_QUESTION);
+  if (query.drawable) filters.push(DRAWABLE_QUESTION);
   // Resolved through the assignment relation, so no caller has to carry a list of ids in the URL.
   if (query.writtenForTestId && query.writtenFor) {
     const wroteIt = { assignment: { testId: query.writtenForTestId } };
-    always.push(query.writtenFor === WRITTEN_FOR.BANK ? { NOT: wroteIt } : wroteIt);
+    filters.push(query.writtenFor === WRITTEN_FOR.BANK ? { NOT: wroteIt } : wroteIt);
   }
-  if (query.tag) chosen.push({ tags: { has: query.tag } });
+  // The search ran as its own query, so an empty result must match nothing rather than be dropped.
+  if (matchedIds) filters.push({ id: { in: matchedIds } });
+
+  return filters;
+}
+
+/** What the match toggle governs: the filters the reader chose, each one narrowing or widening. */
+function whatWasAsked(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
+  const filters: Prisma.QuestionWhereInput[] = [];
+
+  // A set, or undefined — never [], which Prisma reads as "match nothing" rather than "any".
+  if (query.subjectId) filters.push({ subjectId: { in: query.subjectId } });
+  if (query.topicId) filters.push({ topicId: { in: query.topicId } });
+  if (query.type) filters.push({ type: { in: query.type } });
+  if (query.difficulty) filters.push({ difficulty: { in: query.difficulty } });
+  if (query.status) filters.push({ status: { in: query.status } });
+  if (query.tag) filters.push({ tags: { has: query.tag } });
   // No picker to choose an author from, so the name typed is matched against what they sign in as.
   if (query.author) {
-    chosen.push({
+    filters.push({
       createdBy: {
         OR: [
           { fullName: { contains: query.author, mode: 'insensitive' } },
@@ -55,21 +72,13 @@ export function questionWhere(
       },
     });
   }
-  if (query.from || query.to) chosen.push({ createdAt: writtenBetween(query.from, query.to) });
-
-  // A language is present when the CURRENT version has a stem in it, which is the key
-  // `buildContent` writes. The content is on the version, so the filter travels through it.
+  if (query.from || query.to) filters.push({ createdAt: writtenBetween(query.from, query.to) });
+  // A language is present when the CURRENT version has a stem in it, the key `buildContent` writes.
   if (query.language) {
-    chosen.push({ currentVersion: { content: { path: [query.language], not: Prisma.DbNull } } });
+    filters.push({ currentVersion: { content: { path: [query.language], not: Prisma.DbNull } } });
   }
 
-  // The search already ran as its own query; an empty result must match nothing
-  // rather than being dropped, or a search for nonsense would list everything.
-  if (matchedIds) always.push({ id: { in: matchedIds } });
-
-  const and = matchFilters(always, chosen, query.match);
-
-  return and.length > 0 ? { AND: and } : {};
+  return filters;
 }
 
 export function questionOrderBy(sort: QuestionSort): Prisma.QuestionOrderByWithRelationInput[] {
