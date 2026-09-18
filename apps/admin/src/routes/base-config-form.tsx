@@ -349,7 +349,7 @@ function configTitle(detail: BaseConfigDetail | null, isEditing: boolean): strin
 
 function stageMetaOf(detail: BaseConfigDetail | null): string | undefined {
   if (!detail) return undefined;
-  return `${detail.examStage.exam.code} / ${detail.examStage.name} — version ${detail.version}`;
+  return `${detail.examStage.exam.code} / ${detail.examStage.name}, version ${detail.version}`;
 }
 
 /** Locked is the one state with no way into the form, so it offers the clone instead. */
@@ -484,7 +484,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       {locked ? (
         <Alert variant="warning">
           <span>
-            This configuration is locked — a test built from it has already been finalized, and a
+            This configuration is locked. A test built from it has already been finalized, and a
             paper somebody has sat cannot change shape underneath them. Every field below is fixed
             for good. Clone it to carry all of this into a copy you can edit: the copy starts
             unlocked and is not the stage&apos;s default until you promote it. The name, and whether
@@ -516,7 +516,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
           )}
 
           <FormField form={form} name="name" label="Name">
-            {(control) => <Input {...control} placeholder="SSC CGL Tier 1 — 2024 pattern" />}
+            {(control) => <Input {...control} placeholder="SSC CGL Tier 1, 2024 pattern" />}
           </FormField>
 
           <ToggleField form={form} name="isDefault" label="The stage's default pattern" />
@@ -860,7 +860,7 @@ function SectionCard({
           name={`sections.${index}.durationMin`}
           label="Minutes"
           /* ui-copy-ok: rule */ hint={
-            sectionalClocks ? 'Required — this paper has a clock per section' : 'Optional'
+            sectionalClocks ? 'Required: this paper has a clock per section' : 'Optional'
           }
         >
           {(control) => <Input {...control} inputMode="numeric" />}

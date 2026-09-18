@@ -72,11 +72,11 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.CONFLICT]: 'That already exists',
   [ErrorCodes.SITTING_TAKEN_OVER]: 'This test was continued somewhere else',
   [ErrorCodes.SITTING_ENDED]: 'This sitting has already ended',
-  [ErrorCodes.RATE_LIMITED]: 'Too many requests — please wait a moment',
+  [ErrorCodes.RATE_LIMITED]: 'Too many requests. Please wait a moment',
   [ErrorCodes.OTP_INVALID]: 'Incorrect code',
-  [ErrorCodes.OTP_EXPIRED]: 'That code has expired — request a new one',
+  [ErrorCodes.OTP_EXPIRED]: 'That code has expired. Request a new one',
   [ErrorCodes.PIN_INVALID]: 'Incorrect mobile number or PIN',
-  [ErrorCodes.PIN_LOCKED]: 'Too many incorrect attempts — try again later',
+  [ErrorCodes.PIN_LOCKED]: 'Too many incorrect attempts. Try again later',
   [ErrorCodes.ADMIN_NOT_REGISTERED]:
     'That email has no admin account. Ask a super admin to create one for you.',
   [ErrorCodes.DRAW_SHORTFALL]:

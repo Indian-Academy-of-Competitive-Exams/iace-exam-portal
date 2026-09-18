@@ -41,7 +41,7 @@ export function throttlerOptionsFrom(
         (request as { user?: AuthenticatedUser }).user,
         (request as unknown as Request).ip,
       ),
-    errorMessage: 'Too many requests — please wait a moment',
+    errorMessage: 'Too many requests. Please wait a moment',
     storage,
   };
 }

@@ -64,7 +64,7 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   },
   [FEATURE_KEYS.STUDENT_PERFORMANCE]: {
     label: 'Student performance',
-    description: "Any student's analytics — percentile, cohort standing and time use.",
+    description: "Any student's analytics: percentile, cohort standing and time use.",
   },
   [FEATURE_KEYS.NOTIFICATION_MANAGEMENT]: {
     label: 'Announcements',

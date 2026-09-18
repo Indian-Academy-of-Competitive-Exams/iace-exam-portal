@@ -88,10 +88,10 @@ function programColumns(
           onChanged={refresh}
           retireText={
             program.isActive
-              ? `Nothing that already carries ${program.code} changes — every student and every series keeps it and keeps working exactly as now. What stops is new ones: this program will no longer be offered when anyone enrols a student or builds a series. Reactivating puts it back.`
+              ? `Nothing that already carries ${program.code} changes. Every student and every series keeps it and keeps working exactly as now. What stops is new ones: this program will no longer be offered when anyone enrols a student or builds a series. Reactivating puts it back.`
               : 'The program is offered again when anyone enrols a student or builds a series. Nothing else changes.'
           }
-          deleteText={`A student and a series carry ${program.code} as plain text, with nothing linking them back to this row. If any of them still does, the delete is refused and the count comes back with it — retire the program instead, which keeps every holder and simply stops it being offered. Deleting cannot be undone.`}
+          deleteText={`A student and a series carry ${program.code} as plain text, with nothing linking them back to this row. If any of them still does, the delete is refused and the count comes back with it. Retire the program instead, which keeps every holder and simply stops it being offered. Deleting cannot be undone.`}
         >
           {/* Everyone on this screen holds STUDENT_MANAGEMENT, so who carries a program is always reachable. */}
           <DropdownMenuItem asChild>
@@ -191,7 +191,7 @@ export function ProgramsList({
         }
         empty={{
           title: 'No programs yet',
-          hint: 'Add the first one — a series can then be aimed at it.',
+          hint: 'Add the first one. A series can then be aimed at it.',
         }}
         emptyFiltered="No programs match those filters"
       />

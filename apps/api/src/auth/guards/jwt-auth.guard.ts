@@ -32,7 +32,7 @@ export class JwtAuthGuard implements CanActivate {
       const replaced = await this.sessions.replacedBy(claims.actor, claims.sub, claims.sid);
       if (replaced)
         throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
-      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has ended — sign in again');
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has ended. Sign in again');
     }
 
     request.user = {

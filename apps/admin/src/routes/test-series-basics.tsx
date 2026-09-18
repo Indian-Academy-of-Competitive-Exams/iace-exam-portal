@@ -34,7 +34,7 @@ export function SeriesBasics({
           {(control) => (
             <Input
               {...control}
-              placeholder="SSC CGL Tier 1 — Mock Test Series"
+              placeholder="SSC CGL Tier 1 Mock Test Series"
               suggestion={name?.trim() === '' ? suggested : undefined}
               onAcceptSuggestion={(next) =>
                 form.setValue('name', next, { shouldDirty: true, shouldValidate: true })

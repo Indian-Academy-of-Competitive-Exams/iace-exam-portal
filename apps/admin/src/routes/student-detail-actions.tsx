@@ -137,7 +137,7 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         title={isActive ? `Suspend sign-in for ${name}?` : `Restore sign-in for ${name}?`}
         description={
           isActive
-            ? 'They cannot sign in at all, on any device. A session they already have open is not revoked — it lasts until its token expires. Their record, attempts and results are kept.'
+            ? 'They cannot sign in at all, on any device. A session they already have open is not revoked; it lasts until its token expires. Their record, attempts and results are kept.'
             : 'They can sign in again. Whether they may sit a test is the other switch, and this does not change it.'
         }
         confirmLabel={isActive ? 'Suspend sign-in' : 'Restore sign-in'}
@@ -150,7 +150,7 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         destructive
         loading={erase.isPending}
         title={`Erase ${name}'s personal data?`}
-        description="Their name, contact details, documents and profile are removed for good and cannot be restored. Every sitting they sat is left standing and still counts in results and rankings — the person is no longer named against them."
+        description="Their name, contact details, documents and profile are removed for good and cannot be restored. Every sitting they sat is left standing and still counts in results and rankings, but the person is no longer named against them."
         confirmLabel="Erase personal data"
         onConfirm={() => erase.mutate()}
       />

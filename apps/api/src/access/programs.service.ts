@@ -159,7 +159,7 @@ export class ProgramsService {
     if (series > 0) held.push(`${series} series`);
 
     if (held.length === 0) return null;
-    return `${held.join(' and ')} already carry ${code}, and nothing links them back to this row — a ${verb} would detach every one of them silently. Retire the program instead.`;
+    return `${held.join(' and ')} already carry ${code}, and nothing links them back to this row, so a ${verb} would detach every one of them silently. Retire the program instead.`;
   }
 
   private async assertCodeFree(code: string): Promise<void> {

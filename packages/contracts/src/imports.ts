@@ -328,7 +328,7 @@ export const IMPORT_LIST_SEPARATORS = /[,;|/\n]+/;
 
 /** A row naming none of course, exam or program creates a student who reaches nothing. */
 export const NO_ACCESS_ROUTE_MESSAGE =
-  'This row reaches no test series — give it an enrolled course, an enrolled exam or a program.';
+  'This row reaches no test series. Give it an enrolled course, an enrolled exam or a program.';
 
 export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];

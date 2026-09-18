@@ -165,5 +165,5 @@ export function activationBlocker(test: { isLocked: boolean }): string | null {
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */
 export function testDeletionBlocker(usage: { attemptCount: number }): string | null {
   if (usage.attemptCount === 0) return null;
-  return `${attemptsLabel(usage.attemptCount)} were sat on this test. Retire it instead — it keeps its results and is simply no longer offered.`;
+  return `${attemptsLabel(usage.attemptCount)} were sat on this test. Retire it instead. It keeps its results and is simply no longer offered.`;
 }

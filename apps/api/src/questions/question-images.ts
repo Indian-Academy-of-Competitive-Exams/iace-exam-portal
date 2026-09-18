@@ -63,7 +63,7 @@ export function checkQuestionImage(file: UploadedImage | undefined): CheckedImag
   const megapixels = QUESTION_IMAGE_MAX_PIXELS / 1_000_000;
   if (image.width * image.height > QUESTION_IMAGE_MAX_PIXELS) {
     return refuse(
-      `That image is ${image.width}×${image.height}. Scale it under ${megapixels} megapixels — a figure never needs that many.`,
+      `That image is ${image.width}×${image.height}. Scale it under ${megapixels} megapixels. A figure never needs that many.`,
       'That image is too large to draw',
     );
   }

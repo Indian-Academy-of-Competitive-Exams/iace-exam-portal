@@ -93,7 +93,7 @@ export class SessionService {
       this.logger.warn(`Refresh token reuse detected for ${actor} ${subjectId}; session revoked`);
       throw new AppException(
         ErrorCodes.UNAUTHENTICATED,
-        'Session is no longer valid — sign in again',
+        'Session is no longer valid. Sign in again',
       );
     }
 
@@ -123,7 +123,7 @@ export class SessionService {
     const replaced = await this.replacedBy(actor, subjectId, sessionId);
     if (replaced)
       throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
-    throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired — sign in again');
+    throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired. Sign in again');
   }
 
   async revoke(actor: ActorType, subjectId: string, sessionId: string): Promise<void> {

@@ -67,7 +67,7 @@ export function AppShell() {
         A student still on the PIN the institute set cannot get past this.
         Not a banner they can scroll past: the PIN is the first four digits of
         their own mobile number, so anyone holding the class list can sign in
-        as them — and every test they sit until they change it is a result
+        as them, and every test they sit until they change it is a result
         somebody else could have produced.
 
         It sits INSIDE the shell rather than being a redirect, so the header

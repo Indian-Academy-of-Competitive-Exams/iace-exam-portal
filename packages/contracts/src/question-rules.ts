@@ -102,7 +102,7 @@ function checkMath(draft: QuestionDraft, issues: ValidationIssue[], mathError: M
 
     issues.push({
       code: CODE.MATH_INVALID,
-      message: `The formula "${failure.latex}" will not render — ${failure.message}`,
+      message: `The formula "${failure.latex}" will not render: ${failure.message}`,
       field,
     });
   }
@@ -235,7 +235,7 @@ function checkOptions(draft: QuestionDraft, issues: ValidationIssue[]): void {
   if (seated.some((position, index) => position !== index + 1)) {
     issues.push({
       code: CODE.OPTION_COUNT_INVALID,
-      message: 'The options skip a slot — number them from 1 with no gaps',
+      message: 'The options skip a slot. Number them from 1 with no gaps',
       field: 'options',
       column: 'option1_en',
     });

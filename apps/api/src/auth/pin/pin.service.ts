@@ -167,7 +167,7 @@ export class PinService {
       // student back to the same place a stale code would.
       throw new AppException(
         ErrorCodes.OTP_EXPIRED,
-        'This step has expired — verify your mobile number again',
+        'This step has expired. Verify your mobile number again',
       );
     }
     await this.redis.del(key);

@@ -27,7 +27,7 @@ export class SuperAdminGuard implements CanActivate {
     if (!user.isActive) {
       throw new AppException(
         ErrorCodes.FORBIDDEN,
-        'Your account has been deactivated — ask a super admin to restore it',
+        'Your account has been deactivated. Ask a super admin to restore it',
       );
     }
     return true;

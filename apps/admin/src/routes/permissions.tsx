@@ -96,7 +96,7 @@ export function PermissionsPage() {
               <Alert variant="warning" className="mb-5">
                 <span>
                   No features are defined, so there is nothing to grant. Feature keys live in the
-                  code — screen first.
+                  code, not on this screen.
                 </span>
               </Alert>
             ) : null}
@@ -228,7 +228,7 @@ function AdminPanel({
           {changes.length > 0 ? (
             <Alert variant="warning" className="mt-3">
               <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
-                <span>{plural(changes.length, 'unsaved change')} — nothing has been sent yet.</span>
+                <span>{plural(changes.length, 'unsaved change')}. Nothing has been sent yet.</span>
                 <div className="flex gap-2">
                   {/* Cancel is neutral grey, never red: discarding a draft destroys nothing. */}
                   <Button
@@ -257,7 +257,7 @@ function AdminPanel({
             title={`Apply ${plural(changes.length, 'change')} to ${admin.email}?`}
             description={
               changes.some(isReduction)
-                ? 'Anything removed here disappears from what they can reach the moment this saves — they do not have to sign out for it to take effect.'
+                ? 'Anything removed here disappears from what they can reach the moment this saves. They do not have to sign out for it to take effect.'
                 : 'They can use everything granted here as soon as this saves, without signing out and in again.'
             }
             confirmLabel="Apply changes"

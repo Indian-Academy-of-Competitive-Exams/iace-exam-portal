@@ -84,7 +84,7 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
       className="h-32 items-center justify-center overflow-hidden rounded-md border border-border bg-muted"
     >
       {isPdf(url) ? (
-        <Text className="text-xs text-muted-foreground">PDF — tap to open</Text>
+        <Text className="text-xs text-muted-foreground">PDF. Tap to open</Text>
       ) : (
         <Image source={{ uri: url }} resizeMode="cover" className="h-full w-full" />
       )}

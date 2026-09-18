@@ -156,7 +156,7 @@ function missingHeaders(headers: string[]): string[] {
 function tooManyRows(table: CsvTable): string[] {
   if (table.rows.length <= IMPORT_MAX_ROWS) return [];
   return [
-    `That file has ${table.rows.length} rows. Import at most ${IMPORT_MAX_ROWS} at a time — ` +
+    `That file has ${table.rows.length} rows. Import at most ${IMPORT_MAX_ROWS} at a time: ` +
       `split it and upload the parts.`,
   ];
 }

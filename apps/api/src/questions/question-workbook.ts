@@ -166,7 +166,7 @@ function writeLists(
 
   for (const subject of catalog.subjects) {
     addList(
-      `${subject.name} — topics`,
+      `${subject.name}: topics`,
       subject.topics.map((topic) => topic.name),
       topicRangeName(subject.name),
     );
@@ -230,27 +230,27 @@ const INSTRUCTIONS = [
   'One row is one question. Fill in the Questions tab; the Lists tab is what the',
   'dropdowns read, so leave it alone.',
   '',
-  `Languages — ${LANGUAGE_LIST}.`,
+  `Languages: ${LANGUAGE_LIST}.`,
   'English is required on every question. Hindi and Telugu are optional, but a',
   'question written in one of them needs BOTH its question text and all of its',
   'options in that language: a half-translated paper cannot be sat in it.',
   'Type or paste the script straight into the cell.',
   '',
   'Every cell is plain text and arrives exactly as typed, so "x < 5" and "A & B" are safe.',
-  'Formatting, tables, images and equations are not read from a sheet — a tag typed into a',
+  'Formatting, tables, images and equations are not read from a sheet. A tag typed into a',
   'cell shows as the tag. Add those by opening the question in the bank afterwards.',
   '',
-  'subject / topic — pick from the dropdowns. They cascade: the topics offered are',
-  'the ones under the subject on that row. Nothing is created by an import — a name',
+  'subject / topic: pick from the dropdowns. They cascade, so the topics offered are',
+  'the ones under the subject on that row. Nothing is created by an import, so a name',
   'that matches nothing in the bank is reported against its line.',
   '',
-  `SINGLE_MCQ — fill option1..option${MCQ_OPTION_COUNT} and correct_option (1 to ${MCQ_OPTION_COUNT}).`,
-  'TEXT_FIELD — leave the options empty and fill answer_mode and answer_en.',
+  `SINGLE_MCQ: fill option1..option${MCQ_OPTION_COUNT} and correct_option (1 to ${MCQ_OPTION_COUNT}).`,
+  'TEXT_FIELD: leave the options empty and fill answer_mode and answer_en.',
   '  EXACT compares the text, ignoring case and spacing.',
   '  NUMERIC compares the number, and answer_tolerance is how far either side',
   '  still counts (0.01 accepts 3.13 to 3.15 for an answer of 3.14).',
   '',
-  `tags — separate several with "${TAG_SEPARATOR}". question_code is your own reference and`,
+  `tags: separate several with "${TAG_SEPARATOR}". question_code is your own reference and`,
   'must be unique across the bank; leave it blank if you do not use one.',
   `Every question imported also carries the tag "${QUESTION_IMPORT_TAG}", which is one of the`,
   `${TAGS_MAX} a question may hold. Filter the bank by it to find what an upload brought in.`,
@@ -261,7 +261,7 @@ const INSTRUCTIONS = [
   'Nothing is written until you press Import. The preview shows what would happen',
   'to every row: rows with problems are listed with the reason and skipped, and a',
   'question already in the bank is skipped as a duplicate rather than reported as',
-  'an error — re-uploading a sheet with new questions on the end is normal.',
+  'an error. Re-uploading a sheet with new questions on the end is normal.',
 ];
 
 export { topicRangeName };

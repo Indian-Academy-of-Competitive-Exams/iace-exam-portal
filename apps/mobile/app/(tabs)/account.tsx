@@ -42,7 +42,7 @@ export default function AccountScreen() {
       {identity?.hasDefaultPin ? (
         <Alert variant="warning">
           Your PIN is the one you were given when you were enrolled. Anyone holding the class list
-          can work it out — pick your own.
+          can work it out. Pick your own.
         </Alert>
       ) : null}
 

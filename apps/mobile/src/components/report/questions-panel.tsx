@@ -178,7 +178,7 @@ function Distribution({ row }: Readonly<{ row: QuestionReportRow }>) {
       <MeasureBars bars={bars} max={total} />
       {won === null || won.isCorrect || row.isCorrect === true ? null : (
         <Alert variant="warning">
-          {`Option ${won.position} pulled ${won.count} of ${total} — the same wrong answer most of the field reached for.`}
+          {`Option ${won.position} pulled ${won.count} of ${total}, the same wrong answer most of the field reached for.`}
         </Alert>
       )}
     </View>
@@ -192,7 +192,7 @@ function optionMark(
 ): string {
   const marks = [option.isCorrect ? 'correct' : null, option.optionId === chosen ? 'yours' : null];
   const named = marks.filter((mark) => mark !== null);
-  return named.length === 0 ? '' : ` — ${named.join(', ')}`;
+  return named.length === 0 ? '' : `: ${named.join(', ')}`;
 }
 
 function resultOf(row: QuestionReportRow) {

@@ -186,7 +186,7 @@ function CodeStep({
             <Alert variant="info">
               <Info aria-hidden />
               <span>
-                Development sender — your code is{' '}
+                Development sender. Your code is{' '}
                 <span className="font-semibold tabular-nums">{challenge.devCode}</span>
               </span>
             </Alert>

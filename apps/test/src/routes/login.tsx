@@ -316,7 +316,7 @@ function CodeStep({
             <Alert variant="info">
               <Info aria-hidden />
               <span>
-                Development sender — your code is{' '}
+                Development sender. Your code is{' '}
                 <span className="font-semibold tabular-nums">{challenge.devCode}</span>
               </span>
             </Alert>
@@ -368,7 +368,7 @@ function SetPinStep({
     <>
       <CardHeader className={STEP_HEADER}>
         <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
-        <CardDescription>This is how you sign in from now on — no more codes.</CardDescription>
+        <CardDescription>This is how you sign in from now on. No more codes.</CardDescription>
       </CardHeader>
 
       <CardContent>

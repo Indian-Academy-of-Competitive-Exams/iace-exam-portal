@@ -84,7 +84,7 @@ export class OtpService {
     if (sent > this.config.get('OTP_MAX_PER_DAY')) {
       throw new AppException(
         ErrorCodes.RATE_LIMITED,
-        'Too many codes have been sent to this number — try again later',
+        'Too many codes have been sent to this number. Try again later',
       );
     }
   }
@@ -125,7 +125,7 @@ export class OtpService {
     const key = redisKeys.otp(actor, identifier);
     const stored = await this.redis.getJson<StoredOtp>(key);
     if (!stored)
-      throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired — request a new one');
+      throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired. Request a new one');
 
     if (!sameHex(this.hash(code), stored.codeHash)) {
       const attempts = stored.attempts + 1;
@@ -135,7 +135,7 @@ export class OtpService {
         // the client's next step is "request a new one", not "try again".
         throw new AppException(
           ErrorCodes.RATE_LIMITED,
-          'Too many incorrect attempts — request a new code',
+          'Too many incorrect attempts. Request a new code',
         );
       }
       const ttl = await this.redis.ttl(key);

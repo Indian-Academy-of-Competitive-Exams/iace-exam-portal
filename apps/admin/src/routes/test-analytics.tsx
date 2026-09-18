@@ -225,7 +225,7 @@ function Freshness({
     <div className="flex items-center gap-2">
       {summary.isSettling ? (
         <Badge variant="neutral">
-          {`Updating — ${summary.evaluatedCount} of ${summary.liveEvaluatedCount} folded`}
+          {`Updating: ${summary.evaluatedCount} of ${summary.liveEvaluatedCount} folded`}
         </Badge>
       ) : null}
       {canSync ? (
@@ -342,7 +342,7 @@ function Items({
       <SectionHeading title="Questions" meta={plural(items.length, 'question')} />
       {flagged === 0 ? null : (
         <Alert variant="warning">
-          {plural(flagged, 'question')} tripped two or more of the item signals — open a flagged row
+          {plural(flagged, 'question')} tripped two or more of the item signals. Open a flagged row
           to see which.
         </Alert>
       )}
@@ -417,7 +417,7 @@ function ItemPanel({ item }: Readonly<{ item: TestItemAnalytics }>) {
   const total = item.optionCounts.reduce((sum, option) => sum + option.count, 0);
   const bars: MeasureBar[] = item.optionCounts.map((option) => ({
     key: option.optionId,
-    label: `Option ${option.position}${option.isCorrect ? ' — correct' : ''}`,
+    label: `Option ${option.position}${option.isCorrect ? ' (correct)' : ''}`,
     value: option.count,
     tone: option.isCorrect ? 2 : 1,
   }));
@@ -432,7 +432,7 @@ function ItemPanel({ item }: Readonly<{ item: TestItemAnalytics }>) {
       )}
       {won === null || won.isCorrect ? null : (
         <Alert variant="warning">
-          Option {won.position} pulled {won.count} of {total} — the same wrong answer most of the
+          Option {won.position} pulled {won.count} of {total}, the same wrong answer most of the
           field reached for.
         </Alert>
       )}

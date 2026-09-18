@@ -89,13 +89,13 @@ function examColumns(
           onChanged={refresh}
           retireText={
             exam.isActive
-              ? `Nothing it already holds changes — ${plural(exam.stageCount, 'stage')} and every student enrolled under ${exam.code} keep working exactly as now. What stops is new ones: this exam will no longer be offered when anyone enrols a student. Reactivating puts it back.`
+              ? `Nothing it already holds changes. ${plural(exam.stageCount, 'stage')} and every student enrolled under ${exam.code} keep working exactly as now. What stops is new ones: this exam will no longer be offered when anyone enrols a student. Reactivating puts it back.`
               : 'The exam is offered again on the student form. Nothing else changes.'
           }
           deleteText={
             exam.stageCount === 0
               ? `Nothing hangs off ${exam.code}. If a student is still enrolled on it, this will be refused. Deleting cannot be undone.`
-              : `${plural(exam.stageCount, 'stage')} still hang off ${exam.code}, and deleting it will be refused. Retire the exam instead — it keeps everything it has and is simply no longer offered.`
+              : `${plural(exam.stageCount, 'stage')} still hang off ${exam.code}, and deleting it will be refused. Retire the exam instead. It keeps everything it has and is simply no longer offered.`
           }
         >
           {isSuperAdmin ? (
@@ -192,7 +192,7 @@ export function ExamsPage() {
         filters={EXAM_FILTERS}
         columns={columns}
         rowKey={(exam) => exam.id}
-        empty={{ title: 'No exams yet', hint: 'Add the first one — every stage hangs off it.' }}
+        empty={{ title: 'No exams yet', hint: 'Add the first one. Every stage hangs off it.' }}
         emptyFiltered="No exams match those filters"
         expand={{
           render: (exam) => <ExamStages exam={exam} canWrite={canWrite} />,
@@ -338,13 +338,13 @@ function stageColumns(
           deleteTitle={`${stage.exam.code} / ${stage.name}`}
           retireText={
             stage.isActive
-              ? `Nothing it already holds changes — ${plural(stage.configCount, 'base configuration')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a configuration, a series or a test. Reactivating puts it back.`
+              ? `Nothing it already holds changes. ${plural(stage.configCount, 'base configuration')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a configuration, a series or a test. Reactivating puts it back.`
               : 'The stage is offered again when anyone builds a configuration, a series or a test. Nothing else changes.'
           }
           deleteText={
             stage.configCount + stage.testCount + stage.seriesCount === 0
               ? `Nothing hangs off ${stage.stageKey}. Deleting cannot be undone.`
-              : `${plural(stage.configCount, 'base configuration')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead — it keeps everything it has and is simply no longer offered.`
+              : `${plural(stage.configCount, 'base configuration')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead. It keeps everything it has and is simply no longer offered.`
           }
         >
           {canWrite ? (
@@ -567,7 +567,7 @@ function EditStageDialog({
         label="Key"
         /* ui-copy-ok: rule */ hint={
           stage.configCount > 0
-            ? `${plural(stage.configCount, 'base configuration')} hangs off this key — it can no longer change.`
+            ? `${plural(stage.configCount, 'base configuration')} hangs off this key, so it can no longer change.`
             : 'Free to change only while no base configuration hangs off it.'
         }
       >

@@ -106,13 +106,13 @@ function BranchRowActions({
       onChanged={onChanged}
       retireText={
         branch.isActive
-          ? `Nothing it already holds changes — the ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
+          ? `Nothing it already holds changes. The ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
           : 'The branch is offered again when anyone assigns a student. Nothing else changes.'
       }
       deleteText={
         branch.studentCount === 0
           ? 'No student attends this branch, so nothing loses access. This cannot be undone.'
-          : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead — a retired branch keeps everyone it has and simply takes no new students.`
+          : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead. A retired branch keeps everyone it has and simply takes no new students.`
       }
     >
       <DropdownMenuItem asChild>

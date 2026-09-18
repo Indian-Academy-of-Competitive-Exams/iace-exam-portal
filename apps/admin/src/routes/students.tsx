@@ -281,7 +281,7 @@ export function StudentsPage() {
       action={
         <div className="flex flex-wrap gap-2">
           {/* Write actions appear only with WRITE. Hiding is not the security
-                — the endpoints enforce it — it is not offering a control that
+                (the endpoints enforce it), it is not offering a control that
                 would be refused. */}
           {canWrite ? (
             <>

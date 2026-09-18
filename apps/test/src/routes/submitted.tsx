@@ -58,7 +58,7 @@ export function SubmittedPage() {
             <EmptyState
               kind={EMPTY_STATE_KINDS.FAILURE}
               title="Your score card did not load"
-              hint="It is safe — open it from your performance."
+              hint="It is safe. Open it from your performance."
               onRetry={card.refetch}
             />
           ) : (

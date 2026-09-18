@@ -107,7 +107,7 @@ function SeriesList({
 /** A grant is filed against the student either way; whether it OPENS anything is the series' switch. */
 function grantConsequence(chosen: ChosenSeries): string {
   if (!chosen.isEnabled) {
-    return `${chosen.name} is switched off, so this grant opens nothing yet — they reach its tests only once somebody switches the series on. It is one row for this one student and changes nothing for anybody else.`;
+    return `${chosen.name} is switched off, so this grant opens nothing yet. They reach its tests only once somebody switches the series on. It is one row for this one student and changes nothing for anybody else.`;
   }
   return `They reach every test in ${chosen.name} from now on, whatever their enrolments, programs or branch say. It is one row for this one student and changes nothing for anybody else.`;
 }

@@ -33,7 +33,7 @@ export function examDeletionBlocker(usage: ExamUsage): string | null {
   ].filter((part): part is string => part !== null);
 
   if (held.length === 0) return null;
-  return `This exam is still used by ${held.join(', ')}. Retire it instead — a retired exam keeps everything it has and is simply no longer offered.`;
+  return `This exam is still used by ${held.join(', ')}. Retire it instead. A retired exam keeps everything it has and is simply no longer offered.`;
 }
 
 /**
@@ -48,7 +48,7 @@ export function examEditBlocker(
 
   const subject = countOf(usage.studentCount, 'enrolled student');
   const verb = usage.studentCount === 1 ? 'holds' : 'hold';
-  return `${subject} already ${verb} this code, and nothing links them back to this row — changing it would detach every one of them silently. Create a second exam instead.`;
+  return `${subject} already ${verb} this code, and nothing links them back to this row, so changing it would detach every one of them silently. Create a second exam instead.`;
 }
 
 export const INACTIVE_EXAM_MESSAGE =
@@ -72,7 +72,7 @@ export function stageDeletionBlocker(usage: StageUsage): string | null {
   ].filter((part): part is string => part !== null);
 
   if (held.length === 0) return null;
-  return `This stage is still used by ${held.join(', ')}. Retire it instead — a retired stage keeps everything it has and is simply no longer offered.`;
+  return `This stage is still used by ${held.join(', ')}. Retire it instead. A retired stage keeps everything it has and is simply no longer offered.`;
 }
 
 /**
@@ -85,11 +85,11 @@ export function stageEditBlocker(
 ): string | null {
   if (changes.stageKey === undefined || usage.configCount === 0) return null;
 
-  return `${countOf(usage.configCount, 'base config')} already hangs off this key, and nothing links back to this row — changing it would detach them silently. Create a second stage instead.`;
+  return `${countOf(usage.configCount, 'base config')} already hangs off this key, and nothing links back to this row, so changing it would detach them silently. Create a second stage instead.`;
 }
 
 export const INACTIVE_STAGE_MESSAGE =
   'That stage is no longer active. Pick another, or reactivate it first.';
 
 export const CATALOG_ONLY_STAGE_MESSAGE =
-  'That stage is listed for the journey only — nobody sits it here, so it carries no paper.';
+  'That stage is listed for the journey only. Nobody sits it here, so it carries no paper.';

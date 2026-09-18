@@ -150,7 +150,7 @@ export function BaseConfigsPage() {
         rowKey={(config) => config.id}
         empty={{
           title: 'No base configurations yet',
-          hint: 'Build the first one — every test hangs its shape off one.',
+          hint: 'Build the first one. Every test hangs its shape off one.',
         }}
         emptyFiltered="No configurations match those filters"
       />
@@ -171,10 +171,10 @@ function ConfigStatus({ config }: Readonly<{ config: BaseConfig }>) {
 /** Names what would refuse the delete, so the dialog is not a guess the server then corrects. */
 function deleteDescription(config: BaseConfig): string {
   if (config.locked) {
-    return `${config.name} is locked — a test built from it has already been sat — so deleting it will be refused. Retire it instead: it keeps its history and is simply no longer offered.`;
+    return `${config.name} is locked: a test built from it has already been sat, so deleting it will be refused. Retire it instead. It keeps its history and is simply no longer offered.`;
   }
   if (config.testCount > 0) {
-    return `${plural(config.testCount, 'test')} inherit their shape from ${config.name}, and deleting it will be refused. Retire it instead — a retired config keeps everything it has and is simply no longer offered.`;
+    return `${plural(config.testCount, 'test')} inherit their shape from ${config.name}, and deleting it will be refused. Retire it instead. A retired config keeps everything it has and is simply no longer offered.`;
   }
   return `No test inherits from ${config.name} and none has been sat. Deleting it removes its sections too, and cannot be undone.`;
 }
@@ -213,7 +213,7 @@ function ConfigRowActions({
         onChanged={onChanged}
         retireText={
           config.isActive
-            ? `Nothing it already holds changes — ${plural(config.testCount, 'test')} built from it keep working exactly as now. What stops is new ones: this configuration will no longer be offered when anyone builds a test. Reactivating puts it back.`
+            ? `Nothing it already holds changes. ${plural(config.testCount, 'test')} built from it keep working exactly as now. What stops is new ones: this configuration will no longer be offered when anyone builds a test. Reactivating puts it back.`
             : 'The configuration is offered again when anyone builds a test. Nothing else changes.'
         }
         deleteText={deleteDescription(config)}

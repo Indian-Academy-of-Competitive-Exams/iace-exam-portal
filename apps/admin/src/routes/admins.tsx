@@ -158,7 +158,7 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   }
 
   return (
-    <BadgeList items={held} label={(key) => `${key} — ${admin.permissions[key]}`} max={1}>
+    <BadgeList items={held} label={(key) => `${key}: ${admin.permissions[key]}`} max={1}>
       {(key) => (
         <Badge variant="neutral" className="min-w-0 shrink">
           <TruncatedText>{key}</TruncatedText>
@@ -218,8 +218,8 @@ function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChange
         title={admin.isActive ? `Deactivate ${admin.email}?` : `Reactivate ${admin.email}?`}
         description={
           admin.isActive
-            ? 'They are signed out and every permission they hold is removed. Switching them back on does NOT restore those grants — someone has to grant them again, by hand.'
-            : 'They can sign in again. Their old permissions were removed when they were deactivated and do NOT come back — grant them what they need on the Permissions screen.'
+            ? 'They are signed out and every permission they hold is removed. Switching them back on does NOT restore those grants. Someone has to grant them again, by hand.'
+            : 'They can sign in again. Their old permissions were removed when they were deactivated and do NOT come back. Grant them what they need on the Permissions screen.'
         }
         confirmLabel={admin.isActive ? 'Deactivate' : 'Reactivate'}
         onConfirm={() => setActive.mutate()}
@@ -292,7 +292,7 @@ function NewAdminDialog({
       </FormDialog>
 
       {/* Creating an admin is creating a way into this app, and a super admin
-          bypasses every permission check there is — including the one on this
+          bypasses every permission check there is, including the one on this
           screen, so the new account can create more of itself. That is worth
           one deliberate step, and the wording changes with the box, because
           the two outcomes are not the same size. Stacked OVER the form, and
@@ -311,7 +311,7 @@ function NewAdminDialog({
         }
         description={
           pending?.isSuperAdmin
-            ? `${pending.email} will bypass every feature check, can manage branches, and can create and deactivate other admins — including you. Grant it only to someone who already runs the institute.`
+            ? `${pending.email} will bypass every feature check, can manage branches, and can create and deactivate other admins, including you. Grant it only to someone who already runs the institute.`
             : 'They will be able to sign in with this email and a one-time code. They hold no permissions until you grant them some on the Permissions screen.'
         }
         confirmLabel={pending?.isSuperAdmin ? 'Create super admin' : 'Create admin'}

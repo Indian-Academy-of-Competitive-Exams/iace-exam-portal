@@ -120,5 +120,5 @@ const monthOf = (date: string) => MONTH.format(new Date(`${date}T00:00:00.000Z`)
 
 function dayTip(date: string, sittings: number): string {
   const label = instituteDayLabel(`${date}T00:00:00.000Z`) ?? date;
-  return `${label} — ${plural(sittings, 'sitting')}`;
+  return `${label}: ${plural(sittings, 'sitting')}`;
 }

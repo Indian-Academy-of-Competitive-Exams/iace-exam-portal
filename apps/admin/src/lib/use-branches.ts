@@ -52,5 +52,5 @@ export function useBranchChoice(studentType: StudentType) {
 function onlineBranchHint(exists: boolean): string {
   return exists
     ? 'Online students sit in the online branch.'
-    : 'No online branch yet — a super admin creates it on the Branches screen.';
+    : 'No online branch yet. A super admin creates it on the Branches screen.';
 }

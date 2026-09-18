@@ -105,7 +105,7 @@ export default function ProfileScreen() {
         {me.data.preTestReady ? null : (
           <Alert variant="warning">
             Before your first test we need your mother&rsquo;s name, father&rsquo;s name and date of
-            birth — they go on your hall ticket.
+            birth. They go on your hall ticket.
           </Alert>
         )}
 

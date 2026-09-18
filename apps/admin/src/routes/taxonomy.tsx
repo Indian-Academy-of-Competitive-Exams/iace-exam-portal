@@ -197,7 +197,7 @@ function SubjectsList() {
       rowKey={(row) => row.id}
       empty={{
         title: 'No subjects yet',
-        hint: 'Add the first one — questions are filed under it.',
+        hint: 'Add the first one. Questions are filed under it.',
       }}
       emptyFiltered="No subjects match that search"
     />

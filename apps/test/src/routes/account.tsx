@@ -59,7 +59,7 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
       {/* Said plainly: "for your security" tells a student nothing they can act on. */}
       <Alert variant={onDefaultPin ? 'warning' : 'info'}>
         {onDefaultPin
-          ? `Your PIN is the first ${PIN_LENGTH} digits of your mobile number, set for you when you were enrolled. Anyone holding the class list can work it out — pick your own.`
+          ? `Your PIN is the first ${PIN_LENGTH} digits of your mobile number, set for you when you were enrolled. Anyone holding the class list can work it out. Pick your own.`
           : `Any ${PIN_LENGTH} digits. Changing it signs you out everywhere else.`}
       </Alert>
 

@@ -231,7 +231,7 @@ function Blueprint({
         {(control) => (
           <Input
             {...control}
-            placeholder="SSC CGL Tier 1 Standard — Mock 01"
+            placeholder="SSC CGL Tier 1 Standard, Mock 01"
             suggestion={suggestion}
             onAcceptSuggestion={(name) =>
               form.setValue('title', name, { shouldDirty: true, shouldValidate: true })

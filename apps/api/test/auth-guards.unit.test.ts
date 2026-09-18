@@ -179,7 +179,7 @@ describe('JwtAuthGuard', () => {
       () => ctx.guard.canActivate(context),
       (error: unknown) => {
         assert.ok(AppException.is(error));
-        assert.equal(error.message, 'Session has ended — sign in again');
+        assert.equal(error.message, 'Session has ended. Sign in again');
         return true;
       },
     );

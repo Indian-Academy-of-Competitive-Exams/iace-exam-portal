@@ -400,7 +400,7 @@ function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['a
     } else {
       issues.push({
         code: CODE.ANSWER_MODE_INVALID,
-        message: `"${rawMode}" is not an answer mode — use EXACT or NUMERIC`,
+        message: `"${rawMode}" is not an answer mode. Use EXACT or NUMERIC`,
         field: 'answerKey.mode',
         column: 'answer_mode',
       });

@@ -133,7 +133,7 @@ export class AuthoringService {
     if (row.status !== QUESTION_STATUS.DRAFT) {
       throw new AppException(
         ErrorCodes.CONFLICT,
-        'This question has left review — it is changed in the question bank now',
+        'This question has left review. It is changed in the question bank now',
       );
     }
   }

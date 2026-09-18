@@ -47,7 +47,7 @@ export const dobSchema = dateOnlySchema
   .refine((value) => value <= todayISO(), 'A date of birth cannot be in the future')
   .refine(
     (value) => Number(value.slice(0, 4)) >= EARLIEST_BIRTH_YEAR,
-    `That year looks like a typo — use ${EARLIEST_BIRTH_YEAR} or later`,
+    `That year looks like a typo. Use ${EARLIEST_BIRTH_YEAR} or later`,
   );
 
 /** Today at the institute, as YYYY-MM-DD — what a date input caps itself at. */
@@ -64,7 +64,7 @@ export const personNameSchema = z
   .trim()
   .min(2, 'A name needs at least two letters')
   .max(120)
-  .regex(/^\p{L}[\p{L}\p{M}\s.'-]*$/u, 'Use letters only — no digits, commas or other characters');
+  .regex(/^\p{L}[\p{L}\p{M}\s.'-]*$/u, 'Use letters only: no digits, commas or other characters');
 
 // ============================================================================
 // Reading

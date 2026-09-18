@@ -132,7 +132,7 @@ function toFormValues(student: StudentDetail): FormValues {
 /** One uploaded document. Opens in a new tab — these are short-lived signed links. */
 function DocumentLink({ label, url }: Readonly<{ label: string; url?: string | null }>) {
   if (!url) {
-    return <Badge variant="neutral">{label} — not uploaded</Badge>;
+    return <Badge variant="neutral">{label}: not uploaded</Badge>;
   }
 
   return (

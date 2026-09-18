@@ -124,7 +124,7 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
       {isPdf(url) ? (
         <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
           <FileText className="size-6" aria-hidden />
-          PDF — open to view
+          PDF. Open to view
         </span>
       ) : (
         <img src={url} alt={label} className="size-full object-cover" />

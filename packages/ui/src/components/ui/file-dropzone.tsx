@@ -75,7 +75,7 @@ export function FileDropzone({
       <FileUp className="size-5" aria-hidden />
       <span className="font-medium text-foreground">{file ? file.name : label}</span>
       <span className="text-xs">
-        {file ? `${formatFileSize(file.size)} — choose another to replace it` : hint}
+        {file ? `${formatFileSize(file.size)}. Choose another to replace it` : hint}
       </span>
       <input
         type="file"

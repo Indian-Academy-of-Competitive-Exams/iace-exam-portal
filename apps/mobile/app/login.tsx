@@ -268,7 +268,7 @@ function CodeStep({
       />
 
       {challenge.devCode ? (
-        <Alert>Development sender — your code is {challenge.devCode}</Alert>
+        <Alert>Development sender. Your code is {challenge.devCode}</Alert>
       ) : null}
 
       <Button

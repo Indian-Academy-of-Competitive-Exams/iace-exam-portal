@@ -247,7 +247,7 @@ export function EventsList({
         rowKey={(event) => event.id}
         empty={{
           title: 'No events yet',
-          hint: 'Add the first one — an Event Test reaches only the candidates on one.',
+          hint: 'Add the first one. An Event Test reaches only the candidates on one.',
         }}
         emptyFiltered="No events match those filters"
       />

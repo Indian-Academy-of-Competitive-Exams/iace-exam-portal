@@ -72,7 +72,7 @@ const dateOrNull = (value: string | null | undefined): Date | null =>
   value === null || value === undefined ? null : new Date(value);
 
 const OPENS_BEFORE_THE_TEST_DOES =
-  'A program opens a test earlier, never later — a later opening would hold this program’s students back after the test has opened for everyone else.';
+  'A program opens a test earlier, never later. A later opening would hold this program’s students back after the test has opened for everyone else.';
 
 const UNLOCK_FIELD = 'unlockAt';
 

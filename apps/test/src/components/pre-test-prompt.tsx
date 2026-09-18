@@ -17,8 +17,8 @@ export function PreTestPrompt({
           <ClipboardList className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
             <strong className="font-medium">Before your first test.</strong> We need your
-            mother&rsquo;s name, father&rsquo;s name and date of birth — they go on your hall
-            ticket. It takes a minute.
+            mother&rsquo;s name, father&rsquo;s name and date of birth. They go on your hall ticket.
+            It takes a minute.
           </span>
         </span>
         {/* Already on the profile, the fields are here — so it opens them rather than navigating. */}

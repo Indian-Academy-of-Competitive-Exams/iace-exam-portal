@@ -152,7 +152,7 @@ function Distribution({ row }: Readonly<{ row: QuestionReportRow }>) {
       {won === null || won.isCorrect || row.isCorrect === true ? null : (
         /* ui-copy-ok: consequence */
         <Alert variant="warning">
-          Option {won.position} pulled {won.count} of {total} — the same wrong answer most of the
+          Option {won.position} pulled {won.count} of {total}, the same wrong answer most of the
           field reached for.
         </Alert>
       )}
@@ -167,7 +167,7 @@ function optionMark(
 ): string {
   const marks = [option.isCorrect ? 'correct' : null, option.optionId === chosen ? 'yours' : null];
   const named = marks.filter((mark) => mark !== null);
-  return named.length === 0 ? '' : ` — ${named.join(', ')}`;
+  return named.length === 0 ? '' : `: ${named.join(', ')}`;
 }
 
 function columnsFor(): DataTableColumn<QuestionReportRow>[] {

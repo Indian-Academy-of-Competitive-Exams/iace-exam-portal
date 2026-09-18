@@ -19,7 +19,7 @@ export const INACTIVE_CONFIG_MESSAGE =
   'That config is retired. Pick another, or reactivate it first.';
 
 export const LOCKED_CONFIG_MESSAGE =
-  'This config is locked — a test built from it has already been sat. Clone it to change its shape; the clone starts where this one left off.';
+  'This config is locked, because a test built from it has already been sat. Clone it to change its shape; the clone starts where this one left off.';
 
 /** What a save is asking to change, once the unfrozen three are set aside. */
 export function locksOutEdit(input: UpdateBaseConfigBody): boolean {
@@ -43,7 +43,7 @@ export function configShapeIssues(
     const untimed = sections.filter((section) => !section.durationSec);
     if (untimed.length > 0) {
       issues.push(
-        `A sectional paper gives every section its own clock — ${untimed.map((section) => section.name).join(', ')} has no time.`,
+        `A sectional paper gives every section its own clock, and ${untimed.map((section) => section.name).join(', ')} has no time.`,
       );
     } else if (durationSec !== undefined) {
       // The section clocks are the ones a candidate sits, so the paper's own has to be their sum.
@@ -57,7 +57,7 @@ export function configShapeIssues(
   }
 
   if (timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length === 0) {
-    issues.push('A session paper is made of modules — add at least one.');
+    issues.push('A session paper is made of modules. Add at least one.');
   }
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {
@@ -83,11 +83,11 @@ export function configDeletionBlocker(usage: {
   testCount: number;
 }): string | null {
   if (usage.locked) {
-    return 'This config is locked, so a test built from it has already been sat. Retire it instead — it keeps its history and is simply no longer offered.';
+    return 'This config is locked, so a test built from it has already been sat. Retire it instead. It keeps its history and is simply no longer offered.';
   }
   if (usage.testCount > 0) {
     const tests = `${usage.testCount} test${usage.testCount === 1 ? '' : 's'}`;
-    return `${tests} inherit their shape from this config. Retire it instead — a retired config keeps everything it has and is simply no longer offered.`;
+    return `${tests} inherit their shape from this config. Retire it instead. A retired config keeps everything it has and is simply no longer offered.`;
   }
   return null;
 }

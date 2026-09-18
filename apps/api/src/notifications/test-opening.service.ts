@@ -74,7 +74,7 @@ export class TestOpeningService {
             studentId,
             type: NOTIFICATION_TYPE.TEST_ASSIGNED,
             title: test.title ?? 'A new test is open',
-            body: 'It is open now, and stays open — sit it whenever you are ready.',
+            body: 'It is open now, and stays open. Sit it whenever you are ready.',
             // The natural key of the fact: this test opening, once, however often the sweep runs.
             dedupeKey: `test-open:${test.id}`,
             testId: test.id,

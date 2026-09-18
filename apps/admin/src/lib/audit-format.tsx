@@ -42,7 +42,7 @@ export function ChangedCell({ row }: Readonly<{ row: RowAction }>) {
   if (row.importLogId) {
     return (
       <Link to={`${ROUTES.AUDIT_IMPORTS}?run=${row.importLogId}`} className={linkVariants()}>
-        From an import — view run
+        From an import. View run
       </Link>
     );
   }
