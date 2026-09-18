@@ -257,6 +257,11 @@ enum ActorType {
   SYSTEM
 }
 
+enum AssignmentRole {
+  TYPIST
+  PROOFREADER
+}
+
 // ============================================================================
 // Exam taxonomy — ExamCourse (enum) → Exam → ExamStage
 // ============================================================================
@@ -384,11 +389,12 @@ model BaseConfigSection {
   // The exam-pattern workbook's own words ("Moderate-Difficult"). Reference only; no draw reads it.
   patternNote       String?
 
-  baseConfig     BaseConfig        @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
-  module         BaseConfigModule? @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
-  subject        Subject?          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  baseConfig     BaseConfig           @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
+  module         BaseConfigModule?    @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
+  subject        Subject?             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   paperQuestions PaperQuestion[]
   sectionStats   TestSectionStat[]
+  assignments    QuestionAssignment[]
 
   @@unique([baseConfigId, moduleId, order])
   @@unique([baseConfigId, id])
@@ -437,25 +443,28 @@ model Question {
   stemHash         String?
   // Times used on a paper; incremented atomically at finalize.
   fixedUseCount    Int             @default(0)
+  assignmentId     String?         @db.Uuid
   createdById      String?         @db.Uuid
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
-  subject        Subject            @relation(fields: [subjectId], references: [id])
-  createdBy      Admin?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  topic          Topic?             @relation(fields: [topicId], references: [id], onDelete: Restrict)
-  currentVersion QuestionVersion?   @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
-  versions       QuestionVersion[]  @relation("QuestionVersions")
+  subject        Subject             @relation(fields: [subjectId], references: [id])
+  createdBy      Admin?              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  topic          Topic?              @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  currentVersion QuestionVersion?    @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
+  versions       QuestionVersion[]   @relation("QuestionVersions")
   paperQuestions PaperQuestion[]
   questionStats  TestQuestionStat[]
   flags          QuestionFlag[]
   savedBy        SavedQuestion[]
+  assignment     QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   @@index([subjectId, difficulty, status])
   @@index([topicId])
   @@index([stemHash])
   @@index([fixedUseCount])
   @@index([createdById])
+  @@index([assignmentId])
   @@index([tags], type: Gin)
 }
 
@@ -510,16 +519,17 @@ model Test {
   // When students were told it had opened. The sweep's watermark: set once, never read as a date.
   announcedAt        DateTime?    @db.Timestamptz(3)
 
-  baseConfig     BaseConfig          @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
-  examStage      ExamStage           @relation(fields: [examStageId], references: [id])
+  baseConfig     BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
+  examStage      ExamStage            @relation(fields: [examStageId], references: [id])
   paperQuestions PaperQuestion[]
+  assignments    QuestionAssignment[]
   attempts       Attempt[]
   notifications  Notification[]
   stat           TestStat?
   sectionStats   TestSectionStat[]
   questionStats  TestQuestionStat[]
   programUnlocks TestProgramUnlock[]
-  testSeries     TestSeries          @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
+  testSeries     TestSeries           @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -554,6 +564,32 @@ model PaperQuestion {
   @@index([questionId])
   @@index([questionVersionId])
   @@index([baseConfigId, baseConfigSectionId])
+}
+
+// One person's job on one section of one test. Two rows per section: who types it, who reads it.
+model QuestionAssignment {
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  testId              String         @db.Uuid
+  baseConfigId        String         @db.Uuid
+  baseConfigSectionId String         @db.Uuid
+  assigneeId          String         @db.Uuid
+  role                AssignmentRole
+  // An informal reminder. It gates nothing and blocks nothing.
+  dueAt               DateTime?      @db.Timestamptz(3)
+  // The whole state: null is outstanding, set is done. No status enum to keep in step.
+  finalizedAt         DateTime?      @db.Timestamptz(3)
+  createdById         String?        @db.Uuid
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+
+  test              Test              @relation(fields: [testId, baseConfigId], references: [id, baseConfigId], onDelete: Cascade, onUpdate: NoAction)
+  baseConfigSection BaseConfigSection @relation(fields: [baseConfigId, baseConfigSectionId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
+  assignee          Admin             @relation("AssignmentAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  questions         Question[]
+
+  @@unique([testId, baseConfigSectionId, role])
+  @@index([assigneeId, finalizedAt])
+  @@index([testId])
 }
 
 // ============================================================================
@@ -732,6 +768,7 @@ model Admin {
   announcementsSent Announcement[]
   // The one createdById with a real relation: a draft names its author on screen and in a filter.
   questionsAuthored Question[]
+  assignments       QuestionAssignment[]     @relation("AssignmentAssignee")
 }
 
 // One row per grant. featureKey mirrors the code-owned FEATURE_KEYS enum and is

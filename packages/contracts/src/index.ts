@@ -22,6 +22,7 @@ export * from './questions';
 export * from './question-rules';
 export * from './question-flags';
 export * from './authoring';
+export * from './assignments';
 export * from './dashboard';
 export * from './health';
 export * from './client';
