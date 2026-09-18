@@ -7,7 +7,12 @@ import {
   type AnswerKey,
   type PaperQuestionStatus,
 } from '@iace/contracts';
-import { scorePaper, type ScorableQuestion } from '../src/attempts/score-paper';
+import {
+  packedSections,
+  scorePaper,
+  sectionScoresIn,
+  type ScorableQuestion,
+} from '../src/attempts/score-paper';
 import { rowAt } from './support/fakes';
 
 const MARKS = 2;
@@ -256,5 +261,46 @@ describe('scorePaper — the totals a score card reads', () => {
       unattemptedCount: 0,
       sections: [],
     });
+  });
+});
+
+describe('section scores — stored by position, read back by name', () => {
+  const marked = [
+    {
+      baseConfigSectionId: 'sec_a',
+      score: 68.25,
+      correctCount: 42,
+      wrongCount: 10,
+      unattemptedCount: 18,
+      timeSpentSec: 700,
+    },
+    {
+      baseConfigSectionId: 'sec_b',
+      score: -0.5,
+      correctCount: 0,
+      wrongCount: 1,
+      unattemptedCount: 29,
+      timeSpentSec: 0,
+    },
+  ];
+
+  /** The failure this prevents: a score card reading a section's marks out of the wrong slot. */
+  it('reads back what it wrote, in the order it wrote it', () => {
+    assert.deepEqual(sectionScoresIn(packedSections(marked)), marked);
+  });
+
+  it('writes each section as its id and five numbers', () => {
+    assert.deepEqual(packedSections(marked)[0], ['sec_a', 68.25, 42, 10, 18, 700]);
+  });
+
+  it('reads a column no scorer has written yet as nothing', () => {
+    assert.equal(sectionScoresIn(null), null);
+    assert.equal(sectionScoresIn(undefined), null);
+    assert.deepEqual(sectionScoresIn([]), []);
+  });
+
+  /** A row left in the shape before this format, or half-written, is not marks to show anybody. */
+  it('leaves out an entry that is not a section', () => {
+    assert.deepEqual(sectionScoresIn([{ baseConfigSectionId: 'sec_a', score: 1 }, ['sec_b']]), []);
   });
 });

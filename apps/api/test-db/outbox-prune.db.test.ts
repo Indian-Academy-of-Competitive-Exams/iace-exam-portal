@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   OUTBOX_PRUNE_PAGE,
@@ -21,13 +22,22 @@ after(() => prisma.$disconnect());
 
 const daysBefore = (days: number) => new Date(NOW.getTime() - days * MILLISECONDS_PER_DAY);
 
+const idCache = new Map<string, string>();
+const idFor = (label: string): string => {
+  const cached = idCache.get(label);
+  if (cached) return cached;
+  const id = randomUUID();
+  idCache.set(label, id);
+  return id;
+};
+
 /** Scoring requests, relayed at the instant given or never; each created before it was relayed. */
 const requests = (entries: Record<string, Date | null>) =>
   prisma.outboxEvent.createMany({
-    data: Object.entries(entries).map(([id, processedAt]) => ({
-      id,
+    data: Object.entries(entries).map(([label, processedAt]) => ({
+      id: idFor(label),
       aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-      aggregateId: `att_${id}`,
+      aggregateId: randomUUID(),
       eventType: SCORING_REQUEST.EVENT_TYPE,
       payload: { testId: 'tst_1' },
       createdAt: processedAt ?? daysBefore(OUTBOX_RETENTION_DAYS + 30),
@@ -45,7 +55,7 @@ describe('OutboxPruneProcessor', () => {
     await requests({ old: daysBefore(OUTBOX_RETENTION_DAYS + 1), recent: daysBefore(1) });
 
     assert.equal(await pruner.prune(NOW), 1);
-    assert.deepEqual(await idsLeft(), ['recent']);
+    assert.deepEqual(await idsLeft(), [idFor('recent')]);
   });
 
   /** The failure this prevents: deleting a request would strand its attempt unscored forever. */
@@ -53,7 +63,7 @@ describe('OutboxPruneProcessor', () => {
     await requests({ stranded: null, relayed: daysBefore(OUTBOX_RETENTION_DAYS + 1) });
 
     assert.equal(await pruner.prune(NOW), 1);
-    assert.deepEqual(await idsLeft(), ['stranded']);
+    assert.deepEqual(await idsLeft(), [idFor('stranded')]);
   });
 
   /** A neglected table is drained over several runs rather than in one lock nobody can wait out. */
@@ -75,6 +85,6 @@ describe('OutboxPruneProcessor', () => {
     await requests({ fresh: daysBefore(1) });
 
     assert.equal(await pruner.prune(NOW), 0);
-    assert.deepEqual(await idsLeft(), ['fresh']);
+    assert.deepEqual(await idsLeft(), [idFor('fresh')]);
   });
 });

@@ -7,6 +7,9 @@
 -- Nothing moves: no student holds a device token yet, so the table starts empty and the new
 -- DeliveryChannel value is unused until the first phone registers. Postgres refuses an enum
 -- value used in the transaction that created it, and nothing here reads MOBILE_PUSH.
+--
+-- Dated after every_id_is_a_uuid deliberately: this table is created with uuid keys rather than
+-- created as text and converted, so the conversion never has to know it existed.
 -- CreateEnum
 CREATE TYPE "DevicePlatform" AS ENUM ('ANDROID', 'IOS');
 
@@ -15,8 +18,8 @@ ALTER TYPE "DeliveryChannel" ADD VALUE 'MOBILE_PUSH';
 
 -- CreateTable
 CREATE TABLE "PushDevice" (
-    "id" TEXT NOT NULL,
-    "studentId" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "studentId" UUID NOT NULL,
     "token" TEXT NOT NULL,
     "platform" "DevicePlatform" NOT NULL,
     "deviceName" TEXT,

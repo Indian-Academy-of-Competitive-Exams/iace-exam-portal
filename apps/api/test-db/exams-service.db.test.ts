@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
@@ -15,6 +16,16 @@ import { ExamsService } from '../src/configs/exams.service';
 import { StudentsService } from '../src/students';
 import { FakeEventBus, FakeQueue, fakeStartingPins } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma, uid } from './support/database';
+
+/** One uuid per label, shared across the file so a test can name an id by what it means. */
+const idCache = new Map<string, string>();
+const idFor = (label: string): string => {
+  const cached = idCache.get(label);
+  if (cached) return cached;
+  const id = randomUUID();
+  idCache.set(label, id);
+  return id;
+};
 
 const prisma = testPrisma();
 
@@ -34,11 +45,17 @@ interface ExamRow {
 async function serviceWith(exams: ExamRow[] = [{}]) {
   for (const { stages = 0, ...exam } of exams) {
     const row = await prisma.exam.create({
-      data: { id: 'exam_1', code: 'SSC CGL', name: 'SSC CGL', course: EXAM_COURSE.SSC, ...exam },
+      data: {
+        id: idFor('exam_1'),
+        code: 'SSC CGL',
+        name: 'SSC CGL',
+        course: EXAM_COURSE.SSC,
+        ...exam,
+      },
     });
     for (let n = 0; n < stages; n += 1) {
       await prisma.examStage.create({
-        data: { examId: row.id, stageKey: uid('STAGE'), name: `Tier ${n + 1}` },
+        data: { examId: row.id, stageKey: uid(), name: `Tier ${n + 1}` },
       });
     }
   }
@@ -59,7 +76,12 @@ async function serviceWith(exams: ExamRow[] = [{}]) {
 const listQuery = (over: Partial<ExamListQueryInput> = {}): ExamListQuery =>
   examListQuerySchema.parse({ page: '1', pageSize: '20', ...over });
 
-const RRB_JE: ExamRow = { id: 'exam_2', code: 'RRB JE', name: 'RRB JE', course: EXAM_COURSE.RRB };
+const RRB_JE: ExamRow = {
+  id: idFor('exam_2'),
+  code: 'RRB JE',
+  name: 'RRB JE',
+  course: EXAM_COURSE.RRB,
+};
 
 const refusedWith = (code: string, field?: string) => (error: unknown) =>
   AppException.is(error) &&
@@ -73,7 +95,7 @@ describe('ExamsService — listing', () => {
   it('reports each exam with the number of stages hanging off it, dates as strings', async () => {
     const service = await serviceWith([
       { stages: 2 },
-      { id: 'exam_2', name: 'SSC CHSL', code: 'SSC CHSL' },
+      { id: idFor('exam_2'), name: 'SSC CHSL', code: 'SSC CHSL' },
     ]);
 
     const page = await service.list(listQuery());
@@ -88,7 +110,7 @@ describe('ExamsService — listing', () => {
   it('hides retired exams when the caller asks for active ones only', async () => {
     const service = await serviceWith([
       {},
-      { id: 'exam_2', name: 'OLD', code: 'OLD', isActive: false },
+      { id: idFor('exam_2'), name: 'OLD', code: 'OLD', isActive: false },
     ]);
 
     assert.equal((await service.list(listQuery())).total, 2);
@@ -99,7 +121,7 @@ describe('ExamsService — listing', () => {
     const service = await serviceWith([
       {},
       RRB_JE,
-      { id: 'exam_3', code: 'IBPS PO', name: 'IBPS PO', course: EXAM_COURSE.BANKING },
+      { id: idFor('exam_3'), code: 'IBPS PO', name: 'IBPS PO', course: EXAM_COURSE.BANKING },
     ]);
 
     const one = await service.list(listQuery({ course: EXAM_COURSE.RRB }));
@@ -159,7 +181,7 @@ describe('ExamsService — updating', () => {
     const service = await serviceWith();
     await enrolled(['SSC CGL']);
 
-    const updated = await service.update('exam_1', { name: 'SSC Combined Graduate Level' });
+    const updated = await service.update(idFor('exam_1'), { name: 'SSC Combined Graduate Level' });
 
     assert.deepEqual([updated.name, updated.code], ['SSC Combined Graduate Level', 'SSC CGL']);
   });
@@ -167,9 +189,12 @@ describe('ExamsService — updating', () => {
   it('retires and reactivates one, and changes the code while nothing references it', async () => {
     const service = await serviceWith();
 
-    assert.equal((await service.update('exam_1', { isActive: false })).isActive, false);
-    assert.equal((await service.update('exam_1', { isActive: true })).isActive, true);
-    assert.equal((await service.update('exam_1', { code: 'SSC CGL T1' })).code, 'SSC CGL T1');
+    assert.equal((await service.update(idFor('exam_1'), { isActive: false })).isActive, false);
+    assert.equal((await service.update(idFor('exam_1'), { isActive: true })).isActive, true);
+    assert.equal(
+      (await service.update(idFor('exam_1'), { code: 'SSC CGL T1' })).code,
+      'SSC CGL T1',
+    );
   });
 
   /** Nothing links an enrolment back to this row, so a code change would silently detach every one. */
@@ -178,15 +203,15 @@ describe('ExamsService — updating', () => {
     await enrolled(['SSC CGL']);
 
     await assert.rejects(
-      () => service.update('exam_1', { code: 'SSC CGL T1' }),
+      () => service.update(idFor('exam_1'), { code: 'SSC CGL T1' }),
       refusedWith(ErrorCodes.CONFLICT, 'code'),
     );
     assert.equal(
-      (await prisma.exam.findUniqueOrThrow({ where: { id: 'exam_1' } })).code,
+      (await prisma.exam.findUniqueOrThrow({ where: { id: idFor('exam_1') } })).code,
       'SSC CGL',
     );
     assert.equal(
-      (await service.update('exam_1', { code: 'SSC CGL', isActive: false })).isActive,
+      (await service.update(idFor('exam_1'), { code: 'SSC CGL', isActive: false })).isActive,
       false,
     );
   });
@@ -195,7 +220,7 @@ describe('ExamsService — updating', () => {
     const service = await serviceWith([]);
 
     await assert.rejects(
-      () => service.update('nope', { isActive: false }),
+      () => service.update(randomUUID(), { isActive: false }),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
@@ -205,7 +230,7 @@ describe('ExamsService — deleting', () => {
   it('deletes an exam nothing depends on', async () => {
     const service = await serviceWith();
 
-    await service.remove('exam_1');
+    await service.remove(idFor('exam_1'));
 
     assert.equal(await prisma.exam.count(), 0);
   });
@@ -214,7 +239,7 @@ describe('ExamsService — deleting', () => {
   it('refuses one that still has stages, and says how many', async () => {
     const service = await serviceWith([{ stages: 1 }]);
 
-    await assert.rejects(() => service.remove('exam_1'), /1 stage\b/);
+    await assert.rejects(() => service.remove(idFor('exam_1')), /1 stage\b/);
     assert.equal(await prisma.exam.count(), 1, 'nothing should have been deleted');
   });
 
@@ -222,7 +247,7 @@ describe('ExamsService — deleting', () => {
     const service = await serviceWith();
     await enrolled(['SSC CGL'], ['SSC CGL']);
 
-    await assert.rejects(() => service.remove('exam_1'), /2 enrolled students/);
+    await assert.rejects(() => service.remove(idFor('exam_1')), /2 enrolled students/);
   });
 });
 

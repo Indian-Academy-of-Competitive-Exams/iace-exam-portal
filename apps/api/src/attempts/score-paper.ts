@@ -40,9 +40,34 @@ export interface PaperScore {
   sections: AttemptSectionScore[];
 }
 
+/** How a section is stored: the field names, repeated per section per sitting, were most of the row. */
+type PackedSection = [string, number, number, number, number, number];
+
+const isPacked = (row: unknown): row is PackedSection => Array.isArray(row) && row.length === 6;
+
+/** What the scorer writes to the column; every reader goes back through `sectionScoresIn`. */
+export function packedSections(sections: readonly AttemptSectionScore[]): PackedSection[] {
+  return sections.map((section) => [
+    section.baseConfigSectionId,
+    section.score,
+    section.correctCount,
+    section.wrongCount,
+    section.unattemptedCount,
+    section.timeSpentSec,
+  ]);
+}
+
 /** The `Json?` column read back. Null until a scorer has written it, which is most of a sitting. */
 export function sectionScoresIn(stored: unknown): AttemptSectionScore[] | null {
-  return Array.isArray(stored) ? (stored as AttemptSectionScore[]) : null;
+  if (!Array.isArray(stored)) return null;
+  return stored.filter(isPacked).map((packed) => ({
+    baseConfigSectionId: packed[0],
+    score: packed[1],
+    correctCount: packed[2],
+    wrongCount: packed[3],
+    unattemptedCount: packed[4],
+    timeSpentSec: packed[5],
+  }));
 }
 
 /** Marks are Decimal(6,2), so everything is summed in whole hundredths and divided once at the end. */

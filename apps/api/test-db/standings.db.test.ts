@@ -33,7 +33,7 @@ async function sitter(testId: string, score: number, sat: Sat = {}) {
 /** The database's own collation decides which of two ids is lower, so it is asked, not assumed. */
 async function inIdOrder(ids: readonly string[]): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-    SELECT "id" FROM "Attempt" WHERE "id" = ANY(${[...ids]}::text[]) ORDER BY "id"
+    SELECT "id" FROM "Attempt" WHERE "id" = ANY(${[...ids]}::uuid[]) ORDER BY "id"
   `);
   return rows.map((row) => row.id);
 }

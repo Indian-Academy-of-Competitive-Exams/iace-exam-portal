@@ -72,7 +72,7 @@ const OMR_FILL_BY_STATE: Readonly<Record<AnswerState, number>> = {
   [ANSWER_STATE.ANSWERED]: OMR_FILL.FULL,
 };
 
-/** One section's slice of a scored paper — exactly what `Attempt.sectionScores` holds. */
+/** One section's slice of a scored paper; the column stores it by position (`score-paper.ts`). */
 export const attemptSectionScoreSchema = z.object({
   baseConfigSectionId: z.string(),
   score: z.number(),

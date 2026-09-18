@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
@@ -38,8 +39,18 @@ import {
   uid,
 } from './support/database';
 
-const ADMIN = 'adm_1';
-const OTHER_ADMIN = 'adm_2';
+const ADMIN = randomUUID();
+const OTHER_ADMIN = randomUUID();
+
+/** One uuid per label, shared across the file so a test can name an id by what it means. */
+const idCache = new Map<string, string>();
+const idFor = (label: string): string => {
+  const cached = idCache.get(label);
+  if (cached) return cached;
+  const id = randomUUID();
+  idCache.set(label, id);
+  return id;
+};
 
 const prisma = testPrisma();
 
@@ -56,6 +67,7 @@ async function build(seeded: Seeded[] = [], client: PrismaService = prisma) {
       subjectId: BANK.QUANT,
       topicId: BANK.ARITHMETIC,
       ...question,
+      id: idFor(question.id),
     });
   }
   const audit = new AuditContext();
@@ -123,7 +135,7 @@ async function heldBy(
   const paperRow = (onQuestion: string, onVersion: string) =>
     prisma.paperQuestion.create({
       data: {
-        id: uid('pq'),
+        id: uid(),
         testId: test.id,
         baseConfigId: catalog.baseConfigId,
         baseConfigSectionId: section.id,
@@ -269,18 +281,18 @@ describe('QuestionsService — retiring and status', () => {
 
     assert.deepEqual(
       bank.items.map((item) => item.id),
-      ['q_live'],
+      [idFor('q_live')],
     );
     assert.deepEqual(
       retired.items.map((item) => item.id),
-      ['q_dead'],
+      [idFor('q_dead')],
     );
   });
 
   it('answers NOT_FOUND for a question that is not there', async () => {
     const { questions } = await build();
 
-    await assert.rejects(() => questions.detail('nope'), missing);
+    await assert.rejects(() => questions.detail(randomUUID()), missing);
   });
 });
 
@@ -551,13 +563,17 @@ describe('QuestionsService — a question returns to draft while nothing uses it
   /** A batch is one decision, so one row that cannot make the move refuses all of it. */
   it('refuses a batch holding one question something uses', async () => {
     const { questions } = await build([{ id: 'q_free' }, { id: 'q_drawn' }]);
-    await heldBy('paper', 'q_drawn', 'q_drawn_v1');
+    await heldBy('paper', idFor('q_drawn'), await currentVersionOf(idFor('q_drawn')));
 
     await assert.rejects(
-      () => questions.bulkSetStatus({ ids: ['q_free', 'q_drawn'], status: QUESTION_STATUS.DRAFT }),
+      () =>
+        questions.bulkSetStatus({
+          ids: [idFor('q_free'), idFor('q_drawn')],
+          status: QUESTION_STATUS.DRAFT,
+        }),
       conflict,
     );
-    assert.equal((await questionRow('q_free')).status, QUESTION_STATUS.ACTIVE);
+    assert.equal((await questionRow(idFor('q_free'))).status, QUESTION_STATUS.ACTIVE);
   });
 
   /** Taxonomy is what a paper draws on, so it settles when the question leaves the draft. */
@@ -724,7 +740,7 @@ describe('QuestionsService.remove — the one hard delete', () => {
   it('answers NOT_FOUND for a question that is not there', async () => {
     const { questions } = await build();
 
-    await assert.rejects(() => questions.remove('nope'), missing);
+    await assert.rejects(() => questions.remove(randomUUID()), missing);
   });
 
   /** Every other path refuses ARCHIVED as a destination; creating straight into it is the last door. */
@@ -875,13 +891,13 @@ describe('bulkSetStatus', () => {
     const { questions } = await drafts();
 
     const result = await questions.bulkSetStatus({
-      ids: ['q1', 'q2'],
+      ids: [idFor('q1'), idFor('q2')],
       status: QUESTION_STATUS.ACTIVE,
     });
 
     assert.equal(result.updated, 2);
-    assert.equal((await questionRow('q1')).status, QUESTION_STATUS.ACTIVE);
-    assert.equal((await questionRow('q3')).status, QUESTION_STATUS.DRAFT);
+    assert.equal((await questionRow(idFor('q1'))).status, QUESTION_STATUS.ACTIVE);
+    assert.equal((await questionRow(idFor('q3'))).status, QUESTION_STATUS.DRAFT);
   });
 
   /** The same row twice must not be counted twice, or the screen reports work it did not do. */
@@ -889,11 +905,11 @@ describe('bulkSetStatus', () => {
     const { questions } = await drafts();
 
     const repeated = await questions.bulkSetStatus({
-      ids: ['q1', 'q1', 'q1'],
+      ids: [idFor('q1'), idFor('q1'), idFor('q1')],
       status: QUESTION_STATUS.ACTIVE,
     });
     const partlyGone = await questions.bulkSetStatus({
-      ids: ['q2', 'gone'],
+      ids: [idFor('q2'), idFor('gone')],
       status: QUESTION_STATUS.ACTIVE,
     });
 
@@ -905,19 +921,19 @@ describe('bulkSetStatus', () => {
 describe('QuestionsService — an open proof-reading flag blocks the way into circulation', () => {
   it('refuses a single approval while a flag is open, and lets it through once settled', async () => {
     const { questions } = await build([{ id: 'q1', status: QUESTION_STATUS.DRAFT }]);
-    const raised = await flag('q1');
+    const raised = await flag(idFor('q1'));
 
     await assert.rejects(
-      () => questions.setStatus('q1', { status: QUESTION_STATUS.ACTIVE }),
+      () => questions.setStatus(idFor('q1'), { status: QUESTION_STATUS.ACTIVE }),
       conflict,
     );
-    assert.equal((await questionRow('q1')).status, QUESTION_STATUS.DRAFT);
+    assert.equal((await questionRow(idFor('q1'))).status, QUESTION_STATUS.DRAFT);
 
     await prisma.questionFlag.update({
       where: { id: raised.id },
       data: { status: QUESTION_FLAG_STATUS.RESOLVED },
     });
-    const approved = await questions.setStatus('q1', { status: QUESTION_STATUS.ACTIVE });
+    const approved = await questions.setStatus(idFor('q1'), { status: QUESTION_STATUS.ACTIVE });
 
     assert.equal(approved.status, QUESTION_STATUS.ACTIVE);
   });
@@ -928,11 +944,14 @@ describe('QuestionsService — an open proof-reading flag blocks the way into ci
       { id: 'q_clean', status: QUESTION_STATUS.DRAFT },
       { id: 'q_flagged', status: QUESTION_STATUS.DRAFT },
     ]);
-    await flag('q_flagged');
+    await flag(idFor('q_flagged'));
 
     await assert.rejects(
       () =>
-        questions.bulkSetStatus({ ids: ['q_clean', 'q_flagged'], status: QUESTION_STATUS.ACTIVE }),
+        questions.bulkSetStatus({
+          ids: [idFor('q_clean'), idFor('q_flagged')],
+          status: QUESTION_STATUS.ACTIVE,
+        }),
       conflict,
     );
     const statuses = await prisma.question.findMany({ select: { status: true } });
@@ -944,10 +963,10 @@ describe('QuestionsService — an open proof-reading flag blocks the way into ci
       { id: 'q1', status: QUESTION_STATUS.DRAFT },
       { id: 'q2', status: QUESTION_STATUS.DRAFT },
     ]);
-    await flag('q1', QUESTION_FLAG_STATUS.DISMISSED);
+    await flag(idFor('q1'), QUESTION_FLAG_STATUS.DISMISSED);
 
     const result = await questions.bulkSetStatus({
-      ids: ['q1', 'q2'],
+      ids: [idFor('q1'), idFor('q2')],
       status: QUESTION_STATUS.ACTIVE,
     });
 
@@ -973,8 +992,8 @@ describe('QuestionsService — an open proof-reading flag blocks the way into ci
   /** The count is what the approvals screen shows, so the block is never a surprise. */
   it('counts only the open flags on a listed question', async () => {
     const { questions } = await build([{ id: 'q1' }]);
-    await flag('q1');
-    await flag('q1', QUESTION_FLAG_STATUS.RESOLVED);
+    await flag(idFor('q1'));
+    await flag(idFor('q1'), QUESTION_FLAG_STATUS.RESOLVED);
 
     const page = await questions.list(listQuery());
 

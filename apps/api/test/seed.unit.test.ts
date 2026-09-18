@@ -12,6 +12,10 @@ const SEED = readFileSync(join(__dirname, '../../../prisma/seed.sql'), 'utf8');
 
 const SEEDED_TABLES = [...SEED.matchAll(/INSERT INTO "(\w+)"/g)].map((match) => match[1] ?? '');
 
+/** Ids are uuids, so what a seeded row can promise is their shape and that they line up. */
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const isUuid = new RegExp(`^${UUID}$`);
+
 /** The file's own header explains why an arbiter is wrong, so it quotes the thing it forbids. */
 const STATEMENTS = SEED.replace(/^\s*--.*$/gm, '');
 
@@ -110,7 +114,7 @@ describe('reading the seed', () => {
   it('does not split an array literal into extra columns', () => {
     const config = insertedRows('BaseConfig')[0];
     assert.ok(config);
-    assert.equal(config[0], 'config_ssc_cgl_t1');
+    assert.match(config[0] ?? '', isUuid);
     assert.ok(config.some((cell) => cell.startsWith('ARRAY[')));
   });
 });
@@ -162,7 +166,7 @@ describe('the SSC CGL Tier 1 default config', () => {
   const config = new RegExp('INSERT INTO "BaseConfig"[\\s\\S]*?;').exec(SEED)?.[0] ?? '';
 
   it('is the stage default, so a new test starts from it', () => {
-    assert.match(config, /'stage_ssc_cgl_t1', '[^']*', true,/);
+    assert.match(config, new RegExp(`'${UUID}', '[^']*', true,`));
   });
 
   /** SSC CGL renders both languages together; the student does not pick one. */
@@ -204,7 +208,7 @@ describe('the SSC CGL Tier 1 default config', () => {
   /** A null subject rolls every question up as unclassified, and the analytics say nothing. */
   it('names a subject for every section', () => {
     for (const cells of insertedRows('BaseConfigSection')) {
-      assert.match(cells[4] ?? '', /^subject_\w+$/);
+      assert.match(cells[4] ?? '', isUuid);
     }
   });
 });

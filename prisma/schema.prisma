@@ -262,7 +262,7 @@ enum ActorType {
 // ============================================================================
 
 model Exam {
-  id          String     @id @default(cuid())
+  id          String     @id @default(uuid(7)) @db.Uuid
   course      ExamCourse
   // Student.enrolledExams holds these codes, so a code is never re-used.
   code        String     @unique
@@ -279,8 +279,8 @@ model Exam {
 
 // The Stage/Paper level — what carries a base config, a series and a test.
 model ExamStage {
-  id          String           @id @default(cuid())
-  examId      String
+  id          String           @id @default(uuid(7)) @db.Uuid
+  examId      String           @db.Uuid
   stageKey    String           @unique
   name        String
   order       Int              @default(0)
@@ -307,11 +307,11 @@ model ExamStage {
 // ============================================================================
 
 model BaseConfig {
-  id                   String              @id @default(cuid())
-  examStageId          String
+  id                   String              @id @default(uuid(7)) @db.Uuid
+  examStageId          String              @db.Uuid
   name                 String
   isDefault            Boolean             @default(false)
-  clonedFromId         String?
+  clonedFromId         String?             @db.Uuid
   version              Int                 @default(1)
   isActive             Boolean             @default(true)
   locked               Boolean             @default(false)
@@ -333,7 +333,7 @@ model BaseConfig {
   featureFlags         Json?
   // Which scoring algorithm produced a result — bump to reproduce history exactly.
   scoringVersion       Int                 @default(1)
-  createdById          String?
+  createdById          String?             @db.Uuid
   createdAt            DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -353,8 +353,8 @@ model BaseConfig {
 // Session/module layer above sections. The table and the config seam ship in V1;
 // the SESSION_MODULE_LOCKED runtime engine is the deferred part.
 model BaseConfigModule {
-  id           String @id @default(cuid())
-  baseConfigId String
+  id           String @id @default(uuid(7)) @db.Uuid
+  baseConfigId String @db.Uuid
   name         String
   order        Int
   durationSec  Int?
@@ -367,12 +367,12 @@ model BaseConfigModule {
 }
 
 model BaseConfigSection {
-  id                String    @id @default(cuid())
-  baseConfigId      String
-  moduleId          String?
+  id                String    @id @default(uuid(7)) @db.Uuid
+  baseConfigId      String    @db.Uuid
+  moduleId          String?   @db.Uuid
   name              String
   order             Int
-  subjectId         String?
+  subjectId         String?   @db.Uuid
   questionCount     Int
   marksPerQuestion  Decimal   @db.Decimal(6, 2)
   negativeMarks     Decimal   @db.Decimal(6, 2)
@@ -402,7 +402,7 @@ model BaseConfigSection {
 // ============================================================================
 
 model Subject {
-  id   String  @id @default(cuid())
+  id   String  @id @default(uuid(7)) @db.Uuid
   name String  @unique
   code String? @unique
 
@@ -413,8 +413,8 @@ model Subject {
 }
 
 model Topic {
-  id        String @id @default(cuid())
-  subjectId String
+  id        String @id @default(uuid(7)) @db.Uuid
+  subjectId String @db.Uuid
   name      String
 
   subject   Subject    @relation(fields: [subjectId], references: [id])
@@ -424,20 +424,20 @@ model Topic {
 }
 
 model Question {
-  id               String          @id @default(cuid())
+  id               String          @id @default(uuid(7)) @db.Uuid
   questionCode     String?         @unique
   type             QuestionType    @default(SINGLE_MCQ)
-  subjectId        String
-  topicId          String?
+  subjectId        String          @db.Uuid
+  topicId          String?         @db.Uuid
   difficulty       DifficultyLevel
   status           QuestionStatus  @default(DRAFT)
-  currentVersionId String?
+  currentVersionId String?         @db.Uuid
   // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
   stemHash         String?
   // Times used on a paper; incremented atomically at finalize.
   fixedUseCount    Int             @default(0)
-  createdById      String?
+  createdById      String?         @db.Uuid
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -462,13 +462,13 @@ model Question {
 // Immutable once REFERENCED: editing a DRAFT rewrites its row, any other edit inserts one.
 // Options live in `options` so one read is the whole question on the exam path.
 model QuestionVersion {
-  id          String   @id @default(cuid())
-  questionId  String
+  id          String   @id @default(uuid(7)) @db.Uuid
+  questionId  String   @db.Uuid
   version     Int
   content     Json
   options     Json?
   answerKey   Json?
-  createdById String?
+  createdById String?  @db.Uuid
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   question       Question        @relation("QuestionVersions", fields: [questionId], references: [id])
@@ -485,11 +485,11 @@ model QuestionVersion {
 // ============================================================================
 
 model Test {
-  id                 String       @id @default(cuid())
+  id                 String       @id @default(uuid(7)) @db.Uuid
   title              String?
-  baseConfigId       String
+  baseConfigId       String       @db.Uuid
   // Denormalised from BaseConfig so the composite FK below is always enforced.
-  examStageId        String
+  examStageId        String       @db.Uuid
   scope              TestScope    @default(FULL)
   scopeRef           Json?
   questionPoolFilter Json?
@@ -500,10 +500,10 @@ model Test {
   // Optimistic lock — finalize is a conditional UPDATE ... WHERE version = $n.
   version            Int          @default(0)
   finalizedAt        DateTime?    @db.Timestamptz(3)
-  createdById        String?
+  createdById        String?      @db.Uuid
   createdAt          DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
-  testSeriesId       String
+  testSeriesId       String       @db.Uuid
   seriesOrder        Int?
   // A test opens and never shuts, and that instant is the whole of its timing.
   opensAt            DateTime?    @db.Timestamptz(3)
@@ -530,12 +530,12 @@ model Test {
 
 // One question on a test's paper. A test has exactly one paper, and every sitting is served it.
 model PaperQuestion {
-  id                  String              @id @default(cuid())
-  testId              String
-  baseConfigId        String
-  baseConfigSectionId String
-  questionId          String
-  questionVersionId   String
+  id                  String              @id @default(uuid(7)) @db.Uuid
+  testId              String              @db.Uuid
+  baseConfigId        String              @db.Uuid
+  baseConfigSectionId String              @db.Uuid
+  questionId          String              @db.Uuid
+  questionVersionId   String              @db.Uuid
   order               Int
   marks               Decimal             @db.Decimal(6, 2)
   negativeMarks       Decimal             @db.Decimal(6, 2)
@@ -561,9 +561,9 @@ model PaperQuestion {
 // ============================================================================
 
 model Attempt {
-  id               String              @id @default(cuid())
-  testId           String
-  studentId        String
+  id               String              @id @default(uuid(7)) @db.Uuid
+  testId           String              @db.Uuid
+  studentId        String              @db.Uuid
   attemptNo        Int                 @default(1)
   // True only for the single ranked attempt; the cohort rollup fires on it alone.
   isGraded         Boolean             @default(true)
@@ -588,7 +588,7 @@ model Attempt {
   // Void (support console): archive, never delete. When set, excluded from rollups/leaderboard/cohort reads.
   voidedAt         DateTime?           @db.Timestamptz(3)
   voidReason       String?
-  voidedById       String?
+  voidedById       String?             @db.Uuid
 
   test             Test              @relation(fields: [testId], references: [id])
   student          Student           @relation(fields: [studentId], references: [id])
@@ -599,12 +599,11 @@ model Attempt {
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
   @@index([testId, status])
-  @@index([testId, score])
 }
 
 // One sitting's answers in one row: `answers` holds a slot per paper row in paper order, `verdicts` the scorer's marks for each.
 model AttemptSheet {
-  attemptId String   @id
+  attemptId String   @id @db.Uuid
   answers   Json
   verdicts  Json?
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -621,7 +620,7 @@ model AttemptSheet {
 // (WHERE deletedAt IS NULL) written in the migration, so a soft-deleted row
 // releases its number.
 model Student {
-  id               String       @id @default(cuid())
+  id               String       @id @default(uuid(7)) @db.Uuid
   mobile           String
   externalRef      String?
   studentType      StudentType
@@ -630,7 +629,7 @@ model Student {
   programs         String[]     @default([])
   // Exam.code values, app-validated against Exam.
   enrolledExams    String[]     @default([])
-  currentBranchId  String?
+  currentBranchId  String?      @db.Uuid
   pinHash          String?
   pinIsDefault     Boolean      @default(true)
   fullName         String?
@@ -642,7 +641,7 @@ model Student {
   // Set by an erasure request. deletedAt says the account is closed; this says the PII is gone,
   // and the two are separate facts a regulator asks about separately.
   anonymizedAt     DateTime?    @db.Timestamptz(3)
-  createdById      String?
+  createdById      String?      @db.Uuid
   createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -671,8 +670,8 @@ model Student {
 // Aadhaar/PAN images are never stored here — only the verification status.
 // Writes to motherName/fatherName/dob must recompute Student.preTestReady.
 model StudentProfile {
-  id                String    @id @default(cuid())
-  studentId         String    @unique
+  id                String    @id @default(uuid(7)) @db.Uuid
+  studentId         String    @unique @db.Uuid
   motherName        String?
   fatherName        String?
   dob               DateTime? @db.Date
@@ -703,8 +702,8 @@ enum ConsentPurpose {
 // Deferred (docs/superpowers plan, 6A WS3.6): parental consent for minors. DOB is already captured
 // on StudentProfile, so a MINOR purpose and a guardian column are additive when that lands.
 model StudentConsent {
-  id         String         @id @default(cuid())
-  studentId  String
+  id         String         @id @default(uuid(7)) @db.Uuid
+  studentId  String         @db.Uuid
   purpose    ConsentPurpose
   // The notice this answers, e.g. "2026-09-01". Meaningless to compare across purposes.
   version    String
@@ -719,12 +718,12 @@ model StudentConsent {
 // The first super admin is inserted by SQL — nothing in the codebase creates one.
 // No soft delete: createdById on everything they made points here.
 model Admin {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid(7)) @db.Uuid
   email        String   @unique
   fullName     String?
   isSuperAdmin Boolean  @default(false)
   isActive     Boolean  @default(true)
-  createdById  String?
+  createdById  String?  @db.Uuid
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -738,7 +737,7 @@ model Admin {
 // One row per grant. featureKey mirrors the code-owned FEATURE_KEYS enum and is
 // app-validated — there is no Feature table and the UI never registers a key.
 model AdminFeaturePermission {
-  adminId    String
+  adminId    String          @db.Uuid
   featureKey String
   level      PermissionLevel
 
@@ -757,7 +756,7 @@ model AdminFeaturePermission {
 
 // name carries a partial unique index (WHERE deletedAt IS NULL) from the migration.
 model Branch {
-  id        String     @id @default(cuid())
+  id        String     @id @default(uuid(7)) @db.Uuid
   name      String
   type      BranchType
   isActive  Boolean    @default(true)
@@ -772,7 +771,7 @@ model Branch {
 
 // A new coaching variant is one INSERT, never a migration.
 model Program {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7)) @db.Uuid
   code      String   @unique
   name      String
   isActive  Boolean  @default(true)
@@ -786,17 +785,17 @@ model Program {
 // The unit of offering — a test reaches students only through a series.
 // programCode null = exam/course access; set = program-only.
 model TestSeries {
-  id              String         @id @default(cuid())
+  id              String         @id @default(uuid(7)) @db.Uuid
   name            String
-  examStageId     String?
+  examStageId     String?        @db.Uuid
   programCode     String?
   sequentialTests Boolean        @default(false)
   // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
   kind            TestSeriesKind @default(STANDARD)
-  eventId         String?
+  eventId         String?        @db.Uuid
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
-  branchIds       String[]       @default([])
+  branchIds       String[]       @default([]) @db.Uuid
   isEnabled       Boolean        @default(false)
 
   examStage     ExamStage?     @relation(fields: [examStageId], references: [id], onDelete: Restrict)
@@ -814,10 +813,10 @@ model TestSeries {
 
 // The escape hatch for access that is not exam-, program- or branch-derivable.
 model StudentGrant {
-  studentId    String
-  testSeriesId String
+  studentId    String   @db.Uuid
+  testSeriesId String   @db.Uuid
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  createdById  String?
+  createdById  String?  @db.Uuid
 
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
@@ -828,11 +827,11 @@ model StudentGrant {
 
 // Who an EVENT series reaches: sitters, some of whom are not students yet — unlike a program, which is a fact about being one.
 model Event {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7)) @db.Uuid
   name        String
   description String?
   isActive    Boolean  @default(true)
-  createdById String?
+  createdById String?  @db.Uuid
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -841,8 +840,8 @@ model Event {
 }
 
 model EventCandidate {
-  eventId   String
-  studentId String
+  eventId   String   @db.Uuid
+  studentId String   @db.Uuid
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -854,7 +853,7 @@ model EventCandidate {
 
 // Per-program stagger on when one test opens, on top of Test.opensAt.
 model TestProgramUnlock {
-  testId      String
+  testId      String   @db.Uuid
   programCode String
   opensAt     DateTime @db.Timestamptz(3)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
@@ -871,10 +870,10 @@ model TestProgramUnlock {
 // ============================================================================
 
 model ImportLog {
-  id         String       @id @default(cuid())
+  id         String       @id @default(uuid(7)) @db.Uuid
   feature    AuditFeature
   source     ImportSource
-  actorId    String?
+  actorId    String?      @db.Uuid
   fileS3Key  String?
   total      Int          @default(0)
   created    Int          @default(0)
@@ -892,16 +891,16 @@ model ImportLog {
 }
 
 model RowActionLog {
-  id          String       @id @default(cuid())
+  id          String       @id @default(uuid(7)) @db.Uuid
   feature     AuditFeature
-  entityId    String
+  entityId    String       @db.Uuid
   // The label as it was, so the log survives a rename or a delete.
   entityLabel String?
   action      AuditAction
   actorType   ActorType
-  actorId     String?
+  actorId     String?      @db.Uuid
   changed     Json?
-  importLogId String?
+  importLogId String?      @db.Uuid
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
 
   importLog ImportLog? @relation(fields: [importLogId], references: [id], onDelete: Restrict)
@@ -919,9 +918,9 @@ model RowActionLog {
 // Written in the same transaction as the state change. A relay claims rows with
 // FOR UPDATE SKIP LOCKED; the poll is served by a partial index on pending rows.
 model OutboxEvent {
-  id            String    @id @default(cuid())
+  id            String    @id @default(uuid(7)) @db.Uuid
   aggregateType String
-  aggregateId   String
+  aggregateId   String    @db.Uuid
   eventType     String
   payload       Json?
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
@@ -933,7 +932,7 @@ model OutboxEvent {
 
 // Makes each attempt count exactly once per rollup, across worker retries.
 model ProcessedRollup {
-  attemptId   String
+  attemptId   String   @db.Uuid
   rollupType  String
   processedAt DateTime @default(now()) @db.Timestamptz(3)
 
@@ -947,11 +946,11 @@ model ProcessedRollup {
 // ============================================================================
 
 model Notification {
-  id        String           @id @default(cuid())
+  id        String           @id @default(uuid(7)) @db.Uuid
   // Exactly one recipient, enforced by a CHECK the migration writes by hand. The admin side is
   // shaped for and not built: nulling studentId now is what keeps that migration additive later.
-  studentId String?
-  adminId   String?
+  studentId String?          @db.Uuid
+  adminId   String?          @db.Uuid
   type      NotificationType
   title     String
   body      String?
@@ -962,9 +961,9 @@ model Notification {
   // When what this is about stops being actionable. Null means waiting costs the student nothing.
   actBy     DateTime?        @db.Timestamptz(3)
 
-  testId         String?
-  testSeriesId   String?
-  announcementId String?
+  testId         String?          @db.Uuid
+  testSeriesId   String?          @db.Uuid
+  announcementId String?          @db.Uuid
   isRead         Boolean          @default(false)
   // Which channel actually brought them back, so the policy stops being an assumption.
   openedVia      DeliveryChannel?
@@ -987,7 +986,7 @@ model Notification {
 // What an admin said, to whom, and what it was expected to cost. One row per SEND: there are no
 // drafts, so a row existing means it went out.
 model Announcement {
-  id                 String            @id @default(cuid())
+  id                 String            @id @default(uuid(7)) @db.Uuid
   title              String
   body               String
   // The student filter as written, so "who was this sent to" is answerable and reproducible.
@@ -997,7 +996,7 @@ model Announcement {
   // Counted and priced at SEND time: today's rates would misreport what last month actually cost.
   recipientCount     Int
   estimatedCostPaise Int
-  createdById        String
+  createdById        String            @db.Uuid
   createdAt          DateTime          @default(now()) @db.Timestamptz(3)
 
   createdBy     Admin          @relation(fields: [createdById], references: [id], onDelete: Restrict)
@@ -1009,8 +1008,8 @@ model Announcement {
 
 // One row per channel that can FAIL — in-app has none, because the Notification row IS its delivery.
 model NotificationDelivery {
-  id                String          @id @default(cuid())
-  notificationId    String
+  id                String          @id @default(uuid(7)) @db.Uuid
+  notificationId    String          @db.Uuid
   channel           DeliveryChannel
   status            DeliveryStatus  @default(PENDING)
   // NO_TEMPLATE, NO_CONTACT, ALREADY_READ — why we decided not to spend.
@@ -1040,7 +1039,7 @@ model NotificationDelivery {
 // ============================================================================
 
 model StudentStat {
-  studentId        String    @id
+  studentId        String    @id @db.Uuid
   testsAttempted   Int       @default(0)
   testsEvaluated   Int       @default(0)
   sumScore         Decimal   @default(0) @db.Decimal(16, 2)
@@ -1060,8 +1059,8 @@ model StudentStat {
 
 // Bucketed by scope; "overall" sums the buckets on read. Retakes feed it, the cohort rollups never.
 model StudentSubjectStat {
-  studentId  String
-  subjectId  String
+  studentId  String    @db.Uuid
+  subjectId  String    @db.Uuid
   scope      TestScope
   attempted  Int       @default(0)
   correct    Int       @default(0)
@@ -1077,7 +1076,7 @@ model StudentSubjectStat {
 }
 
 model TestStat {
-  testId           String   @id
+  testId           String   @id @db.Uuid
   attemptCount     Int      @default(0)
   evaluatedCount   Int      @default(0)
   sumScore         Decimal  @default(0) @db.Decimal(18, 2)
@@ -1085,7 +1084,7 @@ model TestStat {
   minScore         Decimal? @db.Decimal(8, 2)
   sumTimeSec       BigInt   @default(0)
   scoreHistogram   Json?
-  topperAttemptId  String?
+  topperAttemptId  String?  @db.Uuid
   // Watermark: rows already folded in, so a rebuild cannot double-count.
   attemptsIncluded Int      @default(0)
   computedAt       DateTime @db.Timestamptz(3)
@@ -1097,8 +1096,8 @@ model TestStat {
 }
 
 model TestSectionStat {
-  testId              String
-  baseConfigSectionId String
+  testId              String   @db.Uuid
+  baseConfigSectionId String   @db.Uuid
   attempted           Int      @default(0)
   sumScore            Decimal  @default(0) @db.Decimal(18, 2)
   sumTimeSec          BigInt   @default(0)
@@ -1113,9 +1112,9 @@ model TestSectionStat {
 
 // Item analysis and distractor counts for a test's paper, from its graded sittings.
 model TestQuestionStat {
-  testId          String
-  paperQuestionId String
-  questionId      String
+  testId          String   @db.Uuid
+  paperQuestionId String   @db.Uuid
+  questionId      String   @db.Uuid
   attemptedCount  Int      @default(0)
   correctCount    Int      @default(0)
   wrongCount      Int      @default(0)
@@ -1156,8 +1155,8 @@ enum QuestionFlagStatus {
 
 //A browser push endpoint. Pruned when a send returns 404/410 (dead subscription).
 model PushSubscription {
-  id         String   @id @default(cuid())
-  studentId  String
+  id         String   @id @default(uuid(7)) @db.Uuid
+  studentId  String   @db.Uuid
   endpoint   String   @unique
   p256dh     String
   auth       String
@@ -1179,8 +1178,8 @@ enum DevicePlatform {
 // carries the keys that encrypt for it, where a device token is one opaque string FCM owns and
 // rotates. Pruned when FCM reports the token unregistered.
 model PushDevice {
-  id         String         @id @default(cuid())
-  studentId  String
+  id         String         @id @default(uuid(7)) @db.Uuid
+  studentId  String         @db.Uuid
   token      String         @unique
   platform   DevicePlatform
   deviceName String?
@@ -1195,12 +1194,12 @@ model PushDevice {
 // Two lists in one table: manual BOOKMARK and auto-collected MISTAKE.
 // Saved by bank `questionId` so the list survives across papers; attempt/paperQuestion are provenance.
 model SavedQuestion {
-  id              String            @id @default(cuid())
-  studentId       String
-  questionId      String
+  id              String            @id @default(uuid(7)) @db.Uuid
+  studentId       String            @db.Uuid
+  questionId      String            @db.Uuid
   kind            SavedQuestionKind
-  attemptId       String?
-  paperQuestionId String?
+  attemptId       String?           @db.Uuid
+  paperQuestionId String?           @db.Uuid
   createdAt       DateTime          @default(now()) @db.Timestamptz(3)
 
   student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -1214,14 +1213,14 @@ model SavedQuestion {
 // (enforced in questions.service assertStatusReachable). raisedById/resolvedById are Admin ids
 // (scalar by design, resolved by a separate lookup, so no lane needs to widen Admin).
 model QuestionFlag {
-  id           String               @id @default(cuid())
-  questionId   String
-  versionId    String?
+  id           String               @id @default(uuid(7)) @db.Uuid
+  questionId   String               @db.Uuid
+  versionId    String?              @db.Uuid
   category     QuestionFlagCategory
   comment      String
   status       QuestionFlagStatus   @default(OPEN)
-  raisedById   String
-  resolvedById String?
+  raisedById   String               @db.Uuid
+  resolvedById String?              @db.Uuid
   resolvedAt   DateTime?            @db.Timestamptz(3)
   createdAt    DateTime             @default(now()) @db.Timestamptz(3)
 

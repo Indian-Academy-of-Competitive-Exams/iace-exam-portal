@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AUDIT_ACTION,
@@ -25,7 +26,10 @@ import {
 } from '../test/support/fakes';
 import { makeQuestionBank, makeStudent, resetDatabase, testPrisma } from './support/database';
 
-const ADMIN = 'adm_1';
+const ADMIN = randomUUID();
+const IMP_1 = randomUUID();
+const STU_1 = randomUUID();
+const STU_2 = randomUUID();
 
 const prisma = testPrisma();
 
@@ -53,7 +57,7 @@ const importLogs = () => prisma.importLog.findMany();
 describe('AuditService.recordImportRows', () => {
   const record = (rows: readonly { entityId: string; action: AuditAction }[]) =>
     new AuditService(prisma, new FakeStorage() as never).recordImportRows(
-      'imp_1',
+      IMP_1,
       AUDIT_FEATURE.STUDENT,
       rows,
       ADMIN,
@@ -64,7 +68,7 @@ describe('AuditService.recordImportRows', () => {
     // The run has to exist: a row pointing at an import nobody opened is refused by its foreign key.
     await prisma.importLog.create({
       data: {
-        id: 'imp_1',
+        id: IMP_1,
         feature: AUDIT_FEATURE.STUDENT,
         source: IMPORT_SOURCE.SHEET,
         actorId: ADMIN,
@@ -73,18 +77,21 @@ describe('AuditService.recordImportRows', () => {
       },
     });
     await record([
-      { entityId: 'stu_1', action: AUDIT_ACTION.CREATE },
-      { entityId: 'stu_2', action: AUDIT_ACTION.UPDATE },
+      { entityId: STU_1, action: AUDIT_ACTION.CREATE },
+      { entityId: STU_2, action: AUDIT_ACTION.UPDATE },
     ]);
 
     const rows = await rowActions();
-    assert.deepEqual(rows.map((row) => [row.entityId, row.action]).sort(), [
-      ['stu_1', AUDIT_ACTION.CREATE],
-      ['stu_2', AUDIT_ACTION.UPDATE],
-    ]);
+    assert.deepEqual(
+      rows.map((row) => [row.entityId, row.action]).sort(),
+      [
+        [STU_1, AUDIT_ACTION.CREATE],
+        [STU_2, AUDIT_ACTION.UPDATE],
+      ].sort(),
+    );
     assert.ok(
       rows.every(
-        (row) => row.importLogId === 'imp_1' && row.actorId === ADMIN && row.changed === null,
+        (row) => row.importLogId === IMP_1 && row.actorId === ADMIN && row.changed === null,
       ),
     );
   });

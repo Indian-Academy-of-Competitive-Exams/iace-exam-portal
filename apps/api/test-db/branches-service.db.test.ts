@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
@@ -25,8 +26,8 @@ interface BranchRow {
   students?: number;
 }
 
-const ONLINE: BranchRow = { id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL };
-const AMEERPET: BranchRow = { id: 'br_1', name: 'AMEERPET' };
+const ONLINE: BranchRow = { id: randomUUID(), name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL };
+const AMEERPET: BranchRow = { id: randomUUID(), name: 'AMEERPET' };
 
 /** The branches given, each with as many students sitting in it as it names, and the service over them. */
 async function serviceWith(branches: BranchRow[] = [AMEERPET]) {
@@ -133,7 +134,7 @@ describe('BranchesService — deleting', () => {
   it('answers NOT_FOUND for a branch that is not there', async () => {
     const { service } = await serviceWith([]);
 
-    await assert.rejects(() => service.remove('nope'), refusedWith(ErrorCodes.NOT_FOUND));
+    await assert.rejects(() => service.remove(randomUUID()), refusedWith(ErrorCodes.NOT_FOUND));
   });
 });
 
@@ -154,10 +155,11 @@ describe('BranchesService — updating', () => {
   });
 
   it('refuses a rename onto a name another branch already has', async () => {
-    const { service } = await serviceWith([AMEERPET, { id: 'br_2', name: 'KUKATPALLY' }]);
+    const other = randomUUID();
+    const { service } = await serviceWith([AMEERPET, { id: other, name: 'KUKATPALLY' }]);
 
     await assert.rejects(
-      () => service.update('br_2', { name: 'AMEERPET' }),
+      () => service.update(other, { name: 'AMEERPET' }),
       refusedWith(ErrorCodes.CONFLICT),
     );
   });
@@ -178,18 +180,19 @@ describe('BranchesService — updating', () => {
 describe('BranchesService.assertUsable — the seam every branch write comes through', () => {
   /** The failure this exists to prevent: a group created under a centre that has stopped taking them. */
   it('accepts an active branch, and refuses a retired or missing one keyed to the field the form shows', async () => {
+    const retired = randomUUID();
     const { service } = await serviceWith([
       AMEERPET,
-      { id: 'br_retired', name: 'RETIRED', isActive: false },
+      { id: retired, name: 'RETIRED', isActive: false },
     ]);
 
     await assert.doesNotReject(() => service.assertUsable(AMEERPET.id));
     await assert.rejects(
-      () => service.assertUsable('br_retired'),
+      () => service.assertUsable(retired),
       refusedWith(ErrorCodes.VALIDATION_ERROR, 'branchId'),
     );
     await assert.rejects(
-      () => service.assertUsable('br_missing'),
+      () => service.assertUsable(randomUUID()),
       refusedWith(ErrorCodes.VALIDATION_ERROR),
     );
   });

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, ErrorCodes } from '@iace/contracts';
@@ -12,7 +13,12 @@ import { AuditService } from '../src/audit/audit.service';
 import { startOfInstituteDay } from '../src/common/time/institute-day';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis, FakeStorage, fakeQueueFailures } from '../test/support/fakes';
-import { resetDatabase, rowActions, testPrisma } from './support/database';
+import {
+  DEFAULT_ROW_ACTION_ACTOR_ID,
+  resetDatabase,
+  rowActions,
+  testPrisma,
+} from './support/database';
 
 const NOW = new Date('2026-04-10T02:00:00Z');
 const OLD_DAY = new Date('2026-03-11T09:00:00Z');
@@ -37,9 +43,9 @@ const linesIn = (body: Buffer) => gunzipSync(body).toString('utf8').trim().split
 async function withRows(count: number) {
   await rowActions(
     prisma,
-    Array.from({ length: count }, (_, index) => ({
-      id: `ral_${index}`,
-      entityId: `stu_${index}`,
+    Array.from({ length: count }, () => ({
+      id: randomUUID(),
+      entityId: randomUUID(),
       createdAt: OLD_DAY,
     })),
   );
@@ -60,8 +66,9 @@ async function withRows(count: number) {
 
 const at = (id: string, iso: string) => ({ id, createdAt: new Date(iso) });
 
+/** Ordered by when each row was made, not by id — an id is a random uuid now, not a sortable label. */
 const leftIds = async () =>
-  (await prisma.rowActionLog.findMany({ select: { id: true }, orderBy: { id: 'asc' } })).map(
+  (await prisma.rowActionLog.findMany({ select: { id: true }, orderBy: { createdAt: 'asc' } })).map(
     (row) => row.id,
   );
 
@@ -122,11 +129,12 @@ describe('AuditArchiveProcessor', () => {
   /** Rows inside the window are none of this run's business. */
   it('leaves rows newer than the retention boundary alone', async () => {
     const { job } = await withRows(1);
-    await rowActions(prisma, [at('ral_new', '2026-04-09T09:00:00Z')]);
+    const ralNew = randomUUID();
+    await rowActions(prisma, [at(ralNew, '2026-04-09T09:00:00Z')]);
 
     await job.archiveOneDay(NOW);
 
-    assert.deepEqual(await leftIds(), ['ral_new']);
+    assert.deepEqual(await leftIds(), [ralNew]);
   });
 
   /** The most dangerous gap: with `gte` dropped from the delete, a row older than the window is destroyed. */
@@ -134,16 +142,18 @@ describe('AuditArchiveProcessor', () => {
     const { job } = await withRows(0);
     const gte = startOfInstituteDay(OLD_DAY_KEY);
     const lt = startOfInstituteDay('2026-03-12');
+    const ralBefore = randomUUID();
+    const ralAfter = randomUUID();
     await rowActions(prisma, [
-      { id: 'ral_before', createdAt: new Date(gte.getTime() - 1) },
-      { id: 'ral_in', createdAt: gte },
-      { id: 'ral_after', createdAt: lt },
+      { id: ralBefore, createdAt: new Date(gte.getTime() - 1) },
+      { id: randomUUID(), createdAt: gte },
+      { id: ralAfter, createdAt: lt },
     ]);
 
     const result = await job.archiveWindow(gte, lt, lt);
 
     assert.equal(result?.rows, 1);
-    assert.deepEqual(await leftIds(), ['ral_after', 'ral_before']);
+    assert.deepEqual(await leftIds(), [ralBefore, ralAfter]);
   });
 
   /** The failure this prevents: two workers on one day, the second uploading a short body over the whole one. */
@@ -169,7 +179,7 @@ describe('AuditArchiveProcessor', () => {
   it('resolves actor names into the archive rather than leaving bare ids', async () => {
     const { storage, job } = await withRows(2);
     await prisma.admin.create({
-      data: { id: 'adm_1', fullName: 'R Kumar', email: 'adm_1@iace.test' },
+      data: { id: DEFAULT_ROW_ACTION_ACTOR_ID, fullName: 'R Kumar', email: 'r.kumar@iace.test' },
     });
 
     const result = await job.archiveOneDay(NOW);
@@ -216,9 +226,9 @@ describe('AuditArchiveProcessor', () => {
   it('clears a multi-day backlog in one run, oldest day first', async () => {
     const { job } = await withRows(0);
     await rowActions(prisma, [
-      at('ral_feb', '2026-02-01T09:00:00Z'),
-      at('ral_mar5', '2026-03-05T09:00:00Z'),
-      { id: 'ral_mar11', createdAt: OLD_DAY },
+      at(randomUUID(), '2026-02-01T09:00:00Z'),
+      at(randomUUID(), '2026-03-05T09:00:00Z'),
+      { id: randomUUID(), createdAt: OLD_DAY },
     ]);
 
     const archived = await job.archivePendingDays(NOW);
@@ -237,25 +247,26 @@ describe('AuditArchiveProcessor', () => {
   /** A backlog longer than the bound is not silently truncated — the rest waits for next run. */
   it('stops at the day bound and leaves the remaining backlog untouched', async () => {
     const { job } = await withRows(0);
+    const dayIds = new Map(
+      ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'].map((day) => [day, randomUUID()]),
+    );
     await rowActions(
       prisma,
-      ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'].map((day) =>
-        at(`ral_${day}`, `${day}T09:00:00Z`),
-      ),
+      [...dayIds].map(([day, id]) => at(id, `${day}T09:00:00Z`)),
     );
 
     const archived = await job.archivePendingDays(NOW, 2);
 
     assert.equal(archived.length, 2);
-    assert.deepEqual(await leftIds(), ['ral_2026-01-03', 'ral_2026-01-04']);
+    assert.deepEqual(await leftIds(), [dayIds.get('2026-01-03'), dayIds.get('2026-01-04')]);
   });
 
   /** The bound was hit, but nothing was left behind — that is success, not a warning-worthy gap. */
   it('does not warn about backlog when the bound exactly clears it', async () => {
     const { job } = await withRows(0);
     await rowActions(prisma, [
-      at('ral_a', '2026-01-01T09:00:00Z'),
-      at('ral_b', '2026-01-02T09:00:00Z'),
+      at(randomUUID(), '2026-01-01T09:00:00Z'),
+      at(randomUUID(), '2026-01-02T09:00:00Z'),
     ]);
     const warnings: string[] = [];
     (job as unknown as { logger: { warn: (message: string) => void } }).logger.warn = (
@@ -271,10 +282,12 @@ describe('AuditArchiveProcessor', () => {
   /** A failure on day 2 must not un-archive day 1, touch day 3, or hide the progress already made. */
   it('preserves already-archived days when a later day in the backlog fails', async () => {
     const { storage, job } = await withRows(0);
+    const ralDay2 = randomUUID();
+    const ralDay3 = randomUUID();
     await rowActions(prisma, [
-      at('ral_day1', '2026-01-01T09:00:00Z'),
-      at('ral_day2', '2026-01-02T09:00:00Z'),
-      at('ral_day3', '2026-01-03T09:00:00Z'),
+      at(randomUUID(), '2026-01-01T09:00:00Z'),
+      at(ralDay2, '2026-01-02T09:00:00Z'),
+      at(ralDay3, '2026-01-03T09:00:00Z'),
     ]);
     storage.reportSize(archiveKeyFor(new Date('2026-01-02T00:00:00Z')), 0);
 
@@ -289,7 +302,7 @@ describe('AuditArchiveProcessor', () => {
       details.archived.map((day) => day.key),
       [archiveKeyFor(new Date('2026-01-01T00:00:00Z'))],
     );
-    assert.deepEqual(await leftIds(), ['ral_day2', 'ral_day3']);
+    assert.deepEqual(await leftIds(), [ralDay2, ralDay3]);
   });
 
   /** A bulk-import day must not have to fit in memory as one array to be archived correctly. */

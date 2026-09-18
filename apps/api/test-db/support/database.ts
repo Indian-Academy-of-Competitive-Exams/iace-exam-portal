@@ -91,7 +91,7 @@ export function testPrisma(): PrismaService {
   return new PrismaService();
 }
 
-export const uid = (prefix: string): string => `${prefix}_${randomUUID()}`;
+export const uid = (): string => randomUUID();
 
 let emptyEveryTable: Prisma.Sql | undefined;
 
@@ -115,20 +115,20 @@ async function truncateStatement(prisma: PrismaService): Promise<Prisma.Sql> {
 export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
   const exam = await prisma.exam.create({
     data: {
-      id: uid('exam'),
+      id: uid(),
       course: DEFAULT_EXAM_COURSE,
-      code: uid('EXAM'),
+      code: uid(),
       name: 'Database tier exam',
     },
     select: { id: true },
   });
   const stage = await prisma.examStage.create({
-    data: { id: uid('stage'), examId: exam.id, stageKey: uid('stage'), name: 'Tier 1' },
+    data: { id: uid(), examId: exam.id, stageKey: uid(), name: 'Tier 1' },
     select: { id: true },
   });
   const config = await prisma.baseConfig.create({
     data: {
-      id: uid('config'),
+      id: uid(),
       examStageId: stage.id,
       name: 'Database tier pattern',
       totalQuestions: 100,
@@ -140,7 +140,7 @@ export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
     select: { id: true },
   });
   const series = await prisma.testSeries.create({
-    data: { id: uid('series'), name: uid('Database tier series'), examStageId: stage.id },
+    data: { id: uid(), name: uid(), examStageId: stage.id },
     select: { id: true },
   });
   return { examStageId: stage.id, baseConfigId: config.id, testSeriesId: series.id };
@@ -149,11 +149,11 @@ export async function makeCatalog(prisma: PrismaService): Promise<Catalog> {
 /** A stage on an exam of its own, with no config or series beside it. */
 export async function makeStage(prisma: PrismaService, isActive = true): Promise<string> {
   const exam = await prisma.exam.create({
-    data: { id: uid('exam'), course: DEFAULT_EXAM_COURSE, code: uid('EXAM'), name: 'SSC CGL' },
+    data: { id: uid(), course: DEFAULT_EXAM_COURSE, code: uid(), name: 'SSC CGL' },
     select: { id: true },
   });
   const stage = await prisma.examStage.create({
-    data: { id: uid('stage'), examId: exam.id, stageKey: uid('STAGE'), name: 'Tier 1', isActive },
+    data: { id: uid(), examId: exam.id, stageKey: uid(), name: 'Tier 1', isActive },
     select: { id: true },
   });
   return stage.id;
@@ -166,8 +166,8 @@ export function makeTest(
 ): Promise<{ id: string }> {
   return prisma.test.create({
     data: {
-      id: uid('test'),
-      title: uid('Database tier mock'),
+      id: uid(),
+      title: uid(),
       baseConfigId: catalog.baseConfigId,
       examStageId: catalog.examStageId,
       testSeriesId: catalog.testSeriesId,
@@ -183,8 +183,8 @@ export function makeStudent(
 ): Promise<{ id: string }> {
   return prisma.student.create({
     data: {
-      id: uid('student'),
-      mobile: uid('mobile'),
+      id: uid(),
+      mobile: uid(),
       studentType: STUDENT_TYPE.ONLINE,
       fullName: 'Database Tier Student',
       ...overrides,
@@ -193,9 +193,9 @@ export function makeStudent(
   });
 }
 
-export function makeBranch(prisma: PrismaService, name = uid('Branch')): Promise<{ id: string }> {
+export function makeBranch(prisma: PrismaService, name = uid()): Promise<{ id: string }> {
   return prisma.branch.create({
-    data: { id: uid('branch'), name, type: BRANCH_TYPE.PHYSICAL },
+    data: { id: uid(), name, type: BRANCH_TYPE.PHYSICAL },
     select: { id: true },
   });
 }
@@ -213,8 +213,8 @@ export function makeAdmin(
 ): Promise<{ id: string }> {
   return prisma.admin.create({
     data: {
-      id: uid('admin'),
-      email: `${uid('admin')}@iace.test`,
+      id: uid(),
+      email: `${uid()}@iace.test`,
       fullName: 'Database Tier Admin',
       ...overrides,
     },
@@ -228,7 +228,7 @@ export function makeNotification(
 ): Promise<{ id: string }> {
   return prisma.notification.create({
     data: {
-      id: uid('notification'),
+      id: uid(),
       studentId: input.studentId,
       type: NOTIFICATION_TYPE.GENERIC,
       title: input.title ?? 'Something happened',
@@ -247,7 +247,7 @@ export async function makeAnnouncement(
   const admin = await makeAdmin(prisma);
   return prisma.announcement.create({
     data: {
-      id: uid('announcement'),
+      id: uid(),
       title: 'Branch closed tomorrow',
       body: 'The Ameerpet centre is shut on Friday.',
       audience: {},
@@ -260,8 +260,8 @@ export async function makeAnnouncement(
   });
 }
 
-export function makeSubject(prisma: PrismaService, name = uid('Subject')): Promise<{ id: string }> {
-  return prisma.subject.create({ data: { id: uid('subject'), name }, select: { id: true } });
+export function makeSubject(prisma: PrismaService, name = uid()): Promise<{ id: string }> {
+  return prisma.subject.create({ data: { id: uid(), name }, select: { id: true } });
 }
 
 /** A question with one version, pointed at as current — the order the composite FK demands. */
@@ -280,7 +280,7 @@ export async function makeQuestion(
 ): Promise<{ id: string; versionId: string }> {
   const question = await prisma.question.create({
     data: {
-      id: uid('question'),
+      id: uid(),
       subjectId: input.subjectId,
       difficulty: input.difficulty ?? DIFFICULTY_LEVEL.MEDIUM,
       ...(input.status ? { status: input.status } : {}),
@@ -290,7 +290,7 @@ export async function makeQuestion(
   });
   const version = await prisma.questionVersion.create({
     data: {
-      id: uid('version'),
+      id: uid(),
       questionId: question.id,
       version: 1,
       content: input.content ?? {
@@ -315,7 +315,7 @@ export function makeSection(
 ): Promise<{ id: string }> {
   return prisma.baseConfigSection.create({
     data: {
-      id: uid('section'),
+      id: uid(),
       baseConfigId: catalog.baseConfigId,
       name: input.name ?? 'Database tier section',
       order: input.order ?? 1,
@@ -397,7 +397,7 @@ export async function makePaper(prisma: PrismaService, input: PaperInput): Promi
     } = typeof entry === 'string' ? { subject: entry } : entry;
     const subject = await prisma.subject.upsert({
       where: { name: subjectName },
-      create: { id: uid('subject'), name: subjectName },
+      create: { id: uid(), name: subjectName },
       update: {},
       select: { id: true },
     });
@@ -409,7 +409,7 @@ export async function makePaper(prisma: PrismaService, input: PaperInput): Promi
     const sectionId = sectionIds[section ?? 0] ?? sectionIds[0] ?? '';
     const paperQuestion = await prisma.paperQuestion.create({
       data: {
-        id: uid('pq'),
+        id: uid(),
         testId: test.id,
         baseConfigId: catalog.baseConfigId,
         baseConfigSectionId: sectionId,
@@ -464,7 +464,7 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
     input.startedAt ?? new Date((submittedAt ?? SAT_ON).getTime() - HALF_HOUR_SEC * SECOND_MS);
   const attempt = await prisma.attempt.create({
     data: {
-      id: uid('attempt'),
+      id: uid(),
       testId: input.paper.testId,
       studentId: input.studentId,
       attemptNo: input.attemptNo ?? 1,
@@ -545,7 +545,7 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
   const startedAt = new Date(submittedAt.getTime() - timeTakenSec * SECOND_MS);
   return prisma.attempt.create({
     data: {
-      id: uid('attempt'),
+      id: uid(),
       testId: input.testId,
       studentId: input.studentId,
       attemptNo: input.attemptNo ?? 1,
@@ -564,6 +564,10 @@ export function makeSitting(prisma: PrismaService, input: SittingInput): Promise
   });
 }
 
+/** The entity and actor a row action falls back to when a test does not care which. */
+export const DEFAULT_ROW_ACTION_ENTITY_ID = randomUUID();
+export const DEFAULT_ROW_ACTION_ACTOR_ID = randomUUID();
+
 /** Rows for the audit log: an admin's update of some student unless told otherwise. */
 export const rowActions = (
   prisma: PrismaService,
@@ -572,21 +576,21 @@ export const rowActions = (
   prisma.rowActionLog.createMany({
     data: rows.map((row) => ({
       feature: AUDIT_FEATURE.STUDENT,
-      entityId: 'stu_1',
+      entityId: DEFAULT_ROW_ACTION_ENTITY_ID,
       action: AUDIT_ACTION.UPDATE,
       actorType: AUDIT_ACTOR_TYPE.ADMIN,
-      actorId: 'adm_1',
+      actorId: DEFAULT_ROW_ACTION_ACTOR_ID,
       ...row,
     })),
   });
 
 /** Fixed ids for the suites that build a test by hand; safe only because each case resets first. */
 export const BUILDER = {
-  STAGE: 'stage_1',
-  OTHER_STAGE: 'stage_9',
-  CONFIG: 'cfg_1',
-  REASONING: 'sub_r',
-  QUANT: 'sub_q',
+  STAGE: randomUUID(),
+  OTHER_STAGE: randomUUID(),
+  CONFIG: randomUUID(),
+  REASONING: randomUUID(),
+  QUANT: randomUUID(),
 } as const;
 
 export interface BuilderSection {
@@ -603,13 +607,13 @@ export async function makeBuilder(
   config: Partial<Prisma.BaseConfigUncheckedCreateInput> = {},
 ): Promise<void> {
   const exam = await prisma.exam.create({
-    data: { id: uid('exam'), course: DEFAULT_EXAM_COURSE, code: uid('EXAM'), name: 'SSC CGL' },
+    data: { id: uid(), course: DEFAULT_EXAM_COURSE, code: uid(), name: 'SSC CGL' },
     select: { id: true },
   });
   await prisma.examStage.createMany({
     data: [
-      { id: BUILDER.STAGE, examId: exam.id, stageKey: uid('stage'), name: 'Tier 1' },
-      { id: BUILDER.OTHER_STAGE, examId: exam.id, stageKey: uid('stage'), name: 'Tier 2' },
+      { id: BUILDER.STAGE, examId: exam.id, stageKey: uid(), name: 'Tier 1' },
+      { id: BUILDER.OTHER_STAGE, examId: exam.id, stageKey: uid(), name: 'Tier 2' },
     ],
   });
   await prisma.subject.createMany({
@@ -645,11 +649,11 @@ export async function makeBuilder(
 
 /** The question bank's taxonomy under fixed ids: two subjects, three topics. */
 export const BANK = {
-  QUANT: 'sub_1',
-  GENERAL_AWARENESS: 'sub_2',
-  ARITHMETIC: 'top_1',
-  ALGEBRA: 'top_2',
-  HISTORY: 'top_3',
+  QUANT: randomUUID(),
+  GENERAL_AWARENESS: randomUUID(),
+  ARITHMETIC: randomUUID(),
+  ALGEBRA: randomUUID(),
+  HISTORY: randomUUID(),
 } as const;
 
 /** The bank's taxonomy, and an admin per id given, named as given; only behind resetDatabase. */
@@ -679,7 +683,7 @@ export async function makeQuestionBank(
   });
 }
 
-/** A bank question under a fixed id, live with a `<id>_v1` version unless told otherwise. */
+/** A bank question under a fixed id, live with one version unless told otherwise — its id returned, since it no longer follows from the question's. */
 export async function makeBankQuestion(
   prisma: PrismaService,
   input: {
@@ -691,7 +695,7 @@ export async function makeBankQuestion(
     createdById?: string;
     versioned?: boolean;
   },
-): Promise<void> {
+): Promise<{ versionId: string | null }> {
   const { versioned, ...question } = input;
   await prisma.question.create({
     data: {
@@ -701,10 +705,11 @@ export async function makeBankQuestion(
       ...question,
     },
   });
-  if (versioned === false) return;
+  if (versioned === false) return { versionId: null };
+  const versionId = randomUUID();
   await prisma.questionVersion.create({
     data: {
-      id: `${input.id}_v1`,
+      id: versionId,
       questionId: input.id,
       version: 1,
       content: { en: { stem: [{ type: 'TEXT', text: `<p>${input.id}</p>` }] } },
@@ -713,6 +718,7 @@ export async function makeBankQuestion(
   });
   await prisma.question.update({
     where: { id: input.id },
-    data: { currentVersionId: `${input.id}_v1` },
+    data: { currentVersionId: versionId },
   });
+  return { versionId };
 }

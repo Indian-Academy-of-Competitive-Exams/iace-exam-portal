@@ -153,6 +153,29 @@ describe('AllExceptionsFilter', () => {
     assert.equal(capture(filter, missing).failure.error.code, 'NOT_FOUND');
   });
 
+  /** The failure this prevents: an old cuid in a bookmark answering 500 once ids became uuids. */
+  it('maps a malformed id to NOT_FOUND, however it reached Postgres', () => {
+    const typed = new Prisma.PrismaClientKnownRequestError('bad uuid', {
+      code: 'P2023',
+      clientVersion: 'test',
+    });
+    const raw = new Prisma.PrismaClientKnownRequestError('raw failed', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '22P02', message: 'invalid input syntax for type uuid' },
+    });
+    const otherRawFailure = new Prisma.PrismaClientKnownRequestError('raw failed', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '42P01', message: 'relation does not exist' },
+    });
+
+    assert.equal(capture(filter, typed).status, 404);
+    assert.equal(capture(filter, typed).failure.error.code, 'NOT_FOUND');
+    assert.equal(capture(filter, raw).status, 404);
+    assert.equal(capture(filter, otherRawFailure).status, 500);
+  });
+
   it('maps a Nest HttpException by status', () => {
     const { status, failure } = capture(filter, new HttpException('Nope', HttpStatus.NOT_FOUND));
 

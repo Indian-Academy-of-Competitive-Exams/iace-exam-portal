@@ -8,7 +8,7 @@ import { type HeldState } from './attempt-state';
 import { PaperSheetService } from './paper-sheet.service';
 
 const whileLive = (attemptId: string) =>
-  Prisma.sql`EXISTS (SELECT 1 FROM "Attempt" WHERE "id" = ${attemptId} AND "status" = ${ATTEMPT_STATUS.IN_PROGRESS}::"AttemptStatus")`;
+  Prisma.sql`EXISTS (SELECT 1 FROM "Attempt" WHERE "id" = ${attemptId}::uuid AND "status" = ${ATTEMPT_STATUS.IN_PROGRESS}::"AttemptStatus")`;
 
 @Injectable()
 export class AttemptSheetService {
@@ -40,7 +40,7 @@ export class AttemptSheetService {
     if (patched === 0) return;
     await this.prisma.$executeRaw`
       UPDATE "AttemptSheet" SET "answers" = ${answers}, "updatedAt" = now()
-      WHERE "attemptId" = ${held.attemptId} AND ${whileLive(held.attemptId)}`;
+      WHERE "attemptId" = ${held.attemptId}::uuid AND ${whileLive(held.attemptId)}`;
   }
 
   /** Submit's write: every live answer at once, so nothing a flush missed can be lost. */
@@ -50,7 +50,7 @@ export class AttemptSheetService {
     const gate = onlyWhileLive ? Prisma.sql`AND ${whileLive(held.attemptId)}` : Prisma.empty;
     await this.prisma.$executeRaw`
       UPDATE "AttemptSheet" SET "answers" = ${JSON.stringify(sheet)}::jsonb, "updatedAt" = now()
-      WHERE "attemptId" = ${held.attemptId} ${gate}`;
+      WHERE "attemptId" = ${held.attemptId}::uuid ${gate}`;
     return sheet;
   }
 }

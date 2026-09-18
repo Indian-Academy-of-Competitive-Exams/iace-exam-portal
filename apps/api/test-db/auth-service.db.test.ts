@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
@@ -33,6 +34,7 @@ import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
 const MOBILE = '9876543210';
 const ADMIN_EMAIL = 'admin@iace.co.in';
+const DEFAULT_ADMIN_ID = randomUUID();
 
 const prisma = testPrisma();
 
@@ -79,7 +81,7 @@ const setStudent = (data: {
 const admin = (over: { id?: string; isSuperAdmin?: boolean; isActive?: boolean } = {}) =>
   prisma.admin.create({
     data: {
-      id: over.id ?? 'adm_1',
+      id: over.id ?? DEFAULT_ADMIN_ID,
       email: ADMIN_EMAIL,
       fullName: 'Admin',
       isSuperAdmin: over.isSuperAdmin ?? false,
@@ -320,7 +322,9 @@ describe('AuthService — admin', () => {
 
   it('signs in a known active admin and carries their grants', async () => {
     await admin();
-    const ctx = build({ adm_1: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE } });
+    const ctx = build({
+      [DEFAULT_ADMIN_ID]: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    });
 
     const identity = await verified(ctx);
 
@@ -333,7 +337,9 @@ describe('AuthService — admin', () => {
   /** Refusing here would answer a real account with "invalid credentials"; they get in and are told. */
   it('signs in a DEACTIVATED admin, and hands them nothing', async () => {
     await admin({ isActive: false });
-    const ctx = build({ adm_1: { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE } });
+    const ctx = build({
+      [DEFAULT_ADMIN_ID]: { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    });
 
     const identity = await verified(ctx);
 
@@ -352,7 +358,7 @@ describe('AuthService — admin', () => {
   });
 
   it('does not look up grants for a super admin — they bypass every check', async () => {
-    await admin({ id: 'adm_root', isSuperAdmin: true });
+    await admin({ id: randomUUID(), isSuperAdmin: true });
     const ctx = build();
 
     const identity = await verified(ctx);

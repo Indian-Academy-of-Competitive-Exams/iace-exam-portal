@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
@@ -274,7 +275,7 @@ describe('SubmitService', () => {
     await answered(built);
 
     await assert.rejects(
-      () => built.submit.submit(uid('student'), built.attemptId),
+      () => built.submit.submit(uid(), built.attemptId),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });
@@ -356,9 +357,9 @@ describe('the scoring outbox', () => {
   it('drains a backlog bigger than one batch in a single pass', async () => {
     const { queue, outbox } = await build();
     await prisma.outboxEvent.createMany({
-      data: Array.from({ length: 250 }, (_, n) => ({
+      data: Array.from({ length: 250 }, () => ({
         aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: `att_${n}`,
+        aggregateId: randomUUID(),
         eventType: SCORING_REQUEST.EVENT_TYPE,
         payload: { testId: 'tst_1' },
         createdAt: SETTLED,
@@ -393,7 +394,7 @@ describe('the scoring outbox', () => {
     await prisma.outboxEvent.create({
       data: {
         aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: 'att_broken',
+        aggregateId: randomUUID(),
         eventType: SCORING_REQUEST.EVENT_TYPE,
         payload: {},
         createdAt: SETTLED,

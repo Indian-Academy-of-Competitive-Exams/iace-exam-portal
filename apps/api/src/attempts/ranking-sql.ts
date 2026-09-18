@@ -20,8 +20,8 @@ export interface StandingRow {
 export function standingsSql(where: { attemptId: string } | { studentId: string }): Prisma.Sql {
   const chosen =
     'attemptId' in where
-      ? Prisma.sql`a."id" = ${where.attemptId}`
-      : Prisma.sql`a."studentId" = ${where.studentId}`;
+      ? Prisma.sql`a."id" = ${where.attemptId}::uuid`
+      : Prisma.sql`a."studentId" = ${where.studentId}::uuid`;
   return Prisma.sql`
     SELECT a."id" AS attempt_id,
            a."testId" AS test_id,
@@ -69,12 +69,12 @@ export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
              (ROW_NUMBER() OVER (ORDER BY a."score" DESC, a."timeTakenSec" ASC, a."id" ASC))::int AS rank,
              (COUNT(*) OVER ())::int AS cohort
       FROM "Attempt" a
-      WHERE a."testId" = ${testId}
+      WHERE a."testId" = ${testId}::uuid
         AND a."isGraded" AND a."status" = 'EVALUATED' AND a."score" IS NOT NULL
     ),
-    mine AS (SELECT rank FROM ranked WHERE "id" = ${attemptId})
+    mine AS (SELECT rank FROM ranked WHERE "id" = ${attemptId}::uuid)
     SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort,
-           s."fullName" AS name, br."name" AS branch, (r."id" = ${attemptId}) AS is_you
+           s."fullName" AS name, br."name" AS branch, (r."id" = ${attemptId}::uuid) AS is_you
     FROM ranked r
     JOIN "Student" s ON s."id" = r."studentId"
     LEFT JOIN "Branch" br ON br."id" = s."currentBranchId"
@@ -100,7 +100,7 @@ export interface PointsRow {
 /** Every sitting's percentile over its whole test cohort, averaged per live student and ranked. */
 export function pointsBoardSql(studentId: string, testIds: readonly string[] | null): Prisma.Sql {
   const inScope =
-    testIds === null ? Prisma.empty : Prisma.sql`AND a."testId" = ANY(${[...testIds]}::text[])`;
+    testIds === null ? Prisma.empty : Prisma.sql`AND a."testId" = ANY(${[...testIds]}::uuid[])`;
 
   return Prisma.sql`
     WITH cohort AS (
@@ -143,14 +143,14 @@ export function pointsBoardSql(studentId: string, testIds: readonly string[] | n
       FROM board b
     ),
     mine AS (
-      SELECT rank FROM ranked WHERE student_id = ${studentId}
+      SELECT rank FROM ranked WHERE student_id = ${studentId}::uuid
     ),
     -- Where the reader stood before their most recent sitting counted.
     before AS (
       SELECT ROUND(AVG(percentile), 2)::float8 AS points
       FROM (
         SELECT percentile FROM scoped
-        WHERE student_id = ${studentId}
+        WHERE student_id = ${studentId}::uuid
         ORDER BY submitted_at DESC NULLS LAST
         OFFSET 1
       ) earlier
@@ -158,7 +158,7 @@ export function pointsBoardSql(studentId: string, testIds: readonly string[] | n
     prior AS (
       SELECT CASE WHEN (SELECT points FROM before) IS NULL THEN NULL ELSE (
         SELECT COUNT(*)::int + 1 FROM ranked r
-        WHERE r.points > (SELECT points FROM before) AND r.student_id <> ${studentId}
+        WHERE r.points > (SELECT points FROM before) AND r.student_id <> ${studentId}::uuid
       ) END AS rank
     )
     SELECT r.rank,
@@ -167,7 +167,7 @@ export function pointsBoardSql(studentId: string, testIds: readonly string[] | n
            r.cohort,
            s."fullName" AS name,
            br."name" AS branch,
-           (r.student_id = ${studentId}) AS is_you,
+           (r.student_id = ${studentId}::uuid) AS is_you,
            (SELECT rank FROM prior) AS prior_rank
     FROM ranked r
     JOIN "Student" s ON s."id" = r.student_id

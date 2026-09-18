@@ -256,8 +256,8 @@ describe('AttemptPaperService — whose sitting it is', () => {
     const missing = (error: unknown) =>
       AppException.is(error) && error.code === ErrorCodes.NOT_FOUND;
 
-    await assert.rejects(() => service.paper(uid('student'), attemptId), missing);
-    await assert.rejects(() => service.paper(student, uid('attempt')), missing);
+    await assert.rejects(() => service.paper(uid(), attemptId), missing);
+    await assert.rejects(() => service.paper(student, uid()), missing);
   });
 });
 

@@ -14,9 +14,9 @@
 -- index the arbiter did not name. Bare DO NOTHING means "this row already
 -- exists in some form — leave it alone", which is the whole intent.
 --
--- Ids are stable, human-readable strings rather than cuids. These rows are
--- referenced from documentation, from support conversations and from the next
--- seed pass, and a generated id would make each of those a lookup.
+-- Ids are fixed UUID literals, not generated at runtime, so re-running this file is idempotent and
+-- a developer can still recognise a row: the readable name lives in whatever name/code/stageKey
+-- column the table already carries.
 --
 -- The full catalog (4 courses, 43 exams, 122 stages, 30 default configs) lives in
 -- prisma/seed.catalog.sql — generated from Exam_Pattern_Base_Configurations.xlsx and run
@@ -33,7 +33,7 @@
 -- is created by this one.
 -- ---------------------------------------------------------------------------
 INSERT INTO "Admin" ("id", "email", "fullName", "isSuperAdmin", "isActive")
-VALUES ('admin_root', 'developer@iace.co.in', 'Super Admin', true, true)
+VALUES ('6559582c-1bf3-4482-aea2-ec69ddd5f505', 'developer@iace.co.in', 'Super Admin', true, true)
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -60,8 +60,8 @@ ON CONFLICT DO NOTHING;
 -- normalises a seed, so these are written correct.
 --
 -- The guard is Branch_name_live_key — UNIQUE (name) WHERE "deletedAt" IS NULL —
--- so a database that already has these rows under generated ids keeps them and
--- this file adds nothing. New devices get the readable ids below.
+-- so a database that already has these rows under different ids keeps them and
+-- this file adds nothing. New devices get the fixed ids below.
 --
 -- A branch a student still attends cannot be deleted, and a retired one takes
 -- no new students, so removing a centre from this list does not remove it from
@@ -69,17 +69,17 @@ ON CONFLICT DO NOTHING;
 -- ---------------------------------------------------------------------------
 INSERT INTO "Branch" ("id", "name", "type", "isActive")
 VALUES
-  ('branch_online',        'ONLINE',        'VIRTUAL',  true),
-  ('branch_ameerpet',      'AMEERPET',      'PHYSICAL', true),
-  ('branch_ananthapur',    'ANANTHAPUR',    'PHYSICAL', true),
-  ('branch_dilsukhnagar',  'DILSUKHNAGAR',  'PHYSICAL', true),
-  ('branch_kukatpally',    'KUKATPALLY',    'PHYSICAL', true),
-  ('branch_nellore',       'NELLORE',       'PHYSICAL', true),
-  ('branch_rajahmundry',   'RAJAHMUNDRY',   'PHYSICAL', true),
-  ('branch_tirupati',      'TIRUPATI',      'PHYSICAL', true),
-  ('branch_vijayawada',    'VIJAYAWADA',    'PHYSICAL', true),
-  ('branch_visakhapatnam', 'VISAKHAPATNAM', 'PHYSICAL', true),
-  ('branch_vizianagaram',  'VIZIANAGARAM',  'PHYSICAL', true)
+  ('34739489-95f9-4c12-9c36-44a25f1590f5', 'ONLINE',        'VIRTUAL',  true),
+  ('56b593cb-997a-402f-90c5-103a1718fda0', 'AMEERPET',      'PHYSICAL', true),
+  ('5a92b9d8-9e66-461b-a3df-34c0c8ca3ef3', 'ANANTHAPUR',    'PHYSICAL', true),
+  ('d55fcc74-76bd-4db2-a210-e0dfa5c5bf09', 'DILSUKHNAGAR',  'PHYSICAL', true),
+  ('e1931c53-ccd1-428a-a9f6-ba4de960be05', 'KUKATPALLY',    'PHYSICAL', true),
+  ('b3c7277f-2d43-4b11-ac84-85234696c58a', 'NELLORE',       'PHYSICAL', true),
+  ('9657717c-1d77-4335-8424-9027b55708fa', 'RAJAHMUNDRY',   'PHYSICAL', true),
+  ('b9ebe459-c727-4a48-8b38-a18543fc78f8', 'TIRUPATI',      'PHYSICAL', true),
+  ('694625ba-8fb0-4d22-9aed-6fc3d8c951d8', 'VIJAYAWADA',    'PHYSICAL', true),
+  ('edf7313e-7140-4785-b47b-2663e4993e34', 'VISAKHAPATNAM', 'PHYSICAL', true),
+  ('6afe1d7c-c5f3-4f06-97a8-6b268d68c345', 'VIZIANAGARAM',  'PHYSICAL', true)
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -96,14 +96,14 @@ ON CONFLICT DO NOTHING;
 -- objective modules can be sat as a mock, and the DEST typing module cannot.
 -- ---------------------------------------------------------------------------
 INSERT INTO "Exam" ("id", "course", "code", "name", "description")
-VALUES ('exam_ssc_cgl', 'SSC', 'SSC CGL', 'Combined Graduate Level',
+VALUES ('e6e82193-acbb-465a-98fb-ac54cec1d64c', 'SSC', 'SSC CGL', 'Combined Graduate Level',
         'SSC Combined Graduate Level examination')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO "ExamStage" ("id", "examId", "stageKey", "name", "order", "mode", "disposition")
 VALUES
-  ('stage_ssc_cgl_t1', 'exam_ssc_cgl', 'SSC_CGL_T1', 'Tier 1', 1, 'CBT', 'CONDUCTED'),
-  ('stage_ssc_cgl_t2', 'exam_ssc_cgl', 'SSC_CGL_T2', 'Tier 2', 2, 'CBT', 'PARTIAL')
+  ('7d09d6e1-2748-4c36-836b-fd0fc6d36d93', 'e6e82193-acbb-465a-98fb-ac54cec1d64c', 'SSC_CGL_T1', 'Tier 1', 1, 'CBT', 'CONDUCTED'),
+  ('7cdf1dc2-202e-4996-91c5-cd6cd1f65be0', 'e6e82193-acbb-465a-98fb-ac54cec1d64c', 'SSC_CGL_T2', 'Tier 2', 2, 'CBT', 'PARTIAL')
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -115,10 +115,10 @@ ON CONFLICT DO NOTHING;
 -- ---------------------------------------------------------------------------
 INSERT INTO "Subject" ("id", "name", "code")
 VALUES
-  ('subject_reasoning',    'GENERAL INTELLIGENCE AND REASONING', 'REASONING'),
-  ('subject_gk',           'GENERAL AWARENESS',                  'GENERAL_AWARENESS'),
-  ('subject_quantitative', 'QUANTITATIVE APTITUDE',              'QUANTITATIVE_APTITUDE'),
-  ('subject_english',      'ENGLISH COMPREHENSION',              'ENGLISH')
+  ('d980b343-efea-4225-9ba5-b84a2e42751b', 'GENERAL INTELLIGENCE AND REASONING', 'REASONING'),
+  ('23056a18-679b-4288-b4fd-94309611d29b', 'GENERAL AWARENESS',                  'GENERAL_AWARENESS'),
+  ('071fc04c-f7f0-4e4b-9987-eff387bc2a91', 'QUANTITATIVE APTITUDE',              'QUANTITATIVE_APTITUDE'),
+  ('0ad32b99-23f6-41ff-8420-bfee20f91347', 'ENGLISH COMPREHENSION',              'ENGLISH')
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ INSERT INTO "BaseConfig" (
   "languages", "shuffleQuestions", "shuffleOptions", "calculatorEnabled", "scoringVersion"
 )
 VALUES (
-  'config_ssc_cgl_t1', 'stage_ssc_cgl_t1', 'SSC CGL Tier 1 — official pattern', true, 1, 100, 200.00,
+  'db57045c-c58f-4fdd-a2cf-8fcbb6e4626f', '7d09d6e1-2748-4c36-836b-fd0fc6d36d93', 'SSC CGL Tier 1 — official pattern', true, 1, 100, 200.00,
   3600, 'COMPOSITE_FREE', 'FREE', 'CBT', 'DUAL',
   ARRAY['EN', 'HI']::"SupportedLanguage"[], true, true, false, 1
 )
@@ -153,8 +153,8 @@ INSERT INTO "BaseConfigSection" (
   "questionCount", "marksPerQuestion", "negativeMarks", "mandatory", "meritOrQualifying"
 )
 VALUES
-  ('section_ssc_cgl_t1_reasoning',    'config_ssc_cgl_t1', 'General Intelligence and Reasoning', 1, 'subject_reasoning',    25, 2.00, 0.50, true, 'MERIT'),
-  ('section_ssc_cgl_t1_gk',           'config_ssc_cgl_t1', 'General Awareness',                  2, 'subject_gk',           25, 2.00, 0.50, true, 'MERIT'),
-  ('section_ssc_cgl_t1_quantitative', 'config_ssc_cgl_t1', 'Quantitative Aptitude',              3, 'subject_quantitative', 25, 2.00, 0.50, true, 'MERIT'),
-  ('section_ssc_cgl_t1_english',      'config_ssc_cgl_t1', 'English Comprehension',              4, 'subject_english',      25, 2.00, 0.50, true, 'MERIT')
+  ('52724cef-69bc-4457-96f4-240f97f14158', 'db57045c-c58f-4fdd-a2cf-8fcbb6e4626f', 'General Intelligence and Reasoning', 1, 'd980b343-efea-4225-9ba5-b84a2e42751b', 25, 2.00, 0.50, true, 'MERIT'),
+  ('abc5aae1-fe7e-49e0-b4c5-e19618247fff', 'db57045c-c58f-4fdd-a2cf-8fcbb6e4626f', 'General Awareness',                  2, '23056a18-679b-4288-b4fd-94309611d29b', 25, 2.00, 0.50, true, 'MERIT'),
+  ('4d97e439-869e-4f9e-9b77-ab46690dbbe3', 'db57045c-c58f-4fdd-a2cf-8fcbb6e4626f', 'Quantitative Aptitude',              3, '071fc04c-f7f0-4e4b-9987-eff387bc2a91', 25, 2.00, 0.50, true, 'MERIT'),
+  ('8d3b4761-cfe7-4378-9095-711878ef99bd', 'db57045c-c58f-4fdd-a2cf-8fcbb6e4626f', 'English Comprehension',              4, '0ad32b99-23f6-41ff-8420-bfee20f91347', 25, 2.00, 0.50, true, 'MERIT')
 ON CONFLICT DO NOTHING;

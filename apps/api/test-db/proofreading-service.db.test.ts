@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
@@ -17,8 +18,8 @@ import { QuestionsService } from '../src/questions/questions.service';
 import { FakeStorage } from '../test/support/fakes';
 import { BANK, makeQuestionBank, resetDatabase, testPrisma } from './support/database';
 
-const REVIEWER = 'adm_reviewer';
-const AUTHOR = 'adm_author';
+const REVIEWER = randomUUID();
+const AUTHOR = randomUUID();
 
 const prisma = testPrisma();
 
@@ -190,7 +191,7 @@ describe('ProofreadingService — raising and settling', () => {
     await assert.rejects(
       () =>
         proofreading.raise(
-          'gone',
+          randomUUID(),
           { category: QUESTION_FLAG_CATEGORY.OTHER, comment: 'Nothing to read.' },
           REVIEWER,
         ),

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DOCUMENT_KINDS } from '@iace/contracts';
 import { type AccessResolverService } from '../src/access';
@@ -12,7 +13,7 @@ import { StudentsService } from '../src/students/students.service';
 import { FakeCodeCatalog, FakeEventBus, FakeQueue, fakeStartingPins } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
-const STUDENT = 'stu_1';
+const STUDENT = randomUUID();
 
 const prisma = testPrisma();
 

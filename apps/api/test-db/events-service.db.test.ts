@@ -32,7 +32,7 @@ const makeEvent = (name = 'Scholarship test') =>
 async function nameInSeries(eventId: string) {
   const { examStageId } = await makeCatalog(prisma);
   return prisma.testSeries.create({
-    data: { name: uid('Series'), kind: TEST_SERIES_KIND.EVENT, eventId, examStageId },
+    data: { name: uid(), kind: TEST_SERIES_KIND.EVENT, eventId, examStageId },
   });
 }
 
@@ -181,7 +181,7 @@ describe('EventsService — the roster', () => {
     const { service, eventBus } = build();
     const student = await makeStudent(prisma);
 
-    const error = await service.removeCandidate(uid('event'), student.id).catch((e: unknown) => e);
+    const error = await service.removeCandidate(uid(), student.id).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);

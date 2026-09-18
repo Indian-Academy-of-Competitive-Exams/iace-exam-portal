@@ -111,7 +111,7 @@ describe('Asking for a pass', () => {
     const unreadable = await prisma.outboxEvent.create({
       data: {
         aggregateType: NOTIFICATION_REQUEST.AGGREGATE_TYPE,
-        aggregateId: uid('student'),
+        aggregateId: uid(),
         eventType: NOTIFICATION_REQUEST.EVENT_TYPE,
         payload: { nothing: 'usable' },
       },

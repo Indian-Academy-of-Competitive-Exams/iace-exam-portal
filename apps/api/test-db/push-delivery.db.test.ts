@@ -68,7 +68,7 @@ describe('Subscribing this browser', () => {
     const { push, student } = await build();
     await push.subscribe(student, SUBSCRIPTION);
 
-    await push.unsubscribe(uid('student'), SUBSCRIPTION.endpoint);
+    await push.unsubscribe(uid(), SUBSCRIPTION.endpoint);
 
     assert.equal(await prisma.pushSubscription.count(), 1);
 
@@ -231,7 +231,7 @@ describe('Registering this phone', () => {
     const { push, student } = await build();
     await push.registerDevice(student, DEVICE);
 
-    await push.dropDevice(uid('student'), DEVICE.token);
+    await push.dropDevice(uid(), DEVICE.token);
 
     assert.equal(await prisma.pushDevice.count(), 1);
 

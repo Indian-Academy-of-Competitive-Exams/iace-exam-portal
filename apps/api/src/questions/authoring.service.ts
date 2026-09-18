@@ -93,7 +93,7 @@ export class AuthoringService {
       SELECT tag FROM (
         SELECT unnest(q."tags") AS tag, MAX(q."updatedAt") AS last_used
         FROM "Question" q
-        WHERE q."createdById" = ${adminId}
+        WHERE q."createdById" = ${adminId}::uuid
         GROUP BY 1
       ) used
       ORDER BY last_used DESC
@@ -108,7 +108,7 @@ export class AuthoringService {
       SELECT to_char((q."createdAt" AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD') AS day,
              COUNT(*) AS written
       FROM "Question" q
-      WHERE q."createdById" = ${adminId} AND q."createdAt" >= ${startOfInstituteDay(firstDay)}
+      WHERE q."createdById" = ${adminId}::uuid AND q."createdAt" >= ${startOfInstituteDay(firstDay)}
       GROUP BY 1
     `;
     return new Map(rows.map((row) => [row.day, Number(row.written)]));

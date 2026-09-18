@@ -142,7 +142,7 @@ describe('dropping a question on a paper somebody has already sat', () => {
     const { set } = await bench();
 
     await assert.rejects(
-      () => set(PAPER_QUESTION_STATUS.DROPPED, uid('pq')),
+      () => set(PAPER_QUESTION_STATUS.DROPPED, uid()),
       (error: AppException) => error.code === ErrorCodes.NOT_FOUND,
     );
   });

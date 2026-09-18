@@ -1,12 +1,13 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
 import { AuditContext } from '../src/audit';
 import { makeAdmin, resetDatabase, testPrisma, uid } from './support/database';
 
-const ACTOR = 'adm_actor';
+const ACTOR = randomUUID();
 
 const prisma = testPrisma();
 
@@ -242,7 +243,7 @@ describe('AdminsService — setActive', () => {
     const { service } = build();
 
     await assert.rejects(
-      () => service.setActive(uid('admin'), false, ACTOR),
+      () => service.setActive(uid(), false, ACTOR),
       (error: unknown) => AppException.is(error) && error.code === 'NOT_FOUND',
     );
   });
