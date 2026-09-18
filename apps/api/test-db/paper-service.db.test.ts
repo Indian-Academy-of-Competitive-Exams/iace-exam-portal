@@ -365,12 +365,12 @@ describe('PaperService — filling a section’s remainder from its own spec', (
   });
 
   /** A paper pins a version, so a question without one has nothing to pin. */
-  it('draws only from ACTIVE questions that carry a version', async () => {
+  it('draws from any question not archived, that carries a version', async () => {
     const service = await serviceWith({
       questions: [
         ...bank(3, BUILDER.REASONING, 'r'),
         ...bank(2, BUILDER.QUANT, 'q'),
-        { id: idFor('draft'), subjectId: BUILDER.QUANT, status: QUESTION_STATUS.DRAFT },
+        { id: idFor('archived'), subjectId: BUILDER.QUANT, status: QUESTION_STATUS.ARCHIVED },
         { id: idFor('unversioned'), subjectId: BUILDER.QUANT, versioned: false },
       ],
     });

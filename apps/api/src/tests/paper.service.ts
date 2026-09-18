@@ -369,7 +369,7 @@ export class PaperService {
       },
     });
 
-    if (question?.status !== QUESTION_STATUS.ACTIVE || !question.currentVersionId) {
+    if (question?.status === QUESTION_STATUS.ARCHIVED || !question?.currentVersionId) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
         fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
       });
@@ -408,14 +408,14 @@ export class PaperService {
     });
   }
 
-  /** Only ACTIVE questions carrying a current version: a paper pins a version, so there must be one. */
+  /** Anything not archived and carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
     section: DrawSection,
     spec: SectionDrawSpec | undefined,
   ): Promise<DrawCandidate[]> {
     const rows = await this.prisma.question.findMany({
       where: {
-        status: QUESTION_STATUS.ACTIVE,
+        status: { not: QUESTION_STATUS.ARCHIVED },
         currentVersionId: { not: null },
         // The narrowing SQL can do; tags and the split are the engine's.
         ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),

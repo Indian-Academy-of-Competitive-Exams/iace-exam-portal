@@ -7,6 +7,7 @@ import {
   FORM_LEVEL_FIELD,
   QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
+  TEST_STATUS,
   fieldDiff,
   plainTextOf,
   type LocalizedContent,
@@ -293,19 +294,26 @@ export class QuestionsService {
       : this.insertVersion(tx, question, built, options, createdById);
   }
 
-  /** The current version when it may be rewritten rather than replaced, or null when it may not. */
+  /** Rewritable until a test students can already reach pins it — the paper must never move under them. */
   private async revisableVersionId(
     tx: Prisma.TransactionClient,
     question: QuestionRow,
   ): Promise<string | null> {
     const questionVersionId = question.currentVersionId;
-    if (!questionVersionId || question.status !== QUESTION_STATUS.DRAFT) return null;
+    if (!questionVersionId) return null;
 
-    // The guard no status can give: a version a paper holds must never move, and every served version is on one.
-    const papers = await tx.paperQuestion.count({
-      where: { questionId: question.id, questionVersionId },
+    const now = new Date();
+    const reached = await tx.paperQuestion.count({
+      where: {
+        questionId: question.id,
+        questionVersionId,
+        test: {
+          status: { not: TEST_STATUS.DRAFT },
+          OR: [{ opensAt: { lte: now } }, { programUnlocks: { some: { opensAt: { lte: now } } } }],
+        },
+      },
     });
-    return papers > 0 ? null : questionVersionId;
+    return reached > 0 ? null : questionVersionId;
   }
 
   /** Version 1 of a question nobody has drawn stays version 1, however often it is saved. */
