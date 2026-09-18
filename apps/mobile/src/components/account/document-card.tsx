@@ -100,7 +100,11 @@ async function pickPhoto(): Promise<UploadFile | null> {
     return null;
   }
 
-  const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
+  // Android's own photo picker shows the Google library; legacy asks the phone's gallery instead.
+  const picked = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    legacy: true,
+  });
   const asset = picked.canceled ? undefined : picked.assets[0];
   if (!asset) return null;
   if (tooBig(asset.fileSize)) return null;
