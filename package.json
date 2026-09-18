@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "turbo run dev --filter=!@iace/mobile",
-    "dev:mobile": "turbo run dev --filter=@iace/mobile",
+    "dev:mobile": "turbo run build --filter=@iace/mobile^... && pnpm --filter @iace/mobile dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",

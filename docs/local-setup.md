@@ -162,8 +162,11 @@ To run just one: `pnpm --filter @iace/api dev` (or `@iace/test`, `@iace/admin`).
 restarted far more often than the API is, and sharing one process makes every reload cost all four.
 
 ```bash
-pnpm dev:mobile   # builds what Metro needs, then expo start
+pnpm dev:mobile   # builds what Metro needs, then hands the terminal to expo
 ```
+
+It builds through turbo and then runs expo directly, rather than running expo as a turbo task:
+turbo does not give a task the keyboard, and `i`, `a` and `r` are how the Expo terminal is used.
 
 Open it in Expo Go (press `i` for the iOS simulator, `a` for an Android emulator, or scan the QR
 code on a phone on the same Wi-Fi). It needs no `.env` in development: it calls the API on the
