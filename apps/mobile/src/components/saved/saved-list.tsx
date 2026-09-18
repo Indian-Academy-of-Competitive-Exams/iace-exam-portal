@@ -2,18 +2,17 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useInfinitePages } from '@iace/app-kit';
+import { SAVED_FILTER_FIELDS, savedFilters, useInfinitePages } from '@iace/app-kit';
 import {
   instituteDayLabel,
   SAVED_QUESTION_KIND,
-  type SavedFacets,
   type SavedQuestion,
   type SavedQuestionKind,
 } from '@iace/contracts';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import { api } from '../../lib/api';
 import { savedFacetsQueryKey, savedQueryKey } from '../../lib/constants';
-import { asText, useFilterState, type Filter, type FilterOption } from '../../lib/filters';
+import { asSet, useFilterState } from '../../lib/filters';
 import { useTokenColor } from '../../lib/use-token-color';
 import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
@@ -23,11 +22,6 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { SavedQuestionSheet } from './saved-question-sheet';
-
-const ANY = '';
-
-/** The keys this list filters on, named once so the spec and the query cannot drift. */
-const KEYS = { SUBJECT: 'subjectId', TEST: 'testId' } as const;
 
 /** What each list is for, said once at the top rather than on every row. */
 const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
@@ -47,10 +41,10 @@ export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
     queryFn: () => api.me.savedFacets({ kind }),
   });
 
-  const filters = useMemo(() => filterSpec(facets.data), [facets.data]);
+  const filters = useMemo(() => savedFilters(facets.data), [facets.data]);
   const state = useFilterState(filters);
-  const subjectId = asText(state.values[KEYS.SUBJECT]);
-  const testId = asText(state.values[KEYS.TEST]);
+  const subjectId = asSet(state.values[SAVED_FILTER_FIELDS.SUBJECT.key]);
+  const testId = asSet(state.values[SAVED_FILTER_FIELDS.TEST.key]);
 
   const list = useInfinitePages({
     queryKey: [...savedQueryKey(kind), { subjectId, testId }],
@@ -58,8 +52,9 @@ export function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
       api.me.savedQuestions({
         kind,
         page,
-        subjectId: subjectId === ANY ? undefined : subjectId,
-        testId: testId === ANY ? undefined : testId,
+        // A set-valued filter choosing nothing means EVERY one of them, never none.
+        subjectId: subjectId.length > 0 ? [...subjectId] : undefined,
+        testId: testId.length > 0 ? [...testId] : undefined,
       }),
   });
 
@@ -195,27 +190,3 @@ const removalOf = (kind: SavedQuestionKind) =>
   kind === SAVED_QUESTION_KIND.BOOKMARK
     ? 'It leaves your bookmarks. Star it again from the solution review to bring it back.'
     : 'It leaves your mistakes. It comes back only if you get it wrong again.';
-
-/** Both fold: a subject list and a paper list are longer than a phone's width either way. */
-function filterSpec(facets: SavedFacets | undefined): Filter[] {
-  return [
-    {
-      key: KEYS.SUBJECT,
-      kind: 'choice',
-      label: 'Subject',
-      items: facetOptions(facets?.subjects, 'Any subject'),
-    },
-    {
-      key: KEYS.TEST,
-      kind: 'choice',
-      label: 'Test',
-      items: facetOptions(facets?.tests, 'Any test'),
-    },
-  ];
-}
-
-/** Only what their own set spans: a filter must offer no choice that finds nothing. */
-const facetOptions = (rows: SavedFacets['subjects'] | undefined, any: string): FilterOption[] => [
-  { value: ANY, label: any },
-  ...(rows ?? []).map((row) => ({ value: row.id, label: row.name })),
-];

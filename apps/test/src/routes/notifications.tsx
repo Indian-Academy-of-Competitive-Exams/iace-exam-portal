@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
+import { asText, NOTIFICATION_FILTERS, READ_STATE } from '@iace/app-kit';
 import { Settings } from 'lucide-react';
 import {
   Badge,
@@ -35,8 +36,6 @@ import {
   notificationsQueryKey,
 } from '../lib/constants';
 
-const READ_STATE = { ALL: '', UNREAD: 'unread' } as const;
-
 const SKELETON_KEYS = ['a', 'b', 'c', 'd'];
 
 /** Half the row on screen is a read, not a row that clipped the edge of the viewport. */
@@ -54,22 +53,11 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   [NOTIFICATION_TYPE.WELCOME]: 'Welcome',
 };
 
-const FILTERS = [
-  {
-    key: 'state',
-    kind: 'choice',
-    label: 'Show',
-    primary: true,
-    items: [
-      { value: READ_STATE.UNREAD, label: 'Unread' },
-      { value: READ_STATE.ALL, label: 'All' },
-    ],
-  },
-] as const satisfies readonly ListFilter[];
+const FILTERS = NOTIFICATION_FILTERS as ListFilter[];
 
 export function NotificationsPage() {
   const filters = useFilterSpec(FILTERS);
-  const unreadOnly = filters.values.state === READ_STATE.UNREAD;
+  const unreadOnly = asText(filters.values.state) === READ_STATE.UNREAD;
 
   // Paged, not pinned to the first: a student with thirty results must be able to reach the oldest.
   const list = useInfinitePages({

@@ -8,13 +8,19 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnstableNativeVariable } from 'nativewind';
-import { activeFilterCount, asSet, asText, type Filter, type FilterState } from '../../lib/filters';
+import {
+  activeFilterCount,
+  asSet,
+  asText,
+  type FilterSpec,
+  type FilterState,
+} from '../../lib/filters';
 import { Button } from './button';
 import { Chip, ChipRow } from './chip-row';
 
 export interface FilterBarProps {
   state: FilterState;
-  filters: readonly Filter[];
+  filters: readonly FilterSpec[];
 }
 
 export function FilterBar({ state, filters }: Readonly<FilterBarProps>) {
@@ -71,7 +77,7 @@ function FilterSheet({
   onClose,
 }: Readonly<{
   open: boolean;
-  filters: readonly Filter[];
+  filters: readonly FilterSpec[];
   state: FilterState;
   onClose: () => void;
 }>) {
@@ -111,7 +117,10 @@ function FilterSheet({
   );
 }
 
-function FilterControl({ filter, state }: Readonly<{ filter: Filter; state: FilterState }>) {
+function FilterControl({ filter, state }: Readonly<{ filter: FilterSpec; state: FilterState }>) {
+  // A search draws itself in the bar, and only it comes with no choices to draw.
+  const items = filter.items ?? [];
+
   if (filter.kind === 'multi') {
     const held = asSet(state.values[filter.key]);
 
@@ -119,7 +128,7 @@ function FilterControl({ filter, state }: Readonly<{ filter: Filter; state: Filt
       <View className="gap-1.5">
         <Text className="text-xs font-medium text-muted-foreground">{filter.label}</Text>
         <View className="flex-row flex-wrap gap-2">
-          {filter.items.map((item) => (
+          {items.map((item) => (
             <Chip
               key={item.value}
               label={item.label}
@@ -136,7 +145,7 @@ function FilterControl({ filter, state }: Readonly<{ filter: Filter; state: Filt
     return (
       <ChipRow
         label={filter.label}
-        options={filter.items}
+        options={items}
         value={asText(state.values[filter.key])}
         onChange={(next) => state.setFilter(filter.key, next)}
       />

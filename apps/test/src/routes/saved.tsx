@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpenText, CircleCheck, Trash2 } from 'lucide-react';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { SAVED_FILTER_FIELDS, type SavedFilterKey } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -36,8 +37,6 @@ import { SavedQuestionDialog } from '../components/review/saved-question-dialog'
 import { NAV_ITEMS, savedFacetsQueryKey, savedQueryKey } from '../lib/constants';
 
 const KIND_KEY = 'list';
-const SUBJECT_KEY = 'subjectId';
-const TEST_KEY = 'testId';
 
 /** What each list is for, said once at the top rather than on every row. */
 const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
@@ -47,7 +46,7 @@ const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
 };
 
 export function SavedPage() {
-  const filters = useFilters<typeof KIND_KEY | typeof SUBJECT_KEY | typeof TEST_KEY>();
+  const filters = useFilters<typeof KIND_KEY | SavedFilterKey>();
   const chosen = filters.get(KIND_KEY);
   const kind: SavedQuestionKind = isKind(chosen) ? chosen : SAVED_QUESTION_KIND.BOOKMARK;
 
@@ -58,7 +57,11 @@ export function SavedPage() {
         value: kind,
         // Each list spans its own subjects, so the other's choice would filter this one to nothing.
         onValueChange: (next) =>
-          filters.set({ [KIND_KEY]: next, [SUBJECT_KEY]: '', [TEST_KEY]: '' }),
+          filters.set({
+            [KIND_KEY]: next,
+            [SAVED_FILTER_FIELDS.SUBJECT.key]: '',
+            [SAVED_FILTER_FIELDS.TEST.key]: '',
+          }),
         items: SAVED_QUESTION_KINDS.map((value) => ({
           value,
           label: SAVED_QUESTION_KIND_LABELS[value],
@@ -112,21 +115,31 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
 
   const filterSpec = [
     {
-      key: SUBJECT_KEY,
+      key: SAVED_FILTER_FIELDS.SUBJECT.key,
       kind: 'customMulti',
-      label: 'Subject',
+      label: SAVED_FILTER_FIELDS.SUBJECT.label,
       primary: true,
       render: (control: ListFilterMultiControl) => (
-        <FacetPicker kind={kind} facet="subjects" placeholder="Any subject" control={control} />
+        <FacetPicker
+          kind={kind}
+          facet="subjects"
+          placeholder={SAVED_FILTER_FIELDS.SUBJECT.placeholder}
+          control={control}
+        />
       ),
     },
     {
-      key: TEST_KEY,
+      key: SAVED_FILTER_FIELDS.TEST.key,
       kind: 'customMulti',
-      label: 'Test',
+      label: SAVED_FILTER_FIELDS.TEST.label,
       primary: true,
       render: (control: ListFilterMultiControl) => (
-        <FacetPicker kind={kind} facet="tests" placeholder="Any test" control={control} />
+        <FacetPicker
+          kind={kind}
+          facet="tests"
+          placeholder={SAVED_FILTER_FIELDS.TEST.placeholder}
+          control={control}
+        />
       ),
     },
   ] as const satisfies readonly ListFilter[];

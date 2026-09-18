@@ -23,25 +23,14 @@ import {
   type QuestionReport,
   type QuestionReportRow,
 } from '@iace/contracts';
+import { QUESTION_REPORT_FILTERS } from '@iace/app-kit';
 import { api } from '../lib/api';
 import { questionReportQueryKey } from '../lib/constants';
 import { ReportSkeleton, StatBand } from '../components/ui';
 
 const DASH = '—';
 
-/** The list's own "Any …" row is the empty value, which is how ListView reads a filter as unset. */
-const STATUS_FILTER: ListFilter = {
-  key: 'status',
-  kind: 'choice',
-  label: 'Result',
-  primary: true,
-  items: [
-    { value: '', label: 'Any result' },
-    { value: QUESTION_FILTERS.CORRECT, label: 'Correct' },
-    { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
-    { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
-  ],
-};
+const STATUS_FILTER = QUESTION_REPORT_FILTERS[0] as ListFilter;
 
 /** What the paper said about them, which the score card shows the moment it is marked. */
 const RESULTS = {

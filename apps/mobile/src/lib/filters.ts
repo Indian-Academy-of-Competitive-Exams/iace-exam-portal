@@ -1,30 +1,13 @@
 /**
- * The web's filter spec on a phone. One array declares the keys, and from it come the controls,
- * the active count and what Clear drops — so those three cannot disagree. Same kinds and the same
- * `primary` rule as `ListFilter` in packages/ui; what differs is where the folded ones are drawn.
+ * The phone's half of the filter spec: the state a screen holds, and what is set. WHICH filters a
+ * screen has, and what its choices are called, come from `@iace/app-kit` — one definition per page,
+ * shared with the web, because the two had already drifted on keys and labels.
  */
 import { useCallback, useMemo, useState } from 'react';
+import { asSet, asText, type FilterSpec, type FilterValue } from '@iace/app-kit';
 
-export type FilterValue = string | readonly string[];
-
-export interface FilterOption {
-  value: string;
-  label: string;
-}
-
-interface FilterBase {
-  key: string;
-  label: string;
-  /** Inline on the screen. Everything else folds into the sheet, which is all a phone has room for. */
-  primary?: boolean;
-}
-
-export type Filter =
-  | (FilterBase & { kind: 'search'; placeholder?: string })
-  /** `items` carries its own "Any …" row, so the control is never also clearable. */
-  | (FilterBase & { kind: 'choice'; items: readonly FilterOption[] })
-  /** Several at once. No "Any …" row: choosing nothing already means every one of them. */
-  | (FilterBase & { kind: 'multi'; items: readonly FilterOption[] });
+export type { FilterSpec, FilterValue } from '@iace/app-kit';
+export { ANY_CHOICE, asSet, asText } from '@iace/app-kit';
 
 export type FilterValues = Readonly<Record<string, FilterValue>>;
 
@@ -32,15 +15,20 @@ const isSet = (value: FilterValue | undefined): boolean =>
   Array.isArray(value) ? value.length > 0 : (value ?? '') !== '';
 
 /** How many of a spec are set. Read by the bar for its badge and by the list for its empty state. */
-export function activeFilterCount(values: FilterValues, filters: readonly Filter[]): number {
+export function activeFilterCount(values: FilterValues, filters: readonly FilterSpec[]): number {
   return filters.filter((filter) => isSet(values[filter.key])).length;
 }
 
-export const asText = (value: FilterValue | undefined): string =>
-  typeof value === 'string' ? value : '';
-
-export const asSet = (value: FilterValue | undefined): readonly string[] =>
-  Array.isArray(value) ? value : [];
+/** What is set, in the words the reader chose them by — the line under a screen's title. */
+export function summaryOf(filters: readonly FilterSpec[], values: FilterValues): string[] {
+  return filters.flatMap((filter) => {
+    if (filter.kind === 'search') return [];
+    const held = filter.kind === 'multi' ? asSet(values[filter.key]) : [asText(values[filter.key])];
+    return held
+      .filter((one) => one !== '')
+      .map((one) => filter.items?.find((item) => item.value === one)?.label ?? one);
+  });
+}
 
 export interface FilterState {
   values: FilterValues;
@@ -51,7 +39,7 @@ export interface FilterState {
 }
 
 /** The web keeps this in the URL; a phone has none, so the screen holds it. */
-export function useFilterState(filters: readonly Filter[]): FilterState {
+export function useFilterState(filters: readonly FilterSpec[]): FilterState {
   const [values, setValues] = useState<FilterValues>({});
 
   const setFilter = useCallback((key: string, value: FilterValue) => {

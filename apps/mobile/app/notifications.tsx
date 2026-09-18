@@ -2,40 +2,23 @@
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useInfinitePages } from '@iace/app-kit';
+import { NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-kit';
 import { instituteDayLabel, type Notification } from '@iace/contracts';
 import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
 import { useTokenColor } from '../src/lib/use-token-color';
-import { asText, useFilterState, type Filter } from '../src/lib/filters';
+import { asText, useFilterState } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
 import { Card } from '../src/components/ui/card';
 import { FilterBar } from '../src/components/ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { Skeleton } from '../src/components/ui/skeleton';
 
-const EVERY = 'every';
-const UNREAD = 'unread';
-
-/** Two choices and a phone has room for both, so this one stays on the screen rather than folding. */
-const FILTERS: readonly Filter[] = [
-  {
-    key: 'showing',
-    kind: 'choice',
-    label: 'Showing',
-    primary: true,
-    items: [
-      { value: EVERY, label: 'Everything' },
-      { value: UNREAD, label: 'Unread' },
-    ],
-  },
-];
-
 /** What the institute has told this student, newest first. Opening one marks it read. */
 export default function NotificationsScreen() {
-  const state = useFilterState(FILTERS);
-  const unreadOnly = asText(state.values.showing) === UNREAD;
+  const state = useFilterState(NOTIFICATION_FILTERS);
+  const unreadOnly = asText(state.values.state) === READ_STATE.UNREAD;
   const queryClient = useQueryClient();
   const router = useRouter();
   const spinner = useTokenColor('--muted-foreground');
@@ -69,7 +52,7 @@ export default function NotificationsScreen() {
       onEndReachedThreshold={0.5}
       onEndReached={list.loadMore}
       renderItem={({ item }) => <Row row={item} onPress={() => open(item)} />}
-      ListHeaderComponent={<FilterBar state={state} filters={FILTERS} />}
+      ListHeaderComponent={<FilterBar state={state} filters={NOTIFICATION_FILTERS} />}
       ListEmptyComponent={<ListBody list={list} unreadOnly={unreadOnly} />}
       ListFooterComponent={
         list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null

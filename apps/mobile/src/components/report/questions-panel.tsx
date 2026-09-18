@@ -10,8 +10,9 @@ import {
   type QuestionReport,
   type QuestionReportRow,
 } from '@iace/contracts';
+import { QUESTION_REPORT_FILTERS } from '@iace/app-kit';
 import { questionReportQuery } from '../../lib/queries';
-import { asText, useFilterState, type Filter, type FilterState } from '../../lib/filters';
+import { asText, useFilterState, type FilterState } from '../../lib/filters';
 import { Alert } from '../ui/alert';
 import { Badge, type BadgeVariant } from '../ui/badge';
 import { Card } from '../ui/card';
@@ -30,26 +31,10 @@ const RESULTS: Readonly<Record<string, { label: string; variant: BadgeVariant }>
   LEFT: { label: 'Skipped', variant: 'neutral' },
 };
 
-/** One filter, and a phone has room for it: it stays on the screen rather than folding. */
-const FILTERS: readonly Filter[] = [
-  {
-    key: 'result',
-    kind: 'choice',
-    label: 'Result',
-    primary: true,
-    items: [
-      { value: QUESTION_FILTERS.ALL, label: 'Any result' },
-      { value: QUESTION_FILTERS.CORRECT, label: 'Correct' },
-      { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
-      { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
-    ],
-  },
-];
-
 /** Every question of one sitting against the field's, which is where a clock is actually read. */
 export function QuestionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const report = useQuery(questionReportQuery(attemptId));
-  const state = useFilterState(FILTERS);
+  const state = useFilterState(QUESTION_REPORT_FILTERS);
 
   if (report.isLoading) {
     return (
@@ -77,7 +62,7 @@ export function QuestionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
 
 function Body({ report, state }: Readonly<{ report: QuestionReport; state: FilterState }>) {
   // The list's own "Any result" row is the unset value, which is how a choice filter reads as off.
-  const filter = asText(state.values.result) || QUESTION_FILTERS.ALL;
+  const filter = asText(state.values.status) || QUESTION_FILTERS.ALL;
   const rows = useMemo(
     () => report.questions.filter((row) => matches(row, filter)),
     [report.questions, filter],
@@ -118,7 +103,7 @@ function Header({
         />
       </View>
 
-      <FilterBar state={state} filters={FILTERS} />
+      <FilterBar state={state} filters={QUESTION_REPORT_FILTERS} />
       <Text className="text-xs text-muted-foreground">{`${showing} of ${report.questions.length}`}</Text>
     </View>
   );
