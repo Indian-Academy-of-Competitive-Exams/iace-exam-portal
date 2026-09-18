@@ -472,11 +472,11 @@
   --empty-icon: #343b47;
   --empty-icon-bg: #1b212a;
 
-  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.5), 0 2px 3px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 24px -6px rgba(0, 0, 0, 0.6), 0 4px 8px -3px rgba(0, 0, 0, 0.45);
-  --shadow-overlay: 0 24px 48px -12px rgba(0, 0, 0, 0.7), 0 8px 16px -8px rgba(0, 0, 0, 0.5);
+  --shadow-xs: 0 1px 1px rgba(2, 4, 10, 0.3);
+  --shadow-sm: 0 1px 2px rgba(2, 4, 10, 0.4), 0 1px 1px rgba(2, 4, 10, 0.3);
+  --shadow-md: 0 4px 8px -2px rgba(2, 4, 10, 0.5), 0 2px 3px -1px rgba(2, 4, 10, 0.4);
+  --shadow-lg: 0 12px 24px -6px rgba(2, 4, 10, 0.6), 0 4px 8px -3px rgba(2, 4, 10, 0.45);
+  --shadow-overlay: 0 24px 48px -12px rgba(2, 4, 10, 0.7), 0 8px 16px -8px rgba(2, 4, 10, 0.5);
 }
 
 /* ============================================================================

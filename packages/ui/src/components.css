@@ -2,7 +2,7 @@
    IACE COMPONENTS — what a React component cannot carry
    packages/ui/components.css   ·   requires tokens.css v0.3
 
-   scrollbars · rich content · watermark · scaffold editor · figures · print
+   scrollbars · headings · rich content · watermark · scaffold editor · figures · print
 
    Every value here is a token reference. If you find yourself writing a raw
    px or hex below this line, the token layer is missing something — add it
@@ -55,6 +55,24 @@
   ::-webkit-scrollbar-corner {
     background: transparent;
   }
+}
+
+/* ============================================================================
+   HEADINGS — global, because an orphan belongs to the text, not to a component
+
+   A heading that wraps leaves its last word alone on a line; `balance` evens the
+   lines instead. Exam content is excluded: the CBT screen reproduces the printed
+   paper, so its line breaks are fidelity rather than taste.
+   ========================================================================== */
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+.rich-content :is(h1, h2, h3) {
+  text-wrap: wrap;
 }
 
 /* ============================================================================
