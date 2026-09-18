@@ -315,6 +315,11 @@ and needs no mapping at all.
   pinned version's option ids in stored order and an answer sheet stores a POSITION into it, so a
   trigger rebuilds that array on every pinning paper whenever a version's options change. Editing
   one test's copy of a question silently repairs every other unopened paper holding it.
+- **Every path that touches both takes the TEST before the QUESTION, its tests in `id` order.**
+  Finalize and thaw already did; an edit now takes the same lock on the tests its paper rows reach
+  before it claims the question row, because the version guard reaches those tests anyway on the way
+  out. Nothing enforces this but the rule: two admins crossing on one order deadlock, and Postgres
+  kills one of them with a save the admin never asked to lose.
 - **Proof-reading reads DRAFTS and nothing else.** A reader's flags gate ACTIVATION, so a question
   that is already live is past the point their reading changes, and an archived one is past caring.
   The server forces `status: DRAFT` rather than filtering on it, so a hand-edited URL cannot widen

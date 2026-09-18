@@ -275,6 +275,9 @@ export class QuestionsService {
     await this.assertTaxonomySettled(tx, question, draft);
     await this.assertStatusReachable(tx, id, question.status, draft.status);
 
+    // One order everywhere, Test before Question: finalize and thaw take the test first too.
+    await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" IN (SELECT "testId" FROM "PaperQuestion" WHERE "questionId" = ${id}::uuid) ORDER BY "id" FOR UPDATE`;
+
     // Pinned to the row as read, so the version and content this rests on cannot be out of date.
     const claimed = await tx.question.updateMany({
       where: { id, updatedAt: question.updatedAt },

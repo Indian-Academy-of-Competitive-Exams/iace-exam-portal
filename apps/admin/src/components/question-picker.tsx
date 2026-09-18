@@ -4,6 +4,7 @@ import {
   DIFFICULTY_LEVELS,
   PICK_REFUSAL,
   QUESTION_STATUS,
+  WRITTEN_FOR,
   boundedPicks,
   pickIssue,
   quotaWithPicks,
@@ -14,6 +15,7 @@ import {
   type QuestionSummary,
   type SectionDrawSpec,
   type SectionQuota,
+  type WrittenFor,
 } from '@iace/contracts';
 import { ArrowUp } from 'lucide-react';
 import { useLocalFilters, useScrollList } from '@iace/app-kit/browser';
@@ -157,12 +159,15 @@ function DifficultyChips({
 }
 
 export function QuestionChooser({
+  testId,
   section,
   spec,
   quota,
   held,
   picking,
 }: Readonly<{
+  /** Whose authoring the pool is split against — its assignments wrote one side of it. */
+  testId: string;
   section: BaseConfigSection;
   /** What the section draws from. The pool follows it, so narrowing the topics narrows this. */
   spec: SectionDrawSpec;
@@ -205,6 +210,19 @@ export function QuestionChooser({
       width: 'w-auto',
       render: (control: ListFilterMultiControl) => <DifficultyChips {...control} quota={live} />,
     },
+    {
+      key: 'writtenFor',
+      kind: 'choice',
+      label: 'Source',
+      primary: true,
+      // It says which pool you are looking at, so it narrows whichever way Match is set.
+      alwaysApplies: true,
+      items: [
+        { value: '', label: 'Any source' },
+        { value: WRITTEN_FOR.TEST, label: 'Written for this test' },
+        { value: WRITTEN_FOR.BANK, label: 'From the bank' },
+      ],
+    },
   ] as const;
 
   const questions = useScrollList({
@@ -217,6 +235,8 @@ export function QuestionChooser({
       drawable: 'true',
       subjectId: section.subjectId ? [section.subjectId] : undefined,
       topicId: spec.topicIds,
+      writtenFor: (values.writtenFor as WrittenFor) || undefined,
+      writtenForTestId: values.writtenFor ? testId : undefined,
     }),
     fetchPage: (params) => api.admin.questions.list({ ...params, pageSize: POOL_PAGE_SIZE }),
   });

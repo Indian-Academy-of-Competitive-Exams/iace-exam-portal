@@ -448,6 +448,7 @@ function SectionWorkspace({
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {editable ? (
           <QuestionChooser
+            testId={testId}
             section={section}
             spec={spec}
             quota={quota}

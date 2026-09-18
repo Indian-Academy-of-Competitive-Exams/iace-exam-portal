@@ -15,6 +15,7 @@ export const PRISMA_ERROR_CODES = {
 /** Postgres says it in `meta.code`; a raw query reports the database's code, not Prisma's. */
 export const POSTGRES_ERROR_CODES = {
   MALFORMED_VALUE: '22P02',
+  DEADLOCK: '40P01',
 } as const;
 
 /** A malformed id, whichever way it reached Postgres: no row can have it, so nothing was found. */
@@ -23,6 +24,17 @@ export function isMalformedValue(error: Prisma.PrismaClientKnownRequestError): b
   return (
     error.code === PRISMA_ERROR_CODES.RAW_QUERY_FAILED &&
     (error.meta as { code?: unknown } | undefined)?.code === POSTGRES_ERROR_CODES.MALFORMED_VALUE
+  );
+}
+
+/** Postgres killed one of two crossing transactions; only a raw query carries the code in `meta`. */
+export function isDeadlock(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+    return error.message.includes(POSTGRES_ERROR_CODES.DEADLOCK);
+  }
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.meta as { code?: unknown } | undefined)?.code === POSTGRES_ERROR_CODES.DEADLOCK
   );
 }
 

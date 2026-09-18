@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   QUESTION_SORTS,
   QUESTION_STATUS,
+  WRITTEN_FOR,
   type QuestionListQuery,
   type QuestionSort,
 } from '@iace/contracts';
@@ -37,6 +38,11 @@ export function questionWhere(
   else always.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
   // The picker asks the same question the draw asks, so it cannot offer a row fillSection refuses.
   if (query.drawable) always.push(DRAWABLE_QUESTION);
+  // Resolved through the assignment relation, so no caller has to carry a list of ids in the URL.
+  if (query.writtenForTestId && query.writtenFor) {
+    const wroteIt = { assignment: { testId: query.writtenForTestId } };
+    always.push(query.writtenFor === WRITTEN_FOR.BANK ? { NOT: wroteIt } : wroteIt);
+  }
   if (query.tag) chosen.push({ tags: { has: query.tag } });
   // No picker to choose an author from, so the name typed is matched against what they sign in as.
   if (query.author) {

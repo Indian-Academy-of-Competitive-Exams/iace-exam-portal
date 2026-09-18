@@ -20,7 +20,7 @@ import {
   type ApiFailure,
 } from '@iace/contracts';
 import { ensureRequestId, type RequestWithId } from './request-id';
-import { PRISMA_ERROR_CODES, isMalformedValue } from './prisma-errors';
+import { PRISMA_ERROR_CODES, isDeadlock, isMalformedValue } from './prisma-errors';
 
 /**
  * The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma,
@@ -98,8 +98,17 @@ function translate(exception: unknown): Translated {
     };
   }
 
-  // 3. Prisma's constraint failures are the two that mean something to a user;
-  //    the rest are our bug, not theirs.
+  // 3. The Prisma failures that mean something to a user; the rest are our bug, not theirs.
+  if (isDeadlock(exception)) {
+    return {
+      status: ERROR_CODE_STATUS.CONFLICT,
+      error: {
+        code: ErrorCodes.CONFLICT,
+        message:
+          'Somebody else was editing the same thing just then, so nothing was saved. Try again.',
+      },
+    };
+  }
   if (exception instanceof Prisma.PrismaClientKnownRequestError) {
     if (exception.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
       return {

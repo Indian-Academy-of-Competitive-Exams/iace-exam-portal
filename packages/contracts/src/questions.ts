@@ -526,6 +526,14 @@ export const QUESTION_SORTS = {
 export type QuestionSort = (typeof QUESTION_SORTS)[keyof typeof QUESTION_SORTS];
 const QUESTION_SORT_VALUES = Object.values(QUESTION_SORTS) as [QuestionSort, ...QuestionSort[]];
 
+/** The two sides of one test's pool: what its own assignments wrote, and everything else. */
+export const WRITTEN_FOR = {
+  TEST: 'test',
+  BANK: 'bank',
+} as const;
+export type WrittenFor = (typeof WRITTEN_FOR)[keyof typeof WRITTEN_FOR];
+const WRITTEN_FOR_VALUES = Object.values(WRITTEN_FOR) as [WrittenFor, ...WrittenFor[]];
+
 export const questionListQuerySchema = paginationQuerySchema.extend({
   /** Matches the stem in any language, the question code, and any tag. */
   q: searchQuery(),
@@ -543,6 +551,10 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   to: dateOnlySchema.optional(),
   /** Only what a paper may draw: not archived, carrying a version, and no open flag. */
   drawable: z.stringbool().optional(),
+  /** Which test's authoring the split is drawn against — meaningless without `writtenFor`. */
+  writtenForTestId: z.string().optional(),
+  /** Which side of that split: what its assignments wrote, or the rest of the bank. */
+  writtenFor: z.enum(WRITTEN_FOR_VALUES).optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
   match: matchModeQuery(),
 });

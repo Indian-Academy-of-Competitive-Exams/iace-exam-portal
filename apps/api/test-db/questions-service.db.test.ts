@@ -4,6 +4,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   DIFFICULTY_LEVEL,
   ErrorCodes,
   QUESTION_FLAG_CATEGORY,
@@ -11,6 +12,7 @@ import {
   QUESTION_STATUS,
   QUESTION_TYPE,
   TEST_STATUS,
+  WRITTEN_FOR,
   plainTextOf,
   previewTextOf,
   questionAvailabilityQuerySchema,
@@ -1289,5 +1291,116 @@ describe('QuestionsService.page — the picker asks for what the draw would find
       page.items.map((row) => row.id).sort(),
       [idFor('draft'), idFor('live')].sort(),
     );
+  });
+});
+
+/** One section of one test handed to a typist, with the question they wrote against it. */
+async function assignedFor(questionId: string): Promise<string> {
+  const catalog = await makeCatalog(prisma);
+  const test = await makeTest(prisma, catalog);
+  const section = await makeSection(prisma, catalog);
+  const assignment = await prisma.questionAssignment.create({
+    data: {
+      id: uid(),
+      testId: test.id,
+      baseConfigId: catalog.baseConfigId,
+      baseConfigSectionId: section.id,
+      assigneeId: ADMIN,
+      role: ASSIGNMENT_ROLES.TYPIST,
+    },
+    select: { id: true },
+  });
+  await prisma.question.update({
+    where: { id: questionId },
+    data: { assignmentId: assignment.id },
+  });
+  return test.id;
+}
+
+describe('QuestionsService.page — a test’s own authoring, and the rest of the bank', () => {
+  /** The failure this prevents: hunting the twenty written for this test among thousands. */
+  it('answers either side of the split from the assignment relation alone', async () => {
+    const { questions } = await build([{ id: 'ours' }, { id: 'theirs' }, { id: 'banked' }]);
+    const testId = await assignedFor(idFor('ours'));
+    await assignedFor(idFor('theirs'));
+
+    const written = await questions.page(
+      listQuery({ writtenForTestId: testId, writtenFor: WRITTEN_FOR.TEST }),
+    );
+    const banked = await questions.page(
+      listQuery({ writtenForTestId: testId, writtenFor: WRITTEN_FOR.BANK }),
+    );
+
+    assert.deepEqual(
+      written.items.map((row) => row.id),
+      [idFor('ours')],
+    );
+    assert.deepEqual(
+      banked.items.map((row) => row.id).sort(),
+      [idFor('banked'), idFor('theirs')].sort(),
+      'another test’s authoring is bank to this one, and so is a question with no assignment',
+    );
+  });
+
+  it('narrows nothing when no side is named', async () => {
+    const { questions } = await build([{ id: 'ours' }, { id: 'banked' }]);
+    const testId = await assignedFor(idFor('ours'));
+
+    const page = await questions.page(listQuery({ writtenForTestId: testId }));
+
+    assert.equal(page.total, 2);
+  });
+});
+
+const LOCK_ORDER = { TESTS: 'the tests holding it', QUESTION: 'the question row' } as const;
+
+/** Nothing outside the transaction can see a lock, so what it records is the order the statements left in. */
+function watchingLocks(order: string[]): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) => work(recordingLocks(tx, order)));
+    },
+  });
+}
+
+function recordingLocks(tx: Prisma.TransactionClient, order: string[]): Prisma.TransactionClient {
+  return new Proxy(tx, {
+    get(inner, member: string | symbol) {
+      if (member === '$queryRaw') {
+        return (sql: TemplateStringsArray, ...values: unknown[]) => {
+          const statement = sql.join('?');
+          if (statement.includes('FROM "Test"') && statement.includes('FOR UPDATE')) {
+            order.push(LOCK_ORDER.TESTS);
+          }
+          return inner.$queryRaw(sql, ...values);
+        };
+      }
+      if (member !== 'question') return Reflect.get(inner, member) as unknown;
+      return new Proxy(inner.question, {
+        get(delegate, method: string | symbol) {
+          if (method !== 'updateMany') return Reflect.get(delegate, method) as unknown;
+          return (args: Prisma.QuestionUpdateManyArgs) => {
+            order.push(LOCK_ORDER.QUESTION);
+            return delegate.updateMany(args);
+          };
+        },
+      });
+    },
+  });
+}
+
+describe('QuestionsService.update — one lock order, Test before Question', () => {
+  /** The failure this prevents: an edit and a finalize taking the same two rows in opposite orders. */
+  it('locks the tests holding the question before it claims the question row', async () => {
+    const order: string[] = [];
+    const { questions } = await build([], watchingLocks(order));
+    const created = await questions.create(asDraft(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
+
+    await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+
+    assert.deepEqual(order, [LOCK_ORDER.TESTS, LOCK_ORDER.QUESTION]);
   });
 });

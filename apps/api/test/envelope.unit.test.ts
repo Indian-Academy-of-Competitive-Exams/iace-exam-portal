@@ -176,6 +176,27 @@ describe('AllExceptionsFilter', () => {
     assert.equal(capture(filter, otherRawFailure).status, 500);
   });
 
+  /** The failure this prevents: two admins crossing, and the save vanishing into an unexplained 500. */
+  it('maps a deadlock to CONFLICT, whichever shape Prisma reports it in', () => {
+    const raw = new Prisma.PrismaClientKnownRequestError('raw failed', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '40P01', message: 'deadlock detected' },
+    });
+    // A model query loses the code entirely: `PrismaClientUnknownRequestError` carries no `meta`.
+    const modelQuery = new Prisma.PrismaClientUnknownRequestError(
+      'Error occurred during query execution: PostgresError { code: "40P01", message: "deadlock detected" }',
+      { clientVersion: 'test' },
+    );
+
+    for (const deadlock of [raw, modelQuery]) {
+      const { status, failure } = capture(filter, deadlock);
+      assert.equal(status, 409);
+      assert.equal(failure.error.code, 'CONFLICT');
+      assert.match(failure.error.message, /nothing was saved/);
+    }
+  });
+
   it('maps a Nest HttpException by status', () => {
     const { status, failure } = capture(filter, new HttpException('Nope', HttpStatus.NOT_FOUND));
 
