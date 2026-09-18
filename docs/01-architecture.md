@@ -35,7 +35,7 @@ TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API s
 | **Database**              | PostgreSQL via Prisma                                                            | Highly relational. `prisma/schema.prisma` is the target of record.                                                         |
 | **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, OTP, sessions, device binding, rate limiting; scoring, flush, sweep and rollup jobs.                   |
 | **Auth**                  | Self-built JWT + refresh; students mobile-OTP then 4-digit PIN, admins email-OTP | OTP, sessions and device binding live in Redis, never the DB.                                                              |
-| **Outbound messaging**    | SMS for OTP and the roster PIN; everything else in-app + web push                | Those two are what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.         |
+| **Outbound messaging**    | SMS for OTP and the roster PIN; everything else in-app, web push and FCM         | Those two are what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.         |
 | **OTP transport**         | `OTP_SENDER` selects console or SMS                                              | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.               |
 | **WhatsApp**              | Interakt only, wired and off — future scope                                      | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.       |
 | **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                    |
@@ -226,7 +226,8 @@ A handful of managed services, containerised so nothing is tied to a single host
 | Route 53 + ACM               | DNS and TLS                               | HTTPS everywhere.                                                              |
 | Secrets Manager / SSM        | DB, Redis, S3 and SMS credentials         | No secrets in code or in a committed env file — `.env.example` only.           |
 | SMS provider (external)      | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                     |
-| Web push (external)          | Every other message to a student          | VAPID direct to the browser's push service. No vendor and no per-message cost. |
+| Web push (external)          | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost. |
+| FCM (external)               | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.  |
 
 **Anything in front of the API must pass `x-client` and `x-device-name` through.** A load balancer or
 CDN that strips them makes every sign-in kind-less, so each new sign-in replaces all of a student's

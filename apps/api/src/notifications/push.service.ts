@@ -1,14 +1,19 @@
 /**
- * Owns `PushSubscription` and the free web-push fan-out. Best-effort by contract: the bell row is
- * already committed by the time this runs, so nothing here may throw its way back into the job that
- * wrote it — a push service being down is not a student left untold.
+ * Owns `PushSubscription` and `PushDevice`, and the free fan-out to both: a browser through
+ * web-push, a phone through FCM. Best-effort by contract — the bell row is already committed by
+ * the time this runs, so nothing here may throw its way back into the job that wrote it.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { DeliveryChannel, DeliveryStatus, type NotificationType } from '@prisma/client';
-import { NOTIFICATION_INBOX_PATH, type PushSubscriptionBody } from '@iace/contracts';
+import {
+  NOTIFICATION_INBOX_PATH,
+  type PushDeviceBody,
+  type PushSubscriptionBody,
+} from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
-import { PUSH_OUTCOMES, WebPushSender } from './web-push.sender';
+import { FcmSender } from './fcm.sender';
+import { PUSH_OUTCOMES, WebPushSender, type PushPayload } from './web-push.sender';
 
 /** What one push is sent from. The title only — the body may name marks, and a push must not. */
 export interface PushDelivery {
@@ -26,6 +31,7 @@ export class PushService {
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
     private readonly sender: WebPushSender,
+    private readonly fcm: FcmSender,
   ) {}
 
   /** Null is a channel nothing can carry, which the screen shows differently from one switched off. */
@@ -49,29 +55,54 @@ export class PushService {
     await this.prisma.pushSubscription.deleteMany({ where: { studentId, endpoint } });
   }
 
+  /** Keyed on the token FCM issued: the same phone re-registering is the same row, moved if it must be. */
+  async registerDevice(studentId: string, body: PushDeviceBody): Promise<void> {
+    const device = { platform: body.platform, deviceName: body.deviceName ?? null };
+
+    await this.prisma.pushDevice.upsert({
+      where: { token: body.token },
+      create: { studentId, token: body.token, ...device },
+      update: { studentId, lastSeenAt: new Date(), ...device },
+    });
+  }
+
+  /** Scoped by student, so somebody else's token in the body deletes nothing. */
+  async dropDevice(studentId: string, token: string): Promise<void> {
+    await this.prisma.pushDevice.deleteMany({ where: { studentId, token } });
+  }
+
   /** Never throws: the caller has already written the bell, which is the source of truth. */
   async deliver(input: PushDelivery): Promise<void> {
+    const payload = {
+      title: input.title,
+      url: NOTIFICATION_INBOX_PATH,
+      notificationId: input.notificationId,
+    };
+
+    // Two channels, each booked on its own ledger row: a phone reached is not a browser reached.
+    await Promise.all([
+      this.attempt(input, DeliveryChannel.WEB_PUSH, () => this.sendWeb(input, payload)),
+      this.attempt(input, DeliveryChannel.MOBILE_PUSH, () => this.sendMobile(input, payload)),
+    ]);
+  }
+
+  private async attempt(
+    input: PushDelivery,
+    channel: DeliveryChannel,
+    send: () => Promise<void>,
+  ): Promise<void> {
     try {
-      await this.send(input);
+      await send();
     } catch (error) {
-      this.logger.warn(`Web push for notification ${input.notificationId} failed`, error);
+      this.logger.warn(`${channel} for notification ${input.notificationId} failed`, error);
     }
   }
 
-  private async send(input: PushDelivery): Promise<void> {
+  private async sendWeb(input: PushDelivery, payload: PushPayload): Promise<void> {
     if (!this.sender.isConfigured) return;
 
     // A ledger row means this was already decided, so a redelivered job cannot push a second time.
-    const settled = await this.prisma.notificationDelivery.findUnique({
-      where: {
-        notificationId_channel: {
-          notificationId: input.notificationId,
-          channel: DeliveryChannel.WEB_PUSH,
-        },
-      },
-      select: { id: true },
-    });
-    if (settled) return;
+    if (await this.settled(input.notificationId, DeliveryChannel.WEB_PUSH)) return;
 
     const targets = await this.prisma.pushSubscription.findMany({
       where: { studentId: input.studentId },
@@ -80,11 +111,6 @@ export class PushService {
     // A browser subscription IS the consent, so no subscription is an absence and not a refusal.
     if (targets.length === 0) return;
 
-    const payload = {
-      title: input.title,
-      url: NOTIFICATION_INBOX_PATH,
-      notificationId: input.notificationId,
-    };
     const outcomes = await Promise.all(
       targets.map(async (target) => ({
         endpoint: target.endpoint,
@@ -99,23 +125,72 @@ export class PushService {
       });
     }
 
-    const reached = outcomes.some((row) => row.outcome === PUSH_OUTCOMES.SENT);
     await this.record(
       input.notificationId,
-      reached
-        ? { status: DeliveryStatus.SENT, sentAt: new Date(), attempts: 1 }
-        : {
-            status: DeliveryStatus.FAILED,
-            failedAt: new Date(),
-            attempts: 1,
-            lastError: `No subscription accepted the push (${outcomes.length} tried)`,
-          },
+      DeliveryChannel.WEB_PUSH,
+      outcomes.some((row) => row.outcome === PUSH_OUTCOMES.SENT),
+      outcomes.length,
     );
   }
 
+  /** The phones this student has signed in on, each reached by the token FCM issued it. */
+  private async sendMobile(input: PushDelivery, payload: PushPayload): Promise<void> {
+    if (!this.fcm.isConfigured) return;
+    if (await this.settled(input.notificationId, DeliveryChannel.MOBILE_PUSH)) return;
+
+    const devices = await this.prisma.pushDevice.findMany({
+      where: { studentId: input.studentId },
+      select: { token: true },
+    });
+    // Registering the token IS the consent, so no device is an absence and not a refusal.
+    if (devices.length === 0) return;
+
+    const outcomes = await Promise.all(
+      devices.map(async (device) => ({
+        token: device.token,
+        outcome: await this.fcm.send(device.token, payload),
+      })),
+    );
+
+    const dead = outcomes.filter((row) => row.outcome === PUSH_OUTCOMES.GONE);
+    if (dead.length > 0) {
+      await this.prisma.pushDevice.deleteMany({
+        where: { token: { in: dead.map((row) => row.token) } },
+      });
+    }
+
+    await this.record(
+      input.notificationId,
+      DeliveryChannel.MOBILE_PUSH,
+      outcomes.some((row) => row.outcome === PUSH_OUTCOMES.SENT),
+      outcomes.length,
+    );
+  }
+
+  /** A ledger row means this was already decided, so a redelivered job cannot push a second time. */
+  private async settled(notificationId: string, channel: DeliveryChannel): Promise<boolean> {
+    const row = await this.prisma.notificationDelivery.findUnique({
+      where: { notificationId_channel: { notificationId, channel } },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   /** Upsert, not create: the ledger holds one row per notification and channel, whatever retries. */
-  private async record(notificationId: string, outcome: DeliveryOutcome): Promise<void> {
-    const channel = DeliveryChannel.WEB_PUSH;
+  private async record(
+    notificationId: string,
+    channel: DeliveryChannel,
+    reached: boolean,
+    tried: number,
+  ): Promise<void> {
+    const outcome: DeliveryOutcome = reached
+      ? { status: DeliveryStatus.SENT, sentAt: new Date(), attempts: 1 }
+      : {
+          status: DeliveryStatus.FAILED,
+          failedAt: new Date(),
+          attempts: 1,
+          lastError: `Nothing accepted the push (${tried} tried)`,
+        };
 
     await this.prisma.notificationDelivery.upsert({
       where: { notificationId_channel: { notificationId, channel } },

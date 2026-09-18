@@ -12,7 +12,13 @@ import { NotificationsService } from '../src/notifications/notifications.service
 import { PushService } from '../src/notifications/push.service';
 import { TestOpeningService } from '../src/notifications/test-opening.service';
 import { NOTIFICATION_WRITE_JOB_ID } from '../src/queue/queues';
-import { FakeConfig, FakePushSender, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import {
+  FakeConfig,
+  FakeFcmSender,
+  FakePushSender,
+  FakeQueue,
+  fakeQueueFailures,
+} from '../test/support/fakes';
 import { makeAnnouncement, makeStudent, resetDatabase, testPrisma, uid } from './support/database';
 
 /** The durable path: the fact and the intent commit together, and the queue is a later step. */
@@ -30,6 +36,7 @@ function build() {
     prisma,
     new FakeConfig().asService(),
     new FakePushSender(false) as never,
+    new FakeFcmSender(false) as never,
   );
   // Nothing here opens a test, so the audience it would fan out to is deliberately empty.
   const access = { studentsReaching: () => Promise.resolve([]) } as never;

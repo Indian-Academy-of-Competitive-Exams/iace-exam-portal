@@ -21,6 +21,7 @@ import {
   type PushTarget,
   type WebPushSender,
 } from '../../src/notifications/web-push.sender';
+import { type FcmSender } from '../../src/notifications/fcm.sender';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
 import { type PinService } from '../../src/auth/pin/pin.service';
@@ -570,6 +571,25 @@ export class FakePushSender implements Pick<WebPushSender, 'isConfigured' | 'sen
     if (this.failing.includes(target.endpoint)) return Promise.resolve(PUSH_OUTCOMES.FAILED);
 
     this.sent.push({ endpoint: target.endpoint, payload });
+    return Promise.resolve(PUSH_OUTCOMES.SENT);
+  }
+}
+
+/** The FCM transport, faked: nothing in a test talks to Google. */
+export class FakeFcmSender implements Pick<FcmSender, 'isConfigured' | 'send'> {
+  readonly sent: { token: string; payload: PushPayload }[] = [];
+
+  constructor(
+    readonly isConfigured = true,
+    private readonly gone: readonly string[] = [],
+    private readonly failing: readonly string[] = [],
+  ) {}
+
+  send(token: string, payload: PushPayload): Promise<PushOutcome> {
+    if (this.gone.includes(token)) return Promise.resolve(PUSH_OUTCOMES.GONE);
+    if (this.failing.includes(token)) return Promise.resolve(PUSH_OUTCOMES.FAILED);
+
+    this.sent.push({ token, payload });
     return Promise.resolve(PUSH_OUTCOMES.SENT);
   }
 }

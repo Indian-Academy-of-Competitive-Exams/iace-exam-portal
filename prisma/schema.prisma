@@ -171,6 +171,8 @@ enum NotificationType {
 enum DeliveryChannel {
   IN_APP
   WEB_PUSH
+  // A phone, reached through FCM. Free like WEB_PUSH, and booked the same way.
+  MOBILE_PUSH
   EMAIL
   SMS
   WHATSAPP
@@ -654,6 +656,7 @@ model Student {
   subjectStats      StudentSubjectStat[]
   eventCandidacies  EventCandidate[]
   pushSubscriptions PushSubscription[]
+  pushDevices       PushDevice[]
   savedQuestions    SavedQuestion[]
 
   @@index([mobile])
@@ -1161,6 +1164,28 @@ model PushSubscription {
   userAgent  String?
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+// One phone's FCM registration token. Kept apart from PushSubscription: a browser subscription
+// carries the keys that encrypt for it, where a device token is one opaque string FCM owns and
+// rotates. Pruned when FCM reports the token unregistered.
+model PushDevice {
+  id         String         @id @default(cuid())
+  studentId  String
+  token      String         @unique
+  platform   DevicePlatform
+  deviceName String?
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime       @default(now()) @db.Timestamptz(3)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 

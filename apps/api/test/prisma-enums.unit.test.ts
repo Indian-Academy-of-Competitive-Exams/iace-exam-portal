@@ -12,6 +12,7 @@ import {
   AUDIT_FEATURE,
   BRANCH_TYPE,
   DELIVERY_CHANNEL,
+  DEVICE_PLATFORM,
   DIFFICULTY_LEVEL,
   EXAM_COURSE,
   EXAM_MODE,
@@ -69,6 +70,7 @@ const MIRRORED = {
   AnswerState: ANSWER_STATE,
   NotificationType: NOTIFICATION_TYPE,
   DeliveryChannel: DELIVERY_CHANNEL,
+  DevicePlatform: DEVICE_PLATFORM,
 } as const;
 
 function prismaEnum(name: string): string[] {

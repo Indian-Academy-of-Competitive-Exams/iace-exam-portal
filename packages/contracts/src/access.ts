@@ -299,6 +299,7 @@ export type NotificationListQueryInput = z.input<typeof notificationListQuerySch
 export const DELIVERY_CHANNEL = {
   IN_APP: 'IN_APP',
   WEB_PUSH: 'WEB_PUSH',
+  MOBILE_PUSH: 'MOBILE_PUSH',
   EMAIL: 'EMAIL',
   SMS: 'SMS',
   WHATSAPP: 'WHATSAPP',
@@ -329,6 +330,29 @@ export const NOTIFICATION_INBOX_PATH = '/notifications';
 export const dropPushSubscriptionSchema = z.object({ endpoint: z.string().min(1) });
 export type DropPushSubscriptionInput = z.input<typeof dropPushSubscriptionSchema>;
 export type DropPushSubscriptionBody = z.infer<typeof dropPushSubscriptionSchema>;
+
+/** Which store issued the registration. Mirrors `DevicePlatform` in prisma/schema.prisma. */
+export const DEVICE_PLATFORM = { ANDROID: 'ANDROID', IOS: 'IOS' } as const;
+export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
+export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
+
+/** FCM's own cap on a registration token; anything longer is not one. */
+export const DEVICE_TOKEN_MAX = 4096;
+
+/** One phone, by the token FCM issued it. The token IS the identity: it rotates, the phone does not. */
+export const pushDeviceSchema = z.object({
+  token: z.string().min(1).max(DEVICE_TOKEN_MAX),
+  platform: devicePlatformSchema,
+  /** What the student would recognise in a list — the model, never an identifier. */
+  deviceName: z.string().max(120).optional(),
+});
+export type PushDeviceInput = z.input<typeof pushDeviceSchema>;
+export type PushDeviceBody = z.infer<typeof pushDeviceSchema>;
+
+/** Signing out names the token, because a phone may have been reissued one since. */
+export const dropPushDeviceSchema = z.object({ token: z.string().min(1).max(DEVICE_TOKEN_MAX) });
+export type DropPushDeviceInput = z.input<typeof dropPushDeviceSchema>;
+export type DropPushDeviceBody = z.infer<typeof dropPushDeviceSchema>;
 
 // ============================================================================
 // When a test opens, which is the whole of its timing. There is no cutoff: it

@@ -16,6 +16,7 @@ import { NotificationsProcessor } from './notifications.processor';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
+import { FcmSender } from './fcm.sender';
 import { PushService } from './push.service';
 import { TestOpeningService } from './test-opening.service';
 import { NotificationListener } from './notification.listener';
@@ -39,6 +40,7 @@ import { WebPushSender } from './web-push.sender';
     NotificationsProcessor,
     NotificationDeliveryProcessor,
     PushService,
+    FcmSender,
     TestOpeningService,
     NotificationListener,
     WebPushSender,

@@ -92,6 +92,8 @@ export const ME_ROUTES = {
   readNotification: (id: string) => `/me/notifications/${id}/read`,
   /** GET carries the key to subscribe with; POST subscribes this browser, DELETE drops it. */
   pushSubscription: '/me/push-subscription',
+  /** POST registers this phone's FCM token, DELETE drops it. No GET: there is no key to hand out. */
+  pushDevice: '/me/push-device',
   /** The kind is in the path — see DOCUMENT_KINDS. */
   document: (kind: DocumentKind) => `/me/documents/${kind}`,
   /** Irreversible, and not a delete: every sitting stays, and none of them names anybody. */

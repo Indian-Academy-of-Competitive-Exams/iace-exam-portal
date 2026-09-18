@@ -29,11 +29,13 @@ import {
   type DocumentKind,
   type ErasureReceipt,
   type Me,
+  type DropPushDeviceBody,
   type DropPushSubscriptionBody,
   type Notification,
   type NotificationListQuery,
   type PushConfig,
   type Paginated,
+  type PushDeviceBody,
   type PushSubscriptionBody,
   type RecordConsentBody,
   type StudentCatalog,
@@ -41,8 +43,10 @@ import {
   type UpdateMeBody,
   changePinSchema,
   documentKindSchema,
+  dropPushDeviceSchema,
   dropPushSubscriptionSchema,
   notificationListQuerySchema,
+  pushDeviceSchema,
   pushSubscriptionSchema,
   recordConsentSchema,
   updateMeSchema,
@@ -158,6 +162,25 @@ export class MeController {
     @Body(new ZodBody(dropPushSubscriptionSchema)) body: DropPushSubscriptionBody,
   ): Promise<void> {
     return this.push.unsubscribe(user.id, body.endpoint);
+  }
+
+  /** This phone's FCM token. Idempotent: the same token re-registering is the same row. */
+  @Post('push-device')
+  @HttpCode(HttpStatus.OK)
+  registerPushDevice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodBody(pushDeviceSchema)) body: PushDeviceBody,
+  ): Promise<void> {
+    return this.push.registerDevice(user.id, body);
+  }
+
+  @Delete('push-device')
+  @HttpCode(HttpStatus.OK)
+  dropPushDevice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodBody(dropPushDeviceSchema)) body: DropPushDeviceBody,
+  ): Promise<void> {
+    return this.push.dropDevice(user.id, body.token);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)

@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { hydrate } from '../src/lib/api';
 import { AuthProvider, useAuth } from '../src/providers/auth';
 import { useTokenColor } from '../src/lib/use-token-color';
+import { usePushDevice } from '../src/lib/use-push-device';
 import '../global.css';
 
 void SplashScreen.preventAutoHideAsync();
@@ -43,6 +44,7 @@ export default function RootLayout() {
 /** Every route is registered under a guard; a route with no guard stays reachable either way. */
 function Navigation() {
   const { identity, isLoading } = useAuth();
+  usePushDevice(Boolean(identity));
   const insets = useSafeAreaInsets();
   const pageColor = useTokenColor('--background');
   if (isLoading) return null;

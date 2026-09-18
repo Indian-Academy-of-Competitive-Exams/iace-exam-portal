@@ -12,6 +12,7 @@ import { Card } from '../../src/components/ui/card';
 import { ConfirmDialog } from '../../src/components/ui/confirm-dialog';
 import { api } from '../../src/lib/api';
 import { ACCOUNT_ROUTES } from '../../src/lib/nav';
+import { dropPushDevice } from '../../src/lib/push-device';
 import { UNREAD_QUERY_KEY } from '../../src/lib/constants';
 import { useTokenColor } from '../../src/lib/use-token-color';
 import { cn } from '../../src/lib/cn';
@@ -80,7 +81,7 @@ export default function AccountScreen() {
         confirmLabel="Sign out"
         onConfirm={() => {
           setConfirming(false);
-          void signOut();
+          void dropPushDevice().then(() => signOut());
         }}
         onCancel={() => setConfirming(false)}
       />

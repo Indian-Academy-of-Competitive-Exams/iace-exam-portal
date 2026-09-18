@@ -167,6 +167,11 @@ export const envSchema = z.object({
   VAPID_PRIVATE_KEY: optional,
   VAPID_SUBJECT: optional,
 
+  // Mobile push through FCM, all three or none — three fields of one service account, never a file.
+  FCM_PROJECT_ID: optional,
+  FCM_CLIENT_EMAIL: optional,
+  FCM_PRIVATE_KEY: optional,
+
   // The language a template was REGISTERED in. A mismatch is rejected, not translated.
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().default('en'),
   WHATSAPP_INTERAKT_URL: z.string().default('https://api.interakt.ai/v1/public/message/'),

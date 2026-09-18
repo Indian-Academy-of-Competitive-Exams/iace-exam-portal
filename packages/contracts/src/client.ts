@@ -124,7 +124,9 @@ import {
   type NotificationListQueryInput,
   pushConfigSchema,
   type PushConfig,
+  type PushDeviceInput,
   type PushSubscriptionInput,
+  type DropPushDeviceInput,
   type DropPushSubscriptionInput,
   studentCatalogSchema,
   type StudentCatalog,
@@ -695,6 +697,13 @@ export function createApiClient(options: ApiClientOptions) {
 
       unsubscribeFromPush: (input: DropPushSubscriptionInput): Promise<NoContent> =>
         write('DELETE', ME_ROUTES.pushSubscription, noContentSchema, input),
+
+      /** Idempotent: the same token registering again is the same row, moved to whoever is signed in. */
+      registerPushDevice: (input: PushDeviceInput): Promise<NoContent> =>
+        write('POST', ME_ROUTES.pushDevice, noContentSchema, input),
+
+      dropPushDevice: (input: DropPushDeviceInput): Promise<NoContent> =>
+        write('DELETE', ME_ROUTES.pushDevice, noContentSchema, input),
 
       /** What the student reads before the clock starts. */
       testBrief: (testId: string): Promise<ExamBrief> =>
