@@ -11,12 +11,8 @@ const renderTabIcon =
   ({ color, size }: { color: ColorValue; size: number }) => <Icon color={color} size={size} />;
 
 /** The tab you are on wears a pill; the bar draws that fill square, so the item clips it round. */
-const ITEM_STYLE = {
-  borderRadius: 16,
-  overflow: 'hidden',
-  marginHorizontal: 6,
-  marginVertical: 4,
-} as const;
+// No vertical margin: iOS packs the icon and label to the item's top, and a short item clips it.
+const ITEM_STYLE = { borderRadius: 16, overflow: 'hidden', marginHorizontal: 6 } as const;
 
 /** The five-tab shell every signed-in screen lives under. */
 export default function TabLayout() {
