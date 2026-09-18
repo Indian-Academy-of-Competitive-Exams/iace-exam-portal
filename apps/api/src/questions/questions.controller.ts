@@ -21,6 +21,7 @@ import {
   PERMISSION_LEVELS,
   questionDraftSchema,
   QUESTION_IMAGE_FILE_FIELD,
+  QUESTION_IMAGE_MAX_BYTES,
   bulkQuestionStatusSchema,
   questionAvailabilityQuerySchema,
   questionListQuerySchema,
@@ -77,7 +78,9 @@ export class QuestionsController {
   )
   @Post('images')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor(QUESTION_IMAGE_FILE_FIELD))
+  @UseInterceptors(
+    FileInterceptor(QUESTION_IMAGE_FILE_FIELD, { limits: { fileSize: QUESTION_IMAGE_MAX_BYTES } }),
+  )
   uploadImage(@UploadedFile() file?: UploadedFileLike): Promise<QuestionImage> {
     return this.questions.saveImage(file);
   }

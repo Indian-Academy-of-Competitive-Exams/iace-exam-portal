@@ -25,6 +25,7 @@ import {
   type ConsentState,
   type ConsentStatus,
   DOCUMENT_FILE_FIELD,
+  DOCUMENT_MAX_BYTES,
   type DeviceSession,
   type DocumentKind,
   type ErasureReceipt,
@@ -196,7 +197,9 @@ export class MeController {
   @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)
   @Post('documents/:kind')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor(DOCUMENT_FILE_FIELD))
+  @UseInterceptors(
+    FileInterceptor(DOCUMENT_FILE_FIELD, { limits: { fileSize: DOCUMENT_MAX_BYTES } }),
+  )
   uploadDocument(
     @CurrentUser() user: AuthenticatedUser,
     @Param('kind', new ZodParam(documentKindSchema)) kind: DocumentKind,
