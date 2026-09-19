@@ -22,7 +22,7 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { TestsService } from '../src/tests/tests.service';
-import { FakeEventBus } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
   makeAdmin,
   makeCatalog,
@@ -48,7 +48,13 @@ function build() {
   return {
     assignments: new AssignmentsService(prisma, admins),
     admins,
-    tests: new TestsService(prisma, configs, audit, new FakeEventBus().asService()),
+    tests: new TestsService(
+      prisma,
+      configs,
+      audit,
+      new FakeEventBus().asService(),
+      new FakeRedis().asService(),
+    ),
   };
 }
 
@@ -777,7 +783,7 @@ describe('the offer gate', () => {
       refusedWith(ErrorCodes.VALIDATION_ERROR),
     );
 
-    await tests.update(paper.testId, { paperSource: PAPER_SOURCES.PICKED }, true);
+    await tests.update(paper.testId, { paperSource: PAPER_SOURCES.PICKED }, { isSuperAdmin: true });
     const result = await finalizer.offer(paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);

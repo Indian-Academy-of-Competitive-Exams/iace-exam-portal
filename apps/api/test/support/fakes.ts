@@ -211,6 +211,19 @@ export class FakeRedis {
     return (await this.client.set(key, '1', 'EX', ttlSec, 'NX')) === 'OK';
   }
 
+  async holdLock(
+    key: string,
+    holderId: string,
+    ttlSec: number,
+    steal = false,
+  ): Promise<string | null> {
+    if ((await this.client.set(key, holderId, 'EX', ttlSec, 'NX')) === 'OK') return null;
+    const holder = await this.client.get(key);
+    if (holder !== null && holder !== holderId && !steal) return holder;
+    await this.client.set(key, holderId, 'EX', ttlSec);
+    return null;
+  }
+
   asService(): RedisService {
     return this as unknown as RedisService;
   }

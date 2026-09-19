@@ -11,7 +11,7 @@ import { FinalizeService } from '../src/tests/finalize.service';
 import { OfferingService } from '../src/tests/offering.service';
 import { PaperService } from '../src/tests/paper.service';
 import { TestsService } from '../src/tests/tests.service';
-import { FakeEventBus, FakeQueue } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis } from '../test/support/fakes';
 import {
   BUILDER,
   makeBankQuestion,
@@ -58,12 +58,14 @@ async function builder() {
   const events = new FakeEventBus();
   const audit = new AuditContext();
   const configs = new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit);
-  const tests = new TestsService(prisma, configs, audit, events.asService());
+  const redis = new FakeRedis().asService();
+  const tests = new TestsService(prisma, configs, audit, events.asService(), redis);
   const paper = new PaperService(
     prisma,
     configs,
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
+    redis,
   );
   const created = await tests.create(
     { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: seriesId },

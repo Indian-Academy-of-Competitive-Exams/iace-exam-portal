@@ -19,6 +19,7 @@ import {
   type UpdateTestBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
@@ -37,6 +38,7 @@ import {
   testDeletionBlocker,
 } from './test-rules';
 import { beginPaperEdit } from './begin-paper-edit';
+import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 
 const TEST_INCLUDE = {
   baseConfig: {
@@ -89,6 +91,7 @@ export class TestsService {
     private readonly configs: BaseConfigsService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
+    private readonly redis: RedisService,
   ) {}
 
   async list(query: TestListQuery): Promise<Paginated<Test>> {
@@ -120,6 +123,7 @@ export class TestsService {
       ...toTest(row),
       ...toTestSchedule(row),
       baseConfig: await this.configs.detail(row.baseConfigId),
+      editingBy: await testEditingBy(this.redis, this.prisma, id),
     };
   }
 
@@ -166,9 +170,12 @@ export class TestsService {
     return series;
   }
 
-  async update(id: string, input: UpdateTestBody, isSuperAdmin = false): Promise<TestDetail> {
+  async update(id: string, input: UpdateTestBody, editor: Editor = {}): Promise<TestDetail> {
     const test = await this.requireTest(id);
-    if (input.paperSource !== undefined) this.assertPaperSourceOpen(test, isSuperAdmin);
+    await takeTestEditLock(this.redis, this.prisma, id, editor);
+    if (input.paperSource !== undefined) {
+      this.assertPaperSourceOpen(test, editor.isSuperAdmin ?? false);
+    }
 
     const shapeChange = locksOutTestEdit(input);
     if (test._count.attempts > 0 && shapeChange) {
@@ -216,7 +223,12 @@ export class TestsService {
 
     this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));
 
-    return { ...toTest(updated), ...toTestSchedule(updated), baseConfig: config };
+    return {
+      ...toTest(updated),
+      ...toTestSchedule(updated),
+      baseConfig: config,
+      editingBy: await testEditingBy(this.redis, this.prisma, id),
+    };
   }
 
   async remove(id: string): Promise<void> {
@@ -325,7 +337,7 @@ function toTest(row: TestRow): Test {
 }
 
 /** The columns `TestDetail` adds over `Test`: the test's own schedule, read as stored. */
-function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig'> {
+function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig' | 'editingBy'> {
   return {
     seriesOrder: row.seriesOrder,
     opensAt: row.opensAt?.toISOString() ?? null,

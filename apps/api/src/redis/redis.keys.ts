@@ -72,4 +72,10 @@ export const redisKeys = {
   /** One student's resolved catalog, at one payload shape and both epochs. */
   studentCatalog: (studentId: string, shape: string, epoch: number, studentEpoch: number) =>
     `access:catalog:${studentId}:${shape}:${epoch}.${studentEpoch}`,
+
+  /** The admin building one test's paper. Holds their id, so a refusal can name them. */
+  testEditLock: (testId: string) => `test:edit:${testId}`,
 } as const;
+
+/** How long a test stays that admin's, counted from their last edit rather than their first. */
+export const TEST_EDIT_LOCK_TTL_SEC = 15 * 60;

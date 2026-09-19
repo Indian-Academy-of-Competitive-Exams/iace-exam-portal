@@ -27,6 +27,7 @@ import {
   scopedSections,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { BaseConfigsService } from '../configs';
 import {
   drawSection,
@@ -37,6 +38,7 @@ import {
 } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
 import { beginPaperEdit } from './begin-paper-edit';
+import { takeTestEditLock, type Editor } from './edit-lock';
 import { DRAWABLE_QUESTION, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
@@ -102,6 +104,7 @@ export class PaperService {
     private readonly configs: BaseConfigsService,
     private readonly outbox: ScoringOutbox,
     private readonly auditContext: AuditContext,
+    private readonly redis: RedisService,
   ) {}
 
   async read(testId: string): Promise<TestPaper> {
@@ -114,16 +117,17 @@ export class PaperService {
   async addQuestions(
     testId: string,
     input: AddPaperQuestionBody,
-    isSuperAdmin = false,
+    editor: Editor = {},
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
+    await takeTestEditLock(this.redis, this.prisma, testId, editor);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
     assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    await this.assertSectionsNotAssigned(testId, [section.id], isSuperAdmin);
+    await this.assertSectionsNotAssigned(testId, [section.id], editor.isSuperAdmin ?? false);
 
     this.assertNoRepeats(input.questionIds);
 
@@ -185,16 +189,17 @@ export class PaperService {
   async fillSection(
     testId: string,
     baseConfigSectionId: string,
-    isSuperAdmin = false,
+    editor: Editor = {},
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
+    await takeTestEditLock(this.redis, this.prisma, testId, editor);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
     assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    await this.assertSectionsNotAssigned(testId, [section.id], isSuperAdmin);
+    await this.assertSectionsNotAssigned(testId, [section.id], editor.isSuperAdmin ?? false);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -281,14 +286,19 @@ export class PaperService {
     testId: string,
     rowId: string,
     input: ReplacePaperQuestionBody,
-    isSuperAdmin = false,
+    editor: Editor = {},
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
+    await takeTestEditLock(this.redis, this.prisma, testId, editor);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
     assertSourceChosen(test);
 
     const row = await this.requireRow(testId, rowId);
-    await this.assertSectionsNotAssigned(testId, [row.baseConfigSectionId], isSuperAdmin);
+    await this.assertSectionsNotAssigned(
+      testId,
+      [row.baseConfigSectionId],
+      editor.isSuperAdmin ?? false,
+    );
     const question = await this.requireDrawable(input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
@@ -307,9 +317,10 @@ export class PaperService {
   async removeQuestions(
     testId: string,
     rowIds: readonly string[],
-    isSuperAdmin = false,
+    editor: Editor = {},
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
+    await takeTestEditLock(this.redis, this.prisma, testId, editor);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
@@ -318,7 +329,7 @@ export class PaperService {
     await this.assertSectionsNotAssigned(
       testId,
       [...new Set(rows.map((row) => row.baseConfigSectionId))],
-      isSuperAdmin,
+      editor.isSuperAdmin ?? false,
     );
 
     await this.prisma.$transaction(async (tx) => {

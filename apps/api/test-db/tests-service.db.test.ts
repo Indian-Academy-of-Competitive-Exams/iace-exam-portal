@@ -18,7 +18,7 @@ import { DOMAIN_EVENTS } from '../src/common/events';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { TestsService } from '../src/tests/tests.service';
-import { FakeEventBus } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
   BUILDER,
   makeAdmin,
@@ -88,7 +88,8 @@ async function serviceWith(over: Bench = {}) {
   const events = new FakeEventBus();
   const audit = new AuditContext();
   const configs = new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit);
-  return { events, service: new TestsService(prisma, configs, audit, events.asService()) };
+  const redis = new FakeRedis().asService();
+  return { events, service: new TestsService(prisma, configs, audit, events.asService(), redis) };
 }
 
 const FROZEN = { isLocked: true, finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
@@ -313,7 +314,11 @@ describe('TestsService — where a test gets its questions', () => {
   it('lets a super admin move the very choice it just refused', async () => {
     const { service } = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
 
-    const moved = await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, true);
+    const moved = await service.update(
+      TEST,
+      { paperSource: PAPER_SOURCES.PICKED },
+      { isSuperAdmin: true },
+    );
 
     assert.equal(moved.paperSource, PAPER_SOURCES.PICKED);
   });
@@ -325,7 +330,7 @@ describe('TestsService — where a test gets its questions', () => {
     const outstanding = await assignTypist(typist.id, idFor('sec_1'), null);
     const done = await assignTypist(typist.id, idFor('sec_2'), new Date());
 
-    await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, true);
+    await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, { isSuperAdmin: true });
 
     const left = await prisma.questionAssignment.findMany({ select: { id: true } });
     assert.deepEqual(

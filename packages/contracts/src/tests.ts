@@ -365,9 +365,18 @@ export const testProgramUnlockSchema = z.object({
 });
 export type TestProgramUnlock = z.infer<typeof testProgramUnlockSchema>;
 
+/** The admin whose advisory claim on this test is live. Their name, because an id names nobody. */
+export const testEditorSchema = z.object({
+  adminId: z.string(),
+  fullName: z.string().nullable(),
+});
+export type TestEditor = z.infer<typeof testEditorSchema>;
+
 /** The test plus the blueprint it reads its shape from, so a screen renders both in one request. */
 export const testDetailSchema = testSchema.extend({
   baseConfig: baseConfigDetailSchema,
+  /** Who is building it right now, so a second admin is warned before the work, not at the save. */
+  editingBy: testEditorSchema.nullable(),
   /** Position inside that series, which is the order an ordered series opens it in. */
   seriesOrder: z.number().int().nullable(),
   /** When this test opens. Null opens with the series it sits in. */

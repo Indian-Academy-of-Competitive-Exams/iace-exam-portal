@@ -100,7 +100,7 @@ export class TestsController {
     @Body(new ZodBody(updateTestSchema)) body: UpdateTestBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestDetail> {
-    return this.tests.update(id, body, user.isSuperAdmin);
+    return this.tests.update(id, body, user);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -118,7 +118,7 @@ export class TestsController {
     @Body(new ZodBody(addPaperQuestionSchema)) body: AddPaperQuestionBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.addQuestions(id, body, user.isSuperAdmin);
+    return this.paper.addQuestions(id, body, user);
   }
 
   /** One row of the paper, so a paper right but for a single question is not redrawn whole. */
@@ -131,7 +131,7 @@ export class TestsController {
     @Body(new ZodBody(replacePaperQuestionSchema)) body: ReplacePaperQuestionBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.replaceQuestion(id, rowId, body, user.isSuperAdmin);
+    return this.paper.replaceQuestion(id, rowId, body, user);
   }
 
   /** The only change a finalized paper allows — and it re-scores every sitting that served it. */
@@ -154,7 +154,7 @@ export class TestsController {
     @Query(new ZodQuery(removePaperQuestionsSchema)) query: RemovePaperQuestionsQuery,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.removeQuestions(id, query.rowIds ?? [], user.isSuperAdmin);
+    return this.paper.removeQuestions(id, query.rowIds ?? [], user);
   }
 
   /** Draws what one section still lacks. It only ever adds: a hand-picked row is never displaced. */
@@ -167,7 +167,7 @@ export class TestsController {
     @Param('sectionId') sectionId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.fillSection(id, sectionId, user.isSuperAdmin);
+    return this.paper.fillSection(id, sectionId, user);
   }
 
   /** Idempotent: a second finalize reports the first one's outcome rather than freezing twice. */

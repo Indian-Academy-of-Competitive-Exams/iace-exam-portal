@@ -13,7 +13,7 @@ import { SCORING_REQUEST, ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { PaperService } from '../src/tests/paper.service';
-import { FakeQueue } from '../test/support/fakes';
+import { FakeQueue, FakeRedis } from '../test/support/fakes';
 import {
   makePaper,
   makeStudent,
@@ -62,6 +62,7 @@ async function bench({ isLocked = true, sat = true } = {}) {
     new BaseConfigsService(prisma, stages, audit),
     new ScoringOutbox(prisma, queue.asQueue()),
     audit,
+    new FakeRedis().asService(),
   );
   const [dropped, kept] = paper.items.map((item) => item.paperQuestionId);
   const set = (status: PaperQuestionStatus, row = dropped ?? '') =>

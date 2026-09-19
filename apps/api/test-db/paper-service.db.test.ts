@@ -17,8 +17,9 @@ import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { PaperService } from '../src/tests/paper.service';
+import { type Editor } from '../src/tests/edit-lock';
 import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
-import { FakeQueue } from '../test/support/fakes';
+import { FakeQueue, FakeRedis } from '../test/support/fakes';
 import {
   BUILDER,
   makeAdmin,
@@ -123,6 +124,7 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
     new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit),
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
+    new FakeRedis().asService(),
   );
 }
 
@@ -782,7 +784,7 @@ describe('PaperService — where the questions come from', () => {
       service.addQuestions(
         TEST,
         { baseConfigSectionId: idFor('sec_1'), questionIds: [idFor('r1')] },
-        true,
+        { isSuperAdmin: true },
       ),
     );
     assert.equal(asSuperAdmin.code, ErrorCodes.CONFLICT);
@@ -854,7 +856,7 @@ describe("PaperService — a section that is its typist's job", () => {
     const paper = await service.addQuestions(
       TEST,
       { baseConfigSectionId: idFor('sec_2'), questionIds: [idFor('q1')] },
-      true,
+      { isSuperAdmin: true },
     );
 
     assert.ok(paper.sections.some((section) => section.questions.length > 0));
@@ -900,5 +902,51 @@ describe("PaperService — a section that is its typist's job", () => {
     });
 
     assert.ok(paper.sections.some((section) => section.questions.length > 0));
+  });
+});
+
+describe('PaperService — two admins on one paper', () => {
+  const pick = (service: PaperService, questionId: string, editor: Editor) =>
+    service.addQuestions(
+      TEST,
+      { baseConfigSectionId: idFor('sec_1'), questionIds: [questionId] },
+      editor,
+    );
+
+  /** The failure this prevents: the second admin's work looks fine until the counts disagree. */
+  it('refuses the second admin by name, and leaves the paper as the first left it', async () => {
+    const service = await serviceWith();
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const ravi = await makeAdmin(prisma, { fullName: 'Ravi' });
+
+    await pick(service, idFor('r1'), { id: priya.id });
+    const error = await refused(pick(service, idFor('r2'), { id: ravi.id }));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /Priya/);
+    assert.deepEqual(await heldIds(), [idFor('r1')]);
+  });
+
+  it('lets the admin holding it carry on', async () => {
+    const service = await serviceWith();
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+
+    await pick(service, idFor('r1'), { id: priya.id });
+    await pick(service, idFor('r2'), { id: priya.id });
+
+    assert.deepEqual(await heldIds(), [idFor('r1'), idFor('r2')]);
+  });
+
+  /** An admin who closed their laptop holding it is the lockout the override exists for. */
+  it('hands it to a super admin, and refuses the first admin after', async () => {
+    const service = await serviceWith();
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const ravi = await makeAdmin(prisma, { fullName: 'Ravi', isSuperAdmin: true });
+
+    await pick(service, idFor('r1'), { id: priya.id });
+    await pick(service, idFor('r2'), { id: ravi.id, isSuperAdmin: true });
+
+    assert.deepEqual(await heldIds(), [idFor('r1'), idFor('r2')]);
+    assert.match((await refused(pick(service, idFor('r3'), { id: priya.id }))).message, /Ravi/);
   });
 });

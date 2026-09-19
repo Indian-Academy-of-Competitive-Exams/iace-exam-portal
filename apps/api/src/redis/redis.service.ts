@@ -142,6 +142,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return (await this.client.set(key, LOCK_HELD, 'EX', ttlSec, 'NX')) === 'OK';
   }
 
+  /** Null once the caller holds it, else who does. The holder re-enters; `steal` takes it over. */
+  async holdLock(
+    key: string,
+    holderId: string,
+    ttlSec: number,
+    steal = false,
+  ): Promise<string | null> {
+    if ((await this.client.set(key, holderId, 'EX', ttlSec, 'NX')) === 'OK') return null;
+    const holder = await this.client.get(key);
+    if (holder !== null && holder !== holderId && !steal) return holder;
+    await this.client.set(key, holderId, 'EX', ttlSec);
+    return null;
+  }
+
   /** Remaining TTL in seconds, or 0 when the key is gone / has no expiry. */
   async ttl(key: string): Promise<number> {
     const ttl = await this.client.ttl(key);
