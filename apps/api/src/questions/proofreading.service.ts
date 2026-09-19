@@ -9,6 +9,8 @@ import {
   type QuestionOnOtherTest,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { takeSectionEditLock } from '../common/edit-lock';
 import { reachableTest } from './question-query';
 import { QuestionsService } from './questions.service';
 
@@ -17,6 +19,7 @@ import { QuestionsService } from './questions.service';
 export class ProofreadingService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
     private readonly questions: QuestionsService,
   ) {}
 
@@ -30,6 +33,13 @@ export class ProofreadingService {
     return this.questions.allIn(sectionScope(assignment));
   }
 
+  /** The same section reached by its own pair, so a section nobody holds still opens for a super admin. */
+  async forSection(testId: string, baseConfigSectionId: string): Promise<QuestionDetail[]> {
+    return this.questions.allIn(
+      sectionScope(await this.requireSection(testId, baseConfigSectionId)),
+    );
+  }
+
   /** The reader FIXES what they find, over the one service that owns the tables — never a second path. */
   async editQuestion(
     assignmentId: string,
@@ -39,11 +49,34 @@ export class ProofreadingService {
     isSuperAdmin = false,
   ): Promise<QuestionDetail> {
     const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
+    return this.editIn(assignment, questionId, draft, adminId, isSuperAdmin);
+  }
+
+  /** The same edit, reached by the section's own pair rather than by an assignment id. */
+  async editSectionQuestion(
+    testId: string,
+    baseConfigSectionId: string,
+    questionId: string,
+    draft: QuestionDraft,
+    adminId: string,
+  ): Promise<QuestionDetail> {
+    const section = await this.requireSection(testId, baseConfigSectionId);
+    return this.editIn(section, questionId, draft, adminId, true);
+  }
+
+  private async editIn(
+    section: SectionRef,
+    questionId: string,
+    draft: QuestionDraft,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<QuestionDetail> {
     // Finalising ends a reader's authority over the section; it never ends a super admin's.
-    if (assignment.finalizedAt && !isSuperAdmin) throw alreadyRead();
+    if (section.finalizedAt && !isSuperAdmin) throw alreadyRead();
+    await takeSectionEditLock(this.redis, this.prisma, section, { id: adminId, isSuperAdmin });
 
     const question = await this.prisma.question.findFirst({
-      where: { id: questionId, ...sectionScope(assignment) },
+      where: { id: questionId, ...sectionScope(section) },
       select: { status: true },
     });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
@@ -60,6 +93,22 @@ export class ProofreadingService {
     isSuperAdmin = false,
   ): Promise<QuestionOnOtherTest[]> {
     const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
+    return this.otherTestsIn(assignment, questionId);
+  }
+
+  /** The same warning, for the section a super admin opened without an assignment behind it. */
+  async sectionOtherTests(
+    testId: string,
+    baseConfigSectionId: string,
+    questionId: string,
+  ): Promise<QuestionOnOtherTest[]> {
+    return this.otherTestsIn(await this.requireSection(testId, baseConfigSectionId), questionId);
+  }
+
+  private async otherTestsIn(
+    assignment: SectionRef,
+    questionId: string,
+  ): Promise<QuestionOnOtherTest[]> {
     await this.requireInSection(assignment, questionId);
 
     const rows = await this.prisma.paperQuestion.findMany({
@@ -103,6 +152,27 @@ export class ProofreadingService {
       select: { id: true },
     });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+  }
+
+  /** The same scope from the other key: the section exists on the test, and the reader is one if any. */
+  private async requireSection(testId: string, baseConfigSectionId: string): Promise<SectionRef> {
+    const section = await this.prisma.baseConfigSection.findFirst({
+      where: { id: baseConfigSectionId, baseConfig: { tests: { some: { id: testId } } } },
+      select: { id: true },
+    });
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section');
+
+    const reading = await this.prisma.questionAssignment.findUnique({
+      where: {
+        testId_baseConfigSectionId_role: {
+          testId,
+          baseConfigSectionId,
+          role: ASSIGNMENT_ROLES.PROOFREADER,
+        },
+      },
+      select: { finalizedAt: true },
+    });
+    return { testId, baseConfigSectionId, finalizedAt: reading?.finalizedAt ?? null };
   }
 
   /** Not theirs reads as not there — unless a super admin, who is refused no section of their own institute. */

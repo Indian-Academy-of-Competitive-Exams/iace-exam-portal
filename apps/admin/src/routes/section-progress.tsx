@@ -5,7 +5,7 @@ import {
   type SectionRoleProgress,
 } from '@iace/contracts';
 import { usePagedPicker } from '@iace/app-kit';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ListView,
@@ -18,13 +18,22 @@ import {
   type BadgeProps,
   type DataTableColumn,
   type ListFilter,
+  type ListFilterControl,
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
+import {
+  AssignmentSectionPicker,
+  AssignmentTestPicker,
+} from '../components/assignment-scope-picker';
+import { chooseTest } from '../lib/assignment-filters';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
+
+/** This screen is the institute's, not one admin's, so its pickers are never narrowed to `mine`. */
+const EVERY_SECTION = {} as const;
 
 function progressVariant(written: number, target: number): BadgeProps['variant'] {
   if (written === 0) return 'neutral';
@@ -50,7 +59,10 @@ function RoleCell({
 }: Readonly<{ held: SectionRoleProgress | null; doneLabel: string; href: string | null }>) {
   // The paper's source gives this role nothing to do — a picked paper is drawn, never typed.
   if (held === null) return <TruncatedText>{null}</TruncatedText>;
-  if (held.assignmentId === null) return <Badge variant="warning">Unassigned</Badge>;
+  if (held.assignmentId === null) {
+    const badge = <Badge variant="warning">Unassigned</Badge>;
+    return href ? <Link to={href}>{badge}</Link> : badge;
+  }
 
   const name = <TruncatedText>{held.assigneeName}</TruncatedText>;
 
@@ -83,7 +95,22 @@ const ownWork = (
 ): string | null =>
   held?.assignmentId && held.assigneeId === adminId ? to(held.assignmentId) : null;
 
-function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
+/** A super admin reaches any outstanding reading, one nobody holds on its own pair — assigning nobody. */
+function readingHref(
+  row: SectionProgressRow,
+  adminId: string,
+  isSuperAdmin: boolean,
+): string | null {
+  const held = row.reading;
+  const mine = ownWork(held, adminId, ROUTES.PROOFREADING_SECTION);
+  const outstanding = isSuperAdmin && held !== null && held.finalizedAt === null;
+  if (mine || !outstanding) return mine;
+  return held.assignmentId
+    ? ROUTES.PROOFREADING_SECTION(held.assignmentId)
+    : ROUTES.PROOFREADING_OF_SECTION(row.testId, row.baseConfigSectionId);
+}
+
+function columnsOf(adminId: string, isSuperAdmin: boolean): DataTableColumn<SectionProgressRow>[] {
   return [
     {
       key: 'test',
@@ -126,7 +153,7 @@ function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
         <RoleCell
           held={row.reading}
           doneLabel="Read"
-          href={ownWork(row.reading, adminId, ROUTES.PROOFREADING_SECTION)}
+          href={readingHref(row, adminId, isSuperAdmin)}
         />
       ),
     },
@@ -136,6 +163,12 @@ function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
 export function SectionProgressPage() {
   const { identity } = useAuth();
   const adminId = identity?.id ?? '';
+  const isSuperAdmin = identity?.isSuperAdmin ?? false;
+
+  // Held outside the spec: choosing another test also has to drop the section under the old one.
+  const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
+  const testId = urlFilters.get('testId');
+  const sectionId = urlFilters.get('baseConfigSectionId');
 
   const assignees = usePagedPicker({
     queryKey: [...QUERY_KEYS.ADMINS, 'section-progress-filter'],
@@ -144,13 +177,27 @@ export function SectionProgressPage() {
 
   const buildFilters = (selectedAssigneeLabels: Record<string, string>) =>
     [
-      { key: 'test', kind: 'search', label: 'Test', placeholder: 'Search tests', primary: true },
       {
-        key: 'section',
-        kind: 'search',
-        label: 'Section',
-        placeholder: 'Search sections',
+        key: 'testId',
+        kind: 'custom',
+        label: 'Test',
         primary: true,
+        render: (control: ListFilterControl) => (
+          <AssignmentTestPicker
+            {...control}
+            scope={EVERY_SECTION}
+            onChange={(value) => urlFilters.set(chooseTest(value, testId, sectionId))}
+          />
+        ),
+      },
+      {
+        key: 'baseConfigSectionId',
+        kind: 'custom',
+        label: 'Section',
+        primary: true,
+        render: (control: ListFilterControl) => (
+          <AssignmentSectionPicker {...control} scope={EVERY_SECTION} testId={testId} />
+        ),
       },
       {
         key: 'assigneeId',
@@ -182,8 +229,8 @@ export function SectionProgressPage() {
     queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'progress'],
     filters: buildFilters({}),
     toQuery: (values) => ({
-      test: values.test || undefined,
-      section: values.section || undefined,
+      testId: values.testId || undefined,
+      baseConfigSectionId: values.baseConfigSectionId || undefined,
       dueFrom: values.dueFrom || undefined,
       dueTo: values.dueTo || undefined,
       assigneeId: values.assigneeId,
@@ -212,7 +259,7 @@ export function SectionProgressPage() {
       <ListView
         list={sections}
         filters={buildFilters(selectedAssigneeLabels)}
-        columns={columnsOf(adminId)}
+        columns={columnsOf(adminId, isSuperAdmin)}
         rowKey={(row) => `${row.testId}:${row.baseConfigSectionId}`}
         empty="No sections yet"
         emptyFiltered="No sections match those filters"

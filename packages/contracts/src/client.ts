@@ -337,19 +337,27 @@ import {
   ADMIN_PROOFREADING_ROUTES,
   assignableAdminSchema,
   assignmentSchema,
+  assignmentSectionSchema,
+  assignmentTestSchema,
   assignmentWithTestSchema,
   questionOnOtherTestSchema,
   sectionCommentSchema,
+  sectionEditLockSchema,
   sectionProgressRowSchema,
   type Assignment,
   type AssignableAdmin,
   type AssignableQueryInput,
+  type AssignmentSection,
+  type AssignmentSectionsQueryInput,
+  type AssignmentTest,
+  type AssignmentTestsQueryInput,
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type CreateSectionCommentInput,
   type MineAssignmentsQueryInput,
   type QuestionOnOtherTest,
   type SectionComment,
+  type SectionEditLock,
   type SectionProgressQueryInput,
   type SectionProgressRow,
 } from './assignments';
@@ -1260,6 +1268,36 @@ export function createApiClient(options: ApiClientOptions) {
             ADMIN_PROOFREADING_ROUTES.otherTests(assignmentId, questionId),
             questionOnOtherTestSchema.array(),
           ),
+
+        /** The same three reads, keyed on the section itself — a super admin needs no assignment. */
+        forSection: (testId: string, sectionId: string): Promise<QuestionDetail[]> =>
+          get(
+            ADMIN_PROOFREADING_ROUTES.forSection(testId, sectionId),
+            questionDetailSchema.array(),
+          ),
+
+        editSectionQuestion: (
+          testId: string,
+          sectionId: string,
+          questionId: string,
+          input: QuestionDraftInput,
+        ): Promise<QuestionDetail> =>
+          write(
+            'PATCH',
+            ADMIN_PROOFREADING_ROUTES.editSectionQuestion(testId, sectionId, questionId),
+            questionDetailSchema,
+            input,
+          ),
+
+        sectionOtherTests: (
+          testId: string,
+          sectionId: string,
+          questionId: string,
+        ): Promise<QuestionOnOtherTest[]> =>
+          get(
+            ADMIN_PROOFREADING_ROUTES.sectionOtherTests(testId, sectionId, questionId),
+            questionOnOtherTestSchema.array(),
+          ),
       },
 
       /** Who types a section and who reads it, and the queue each of them works from. */
@@ -1292,6 +1330,24 @@ export function createApiClient(options: ApiClientOptions) {
             `${ADMIN_ASSIGNMENTS_ROUTES.assignable}${queryString({ ...query })}`,
             assignableAdminSchema.array(),
           ),
+
+        /** What a test picker offers: their own, or every unfrozen test for a super admin. */
+        tests: (query: AssignmentTestsQueryInput = {}): Promise<Paginated<AssignmentTest>> =>
+          list(ADMIN_ASSIGNMENTS_ROUTES.tests, query, assignmentTestSchema),
+
+        /** Unpaged, because a base config holds a dozen sections and never a page's worth. */
+        sectionsOf: (
+          testId: string,
+          query: AssignmentSectionsQueryInput = {},
+        ): Promise<AssignmentSection[]> =>
+          get(
+            `${ADMIN_ASSIGNMENTS_ROUTES.sectionsOf(testId)}${queryString({ ...query })}`,
+            assignmentSectionSchema.array(),
+          ),
+
+        /** Who holds the section right now — read on load, so the warning lands before the work. */
+        sectionLock: (testId: string, sectionId: string): Promise<SectionEditLock> =>
+          get(ADMIN_ASSIGNMENTS_ROUTES.sectionLock(testId, sectionId), sectionEditLockSchema),
 
         /** The section thread, oldest first — a discussion is read in the order it was said. */
         comments: (testId: string, sectionId: string): Promise<SectionComment[]> =>

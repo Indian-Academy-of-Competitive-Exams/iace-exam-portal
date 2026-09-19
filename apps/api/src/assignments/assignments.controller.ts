@@ -15,6 +15,8 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   assignableQuerySchema,
+  assignmentSectionsQuerySchema,
+  assignmentTestsQuerySchema,
   createAssignmentSchema,
   createSectionCommentSchema,
   mineAssignmentsQuerySchema,
@@ -22,12 +24,17 @@ import {
   type Assignment,
   type AssignableAdmin,
   type AssignableQuery,
+  type AssignmentSection,
+  type AssignmentSectionsQuery,
+  type AssignmentTest,
+  type AssignmentTestsQuery,
   type AssignmentWithTest,
   type CreateAssignmentBody,
   type CreateSectionCommentBody,
   type MineAssignmentsQuery,
   type Paginated,
   type SectionComment,
+  type SectionEditLock,
   type SectionProgressQuery,
   type SectionProgressRow,
 } from '@iace/contracts';
@@ -94,6 +101,36 @@ export class AssignmentsController {
     @Query(new ZodQuery(sectionProgressQuerySchema)) query: SectionProgressQuery,
   ): Promise<Paginated<SectionProgressRow>> {
     return this.assignments.progress(query);
+  }
+
+  /** What the queue's test picker offers. `mine` is how a super admin narrows it to their own. */
+  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
+  @Get('tests')
+  tests(
+    @Query(new ZodQuery(assignmentTestsQuerySchema)) query: AssignmentTestsQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Paginated<AssignmentTest>> {
+    return this.assignments.tests(query, user.id, user.isSuperAdmin);
+  }
+
+  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
+  @Get('tests/:testId/sections')
+  sections(
+    @Param('testId') testId: string,
+    @Query(new ZodQuery(assignmentSectionsQuerySchema)) query: AssignmentSectionsQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AssignmentSection[]> {
+    return this.assignments.sectionChoices(testId, query, user.id, user.isSuperAdmin);
+  }
+
+  /** Read on load, never polled: it says who is in the section before the work starts. */
+  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
+  @Get('tests/:testId/sections/:sectionId/lock')
+  sectionLock(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+  ): Promise<SectionEditLock> {
+    return this.assignments.sectionLock(testId, sectionId);
   }
 
   /** Either role finalises their own row — "I've written this" and "I've read this" are independent. */

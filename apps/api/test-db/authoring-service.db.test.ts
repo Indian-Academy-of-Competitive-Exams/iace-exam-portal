@@ -15,7 +15,7 @@ import {
 import { AuditContext } from '../src/audit';
 import { AuthoringService } from '../src/questions/authoring.service';
 import { QuestionsService } from '../src/questions/questions.service';
-import { FakeStorage } from '../test/support/fakes';
+import { FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   makeBankQuestion,
@@ -48,7 +48,7 @@ async function build(seeded: Seeded[] = []) {
     });
   }
   const questions = new QuestionsService(prisma, new AuditContext(), new FakeStorage() as never);
-  return new AuthoringService(prisma, questions);
+  return new AuthoringService(prisma, new FakeRedis().asService(), questions);
 }
 
 const draft = (over: Partial<QuestionDraftInput> = {}) =>
@@ -67,6 +67,23 @@ const draft = (over: Partial<QuestionDraftInput> = {}) =>
   });
 
 const query = (over: AuthoringHistoryQueryInput = {}) => authoringHistoryQuerySchema.parse(over);
+
+async function makeAssignment(assigneeId: string) {
+  const catalog = await makeCatalog(prisma);
+  const test = await makeTest(prisma, catalog);
+  const section = await makeSection(prisma, catalog);
+  return prisma.questionAssignment.create({
+    data: {
+      id: uid(),
+      testId: test.id,
+      baseConfigId: catalog.baseConfigId,
+      baseConfigSectionId: section.id,
+      assigneeId,
+      role: ASSIGNMENT_ROLES.TYPIST,
+    },
+    select: { id: true },
+  });
+}
 
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
@@ -142,23 +159,6 @@ describe('AuthoringService.create', () => {
 });
 
 describe('AuthoringService.create — assignment provenance', () => {
-  async function makeAssignment(assigneeId: string) {
-    const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
-    const section = await makeSection(prisma, catalog);
-    return prisma.questionAssignment.create({
-      data: {
-        id: uid(),
-        testId: test.id,
-        baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: section.id,
-        assigneeId,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      },
-      select: { id: true },
-    });
-  }
-
   it('ties a created question to the caller’s own assignment', async () => {
     const authoring = await build();
     const assignment = await makeAssignment(MINE);
@@ -233,6 +233,35 @@ describe('AuthoringService.history', () => {
       page.items.map((row) => row.id),
       [qst1],
     );
+  });
+
+  /** The section is how a typist finds one batch again out of everything they have written. */
+  it('narrows to the questions written for one assignment', async () => {
+    const authoring = await build();
+    const mine = await makeAssignment(MINE);
+    const other = await makeAssignment(MINE);
+    const { question } = await authoring.create(draft(), MINE, mine.id);
+    await authoring.create(
+      draft({ stem: { en: 'A different question entirely?' } }),
+      MINE,
+      other.id,
+    );
+
+    const page = await authoring.history(query({ assignmentId: mine.id }), MINE);
+
+    assert.deepEqual(
+      page.items.map((row) => row.id),
+      [question.id],
+    );
+  });
+
+  it('reads no assignment asked for as every assignment', async () => {
+    const authoring = await build();
+    const one = await makeAssignment(MINE);
+    await authoring.create(draft(), MINE, one.id);
+    await authoring.create(draft({ stem: { en: 'Written outside any section?' } }), MINE);
+
+    assert.equal((await authoring.history(query(), MINE)).total, 2);
   });
 
   it('searches inside the author’s own rows, never past them', async () => {

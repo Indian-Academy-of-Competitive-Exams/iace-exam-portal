@@ -92,6 +92,7 @@ export {
   holdsASet,
   type SetKind,
   type ListFilter,
+  type ListFilterControl,
   type ListFilterMultiControl,
   type ListFilterValue,
   type ListState,

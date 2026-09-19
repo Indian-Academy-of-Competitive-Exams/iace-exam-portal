@@ -73,6 +73,10 @@ export const ROUTES = {
   SECTION_PROGRESS: '/tests/section-progress',
   PROOFREADING_SECTION: (assignmentId: string) => `/proofreading/assignments/${assignmentId}`,
   PROOFREADING_SECTION_PATTERN: '/proofreading/assignments/:assignmentId',
+  /** The same screen on the pair an assignment keys on, for a section nobody has been given. */
+  PROOFREADING_OF_SECTION: (testId: string, sectionId: string) =>
+    `/proofreading/sections/${testId}/${sectionId}`,
+  PROOFREADING_OF_SECTION_PATTERN: '/proofreading/sections/:testId/:sectionId',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,

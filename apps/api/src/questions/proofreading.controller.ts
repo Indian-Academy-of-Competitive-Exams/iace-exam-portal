@@ -10,7 +10,13 @@ import {
   type QuestionDraft,
   type QuestionOnOtherTest,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  CurrentUser,
+  RequiresFeature,
+  RequiresSuperAdmin,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { ProofreadingService } from './proofreading.service';
@@ -40,6 +46,40 @@ export class ProofreadingController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionOnOtherTest[]> {
     return this.proofreading.otherTests(assignmentId, questionId, user.id, user.isSuperAdmin);
+  }
+
+  /** Keyed on the section itself, so a section nobody was given still opens. Super admin only. */
+  @RequiresSuperAdmin()
+  @Get('tests/:testId/sections/:sectionId/questions')
+  forSection(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+  ): Promise<QuestionDetail[]> {
+    return this.proofreading.forSection(testId, sectionId);
+  }
+
+  @RequiresSuperAdmin()
+  @Get('tests/:testId/sections/:sectionId/questions/:questionId/other-tests')
+  sectionOtherTests(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Param('questionId') questionId: string,
+  ): Promise<QuestionOnOtherTest[]> {
+    return this.proofreading.sectionOtherTests(testId, sectionId, questionId);
+  }
+
+  /** The same guards `editQuestion` obeys, minus the assignment there is none of. */
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
+  @RequiresSuperAdmin()
+  @Patch('tests/:testId/sections/:sectionId/questions/:questionId')
+  editSectionQuestion(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Param('questionId') questionId: string,
+    @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionDetail> {
+    return this.proofreading.editSectionQuestion(testId, sectionId, questionId, body, user.id);
   }
 
   /** The point of the feature: a reader fixes what they find rather than only naming it. */

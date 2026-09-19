@@ -78,6 +78,10 @@ export const redisKeys = {
 
   /** The admin editing one blueprint — the shape every test built from it inherits. */
   baseConfigEditLock: (baseConfigId: string) => `base-config:edit:${baseConfigId}`,
+
+  /** The admin writing one section of one test. One key per pair: both roles touch the same rows. */
+  sectionEditLock: (testId: string, baseConfigSectionId: string) =>
+    `section:edit:${testId}:${baseConfigSectionId}`,
 } as const;
 
 /** How long a record stays that admin's, counted from their last edit rather than their first. */

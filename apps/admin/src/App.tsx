@@ -76,6 +76,10 @@ export function App() {
             element={<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />}
           />
           <Route path={ROUTES.PROOFREADING_SECTION_PATTERN} element={<ProofreadingSectionPage />} />
+          <Route
+            path={ROUTES.PROOFREADING_OF_SECTION_PATTERN}
+            element={<ProofreadingSectionPage />}
+          />
           <Route path={ROUTES.AUTHORING_EDITOR} element={<AuthoringEditorPage />} />
           {/* Before the :id route, or "history" would be read as a question id. */}
           <Route path={ROUTES.AUTHORING_HISTORY} element={<AuthoringHistoryPage />} />

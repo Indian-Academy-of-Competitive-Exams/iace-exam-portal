@@ -7,7 +7,7 @@ import {
   type AssignmentRole,
   type AssignmentWithTest,
 } from '@iace/contracts';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ConfirmDialog,
@@ -22,9 +22,15 @@ import {
   type BadgeProps,
   type DataTableColumn,
   type ListFilter,
+  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import {
+  AssignmentSectionPicker,
+  AssignmentTestPicker,
+} from '../components/assignment-scope-picker';
+import { chooseTest } from '../lib/assignment-filters';
 
 /** One section handed to one admin, from either side of it, and the screen a row of it opens. */
 
@@ -119,14 +125,34 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   const queryClient = useQueryClient();
   const [finalizing, setFinalizing] = useState<AssignmentWithTest | null>(null);
 
+  // Held outside the spec: choosing another test also has to drop the section under the old one.
+  const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
+  const testId = urlFilters.get('testId');
+  const sectionId = urlFilters.get('baseConfigSectionId');
+  const scope = { role, mine: true };
+
   const filters = [
-    { key: 'test', kind: 'search', label: 'Test', placeholder: 'Search tests', primary: true },
     {
-      key: 'section',
-      kind: 'search',
-      label: 'Section',
-      placeholder: 'Search sections',
+      key: 'testId',
+      kind: 'custom',
+      label: 'Test',
       primary: true,
+      render: (control: ListFilterControl) => (
+        <AssignmentTestPicker
+          {...control}
+          scope={scope}
+          onChange={(value) => urlFilters.set(chooseTest(value, testId, sectionId))}
+        />
+      ),
+    },
+    {
+      key: 'baseConfigSectionId',
+      kind: 'custom',
+      label: 'Section',
+      primary: true,
+      render: (control: ListFilterControl) => (
+        <AssignmentSectionPicker {...control} scope={scope} testId={testId} />
+      ),
     },
     {
       key: 'outstanding',
@@ -148,8 +174,8 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
     toQuery: (values) => ({
       role,
       outstanding: values.outstanding === 'true' ? ('true' as const) : undefined,
-      test: values.test || undefined,
-      section: values.section || undefined,
+      testId: values.testId || undefined,
+      baseConfigSectionId: values.baseConfigSectionId || undefined,
       dueFrom: values.dueFrom || undefined,
       dueTo: values.dueTo || undefined,
     }),

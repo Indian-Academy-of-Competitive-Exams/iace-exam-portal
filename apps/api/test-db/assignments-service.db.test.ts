@@ -58,7 +58,7 @@ function build() {
     redis,
   );
   return {
-    assignments: new AssignmentsService(prisma, admins),
+    assignments: new AssignmentsService(prisma, new FakeRedis().asService(), admins),
     admins,
     tests: new TestsService(
       prisma,
@@ -642,8 +642,8 @@ describe('AssignmentsService — mine', () => {
       typist.id,
     );
 
-    const byTest = await queue(assignments, typist.id, { test: 'railway' });
-    const bySection = await queue(assignments, typist.id, { section: 'reason' });
+    const byTest = await queue(assignments, typist.id, { testId: railway.id });
+    const bySection = await queue(assignments, typist.id, { baseConfigSectionId: reasoning.id });
     const byDue = await queue(assignments, typist.id, { dueFrom: '2026-10-06' });
 
     assert.deepEqual(
@@ -835,13 +835,19 @@ describe('AssignmentsService — section progress', () => {
   it('the test and section filters narrow it to one row', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    await framed(catalog, { title: 'Banking prelims mock' });
+    const banking = await framed(catalog, { title: 'Banking prelims mock' });
     await framed(catalog, { title: 'Railway mock' });
     await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
-    await makeSection(prisma, catalog, { name: 'Quantitative aptitude', order: 2 });
+    const quantitative = await makeSection(prisma, catalog, {
+      name: 'Quantitative aptitude',
+      order: 2,
+    });
 
-    const byTest = await progress(assignments, { test: 'banking' });
-    const byBoth = await progress(assignments, { test: 'banking', section: 'quantitative' });
+    const byTest = await progress(assignments, { testId: banking.id });
+    const byBoth = await progress(assignments, {
+      testId: banking.id,
+      baseConfigSectionId: quantitative.id,
+    });
 
     assert.deepEqual(
       byTest.map((one) => one.testTitle),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { adminRoleSchema } from './admins';
-import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, editLockHolderSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { dateOnlySchema } from './students';
 import { difficultyMixSchema } from './tests';
@@ -61,10 +61,9 @@ export const mineAssignmentsQuerySchema = paginationQuerySchema.extend({
   outstanding: optionalBooleanQuery(),
   /** Absent reads both roles; a role's own queue always sends its own. */
   role: assignmentRoleSchema.optional(),
-  /** Matches the test's title. */
-  test: searchQuery(),
-  /** Matches the section's name. */
-  section: searchQuery(),
+  /** The test chosen in the queue's picker; its sections are what `baseConfigSectionId` narrows. */
+  testId: z.string().optional(),
+  baseConfigSectionId: z.string().optional(),
   /** Institute days, inclusive, against the due date. */
   dueFrom: dateOnlySchema.optional(),
   dueTo: dateOnlySchema.optional(),
@@ -104,10 +103,9 @@ export const sectionProgressRowSchema = z.object({
 export type SectionProgressRow = z.infer<typeof sectionProgressRowSchema>;
 
 export const sectionProgressQuerySchema = paginationQuerySchema.extend({
-  /** Matches the test's title. */
-  test: searchQuery(),
-  /** Matches the section's name. */
-  section: searchQuery(),
+  /** The test chosen in the picker; its sections are what `baseConfigSectionId` narrows. */
+  testId: z.string().optional(),
+  baseConfigSectionId: z.string().optional(),
   /** Institute days, inclusive, against EITHER role's due date. */
   dueFrom: dateOnlySchema.optional(),
   dueTo: dateOnlySchema.optional(),
@@ -116,6 +114,48 @@ export const sectionProgressQuerySchema = paginationQuerySchema.extend({
 });
 export type SectionProgressQuery = z.infer<typeof sectionProgressQuerySchema>;
 export type SectionProgressQueryInput = z.input<typeof sectionProgressQuerySchema>;
+
+// ============================================================================
+// What the queue and the progress screen CHOOSE from. A test picker pages and
+// searches on the server; its sections then fill a plain dropdown, because a
+// base config holds a dozen of them and never a page's worth.
+// ============================================================================
+
+/** Enough to choose a test by, and no more: a picker names one, it does not describe it. */
+export const assignmentTestSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+});
+export type AssignmentTest = z.infer<typeof assignmentTestSchema>;
+
+export const assignmentSectionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type AssignmentSection = z.infer<typeof assignmentSectionSchema>;
+
+/** `mine` is how a super admin asks for their OWN queue rather than the whole institute's. */
+const assignmentScopeShape = {
+  role: assignmentRoleSchema.optional(),
+  mine: optionalBooleanQuery(),
+};
+
+export const assignmentTestsQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  ...assignmentScopeShape,
+});
+export type AssignmentTestsQuery = z.infer<typeof assignmentTestsQuerySchema>;
+export type AssignmentTestsQueryInput = z.input<typeof assignmentTestsQuerySchema>;
+
+export const assignmentSectionsQuerySchema = z.object(assignmentScopeShape);
+export type AssignmentSectionsQuery = z.infer<typeof assignmentSectionsQuerySchema>;
+export type AssignmentSectionsQueryInput = z.input<typeof assignmentSectionsQuerySchema>;
+
+/** Who is editing one section right now, or nobody. Read before the work, not at the save. */
+export const sectionEditLockSchema = z.object({
+  editingBy: editLockHolderSchema.nullable(),
+});
+export type SectionEditLock = z.infer<typeof sectionEditLockSchema>;
 
 /** id and name only — a picker needs someone to choose, not the directory `admins.list` guards. */
 export const assignableAdminSchema = z.object({
@@ -178,6 +218,13 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   mine: '/admin/assignments/mine',
   /** Read access over every section, for a super admin. Assigned or not, finished or not. */
   progress: '/admin/assignments/progress',
+  /** What a test picker offers: their own tests, or every unfrozen one for a super admin. */
+  tests: '/admin/assignments/tests',
+  /** The chosen test's sections, unpaged — a base config holds a dozen, never a page's worth. */
+  sectionsOf: (testId: string) => `/admin/assignments/tests/${testId}/sections`,
+  /** Whoever holds the section's advisory lock, so a screen warns before the work begins. */
+  sectionLock: (testId: string, baseConfigSectionId: string) =>
+    `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/lock`,
   /** One row by id, for the screen a queue row opens — a super admin reaches anybody's. */
   one: (id: string) => `/admin/assignments/${id}`,
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,
@@ -198,4 +245,11 @@ export const ADMIN_PROOFREADING_ROUTES = {
   /** Read before the edit: which other tests hold this question, and which of them have opened. */
   otherTests: (assignmentId: string, questionId: string) =>
     `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}/other-tests`,
+  /** The same section, reached by the pair an assignment keys on. Super admin only, and unassigned. */
+  forSection: (testId: string, baseConfigSectionId: string) =>
+    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions`,
+  editSectionQuestion: (testId: string, baseConfigSectionId: string, questionId: string) =>
+    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}`,
+  sectionOtherTests: (testId: string, baseConfigSectionId: string, questionId: string) =>
+    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}/other-tests`,
 } as const;

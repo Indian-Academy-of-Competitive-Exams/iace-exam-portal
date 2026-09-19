@@ -7,7 +7,7 @@
 import { AppException, ErrorCodes, FORM_LEVEL_FIELD, type EditLockHolder } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { EDIT_LOCK_TTL_SEC } from '../redis/redis.keys';
+import { EDIT_LOCK_TTL_SEC, redisKeys } from '../redis/redis.keys';
 
 /** The caller of a mutation that edits a record. Without an id there is nobody to claim it for. */
 export type Editor = { id?: string; isSuperAdmin?: boolean };
@@ -17,6 +17,7 @@ export const EDIT_SUBJECTS = {
   TEST: 'test',
   BASE_CONFIG: 'configuration',
   QUESTION: 'question',
+  SECTION: 'section',
 } as const;
 export type EditSubject = (typeof EDIT_SUBJECTS)[keyof typeof EDIT_SUBJECTS];
 
@@ -73,3 +74,29 @@ async function fullNameOf(prisma: PrismaService, adminId: string): Promise<strin
   });
   return admin?.fullName ?? null;
 }
+
+/** One key per (test, section): a typist and a reader write the same rows, so they cannot both hold it. */
+export const takeSectionEditLock = (
+  redis: RedisService,
+  prisma: PrismaService,
+  section: { testId: string; baseConfigSectionId: string },
+  editor: Editor,
+): Promise<void> =>
+  takeEditLock(
+    redis,
+    prisma,
+    redisKeys.sectionEditLock(section.testId, section.baseConfigSectionId),
+    EDIT_SUBJECTS.SECTION,
+    editor,
+  );
+
+export const sectionEditingBy = (
+  redis: RedisService,
+  prisma: PrismaService,
+  section: { testId: string; baseConfigSectionId: string },
+) =>
+  editLockHeldBy(
+    redis,
+    prisma,
+    redisKeys.sectionEditLock(section.testId, section.baseConfigSectionId),
+  );

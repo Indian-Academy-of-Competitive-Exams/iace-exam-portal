@@ -16,6 +16,10 @@ import {
   type Assignment,
   type AssignableAdmin,
   type AssignmentRole,
+  type AssignmentSection,
+  type AssignmentSectionsQuery,
+  type AssignmentTest,
+  type AssignmentTestsQuery,
   type AssignmentWithTest,
   type CreateAssignmentBody,
   type DifficultyMix,
@@ -25,12 +29,15 @@ import {
   type Paginated,
   type PaperSource,
   type SectionProgressQuery,
+  type SectionEditLock,
   type SectionProgressRow,
   type SectionRoleProgress,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { AdminsService } from '../admins';
+import { sectionEditingBy } from '../common/edit-lock';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
@@ -122,8 +129,11 @@ const withinDue = (at: Date | null, bounds: DueBounds): boolean =>
 
 const nameLike = (text: string): Prisma.StringFilter => ({ contains: text, mode: 'insensitive' });
 
-const matchesSection = (name: string, wanted: string | undefined): boolean =>
-  !wanted || name.toLowerCase().includes(wanted.toLowerCase());
+/** A test still being built: the picker and the progress list must offer and list the same ones. */
+const UNFROZEN_TEST = {
+  finalizedAt: null,
+  paperSource: { not: null },
+} as const satisfies Prisma.TestWhereInput;
 
 const sectionsOf = (test: QueueTest): QueueSection[] => [
   ...scopedSections(test.baseConfig.sections, test.scope, (test.scopeRef as TestScopeRef) ?? null),
@@ -182,6 +192,7 @@ const roleLabel = (role: AssignmentRole): string =>
 export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
     private readonly admins: AdminsService,
   ) {}
 
@@ -279,8 +290,8 @@ export class AssignmentsService {
       assigneeId: adminId,
       ...(query.outstanding ? { finalizedAt: null } : {}),
       ...(query.role ? { role: query.role } : {}),
-      ...(query.test ? { test: { title: nameLike(query.test) } } : {}),
-      ...(query.section ? { baseConfigSection: { name: nameLike(query.section) } } : {}),
+      ...(query.testId ? { testId: query.testId } : {}),
+      ...(query.baseConfigSectionId ? { baseConfigSectionId: query.baseConfigSectionId } : {}),
       ...(due
         ? { dueAt: { ...(due.from ? { gte: due.from } : {}), ...(due.to ? { lte: due.to } : {}) } }
         : {}),
@@ -308,9 +319,8 @@ export class AssignmentsService {
     const due = dueBounds(query);
     const tests = await this.prisma.test.findMany({
       where: {
-        finalizedAt: null,
-        paperSource: { not: null },
-        ...(query.test ? { title: nameLike(query.test) } : {}),
+        ...UNFROZEN_TEST,
+        ...(query.testId ? { id: query.testId } : {}),
       },
       select: TEST_QUEUE_SELECT,
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
@@ -319,7 +329,9 @@ export class AssignmentsService {
     const rows = tests
       .flatMap((test) =>
         sectionsOf(test)
-          .filter((section) => matchesSection(section.name, query.section))
+          .filter(
+            (section) => !query.baseConfigSectionId || section.id === query.baseConfigSectionId,
+          )
           .map((section) => sectionRow(test, section)),
       )
       .filter((row) => !query.assigneeId || heldByAnyOf(row, query.assigneeId))
@@ -332,6 +344,62 @@ export class AssignmentsService {
       items.map((row) => ({ ...row, writtenCount: written.get(sectionKey(row)) ?? 0 })),
       rows.length,
     );
+  }
+
+  /** What a test picker offers: their own tests, or every unfrozen one when a super admin asks. */
+  async tests(
+    query: AssignmentTestsQuery,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<Paginated<AssignmentTest>> {
+    const where: Prisma.TestWhereInput = {
+      ...UNFROZEN_TEST,
+      ...(ownScope(query, isSuperAdmin) ? { assignments: { some: heldBy(adminId, query) } } : {}),
+      ...(query.q ? { title: nameLike(query.q) } : {}),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.test.findMany({
+        where,
+        select: { id: true, title: true },
+        orderBy: [{ title: 'asc' }, { id: 'asc' }],
+        ...pageArgs(query),
+      }),
+      this.prisma.test.count({ where }),
+    ]);
+    return paged(query, rows, total);
+  }
+
+  /** The chosen test's sections, in the test's own order — a dozen rows, so no page to ask for. */
+  async sectionChoices(
+    testId: string,
+    query: AssignmentSectionsQuery,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<AssignmentSection[]> {
+    if (ownScope(query, isSuperAdmin)) {
+      const held = await this.prisma.questionAssignment.findMany({
+        where: { testId, ...heldBy(adminId, query) },
+        select: { baseConfigSection: { select: { id: true, name: true } } },
+        orderBy: { baseConfigSection: { order: 'asc' } },
+      });
+      return held.map((row) => row.baseConfigSection);
+    }
+
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: TEST_QUEUE_SELECT,
+    });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    return sectionsOf(test).map((section) => ({ id: section.id, name: section.name }));
+  }
+
+  /** Who holds the section right now, so a screen warns before the work rather than at the save. */
+  async sectionLock(testId: string, baseConfigSectionId: string): Promise<SectionEditLock> {
+    const editingBy = await sectionEditingBy(this.redis, this.prisma, {
+      testId,
+      baseConfigSectionId,
+    });
+    return { editingBy };
   }
 
   /** Idempotent: finalising twice hands back the same row rather than erroring on the second call. */
@@ -463,6 +531,18 @@ export class AssignmentsService {
     });
   }
 }
+
+/** A super admin reads the whole institute unless they ask for their own queue; nobody else ever does. */
+const ownScope = (query: { mine?: boolean }, isSuperAdmin: boolean): boolean =>
+  !isSuperAdmin || query.mine === true;
+
+const heldBy = (
+  adminId: string,
+  query: { role?: AssignmentRole },
+): Prisma.QuestionAssignmentWhereInput => ({
+  assigneeId: adminId,
+  ...(query.role ? { role: query.role } : {}),
+});
 
 /** Nobody is handed a section until the test says where its questions come from, and PICKED needs no typist. */
 function assertRoleFits(paperSource: PaperSource | null, role: AssignmentRole): void {

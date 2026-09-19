@@ -16,7 +16,7 @@ import {
 import { AuditContext } from '../src/audit';
 import { ProofreadingService } from '../src/questions/proofreading.service';
 import { QuestionsService } from '../src/questions/questions.service';
-import { FakeStorage } from '../test/support/fakes';
+import { FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   makeCatalog,
@@ -46,7 +46,12 @@ async function build() {
     [STRANGER]: 'Stranger',
   });
   const questions = new QuestionsService(prisma, new AuditContext(), new FakeStorage() as never);
-  return { questions, proofreading: new ProofreadingService(prisma, questions) };
+  const redis = new FakeRedis();
+  return {
+    questions,
+    redis,
+    proofreading: new ProofreadingService(prisma, redis.asService(), questions),
+  };
 }
 
 function draft(over: Partial<QuestionDraftInput> = {}) {

@@ -20,6 +20,7 @@ import {
 } from '@iace/contracts';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
 import {
+  Alert,
   Button,
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -84,7 +85,6 @@ interface Saved {
   header: AuthoringHeader;
   state: AuthoringState;
   language: QuestionLanguage;
-  written: number;
   /** The typist's own setting, kept because it is about their keyboard and not this question. */
   romanised: boolean;
 }
@@ -112,7 +112,6 @@ export function AuthoringEditorPage() {
   const [header, setHeader] = useState<AuthoringHeader>(restored.header);
   const [state, setState] = useState<AuthoringState>(restored.state);
   const [language, setLanguage] = useState<QuestionLanguage>(restored.language);
-  const [written, setWritten] = useState(restored.written);
   const [romanised, setRomanised] = useState(restored.romanised);
 
   // Bumped whenever the box must be rebuilt: a language, a type, or a question loaded into it.
@@ -128,6 +127,7 @@ export function AuthoringEditorPage() {
     enabled: editingId !== '',
   });
   const assignment = useTypistAssignment(assignmentId);
+  const heldElsewhere = useSectionHolder(assignment.section, identity?.id);
   const sectionSubjectId = assignment.section?.sectionSubjectId ?? null;
   useSectionSubject(editingId === '' ? sectionSubjectId : null, setHeader);
 
@@ -139,8 +139,8 @@ export function AuthoringEditorPage() {
   });
 
   const saved = useMemo(
-    () => ({ header, state, language, written, romanised }),
-    [header, state, language, written, romanised],
+    () => ({ header, state, language, romanised }),
+    [header, state, language, romanised],
   );
   usePersistedDraft(storageKey, editingId === '', saved);
 
@@ -152,7 +152,6 @@ export function AuthoringEditorPage() {
     if (editingId) return;
     // The header survives: the next fifty questions are the same subject at the same level.
     setState(emptyState(state.type));
-    setWritten((count) => count + 1);
     rebuildBox();
   });
 
@@ -208,6 +207,12 @@ export function AuthoringEditorPage() {
 
       {assignment.section ? <AssignmentContext assignment={assignment.section} /> : null}
 
+      {heldElsewhere ? (
+        <Alert variant="warning" className="mx-4 mt-4">
+          {`${heldElsewhere.fullName ?? 'Another admin'} is editing this section. Their changes have to land first.`}
+        </Alert>
+      ) : null}
+
       {gate ?? (
         <EditorPanes
           questionId={editingId}
@@ -217,7 +222,6 @@ export function AuthoringEditorPage() {
           canSave={canSave}
           boxVersion={boxVersion}
           checks={checks}
-          counter={id ? 'Editing' : `Question ${written + 1}`}
           onRegions={onRegions}
           onCycleLanguage={cycleLanguage}
           onLanguageChange={switchLanguage}
@@ -251,7 +255,6 @@ function EditorPanes({
   canSave,
   boxVersion,
   checks,
-  counter,
   onRegions,
   onCycleLanguage,
   onLanguageChange,
@@ -264,8 +267,6 @@ function EditorPanes({
   canSave: boolean;
   boxVersion: number;
   checks: readonly Check[];
-  /** Which question of this batch is in the box — a value, and the only title the pane needs. */
-  counter: string;
   onRegions: (regions: ScaffoldRegion[]) => void;
   onCycleLanguage: () => void;
   onLanguageChange: (next: QuestionLanguage) => void;
@@ -277,7 +278,6 @@ function EditorPanes({
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
         <PanelHeading
-          title={counter}
           action={
             <SegmentedControl
               value={language}
@@ -426,10 +426,11 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
   );
 }
 
-function PanelHeading({ title, action }: Readonly<{ title: string; action?: React.ReactNode }>) {
+/** A pane whose content names itself takes no title; the bar stays so both panes line up. */
+function PanelHeading({ title, action }: Readonly<{ title?: string; action?: React.ReactNode }>) {
   return (
     <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
+      {title ? <h2 className="text-sm font-semibold">{title}</h2> : <span />}
       {action}
     </div>
   );
@@ -502,6 +503,20 @@ function useTypistAssignment(scoped = ''): ScopedSection {
     loading: scoped !== '' && held.isPending,
     refused: scoped !== '' && !held.isPending && section === null,
   };
+}
+
+/** Who else is in this section right now — read once on load, so the warning lands before the work. */
+function useSectionHolder(section: AssignmentWithTest | null, adminId: string | undefined) {
+  const testId = section?.testId ?? '';
+  const sectionId = section?.baseConfigSectionId ?? '';
+  const lock = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'lock', testId, sectionId],
+    queryFn: () => api.admin.assignments.sectionLock(testId, sectionId),
+    enabled: testId !== '' && sectionId !== '',
+  });
+
+  const editingBy = lock.data?.editingBy ?? null;
+  return editingBy && editingBy.adminId !== adminId ? editingBy : null;
 }
 
 /** Saving is all the server hears: a new question, or the draft this editor was opened on. */
@@ -618,14 +633,25 @@ function restore(key: string): Saved {
     header: startingHeader(),
     state: emptyState(),
     language: DEFAULT_LANGUAGE,
-    written: 0,
     romanised: true,
   };
 
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? { ...blank, ...(JSON.parse(raw) as Partial<Saved>) } : blank;
+    if (!raw) return blank;
+    const kept = { ...blank, ...(JSON.parse(raw) as Partial<Saved>) };
+    // Only an unfinished question earns its settings back; an empty box is a first visit.
+    return wasTyped(kept.state) ? kept : { ...blank, romanised: kept.romanised };
   } catch {
     return blank;
   }
+}
+
+/** Anything the typist put in the box, in any language, including the answer line. */
+function wasTyped(state: AuthoringState): boolean {
+  if (state.answer.trim() !== '') return true;
+  return LANGUAGE_ORDER.some((code) => {
+    const content = state.content[code];
+    return hasText(content.stem) || hasText(content.solution) || content.options.some(hasText);
+  });
 }

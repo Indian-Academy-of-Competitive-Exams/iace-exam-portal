@@ -8,8 +8,8 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   instituteDayLabel,
-  type AssignmentWithTest,
   type QuestionDetail,
+  type QuestionDraftInput,
   type QuestionOnOtherTest,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -30,6 +30,7 @@ import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ProofreadQuestionBlock } from '../components/proofread-question';
 import { SectionThread } from '../components/section-thread';
+import { SuperAdminOnly } from '../components/super-admin-only';
 import { QuestionFields } from '../components/question-fields';
 import {
   SERVER_FIELDS,
@@ -40,42 +41,93 @@ import {
 import { FinalizeAssignmentDialog } from './assignment-queue';
 
 /** One section of one test, read top to bottom, with the fix in the reader's own hands. */
+
+/** The two ways in: the assignment that handed the section over, or the section's own pair. */
+interface SectionKey {
+  assignmentId: string;
+  testId: string;
+  sectionId: string;
+}
+
 export function ProofreadingSectionPage() {
-  const { assignmentId } = useParams<{ assignmentId: string }>();
-  const { can } = useAuth();
+  const params = useParams<{ assignmentId?: string; testId?: string; sectionId?: string }>();
+  const key: SectionKey = {
+    assignmentId: params.assignmentId ?? '',
+    testId: params.testId ?? '',
+    sectionId: params.sectionId ?? '',
+  };
+
+  if (key.assignmentId !== '') return <SectionReading sectionKey={key} />;
+
+  return (
+    <SuperAdminOnly title="Section">
+      <SectionReading sectionKey={key} />
+    </SuperAdminOnly>
+  );
+}
+
+function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
+  const { can, identity } = useAuth();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<QuestionDetail | null>(null);
   const [finalizing, setFinalizing] = useState(false);
 
-  const id = assignmentId ?? '';
+  const byAssignment = sectionKey.assignmentId !== '';
+
   const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'one', id],
-    queryFn: () => api.admin.assignments.one(id),
-    enabled: id !== '',
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'one', sectionKey.assignmentId],
+    queryFn: () => api.admin.assignments.one(sectionKey.assignmentId),
+    enabled: byAssignment,
   });
   const assignment = assignments.data ?? null;
 
-  const questions = useQuery({
-    queryKey: [...QUERY_KEYS.PROOFREADING, 'assignment', id],
-    queryFn: () => api.admin.proofreading.forAssignment(id),
-    enabled: assignment !== null,
+  // Only the section's own pair arrives in the URL, so the two names come off the test itself.
+  const test = useQuery({
+    queryKey: [...QUERY_KEYS.TEST, sectionKey.testId],
+    queryFn: () => api.admin.tests.detail(sectionKey.testId),
+    enabled: !byAssignment && sectionKey.testId !== '',
   });
 
+  const testId = assignment?.testId ?? sectionKey.testId;
+  const sectionId = assignment?.baseConfigSectionId ?? sectionKey.sectionId;
+  const scoped = testId !== '' && sectionId !== '';
+
+  const questions = useQuery({
+    queryKey: [...QUERY_KEYS.PROOFREADING, 'section', testId, sectionId],
+    queryFn: () =>
+      byAssignment
+        ? api.admin.proofreading.forAssignment(sectionKey.assignmentId)
+        : api.admin.proofreading.forSection(testId, sectionId),
+    enabled: byAssignment ? assignment !== null : scoped,
+  });
+
+  const lock = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'lock', testId, sectionId],
+    queryFn: () => api.admin.assignments.sectionLock(testId, sectionId),
+    enabled: scoped,
+  });
+  const editingBy = lock.data?.editingBy ?? null;
+  const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
+
+  const sectionName =
+    assignment?.sectionName ??
+    test.data?.baseConfig.sections.find((one) => one.id === sectionId)?.name ??
+    'Section';
+  const testTitle = assignment?.testTitle ?? test.data?.title ?? null;
+
   const rows = questions.data ?? [];
-  const canEdit =
-    assignment !== null &&
-    assignment.finalizedAt === null &&
-    can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE);
+  const canWrite = can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE);
+  const canEdit = byAssignment
+    ? assignment !== null && assignment.finalizedAt === null && canWrite
+    : scoped;
 
   const header = (
     <PageHeader
-      breadcrumbs={
-        <PageCrumbs nav={NAV_ITEMS} tail={[{ label: assignment?.sectionName ?? 'Section' }]} />
-      }
-      title={assignment?.sectionName ?? 'Section'}
-      meta={metaOf(assignment, questions.data?.length)}
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: sectionName }]} />}
+      title={sectionName}
+      meta={metaOf(testTitle, questions.data?.length)}
       action={
-        canEdit ? (
+        canEdit && byAssignment ? (
           <Button size="sm" onClick={() => setFinalizing(true)}>
             Mark read
           </Button>
@@ -84,7 +136,7 @@ export function ProofreadingSectionPage() {
     />
   );
 
-  if (assignments.data !== undefined && assignment === null) {
+  if (byAssignment && assignments.data !== undefined && assignment === null) {
     return (
       <PageFrame header={header}>
         <EmptyState
@@ -98,20 +150,28 @@ export function ProofreadingSectionPage() {
 
   return (
     <PageFrame header={header}>
-      {assignment ? (
+      {scoped ? (
         <div data-print-hide className="mb-8">
-          <SectionThread
-            testId={assignment.testId}
-            sectionId={assignment.baseConfigSectionId}
-            canWrite={can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)}
-          />
+          <SectionThread testId={testId} sectionId={sectionId} canWrite={canWrite} />
         </div>
       ) : null}
 
       <section data-print-document className="flex flex-col gap-8">
+        {elsewhere ? (
+          <Alert variant="warning">
+            {`${elsewhere.fullName ?? 'Another admin'} is editing this section. Their changes have to land first.`}
+          </Alert>
+        ) : null}
+
         {assignment?.finalizedAt ? (
           <Alert variant="info">
             {`You marked this section read on ${instituteDayLabel(assignment.finalizedAt)}. Its questions are no longer yours to change.`}
+          </Alert>
+        ) : null}
+
+        {!byAssignment && questions.data ? (
+          <Alert variant="info">
+            Nobody has been given this section to proof-read. Reading it here assigns it to nobody.
           </Alert>
         ) : null}
 
@@ -147,7 +207,7 @@ export function ProofreadingSectionPage() {
 
       {editing ? (
         <EditQuestionDialog
-          assignmentId={id}
+          sectionKey={{ ...sectionKey, testId, sectionId }}
           question={editing}
           onClose={() => setEditing(null)}
           onSaved={() => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING })}
@@ -165,35 +225,53 @@ export function ProofreadingSectionPage() {
   );
 }
 
-function metaOf(assignment: AssignmentWithTest | null, count: number | undefined) {
-  if (!assignment) return undefined;
-  const title = assignment.testTitle ?? 'Untitled test';
+function metaOf(testTitle: string | null, count: number | undefined) {
+  const title = testTitle ?? 'Untitled test';
 
   return count === undefined ? title : `${title} · ${plural(count, 'question')}`;
 }
 
+/** One pair of calls, whichever key the section was opened on — the authority is the route's. */
+function readerFor(sectionKey: SectionKey) {
+  const { assignmentId, testId, sectionId } = sectionKey;
+  if (assignmentId !== '') {
+    return {
+      otherTests: (questionId: string) =>
+        api.admin.proofreading.otherTests(assignmentId, questionId),
+      edit: (questionId: string, draft: QuestionDraftInput) =>
+        api.admin.proofreading.editQuestion(assignmentId, questionId, draft),
+    };
+  }
+  return {
+    otherTests: (questionId: string) =>
+      api.admin.proofreading.sectionOtherTests(testId, sectionId, questionId),
+    edit: (questionId: string, draft: QuestionDraftInput) =>
+      api.admin.proofreading.editSectionQuestion(testId, sectionId, questionId, draft),
+  };
+}
+
 function EditQuestionDialog({
-  assignmentId,
+  sectionKey,
   question,
   onClose,
   onSaved,
 }: Readonly<{
-  assignmentId: string;
+  sectionKey: SectionKey;
   question: QuestionDetail;
   onClose: () => void;
   onSaved: () => void;
 }>) {
   const form = useForm<QuestionFormValues>({ defaultValues: valuesOf(question) });
+  const reader = useMemo(() => readerFor(sectionKey), [sectionKey]);
 
   const elsewhere = useQuery({
-    queryKey: [...QUERY_KEYS.PROOFREADING, 'other-tests', assignmentId, question.id],
-    queryFn: () => api.admin.proofreading.otherTests(assignmentId, question.id),
+    queryKey: [...QUERY_KEYS.PROOFREADING, 'other-tests', sectionKey.testId, question.id],
+    queryFn: () => reader.otherTests(question.id),
   });
 
   const save = useMutation({
     meta: { success: 'Question saved.', fields: [...SERVER_FIELDS] },
-    mutationFn: (values: QuestionFormValues) =>
-      api.admin.proofreading.editQuestion(assignmentId, question.id, toDraft(values, question)),
+    mutationFn: (values: QuestionFormValues) => reader.edit(question.id, toDraft(values, question)),
     onSuccess: () => {
       onSaved();
       onClose();

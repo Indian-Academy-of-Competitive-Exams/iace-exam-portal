@@ -17,6 +17,8 @@ import {
   type QuestionSummary,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { takeSectionEditLock } from '../common/edit-lock';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { computeStemHash } from './question-core';
 import { writtenBetween } from './question-query';
@@ -27,6 +29,7 @@ import { QuestionsService } from './questions.service';
 export class AuthoringService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
     private readonly questions: QuestionsService,
   ) {}
 
@@ -36,13 +39,16 @@ export class AuthoringService {
     assignmentId: string | null = null,
     isSuperAdmin = false,
   ): Promise<AuthoringSaveResult> {
-    if (assignmentId) await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
+    if (assignmentId) {
+      const section = await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
+      await this.claimSection(section, adminId, isSuperAdmin);
+    }
     const question = await this.questions.create(draft, adminId, { assignmentId });
     return { question, duplicateOf: await this.duplicateFor(draft, question.id) };
   }
 
   async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
-    await this.assertTheirs(id, adminId);
+    await this.claimSection(await this.assertTheirs(id, adminId), adminId, false);
     const question = await this.questions.update(id, draft, adminId);
     return { question, duplicateOf: await this.duplicateFor(draft, id) };
   }
@@ -55,6 +61,7 @@ export class AuthoringService {
   history(query: AuthoringHistoryQuery, adminId: string): Promise<Paginated<QuestionSummary>> {
     return this.questions.list(asBankQuery(query), {
       createdById: adminId,
+      ...(query.assignmentId?.length ? { assignmentId: { in: query.assignmentId } } : {}),
       ...(query.from || query.to ? { createdAt: writtenBetween(query.from, query.to) } : {}),
     });
   }
@@ -120,25 +127,47 @@ export class AuthoringService {
     return this.questions.duplicateOf(computeStemHash(draft), exceptId);
   }
 
+  /** Taken BEFORE any write: Redis does not roll back, so a claim inside one is a claim nobody releases. */
+  private async claimSection(
+    section: SectionRef | null,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<void> {
+    if (section === null) return;
+    await takeSectionEditLock(this.redis, this.prisma, section, { id: adminId, isSuperAdmin });
+  }
+
   /** Not theirs reads as not there: an author has no business learning what another one wrote. */
-  private async assertTheirs(id: string, adminId: string): Promise<void> {
+  private async assertTheirs(id: string, adminId: string): Promise<SectionRef | null> {
     const row = await this.prisma.question.findFirst({
       where: { id, createdById: adminId },
-      select: { id: true },
+      select: { assignment: { select: { testId: true, baseConfigSectionId: true } } },
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+    return row.assignment;
   }
 
   /** Not theirs reads as not there — unless a super admin, who takes up a section nobody holds. */
-  private async assertOwnAssignment(id: string, adminId: string, isSuperAdmin: boolean) {
+  private async assertOwnAssignment(
+    id: string,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<SectionRef> {
     const row = await this.prisma.questionAssignment.findUnique({
       where: { id },
-      select: { assigneeId: true },
+      select: { assigneeId: true, testId: true, baseConfigSectionId: true },
     });
     if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
+    return row;
   }
+}
+
+/** The pair a section lock keys on — a question outside an assignment has none. */
+interface SectionRef {
+  testId: string;
+  baseConfigSectionId: string;
 }
 
 const SEVEN_DAYS = 7;
