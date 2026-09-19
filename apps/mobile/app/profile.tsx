@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +15,7 @@ import {
   type Me,
   type UpdateMeInput,
 } from '@iace/contracts';
+import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../src/lib/constants';
 import { DocumentCard } from '../src/components/account/document-card';
@@ -113,7 +114,7 @@ export default function ProfileScreen() {
 
         {isEditing ? (
           <View className="gap-4">
-            <Text className="text-lg font-semibold text-foreground">Your details</Text>
+            <Text variant="section">Your details</Text>
             <TextField control={form.control} name="fullName" label="Full name" />
             <TextField control={form.control} name="profile.motherName" label="Mother's name" />
             <TextField control={form.control} name="profile.fatherName" label="Father's name" />
@@ -194,7 +195,7 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View className="gap-4">
-            <Text className="text-lg font-semibold text-foreground">Your details</Text>
+            <Text variant="section">Your details</Text>
             <Rows rows={detailsOf(me.data)} />
             <Button variant="outline" onPress={() => setIsEditing(true)}>
               Edit your details
@@ -215,7 +216,7 @@ export default function ProfileScreen() {
 function Enrolment({ me }: Readonly<{ me: Me }>) {
   return (
     <View className="gap-4">
-      <Text className="text-lg font-semibold text-foreground">Enrolment</Text>
+      <Text variant="section">Enrolment</Text>
       <Rows
         rows={[
           { label: 'Branch', value: me.enrolment.branch },
@@ -240,8 +241,8 @@ function Rows({ rows }: Readonly<{ rows: readonly DetailRow[] }>) {
           key={row.label}
           className={index > 0 ? 'gap-1 border-t border-border p-4' : 'gap-1 p-4'}
         >
-          <Text className="text-xs text-muted-foreground">{row.label}</Text>
-          <Text className="text-sm text-foreground">{row.value || DASH}</Text>
+          <Text variant="meta">{row.label}</Text>
+          <Text variant="body">{row.value || DASH}</Text>
         </View>
       ))}
     </Card>
@@ -280,7 +281,7 @@ const EMPTY_EXAM = { exam: '', year: '', result: '' };
 function Documents({ me }: Readonly<{ me: Me }>) {
   return (
     <View className="gap-4">
-      <Text className="text-lg font-semibold text-foreground">Documents</Text>
+      <Text variant="section">Documents</Text>
       <View className="flex-row gap-3">
         <DocumentCard
           kind={DOCUMENT_KINDS.PHOTO}
@@ -302,11 +303,11 @@ function History({ title, lines }: Readonly<{ title: string; lines: readonly str
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">{title}</Text>
+      <Text variant="section">{title}</Text>
       <Card>
         {lines.map((line, index) => (
           <View key={line} className={index > 0 ? 'border-t border-border p-4' : 'p-4'}>
-            <Text className="text-sm text-foreground">{line}</Text>
+            <Text variant="body">{line}</Text>
           </View>
         ))}
       </Card>

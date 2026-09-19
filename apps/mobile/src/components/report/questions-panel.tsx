@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   distractorThatWon,
@@ -11,6 +11,7 @@ import {
   type QuestionReportRow,
 } from '@iace/contracts';
 import { QUESTION_REPORT_FILTERS } from '@iace/app-kit';
+import { Text } from '../ui/text';
 import { questionReportQuery } from '../../lib/queries';
 import { asText, useFilterState, type FilterState } from '../../lib/filters';
 import { Alert } from '../ui/alert';
@@ -104,7 +105,7 @@ function Header({
       </View>
 
       <View className="flex-row items-center justify-between gap-3">
-        <Text className="flex-1 text-sm text-muted-foreground">
+        <Text variant="muted" className="flex-1">
           {`${showing} of ${report.questions.length}`}
         </Text>
         <FilterTrigger state={state} filters={QUESTION_REPORT_FILTERS} />
@@ -156,8 +157,8 @@ function Question({ row }: Readonly<{ row: QuestionReportRow }>) {
 function Figure({ label, value }: Readonly<{ label: string; value: string | number }>) {
   return (
     <View className="flex-row items-baseline gap-2">
-      <Text className="text-xs text-muted-foreground">{label}</Text>
-      <Text className="text-sm font-medium text-foreground">{value}</Text>
+      <Text variant="meta">{label}</Text>
+      <Text variant="label">{value}</Text>
     </View>
   );
 }

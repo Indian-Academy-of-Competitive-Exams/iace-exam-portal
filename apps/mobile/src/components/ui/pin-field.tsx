@@ -5,8 +5,9 @@
  */
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { Controller, type Control, type FieldValues, type Path } from 'react-hook-form';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 
 const DOT = '•';
@@ -51,7 +52,7 @@ export function PinField<TValues extends FieldValues>({
 
         return (
           <View className="flex flex-col gap-1.5">
-            <Text className="text-sm font-medium text-foreground">{label}</Text>
+            <Text variant="label">{label}</Text>
 
             <View className="relative">
               <View className="flex-row gap-2">

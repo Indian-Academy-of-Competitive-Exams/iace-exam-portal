@@ -1,8 +1,9 @@
 /// <reference types="nativewind/types" />
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { minutes } from '@iace/app-kit';
 import { type MarkComposition, type ScoreCard } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { attemptReportQuery, scoreCardQuery } from '../../lib/queries';
 import { Card } from '../ui/card';
 import { Hero, HeroFigure } from '../ui/hero';
@@ -95,7 +96,7 @@ function Marks({ composition }: Readonly<{ composition: MarkComposition }>) {
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Marks</Text>
+      <Text variant="section">Marks</Text>
       <Card className="p-5">
         <MeasureBars bars={bars} max={composition.maxMarks} />
       </Card>

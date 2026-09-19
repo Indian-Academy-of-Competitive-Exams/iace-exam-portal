@@ -4,7 +4,7 @@
  * room for five columns, and a row that wraps mid-column reads as two rows.
  */
 /// <reference types="nativewind/types" />
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   useFieldArray,
   type Control,
@@ -13,6 +13,7 @@ import {
   type ArrayPath,
 } from 'react-hook-form';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { TextField } from '../ui/text-field';
@@ -47,9 +48,9 @@ export function HistoryEditor<TValues extends FieldValues>({
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">{title}</Text>
+      <Text variant="section">{title}</Text>
 
-      {fields.length === 0 ? <Text className="text-sm text-muted-foreground">{empty}</Text> : null}
+      {fields.length === 0 ? <Text variant="muted">{empty}</Text> : null}
 
       {fields.map((field, index) => (
         <Card key={field.id} className="gap-3 p-4">

@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { LEADERBOARD_MEASURES, type Leaderboard, type LeaderboardRow } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { cn } from '../../lib/cn';
 import { Card } from '../ui/card';
 import { EmptyState } from '../ui/empty-state';
@@ -32,11 +33,11 @@ export function Podium({ rows }: Readonly<{ rows: readonly LeaderboardRow[] }>) 
             {PODIUM_LABELS[row.rank] ?? `#${row.rank}`}
           </Text>
           <View className="flex-1 gap-0.5">
-            <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
+            <Text variant="subsection" numberOfLines={1}>
               {row.name}
             </Text>
             {row.branch ? (
-              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              <Text variant="meta" numberOfLines={1}>
                 {row.branch}
               </Text>
             ) : null}
@@ -58,9 +59,7 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">
-        {MEASURE_LABELS[board.measure] ?? 'Standing'}
-      </Text>
+      <Text variant="section">{MEASURE_LABELS[board.measure] ?? 'Standing'}</Text>
       <Card>
         {rows.map((row, index) => (
           <View
@@ -73,17 +72,17 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
           >
             <Text className="w-8 text-sm font-semibold text-muted-foreground">{row.rank}</Text>
             <View className="flex-1 gap-0.5">
-              <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+              <Text variant="label" numberOfLines={1}>
                 {row.isYou ? 'You' : row.name}
               </Text>
               {row.branch ? (
-                <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                <Text variant="meta" numberOfLines={1}>
                   {row.branch}
                 </Text>
               ) : null}
             </View>
             <View className="items-end">
-              <Text className="text-sm font-semibold text-foreground">{row.value}</Text>
+              <Text variant="subsection">{row.value}</Text>
               {row.deltaRank === null || row.deltaRank === 0 ? null : (
                 <Text
                   className={cn(

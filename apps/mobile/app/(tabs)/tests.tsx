@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   ANY_CHOICE,
@@ -11,6 +11,7 @@ import {
   type TestResult,
 } from '@iace/app-kit';
 import { type StudentCatalogSeries } from '@iace/contracts';
+import { Text } from '../../src/components/ui/text';
 import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
@@ -136,8 +137,8 @@ function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeade
     <View className="gap-4 pb-2">
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1">
-          <Text className="text-2xl font-bold tracking-tight text-foreground">Tests</Text>
-          <Text className="text-sm text-muted-foreground">{plural(count, 'test')}</Text>
+          <Text variant="title">Tests</Text>
+          <Text variant="muted">{plural(count, 'test')}</Text>
         </View>
         <FilterTrigger state={state} filters={filters} />
       </View>

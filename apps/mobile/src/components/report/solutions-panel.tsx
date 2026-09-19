@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
@@ -11,6 +11,7 @@ import {
   type ScoreCard,
   type SolutionReport,
 } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { bookmarksInAttemptQueryKey, savedQueryKey } from '../../lib/constants';
 import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
@@ -109,9 +110,7 @@ function Paper({
         ) : null}
 
         <View className="flex-row items-center justify-between gap-3">
-          <Text className="text-sm font-medium text-foreground">
-            {`Question ${question.order} · ${verdict.label}`}
-          </Text>
+          <Text variant="label">{`Question ${question.order} · ${verdict.label}`}</Text>
           <Button
             variant="ghost"
             size="sm"

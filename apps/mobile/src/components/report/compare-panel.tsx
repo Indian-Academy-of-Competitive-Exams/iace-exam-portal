@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   percentLabel,
@@ -7,6 +7,7 @@ import {
   type PerformancePoint,
   type PerformanceReport,
 } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { attemptReportQuery, performanceQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
 import { Alert } from '../ui/alert';
@@ -111,7 +112,7 @@ function Against({ cohort, max }: Readonly<{ cohort: CohortCurve; max: number }>
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Marks</Text>
+      <Text variant="section">Marks</Text>
       <Card className="p-5">
         <MeasureBars bars={bars} max={max} />
       </Card>
@@ -135,7 +136,7 @@ function Curve({ cohort }: Readonly<{ cohort: CohortCurve }>) {
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Where the field scored</Text>
+      <Text variant="section">Where the field scored</Text>
       <Card className="p-5">
         <MeasureBars bars={bars} max={Math.max(...cohort.bands.map((band) => band.count), 1)} />
       </Card>
@@ -159,7 +160,7 @@ function OwnAttempts({ sittings }: Readonly<{ sittings: readonly PerformancePoin
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Your attempts</Text>
+      <Text variant="section">Your attempts</Text>
       <Card className="p-5">
         <MeasureBars bars={bars} max={max} />
       </Card>

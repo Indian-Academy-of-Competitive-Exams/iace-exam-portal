@@ -1,5 +1,6 @@
 /// <reference types="nativewind/types" />
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 
 export interface ChipOption {
@@ -38,7 +39,7 @@ export function ChipRow({
 
   return (
     <View className={cn('gap-1.5', className)}>
-      {label ? <Text className="text-xs font-medium text-muted-foreground">{label}</Text> : null}
+      {label ? <Text variant="metaStrong">{label}</Text> : null}
       {scroll ? (
         <ScrollView
           horizontal

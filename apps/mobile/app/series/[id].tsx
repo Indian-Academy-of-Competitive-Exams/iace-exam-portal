@@ -4,7 +4,7 @@
  * a `DataTable` are web-only, so this reuses the same `TestTile` the Tests tab already shelves.
  */
 import { Fragment } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -18,6 +18,7 @@ import {
   type TestResult,
 } from '@iace/app-kit';
 import { type PerformancePoint, type StudentCatalogSeries } from '@iace/contracts';
+import { Text } from '../../src/components/ui/text';
 import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
 import { Button } from '../../src/components/ui/button';
@@ -115,8 +116,8 @@ function SeriesHeader({
     <View className="gap-4 pb-2">
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1">
-          <Text className="text-2xl font-bold tracking-tight text-foreground">{series.name}</Text>
-          <Text className="text-sm text-muted-foreground">
+          <Text variant="title">{series.name}</Text>
+          <Text variant="muted">
             {progress.done} of {plural(progress.total, 'test')} done
           </Text>
         </View>
@@ -134,8 +135,8 @@ function SeriesHeader({
       ) : null}
 
       <View className="flex-row items-baseline justify-between">
-        <Text className="text-lg font-semibold text-foreground">Tests</Text>
-        <Text className="text-sm text-muted-foreground">{plural(series.tests.length, 'test')}</Text>
+        <Text variant="section">Tests</Text>
+        <Text variant="muted">{plural(series.tests.length, 'test')}</Text>
       </View>
     </View>
   );
@@ -180,10 +181,10 @@ function StatBlock({
 }: Readonly<{ label: string; value: string | number; unit?: string }>) {
   return (
     <Card className="flex-1 gap-1 p-4">
-      <Text className="text-xs text-muted-foreground">{label}</Text>
+      <Text variant="meta">{label}</Text>
       <Text className="text-xl font-semibold text-foreground">
         {value}
-        {unit ? <Text className="text-xs font-medium text-muted-foreground"> {unit}</Text> : null}
+        {unit ? <Text variant="metaStrong"> {unit}</Text> : null}
       </Text>
     </Card>
   );

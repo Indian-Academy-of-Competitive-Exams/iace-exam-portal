@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { Text } from 'react-native';
+import { Text } from './text';
 import { Card } from './card';
 import { cn } from '../../lib/cn';
 
@@ -13,7 +13,7 @@ export interface StatTileProps {
 export function StatTile({ label, value, className }: Readonly<StatTileProps>) {
   return (
     <Card className={cn('min-w-[7rem] flex-1 gap-1 p-4', className)}>
-      <Text className="text-xs text-muted-foreground">{label}</Text>
+      <Text variant="meta">{label}</Text>
       <Text className="text-xl font-semibold text-foreground">{value}</Text>
     </Card>
   );

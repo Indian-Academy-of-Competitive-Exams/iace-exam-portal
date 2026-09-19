@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import { type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 
 export interface HeroProps {
@@ -29,10 +30,8 @@ export function Hero({ eyebrow, title, meta, children, className }: Readonly<Her
           {eyebrow}
         </Text>
       ) : null}
-      {title ? (
-        <Text className="text-2xl font-bold tracking-tight text-foreground">{title}</Text>
-      ) : null}
-      {meta ? <Text className="text-sm text-muted-foreground">{meta}</Text> : null}
+      {title ? <Text variant="title">{title}</Text> : null}
+      {meta ? <Text variant="muted">{meta}</Text> : null}
       {children}
     </View>
   );
@@ -54,7 +53,7 @@ export function HeroFigure({ value, unit, caption }: Readonly<HeroFigureProps>) 
         <Text className="text-3xl font-bold tracking-tight text-primary-ink">{value}</Text>
         {unit ? <Text className="text-lg font-semibold text-primary-ink">{unit}</Text> : null}
       </View>
-      {caption ? <Text className="text-sm text-muted-foreground">{caption}</Text> : null}
+      {caption ? <Text variant="muted">{caption}</Text> : null}
     </View>
   );
 }
@@ -63,8 +62,8 @@ export function HeroFigure({ value, unit, caption }: Readonly<HeroFigureProps>) 
 export function ScreenTitle({ children, meta }: Readonly<{ children: string; meta?: string }>) {
   return (
     <View className="gap-0.5">
-      <Text className="text-2xl font-bold tracking-tight text-foreground">{children}</Text>
-      {meta ? <Text className="text-sm text-muted-foreground">{meta}</Text> : null}
+      <Text variant="title">{children}</Text>
+      {meta ? <Text variant="muted">{meta}</Text> : null}
     </View>
   );
 }

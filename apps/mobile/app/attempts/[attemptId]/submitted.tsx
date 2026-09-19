@@ -3,11 +3,12 @@
  * Marking is a queued job, so this shows what the sitting knows about ITSELF and
  * polls for the score card. The report opens the moment that lands.
  */
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useUnstableNativeVariable } from 'nativewind';
 import { pollDelayMs, shouldKeepPolling, type EndedSitting } from '@iace/app-kit';
+import { Text } from '../../../src/components/ui/text';
 import { isMarkingPending } from '../../../src/lib/exam-routes';
 import { DETAIL_ROUTES, ROUTES } from '../../../src/lib/nav';
 import { plural } from '../../../src/lib/plural';
@@ -44,7 +45,7 @@ export default function SubmittedScreen() {
       {handedIn ? <OwnEffort sitting={handedIn} /> : null}
 
       <View className="gap-2">
-        <Text className="text-lg font-semibold text-foreground">Marking</Text>
+        <Text variant="section">Marking</Text>
         <MarkingState marking={markingOf(card)} onRetry={card.refetch} />
       </View>
 
@@ -65,12 +66,12 @@ export default function SubmittedScreen() {
 function OwnEffort({ sitting }: Readonly<{ sitting: EndedSitting }>) {
   return (
     <View className="gap-2">
-      <Text className="text-lg font-semibold text-foreground">Your paper</Text>
+      <Text variant="section">Your paper</Text>
       <Card>
         {sitting.sections.map((section, index) => (
           <View key={section.id} className={cn('gap-1 p-4', index > 0 && 'border-t border-border')}>
-            <Text className="text-sm font-medium text-foreground">{section.name}</Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text variant="label">{section.name}</Text>
+            <Text variant="meta">
               {`${plural(section.total, 'question')} · ${section.attempted} attempted · ${section.unattempted} unattempted`}
             </Text>
           </View>
@@ -101,7 +102,7 @@ function MarkingState({ marking, onRetry }: Readonly<{ marking: Marking; onRetry
   return (
     <View className="flex-row items-center gap-3 py-2">
       <ActivityIndicator color={typeof spinnerColor === 'string' ? spinnerColor : undefined} />
-      <Text className="text-sm text-foreground">Marking your paper</Text>
+      <Text variant="body">Marking your paper</Text>
     </View>
   );
 }

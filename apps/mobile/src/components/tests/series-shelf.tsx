@@ -1,9 +1,10 @@
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { Link } from 'expo-router';
 import { useUnstableNativeVariable } from 'nativewind';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { seriesProgress, type Sittable, type TestResult } from '@iace/app-kit';
+import { Text } from '../ui/text';
 import { plural } from '../../lib/plural';
 import { DETAIL_ROUTES } from '../../lib/nav';
 import { TestTile } from './test-tile';
@@ -46,7 +47,7 @@ export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelf
           />
         </Pressable>
       </Link>
-      <Text className="text-sm text-muted-foreground">
+      <Text variant="muted">
         {plural(progress.total, 'test')} · {progress.done} sat
       </Text>
 

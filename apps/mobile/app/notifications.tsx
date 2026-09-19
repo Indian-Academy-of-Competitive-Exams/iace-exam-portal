@@ -1,9 +1,10 @@
 /// <reference types="nativewind/types" />
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-kit';
 import { instituteDayLabel, type Notification } from '@iace/contracts';
+import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
@@ -110,8 +111,8 @@ function Row({ row, onPress }: Readonly<{ row: Notification; onPress: () => void
           <Text className="flex-1 text-base font-semibold text-foreground">{row.title}</Text>
           {row.isRead ? null : <Badge variant="primary">New</Badge>}
         </View>
-        {row.body ? <Text className="text-sm text-foreground">{row.body}</Text> : null}
-        <Text className="text-xs text-muted-foreground">{instituteDayLabel(row.createdAt)}</Text>
+        {row.body ? <Text variant="body">{row.body}</Text> : null}
+        <Text variant="meta">{instituteDayLabel(row.createdAt)}</Text>
       </Pressable>
     </Card>
   );

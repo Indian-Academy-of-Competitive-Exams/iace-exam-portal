@@ -4,7 +4,7 @@
  * picker. What is on file opens in whatever the phone reads it with.
  */
 /// <reference types="nativewind/types" />
-import { Alert as NativeAlert, Image, Linking, Pressable, Text, View } from 'react-native';
+import { Alert as NativeAlert, Image, Linking, Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,6 +16,7 @@ import {
   type Me,
   type UploadFile,
 } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../../lib/constants';
 import { Button } from '../ui/button';
@@ -49,7 +50,7 @@ export function DocumentCard({
       <Preview url={url} label={label} />
 
       <View className="flex-row items-center justify-between gap-2">
-        <Text className="flex-1 text-sm font-medium text-foreground" numberOfLines={1}>
+        <Text variant="label" className="flex-1" numberOfLines={1}>
           {label}
         </Text>
         <Text className={url ? 'text-xs text-success-ink' : 'text-xs text-muted-foreground'}>
@@ -71,7 +72,7 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
   if (!url) {
     return (
       <View className="h-32 items-center justify-center rounded-md border border-dashed border-border bg-muted">
-        <Text className="text-xs text-muted-foreground">Nothing uploaded</Text>
+        <Text variant="meta">Nothing uploaded</Text>
       </View>
     );
   }
@@ -84,7 +85,7 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
       className="h-32 items-center justify-center overflow-hidden rounded-md border border-border bg-muted"
     >
       {isPdf(url) ? (
-        <Text className="text-xs text-muted-foreground">PDF. Tap to open</Text>
+        <Text variant="meta">PDF. Tap to open</Text>
       ) : (
         <Image source={{ uri: url }} resizeMode="cover" className="h-full w-full" />
       )}

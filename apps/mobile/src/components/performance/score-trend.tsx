@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { type PerformancePoint } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { plural } from '../../lib/plural';
 import { trendOf } from '../../lib/trend';
 import { LinePlot } from '../ui/line-plot';
@@ -15,8 +16,8 @@ export function ScoreTrend({ points }: Readonly<{ points: readonly PerformancePo
   return (
     <View className="gap-2 rounded-lg bg-chart-surface p-4">
       <View className="flex-row items-baseline justify-between gap-3">
-        <Text className="text-lg font-semibold text-foreground">{line.title}</Text>
-        <Text className="text-xs text-muted-foreground">{plural(points.length, 'sitting')}</Text>
+        <Text variant="section">{line.title}</Text>
+        <Text variant="meta">{plural(points.length, 'sitting')}</Text>
       </View>
       <LinePlot
         points={line.points}

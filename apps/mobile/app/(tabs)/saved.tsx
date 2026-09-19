@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { savedFilters } from '@iace/app-kit';
 import {
@@ -9,6 +9,7 @@ import {
   SAVED_QUESTION_KINDS,
   type SavedQuestionKind,
 } from '@iace/contracts';
+import { Text } from '../../src/components/ui/text';
 import { ChipRow, type ChipOption } from '../../src/components/ui/chip-row';
 import { FilterSummary, FilterTrigger } from '../../src/components/ui/filter-bar';
 import { SavedList } from '../../src/components/saved/saved-list';
@@ -36,7 +37,7 @@ export default function SavedScreen() {
     <View className="flex-1 bg-background">
       <View className="gap-3 px-5 pt-6">
         <View className="flex-row items-center justify-between gap-3">
-          <Text className="flex-1 text-2xl font-bold tracking-tight text-foreground">
+          <Text variant="title" className="flex-1">
             Saved questions
           </Text>
           <FilterTrigger state={state} filters={filters} />

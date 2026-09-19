@@ -5,10 +5,11 @@
  */
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnstableNativeVariable } from 'nativewind';
 import SlidersHorizontal from 'lucide-react-native/icons/sliders-horizontal';
+import { Text } from './text';
 import { asSet, asText, summaryOf, type FilterSpec, type FilterState } from '../../lib/filters';
 import { useTokenColor } from '../../lib/use-token-color';
 import { Button } from './button';
@@ -69,7 +70,7 @@ export function FilterSummary({ state, filters }: Readonly<FilterProps>) {
 
   return (
     <View className="flex-row items-center gap-3">
-      <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+      <Text variant="muted" className="flex-1" numberOfLines={1}>
         {set.join(' · ')}
       </Text>
       {/* Shown only when it would do something — a permanently greyed Clear teaches nobody. */}
@@ -116,7 +117,7 @@ function FilterSheet({
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
           <View className="flex-row items-center justify-between px-4">
-            <Text className="text-lg font-semibold text-foreground">Filters</Text>
+            <Text variant="section">Filters</Text>
             <Button variant="ghost" onPress={onClose}>
               Done
             </Button>
@@ -159,7 +160,7 @@ function FilterControl({
 
     return (
       <View className="gap-1.5">
-        <Text className="text-xs font-medium text-muted-foreground">{filter.label}</Text>
+        <Text variant="metaStrong">{filter.label}</Text>
         <View className="flex-row flex-wrap gap-2">
           {items.map((item) => (
             <Chip

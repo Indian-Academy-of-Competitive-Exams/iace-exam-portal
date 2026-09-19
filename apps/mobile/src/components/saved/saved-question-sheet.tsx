@@ -4,10 +4,11 @@
  * solutions screen would have shown.
  */
 /// <reference types="nativewind/types" />
-import { Modal, Text, View } from 'react-native';
+import { Modal, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
 import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
@@ -26,7 +27,7 @@ export function SavedQuestionSheet({
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         <View className="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
-          <Text className="flex-1 text-lg font-semibold text-foreground" numberOfLines={1}>
+          <Text variant="section" className="flex-1" numberOfLines={1}>
             {saved.testTitle ?? 'This question'}
           </Text>
           <Button variant="ghost" size="sm" onPress={onClose}>

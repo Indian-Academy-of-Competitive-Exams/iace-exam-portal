@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../src/components/ui/text';
 import { ChipRow, type ChipOption } from '../../src/components/ui/chip-row';
 import { LeaderboardPanel } from '../../src/components/performance/leaderboard-panel';
 import { OverviewPanel } from '../../src/components/performance/overview-panel';
@@ -20,7 +21,7 @@ export default function PerformanceScreen() {
   return (
     <View className="flex-1 bg-background">
       <View className="gap-3 px-5 pt-6">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Performance</Text>
+        <Text variant="title">Performance</Text>
         <ChipRow options={VIEWS} value={view} onChange={setView} />
       </View>
 

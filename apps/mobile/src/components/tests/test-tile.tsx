@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Link } from 'expo-router';
 import {
   ATTEMPT_STATUS,
@@ -7,6 +7,7 @@ import {
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { shutReason, type Sittable, type TestResult } from '@iace/app-kit';
+import { Text } from '../ui/text';
 import { Alert } from '../ui/alert';
 import { Card } from '../ui/card';
 import { cn } from '../../lib/cn';
@@ -51,12 +52,12 @@ export function TestTile({ row, now, result, fullWidth = false }: Readonly<TestT
             {row.test.title ?? 'Untitled test'}
           </Text>
 
-          <Text className="text-xs text-muted-foreground">{paperLine(row.test)}</Text>
+          <Text variant="meta">{paperLine(row.test)}</Text>
 
           {stateOf(row) === 'SHUT' ? (
             <Alert>{shutReason(row.test, now)}</Alert>
           ) : (
-            <Text className="text-xs text-muted-foreground">{whenLine(row.test, now)}</Text>
+            <Text variant="meta">{whenLine(row.test, now)}</Text>
           )}
 
           <TileFoot row={row} result={result} />
@@ -72,7 +73,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
     return (
       <Text className="text-lg font-semibold tabular-nums text-foreground">
         {result.score}
-        <Text className="text-xs font-medium text-muted-foreground"> /{result.maxMarks}</Text>
+        <Text variant="metaStrong"> /{result.maxMarks}</Text>
       </Text>
     );
   }
@@ -89,7 +90,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
 
   return (
     <View className="items-center rounded-md border border-input px-3 py-2">
-      <Text className="text-sm font-medium text-foreground">View details</Text>
+      <Text variant="label">View details</Text>
     </View>
   );
 }

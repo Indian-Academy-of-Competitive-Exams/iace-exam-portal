@@ -1,5 +1,6 @@
 /// <reference types="nativewind/types" />
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 
 /** Which hue a bar wears. Identity only — a magnitude comparison leaves them all on one. */
@@ -40,7 +41,7 @@ export function MeasureBars({ bars, max, className }: Readonly<MeasureBarsProps>
       {bars.map((bar) => (
         <View key={bar.key} className="gap-1">
           <View className="flex-row items-baseline justify-between gap-3">
-            <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+            <Text variant="muted" className="flex-1" numberOfLines={1}>
               {bar.label}
             </Text>
             <Text
@@ -51,9 +52,7 @@ export function MeasureBars({ bars, max, className }: Readonly<MeasureBarsProps>
             >
               {bar.display ?? bar.value}
             </Text>
-            {bar.meta === undefined ? null : (
-              <Text className="text-xs text-muted-foreground">{bar.meta}</Text>
-            )}
+            {bar.meta === undefined ? null : <Text variant="meta">{bar.meta}</Text>}
           </View>
           <View className="h-2 overflow-hidden rounded-full bg-muted">
             <View

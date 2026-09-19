@@ -3,7 +3,7 @@
  * It never starts the attempt: the exam screen calls `startAttempt` on arrival at `/exam/[testId]`.
  */
 import { Fragment, useState } from 'react';
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -13,6 +13,7 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
+import { Text } from '../../../src/components/ui/text';
 import { briefQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
 import { Button } from '../../../src/components/ui/button';
@@ -110,9 +111,7 @@ function InstructionsContent({
 
   return (
     <Fragment>
-      <Text className="text-2xl font-bold tracking-tight text-foreground">
-        {paper.title ?? 'Instructions'}
-      </Text>
+      <Text variant="title">{paper.title ?? 'Instructions'}</Text>
 
       <View className="flex-row flex-wrap gap-3">
         <StatTile label="Duration" value={`${Math.round(paper.durationSec / 60)} min`} />
@@ -153,16 +152,14 @@ function SectionsList({ paper }: Readonly<{ paper: ExamBrief }>) {
   return (
     <View className="gap-2">
       <View className="flex-row items-baseline justify-between">
-        <Text className="text-lg font-semibold text-foreground">Sections</Text>
-        <Text className="text-sm text-muted-foreground">
-          {plural(paper.sections.length, 'section')}
-        </Text>
+        <Text variant="section">Sections</Text>
+        <Text variant="muted">{plural(paper.sections.length, 'section')}</Text>
       </View>
       <Card>
         {paper.sections.map((section, index) => (
           <View key={section.id} className={cn('gap-1 p-4', index > 0 && 'border-t border-border')}>
-            <Text className="text-sm font-medium text-foreground">{section.name}</Text>
-            <Text className="text-xs text-muted-foreground">{sectionLine(section)}</Text>
+            <Text variant="label">{section.name}</Text>
+            <Text variant="meta">{sectionLine(section)}</Text>
           </View>
         ))}
       </Card>
@@ -181,7 +178,7 @@ function LanguagePicker({
 }>) {
   return (
     <View className="gap-2">
-      <Text className="text-xs font-medium text-muted-foreground">Language</Text>
+      <Text variant="metaStrong">Language</Text>
       <View className="flex-row flex-wrap gap-2">
         {paper.languages.map((code) => (
           <LanguageChip
@@ -229,7 +226,7 @@ function Declaration({
     <View className="flex-row items-center gap-3 rounded-lg border border-border bg-surface p-4">
       <Switch value={declared} onValueChange={onChange} accessibilityLabel={label} />
       <Pressable className="flex-1" onPress={() => onChange(!declared)}>
-        <Text className="text-sm font-medium text-foreground">{label}</Text>
+        <Text variant="label">{label}</Text>
       </Pressable>
     </View>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CLIENT_KINDS,
@@ -7,6 +7,7 @@ import {
   type ClientKind,
   type DeviceSession,
 } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { ACTIVE_DEVICES_QUERY_KEY } from '../../lib/constants';
 import { cn } from '../../lib/cn';
@@ -100,16 +101,14 @@ function DeviceRow({
       )}
     >
       <View className="shrink gap-0.5">
-        <Text className="text-sm font-semibold text-foreground">
-          {session.deviceName ?? 'Unknown device'}
-        </Text>
-        <Text className="text-xs text-muted-foreground">
+        <Text variant="subsection">{session.deviceName ?? 'Unknown device'}</Text>
+        <Text variant="meta">
           {clientLabelOf(session.client)} · Last active {instituteDateTimeLabel(session.lastSeenAt)}
         </Text>
       </View>
 
       {session.current ? (
-        <Text className="text-xs text-muted-foreground">This device</Text>
+        <Text variant="meta">This device</Text>
       ) : (
         <Button variant="outline" size="sm" onPress={onSignOut}>
           Sign out

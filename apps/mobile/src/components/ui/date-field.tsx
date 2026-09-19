@@ -1,11 +1,12 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { Controller, type Control, type FieldValues, type Path } from 'react-hook-form';
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import { civilDate } from '@iace/contracts';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 
 export interface DateFieldProps<TValues extends FieldValues> {
@@ -46,7 +47,7 @@ export function DateField<TValues extends FieldValues>({
 
         return (
           <View className="flex flex-col gap-1.5">
-            <Text className="text-sm font-medium text-foreground">{label}</Text>
+            <Text variant="label">{label}</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={label}

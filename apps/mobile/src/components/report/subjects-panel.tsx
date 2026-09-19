@@ -1,8 +1,9 @@
 /// <reference types="nativewind/types" />
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { minutes } from '@iace/app-kit';
 import { type PerformanceReport, type SectionalStanding } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { attemptReportQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
 import { Badge, type BadgeVariant } from '../ui/badge';
@@ -48,9 +49,7 @@ function Sections({ report }: Readonly<{ report: PerformanceReport }>) {
 
   return (
     <>
-      <Text className="text-sm text-muted-foreground">
-        {plural(report.sections.length, 'section')}
-      </Text>
+      <Text variant="muted">{plural(report.sections.length, 'section')}</Text>
       {report.sections.map((section) => (
         <Section key={section.baseConfigSectionId} section={section} />
       ))}
@@ -65,15 +64,15 @@ function Section({ section }: Readonly<{ section: SectionalStanding }>) {
   return (
     <Card className="gap-3 p-5">
       <View className="gap-2">
-        <Text className="text-lg font-semibold text-foreground" numberOfLines={2}>
+        <Text variant="section" numberOfLines={2}>
           {section.name}
         </Text>
         <Badge variant={standing.variant}>{standing.label}</Badge>
       </View>
 
       <View className="flex-row items-baseline gap-1">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">{section.score}</Text>
-        <Text className="text-sm text-muted-foreground">{`of ${section.maxMarks} marks`}</Text>
+        <Text variant="title">{section.score}</Text>
+        <Text variant="muted">{`of ${section.maxMarks} marks`}</Text>
       </View>
 
       <View className="flex-row flex-wrap gap-x-5 gap-y-1">
@@ -94,8 +93,8 @@ function Section({ section }: Readonly<{ section: SectionalStanding }>) {
 function Figure({ label, value }: Readonly<{ label: string; value: string | number }>) {
   return (
     <View className="flex-row items-baseline gap-2">
-      <Text className="text-xs text-muted-foreground">{label}</Text>
-      <Text className="text-sm font-medium text-foreground">{value}</Text>
+      <Text variant="meta">{label}</Text>
+      <Text variant="label">{value}</Text>
     </View>
   );
 }
@@ -114,7 +113,7 @@ function Spread({ sections }: Readonly<{ sections: readonly SectionalStanding[] 
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Marks by section</Text>
+      <Text variant="section">Marks by section</Text>
       <Card className="p-5">
         <MeasureBars bars={bars} max={max} />
       </Card>

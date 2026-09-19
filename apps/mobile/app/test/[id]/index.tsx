@@ -3,7 +3,7 @@
  * attempts are dropped: they link to a score-card route this slice does not build yet.
  */
 import { Fragment } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { shutReason } from '@iace/app-kit';
@@ -19,6 +19,7 @@ import {
   type LanguageCode,
   type StudentCatalogTest,
 } from '@iace/contracts';
+import { Text } from '../../../src/components/ui/text';
 import { briefQuery, catalogQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
 import { Button } from '../../../src/components/ui/button';
@@ -105,12 +106,10 @@ function AboutContent({
   return (
     <Fragment>
       <View className="gap-1">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">
-          {brief.title ?? 'Test'}
-        </Text>
-        {seriesName ? <Text className="text-sm text-muted-foreground">{seriesName}</Text> : null}
+        <Text variant="title">{brief.title ?? 'Test'}</Text>
+        {seriesName ? <Text variant="muted">{seriesName}</Text> : null}
         {listed ? (
-          <Text className="text-sm text-muted-foreground">
+          <Text variant="muted">
             Opens {listed.opensAt === null ? 'any time' : instituteDateTimeLabel(listed.opensAt)}
           </Text>
         ) : null}
@@ -144,10 +143,8 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
   return (
     <View className="gap-2">
       <View className="flex-row items-baseline justify-between">
-        <Text className="text-lg font-semibold text-foreground">Sections</Text>
-        <Text className="text-sm text-muted-foreground">
-          {plural(brief.sections.length, 'section')}
-        </Text>
+        <Text variant="section">Sections</Text>
+        <Text variant="muted">{plural(brief.sections.length, 'section')}</Text>
       </View>
       <Card>
         {brief.sections.map((section, index) => (
@@ -156,11 +153,9 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
               <Text numberOfLines={1} className="flex-1 text-sm font-medium text-foreground">
                 {section.name}
               </Text>
-              <Text className="text-sm font-semibold text-foreground">
-                {sectionMarks(section)} marks
-              </Text>
+              <Text variant="subsection">{sectionMarks(section)} marks</Text>
             </View>
-            <Text className="text-xs text-muted-foreground">{sectionLine(section)}</Text>
+            <Text variant="meta">{sectionLine(section)}</Text>
           </View>
         ))}
       </Card>
@@ -171,7 +166,7 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
 function PaperCard({ brief }: Readonly<{ brief: ExamBrief }>) {
   return (
     <View className="gap-2">
-      <Text className="text-lg font-semibold text-foreground">The paper</Text>
+      <Text variant="section">The paper</Text>
       <Card className="gap-3 p-4">
         <InfoRow label="Languages" value={languagesOf(brief)} />
         <InfoRow label="Sectional timing" value={sectionalOf(brief) ? 'Yes' : 'No'} />
@@ -183,8 +178,8 @@ function PaperCard({ brief }: Readonly<{ brief: ExamBrief }>) {
 function InfoRow({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <View className="flex-row items-center justify-between gap-2">
-      <Text className="text-sm text-muted-foreground">{label}</Text>
-      <Text className="text-sm font-medium text-foreground">{value}</Text>
+      <Text variant="muted">{label}</Text>
+      <Text variant="label">{value}</Text>
     </View>
   );
 }

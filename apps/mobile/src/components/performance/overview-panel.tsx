@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { minutes, newestFirst, sittingHint } from '@iace/app-kit';
@@ -17,6 +17,7 @@ import {
   type StudentOverview,
   type TestScope,
 } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { DETAIL_ROUTES, ROUTES } from '../../lib/nav';
 import { overviewQuery, performanceQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
@@ -144,11 +145,11 @@ function Subjects({
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Subjects</Text>
+      <Text variant="section">Subjects</Text>
       <Card className="gap-3 p-5">
         {bars.length > 0 ? <MeasureBars bars={bars} max={100} /> : null}
         {ranked.thin.length > 0 ? (
-          <Text className="text-xs text-muted-foreground">
+          <Text variant="meta">
             {`Too few answered to rank: ${ranked.thin.map((row) => row.name).join(', ')}`}
           </Text>
         ) : null}
@@ -169,7 +170,7 @@ function Effort({ overview }: Readonly<{ overview: StudentOverview }>) {
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Every question served</Text>
+      <Text variant="section">Every question served</Text>
       <Card className="p-5">
         <MeasureBars bars={bars} max={rates.served} />
       </Card>
@@ -191,7 +192,7 @@ function Sittings({ sittings }: Readonly<{ sittings: readonly PerformancePoint[]
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Tests you have sat</Text>
+      <Text variant="section">Tests you have sat</Text>
       <Card>
         {rows.map((point, index) => (
           <Pressable
@@ -200,10 +201,10 @@ function Sittings({ sittings }: Readonly<{ sittings: readonly PerformancePoint[]
             onPress={() => router.navigate(DETAIL_ROUTES.REPORT(point.attemptId))}
             className={index > 0 ? 'gap-1 border-t border-border p-4' : 'gap-1 p-4'}
           >
-            <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text variant="label" numberOfLines={1}>
               {point.testTitle ?? 'Untitled test'}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text variant="meta">
               {`${point.score} of ${point.maxMarks} marks · ${sittingHint(point)}`}
             </Text>
           </Pressable>

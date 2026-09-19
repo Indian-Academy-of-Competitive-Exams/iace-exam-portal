@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SAVED_FILTER_FIELDS, useInfinitePages } from '@iace/app-kit';
 import {
@@ -10,6 +10,7 @@ import {
   type SavedQuestionKind,
 } from '@iace/contracts';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
+import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { savedFacetsQueryKey, savedQueryKey } from '../../lib/constants';
 import { asSet, type FilterState } from '../../lib/filters';
@@ -160,12 +161,12 @@ function SavedRow({
         </Text>
         <View className="flex-row flex-wrap items-center gap-2">
           <Badge variant="neutral">{row.subject}</Badge>
-          {row.topic ? <Text className="text-xs text-muted-foreground">{row.topic}</Text> : null}
+          {row.topic ? <Text variant="meta">{row.topic}</Text> : null}
         </View>
       </Pressable>
 
       <View className="flex-row items-center justify-between gap-3 border-t border-border pt-3">
-        <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+        <Text variant="meta" className="flex-1" numberOfLines={1}>
           {footOf(row)}
         </Text>
         <Pressable accessibilityRole="button" onPress={onDrop} className="px-1 py-1">

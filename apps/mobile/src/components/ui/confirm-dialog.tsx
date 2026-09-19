@@ -1,5 +1,6 @@
 /// <reference types="nativewind/types" />
-import { Modal, Text, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { Text } from './text';
 import { Button } from './button';
 import { Card } from './card';
 
@@ -28,8 +29,8 @@ export function ConfirmDialog({
     <Modal transparent visible={open} animationType="fade" onRequestClose={onCancel}>
       <View className="flex-1 items-center justify-center bg-[var(--overlay-bg)] p-6">
         <Card accessibilityRole="alert" className="w-full max-w-md gap-4 p-5">
-          <Text className="text-lg font-semibold text-foreground">{title}</Text>
-          <Text className="text-sm text-foreground">{description}</Text>
+          <Text variant="section">{title}</Text>
+          <Text variant="body">{description}</Text>
           <View className="flex-row justify-end gap-2">
             <Button variant="ghost" onPress={onCancel}>
               Cancel

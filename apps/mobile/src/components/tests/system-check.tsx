@@ -1,8 +1,9 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useUnstableNativeVariable } from 'nativewind';
 import Check from 'lucide-react-native/icons/check';
 import X from 'lucide-react-native/icons/x';
+import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { SYSTEM_CHECK_QUERY_KEY } from '../../lib/constants';
 import { Alert } from '../ui/alert';
@@ -32,7 +33,7 @@ export function SystemCheck() {
       {reachable.isLoading ? (
         <View className="flex-row items-center gap-2">
           <ActivityIndicator />
-          <Text className="text-sm text-muted-foreground">Checking your connection</Text>
+          <Text variant="muted">Checking your connection</Text>
         </View>
       ) : (
         <View className="gap-1.5">

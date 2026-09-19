@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import {
   type StudentLoginBody,
 } from '@iace/contracts';
 import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
+import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { useAuth } from '../src/providers/auth';
 import { Alert } from '../src/components/ui/alert';
@@ -138,7 +139,9 @@ function SignInStep({
 
   return (
     <View className="gap-4">
-      <Text className="text-center text-lg font-semibold text-foreground">Sign in</Text>
+      <Text variant="section" className="text-center">
+        Sign in
+      </Text>
 
       <TextField
         control={form.control}
@@ -162,10 +165,10 @@ function SignInStep({
       {/* Two peer actions, weighted the same — neither reads as more important than the other. */}
       <View className="flex-row items-center justify-between border-t border-border pt-4">
         <Pressable onPress={onSignUp}>
-          <Text className="text-sm font-medium text-foreground">Create an account</Text>
+          <Text variant="label">Create an account</Text>
         </Pressable>
         <Pressable onPress={onForgotPin}>
-          <Text className="text-sm text-muted-foreground">Forgot PIN?</Text>
+          <Text variant="muted">Forgot PIN?</Text>
         </Pressable>
       </View>
     </View>
@@ -198,7 +201,7 @@ function MobileStep({
 
   return (
     <View className="gap-4">
-      <Text className="text-center text-lg font-semibold text-foreground">
+      <Text variant="section" className="text-center">
         {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
       </Text>
 
@@ -255,8 +258,12 @@ function CodeStep({
 
   return (
     <View className="gap-4">
-      <Text className="text-center text-lg font-semibold text-foreground">Enter the code</Text>
-      <Text className="text-center text-sm text-muted-foreground">Sent to +91 {mobile}</Text>
+      <Text variant="section" className="text-center">
+        Enter the code
+      </Text>
+      <Text variant="muted" className="text-center">
+        Sent to +91 {mobile}
+      </Text>
 
       <PinField
         control={form.control}
@@ -317,7 +324,7 @@ function SetPinStep({
 
   return (
     <View className="gap-4">
-      <Text className="text-center text-lg font-semibold text-foreground">
+      <Text variant="section" className="text-center">
         {ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}
       </Text>
 

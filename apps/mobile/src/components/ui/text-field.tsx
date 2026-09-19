@@ -1,7 +1,8 @@
 /// <reference types="nativewind/types" />
-import { Text, TextInput, View, type TextInputProps } from 'react-native';
+import { TextInput, View, type TextInputProps } from 'react-native';
 import { useUnstableNativeVariable } from 'nativewind';
 import { Controller, type Control, type FieldValues, type Path } from 'react-hook-form';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 
 export interface TextFieldProps<TValues extends FieldValues> extends Omit<
@@ -39,7 +40,7 @@ export function TextField<TValues extends FieldValues>({
 
         return (
           <View className="flex flex-col gap-1.5">
-            <Text className="text-sm font-medium text-foreground">{label}</Text>
+            <Text variant="label">{label}</Text>
             <TextInput
               {...inputProps}
               value={typeof field.value === 'string' ? field.value : ''}

@@ -1,6 +1,5 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Text } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   LEADERBOARD_SCOPES,
@@ -8,6 +7,7 @@ import {
   type LeaderboardQueryInput,
   type LeaderboardScope,
 } from '@iace/contracts';
+import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { leaderboardQueryKey, PERFORMANCE_SERIES_QUERY_KEY } from '../../lib/constants';
 import { performanceQuery } from '../../lib/queries';
@@ -89,9 +89,7 @@ export function LeaderboardPanel() {
 
       {board.data ? (
         <>
-          <Text className="text-xs text-muted-foreground">
-            {plural(board.data.cohortSize, 'student')}
-          </Text>
+          <Text variant="meta">{plural(board.data.cohortSize, 'student')}</Text>
           <Podium rows={board.data.podium} />
           <Standings board={board.data} empty="Nobody has been ranked here yet" />
           {board.data.you === null ? (

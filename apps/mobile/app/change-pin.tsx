@@ -1,11 +1,12 @@
 /// <reference types="nativewind/types" />
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { applyFieldErrors } from '@iace/app-kit';
 import { changePinSchema, PIN_LENGTH, type ChangePinBody } from '@iace/contracts';
+import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { ACTIVE_DEVICES_QUERY_KEY } from '../src/lib/constants';
 import { useAuth } from '../src/providers/auth';
@@ -53,9 +54,7 @@ export default function ChangePinScreen() {
             : `Any ${PIN_LENGTH} digits. Changing it signs you out everywhere else.`}
         </Alert>
 
-        <Text className="text-lg font-semibold text-foreground">
-          {onDefaultPin ? 'Choose your own PIN' : 'Change your PIN'}
-        </Text>
+        <Text variant="section">{onDefaultPin ? 'Choose your own PIN' : 'Change your PIN'}</Text>
 
         <PinField
           control={form.control}

@@ -4,8 +4,9 @@
  * marking, whether a question was flagged for review no longer decides anything.
  */
 /// <reference types="nativewind/types" />
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from '../ui/text';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
 import { VERDICT, verdictOf, type ReviewedQuestion, type Verdict } from './review-protocol';
@@ -56,7 +57,7 @@ export function ReviewPalette({
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
           <View className="flex-row items-center justify-between px-4">
-            <Text className="text-lg font-semibold text-foreground">Questions</Text>
+            <Text variant="section">Questions</Text>
             <Button variant="ghost" onPress={onClose}>
               Close
             </Button>
@@ -66,10 +67,10 @@ export function ReviewPalette({
             {VERDICTS.map((verdict) => (
               <View key={verdict} className="flex-row items-center gap-3">
                 <View className={cn('h-4 w-4 rounded-sm', VERDICT_STYLE[verdict].fill)} />
-                <Text className="flex-1 text-sm text-foreground">
+                <Text variant="body" className="flex-1">
                   {VERDICT_STYLE[verdict].label}
                 </Text>
-                <Text className="text-sm font-semibold text-foreground">
+                <Text variant="subsection">
                   {questions.filter((row) => verdictOf(row) === verdict).length}
                 </Text>
               </View>

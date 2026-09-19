@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -20,6 +20,7 @@ import {
   type PerformancePoint,
   type StudentOverview,
 } from '@iace/contracts';
+import { Text } from '../../src/components/ui/text';
 import { api } from '../../src/lib/api';
 import { TEST_DAYS_QUERY_KEY } from '../../src/lib/constants';
 import { ACCOUNT_ROUTES, DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
@@ -67,9 +68,7 @@ export default function HomeScreen() {
 
   return (
     <RefreshScroll refreshing={catalog.isRefetching} onRefresh={refresh}>
-      <Text className="text-2xl font-bold tracking-tight text-foreground">
-        {greetingFor(now, identity?.fullName)}
-      </Text>
+      <Text variant="title">{greetingFor(now, identity?.fullName)}</Text>
 
       <PreTest ready={identity?.preTestReady ?? true} />
 
@@ -148,7 +147,7 @@ function NextUp({
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Up next</Text>
+      <Text variant="section">Up next</Text>
       {waiting.map((row) => (
         <TestTile key={row.test.id} row={row} now={now} fullWidth />
       ))}
@@ -178,7 +177,7 @@ function Recent({ recent }: Readonly<{ recent: readonly PerformancePoint[] }>) {
 
   return (
     <View className="gap-3">
-      <Text className="text-lg font-semibold text-foreground">Recent results</Text>
+      <Text variant="section">Recent results</Text>
       <Card>
         {recent.map((point, index) => (
           <Pressable
@@ -187,10 +186,10 @@ function Recent({ recent }: Readonly<{ recent: readonly PerformancePoint[] }>) {
             onPress={() => router.navigate(DETAIL_ROUTES.REPORT(point.attemptId))}
             className={index > 0 ? 'gap-1 border-t border-border p-4' : 'gap-1 p-4'}
           >
-            <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text variant="label" numberOfLines={1}>
               {point.testTitle ?? 'Untitled test'}
             </Text>
-            <Text className="text-xs text-muted-foreground">{resultLine(point)}</Text>
+            <Text variant="meta">{resultLine(point)}</Text>
           </Pressable>
         ))}
       </Card>

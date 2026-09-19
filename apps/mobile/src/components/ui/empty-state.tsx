@@ -1,12 +1,13 @@
 /// <reference types="nativewind/types" />
 import { type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useUnstableNativeVariable } from 'nativewind';
 import { type LucideIcon } from 'lucide-react-native';
 import CircleX from 'lucide-react-native/icons/circle-x';
 import Inbox from 'lucide-react-native/icons/inbox';
 import Lock from 'lucide-react-native/icons/lock';
 import SearchX from 'lucide-react-native/icons/search-x';
+import { Text } from './text';
 import { cn } from '../../lib/cn';
 import { Button } from './button';
 
@@ -90,7 +91,11 @@ export function EmptyState({
         <Icon size={24} color={typeof glyphColor === 'string' ? glyphColor : undefined} />
       </View>
       <Text className="text-center text-base font-semibold text-foreground">{title}</Text>
-      {hint ? <Text className="text-center text-sm text-muted-foreground">{hint}</Text> : null}
+      {hint ? (
+        <Text variant="muted" className="text-center">
+          {hint}
+        </Text>
+      ) : null}
       {action ?? retry}
     </View>
   );
