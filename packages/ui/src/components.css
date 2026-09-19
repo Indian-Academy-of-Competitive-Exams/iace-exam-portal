@@ -247,6 +247,11 @@ h3 {
   font-size: var(--text-xs);
 }
 
+/* Dotted, so an option's area is bounded without reading as the rule that closes the options. */
+.scaffold-content .scaffold-region[data-kind='seat'] + .scaffold-region[data-kind='seat'] {
+  border-top: 1px dotted var(--border);
+}
+
 /* The first named slot opens the settled half of the question, below the options. */
 .scaffold-content .scaffold-region[data-kind='seat'] + .scaffold-region[data-kind='named'] {
   margin-top: var(--space-4);
