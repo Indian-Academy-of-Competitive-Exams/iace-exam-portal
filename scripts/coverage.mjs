@@ -48,6 +48,14 @@ const PACKAGES = [
   { dir: 'apps/admin', env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' } },
 ];
 
+const RECORD_END = 'end_of_record\n';
+
+/** Node writes `undefined` where it has no line for a branch, and Sonar counts each one an inconsistency. */
+const UNPLACED = /^(?:BRDA|FN):undefined,.*\n/gm;
+
+/** Mirrors sonar.sources and the dist exclusion: a path outside them resolves to nothing. */
+const analysed = (file) => /^(apps|packages|prisma)\//.test(file) && !file.includes('/dist/');
+
 const merged = [];
 const summary = [];
 
@@ -86,11 +94,14 @@ for (const pkg of PACKAGES) {
 
   if (!existsSync(lcovPath)) continue;
 
-  // Rewrite each SF: to be repo-root relative — see the note above.
-  const body = readFileSync(lcovPath, 'utf8').replace(
-    /^SF:(.+)$/gm,
-    (_line, file) => `SF:${join(pkg.dir, file)}`,
-  );
+  // Rewrite each SF: to be repo-root relative, and drop what Sonar does not index — see the notes above.
+  const body = readFileSync(lcovPath, 'utf8')
+    .replaceAll(UNPLACED, '')
+    .split(RECORD_END)
+    .map((record) => record.replace(/^SF:(.+)$/m, (_line, file) => `SF:${join(pkg.dir, file)}`))
+    .filter((record) => analysed(/^SF:(.+)$/m.exec(record)?.[1] ?? ''))
+    .map((record) => record + RECORD_END)
+    .join('');
   merged.push(body);
 
   summary.push({ dir: pkg.label ?? pkg.dir, ...filesIn(body, cwd, pkg.dir) });
