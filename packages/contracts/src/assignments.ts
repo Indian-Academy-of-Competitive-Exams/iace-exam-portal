@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { adminRoleSchema } from './admins';
 import { optionalBooleanQuery } from './common';
 import { difficultyMixSchema } from './tests';
 
@@ -64,6 +65,8 @@ export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchem
 export const assignableAdminSchema = z.object({
   id: z.string(),
   fullName: z.string().nullable(),
+  /** What they are called. The feature key is still what decides who is on this list at all. */
+  role: adminRoleSchema,
 });
 export type AssignableAdmin = z.infer<typeof assignableAdminSchema>;
 
@@ -72,6 +75,44 @@ export const assignableQuerySchema = z.object({
 });
 export type AssignableQuery = z.infer<typeof assignableQuerySchema>;
 export type AssignableQueryInput = z.input<typeof assignableQuerySchema>;
+
+// ============================================================================
+// The section thread. Comments live at (test, section) — the pair an assignment
+// keys on — because the typist and the proof-reader hold separate rows on one
+// section and share one discussion. Append-only: nothing edits or deletes one.
+// ============================================================================
+
+export const sectionCommentSchema = z.object({
+  id: z.string(),
+  testId: z.string(),
+  baseConfigSectionId: z.string(),
+  authorId: z.string(),
+  /** Resolved server-side, so a thread reads without a second lookup per line. */
+  authorName: z.string(),
+  authorRole: adminRoleSchema,
+  body: z.string(),
+  createdAt: z.string(),
+});
+export type SectionComment = z.infer<typeof sectionCommentSchema>;
+
+export const createSectionCommentSchema = z.object({
+  body: z.string().trim().min(1, 'Write something first').max(2000),
+});
+export type CreateSectionCommentInput = z.input<typeof createSectionCommentSchema>;
+export type CreateSectionCommentBody = z.infer<typeof createSectionCommentSchema>;
+
+/** Another test holding a question somebody is about to edit — the warning, not a report. */
+export const questionOnOtherTestSchema = z.object({
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  sectionName: z.string(),
+  /** Derived: an assignment on that test still carries a null `finalizedAt`. Never stored. */
+  underReview: z.boolean(),
+  /** Past `min(Test.opensAt, min(TestProgramUnlock.opensAt))`, so students can already reach it. */
+  isOpen: z.boolean(),
+  opensAt: z.string().nullable(),
+});
+export type QuestionOnOtherTest = z.infer<typeof questionOnOtherTestSchema>;
 
 export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** GET lists a test's assignments; POST to the same path creates one. */
@@ -82,6 +123,9 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,
   /** Who a role can be given to — active admins already holding the feature key it needs. */
   assignable: '/admin/assignments/assignable',
+  /** GET reads the section thread; POST to the same path adds to it. */
+  comments: (testId: string, baseConfigSectionId: string) =>
+    `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/comments`,
 } as const;
 
 export const ADMIN_PROOFREADING_ROUTES = {
@@ -91,4 +135,7 @@ export const ADMIN_PROOFREADING_ROUTES = {
   /** The assignment is in the path because it is the authority the edit rests on. */
   editQuestion: (assignmentId: string, questionId: string) =>
     `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}`,
+  /** Read before the edit: which other tests hold this question, and which of them have opened. */
+  otherTests: (assignmentId: string, questionId: string) =>
+    `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}/other-tests`,
 } as const;

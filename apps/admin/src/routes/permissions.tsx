@@ -2,8 +2,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import {
+  ADMIN_ROLE_VALUES,
   PERMISSION_LEVELS,
+  ROLE_PERMISSION_PRESET,
   type Admin,
+  type AdminRole,
   type Feature,
   type FeatureKey,
   type PermissionLevel,
@@ -15,7 +18,9 @@ import {
   Badge,
   Button,
   Checkbox,
+  Combobox,
   ConfirmDialog,
+  Field,
   PageFrame,
   PageHeader,
   plural,
@@ -24,7 +29,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, PAGE_SIZE_FOR_PICKERS, QUERY_KEYS } from '../lib/constants';
+import { ADMIN_ROLE_LABELS, NAV_ITEMS, PAGE_SIZE_FOR_PICKERS, QUERY_KEYS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
 /** What an admin holds for one feature, with "nothing" said out loud. */
@@ -47,6 +52,11 @@ const LEVEL_WORDS: Record<PermissionLevel, string> = {
 };
 
 const levelWord = (level: Level) => (level === null ? 'none' : LEVEL_WORDS[level]);
+
+const ROLE_ITEMS = ADMIN_ROLE_VALUES.map((role) => ({
+  value: role,
+  label: ADMIN_ROLE_LABELS[role],
+}));
 
 interface Change {
   feature: Feature;
@@ -160,6 +170,16 @@ function AdminPanel({
       return updated;
     });
 
+  const setRole = useMutation({
+    meta: { success: `Role updated for ${admin.email}.` },
+    mutationFn: (role: AdminRole) => api.admin.admins.update(admin.id, { role }),
+    // The preset is loaded as an ordinary unsaved draft: the role names the job, the Save grants it.
+    onSuccess: (saved) => {
+      setDraft(presetDraft(saved, features));
+      onSaved();
+    },
+  });
+
   const save = useMutation({
     meta: { success: `Access updated for ${admin.email}.` },
     /** One feature at a time, revoking before granting so both levels are never held at once. */
@@ -217,6 +237,23 @@ function AdminPanel({
         </Alert>
       ) : (
         <>
+          <Field
+            htmlFor={`role-${admin.id}`}
+            label="Role"
+            /* ui-copy-ok: consequence */ hint="Ticks its usual access below; nothing is granted until you save"
+          >
+            {(control) => (
+              <Combobox
+                {...control}
+                value={admin.role}
+                clearable={false}
+                items={ROLE_ITEMS}
+                disabled={setRole.isPending || save.isPending}
+                onChange={(next) => next && setRole.mutate(next as AdminRole)}
+              />
+            )}
+          </Field>
+
           <FeatureGrid
             admin={admin}
             features={features}
@@ -279,6 +316,17 @@ function AdminPanel({
       )}
     </Accordion>
   );
+}
+
+/** Every registered key the role's preset names, as a draft against what is already stored. */
+function presetDraft(admin: Admin, features: readonly Feature[]): Draft {
+  const preset = ROLE_PERMISSION_PRESET[admin.role];
+  const draft = new Map<FeatureKey, Level>();
+  for (const feature of features) {
+    const next = preset[feature.key] ?? null;
+    if ((admin.permissions[feature.key] ?? null) !== next) draft.set(feature.key, next);
+  }
+  return draft;
 }
 
 /** Unsaved work wins the slot: this row is all that is visible once the panel is shut. */

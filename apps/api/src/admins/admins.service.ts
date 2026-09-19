@@ -10,6 +10,7 @@ import {
   type Admin as AdminDto,
   type AdminListQuery,
   type AdminPermissions,
+  type AdminRole,
   type CreateAdminBody,
   type Feature as FeatureDto,
   type FeatureKey,
@@ -30,13 +31,14 @@ interface AdminRow {
   id: string;
   email: string;
   fullName: string | null;
+  role: AdminRole;
   isSuperAdmin: boolean;
   isActive: boolean;
   createdAt: Date;
 }
 
 /** What an admin's audit diff covers — every column the admin screens can change. */
-export const AUDITED_ADMIN_FIELDS = ['fullName', 'isSuperAdmin'] as const;
+export const AUDITED_ADMIN_FIELDS = ['fullName', 'role', 'isSuperAdmin'] as const;
 
 /** The single column the toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
@@ -70,10 +72,10 @@ export class AdminsService {
   async holdersOf(
     key: FeatureKey,
     level: PermissionLevel,
-  ): Promise<{ id: string; fullName: string | null }[]> {
+  ): Promise<{ id: string; fullName: string | null; role: AdminRole }[]> {
     const rows = await this.prisma.admin.findMany({
       where: { isActive: true },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, role: true },
     });
     const grants = await this.grantsByAdmin(rows.map((row) => row.id));
     return rows.filter((row) => satisfiesLevel(grants.get(row.id)?.[key], level));
@@ -130,6 +132,7 @@ export class AdminsService {
       data: {
         email: input.email,
         fullName: input.fullName ?? null,
+        role: input.role,
         isSuperAdmin: input.isSuperAdmin,
         createdById,
       },
@@ -148,6 +151,7 @@ export class AdminsService {
       where: { id },
       data: {
         ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
+        ...(input.role === undefined ? {} : { role: input.role }),
         ...(input.isSuperAdmin === undefined ? {} : { isSuperAdmin: input.isSuperAdmin }),
       },
     });
@@ -319,6 +323,7 @@ export class AdminsService {
       id: row.id,
       email: row.email,
       fullName: row.fullName,
+      role: row.role,
       isSuperAdmin: row.isSuperAdmin,
       isActive: row.isActive,
       createdAt: row.createdAt.toISOString(),
@@ -350,6 +355,10 @@ function asFeatureKey(value: string): FeatureKey | null {
   return (FEATURE_KEY_VALUES as readonly string[]).includes(value) ? (value as FeatureKey) : null;
 }
 
-function auditFieldsOf(row: AdminRow): { fullName: string | null; isSuperAdmin: boolean } {
-  return { fullName: row.fullName, isSuperAdmin: row.isSuperAdmin };
+function auditFieldsOf(row: AdminRow): {
+  fullName: string | null;
+  role: AdminRole;
+  isSuperAdmin: boolean;
+} {
+  return { fullName: row.fullName, role: row.role, isSuperAdmin: row.isSuperAdmin };
 }

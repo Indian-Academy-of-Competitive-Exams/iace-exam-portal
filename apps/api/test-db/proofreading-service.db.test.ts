@@ -7,6 +7,7 @@ import {
   DIFFICULTY_LEVEL,
   ErrorCodes,
   QUESTION_STATUS,
+  TEST_STATUS,
   plainTextOf,
   questionDraftSchema,
   type AssignmentRole,
@@ -265,5 +266,70 @@ describe('ProofreadingService.editQuestion', () => {
     );
 
     assert.equal(saved.status, QUESTION_STATUS.ARCHIVED);
+  });
+});
+
+/** Spec §8: the warning has to NAME what else holds the question, and it has to do it before the edit. */
+describe('ProofreadingService.otherTests', () => {
+  const currentVersionOf = async (questionId: string) => {
+    const row = await prisma.question.findUniqueOrThrow({
+      where: { id: questionId },
+      select: { currentVersionId: true },
+    });
+    return { id: questionId, versionId: row.currentVersionId ?? '' };
+  };
+
+  it('names the other test holding the question, its review state and that it has opened', async () => {
+    const { proofreading, questions } = await build();
+    const section = await aSection();
+    const written = await questions.create(draft(), AUTHOR, { assignmentId: section.typing.id });
+
+    const opened = new Date(Date.now() - 60_000);
+    const live = await makeTest(prisma, section.catalog, {
+      title: 'Grand Test 4',
+      status: TEST_STATUS.ACTIVE,
+      opensAt: opened,
+    });
+    const liveSection = await makeSection(prisma, section.catalog, {
+      name: 'Reasoning again',
+      order: 3,
+    });
+    await assign(section.catalog, live.id, liveSection.id, REVIEWER, ASSIGNMENT_ROLES.PROOFREADER);
+    await pickOntoPaper(
+      section.catalog,
+      live.id,
+      liveSection.id,
+      await currentVersionOf(written.id),
+      1,
+    );
+
+    const rows = await proofreading.otherTests(section.reading.id, written.id, REVIEWER);
+
+    assert.deepEqual(rows, [
+      {
+        testId: live.id,
+        testTitle: 'Grand Test 4',
+        sectionName: 'Reasoning again',
+        underReview: true,
+        isOpen: true,
+        opensAt: opened.toISOString(),
+      },
+    ]);
+  });
+
+  /** Nothing else holds it, so there is nothing to warn about — which is what makes the Alert conditional. */
+  it('leaves out the reader’s own test and says nothing when no other holds it', async () => {
+    const { proofreading, questions } = await build();
+    const section = await aSection();
+    const written = await questions.create(draft(), AUTHOR, { assignmentId: section.typing.id });
+    await pickOntoPaper(
+      section.catalog,
+      section.testId,
+      section.sectionId,
+      await currentVersionOf(written.id),
+      1,
+    );
+
+    assert.deepEqual(await proofreading.otherTests(section.reading.id, written.id, REVIEWER), []);
   });
 });

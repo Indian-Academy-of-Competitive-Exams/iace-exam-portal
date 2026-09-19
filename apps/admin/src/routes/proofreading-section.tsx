@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import {
   instituteDayLabel,
   type AssignmentWithTest,
   type QuestionDetail,
+  type QuestionOnOtherTest,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -28,6 +29,7 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ProofreadQuestionBlock } from '../components/proofread-question';
+import { SectionThread } from '../components/section-thread';
 import { QuestionFields } from '../components/question-fields';
 import {
   SERVER_FIELDS,
@@ -95,6 +97,16 @@ export function ProofreadingSectionPage() {
 
   return (
     <PageFrame header={header}>
+      {assignment ? (
+        <div data-print-hide className="mb-8">
+          <SectionThread
+            testId={assignment.testId}
+            sectionId={assignment.baseConfigSectionId}
+            canWrite={can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)}
+          />
+        </div>
+      ) : null}
+
       <section data-print-document className="flex flex-col gap-8">
         {assignment?.finalizedAt ? (
           <Alert variant="info">
@@ -172,6 +184,11 @@ function EditQuestionDialog({
 }>) {
   const form = useForm<QuestionFormValues>({ defaultValues: valuesOf(question) });
 
+  const elsewhere = useQuery({
+    queryKey: [...QUERY_KEYS.PROOFREADING, 'other-tests', assignmentId, question.id],
+    queryFn: () => api.admin.proofreading.otherTests(assignmentId, question.id),
+  });
+
   const save = useMutation({
     meta: { success: 'Question saved.', fields: [...SERVER_FIELDS] },
     mutationFn: (values: QuestionFormValues) =>
@@ -194,12 +211,47 @@ function EditQuestionDialog({
       loading={save.isPending}
       size="lg"
     >
-      <Alert variant="warning">
-        A fix here changes the question wherever it is used. A test students can already reach keeps
-        the version they were shown.
-      </Alert>
+      <CrossTestWarning loading={elsewhere.isLoading} tests={elsewhere.data ?? []} />
 
       <QuestionFields form={form} saved={question} />
     </FormDialog>
+  );
+}
+
+const TEST_NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });
+
+/** "Untitled test" rather than a blank: an unnamed test is still a test somebody has to decide about. */
+const nameOf = (test: QuestionOnOtherTest): string => {
+  const title = test.testTitle ?? 'Untitled test';
+  return test.underReview ? `${title} (still under review)` : title;
+};
+
+/** Silent when nothing else holds the question, which is what makes it worth reading. */
+function CrossTestWarning({
+  loading,
+  tests,
+}: Readonly<{ loading: boolean; tests: readonly QuestionOnOtherTest[] }>) {
+  const [open, sharedOnly] = useMemo(
+    () => [tests.filter((test) => test.isOpen), tests.filter((test) => !test.isOpen)],
+    [tests],
+  );
+
+  if (loading) return <SkeletonParagraph lines={2} />;
+  if (tests.length === 0) return null;
+
+  return (
+    <>
+      {open.length > 0 ? (
+        <Alert variant="warning">
+          {`${TEST_NAMES.format(open.map(nameOf))} ${open.length === 1 ? 'has' : 'have'} already opened. A fix here appends a new version, and ${open.length === 1 ? 'that test keeps' : 'those tests keep'} the version its students were shown. Drop the question from it if that is not what you want.`}
+        </Alert>
+      ) : null}
+
+      {sharedOnly.length > 0 ? (
+        <Alert variant="info">
+          {`This question is also on ${TEST_NAMES.format(sharedOnly.map(nameOf))}, ${sharedOnly.length === 1 ? 'which has not' : 'none of which have'} opened. A fix here changes it there too.`}
+        </Alert>
+      ) : null}
+    </>
   );
 }

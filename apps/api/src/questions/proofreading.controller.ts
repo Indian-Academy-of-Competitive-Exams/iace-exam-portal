@@ -8,6 +8,7 @@ import {
   questionDraftSchema,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionOnOtherTest,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
@@ -28,6 +29,17 @@ export class ProofreadingController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionDetail[]> {
     return this.proofreading.forAssignment(assignmentId, user.id, user.isSuperAdmin);
+  }
+
+  /** Read before the edit, not after: it is what makes the edit warning conditional. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.READ)
+  @Get('assignments/:assignmentId/questions/:questionId/other-tests')
+  otherTests(
+    @Param('assignmentId') assignmentId: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionOnOtherTest[]> {
+    return this.proofreading.otherTests(assignmentId, questionId, user.id, user.isSuperAdmin);
   }
 
   /** The point of the feature: a reader fixes what they find rather than only naming it. */

@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
+  ADMIN_ROLES,
+  ADMIN_ROLE_VALUES,
   createAdminSchema,
   type Admin,
   type CreateAdminInput,
@@ -16,6 +18,7 @@ import {
   Checkbox,
   ConfirmDialog,
   DropdownMenuItem,
+  FormCombobox,
   FormDialog,
   FormField,
   Input,
@@ -29,10 +32,15 @@ import {
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { ADMIN_ROLE_LABELS, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
-const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
+const NEW_ADMIN_FIELDS = ['email', 'fullName', 'role', 'isSuperAdmin'] as const;
+
+const ROLE_ITEMS = ADMIN_ROLE_VALUES.map((role) => ({
+  value: role,
+  label: ADMIN_ROLE_LABELS[role],
+}));
 
 /**
  * Who can get into the admin app. Super admin only — this screen decides who decides.
@@ -81,6 +89,7 @@ function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
   ];
 }
 
+/** The bypass outranks the label: what they ARE beats what they are called. */
 function RoleBadge({ admin }: Readonly<{ admin: Admin }>) {
   if (admin.isSuperAdmin) {
     return (
@@ -90,7 +99,7 @@ function RoleBadge({ admin }: Readonly<{ admin: Admin }>) {
       </Badge>
     );
   }
-  return <Badge variant="neutral">Admin</Badge>;
+  return <Badge variant="neutral">{ADMIN_ROLE_LABELS[admin.role]}</Badge>;
 }
 
 export function AdminsPage() {
@@ -235,7 +244,7 @@ function NewAdminDialog({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateAdminInput>({
     resolver: zodResolver(createAdminSchema),
-    defaultValues: { email: '', fullName: '', isSuperAdmin: false },
+    defaultValues: { email: '', fullName: '', role: ADMIN_ROLES.ADMIN, isSuperAdmin: false },
   });
 
   // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
@@ -277,6 +286,15 @@ function NewAdminDialog({
         <FormField form={form} name="fullName" label="Name">
           {(control) => <Input {...control} placeholder="Full name" />}
         </FormField>
+
+        <FormCombobox
+          form={form}
+          name="role"
+          label="Role"
+          clearable={false}
+          items={ROLE_ITEMS}
+          /* ui-copy-ok: consequence */ hint="It grants nothing; access is granted on the Permissions screen"
+        />
 
         <FormField form={form} name="isSuperAdmin" label="">
           {(control) => (

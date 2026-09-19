@@ -72,9 +72,41 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   },
 };
 
+/** What an admin is CALLED — it presets, labels and orders, and no guard ever reads it. */
+export const ADMIN_ROLES = {
+  TYPIST: 'TYPIST',
+  PROOFREADER: 'PROOFREADER',
+  ADMIN: 'ADMIN',
+  SUPER_ADMIN: 'SUPER_ADMIN',
+} as const;
+export const adminRoleSchema = z.enum(ADMIN_ROLES);
+export type AdminRole = z.infer<typeof adminRoleSchema>;
+export const ADMIN_ROLE_VALUES = adminRoleSchema.options;
+
 /** What an admin may do, by feature. An absent key means no access, so the map is partial. */
 export const adminPermissionsSchema = z.partialRecord(featureKeySchema, permissionLevelSchema);
 export type AdminPermissions = z.infer<typeof adminPermissionsSchema>;
+
+/** A suggestion the screen writes down as ordinary grants, never consulted at a gate. */
+export const ROLE_PERMISSION_PRESET: Readonly<Record<AdminRole, AdminPermissions>> = {
+  [ADMIN_ROLES.TYPIST]: {
+    [FEATURE_KEYS.QUESTION_AUTHORING]: PERMISSION_LEVELS.WRITE,
+  },
+  [ADMIN_ROLES.PROOFREADER]: {
+    [FEATURE_KEYS.QUESTION_PROOFREAD]: PERMISSION_LEVELS.WRITE,
+    [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
+  },
+  [ADMIN_ROLES.ADMIN]: {
+    [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    [FEATURE_KEYS.TEST_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    [FEATURE_KEYS.TEST_OPERATIONS]: PERMISSION_LEVELS.WRITE,
+    [FEATURE_KEYS.STUDENT_PERFORMANCE]: PERMISSION_LEVELS.READ,
+  },
+  // A super admin bypasses every check, so there is nothing to tick.
+  [ADMIN_ROLES.SUPER_ADMIN]: {},
+};
 
 /** Does `granted` satisfy `required`? Shared, so the guard and the UI cannot disagree. */
 export function satisfiesLevel(
@@ -94,6 +126,7 @@ export const adminSchema = z.object({
   id: z.string(),
   email: z.string(),
   fullName: z.string().nullable(),
+  role: adminRoleSchema,
   isSuperAdmin: z.boolean(),
   isActive: z.boolean(),
   createdAt: z.string(),
@@ -130,6 +163,7 @@ const adminEmailSchema = z
 export const createAdminSchema = z.object({
   email: adminEmailSchema,
   fullName: z.string().trim().min(1).max(120).optional(),
+  role: adminRoleSchema.default(ADMIN_ROLES.ADMIN),
   /** A super admin may create another super admin. Nothing else may. */
   isSuperAdmin: z.boolean().default(false),
 });
@@ -142,6 +176,7 @@ export type SetAdminActiveBody = z.infer<typeof setAdminActiveSchema>;
 
 export const updateAdminSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
+  role: adminRoleSchema.optional(),
   isSuperAdmin: z.boolean().optional(),
 });
 export type UpdateAdminBody = z.infer<typeof updateAdminSchema>;
@@ -172,6 +207,7 @@ export type PermissionGrantBody = z.infer<typeof permissionGrantSchema>;
 export const ADMIN_ADMIN_ROUTES = {
   list: '/admin/admins',
   create: '/admin/admins',
+  update: (id: string) => `/admin/admins/${id}`,
   /** One route both ways. A PATCH, not a DELETE: the row survives, `createdById` points at it. */
   setActive: (id: string) => `/admin/admins/${id}/active`,
 } as const;

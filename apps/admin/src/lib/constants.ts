@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { filterNavBy, type NavItem } from '@iace/app-kit';
 import {
+  type AdminRole,
   type AssignmentRole,
   type AttemptStatus,
   type AuditAction,
@@ -339,6 +340,14 @@ export const ASSIGNMENT_ROLE_LABELS: Readonly<Record<AssignmentRole, string>> = 
   PROOFREADER: 'Proof-reader',
 };
 
+/** What an admin is called. A label, not a permission — the feature keys decide what they reach. */
+export const ADMIN_ROLE_LABELS: Readonly<Record<AdminRole, string>> = {
+  TYPIST: 'Typist',
+  PROOFREADER: 'Proof-reader',
+  ADMIN: 'Admin',
+  SUPER_ADMIN: 'Super admin',
+};
+
 export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
   DRAFT: 'Draft',
   ACTIVE: 'Active',
@@ -478,6 +487,7 @@ export const QUERY_KEYS = {
   QUESTIONS: [ADMIN, 'questions'],
   STUDENT: [ADMIN, 'student'],
   STUDENTS: [ADMIN, 'students'],
+  SECTION_THREAD: [ADMIN, 'section-thread'],
   SUBJECTS: [ADMIN, 'subjects'],
   TEST: [ADMIN, 'test'],
   TEST_ANALYTICS: [ADMIN, 'test-analytics'],

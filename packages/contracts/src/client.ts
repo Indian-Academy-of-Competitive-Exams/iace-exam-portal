@@ -61,6 +61,7 @@ import {
   type Feature,
   type PermissionGrantBody,
   type PermissionGrantInput,
+  type UpdateAdminBody,
 } from './admins';
 import { CSV_SEPARATOR } from './common';
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from './dashboard';
@@ -333,12 +334,17 @@ import {
   assignableAdminSchema,
   assignmentSchema,
   assignmentWithTestSchema,
+  questionOnOtherTestSchema,
+  sectionCommentSchema,
   type Assignment,
   type AssignableAdmin,
   type AssignableQueryInput,
   type AssignmentWithTest,
   type CreateAssignmentInput,
+  type CreateSectionCommentInput,
   type MineAssignmentsQueryInput,
+  type QuestionOnOtherTest,
+  type SectionComment,
 } from './assignments';
 
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
@@ -878,6 +884,10 @@ export function createApiClient(options: ApiClientOptions) {
         create: (input: CreateAdminInput): Promise<Admin> =>
           write('POST', ADMIN_ADMIN_ROUTES.create, adminSchema, input),
 
+        /** Display fields only — the role labels the person, it does not grant them anything. */
+        update: (id: string, input: UpdateAdminBody): Promise<Admin> =>
+          write('PATCH', ADMIN_ADMIN_ROUTES.update(id), adminSchema, input),
+
         /** Deactivating prunes every grant. Reactivating does NOT restore them. */
         setActive: (id: string, isActive: boolean): Promise<Admin> =>
           write('PATCH', ADMIN_ADMIN_ROUTES.setActive(id), adminSchema, { isActive }),
@@ -1226,6 +1236,13 @@ export function createApiClient(options: ApiClientOptions) {
             questionDetailSchema,
             input,
           ),
+
+        /** The cross-test warning, read before the edit rather than reported after it. */
+        otherTests: (assignmentId: string, questionId: string): Promise<QuestionOnOtherTest[]> =>
+          get(
+            ADMIN_PROOFREADING_ROUTES.otherTests(assignmentId, questionId),
+            questionOnOtherTestSchema.array(),
+          ),
       },
 
       /** Who types a section and who reads it, and the queue each of them works from. */
@@ -1252,6 +1269,22 @@ export function createApiClient(options: ApiClientOptions) {
           get(
             `${ADMIN_ASSIGNMENTS_ROUTES.assignable}${queryString({ ...query })}`,
             assignableAdminSchema.array(),
+          ),
+
+        /** The section thread, oldest first — a discussion is read in the order it was said. */
+        comments: (testId: string, sectionId: string): Promise<SectionComment[]> =>
+          get(ADMIN_ASSIGNMENTS_ROUTES.comments(testId, sectionId), sectionCommentSchema.array()),
+
+        comment: (
+          testId: string,
+          sectionId: string,
+          input: CreateSectionCommentInput,
+        ): Promise<SectionComment> =>
+          write(
+            'POST',
+            ADMIN_ASSIGNMENTS_ROUTES.comments(testId, sectionId),
+            sectionCommentSchema,
+            input,
           ),
       },
 

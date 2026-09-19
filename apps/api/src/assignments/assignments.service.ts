@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ADMIN_ROLES,
   ASSIGNMENT_ROLES,
   AppException,
   ErrorCodes,
@@ -10,6 +11,7 @@ import {
   PAPER_SOURCES,
   PERMISSION_LEVELS,
   satisfiesLevel,
+  type AdminRole,
   type Assignment,
   type AssignableAdmin,
   type AssignmentRole,
@@ -48,6 +50,12 @@ const FEATURE_FOR_ROLE: Record<AssignmentRole, FeatureKey> = {
   [ASSIGNMENT_ROLES.PROOFREADER]: FEATURE_KEYS.QUESTION_PROOFREAD,
 };
 
+/** What somebody doing this job is CALLED — it orders the picker and decides nothing. */
+const ADMIN_ROLE_FOR_ROLE: Record<AssignmentRole, AdminRole> = {
+  [ASSIGNMENT_ROLES.TYPIST]: ADMIN_ROLES.TYPIST,
+  [ASSIGNMENT_ROLES.PROOFREADER]: ADMIN_ROLES.PROOFREADER,
+};
+
 const SOURCE_UNCHOSEN_MESSAGE =
   'Say where this test gets its questions before handing a section to anybody.';
 
@@ -81,7 +89,10 @@ export class AssignmentsService {
 
   /** Active admins already holding what a role needs — who the picker offers, and nothing more. */
   async assignable(role: AssignmentRole): Promise<AssignableAdmin[]> {
-    return this.admins.holdersOf(FEATURE_FOR_ROLE[role], PERMISSION_LEVELS.WRITE);
+    const called = ADMIN_ROLE_FOR_ROLE[role];
+    const holders = await this.admins.holdersOf(FEATURE_FOR_ROLE[role], PERMISSION_LEVELS.WRITE);
+    // The feature key decides who is on this list; the role only decides who is at the top of it.
+    return holders.sort((a, b) => Number(b.role === called) - Number(a.role === called));
   }
 
   async assign(testId: string, body: CreateAssignmentBody, actorId: string): Promise<Assignment> {

@@ -16,13 +16,16 @@ import {
   PERMISSION_LEVELS,
   assignableQuerySchema,
   createAssignmentSchema,
+  createSectionCommentSchema,
   mineAssignmentsQuerySchema,
   type Assignment,
   type AssignableAdmin,
   type AssignableQuery,
   type AssignmentWithTest,
   type CreateAssignmentBody,
+  type CreateSectionCommentBody,
   type MineAssignmentsQuery,
+  type SectionComment,
 } from '@iace/contracts';
 import {
   Actors,
@@ -33,6 +36,7 @@ import {
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { AssignmentsService } from './assignments.service';
+import { SectionThreadService } from './section-thread.service';
 
 /** Either half of the work shares one queue — filtered by neither key alone. */
 const ASSIGNEE_FEATURES = [
@@ -40,11 +44,17 @@ const ASSIGNEE_FEATURES = [
   FEATURE_KEYS.QUESTION_PROOFREAD,
 ] as const;
 
+/** The thread is read from the section screen and from test builder step 2, so it takes either key. */
+const THREAD_FEATURES = [...ASSIGNEE_FEATURES, FEATURE_KEYS.TEST_MANAGEMENT] as const;
+
 /** Who types a section and who reads it. The paper itself stays owned by `tests`. */
 @Controller('admin/assignments')
 @Actors(ActorTypes.ADMIN)
 export class AssignmentsController {
-  constructor(private readonly assignments: AssignmentsService) {}
+  constructor(
+    private readonly assignments: AssignmentsService,
+    private readonly thread: SectionThreadService,
+  ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId')
@@ -87,6 +97,29 @@ export class AssignmentsController {
   }
 
   /** Who a role can be given to — the same key `assign` itself requires, never the admin directory. */
+  /** The whole thread, unpaged — everyone who can see the section reads it. */
+  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
+  @Get('tests/:testId/sections/:sectionId/comments')
+  comments(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+  ): Promise<SectionComment[]> {
+    return this.thread.forSection(testId, sectionId);
+  }
+
+  /** The guard only says they work here; the service says whether this section is theirs. */
+  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.WRITE)
+  @Post('tests/:testId/sections/:sectionId/comments')
+  @HttpCode(HttpStatus.CREATED)
+  comment(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Body(new ZodBody(createSectionCommentSchema)) body: CreateSectionCommentBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SectionComment> {
+    return this.thread.comment(testId, sectionId, body, user.id, user.isSuperAdmin);
+  }
+
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('assignable')
   assignable(

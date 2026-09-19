@@ -267,6 +267,15 @@ enum AssignmentRole {
   PROOFREADER
 }
 
+// What an admin is CALLED. Display only: FEATURE_KEYS remain the gate, and no
+// guard reads this.
+enum AdminRole {
+  TYPIST
+  PROOFREADER
+  ADMIN
+  SUPER_ADMIN
+}
+
 // ============================================================================
 // Exam taxonomy — ExamCourse (enum) → Exam → ExamStage
 // ============================================================================
@@ -525,17 +534,18 @@ model Test {
   // When students were told it had opened. The sweep's watermark: set once, never read as a date.
   announcedAt        DateTime?    @db.Timestamptz(3)
 
-  baseConfig     BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
-  examStage      ExamStage            @relation(fields: [examStageId], references: [id])
-  paperQuestions PaperQuestion[]
-  assignments    QuestionAssignment[]
-  attempts       Attempt[]
-  notifications  Notification[]
-  stat           TestStat?
-  sectionStats   TestSectionStat[]
-  questionStats  TestQuestionStat[]
-  programUnlocks TestProgramUnlock[]
-  testSeries     TestSeries           @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
+  baseConfig      BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
+  examStage       ExamStage            @relation(fields: [examStageId], references: [id])
+  paperQuestions  PaperQuestion[]
+  assignments     QuestionAssignment[]
+  sectionComments SectionComment[]
+  attempts        Attempt[]
+  notifications   Notification[]
+  stat            TestStat?
+  sectionStats    TestSectionStat[]
+  questionStats   TestQuestionStat[]
+  programUnlocks  TestProgramUnlock[]
+  testSeries      TestSeries           @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -596,6 +606,22 @@ model QuestionAssignment {
   @@unique([testId, baseConfigSectionId, role])
   @@index([assigneeId, finalizedAt])
   @@index([testId])
+}
+
+// The discussion on one section of one test, at the pair an assignment keys on.
+// Append-only: nothing edits or deletes a comment, so the thread reads as a record.
+model SectionComment {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  testId              String   @db.Uuid
+  baseConfigSectionId String   @db.Uuid
+  authorId            String   @db.Uuid
+  body                String
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+
+  test   Test  @relation(fields: [testId], references: [id], onDelete: Cascade)
+  author Admin @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([testId, baseConfigSectionId, createdAt])
 }
 
 // ============================================================================
@@ -760,14 +786,16 @@ model StudentConsent {
 // The first super admin is inserted by SQL — nothing in the codebase creates one.
 // No soft delete: createdById on everything they made points here.
 model Admin {
-  id           String   @id @default(uuid(7)) @db.Uuid
-  email        String   @unique
+  id           String    @id @default(uuid(7)) @db.Uuid
+  email        String    @unique
   fullName     String?
-  isSuperAdmin Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  createdById  String?  @db.Uuid
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  // Presets the permission checkboxes and labels the person; it grants nothing.
+  role         AdminRole @default(ADMIN)
+  isSuperAdmin Boolean   @default(false)
+  isActive     Boolean   @default(true)
+  createdById  String?   @db.Uuid
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
   permissions       AdminFeaturePermission[]
   notifications     Notification[]
@@ -775,6 +803,7 @@ model Admin {
   // The one createdById with a real relation: a draft names its author on screen and in a filter.
   questionsAuthored Question[]
   assignments       QuestionAssignment[]     @relation("AssignmentAssignee")
+  sectionComments   SectionComment[]
 }
 
 // One row per grant. featureKey mirrors the code-owned FEATURE_KEYS enum and is

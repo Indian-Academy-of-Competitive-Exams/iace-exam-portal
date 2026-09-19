@@ -465,9 +465,28 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
       questions.update(created.id, live({ stem: REWORDED }), ADMIN),
     );
 
-    assert.ok(changed?.content, 'the edit recorded no content change');
-    assert.notEqual(changed.content.from, changed.content.to);
-    assert.equal(changed.version, undefined);
+    assert.deepEqual(changed?.['stem.EN'], {
+      from: 'What is 20% of 150?',
+      to: 'What is 20% of 150, exactly?',
+    });
+    assert.equal(changed?.['stem.HI'], undefined);
+    assert.equal(changed?.version, undefined);
+  });
+
+  /** The failure this prevents: a fixed typo logging an empty diff, so the history was blank. */
+  it('logs one field for a one-option edit, not an empty diff and not the whole content', async () => {
+    const { questions, audit } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const retyped = draft().options.map((option) =>
+      option.position === 3 ? { ...option, text: { ...option.text, hi: '३५' } } : option,
+    );
+
+    const { changed } = await recording(audit, () =>
+      questions.update(created.id, live({ options: retyped }), ADMIN),
+    );
+
+    assert.deepEqual(Object.keys(changed ?? {}), ['option.3.HI']);
+    assert.deepEqual(changed?.['option.3.HI'], { from: '35', to: '३५' });
   });
 
   /** Every word on the row can be the second admin's, so the row should not still credit the first. */

@@ -6,8 +6,10 @@ import {
   ErrorCodes,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionOnOtherTest,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { reachableTest } from './question-query';
 import { QuestionsService } from './questions.service';
 
 /** The one section a proof-reader reads and fixes (docs/03 §5). */
@@ -48,6 +50,59 @@ export class ProofreadingService {
 
     // Reading a section is no licence to retire out of it: the status stays the one it arrived with.
     return this.questions.update(questionId, { ...draft, status: question.status }, adminId);
+  }
+
+  /** Which other tests keep the old version — asked before the edit, not reported after it. */
+  async otherTests(
+    assignmentId: string,
+    questionId: string,
+    adminId: string,
+    isSuperAdmin = false,
+  ): Promise<QuestionOnOtherTest[]> {
+    const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
+    await this.requireInSection(assignment, questionId);
+
+    const rows = await this.prisma.paperQuestion.findMany({
+      where: { questionId, testId: { not: assignment.testId } },
+      select: {
+        baseConfigSection: { select: { name: true } },
+        test: {
+          select: {
+            id: true,
+            title: true,
+            opensAt: true,
+            assignments: { select: { finalizedAt: true } },
+          },
+        },
+      },
+      orderBy: { test: { opensAt: 'asc' } },
+    });
+    if (rows.length === 0) return [];
+
+    // The same predicate the version rule turns on, so the warning and the rewrite cannot disagree.
+    const open = await this.prisma.test.findMany({
+      where: { id: { in: rows.map((row) => row.test.id) }, ...reachableTest(new Date()) },
+      select: { id: true },
+    });
+    const opened = new Set(open.map((row) => row.id));
+
+    return rows.map((row) => ({
+      testId: row.test.id,
+      testTitle: row.test.title,
+      sectionName: row.baseConfigSection.name,
+      underReview: row.test.assignments.some((each) => each.finalizedAt === null),
+      isOpen: opened.has(row.test.id),
+      opensAt: row.test.opensAt?.toISOString() ?? null,
+    }));
+  }
+
+  /** The same scope the edit rests on: a section is no licence to read the bank through it. */
+  private async requireInSection(assignment: SectionRef, questionId: string): Promise<void> {
+    const question = await this.prisma.question.findFirst({
+      where: { id: questionId, ...sectionScope(assignment) },
+      select: { id: true },
+    });
+    if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
   }
 
   /** Not theirs reads as not there — unless a super admin, who is refused no section of their own institute. */

@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
+import { ADMIN_ROLES, AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
 import { AuditContext } from '../src/audit';
 import { makeAdmin, resetDatabase, testPrisma, uid } from './support/database';
@@ -144,7 +144,11 @@ describe('AdminsService — admins', () => {
     await makeAdmin(prisma, { email: 'taken@iace.co.in' });
 
     await assert.rejects(
-      () => service.create({ email: 'taken@iace.co.in', isSuperAdmin: false }, ACTOR),
+      () =>
+        service.create(
+          { email: 'taken@iace.co.in', role: ADMIN_ROLES.ADMIN, isSuperAdmin: false },
+          ACTOR,
+        ),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, 'CONFLICT');
@@ -157,7 +161,10 @@ describe('AdminsService — admins', () => {
   it('records who created an admin from the token, not the body', async () => {
     const { service } = build();
 
-    const created = await service.create({ email: 'new@iace.co.in', isSuperAdmin: true }, ACTOR);
+    const created = await service.create(
+      { email: 'new@iace.co.in', role: ADMIN_ROLES.SUPER_ADMIN, isSuperAdmin: true },
+      ACTOR,
+    );
 
     assert.equal(created.isSuperAdmin, true);
     assert.deepEqual(created.permissions, {});

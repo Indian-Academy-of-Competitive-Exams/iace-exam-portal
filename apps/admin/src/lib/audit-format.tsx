@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { type RowAction } from '@iace/contracts';
+import { LANGUAGE_LABELS, type QuestionLanguage, type RowAction } from '@iace/contracts';
 import { Badge, BadgeList, linkVariants, TruncatedText } from '@iace/ui';
 import { ROUTES } from './constants';
 
@@ -12,8 +12,26 @@ function formatDiffValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** What a question SAYS is logged leaf by leaf (`stem.EN`, `option.3.HI`), so name the leaf. */
+const CONTENT_FIELD_NOUNS: Readonly<Record<string, string>> = {
+  stem: 'Stem',
+  solution: 'Solution',
+  option: 'Option',
+};
+
+/** Anything else — a column, a key from another feature — reads as the field name it already is. */
+function fieldLabel(field: string): string {
+  const parts = field.split('.');
+  const noun = CONTENT_FIELD_NOUNS[parts[0] ?? ''];
+  const language = LANGUAGE_LABELS[(parts.at(-1) ?? '').toLowerCase() as QuestionLanguage];
+  if (!noun || !language) return field;
+
+  const position = parts.length === 3 ? ` ${parts[1]}` : '';
+  return `${noun}${position} (${language})`;
+}
+
 function diffLabel(field: string, diff: { from: unknown; to: unknown }): string {
-  return `${field}: ${formatDiffValue(diff.from)} → ${formatDiffValue(diff.to)}`;
+  return `${fieldLabel(field)}: ${formatDiffValue(diff.from)} → ${formatDiffValue(diff.to)}`;
 }
 
 /**

@@ -31,7 +31,6 @@ Enum AnswerMode {
 }
 
 Enum QuestionStatus {
-  DRAFT
   ACTIVE
   ARCHIVED
 }
@@ -103,6 +102,11 @@ Enum TestScope {
   FULL
   MODULE
   SECTIONAL
+}
+
+Enum PaperSource {
+  FRAMED
+  PICKED
 }
 
 Enum PaperQuestionStatus {
@@ -221,6 +225,18 @@ Enum ActorType {
   SYSTEM
 }
 
+Enum AssignmentRole {
+  TYPIST
+  PROOFREADER
+}
+
+Enum AdminRole {
+  TYPIST
+  PROOFREADER
+  ADMIN
+  SUPER_ADMIN
+}
+
 Enum ConsentPurpose {
   PLATFORM
 }
@@ -228,20 +244,6 @@ Enum ConsentPurpose {
 Enum SavedQuestionKind {
   BOOKMARK
   MISTAKE
-}
-
-Enum QuestionFlagCategory {
-  AWKWARD
-  INVALID
-  TOO_DIFFICULT
-  INSUFFICIENT_DATA
-  OTHER
-}
-
-Enum QuestionFlagStatus {
-  OPEN
-  RESOLVED
-  DISMISSED
 }
 
 Enum DevicePlatform {
@@ -374,11 +376,12 @@ Table Question {
   subjectId uuid [not null]
   topicId uuid
   difficulty DifficultyLevel [not null]
-  status QuestionStatus [not null, default: 'DRAFT']
+  status QuestionStatus [not null, default: 'ACTIVE']
   currentVersionId uuid
   tags text [not null, note: 'array']
   stemHash text
   fixedUseCount integer [not null, default: 0]
+  assignmentId uuid
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
@@ -388,6 +391,7 @@ Table Question {
     (stemHash)
     (fixedUseCount)
     (createdById)
+    (assignmentId)
     (tags)
   }
 }
@@ -415,6 +419,7 @@ Table Test {
   scope TestScope [not null, default: 'FULL']
   scopeRef jsonb
   questionPoolFilter jsonb
+  paperSource PaperSource
   examTemplate ExamTemplate [not null, default: 'DEFAULT']
   status TestStatus [not null, default: 'DRAFT']
   isLocked boolean [not null, default: false]
@@ -454,6 +459,37 @@ Table PaperQuestion {
     (questionId)
     (questionVersionId)
     (baseConfigId, baseConfigSectionId)
+  }
+}
+
+Table QuestionAssignment {
+  id uuid [pk, default: `uuid(7)`]
+  testId uuid [not null]
+  baseConfigId uuid [not null]
+  baseConfigSectionId uuid [not null]
+  assigneeId uuid [not null]
+  role AssignmentRole [not null]
+  dueAt timestamptz(3)
+  finalizedAt timestamptz(3)
+  createdById uuid
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (testId, baseConfigSectionId, role) [unique]
+    (assigneeId, finalizedAt)
+    (testId)
+  }
+}
+
+Table SectionComment {
+  id uuid [pk, default: `uuid(7)`]
+  testId uuid [not null]
+  baseConfigSectionId uuid [not null]
+  authorId uuid [not null]
+  body text [not null]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (testId, baseConfigSectionId, createdAt)
   }
 }
 
@@ -563,6 +599,7 @@ Table Admin {
   id uuid [pk, default: `uuid(7)`]
   email text [unique, not null]
   fullName text
+  role AdminRole [not null, default: 'ADMIN']
   isSuperAdmin boolean [not null, default: false]
   isActive boolean [not null, default: true]
   createdById uuid
@@ -910,23 +947,6 @@ Table SavedQuestion {
   }
 }
 
-Table QuestionFlag {
-  id uuid [pk, default: `uuid(7)`]
-  questionId uuid [not null]
-  versionId uuid
-  category QuestionFlagCategory [not null]
-  comment text [not null]
-  status QuestionFlagStatus [not null, default: 'OPEN']
-  raisedById uuid [not null]
-  resolvedById uuid
-  resolvedAt timestamptz(3)
-  createdAt timestamptz(3) [not null, default: `now()`]
-  indexes {
-    (questionId, status)
-    (status, createdAt)
-  }
-}
-
 Ref: ExamStage.examId > Exam.id
 Ref: BaseConfig.examStageId > ExamStage.id
 Ref: BaseConfig.clonedFromId > BaseConfig.id [delete: restrict]
@@ -939,6 +959,7 @@ Ref: Question.subjectId > Subject.id
 Ref: Question.createdById > Admin.id [delete: restrict]
 Ref: Question.topicId > Topic.id [delete: restrict]
 Ref: Question.(id, currentVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
+Ref: Question.assignmentId > QuestionAssignment.id [delete: set null]
 Ref: QuestionVersion.questionId > Question.id
 Ref: Test.(baseConfigId, examStageId) > BaseConfig.(id, examStageId) [delete: restrict]
 Ref: Test.examStageId > ExamStage.id
@@ -947,6 +968,11 @@ Ref: PaperQuestion.(testId, baseConfigId) > Test.(id, baseConfigId) [delete: cas
 Ref: PaperQuestion.(baseConfigId, baseConfigSectionId) > BaseConfigSection.(baseConfigId, id) [delete: restrict]
 Ref: PaperQuestion.questionId > Question.id
 Ref: PaperQuestion.(questionId, questionVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
+Ref: QuestionAssignment.(testId, baseConfigId) > Test.(id, baseConfigId) [delete: cascade]
+Ref: QuestionAssignment.(baseConfigId, baseConfigSectionId) > BaseConfigSection.(baseConfigId, id) [delete: restrict]
+Ref: QuestionAssignment.assigneeId > Admin.id [delete: restrict]
+Ref: SectionComment.testId > Test.id [delete: cascade]
+Ref: SectionComment.authorId > Admin.id [delete: restrict]
 Ref: Attempt.testId > Test.id
 Ref: Attempt.studentId > Student.id
 Ref: AttemptSheet.attemptId > Attempt.id [delete: cascade]
@@ -986,7 +1012,6 @@ Ref: PushSubscription.studentId > Student.id [delete: cascade]
 Ref: PushDevice.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.questionId > Question.id
-Ref: QuestionFlag.questionId > Question.id [delete: cascade]
 
 // ============================================================================
 // Table groups. Colors are kept as trailing comments: @dbml/core rejects
@@ -1010,12 +1035,13 @@ TableGroup "Question Bank" { // color: #B8860B
   Question
   QuestionVersion
   SavedQuestion
-  QuestionFlag
 }
 
 TableGroup "Tests & Papers" { // color: #2E7D5B
   Test
   PaperQuestion
+  QuestionAssignment
+  SectionComment
 }
 
 TableGroup "Attempts" { // color: #2563A8

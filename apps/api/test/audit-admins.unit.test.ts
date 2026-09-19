@@ -1,19 +1,19 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
+import { ADMIN_ROLES, AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
 import { AdminsController } from '../src/admins/admins.controller';
 import { AUDITED_ADMIN_FIELDS, permissionDiff } from '../src/admins/admins.service';
 import { AUDIT_KEY, type AuditRoute } from '../src/audit/audit.decorator';
 
 describe('the admin audit diff', () => {
   it('covers what an admin edit can change', () => {
-    assert.deepEqual([...AUDITED_ADMIN_FIELDS], ['fullName', 'isSuperAdmin']);
+    assert.deepEqual([...AUDITED_ADMIN_FIELDS], ['fullName', 'role', 'isSuperAdmin']);
   });
 
   /** Promotion to super admin bypasses every feature check, so it is the row to find. */
   it('reports a promotion to super admin', () => {
-    const before = { fullName: 'R Kumar', isSuperAdmin: false };
+    const before = { fullName: 'R Kumar', role: ADMIN_ROLES.ADMIN, isSuperAdmin: false };
 
     assert.deepEqual(fieldDiff(before, { ...before, isSuperAdmin: true }, AUDITED_ADMIN_FIELDS), {
       isSuperAdmin: { from: false, to: true },

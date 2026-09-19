@@ -7,9 +7,10 @@ import {
   FORM_LEVEL_FIELD,
   QUESTION_SORTS,
   QUESTION_STATUS,
-  TEST_STATUS,
   fieldDiff,
   plainTextOf,
+  previewTextOf,
+  type FieldDiff,
   type LocalizedContent,
   type Paginated,
   type QuestionAvailability,
@@ -21,6 +22,7 @@ import {
   type QuestionListQuery,
   type QuestionOption,
   type QuestionSummary,
+  type RichContent,
   type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
@@ -45,7 +47,7 @@ import {
   validateQuestion,
   type BuiltQuestion,
 } from './question-core';
-import { questionOrderBy, questionWhere } from './question-query';
+import { questionOrderBy, questionWhere, reachableTest } from './question-query';
 import { taxonomyForIds } from './taxonomy-context';
 
 const QUESTION_INCLUDE = {
@@ -65,7 +67,7 @@ const QUESTION_INCLUDE = {
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
 
-/** What an edit can change: the columns, plus a fingerprint of what the question actually says. */
+/** The COLUMNS an edit can change. What the question says is flattened beside them, leaf by leaf. */
 export const AUDITED_QUESTION_FIELDS = [
   'type',
   'subjectId',
@@ -76,7 +78,6 @@ export const AUDITED_QUESTION_FIELDS = [
   'version',
   'correctOptionPositions',
   'answerKey',
-  'content',
 ] as const;
 
 /** Long enough to survive an authoring session; content stores the key, so nothing outlives it. */
@@ -252,9 +253,7 @@ export class QuestionsService {
       this.writeEdit(tx, id, draft, built, createdById),
     );
 
-    this.auditContext.setChanged(
-      fieldDiff(auditFieldsOf(question), auditFieldsOf(row), AUDITED_QUESTION_FIELDS),
-    );
+    this.auditContext.setChanged(questionDiff(question, row));
 
     return this.signed(toDetail(row));
   }
@@ -318,20 +317,8 @@ export class QuestionsService {
     const questionVersionId = question.currentVersionId;
     if (!questionVersionId) return null;
 
-    const now = new Date();
     const reached = await tx.paperQuestion.count({
-      where: {
-        questionId: question.id,
-        questionVersionId,
-        test: {
-          status: { not: TEST_STATUS.DRAFT },
-          OR: [
-            { opensAt: null },
-            { opensAt: { lte: now } },
-            { programUnlocks: { some: { opensAt: { lte: now } } } },
-          ],
-        },
-      },
+      where: { questionId: question.id, questionVersionId, test: reachableTest(new Date()) },
     });
     return reached > 0 ? null : questionVersionId;
   }
@@ -391,9 +378,7 @@ export class QuestionsService {
       return tx.question.findUniqueOrThrow({ where: { id }, include: QUESTION_INCLUDE });
     });
 
-    this.auditContext.setChanged(
-      fieldDiff(auditFieldsOf(question), auditFieldsOf(updated), AUDITED_QUESTION_FIELDS),
-    );
+    this.auditContext.setChanged(questionDiff(question, updated));
 
     return this.signed(toDetail(updated));
   }
@@ -630,19 +615,16 @@ function currentOptionsOf(row: QuestionRow): QuestionOption[] {
   return Array.isArray(options) ? (options as unknown as QuestionOption[]) : [];
 }
 
+/** The union of both sides, so a language or an option that went away still diffs to null. */
+function questionDiff(before: QuestionRow, after: QuestionRow): FieldDiff | null {
+  const from = auditFieldsOf(before);
+  const to = auditFieldsOf(after);
+  const fields = new Set([...AUDITED_QUESTION_FIELDS, ...Object.keys(from), ...Object.keys(to)]);
+  return fieldDiff(from, to, [...fields]);
+}
+
 /** `options`, kept only as the scoring key: the sorted positions of the ones marked correct. */
-function auditFieldsOf(row: QuestionRow): {
-  type: QuestionRow['type'];
-  subjectId: string;
-  topicId: string | null;
-  difficulty: QuestionRow['difficulty'];
-  questionCode: string | null;
-  status: QuestionRow['status'];
-  version: number | null;
-  correctOptionPositions: number[];
-  answerKey: unknown;
-  content: string | null;
-} {
+function auditFieldsOf(row: QuestionRow): Record<string, unknown> {
   return {
     type: row.type,
     subjectId: row.subjectId,
@@ -656,8 +638,32 @@ function auditFieldsOf(row: QuestionRow): {
       .filter((option) => option.isCorrect)
       .map((option) => option.position)
       .sort((a, b) => a - b),
-    content: contentHashOf(row),
+    ...contentLeavesOf(row),
   };
+}
+
+/** The words, not the markup — a history a proof-reader reads must not be a wall of tags. */
+const readableText = (content: RichContent | undefined): string =>
+  previewTextOf(plainTextOf(content));
+
+/** `stem.EN`, `solution.HI`, `option.3.TE`: one key per thing somebody can actually retype. */
+function contentLeavesOf(row: QuestionRow): Record<string, string> {
+  const leaves: Record<string, string> = {};
+
+  for (const [language, field] of Object.entries(contentOf(row))) {
+    leaves[`stem.${language.toUpperCase()}`] = readableText(field?.stem);
+    if (field?.solution) {
+      leaves[`solution.${language.toUpperCase()}`] = readableText(field.solution);
+    }
+  }
+
+  for (const option of currentOptionsOf(row)) {
+    for (const [language, text] of Object.entries(option.text)) {
+      leaves[`option.${option.position}.${language.toUpperCase()}`] = readableText(text);
+    }
+  }
+
+  return leaves;
 }
 
 /** Short: it is read to spot a change, never to rebuild anything. */

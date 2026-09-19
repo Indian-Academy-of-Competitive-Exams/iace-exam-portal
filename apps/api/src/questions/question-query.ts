@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   QUESTION_SORTS,
   QUESTION_STATUS,
+  TEST_STATUS,
   WRITTEN_FOR,
   type QuestionListQuery,
   type QuestionSort,
@@ -9,6 +10,16 @@ import {
 import { matchFilters } from '../common/match-filters';
 import { DRAWABLE_QUESTION } from './question-core';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+
+/** Spec §3: reachable is `min(Test.opensAt, min(TestProgramUnlock.opensAt)) <= now`, a program opening earlier than its test included. */
+export const reachableTest = (now: Date): Prisma.TestWhereInput => ({
+  status: { not: TEST_STATUS.DRAFT },
+  OR: [
+    { opensAt: null },
+    { opensAt: { lte: now } },
+    { programUnlocks: { some: { opensAt: { lte: now } } } },
+  ],
+});
 
 /** A civil day in Asia/Kolkata is a whole day, not the instant its name would parse to. */
 export function writtenBetween(from: string | undefined, to: string | undefined) {

@@ -41,6 +41,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
 import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
+import { SectionThread } from '../components/section-thread';
 
 /** Sits beside the paper it staffs: who types and reads each section, before the paper is judged. */
 
@@ -83,6 +84,7 @@ export function AssignStep({
   detail,
   config,
 }: Readonly<{ detail: TestDetail | null; config: BaseConfigDetail | null }>) {
+  const { identity } = useAuth();
   const assignments = useQuery({
     queryKey: [...QUERY_KEYS.ASSIGNMENTS, detail?.id ?? ''],
     queryFn: () => api.admin.assignments.forTest(detail?.id ?? ''),
@@ -123,6 +125,10 @@ export function AssignStep({
     ),
   });
   const outstanding = (assignments.data ?? []).some((row) => row.finalizedAt === null);
+  // The server refuses anybody else, so a box they cannot post from is not shown at all.
+  const mayComment = (row: SectionRow): boolean =>
+    (identity?.isSuperAdmin ?? false) ||
+    [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id);
 
   return (
     <FormSection title="Assignments" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
@@ -139,6 +145,16 @@ export function AssignStep({
         rowKey={(row) => row.section.id}
         isLoading={assignments.isLoading}
         empty="No sections"
+        expand={{
+          label: (row) => `Comments on ${row.section.name}`,
+          render: (row) => (
+            <SectionThread
+              testId={detail.id}
+              sectionId={row.section.id}
+              canWrite={mayComment(row)}
+            />
+          ),
+        }}
       />
 
       {assigning ? (
