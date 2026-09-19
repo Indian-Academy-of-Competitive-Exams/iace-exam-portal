@@ -75,7 +75,10 @@ export const redisKeys = {
 
   /** The admin building one test's paper. Holds their id, so a refusal can name them. */
   testEditLock: (testId: string) => `test:edit:${testId}`,
+
+  /** The admin editing one blueprint — the shape every test built from it inherits. */
+  baseConfigEditLock: (baseConfigId: string) => `base-config:edit:${baseConfigId}`,
 } as const;
 
-/** How long a test stays that admin's, counted from their last edit rather than their first. */
-export const TEST_EDIT_LOCK_TTL_SEC = 15 * 60;
+/** How long a record stays that admin's, counted from their last edit rather than their first. */
+export const EDIT_LOCK_TTL_SEC = 15 * 60;

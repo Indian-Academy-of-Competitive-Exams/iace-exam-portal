@@ -21,9 +21,12 @@ export const INACTIVE_CONFIG_MESSAGE =
 export const LOCKED_CONFIG_MESSAGE =
   'This config is locked, because a test built from it has already been sat. Clone it to change its shape; the clone starts where this one left off.';
 
+/** Carried by every save and changing nothing — a locked config may still be renamed with it. */
+const NOT_A_FIELD = ['expectedUpdatedAt'] as const;
+
 /** What a save is asking to change, once the unfrozen three are set aside. */
 export function locksOutEdit(input: UpdateBaseConfigBody): boolean {
-  const unfrozen = new Set<string>(UNFROZEN_FIELDS);
+  const unfrozen = new Set<string>([...UNFROZEN_FIELDS, ...NOT_A_FIELD]);
   return Object.keys(input).some((key) => !unfrozen.has(key));
 }
 

@@ -87,8 +87,13 @@ async function serviceWith(over: Bench = {}) {
   }
   const events = new FakeEventBus();
   const audit = new AuditContext();
-  const configs = new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit);
   const redis = new FakeRedis().asService();
+  const configs = new BaseConfigsService(
+    prisma,
+    new ExamStagesService(prisma, audit),
+    audit,
+    redis,
+  );
   return { events, service: new TestsService(prisma, configs, audit, events.asService(), redis) };
 }
 

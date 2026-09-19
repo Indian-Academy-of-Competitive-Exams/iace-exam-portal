@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, editLockHolderSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { examRefSchema, languageCodeSchema } from './exams';
 import { displayNameSchema } from './naming';
@@ -177,6 +177,10 @@ export type BaseConfig = z.infer<typeof baseConfigSchema>;
 export const baseConfigDetailSchema = baseConfigSchema.extend({
   modules: z.array(baseConfigModuleSchema),
   sections: z.array(baseConfigSectionSchema),
+  /** What an edit is judged stale against — a form sends back exactly what it opened. */
+  updatedAt: z.string(),
+  /** Who is editing it right now, so a second admin is warned before the work, not at the save. */
+  editingBy: editLockHolderSchema.nullable(),
 });
 export type BaseConfigDetail = z.infer<typeof baseConfigDetailSchema>;
 
@@ -257,6 +261,8 @@ export const updateBaseConfigSchema = configShapeSchema.partial().extend({
   isActive: z.boolean().optional(),
   sections: z.array(baseConfigSectionDraftSchema).min(1).optional(),
   modules: z.array(baseConfigModuleDraftSchema).optional(),
+  /** The `updatedAt` the form opened on. A save that does not match it is refused, not merged. */
+  expectedUpdatedAt: z.string().optional(),
 });
 export type UpdateBaseConfigInput = z.input<typeof updateBaseConfigSchema>;
 export type UpdateBaseConfigBody = z.infer<typeof updateBaseConfigSchema>;

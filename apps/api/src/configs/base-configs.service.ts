@@ -14,11 +14,21 @@ import {
   type BaseConfigSectionDraft,
   type CloneBaseConfigBody,
   type CreateBaseConfigBody,
+  type EditLockHolder,
   type Paginated,
   type TimerTemplate,
   type UpdateBaseConfigBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { redisKeys } from '../redis/redis.keys';
+import {
+  EDIT_SUBJECTS,
+  editLockHeldBy,
+  editedElsewhere,
+  takeEditLock,
+  type Editor,
+} from '../common/edit-lock';
 import { AuditContext } from '../audit';
 import { ExamStagesService } from './exam-stages.service';
 import {
@@ -71,6 +81,7 @@ export class BaseConfigsService {
     private readonly prisma: PrismaService,
     private readonly stages: ExamStagesService,
     private readonly auditContext: AuditContext,
+    private readonly redis: RedisService,
   ) {}
 
   async list(query: BaseConfigListQuery): Promise<Paginated<BaseConfig>> {
@@ -98,7 +109,7 @@ export class BaseConfigsService {
   }
 
   async detail(id: string): Promise<BaseConfigDetail> {
-    return toDetail(await this.requireDetail(id));
+    return toDetail(await this.requireDetail(id), await this.editingBy(id));
   }
 
   async create(input: CreateBaseConfigBody, createdById: string): Promise<BaseConfigDetail> {
@@ -135,7 +146,11 @@ export class BaseConfigsService {
    * admin reads a sentence instead of a Postgres exception. Name, default and active still move —
    * that is what lets a clone be promoted over the locked original it replaces.
    */
-  async update(id: string, input: UpdateBaseConfigBody): Promise<BaseConfigDetail> {
+  async update(
+    id: string,
+    input: UpdateBaseConfigBody,
+    editor: Editor = {},
+  ): Promise<BaseConfigDetail> {
     const config = await this.requireDetail(id);
 
     if (config.locked && locksOutEdit(input)) {
@@ -143,6 +158,7 @@ export class BaseConfigsService {
         fieldErrors: { [FORM_LEVEL_FIELD]: [LOCKED_CONFIG_MESSAGE] },
       });
     }
+    assertScreenIsCurrent(config, input.expectedUpdatedAt);
 
     const timerTemplate = input.timerTemplate ?? (config.timerTemplate as TimerTemplate);
     const sections = input.sections;
@@ -156,19 +172,27 @@ export class BaseConfigsService {
       input.durationSec ?? config.durationSec,
     );
 
-    await this.prisma.$transaction(async (tx) => {
-      if (input.isDefault) await clearDefault(tx, config.examStageId, id);
+    await this.claimEdit(id, editor);
 
-      await tx.baseConfig.update({
-        where: { id },
+    await this.prisma.$transaction(async (tx) => {
+      // FIRST, and conditional: a save that lost the race must not reach the deletes below.
+      const claimed = await tx.baseConfig.updateMany({
+        where: { id, updatedAt: config.updatedAt },
         data: {
           ...(input.name === undefined ? {} : { name: input.name }),
-          ...(input.isDefault === undefined ? {} : { isDefault: input.isDefault }),
           ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
           ...shapeColumnsOf(input, input.timerTemplate),
           ...(sections ? configTotalsOf(sections) : {}),
+          updatedAt: new Date(),
         },
       });
+      if (claimed.count !== 1) throw editedElsewhere(EDIT_SUBJECTS.BASE_CONFIG);
+
+      // Its own write, after the claim: the stage's one default has to be given up before it is taken.
+      if (input.isDefault !== undefined) {
+        if (input.isDefault) await clearDefault(tx, config.examStageId, id);
+        await tx.baseConfig.update({ where: { id }, data: { isDefault: input.isDefault } });
+      }
 
       if (sections) {
         // Replaced wholesale: the editor holds the whole paper, and a section has no identity
@@ -182,7 +206,7 @@ export class BaseConfigsService {
     const updated = await this.requireDetail(id);
     this.auditContext.setChanged(fieldDiff(config, updated, AUDITED_CONFIG_FIELDS));
 
-    return toDetail(updated);
+    return toDetail(updated, await this.editingBy(id));
   }
 
   /**
@@ -264,7 +288,8 @@ export class BaseConfigsService {
     return this.detail(cloneId);
   }
 
-  async remove(id: string): Promise<void> {
+  /** Deleting is the one shape change nothing can undo, so it waits on whoever is mid-edit too. */
+  async remove(id: string, editor: Editor = {}): Promise<void> {
     const config = await this.requireDetail(id);
 
     const blocker = configDeletionBlocker({
@@ -273,6 +298,7 @@ export class BaseConfigsService {
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
+    await this.claimEdit(id, editor);
     await this.prisma.baseConfig.delete({ where: { id } });
   }
 
@@ -292,7 +318,16 @@ export class BaseConfigsService {
         fieldErrors: { [fieldKey]: [INACTIVE_CONFIG_MESSAGE] },
       });
     }
-    return toDetail(config);
+    return toDetail(config, null);
+  }
+
+  private claimEdit(id: string, editor: Editor): Promise<void> {
+    const key = redisKeys.baseConfigEditLock(id);
+    return takeEditLock(this.redis, this.prisma, key, EDIT_SUBJECTS.BASE_CONFIG, editor);
+  }
+
+  private editingBy(id: string) {
+    return editLockHeldBy(this.redis, this.prisma, redisKeys.baseConfigEditLock(id));
   }
 
   private assertShape(
@@ -409,6 +444,12 @@ async function writeChildren(
   }
 }
 
+/** A form open since before somebody else's save would write its stale sections over theirs. */
+function assertScreenIsCurrent(config: DetailRow, expected: string | undefined): void {
+  if (expected === undefined || expected === config.updatedAt.toISOString()) return;
+  throw editedElsewhere(EDIT_SUBJECTS.BASE_CONFIG);
+}
+
 /** A stored section, in the form the shape rules read — they judge a draft, not a row. */
 function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSectionDraft {
   return {
@@ -455,9 +496,11 @@ function toConfig(row: ConfigRow): BaseConfig {
   };
 }
 
-function toDetail(row: DetailRow): BaseConfigDetail {
+function toDetail(row: DetailRow, editingBy: EditLockHolder | null): BaseConfigDetail {
   return {
     ...toConfig(row),
+    updatedAt: row.updatedAt.toISOString(),
+    editingBy,
     modules: row.modules.map((module) => ({
       id: module.id,
       baseConfigId: module.baseConfigId,

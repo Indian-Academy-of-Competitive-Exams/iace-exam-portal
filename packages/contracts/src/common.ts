@@ -116,6 +116,13 @@ export function fromInstituteWallTime(wallTime: string): Date {
 
 export const actorTypeSchema = z.enum(ActorTypes);
 
+/** The admin whose advisory claim on a record is live. Their name, because an id names nobody. */
+export const editLockHolderSchema = z.object({
+  adminId: z.string(),
+  fullName: z.string().nullable(),
+});
+export type EditLockHolder = z.infer<typeof editLockHolderSchema>;
+
 /** An Indian mobile number, once normalised: 10 digits, leading 6-9. */
 export const MOBILE_DIGITS = 10;
 

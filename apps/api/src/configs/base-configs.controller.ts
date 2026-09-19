@@ -70,8 +70,9 @@ export class BaseConfigsController {
   update(
     @Param('id') id: string,
     @Body(new ZodBody(updateBaseConfigSchema)) body: UpdateBaseConfigBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<BaseConfigDetail> {
-    return this.configs.update(id, body);
+    return this.configs.update(id, body, user);
   }
 
   /** How a locked config evolves: the whole paper, copied, unlocked, pointing back at its origin. */
@@ -91,7 +92,7 @@ export class BaseConfigsController {
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  remove(@Param('id') id: string): Promise<void> {
-    return this.configs.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    return this.configs.remove(id, user);
   }
 }

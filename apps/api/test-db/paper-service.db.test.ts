@@ -119,12 +119,13 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
     },
   });
   const audit = new AuditContext();
+  const redis = new FakeRedis().asService();
   return new PaperService(
     prisma,
-    new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit),
+    new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit, redis),
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
-    new FakeRedis().asService(),
+    redis,
   );
 }
 

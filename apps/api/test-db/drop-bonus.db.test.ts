@@ -59,7 +59,7 @@ async function bench({ isLocked = true, sat = true } = {}) {
   const queue = new FakeQueue();
   const service = new PaperService(
     prisma,
-    new BaseConfigsService(prisma, stages, audit),
+    new BaseConfigsService(prisma, stages, audit, new FakeRedis().asService()),
     new ScoringOutbox(prisma, queue.asQueue()),
     audit,
     new FakeRedis().asService(),

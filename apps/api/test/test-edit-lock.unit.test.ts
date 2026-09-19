@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { redisKeys, TEST_EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
+import { redisKeys, EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
 import { FakeRedis } from './support/fakes';
 
 const KEY = redisKeys.testEditLock('tst_1');
@@ -8,7 +8,7 @@ const PRIYA = 'adm_priya';
 const RAVI = 'adm_ravi';
 
 const take = (redis: FakeRedis, adminId: string, steal = false) =>
-  redis.asService().holdLock(KEY, adminId, TEST_EDIT_LOCK_TTL_SEC, steal);
+  redis.asService().holdLock(KEY, adminId, EDIT_LOCK_TTL_SEC, steal);
 
 describe('the test edit lock', () => {
   it('names the admin already editing rather than just refusing', async () => {
@@ -22,7 +22,7 @@ describe('the test edit lock', () => {
   it('leaves the lock exactly where it was when it refuses', async () => {
     const redis = new FakeRedis();
     await take(redis, PRIYA);
-    redis.advanceSeconds(TEST_EDIT_LOCK_TTL_SEC - 60);
+    redis.advanceSeconds(EDIT_LOCK_TTL_SEC - 60);
 
     await take(redis, RAVI);
 
@@ -34,11 +34,11 @@ describe('the test edit lock', () => {
   it('lets the holder back in, and their fifteen minutes start again', async () => {
     const redis = new FakeRedis();
     await take(redis, PRIYA);
-    redis.advanceSeconds(TEST_EDIT_LOCK_TTL_SEC - 60);
+    redis.advanceSeconds(EDIT_LOCK_TTL_SEC - 60);
 
     assert.equal(await take(redis, PRIYA), null);
 
-    redis.advanceSeconds(TEST_EDIT_LOCK_TTL_SEC - 60);
+    redis.advanceSeconds(EDIT_LOCK_TTL_SEC - 60);
     assert.equal(redis.snapshot()[KEY], PRIYA);
   });
 
@@ -57,7 +57,7 @@ describe('the test edit lock', () => {
     const redis = new FakeRedis();
     await take(redis, PRIYA);
 
-    redis.advanceSeconds(TEST_EDIT_LOCK_TTL_SEC + 1);
+    redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
 
     assert.equal(await take(redis, RAVI), null);
   });

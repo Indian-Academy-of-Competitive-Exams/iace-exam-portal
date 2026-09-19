@@ -11,15 +11,20 @@ import {
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
-import { makeStage, resetDatabase, testPrisma, uid } from './support/database';
+import { EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
+import { type Editor } from '../src/common/edit-lock';
+import { FakeRedis } from '../test/support/fakes';
+import { makeAdmin, makeStage, resetDatabase, testPrisma, uid } from './support/database';
 
 const ADMIN = uid();
 
 const prisma = testPrisma();
+const redis = new FakeRedis();
 const service = new BaseConfigsService(
   prisma,
   new ExamStagesService(prisma, new AuditContext()),
   new AuditContext(),
+  redis.asService(),
 );
 
 beforeEach(() => resetDatabase(prisma));
@@ -469,5 +474,136 @@ describe('BaseConfigsService — clone to evolve', () => {
     await service.update(clone.id, { durationSec: 7200 });
 
     assert.equal((await configRow(original)).durationSec, 3600);
+  });
+});
+
+const refused = async (attempt: Promise<unknown>) => {
+  const error = await attempt.catch((caught: unknown) => caught);
+  assert.ok(AppException.is(error));
+  return error;
+};
+
+const sectionNames = async (baseConfigId: string) =>
+  (
+    await prisma.baseConfigSection.findMany({
+      where: { baseConfigId },
+      orderBy: { order: 'asc' },
+      select: { name: true },
+    })
+  ).map((section) => section.name);
+
+/** One section per name, in the shape an editor posts — the whole paper, never a delta. */
+const sectionsNamed = (names: readonly string[]) =>
+  names.map((name, index) => ({
+    name,
+    order: index,
+    questionCount: 25,
+    marksPerQuestion: 2,
+    negativeMarks: 0.5,
+  }));
+
+const save = (id: string, names: readonly string[], expectedUpdatedAt: string, editor?: Editor) =>
+  service.update(
+    id,
+    { durationSec: 3600, sections: sectionsNamed(names), expectedUpdatedAt },
+    editor,
+  );
+
+describe('BaseConfigsService — two admins on one configuration', () => {
+  /** THE data loss: B's stale paper deleting the section A had just added, with no conflict shown. */
+  it('refuses the stale save, and the section the first admin added is still there', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const ravi = await makeAdmin(prisma, { fullName: 'Ravi' });
+
+    const added = await save(opened.id, ['A', 'B', 'C'], opened.updatedAt, { id: priya.id });
+    redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
+
+    const error = await refused(save(opened.id, ['A', 'B'], opened.updatedAt, { id: ravi.id }));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /changed this configuration/);
+    assert.deepEqual(await sectionNames(opened.id), ['A', 'B', 'C']);
+    assert.equal(added.totalQuestions, 75);
+  });
+
+  it('leaves the configuration exactly as it was when a race is lost', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+    await save(opened.id, ['A', 'B', 'C'], opened.updatedAt);
+    const won = await configRow(opened.id);
+
+    await refused(
+      service.update(opened.id, {
+        name: 'Renamed by the loser',
+        durationSec: 7200,
+        sections: sectionsNamed(['A']),
+        expectedUpdatedAt: opened.updatedAt,
+      }),
+    );
+
+    assert.deepEqual(await configRow(opened.id), won);
+  });
+
+  it('accepts the save that carries back what it opened', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+
+    const saved = await save(opened.id, ['A', 'B', 'C'], opened.updatedAt);
+
+    assert.deepEqual(await sectionNames(opened.id), ['A', 'B', 'C']);
+    assert.notEqual(saved.updatedAt, opened.updatedAt);
+  });
+
+  it('refuses the second admin by name before the work, not at the save', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const ravi = await makeAdmin(prisma, { fullName: 'Ravi' });
+
+    const held = await save(opened.id, ['A', 'B'], opened.updatedAt, { id: priya.id });
+    const error = await refused(save(opened.id, ['C'], held.updatedAt, { id: ravi.id }));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /Priya is editing this configuration/);
+    assert.deepEqual(await sectionNames(opened.id), ['A', 'B']);
+    assert.equal((await service.detail(opened.id)).editingBy?.fullName, 'Priya');
+  });
+
+  it('lets the admin holding it carry on', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+
+    const first = await save(opened.id, ['A', 'B'], opened.updatedAt, { id: priya.id });
+    await save(opened.id, ['A', 'B', 'C'], first.updatedAt, { id: priya.id });
+
+    assert.deepEqual(await sectionNames(opened.id), ['A', 'B', 'C']);
+  });
+
+  /** An admin who closed their laptop holding it is the lockout the override exists for. */
+  it('hands it to a super admin, and refuses the first admin after', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const ravi = await makeAdmin(prisma, { fullName: 'Ravi', isSuperAdmin: true });
+
+    const held = await save(opened.id, ['A', 'B'], opened.updatedAt, { id: priya.id });
+    const stolen = await save(opened.id, ['A', 'B', 'C'], held.updatedAt, {
+      id: ravi.id,
+      isSuperAdmin: true,
+    });
+
+    assert.deepEqual(await sectionNames(opened.id), ['A', 'B', 'C']);
+    const error = await refused(save(opened.id, ['A'], stolen.updatedAt, { id: priya.id }));
+    assert.match(error.message, /Ravi is editing this configuration/);
+  });
+
+  /** Deleting is a shape change nothing undoes, so it waits on whoever is mid-edit too. */
+  it('refuses a delete while another admin is editing', async () => {
+    const opened = await service.create(draft(await makeStage(prisma)), ADMIN);
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const ravi = await makeAdmin(prisma, { fullName: 'Ravi' });
+
+    await save(opened.id, ['A', 'B'], opened.updatedAt, { id: priya.id });
+    const error = await refused(service.remove(opened.id, { id: ravi.id }));
+
+    assert.match(error.message, /Priya is editing this configuration/);
+    assert.ok(await prisma.baseConfig.findUnique({ where: { id: opened.id } }));
   });
 });

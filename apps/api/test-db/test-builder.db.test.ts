@@ -57,8 +57,13 @@ async function builder() {
   });
   const events = new FakeEventBus();
   const audit = new AuditContext();
-  const configs = new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit);
   const redis = new FakeRedis().asService();
+  const configs = new BaseConfigsService(
+    prisma,
+    new ExamStagesService(prisma, audit),
+    audit,
+    redis,
+  );
   const tests = new TestsService(prisma, configs, audit, events.asService(), redis);
   const paper = new PaperService(
     prisma,

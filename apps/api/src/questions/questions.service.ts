@@ -27,6 +27,7 @@ import {
   type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
+import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -283,7 +284,7 @@ export class QuestionsService {
       where: { id, updatedAt: question.updatedAt },
       data: this.columnsOf(draft, built),
     });
-    if (claimed.count !== 1) throw editedElsewhere();
+    if (claimed.count !== 1) throw questionEditedElsewhere();
 
     // Merged here, so what is compared below is exactly what would be written.
     const options = optionsWithIds(built, currentOptionsOf(question));
@@ -392,7 +393,7 @@ export class QuestionsService {
         where: { id, updatedAt: question.updatedAt },
         data: { status: body.status },
       });
-      if (claimed.count !== 1) throw editedElsewhere();
+      if (claimed.count !== 1) throw questionEditedElsewhere();
 
       return tx.question.findUniqueOrThrow({ where: { id }, include: QUESTION_INCLUDE });
     });
@@ -424,7 +425,7 @@ export class QuestionsService {
         where: { id, updatedAt: before.updatedAt },
         data: { currentVersionId: null },
       });
-      if (claimed.count !== 1) throw editedElsewhere();
+      if (claimed.count !== 1) throw questionEditedElsewhere();
 
       if (await this.isUsed(tx, id)) throw stillInUse('deleted');
 
@@ -671,7 +672,7 @@ function assertIntakeStatus(status: QuestionStatus | undefined): void {
 function assertScreenIsCurrent(before: QuestionRow, draft: QuestionDraft): void {
   const expected = draft.expectedUpdatedAt;
   if (expected === undefined || expected === before.updatedAt.toISOString()) return;
-  throw editedElsewhere();
+  throw questionEditedElsewhere();
 }
 
 /** A draft was never in circulation, so retiring it would only be a way to publish it unreviewed. */
@@ -707,12 +708,8 @@ const stillInUse = (what: string) =>
     'Something already uses this question',
   );
 
-/** Someone else moved the row between reading it and writing it; the save is not silently applied. */
-const editedElsewhere = () =>
-  refused(
-    'Somebody else changed this question while you were working on it. Open it again.',
-    'This question changed while you were editing it',
-  );
+/** The shared stale-save refusal, on `status` — the field a question's decisions already ride. */
+const questionEditedElsewhere = () => editedElsewhere(EDIT_SUBJECTS.QUESTION, 'status');
 
 const refused = (message: string, note: string, field = 'status') =>
   new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { [field]: [note] } });
