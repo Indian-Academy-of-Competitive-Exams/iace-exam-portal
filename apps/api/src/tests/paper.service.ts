@@ -36,7 +36,7 @@ import {
   type DrawSection,
 } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
-import { thaw } from './thaw';
+import { beginPaperEdit } from './begin-paper-edit';
 import { DRAWABLE_QUESTION, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
@@ -163,7 +163,7 @@ export class PaperService {
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
-      await thaw(tx, test);
+      await beginPaperEdit(tx, test);
       await tx.paperQuestion.createMany({
         data: questions.map((question, index) => ({
           testId,
@@ -206,7 +206,7 @@ export class PaperService {
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
-      await thaw(tx, test);
+      await beginPaperEdit(tx, test);
       await tx.paperQuestion.createMany({
         data: added.map((row, index) => ({
           ...row,
@@ -293,7 +293,7 @@ export class PaperService {
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
     await this.prisma.$transaction(async (tx) => {
-      await thaw(tx, test);
+      await beginPaperEdit(tx, test);
       await tx.paperQuestion.update({
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
@@ -322,7 +322,7 @@ export class PaperService {
     );
 
     await this.prisma.$transaction(async (tx) => {
-      await thaw(tx, test);
+      await beginPaperEdit(tx, test);
       await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
     });
 

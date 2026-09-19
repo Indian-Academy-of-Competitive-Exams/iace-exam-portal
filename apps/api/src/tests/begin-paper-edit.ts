@@ -1,8 +1,14 @@
 import { Prisma } from '@prisma/client';
 import { unfreezing } from './test-rules';
 
-/** Takes the Test lock every paper edit orders on, then undoes a finalize and the `fixedUseCount` it added. */
-export async function thaw(
+// Every paper edit starts here, and it does three things nothing else is left holding:
+//   1. takes the Test lock, so the whole app orders Test before Question and cannot deadlock
+//      against a question edit, which reaches Test through question_version_sat_guard;
+//   2. thaws a frozen paper, because an edit invalidates the freeze it was finalized under;
+//   3. gives back the fixedUseCount finalize added, or a refreeze would count every question twice.
+// The lock is taken BEFORE the isLocked check: an unfrozen test still has to order with the rest.
+
+export async function beginPaperEdit(
   tx: Prisma.TransactionClient,
   test: { id: string; isLocked: boolean },
 ): Promise<void> {

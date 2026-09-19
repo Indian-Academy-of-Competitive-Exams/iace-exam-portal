@@ -36,7 +36,7 @@ import {
   titleRefused,
   testDeletionBlocker,
 } from './test-rules';
-import { thaw } from './thaw';
+import { beginPaperEdit } from './begin-paper-edit';
 
 const TEST_INCLUDE = {
   baseConfig: {
@@ -188,7 +188,7 @@ export class TestsService {
     this.assertCovers(config, scope, scopeRef);
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (thawsThePaper(input)) await thaw(tx, test);
+      if (thawsThePaper(input)) await beginPaperEdit(tx, test);
       // A picked test has no typist, and a row nobody will finalize would hold `offer` shut forever.
       if (input.paperSource === PAPER_SOURCES.PICKED) {
         await tx.questionAssignment.deleteMany({
