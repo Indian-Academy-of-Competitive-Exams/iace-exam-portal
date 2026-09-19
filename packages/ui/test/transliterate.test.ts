@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { ScaffoldDocument, ScaffoldRegionNode } from '../src/components/ui/scaffold-region';
 import {
   INDIC_SCRIPTS,
   Transliterate,
@@ -63,6 +64,17 @@ function type(editor: Editor, text: string): void {
   }
 }
 
+/** Backspace reaches the plugin through handleKeyDown, which jsdom never fires on its own. */
+function backspace(editor: Editor): void {
+  const handled = editor.view.someProp('handleKeyDown', (handler) =>
+    handler(editor.view, new KeyboardEvent('keydown', { key: 'Backspace' })),
+  );
+  if (!handled) {
+    const { from } = editor.state.selection;
+    editor.view.dispatch(editor.state.tr.delete(from - 1, from));
+  }
+}
+
 const box = () => new Editor({ extensions: [StarterKit, Transliterate], content: '<p></p>' });
 
 describe('the script the box is typing in', () => {
@@ -108,5 +120,131 @@ describe('the script the box is typing in', () => {
     writeIn(editor.view, INDIC_SCRIPTS.TELUGU);
     type(editor, 'prashna ');
     assert.equal(editor.getText(), 'प्रश्न ప్రశ్న ');
+  });
+});
+
+describe('the word being written, before any space is typed', () => {
+  it('shows the script from the first letter rather than waiting for a boundary', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, 'namaste');
+    assert.equal(editor.getText(), 'नमस्ते');
+  });
+
+  /** The reason the word is rewritten whole: `d`, `dh` and `dha` are three different letters. */
+  it('rewrites what came before when a letter changes it', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, 'd');
+    assert.equal(editor.getText(), 'द');
+    type(editor, 'h');
+    assert.equal(editor.getText(), 'ध');
+    type(editor, 'anyavaad');
+    assert.equal(editor.getText(), 'धन्यवाद');
+  });
+
+  it('writes Telugu the same way', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.TELUGU);
+    type(editor, 'prashna');
+    assert.equal(editor.getText(), 'ప్రశ్న');
+  });
+
+  it('starts a new word after a boundary', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, 'namaste prashn');
+    assert.equal(editor.getText(), 'नमस्ते प्रश्न');
+  });
+
+  /** Backspace takes back a LETTER TYPED, not a script character — several map to one. */
+  it('takes back the letter that was typed, not the one on screen', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, 'dh');
+    assert.equal(editor.getText(), 'ध');
+    backspace(editor);
+    assert.equal(editor.getText(), 'द');
+    type(editor, 'in');
+    assert.equal(editor.getText(), 'दिन');
+  });
+
+  it('empties the box when the whole word is taken back', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, 'na');
+    backspace(editor);
+    backspace(editor);
+    assert.equal(editor.getText(), '');
+  });
+});
+
+describe('a formula is not a word', () => {
+  /** The bug: `$x$` is plain text until the closing dollar, so Hindi rewrote the LaTeX. */
+  it('leaves an unclosed inline formula in Roman letters', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, '$x = at');
+    assert.equal(editor.getText(), '$x = at');
+  });
+
+  it('leaves an unclosed block formula alone too', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, '$$x^2 + na');
+    assert.equal(editor.getText(), '$$x^2 + na');
+  });
+
+  it('writes the script again once the formula is closed', () => {
+    const editor = box();
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    type(editor, '$x$ namaste');
+    assert.equal(editor.getText(), '$x$ नमस्ते');
+  });
+});
+
+/** The same node stack ScaffoldEditor builds, so a slot's own attributes reach the plugin. */
+const slots = (html: string) =>
+  new Editor({
+    extensions: [
+      StarterKit.configure({ document: false }),
+      ScaffoldDocument,
+      ScaffoldRegionNode,
+      Transliterate,
+    ],
+    content: html,
+  });
+
+/** A slot nests its body in a div, so the plain text comes back with the block breaks around it. */
+const said = (editor: Editor) => editor.getText().trim();
+
+const REGION = (key: string, roman: boolean) =>
+  `<div data-region="${key}" data-label="${key}" data-kind="named" data-roman="${roman ? 'true' : ''}">` +
+  `<div class="scaffold-body"><p></p></div></div>`;
+
+describe('a slot that holds a value rather than prose', () => {
+  /** The bug: `B` became ब, answerIndexOf matched neither a letter nor a digit, and the key was lost. */
+  it('leaves the answer line in Roman letters whatever script is chosen', () => {
+    const editor = slots(REGION('answer', true));
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    editor.commands.focus('start');
+    type(editor, 'B');
+    assert.equal(said(editor), 'B');
+  });
+
+  it('leaves it in Roman letters in Telugu too', () => {
+    const editor = slots(REGION('answer', true));
+    writeIn(editor.view, INDIC_SCRIPTS.TELUGU);
+    editor.commands.focus('start');
+    type(editor, 'C');
+    assert.equal(said(editor), 'C');
+  });
+
+  it('still writes the script in a slot that holds prose', () => {
+    const editor = slots(REGION('solution', false));
+    writeIn(editor.view, INDIC_SCRIPTS.DEVANAGARI);
+    editor.commands.focus('start');
+    type(editor, 'namaste');
+    assert.equal(said(editor), 'नमस्ते');
   });
 });

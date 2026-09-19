@@ -30,6 +30,8 @@ export interface ScaffoldRegion {
   kind?: RegionKind;
   /** What goes here, said in the slot while it is empty. A rule or a format, never a description. */
   hint?: string;
+  /** Holds a value rather than prose, so it stays in Roman letters whatever script is chosen. */
+  roman?: boolean;
 }
 
 export interface ScaffoldEditorProps {
@@ -75,7 +77,8 @@ function docFrom(regions: readonly ScaffoldRegion[]): string {
       (region) =>
         `<div data-region="${escape(region.key)}" data-label="${escape(region.label)}"` +
         ` data-kind="${escape(region.kind ?? REGION_KIND.PLAIN)}"` +
-        ` data-hint="${escape(region.hint ?? '')}">` +
+        ` data-hint="${escape(region.hint ?? '')}"` +
+        ` data-roman="${region.roman ? 'true' : ''}">` +
         `<div class="scaffold-body">${region.html || '<p></p>'}</div></div>`,
     )
     .join('');
@@ -94,6 +97,7 @@ export function regionsOf(editor: Editor): ScaffoldRegion[] {
       key: String(node.attrs.key ?? ''),
       label: String(node.attrs.label ?? ''),
       kind: String(node.attrs.kind ?? REGION_KIND.PLAIN) as RegionKind,
+      roman: node.attrs.roman === 'true',
       html: holder.innerHTML === '<p></p>' ? '' : holder.innerHTML,
     });
   });

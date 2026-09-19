@@ -125,6 +125,7 @@ export function regionsFor(state: AuthoringState, language: QuestionLanguage): S
       label: REGION_LABELS.ANSWER,
       kind: REGION_KIND.NAMED,
       hint: ANSWER_HINTS[state.type],
+      roman: true,
       html: state.answer,
     },
     {

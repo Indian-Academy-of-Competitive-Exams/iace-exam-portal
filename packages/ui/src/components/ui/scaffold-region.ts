@@ -92,6 +92,7 @@ export const ScaffoldRegionNode = Node.create({
       label: attribute('label', 'data-label'),
       kind: { ...attribute('kind', 'data-kind'), default: REGION_KIND.PLAIN },
       hint: attribute('hint', 'data-hint'),
+      roman: attribute('roman', 'data-roman'),
     };
   },
 
