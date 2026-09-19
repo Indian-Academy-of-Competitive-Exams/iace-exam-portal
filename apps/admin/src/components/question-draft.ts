@@ -4,8 +4,6 @@ import {
   type DIFFICULTY_LEVELS,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
-  QUESTION_STATUS,
-  type QUESTION_STATUSES,
   QUESTION_TYPE,
   type QUESTION_TYPES,
   TAG_SEPARATOR,
@@ -25,7 +23,6 @@ export interface QuestionFormValues {
   subjectId: string;
   topicId: string;
   difficulty: (typeof DIFFICULTY_LEVELS)[number];
-  status: (typeof QUESTION_STATUSES)[number];
   questionCode: string;
   tags: string;
   correctOption: string;
@@ -45,7 +42,6 @@ export function emptyValues(): QuestionFormValues {
     subjectId: '',
     topicId: '',
     difficulty: 'MEDIUM',
-    status: QUESTION_STATUS.DRAFT,
     questionCode: '',
     tags: '',
     correctOption: '1',
@@ -85,7 +81,6 @@ export function valuesOf(question: QuestionDetail): QuestionFormValues {
     subjectId: question.subject.id,
     topicId: question.topic?.id ?? '',
     difficulty: question.difficulty,
-    status: question.status,
     questionCode: question.questionCode ?? '',
     tags: question.tags.join(`${TAG_SEPARATOR} `),
     correctOption: String(question.options.find((option) => option.isCorrect)?.position ?? 1),
@@ -117,7 +112,6 @@ export function toDraft(values: QuestionFormValues, saved?: QuestionDetail): Que
     subjectId: values.subjectId,
     topicId: values.topicId || null,
     difficulty: values.difficulty,
-    status: values.status,
     questionCode: values.questionCode.trim() || null,
     stem: filled(values.stem),
     solution: filled(values.solution),
@@ -152,7 +146,6 @@ export const SERVER_FIELDS = [
   'topicId',
   'difficulty',
   'type',
-  'status',
   'questionCode',
   'tags',
   'options',

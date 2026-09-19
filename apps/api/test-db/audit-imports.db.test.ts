@@ -315,11 +315,8 @@ function questionSheet(...stems: string[]): Buffer {
   return Buffer.from([header, ...lines].join('\n'));
 }
 
-/** Previews the sheet and commits the run it opened, in the status given. */
-async function importQuestions(
-  status: typeof QUESTION_STATUS.DRAFT | typeof QUESTION_STATUS.ACTIVE,
-  ...stems: string[]
-) {
+/** Previews the sheet and commits the run it opened. */
+async function importQuestions(...stems: string[]) {
   await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
   const service = new QuestionImportService(
     prisma,
@@ -328,18 +325,14 @@ async function importQuestions(
   );
   await service.preview(questionSheet(...stems), ADMIN);
   const [log] = await importLogs();
-  const result = await service.commit(log?.id ?? '', status);
+  const result = await service.commit(log?.id ?? '');
   return { logId: log?.id ?? '', result };
 }
 
 describe('QuestionImportService.commit — the rows a question sheet leaves behind', () => {
   /** The failure this prevents: a thousand-question import nothing in the Activity tab can trace back. */
   it('writes one audit row per created question, pointing at the run, with no diff', async () => {
-    const { logId, result } = await importQuestions(
-      QUESTION_STATUS.DRAFT,
-      'What is 20% of 150?',
-      'What is 30% of 200?',
-    );
+    const { logId, result } = await importQuestions('What is 20% of 150?', 'What is 30% of 200?');
 
     assert.equal(result.created, 2);
     const questions = await prisma.question.findMany({ select: { id: true } });
@@ -368,21 +361,14 @@ describe('QuestionImportService.commit — the rows a question sheet leaves behi
   });
 });
 
-describe('QuestionImportService.commit — the status the run lands in', () => {
-  /** The failure this prevents: a 400-row sheet going live the moment it commits. */
-  it('writes every row in the status the run chose', async () => {
-    await importQuestions(QUESTION_STATUS.DRAFT, 'What is 20% of 150?', 'What is 30% of 200?');
+describe('QuestionImportService.commit — the status the rows land in', () => {
+  it('puts every imported row straight into the bank', async () => {
+    await importQuestions('What is 20% of 150?', 'What is 30% of 200?');
 
     const statuses = await prisma.question.findMany({ select: { status: true } });
     assert.deepEqual(
       statuses.map((row) => row.status),
-      [QUESTION_STATUS.DRAFT, QUESTION_STATUS.DRAFT],
+      [QUESTION_STATUS.ACTIVE, QUESTION_STATUS.ACTIVE],
     );
-  });
-
-  it('puts them straight into the bank when that is what was asked for', async () => {
-    await importQuestions(QUESTION_STATUS.ACTIVE, 'What is 20% of 150?');
-
-    assert.equal((await prisma.question.findFirstOrThrow()).status, QUESTION_STATUS.ACTIVE);
   });
 });

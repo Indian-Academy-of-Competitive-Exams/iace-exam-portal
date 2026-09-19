@@ -5,7 +5,6 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  QUESTION_FLAG_STATUS,
   QUESTION_SORTS,
   QUESTION_STATUS,
   TEST_STATUS,
@@ -18,12 +17,10 @@ import {
   type QuestionDetail,
   type QuestionDraft,
   type QuestionLanguage,
+  type QuestionStatus,
   type QuestionListQuery,
   type QuestionOption,
-  type QuestionStatus,
   type QuestionSummary,
-  type BulkQuestionStatusBody,
-  type BulkQuestionStatusResult,
   type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
@@ -54,7 +51,7 @@ import { taxonomyForIds } from './taxonomy-context';
 const QUESTION_INCLUDE = {
   subject: { select: { id: true, name: true } },
   topic: { select: { id: true, name: true } },
-  // The relation, not a second lookup: a page of drafts names its authors in one round trip.
+  // The relation, not a second lookup: a page of questions names its authors in one round trip.
   createdBy: { select: { id: true, fullName: true, email: true } },
   currentVersion: true,
   // Counted in the row's own query, so a page of questions costs one round trip, not one each.
@@ -62,7 +59,6 @@ const QUESTION_INCLUDE = {
     select: {
       paperQuestions: true,
       questionStats: true,
-      flags: { where: { status: QUESTION_FLAG_STATUS.OPEN } },
     },
   },
 } as const satisfies Prisma.QuestionInclude;
@@ -239,7 +235,7 @@ export class QuestionsService {
     return this.signed(toDetail(row));
   }
 
-  /** A draft still being written is revised in place; anything published gains a version instead. */
+  /** Rewritten in place while nothing reachable pins the version; anything else gains one. */
   async update(
     id: string,
     draft: QuestionDraft,
@@ -274,7 +270,6 @@ export class QuestionsService {
     const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
     await this.assertTaxonomySettled(tx, question, draft);
-    await this.assertStatusReachable(tx, id, question.status, draft.status);
 
     // One order everywhere, Test before Question: finalize and thaw take the test first too.
     await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" IN (SELECT "testId" FROM "PaperQuestion" WHERE "questionId" = ${id}::uuid) ORDER BY "id" FOR UPDATE`;
@@ -296,7 +291,7 @@ export class QuestionsService {
     });
   }
 
-  /** A save that says the same thing writes no version, and puts no new hand on a draft. */
+  /** A save that says the same thing writes no version, and puts no new hand on the row. */
   private async versionFor(
     tx: Prisma.TransactionClient,
     question: QuestionRow,
@@ -386,8 +381,6 @@ export class QuestionsService {
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
     const question = await this.require(id);
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.assertStatusReachable(tx, id, question.status, body.status);
-
       // Pinned, so a decision made against a status somebody has since changed is refused.
       const claimed = await tx.question.updateMany({
         where: { id, updatedAt: question.updatedAt },
@@ -436,21 +429,6 @@ export class QuestionsService {
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
 
-  /** Where a question may go: back to a working copy only while nothing has come to depend on it. */
-  private async assertStatusReachable(
-    tx: Prisma.TransactionClient,
-    id: string,
-    from: QuestionStatus,
-    to: QuestionStatus | undefined,
-  ): Promise<void> {
-    assertWasInCirculation(from, to);
-    if (to === QUESTION_STATUS.ACTIVE && from !== QUESTION_STATUS.ACTIVE) {
-      await this.assertFlagsSettled(tx, id);
-    }
-    if (to !== QUESTION_STATUS.DRAFT || from === QUESTION_STATUS.DRAFT) return;
-    if (await this.isUsed(tx, id)) throw stillInUse('returned to draft');
-  }
-
   /** Being depended on is what settles taxonomy, not being published — a drawn row carries no subject. */
   private async assertTaxonomySettled(
     tx: Prisma.TransactionClient,
@@ -465,14 +443,6 @@ export class QuestionsService {
       'Something already uses this question',
       'subjectId',
     );
-  }
-
-  /** A reviewer's outstanding objection outranks an approval, whichever screen the approval came from. */
-  private async assertFlagsSettled(tx: Prisma.TransactionClient, id: string): Promise<void> {
-    const open = await tx.questionFlag.count({
-      where: { questionId: id, status: QUESTION_FLAG_STATUS.OPEN },
-    });
-    if (open > 0) throw stillFlagged(open);
   }
 
   /** Every table that keys on the question, so the rule refuses before a foreign key does. */
@@ -491,68 +461,6 @@ export class QuestionsService {
     return this.anyUsed(tx, [questionId]);
   }
 
-  /** The same gate over a batch, counted by QUESTION: one flagged row refuses the whole decision. */
-  private async assertBatchFlagsSettled(
-    tx: Prisma.TransactionClient,
-    ids: string[],
-  ): Promise<void> {
-    const flagged = await tx.question.count({
-      where: {
-        id: { in: ids },
-        status: { not: QUESTION_STATUS.ACTIVE },
-        flags: { some: { status: QUESTION_FLAG_STATUS.OPEN } },
-      },
-    });
-    if (flagged > 0) throw batchStillFlagged(flagged);
-  }
-
-  /** One decision over many rows: one statement, so a half-applied batch is not a state. */
-  async bulkSetStatus(body: BulkQuestionStatusBody): Promise<BulkQuestionStatusResult> {
-    const ids = [...new Set(body.ids)];
-
-    // Checked and applied together, so a row that changes underneath is not half-decided.
-    const { count } = await this.prisma.$transaction(async (tx) => {
-      await this.assertBatchCanMove(tx, ids, body.status);
-      return tx.question.updateMany({ where: { id: { in: ids } }, data: { status: body.status } });
-    });
-
-    // The row is the batch, not any one question — the interceptor has no :id to fall back on.
-    this.auditContext.setEntityId(`${count} questions`);
-    // A batch has many befores, so the trail records the decision rather than inventing one.
-    this.auditContext.setChanged({ status: { from: 'many', to: body.status } });
-
-    return { updated: count };
-  }
-
-  /** A batch is one decision, so one row that cannot make the move refuses all of it. */
-  private async assertBatchCanMove(
-    tx: Prisma.TransactionClient,
-    ids: string[],
-    status: QuestionStatus,
-  ): Promise<void> {
-    if (status === QUESTION_STATUS.ACTIVE) await this.assertBatchFlagsSettled(tx, ids);
-    if (status === QUESTION_STATUS.ARCHIVED) {
-      const drafts = await tx.question.findMany({
-        where: { id: { in: ids }, status: QUESTION_STATUS.DRAFT },
-        select: { id: true },
-      });
-      if (drafts[0]) assertWasInCirculation(QUESTION_STATUS.DRAFT, status);
-    }
-    if (status !== QUESTION_STATUS.DRAFT) return;
-
-    const leaving = await tx.question.findMany({
-      where: { id: { in: ids }, status: { not: QUESTION_STATUS.DRAFT } },
-      select: { id: true },
-    });
-    if (
-      await this.anyUsed(
-        tx,
-        leaving.map((row) => row.id),
-      )
-    )
-      throw stillInUse('returned to draft');
-  }
-
   /** The columns a draft decides — identity and taxonomy only; content lives in the version. */
   private columnsOf(draft: QuestionDraft, built: ReturnType<typeof buildContent>) {
     return {
@@ -560,7 +468,7 @@ export class QuestionsService {
       subjectId: draft.subjectId,
       topicId: draft.topicId ?? null,
       difficulty: draft.difficulty,
-      // Omitted means "leave it": DRAFT on create, and an archived question stays archived.
+      // Omitted means "leave it": ACTIVE on create, and an archived question stays archived.
       ...(draft.status === undefined ? {} : { status: draft.status }),
       questionCode: draft.questionCode ?? null,
       tags: draft.tags,
@@ -665,7 +573,7 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
 /** ARCHIVED is a retirement, so nothing arrives in it — the one status a question cannot start in. */
 function assertIntakeStatus(status: QuestionStatus | undefined): void {
   if (status !== QUESTION_STATUS.ARCHIVED) return;
-  throw refused('A question cannot be created as archived.', 'Create it as a draft or as active');
+  throw refused('A question cannot be created as archived.', 'Create it as active, then retire it');
 }
 
 /** A form open since before somebody else's save would write its stale fields over theirs. */
@@ -674,32 +582,6 @@ function assertScreenIsCurrent(before: QuestionRow, draft: QuestionDraft): void 
   if (expected === undefined || expected === before.updatedAt.toISOString()) return;
   throw questionEditedElsewhere();
 }
-
-/** A draft was never in circulation, so retiring it would only be a way to publish it unreviewed. */
-function assertWasInCirculation(from: QuestionStatus, to: QuestionStatus | undefined): void {
-  if (to !== QUESTION_STATUS.ARCHIVED || from !== QUESTION_STATUS.DRAFT) return;
-  throw refused(
-    'A draft was never in circulation. Delete it instead, or publish it first.',
-    'This question is still a draft',
-  );
-}
-
-/** Settling the flag lifts the block; nothing here changes a status on its own. */
-const stillFlagged = (open: number) =>
-  refused(
-    open === 1
-      ? 'This question has 1 open proof-reading flag. Resolve or dismiss it before it can go active.'
-      : `This question has ${open} open proof-reading flags. Resolve or dismiss them before it can go active.`,
-    'Open proof-reading flags',
-  );
-
-const batchStillFlagged = (flagged: number) =>
-  refused(
-    flagged === 1
-      ? '1 of these questions has open proof-reading flags. Resolve or dismiss them before it can go active.'
-      : `${flagged} of these questions have open proof-reading flags. Resolve or dismiss them before they can go active.`,
-    'Open proof-reading flags',
-  );
 
 /** Back to a working copy only while it is nobody's question but its author's. */
 const stillInUse = (what: string) =>
@@ -824,7 +706,6 @@ function toSummary(row: QuestionRow): QuestionSummary {
       ? { id: row.createdBy.id, name: row.createdBy.fullName ?? row.createdBy.email }
       : null,
     inUse: isReferenced(row),
-    openFlags: row._count.flags,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

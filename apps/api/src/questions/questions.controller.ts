@@ -22,15 +22,12 @@ import {
   questionDraftSchema,
   QUESTION_IMAGE_FILE_FIELD,
   QUESTION_IMAGE_MAX_BYTES,
-  bulkQuestionStatusSchema,
   questionAvailabilityQuerySchema,
   questionListQuerySchema,
   setQuestionStatusSchema,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
-  type BulkQuestionStatusBody,
-  type BulkQuestionStatusResult,
   type QuestionImage,
   type QuestionAvailability,
   type QuestionAvailabilityQuery,
@@ -83,16 +80,6 @@ export class QuestionsController {
   )
   uploadImage(@UploadedFile() file?: UploadedFileLike): Promise<QuestionImage> {
     return this.questions.saveImage(file);
-  }
-
-  /** Before `:id`, or "status" is read as a question id. */
-  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch('status')
-  bulkSetStatus(
-    @Body(new ZodBody(bulkQuestionStatusSchema)) body: BulkQuestionStatusBody,
-  ): Promise<BulkQuestionStatusResult> {
-    return this.questions.bulkSetStatus(body);
   }
 
   /** Before `:id`, or the word "availability" is read as a question's id. */

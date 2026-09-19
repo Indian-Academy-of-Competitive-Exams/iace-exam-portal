@@ -4,7 +4,6 @@
  * already fold. Reads cross the table-ownership map without writing (docs/03 §4).
  */
 import { Injectable } from '@nestjs/common';
-import { QuestionFlagStatus } from '@prisma/client';
 import {
   DASHBOARD_FEED_ROWS,
   DASHBOARD_RECENT_TESTS,
@@ -106,14 +105,18 @@ export class DashboardService {
   }
 
   private async bank(): Promise<DashboardBank> {
-    const [openFlags, coverage] = await Promise.all([this.openFlags(), this.coverage()]);
+    const [openAssignments, coverage] = await Promise.all([
+      this.openAssignments(),
+      this.coverage(),
+    ]);
 
-    // Omitted at zero, so the tile stays absent until proof-reading has raised a flag to act on.
-    return { coverage, ...(openFlags > 0 ? { openFlags } : {}) };
+    // Omitted at zero, so the tile stays absent until a section is actually waiting on somebody.
+    return { coverage, ...(openAssignments > 0 ? { openAssignments } : {}) };
   }
 
-  private openFlags(): Promise<number> {
-    return this.prisma.questionFlag.count({ where: { status: QuestionFlagStatus.OPEN } });
+  /** "Under review" is derived, never stored: an assignment nobody has finalised is work still owed. */
+  private openAssignments(): Promise<number> {
+    return this.prisma.questionAssignment.count({ where: { finalizedAt: null } });
   }
 
   private async coverage(): Promise<DashboardCoverage[]> {

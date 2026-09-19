@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import {
   ANSWER_MODE,
   DEFAULT_LANGUAGE,
-  QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
   canonicalStemKey,
   hasText,
@@ -125,5 +124,4 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
 export const DRAWABLE_QUESTION = {
   status: { not: QUESTION_STATUS.ARCHIVED },
   currentVersionId: { not: null },
-  flags: { none: { status: QUESTION_FLAG_STATUS.OPEN } },
 } as const satisfies Prisma.QuestionWhereInput;

@@ -37,7 +37,6 @@ export function AuthoringHeaderBar({
   language,
   counter,
   actions,
-  disabled,
   onHeaderChange,
   onStateChange,
   onLanguageChange,
@@ -48,7 +47,6 @@ export function AuthoringHeaderBar({
   /** Which question of this batch is in the box — a value, not a label. */
   counter: string;
   actions: React.ReactNode;
-  disabled: boolean;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
   onLanguageChange: (next: QuestionLanguage) => void;
@@ -61,7 +59,6 @@ export function AuthoringHeaderBar({
         <SubjectPicker
           value={header.subjectId}
           placeholder="Choose a subject"
-          disabled={disabled}
           className={CONTROL}
           aria-label="Subject"
           onChange={(subjectId) => onHeaderChange({ ...header, subjectId, topicId: '' })}
@@ -74,7 +71,6 @@ export function AuthoringHeaderBar({
           subjectId={header.subjectId}
           placeholder="Any topic"
           clearable
-          disabled={disabled}
           className={CONTROL}
           aria-label="Topic"
           onChange={(topicId) => onHeaderChange({ ...header, topicId })}
@@ -84,7 +80,6 @@ export function AuthoringHeaderBar({
       <Slot caption="Tags">
         <Input
           value={header.tags}
-          disabled={disabled}
           placeholder="ssc, time and work"
           aria-label="Tags"
           className={cn(FIELD, 'w-auto min-w-40 max-w-56')}
@@ -95,7 +90,6 @@ export function AuthoringHeaderBar({
       <Slot caption="Difficulty">
         <Combobox
           value={header.difficulty}
-          disabled={disabled}
           clearable={false}
           className={CONTROL}
           aria-label="Difficulty"
@@ -107,7 +101,6 @@ export function AuthoringHeaderBar({
       <Slot caption="Type">
         <Combobox
           value={state.type}
-          disabled={disabled}
           clearable={false}
           className={CONTROL}
           aria-label="Type"
@@ -123,7 +116,6 @@ export function AuthoringHeaderBar({
         <Slot caption="Options">
           <SegmentedControl
             value={String(state.optionCount)}
-            disabled={disabled}
             aria-label="How many options"
             items={OPTION_COUNTS.map((count) => ({ value: String(count), label: String(count) }))}
             onChange={(value) => onStateChange(withOptionCount(state, Number(value)))}
@@ -135,7 +127,6 @@ export function AuthoringHeaderBar({
         <Slot caption="Answer match">
           <Combobox
             value={state.answerMode}
-            disabled={disabled}
             clearable={false}
             className={CONTROL}
             aria-label="Answer match"
@@ -151,7 +142,6 @@ export function AuthoringHeaderBar({
         <Slot caption="Tolerance">
           <Input
             value={state.tolerance}
-            disabled={disabled}
             inputMode="decimal"
             aria-label="Tolerance"
             className={cn(FIELD, 'w-24')}

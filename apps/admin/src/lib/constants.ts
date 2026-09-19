@@ -2,9 +2,7 @@ import {
   BookOpen,
   Building2,
   PenLine,
-  CheckCheck,
   ClipboardList,
-  FileText,
   FolderTree,
   GraduationCap,
   History,
@@ -39,8 +37,6 @@ import {
   type MeritType,
   type AnswerMode,
   type NavigationPolicy,
-  type QuestionFlagCategory,
-  type QuestionFlagStatus,
   type QuestionStatus,
   type QuestionType,
   PERFORMANCE_SCOPES,
@@ -71,8 +67,6 @@ export const ROUTES = {
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
   QUESTION_NEW: '/questions/new',
-  QUESTION_APPROVALS: '/questions/approvals',
-  PROOFREADING: '/questions/proofreading',
   /** The reader's own queue, and one section under it — nested, so the trail reads off the nav. */
   PROOFREADING_ASSIGNMENTS: '/proofreading/assignments',
   PROOFREADING_SECTION: (assignmentId: string) => `/proofreading/assignments/${assignmentId}`,
@@ -152,40 +146,14 @@ export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
 
 /** What a question's state is called on screen. */
 export const QUESTION_STATUS_LABELS: Readonly<Record<QuestionStatus, string>> = {
-  DRAFT: 'Draft',
   ACTIVE: 'Active',
   ARCHIVED: 'Archived',
 };
 
-/** Live reads as live; waiting and retired both read as quiet. */
+/** Live reads as live; retired reads as quiet. */
 export const QUESTION_STATUS_VARIANT: Readonly<Record<QuestionStatus, 'neutral' | 'success'>> = {
-  DRAFT: 'neutral',
   ACTIVE: 'success',
   ARCHIVED: 'neutral',
-};
-
-/** What a proof-reader is calling out. The enum's own words, cased for reading. */
-export const QUESTION_FLAG_CATEGORY_LABELS: Readonly<Record<QuestionFlagCategory, string>> = {
-  AWKWARD: 'Awkward wording',
-  INVALID: 'Invalid',
-  TOO_DIFFICULT: 'Too difficult',
-  INSUFFICIENT_DATA: 'Insufficient data',
-  OTHER: 'Other',
-};
-
-export const QUESTION_FLAG_STATUS_LABELS: Readonly<Record<QuestionFlagStatus, string>> = {
-  OPEN: 'Open',
-  RESOLVED: 'Resolved',
-  DISMISSED: 'Dismissed',
-};
-
-/** Open is what still costs somebody something; a settled flag is only history. */
-export const QUESTION_FLAG_STATUS_VARIANT: Readonly<
-  Record<QuestionFlagStatus, 'warning' | 'success' | 'neutral'>
-> = {
-  OPEN: 'warning',
-  RESOLVED: 'success',
-  DISMISSED: 'neutral',
 };
 
 /** Harder reads as more urgent, so a page of them scans by colour. */
@@ -412,19 +380,15 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
     children: [
       { to: ROUTES.QUESTIONS, label: 'All questions', icon: BookOpen },
-      { to: ROUTES.QUESTION_APPROVALS, label: 'Draft questions', icon: CheckCheck },
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
-  /** Its own section, on a key of its own: a reader reads the bank, and fixes the sections they hold. */
+  /** Its own section, on a key of its own: a reader holds sections, never the bank. */
   {
     label: 'Proof-reading',
     icon: SpellCheck,
     featureKey: FEATURE_KEYS.QUESTION_PROOFREAD,
-    children: [
-      { to: ROUTES.PROOFREADING, label: 'Reader', icon: FileText },
-      { to: ROUTES.PROOFREADING_ASSIGNMENTS, label: 'My sections', icon: ListChecks },
-    ],
+    children: [{ to: ROUTES.PROOFREADING_ASSIGNMENTS, label: 'My sections', icon: ListChecks }],
   },
   /** Its own section, on a key of its own: a typist gets this and not the bank above it. */
   {

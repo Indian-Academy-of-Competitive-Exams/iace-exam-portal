@@ -8,7 +8,6 @@ import {
   DIFFICULTY_LEVEL,
   ErrorCodes,
   PAPER_SOURCES,
-  QUESTION_FLAG_CATEGORY,
   QUESTION_STATUS,
   TEST_SCOPE,
 } from '@iace/contracts';
@@ -137,17 +136,6 @@ const heldIds = async () => (await rows()).map((row) => row.questionId);
 /** Somebody has started sitting it, which is what shuts a paper to editing. */
 const sat = async () =>
   makeSitting(prisma, { testId: TEST, studentId: (await makeStudent(prisma)).id, score: 0 });
-
-/** A proof-reader's outstanding objection, which is what takes a question out of the draw. */
-const flagged = (questionId: string) =>
-  prisma.questionFlag.create({
-    data: {
-      questionId,
-      category: QUESTION_FLAG_CATEGORY.INVALID,
-      comment: 'The answer key is wrong.',
-      raisedById: randomUUID(),
-    },
-  });
 
 const refused = async (attempt: Promise<unknown>) => {
   const error = await attempt.catch((caught: unknown) => caught);
@@ -278,23 +266,6 @@ describe('PaperService — picking a draft paper by hand', () => {
 
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
-
-  /** Promotion to ACTIVE used to be the only way onto a paper, and it is what checked the flags. */
-  it('refuses a question carrying an open proof-reading flag, naming the flag', async () => {
-    const service = await serviceWith();
-    await flagged(idFor('q1'));
-
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('q1')],
-      }),
-    );
-
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.match(error.message, /open proof-reading flag/);
-    assert.deepEqual(await heldIds(), []);
-  });
 });
 
 describe('PaperService — putting several questions on a section in one request', () => {
@@ -412,13 +383,13 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.deepEqual(idsOf(paper, idFor('sec_2')), [idFor('q1')]);
   });
 
-  /** A DRAFT question is drawable now; only ARCHIVED, or nothing to pin, keeps one out. */
+  /** Only ARCHIVED, or nothing to pin, keeps a question out of the draw. */
   it('draws from any question not archived, that carries a version', async () => {
     const service = await serviceWith({
       questions: [
         ...bank(3, BUILDER.REASONING, 'r'),
         ...bank(1, BUILDER.QUANT, 'q'),
-        { id: idFor('draft'), subjectId: BUILDER.QUANT, status: QUESTION_STATUS.DRAFT },
+        { id: idFor('spare'), subjectId: BUILDER.QUANT },
         { id: idFor('archived'), subjectId: BUILDER.QUANT, status: QUESTION_STATUS.ARCHIVED },
         { id: idFor('unversioned'), subjectId: BUILDER.QUANT, versioned: false },
       ],
@@ -428,7 +399,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
 
     assert.deepEqual(
       [...idsOf(paper, idFor('sec_2'))].sort(),
-      [idFor('q1'), idFor('draft')].sort(),
+      [idFor('q1'), idFor('spare')].sort(),
     );
   });
 
@@ -579,23 +550,6 @@ describe('PaperService — filling a section’s remainder from its own spec', (
       /Reasoning needs 3, and the bank holds 2/,
     );
     assert.deepEqual(await heldIds(), [idFor('r1')]);
-  });
-
-  /** The draw runs on not-ARCHIVED now, so an open flag is the only thing left between it and a student. */
-  it('leaves a question carrying an open proof-reading flag out of the pool', async () => {
-    const service = await serviceWith({
-      questions: [...bank(3, BUILDER.REASONING, 'r'), ...bank(6, BUILDER.QUANT, 'q')],
-    });
-    await flagged(idFor('r3'));
-
-    const error = await refused(service.fillSection(TEST, idFor('sec_1')));
-
-    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
-    assert.match(
-      error.fieldErrors?.[idFor('sec_1')]?.[0] ?? '',
-      /Reasoning needs 3, and the bank holds 2/,
-    );
-    assert.deepEqual(await heldIds(), []);
   });
 
   it('refuses a test a student has already sat', async () => {

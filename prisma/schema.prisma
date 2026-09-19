@@ -51,7 +51,6 @@ enum AnswerMode {
 }
 
 enum QuestionStatus {
-  DRAFT
   ACTIVE
   ARCHIVED
 }
@@ -442,7 +441,7 @@ model Question {
   subjectId        String          @db.Uuid
   topicId          String?         @db.Uuid
   difficulty       DifficultyLevel
-  status           QuestionStatus  @default(DRAFT)
+  status           QuestionStatus  @default(ACTIVE)
   currentVersionId String?         @db.Uuid
   // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
@@ -461,7 +460,6 @@ model Question {
   versions       QuestionVersion[]   @relation("QuestionVersions")
   paperQuestions PaperQuestion[]
   questionStats  TestQuestionStat[]
-  flags          QuestionFlag[]
   savedBy        SavedQuestion[]
   assignment     QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
@@ -474,7 +472,7 @@ model Question {
   @@index([tags], type: Gin)
 }
 
-// Immutable once REFERENCED: editing a DRAFT rewrites its row, any other edit inserts one.
+// Immutable once a reachable test pins it; until then an edit rewrites this row in place.
 // Options live in `options` so one read is the whole question on the exam path.
 model QuestionVersion {
   id          String   @id @default(uuid(7)) @db.Uuid
@@ -1184,20 +1182,6 @@ enum SavedQuestionKind {
   MISTAKE // auto-added because they answered it wrong
 }
 
-enum QuestionFlagCategory {
-  AWKWARD
-  INVALID
-  TOO_DIFFICULT
-  INSUFFICIENT_DATA
-  OTHER
-}
-
-enum QuestionFlagStatus {
-  OPEN
-  RESOLVED
-  DISMISSED
-}
-
 //A browser push endpoint. Pruned when a send returns 404/410 (dead subscription).
 model PushSubscription {
   id         String   @id @default(uuid(7)) @db.Uuid
@@ -1252,25 +1236,4 @@ model SavedQuestion {
 
   @@unique([studentId, questionId, kind])
   @@index([studentId, kind, createdAt])
-}
-
-//  A proof-reader's quality flag. An OPEN flag blocks the question from going ACTIVE
-// (enforced in questions.service assertStatusReachable). raisedById/resolvedById are Admin ids
-// (scalar by design, resolved by a separate lookup, so no lane needs to widen Admin).
-model QuestionFlag {
-  id           String               @id @default(uuid(7)) @db.Uuid
-  questionId   String               @db.Uuid
-  versionId    String?              @db.Uuid
-  category     QuestionFlagCategory
-  comment      String
-  status       QuestionFlagStatus   @default(OPEN)
-  raisedById   String               @db.Uuid
-  resolvedById String?              @db.Uuid
-  resolvedAt   DateTime?            @db.Timestamptz(3)
-  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
-
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-
-  @@index([questionId, status])
-  @@index([status, createdAt])
 }

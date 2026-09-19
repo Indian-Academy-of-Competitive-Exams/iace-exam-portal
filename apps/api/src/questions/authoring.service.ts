@@ -5,7 +5,6 @@ import {
   AUTHORING_HISTORY_DAYS,
   AUTHORING_TAG_SUGGESTIONS,
   ErrorCodes,
-  QUESTION_STATUS,
   QUESTION_STATUSES,
   QUESTION_SORTS,
   todayISO,
@@ -31,7 +30,6 @@ export class AuthoringService {
     private readonly questions: QuestionsService,
   ) {}
 
-  /** Always a DRAFT: promoting one into circulation is the question bank's decision, not this one. */
   async create(
     draft: QuestionDraft,
     adminId: string,
@@ -39,7 +37,7 @@ export class AuthoringService {
     isSuperAdmin = false,
   ): Promise<AuthoringSaveResult> {
     if (assignmentId) await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
-    const question = await this.questions.create(asDraftEntry(draft), adminId, {
+    const question = await this.questions.create(draft, adminId, {
       allowDuplicate: true,
       assignmentId,
     });
@@ -47,10 +45,8 @@ export class AuthoringService {
   }
 
   async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
-    await this.assertTheirOwnDraft(id, adminId);
-    const question = await this.questions.update(id, asDraftEntry(draft), adminId, {
-      allowDuplicate: true,
-    });
+    await this.assertTheirs(id, adminId);
+    const question = await this.questions.update(id, draft, adminId, { allowDuplicate: true });
     return { question, duplicateOf: await this.duplicateFor(draft, id) };
   }
 
@@ -71,9 +67,10 @@ export class AuthoringService {
     const firstDay = shiftInstituteDay(today, -(AUTHORING_HISTORY_DAYS - 1));
     const mine: Prisma.QuestionWhereInput = { createdById: adminId };
 
-    const [total, byStatusRows, counted] = await Promise.all([
+    const [total, byStatusRows, inReview, counted] = await Promise.all([
       this.prisma.question.count({ where: mine }),
       this.prisma.question.groupBy({ by: ['status'], where: mine, _count: true }),
+      this.prisma.question.count({ where: { ...mine, assignment: { finalizedAt: null } } }),
       this.countByDay(adminId, firstDay),
     ]);
 
@@ -88,7 +85,7 @@ export class AuthoringService {
       today: counted.get(today) ?? 0,
       lastSevenDays: lastSeven.reduce((sum, day) => sum + day.count, 0),
       total,
-      inReview: byStatus[QUESTION_STATUS.DRAFT] ?? 0,
+      inReview,
       byStatus,
       daily,
     };
@@ -126,23 +123,12 @@ export class AuthoringService {
   }
 
   /** Not theirs reads as not there: an author has no business learning what another one wrote. */
-  private async assertTheirs(id: string, adminId: string) {
+  private async assertTheirs(id: string, adminId: string): Promise<void> {
     const row = await this.prisma.question.findFirst({
       where: { id, createdById: adminId },
-      select: { id: true, status: true },
+      select: { id: true },
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-    return row;
-  }
-
-  private async assertTheirOwnDraft(id: string, adminId: string) {
-    const row = await this.assertTheirs(id, adminId);
-    if (row.status !== QUESTION_STATUS.DRAFT) {
-      throw new AppException(
-        ErrorCodes.CONFLICT,
-        'This question has left review. It is changed in the question bank now',
-      );
-    }
   }
 
   /** Not theirs reads as not there — unless a super admin, who takes up a section nobody holds. */
@@ -158,12 +144,6 @@ export class AuthoringService {
 }
 
 const SEVEN_DAYS = 7;
-
-/** Nothing typed here promotes a question: the status is the server's, not the screen's. */
-const asDraftEntry = (draft: QuestionDraft): QuestionDraft => ({
-  ...draft,
-  status: QUESTION_STATUS.DRAFT,
-});
 
 /** Every status when the reader named none: the bank hides the archived, a work record cannot. */
 function asBankQuery(query: AuthoringHistoryQuery): QuestionListQuery {

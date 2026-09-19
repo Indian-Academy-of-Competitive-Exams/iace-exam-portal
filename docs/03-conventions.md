@@ -118,8 +118,8 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 - `tests` reads `TestSeries` to take the mode a test is judged by — the series decides it, and it is
   denormalised onto `Test` so the composite foreign key holds the two together. Only the read
   crosses; the copy lands on the test's own row.
-- `dashboard` counts across `Student`, `Question`, `Test`, `TestSeries`, `Branch`, `Program`,
-  `Exam` and `QuestionFlag`, and reads the `TestStat` rollup. It writes nothing and is the admin
+- `dashboard` counts across `Student`, `Question`, `QuestionAssignment`, `Test`, `TestSeries`,
+  `Branch`, `Program` and `Exam`, and reads the `TestStat` rollup. It writes nothing and is the admin
   landing screen's read model: a facade call per table would be eight new count methods on eight
   modules, each existing for one screen. The audit feed, which has scoping rules of its own, does
   go through `AuditService`.
@@ -141,7 +141,7 @@ erodes.
 | branches      | `Branch`                                                                                                                                            |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                             |
 | events        | `Event`, `EventCandidate`                                                                                                                           |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `QuestionFlag`                                                                                   |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `QuestionAssignment`                                                                             |
 | configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                                          |
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                        |
 | attempts      | `Attempt`, `AttemptSheet`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |

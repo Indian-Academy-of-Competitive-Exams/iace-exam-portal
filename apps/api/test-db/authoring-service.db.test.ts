@@ -72,24 +72,16 @@ const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
 
 describe('AuthoringService.create', () => {
-  it('writes a DRAFT question and its first version, credited to the author', async () => {
+  it('writes the question and its first version, credited to the author', async () => {
     const authoring = await build();
 
     const { question } = await authoring.create(draft(), MINE);
 
-    assert.equal(question.status, QUESTION_STATUS.DRAFT);
+    assert.equal(question.status, QUESTION_STATUS.ACTIVE);
     assert.equal(question.version, 1);
     const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
     assert.equal(row.createdById, MINE);
     assert.equal(await prisma.questionVersion.count(), 1);
-  });
-
-  it('lands as a DRAFT even when the body asks for something else', async () => {
-    const authoring = await build();
-
-    const { question } = await authoring.create(draft({ status: QUESTION_STATUS.ACTIVE }), MINE);
-
-    assert.equal(question.status, QUESTION_STATUS.DRAFT);
   });
 
   it('reports a near-duplicate and writes it anyway, unlike the bank', async () => {
@@ -178,8 +170,8 @@ describe('AuthoringService.history', () => {
   it("shows the author their own work and nobody else's", async () => {
     const qstMine = randomUUID();
     const authoring = await build([
-      { id: qstMine, createdById: MINE, status: QUESTION_STATUS.DRAFT },
-      { id: randomUUID(), createdById: THEIRS, status: QUESTION_STATUS.DRAFT },
+      { id: qstMine, createdById: MINE },
+      { id: randomUUID(), createdById: THEIRS },
       { id: randomUUID() },
     ]);
 
@@ -194,7 +186,7 @@ describe('AuthoringService.history', () => {
 
   it('lists the archived too, which the bank hides — it is a record of what was written', async () => {
     const authoring = await build([
-      { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.DRAFT },
+      { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.ACTIVE },
       { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.ARCHIVED },
     ]);
 
@@ -204,11 +196,11 @@ describe('AuthoringService.history', () => {
   it('narrows to one state when the reader names one', async () => {
     const qst1 = randomUUID();
     const authoring = await build([
-      { id: qst1, createdById: MINE, status: QUESTION_STATUS.DRAFT },
+      { id: qst1, createdById: MINE, status: QUESTION_STATUS.ARCHIVED },
       { id: randomUUID(), createdById: MINE, status: QUESTION_STATUS.ACTIVE },
     ]);
 
-    const page = await authoring.history(query({ status: QUESTION_STATUS.DRAFT }), MINE);
+    const page = await authoring.history(query({ status: QUESTION_STATUS.ARCHIVED }), MINE);
 
     assert.deepEqual(
       page.items.map((row) => row.id),
@@ -232,9 +224,7 @@ describe('AuthoringService.history', () => {
 describe('editing from the authoring screen', () => {
   it("will neither open nor change another author's question", async () => {
     const qst1 = randomUUID();
-    const authoring = await build([
-      { id: qst1, createdById: THEIRS, status: QUESTION_STATUS.DRAFT },
-    ]);
+    const authoring = await build([{ id: qst1, createdById: THEIRS }]);
 
     await assert.rejects(() => authoring.detail(qst1, MINE), refusedWith(ErrorCodes.NOT_FOUND));
     await assert.rejects(
@@ -243,19 +233,7 @@ describe('editing from the authoring screen', () => {
     );
   });
 
-  it('hands a question that has left review back to the question bank', async () => {
-    const qst1 = randomUUID();
-    const authoring = await build([
-      { id: qst1, createdById: MINE, status: QUESTION_STATUS.ACTIVE },
-    ]);
-
-    await assert.rejects(
-      () => authoring.update(qst1, draft(), MINE),
-      refusedWith(ErrorCodes.CONFLICT),
-    );
-  });
-
-  it('revises the author’s own draft in place', async () => {
+  it('revises the author’s own question in place while nothing reachable pins it', async () => {
     const authoring = await build();
     const created = await authoring.create(draft(), MINE);
 
@@ -266,7 +244,7 @@ describe('editing from the authoring screen', () => {
     );
 
     assert.equal(question.version, 1);
-    assert.equal(question.status, QUESTION_STATUS.DRAFT);
+    assert.equal(question.status, QUESTION_STATUS.ACTIVE);
     assert.equal(await prisma.questionVersion.count(), 1);
   });
 });

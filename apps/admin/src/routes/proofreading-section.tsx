@@ -9,7 +9,7 @@ import {
   PERMISSION_LEVELS,
   instituteDayLabel,
   type AssignmentWithTest,
-  type ProofreadQuestion,
+  type QuestionDetail,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -42,7 +42,7 @@ export function ProofreadingSectionPage() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const { can } = useAuth();
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<ProofreadQuestion | null>(null);
+  const [editing, setEditing] = useState<QuestionDetail | null>(null);
   const [finalizing, setFinalizing] = useState(false);
 
   const id = assignmentId ?? '';
@@ -166,7 +166,7 @@ function EditQuestionDialog({
   onSaved,
 }: Readonly<{
   assignmentId: string;
-  question: ProofreadQuestion;
+  question: QuestionDetail;
   onClose: () => void;
   onSaved: () => void;
 }>) {
@@ -199,7 +199,7 @@ function EditQuestionDialog({
         the version they were shown.
       </Alert>
 
-      <QuestionFields form={form} saved={question} filing={false} />
+      <QuestionFields form={form} saved={question} />
     </FormDialog>
   );
 }

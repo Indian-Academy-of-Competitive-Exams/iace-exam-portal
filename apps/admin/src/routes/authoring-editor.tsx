@@ -10,7 +10,6 @@ import {
   LANGUAGE_ORDER,
   QUESTION_IMAGE_ACCEPTED_TYPES,
   QUESTION_IMAGE_MAX_BYTES,
-  QUESTION_STATUS,
   hasText,
   validateQuestion,
   type AssignmentWithTest,
@@ -21,7 +20,6 @@ import {
 } from '@iace/contracts';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
 import {
-  Alert,
   Button,
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -152,8 +150,7 @@ export function AuthoringEditorPage() {
     rebuildBox();
   });
 
-  const readOnly = editingId !== '' && editing.data?.status !== QUESTION_STATUS.DRAFT;
-  const canSave = issues.length === 0 && !readOnly && !save.isPending;
+  const canSave = issues.length === 0 && !save.isPending;
 
   const cycleLanguage = useCallback(() => {
     setLanguage((current) => {
@@ -185,7 +182,6 @@ export function AuthoringEditorPage() {
         state={state}
         language={language}
         counter={id ? 'Editing' : `Question ${written + 1}`}
-        disabled={readOnly}
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
@@ -214,7 +210,6 @@ export function AuthoringEditorPage() {
           state={state}
           language={language}
           romanised={romanised}
-          readOnly={readOnly}
           canSave={canSave}
           boxVersion={boxVersion}
           checks={checks}
@@ -247,7 +242,6 @@ function EditorPanes({
   state,
   language,
   romanised,
-  readOnly,
   canSave,
   boxVersion,
   checks,
@@ -259,7 +253,6 @@ function EditorPanes({
   state: AuthoringState;
   language: QuestionLanguage;
   romanised: boolean;
-  readOnly: boolean;
   canSave: boolean;
   boxVersion: number;
   checks: readonly Check[];
@@ -274,14 +267,6 @@ function EditorPanes({
       <section className="flex min-h-0 flex-col border-border lg:border-r">
         <PanelHeading title="Editor" />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {readOnly ? (
-            <div className="p-4">
-              <Alert variant="info">
-                This question has left review. Changing it now belongs to the question bank.
-              </Alert>
-            </div>
-          ) : null}
-
           <ScaffoldEditor
             aria-label="Question"
             regions={regionsFor(state, language)}
@@ -293,7 +278,6 @@ function EditorPanes({
             onCycleLanguage={onCycleLanguage}
             onUploadImage={uploadImage}
             imageLimits={IMAGE_LIMITS}
-            disabled={readOnly}
             lang={language}
             script={script}
             className="flex-1 rounded-none border-0 shadow-none"

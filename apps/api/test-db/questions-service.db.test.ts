@@ -7,8 +7,6 @@ import {
   ASSIGNMENT_ROLES,
   DIFFICULTY_LEVEL,
   ErrorCodes,
-  QUESTION_FLAG_CATEGORY,
-  QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
   QUESTION_TYPE,
   TEST_STATUS,
@@ -20,7 +18,6 @@ import {
   questionListQuerySchema,
   type LocalizedContent,
   type QuestionDraftInput,
-  type QuestionFlagStatus,
   type QuestionListQueryInput,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
@@ -118,9 +115,6 @@ const THREE_OPTIONS = [
 
 const ELSEWHERE = { subjectId: BANK.GENERAL_AWARENESS, topicId: BANK.HISTORY };
 
-const asDraft = (over: Partial<QuestionDraftInput> = {}) =>
-  draft({ status: QUESTION_STATUS.DRAFT, ...over });
-
 const live = (over: Partial<QuestionDraftInput> = {}) =>
   draft({ status: QUESTION_STATUS.ACTIVE, ...over });
 
@@ -197,17 +191,6 @@ const openedAgo = (testId: string) =>
   });
 
 const currentVersionOf = async (id: string) => (await questionRow(id)).currentVersionId ?? '';
-
-const flag = (questionId: string, status: QuestionFlagStatus = QUESTION_FLAG_STATUS.OPEN) =>
-  prisma.questionFlag.create({
-    data: {
-      questionId,
-      category: QUESTION_FLAG_CATEGORY.INVALID,
-      comment: 'The answer key is wrong.',
-      raisedById: ADMIN,
-      status,
-    },
-  });
 
 describe('QuestionsService.create', () => {
   it('writes the content nodes and the options as version one', async () => {
@@ -297,14 +280,6 @@ describe('QuestionsService — retiring and status', () => {
     assert.equal(await prisma.question.count(), 1);
 
     assert.equal((await questions.unarchive(created.id)).status, QUESTION_STATUS.ACTIVE);
-  });
-
-  /** Retire then restore would put an unreviewed draft in circulation; delete is its way out. */
-  it('refuses to archive a draft', async () => {
-    const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
-
-    await assert.rejects(() => questions.archive(created.id), conflict);
   });
 
   /** Out of circulation is out of the bank: a reader has to ask for the retired by name. */
@@ -467,10 +442,10 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** A draft is a working copy: saving it ten times must not leave ten versions to read through. */
   it('rewrites the one version a draft already has', async () => {
     const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
     const versionId = await currentVersionOf(created.id);
 
-    const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1);
     assert.equal(edited.version, 1);
@@ -484,10 +459,10 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** Without a version bump to read, the trail would say a draft was saved and nothing else. */
   it('records what the draft now says, though its version number did not move', async () => {
     const { questions, audit } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
 
     const { changed } = await recording(audit, () =>
-      questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN),
+      questions.update(created.id, live({ stem: REWORDED }), ADMIN),
     );
 
     assert.ok(changed?.content, 'the edit recorded no content change');
@@ -498,9 +473,9 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** Every word on the row can be the second admin's, so the row should not still credit the first. */
   it('credits the admin who rewrote the draft, not the one who opened it', async () => {
     const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
 
-    await questions.update(created.id, asDraft({ stem: REWORDED }), OTHER_ADMIN);
+    await questions.update(created.id, live({ stem: REWORDED }), OTHER_ADMIN);
 
     assert.equal((await versions())[0]?.createdById, OTHER_ADMIN);
   });
@@ -508,9 +483,9 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** An attempt stores the option id it was shown, and a revision is still an edit of that row. */
   it('keeps the option ids a revision inherits', async () => {
     const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
 
-    const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
     assert.deepEqual(
       edited.options.map((option) => option.id),
@@ -533,11 +508,11 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** An unreached paper is not the belt status used to be — its version still rewrites in place. */
   it('rewrites in place a version an unreached paper holds, and the paper follows it', async () => {
     const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     await heldBy('paper', created.id, versionId);
 
-    const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
     assert.equal(edited.version, 1);
     assert.equal((await versions()).length, 1);
@@ -561,8 +536,8 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** Publishing is no longer the freeze — a paper students can reach is. */
   it('keeps revising in place after publishing, while nothing reachable pins it', async () => {
     const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
-    await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    const created = await questions.create(live(), ADMIN);
+    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
     assert.equal((await versions()).length, 1);
 
     await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
@@ -732,88 +707,18 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   });
 });
 
-describe('QuestionsService — a question returns to draft while nothing uses it', () => {
-  it('sends a published question nothing has drawn back to draft', async () => {
-    const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
-
-    const back = await questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT });
-
-    assert.equal(back.status, QUESTION_STATUS.DRAFT);
-  });
-
-  /** The failure this prevents: rewriting version 3 in place under a paper that pinned it. */
-  it('refuses once a paper has drawn it, through a status change or a save', async () => {
-    const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
-
-    await assert.rejects(
-      () => questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT }),
-      conflict,
-    );
-    await assert.rejects(
-      () => questions.update(created.id, draft({ status: QUESTION_STATUS.DRAFT }), ADMIN),
-      conflict,
-    );
-    assert.equal((await questionRow(created.id)).status, QUESTION_STATUS.ACTIVE);
-  });
-
-  it('brings a retired question back to draft when nothing uses it', async () => {
-    const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
-    await questions.archive(created.id);
-
-    const back = await questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT });
-
-    assert.equal(back.status, QUESTION_STATUS.DRAFT);
-  });
-
-  /** A batch is one decision, so one row that cannot make the move refuses all of it. */
-  it('refuses a batch holding one question something uses', async () => {
-    const { questions } = await build([{ id: 'q_free' }, { id: 'q_drawn' }]);
-    await heldBy('paper', idFor('q_drawn'), await currentVersionOf(idFor('q_drawn')));
-
-    await assert.rejects(
-      () =>
-        questions.bulkSetStatus({
-          ids: [idFor('q_free'), idFor('q_drawn')],
-          status: QUESTION_STATUS.DRAFT,
-        }),
-      conflict,
-    );
-    assert.equal((await questionRow(idFor('q_free'))).status, QUESTION_STATUS.ACTIVE);
-  });
-
+describe('QuestionsService — being depended on is what settles taxonomy', () => {
   /** The failure this prevents: a Quant question served inside the Reasoning section that drew it. */
-  it('refuses to move a draft a paper has drawn to another subject', async () => {
-    const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
-
-    await assert.rejects(() => questions.update(created.id, asDraft(ELSEWHERE), ADMIN), conflict);
-    assert.equal((await questionRow(created.id)).subjectId, BANK.QUANT);
-  });
-
-  it('refuses to move a published question a paper has drawn', async () => {
+  it('refuses to move a question a paper has drawn to another subject', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
     await heldBy('paper', created.id, await currentVersionOf(created.id));
 
     await assert.rejects(() => questions.update(created.id, live(ELSEWHERE), ADMIN), conflict);
+    assert.equal((await questionRow(created.id)).subjectId, BANK.QUANT);
   });
 
-  it('lets a draft nothing has drawn be moved to another subject', async () => {
-    const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
-
-    const moved = await questions.update(created.id, asDraft(ELSEWHERE), ADMIN);
-
-    assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
-  });
-
-  /** Publishing is not the freeze here either, for the same reason it stopped being one for versions. */
-  it('lets a published question nothing has drawn be moved too', async () => {
+  it('lets a question nothing has drawn be moved to another subject', async () => {
     const { questions } = await build();
     const created = await questions.create(live(), ADMIN);
 
@@ -878,22 +783,22 @@ describe('QuestionsService — what the screen is told', () => {
   /** The failure this prevents: a form open since before somebody else's save overwriting it. */
   it('refuses a save built on a screen somebody has since changed, and takes one that is current', async () => {
     const { questions } = await build();
-    const stale = await questions.create(asDraft(), ADMIN);
-    await questions.update(stale.id, asDraft({ stem: REWORDED }), ADMIN);
+    const stale = await questions.create(live(), ADMIN);
+    await questions.update(stale.id, live({ stem: REWORDED }), ADMIN);
     const current = await questions.detail(stale.id);
 
     await assert.rejects(
       () =>
         questions.update(
           stale.id,
-          asDraft({ expectedUpdatedAt: stale.updatedAt, questionCode: 'QA-9' }),
+          live({ expectedUpdatedAt: stale.updatedAt, questionCode: 'QA-9' }),
           ADMIN,
         ),
       conflict,
     );
     const saved = await questions.update(
       stale.id,
-      asDraft({ stem: REWORDED, expectedUpdatedAt: current.updatedAt, questionCode: 'QA-9' }),
+      live({ stem: REWORDED, expectedUpdatedAt: current.updatedAt, questionCode: 'QA-9' }),
       ADMIN,
     );
 
@@ -928,15 +833,15 @@ describe('QuestionsService — what the screen is told', () => {
 });
 
 describe('QuestionsService.remove — the one hard delete', () => {
-  it('deletes a draft nobody has used, and its versions with it', async () => {
+  it('deletes a question nobody has used, and its versions with it', async () => {
     const { questions, audit } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
 
     const { changed } = await recording(audit, () => questions.remove(created.id));
 
     assert.equal(await prisma.question.count(), 0);
     assert.equal(await prisma.questionVersion.count(), 0);
-    assert.deepEqual(changed?.status, { from: QUESTION_STATUS.DRAFT, to: 'DELETED' });
+    assert.deepEqual(changed?.status, { from: QUESTION_STATUS.ACTIVE, to: 'DELETED' });
   });
 
   /** Status is not what makes a question safe to remove — having nothing depend on it is. */
@@ -957,7 +862,7 @@ describe('QuestionsService.remove — the one hard delete', () => {
   for (const holder of HOLDERS) {
     it(`refuses a draft that a ${holder} already keys on`, async () => {
       const { questions } = await build();
-      const created = await questions.create(asDraft(), ADMIN);
+      const created = await questions.create(live(), ADMIN);
       await heldBy(holder, created.id, await currentVersionOf(created.id));
 
       await assert.rejects(() => questions.remove(created.id), conflict);
@@ -1017,10 +922,10 @@ describe('QuestionsService.update — a save that changes nothing', () => {
       },
     });
     const { questions } = await build([], racing);
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
 
     await assert.rejects(
-      () => questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN),
+      () => questions.update(created.id, live({ stem: REWORDED }), ADMIN),
       conflict,
     );
     const stored = await versions();
@@ -1044,10 +949,10 @@ describe('QuestionsService.update — a save that changes nothing', () => {
   /** Re-crediting a draft on every save would hand it to whoever opened it last. */
   it('leaves a draft credited to whoever actually wrote it', async () => {
     const { questions } = await build();
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
     const [written] = await versions();
 
-    await questions.update(created.id, asDraft(), OTHER_ADMIN);
+    await questions.update(created.id, live(), OTHER_ADMIN);
 
     const [after] = await versions();
     assert.equal(after?.createdById, ADMIN);
@@ -1114,124 +1019,6 @@ describe('TaxonomyService', () => {
   });
 });
 
-describe('bulkSetStatus', () => {
-  const drafts = () =>
-    build(['q1', 'q2', 'q3'].map((id) => ({ id, status: QUESTION_STATUS.DRAFT })));
-
-  it('moves every named question in one statement', async () => {
-    const { questions } = await drafts();
-
-    const result = await questions.bulkSetStatus({
-      ids: [idFor('q1'), idFor('q2')],
-      status: QUESTION_STATUS.ACTIVE,
-    });
-
-    assert.equal(result.updated, 2);
-    assert.equal((await questionRow(idFor('q1'))).status, QUESTION_STATUS.ACTIVE);
-    assert.equal((await questionRow(idFor('q3'))).status, QUESTION_STATUS.DRAFT);
-  });
-
-  /** The same row twice must not be counted twice, or the screen reports work it did not do. */
-  it('counts a repeated id once, and reports what it changed rather than what it was asked to', async () => {
-    const { questions } = await drafts();
-
-    const repeated = await questions.bulkSetStatus({
-      ids: [idFor('q1'), idFor('q1'), idFor('q1')],
-      status: QUESTION_STATUS.ACTIVE,
-    });
-    const partlyGone = await questions.bulkSetStatus({
-      ids: [idFor('q2'), idFor('gone')],
-      status: QUESTION_STATUS.ACTIVE,
-    });
-
-    assert.equal(repeated.updated, 1);
-    assert.equal(partlyGone.updated, 1);
-  });
-});
-
-describe('QuestionsService — an open proof-reading flag blocks the way into circulation', () => {
-  it('refuses a single approval while a flag is open, and lets it through once settled', async () => {
-    const { questions } = await build([{ id: 'q1', status: QUESTION_STATUS.DRAFT }]);
-    const raised = await flag(idFor('q1'));
-
-    await assert.rejects(
-      () => questions.setStatus(idFor('q1'), { status: QUESTION_STATUS.ACTIVE }),
-      conflict,
-    );
-    assert.equal((await questionRow(idFor('q1'))).status, QUESTION_STATUS.DRAFT);
-
-    await prisma.questionFlag.update({
-      where: { id: raised.id },
-      data: { status: QUESTION_FLAG_STATUS.RESOLVED },
-    });
-    const approved = await questions.setStatus(idFor('q1'), { status: QUESTION_STATUS.ACTIVE });
-
-    assert.equal(approved.status, QUESTION_STATUS.ACTIVE);
-  });
-
-  /** The bulk screen is the other way in, so the same gate has to hold there. */
-  it('refuses a batch holding one flagged question, and leaves every row where it was', async () => {
-    const { questions } = await build([
-      { id: 'q_clean', status: QUESTION_STATUS.DRAFT },
-      { id: 'q_flagged', status: QUESTION_STATUS.DRAFT },
-    ]);
-    await flag(idFor('q_flagged'));
-
-    await assert.rejects(
-      () =>
-        questions.bulkSetStatus({
-          ids: [idFor('q_clean'), idFor('q_flagged')],
-          status: QUESTION_STATUS.ACTIVE,
-        }),
-      conflict,
-    );
-    const statuses = await prisma.question.findMany({ select: { status: true } });
-    assert.ok(statuses.every((row) => row.status === QUESTION_STATUS.DRAFT));
-  });
-
-  it('lets a batch through once every flag on it has been settled', async () => {
-    const { questions } = await build([
-      { id: 'q1', status: QUESTION_STATUS.DRAFT },
-      { id: 'q2', status: QUESTION_STATUS.DRAFT },
-    ]);
-    await flag(idFor('q1'), QUESTION_FLAG_STATUS.DISMISSED);
-
-    const result = await questions.bulkSetStatus({
-      ids: [idFor('q1'), idFor('q2')],
-      status: QUESTION_STATUS.ACTIVE,
-    });
-
-    assert.equal(result.updated, 2);
-  });
-
-  /** Authors fix, reviewers settle: a flag must not lock the question it was raised against. */
-  it('still lets an author save a question that is already active and flagged', async () => {
-    const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
-    await flag(created.id);
-
-    const edited = await questions.update(
-      created.id,
-      live({ stem: { en: 'What is 25% of 200?', hi: 'x' } }),
-      ADMIN,
-    );
-
-    assert.equal(edited.status, QUESTION_STATUS.ACTIVE);
-    assert.equal(edited.openFlags, 1);
-  });
-
-  /** The count is what the approvals screen shows, so the block is never a surprise. */
-  it('counts only the open flags on a listed question', async () => {
-    const { questions } = await build([{ id: 'q1' }]);
-    await flag(idFor('q1'));
-    await flag(idFor('q1'), QUESTION_FLAG_STATUS.RESOLVED);
-
-    const page = await questions.list(listQuery());
-
-    assert.equal(page.items[0]?.openFlags, 1);
-  });
-});
-
 describe('QuestionsService — serving legacy images', () => {
   /** Fails if signedAll's `keys.size === 0` shortcut returns: a key-less legacy image would survive. */
   it('strips an external src a key-less legacy image quotes, on a detail read', async () => {
@@ -1256,40 +1043,37 @@ describe('QuestionsService — serving legacy images', () => {
 
 describe('QuestionsService.availability — the count a section is about to draw from', () => {
   /** The failure this prevents: the builder promises three and fillSection then refuses with two. */
-  it('counts exactly what a paper may draw, drafts included and flagged ones out', async () => {
+  it('counts exactly what a paper may draw, leaving out the archived and the unversioned', async () => {
     const { questions } = await build([
       { id: 'live', status: QUESTION_STATUS.ACTIVE },
-      { id: 'draft', status: QUESTION_STATUS.DRAFT },
+      { id: 'also_live', status: QUESTION_STATUS.ACTIVE },
       { id: 'archived', status: QUESTION_STATUS.ARCHIVED },
-      { id: 'flagged', status: QUESTION_STATUS.DRAFT },
       { id: 'unversioned', status: QUESTION_STATUS.ACTIVE, versioned: false },
     ]);
-    await flag(idFor('flagged'));
 
     const held = await questions.availability(
       questionAvailabilityQuerySchema.parse({ subjectId: BANK.QUANT }),
     );
 
-    assert.equal(held.total, 2, 'the draft counts, the archived, flagged and unversioned do not');
+    assert.equal(held.total, 2, 'the archived and the unversioned do not count');
   });
 });
 
 describe('QuestionsService.page — the picker asks for what the draw would find', () => {
   /** The failure this prevents: the picker offers a row, and fillSection then refuses it. */
-  it('lists drafts as drawable and leaves out the archived and the flagged', async () => {
+  it('leaves the archived and the unversioned out of what a paper may draw', async () => {
     const { questions } = await build([
       { id: 'live', status: QUESTION_STATUS.ACTIVE },
-      { id: 'draft', status: QUESTION_STATUS.DRAFT },
+      { id: 'also_live', status: QUESTION_STATUS.ACTIVE },
       { id: 'archived', status: QUESTION_STATUS.ARCHIVED },
-      { id: 'flagged', status: QUESTION_STATUS.DRAFT },
+      { id: 'unversioned', status: QUESTION_STATUS.ACTIVE, versioned: false },
     ]);
-    await flag(idFor('flagged'));
 
     const page = await questions.page(listQuery({ drawable: 'true' }));
 
     assert.deepEqual(
       page.items.map((row) => row.id).sort(),
-      [idFor('draft'), idFor('live')].sort(),
+      [idFor('also_live'), idFor('live')].sort(),
     );
   });
 });
@@ -1396,10 +1180,10 @@ describe('QuestionsService.update — one lock order, Test before Question', () 
   it('locks the tests holding the question before it claims the question row', async () => {
     const order: string[] = [];
     const { questions } = await build([], watchingLocks(order));
-    const created = await questions.create(asDraft(), ADMIN);
+    const created = await questions.create(live(), ADMIN);
     await heldBy('paper', created.id, await currentVersionOf(created.id));
 
-    await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
     assert.deepEqual(order, [LOCK_ORDER.TESTS, LOCK_ORDER.QUESTION]);
   });

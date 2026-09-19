@@ -10,7 +10,6 @@ import {
   XLSX_CONTENT_TYPE,
   type QuestionImportPlan,
   type QuestionImportResult,
-  type QuestionIntakeStatus,
 } from '@iace/contracts';
 import { importFileKey, readUploadedTable } from '../common/importing';
 import { AuditService } from '../audit';
@@ -74,7 +73,7 @@ export class QuestionImportService {
     return withoutDrafts(planning, log.id);
   }
 
-  async commit(importLogId: string, status: QuestionIntakeStatus): Promise<QuestionImportResult> {
+  async commit(importLogId: string): Promise<QuestionImportResult> {
     const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
     if (!log || log.feature !== AuditFeature.QUESTION || !log.fileS3Key) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That upload is no longer available');
@@ -96,8 +95,7 @@ export class QuestionImportService {
       for (const row of creatable) {
         const built = buildContent(row.draft);
         const question = await tx.question.create({
-          // The run decides the status, never the sheet: one file is one review decision.
-          data: questionData({ ...row.draft, status }, built, log.actorId),
+          data: questionData(row.draft, built, log.actorId),
         });
         const version = await tx.questionVersion.create({
           data: versionData(question.id, built, log.actorId),
@@ -193,7 +191,6 @@ function questionData(
     subjectId: draft.subjectId,
     topicId: draft.topicId ?? null,
     difficulty: draft.difficulty,
-    status: draft.status,
     questionCode: draft.questionCode ?? null,
     tags: draft.tags,
     stemHash: built.stemHash,

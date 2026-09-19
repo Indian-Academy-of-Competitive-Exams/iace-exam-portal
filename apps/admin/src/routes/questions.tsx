@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Undo2, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import {
   FEATURE_KEYS,
   LANGUAGE_LABELS,
@@ -33,7 +33,6 @@ import { questionFacetFilters } from '../lib/question-filters';
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
 
 const STATUS_VARIANT = {
-  [QUESTION_STATUS.DRAFT]: 'neutral',
   [QUESTION_STATUS.ACTIVE]: 'success',
   [QUESTION_STATUS.ARCHIVED]: 'warning',
 } as const;
@@ -191,13 +190,6 @@ const PROMPTS = {
     confirmLabel: 'Unarchive',
     destructive: false,
   },
-  DRAFT: {
-    title: 'Return this question to draft?',
-    description:
-      'It leaves circulation and becomes a working copy again, so its subject and topic can be changed and edits stop creating versions. Publishing it again puts it back in front of students.',
-    confirmLabel: 'Return to draft',
-    destructive: false,
-  },
   DELETE: {
     title: 'Delete this question?',
     description:
@@ -212,7 +204,6 @@ type Move = keyof typeof PROMPTS;
 const RUN: Record<Move, (id: string) => Promise<unknown>> = {
   ARCHIVE: (id) => api.admin.questions.archive(id),
   UNARCHIVE: (id) => api.admin.questions.unarchive(id),
-  DRAFT: (id) => api.admin.questions.setStatus(id, { status: QUESTION_STATUS.DRAFT }),
   DELETE: (id) => api.admin.questions.remove(id),
 };
 
@@ -223,7 +214,6 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   const queryClient = useQueryClient();
 
   const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
-  const isDraft = question.status === QUESTION_STATUS.DRAFT;
 
   const settle = () => {
     setAsking(null);
@@ -258,25 +248,14 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
           </Link>
         </DropdownMenuItem>
 
-        {/* A draft was never in circulation, so there is nothing to take it out of. */}
-        {isDraft ? null : (
-          <DropdownMenuItem
-            destructive={!isArchived}
-            disabled={act.isPending}
-            onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
-          >
-            {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
-            {isArchived ? 'Unarchive' : 'Archive'}
-          </DropdownMenuItem>
-        )}
-
-        {/* Both only while nothing points at it — offering either otherwise is offering a refusal. */}
-        {question.inUse || isDraft ? null : (
-          <DropdownMenuItem disabled={act.isPending} onSelect={() => ask('DRAFT')}>
-            <Undo2 aria-hidden />
-            Return to draft
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem
+          destructive={!isArchived}
+          disabled={act.isPending}
+          onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
+        >
+          {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
+          {isArchived ? 'Unarchive' : 'Archive'}
+        </DropdownMenuItem>
 
         {question.inUse ? null : (
           <DropdownMenuItem destructive disabled={act.isPending} onSelect={() => ask('DELETE')}>

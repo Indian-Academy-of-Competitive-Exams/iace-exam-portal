@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { QuestionFlagCategory } from '@prisma/client';
 import {
   ActorTypes,
+  ASSIGNMENT_ROLES,
   DEFAULT_EXAM_COURSE,
   DIFFICULTY_LEVEL,
   FEATURE_KEYS,
@@ -16,9 +16,11 @@ import { DashboardService } from '../src/dashboard/dashboard.service';
 import { type AuthenticatedUser } from '../src/common/security';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import {
+  makeAdmin,
   makeBranch,
   makeCatalog,
   makeQuestion,
+  makeSection,
   makeStudent,
   makeSubject,
   makeTest,
@@ -104,7 +106,11 @@ async function populated() {
     status: active,
     difficulty: DIFFICULTY_LEVEL.HIGH,
   });
-  await makeQuestion(prisma, { subjectId: reasoning.id, difficulty: DIFFICULTY_LEVEL.MEDIUM });
+  await makeQuestion(prisma, {
+    subjectId: reasoning.id,
+    status: QUESTION_STATUS.ARCHIVED,
+    difficulty: DIFFICULTY_LEVEL.MEDIUM,
+  });
   return { quant, reasoning };
 }
 
@@ -174,39 +180,49 @@ describe('DashboardService.overview — a band nobody may see is never even coun
       // Present at zero: a subject with nothing live is exactly the thin area this surfaces.
       { subjectId: reasoning.id, subject: 'REASONING', active: 0, byDifficulty: {} },
     ]);
-    assert.deepEqual(payload.headline?.questions, { ACTIVE: 2, DRAFT: 1 });
+    assert.deepEqual(payload.headline?.questions, { ACTIVE: 2, ARCHIVED: 1 });
   });
 });
 
-describe('the open proof-reading flags tile', () => {
-  it('is absent while nothing has been flagged, so it no-ops before proof-reading ships', async () => {
+/** One test, with `open` sections still being worked and `done` ones already marked finished. */
+async function assignedSections(open: number, done: number) {
+  const catalog = await makeCatalog(prisma);
+  const test = await makeTest(prisma, catalog);
+  const assignee = await makeAdmin(prisma);
+  for (let i = 0; i < open + done; i += 1) {
+    const section = await makeSection(prisma, catalog, { name: `Section ${i}`, order: i + 1 });
+    await prisma.questionAssignment.create({
+      data: {
+        testId: test.id,
+        baseConfigId: catalog.baseConfigId,
+        baseConfigSectionId: section.id,
+        assigneeId: assignee.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        finalizedAt: i < open ? null : new Date(),
+      },
+    });
+  }
+  return { finalized: done };
+}
+
+describe('the outstanding assignments tile', () => {
+  it('is absent while nothing is assigned, so it no-ops before any test is staffed', async () => {
     const { service } = build();
 
     const payload = await service.overview(holding(FEATURE_KEYS.QUESTION_MANAGEMENT));
 
     assert.ok(payload.bank);
-    assert.equal('openFlags' in payload.bank, false);
+    assert.equal('openAssignments' in payload.bank, false);
   });
 
-  it('appears the moment a flag is open', async () => {
-    const subject = await makeSubject(prisma);
-    const question = await makeQuestion(prisma, { subjectId: subject.id });
-    const raisedById = uid();
-    for (let i = 0; i < 3; i += 1) {
-      await prisma.questionFlag.create({
-        data: {
-          questionId: question.id,
-          category: QuestionFlagCategory.INVALID,
-          comment: 'Key is wrong',
-          raisedById,
-        },
-      });
-    }
+  it('counts every assignment nobody has finalised', async () => {
+    const sections = await assignedSections(3, 1);
     const { service } = build();
 
     const payload = await service.overview(holding(FEATURE_KEYS.QUESTION_MANAGEMENT));
 
-    assert.equal(payload.bank?.openFlags, 3);
+    assert.equal(sections.finalized, 1);
+    assert.equal(payload.bank?.openAssignments, 3);
   });
 });
 

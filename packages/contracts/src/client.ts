@@ -299,7 +299,6 @@ import {
 
 import {
   ADMIN_QUESTION_ROUTES,
-  bulkQuestionStatusResultSchema,
   QUESTION_IMAGE_FILE_FIELD,
   questionImageSchema,
   ADMIN_TAXONOMY_ROUTES,
@@ -314,13 +313,10 @@ import {
   type CreateSubjectInput,
   type CreateTopicInput,
   type QuestionDetail,
-  type BulkQuestionStatusInput,
-  type BulkQuestionStatusResult,
   type QuestionImage,
   type QuestionDraftInput,
   type QuestionImportPlan,
   type QuestionImportResult,
-  type QuestionIntakeStatus,
   type QuestionAvailability,
   type QuestionAvailabilityQueryInput,
   type QuestionListQueryInput,
@@ -332,16 +328,8 @@ import {
   type TopicListQueryInput,
 } from './questions';
 import {
-  ADMIN_PROOFREADING_ROUTES,
-  proofreadQuestionSchema,
-  questionFlagSchema,
-  type CreateQuestionFlagInput,
-  type ProofreadQuestion,
-  type QuestionFlag,
-  type SettleQuestionFlagInput,
-} from './question-flags';
-import {
   ADMIN_ASSIGNMENTS_ROUTES,
+  ADMIN_PROOFREADING_ROUTES,
   assignableAdminSchema,
   assignmentSchema,
   assignmentWithTestSchema,
@@ -1212,8 +1200,6 @@ export function createApiClient(options: ApiClientOptions) {
           write('DELETE', ADMIN_QUESTION_ROUTES.remove(id), noContentSchema),
 
         /** One decision over a page of drafts — one request, so nothing is half-approved. */
-        bulkSetStatus: (input: BulkQuestionStatusInput): Promise<BulkQuestionStatusResult> =>
-          write('PATCH', ADMIN_QUESTION_ROUTES.bulkStatus, bulkQuestionStatusResultSchema, input),
 
         /** Content stores the `key`; the `url` is for showing the image that was just chosen. */
         uploadImage: (file: File): Promise<QuestionImage> => {
@@ -1225,22 +1211,9 @@ export function createApiClient(options: ApiClientOptions) {
 
       /** The proof-reading document, and the flags raised on it. */
       proofreading: {
-        document: (query: QuestionListQueryInput = {}): Promise<Paginated<ProofreadQuestion>> =>
-          list(ADMIN_PROOFREADING_ROUTES.document, query, proofreadQuestionSchema),
-
-        raise: (questionId: string, input: CreateQuestionFlagInput): Promise<QuestionFlag> =>
-          write('POST', ADMIN_PROOFREADING_ROUTES.raise(questionId), questionFlagSchema, input),
-
-        /** Resolved or dismissed — either one clears the block on going ACTIVE. */
-        settle: (flagId: string, input: SettleQuestionFlagInput): Promise<QuestionFlag> =>
-          write('PATCH', ADMIN_PROOFREADING_ROUTES.settle(flagId), questionFlagSchema, input),
-
         /** A section reads in full: the typist's own questions and the bank picks beside them. */
-        forAssignment: (assignmentId: string): Promise<ProofreadQuestion[]> =>
-          get(
-            ADMIN_PROOFREADING_ROUTES.forAssignment(assignmentId),
-            proofreadQuestionSchema.array(),
-          ),
+        forAssignment: (assignmentId: string): Promise<QuestionDetail[]> =>
+          get(ADMIN_PROOFREADING_ROUTES.forAssignment(assignmentId), questionDetailSchema.array()),
 
         editQuestion: (
           assignmentId: string,
@@ -1342,13 +1315,9 @@ export function createApiClient(options: ApiClientOptions) {
         previewQuestions: (file: File): Promise<QuestionImportPlan> =>
           write('POST', QUESTION_IMPORT_ROUTES.preview, questionImportPlanSchema, fileBody(file)),
 
-        commitQuestions: (
-          importLogId: string,
-          status: QuestionIntakeStatus,
-        ): Promise<QuestionImportResult> =>
+        commitQuestions: (importLogId: string): Promise<QuestionImportResult> =>
           write('POST', QUESTION_IMPORT_ROUTES.commit, questionImportResultSchema, {
             importLogId,
-            status,
           }),
       },
 

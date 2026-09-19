@@ -6,15 +6,12 @@ import {
   MCQ_OPTION_COUNT,
   MCQ_OPTION_MAX,
   QUESTION_IMPORT_COLUMNS,
-  QUESTION_INTAKE_STATUSES,
   QUESTION_TYPE,
   SUPPORTED_LANGUAGES,
   hasText,
   localizedTextSchema,
   previewTextOf,
   questionDraftSchema,
-  questionImportCommitSchema,
-  questionIntakeStatusSchema,
   questionListQuerySchema,
   tagSchema,
   topicNameSchema,
@@ -164,7 +161,7 @@ describe('questionListQuerySchema', () => {
   });
 
   it('narrows to several statuses at once', () => {
-    assert.deepEqual(parse({ status: 'DRAFT,ARCHIVED' }).status, ['DRAFT', 'ARCHIVED']);
+    assert.deepEqual(parse({ status: 'ACTIVE,ARCHIVED' }).status, ['ACTIVE', 'ARCHIVED']);
   });
 
   /** A screen holds a set; the URL holds CSV. Both have to reach the same query. */
@@ -181,32 +178,11 @@ describe('questionListQuerySchema', () => {
 
   it('still refuses a status nobody defined', () => {
     assert.equal(questionListQuerySchema.safeParse({ status: 'RETIRED' }).success, false);
-    assert.equal(questionListQuerySchema.safeParse({ status: 'DRAFT,RETIRED' }).success, false);
+    assert.equal(questionListQuerySchema.safeParse({ status: 'ACTIVE,RETIRED' }).success, false);
   });
 
   it('drops a blank search rather than searching for nothing', () => {
     assert.equal(parse({ q: '   ' }).q, undefined);
-  });
-});
-
-describe('what a question may be created as', () => {
-  /** ARCHIVED is a retirement. Offering it at intake would let a question arrive already dead. */
-  it('offers draft and active, never archived', () => {
-    assert.deepEqual([...QUESTION_INTAKE_STATUSES], ['DRAFT', 'ACTIVE']);
-    assert.equal(questionIntakeStatusSchema.safeParse('ARCHIVED').success, false);
-  });
-
-  /** An older client that names no status must not put a whole sheet live by omission. */
-  it('lands an import in review when the commit names no status', () => {
-    const parsed = questionImportCommitSchema.parse({ importLogId: 'imp_1' });
-
-    assert.equal(parsed.status, 'DRAFT');
-  });
-
-  it('takes the status the run chose', () => {
-    const parsed = questionImportCommitSchema.parse({ importLogId: 'imp_1', status: 'ACTIVE' });
-
-    assert.equal(parsed.status, 'ACTIVE');
   });
 });
 

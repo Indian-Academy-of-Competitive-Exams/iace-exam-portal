@@ -1,21 +1,14 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   LANGUAGE_LABELS,
-  QUESTION_INTAKE_HINTS,
-  QUESTION_INTAKE_STATUSES,
-  QUESTION_STATUS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type QuestionImportRow,
-  type QuestionIntakeStatus,
 } from '@iace/contracts';
 import {
   Badge,
-  Combobox,
-  Field,
   ImportView,
   PageHeader,
   Table,
@@ -41,8 +34,6 @@ import { saveBlob } from '../lib/save-blob';
  */
 export function ImportQuestionsPage() {
   const queryClient = useQueryClient();
-  // The whole run lands in one status, so it is chosen once rather than per row.
-  const [status, setStatus] = useState<QuestionIntakeStatus>(QUESTION_STATUS.DRAFT);
 
   const template = useMutation({
     mutationFn: () => api.admin.imports.questionTemplate(),
@@ -51,7 +42,7 @@ export function ImportQuestionsPage() {
 
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewQuestions(file),
-    commit: (_file, plan) => api.admin.imports.commitQuestions(plan.importLogId, status),
+    commit: (_file, plan) => api.admin.imports.commitQuestions(plan.importLogId),
     writes: (plan) => plan.summary.willCreate,
     success: (data) => {
       const result = data as { created: number; duplicates: number; invalid: number };
@@ -75,24 +66,6 @@ export function ImportQuestionsPage() {
         'aria-label': 'Question import file',
       }}
       previewing={intake.isPreviewing}
-      options={
-        <Field htmlFor="import-status" label="Status">
-          {(control) => (
-            <Combobox
-              id={control.id}
-              aria-describedby={control['aria-describedby']}
-              clearable={false}
-              value={status}
-              onChange={(next) => setStatus(next as QuestionIntakeStatus)}
-              items={QUESTION_INTAKE_STATUSES.map((value) => ({
-                value,
-                label: value,
-                hint: QUESTION_INTAKE_HINTS[value],
-              }))}
-            />
-          )}
-        </Field>
-      }
       action={{
         label: plan ? `Import ${intake.writes} questions` : 'Import',
         loading: intake.isCommitting,

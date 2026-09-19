@@ -6,9 +6,6 @@ import {
   DIFFICULTY_LEVELS,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
-  QUESTION_INTAKE_HINTS,
-  QUESTION_INTAKE_STATUSES,
-  QUESTION_STATUS,
   QUESTION_TYPE,
   QUESTION_TYPES,
   type QuestionDetail,
@@ -43,33 +40,17 @@ const IMAGE_LIMITS = {
   maxBytes: QUESTION_IMAGE_MAX_BYTES,
 } as const;
 
-/** ARCHIVED is a retirement, so it is only on offer once there is something to retire. */
-function statusChoices(saved: QuestionDetail | undefined) {
-  const intake = QUESTION_INTAKE_STATUSES.map((value) => ({
-    value,
-    label: value,
-    hint: QUESTION_INTAKE_HINTS[value],
-  }));
-  // A draft has nothing to retire, so ARCHIVED appears once the question is in circulation.
-  if (!saved || saved.status === QUESTION_STATUS.DRAFT) return intake;
-
-  return [...intake, { value: QUESTION_STATUS.ARCHIVED, label: QUESTION_STATUS.ARCHIVED }];
-}
-
 export function QuestionFields({
   form,
   saved,
-  filing = true,
 }: Readonly<{
   form: UseFormReturn<QuestionFormValues>;
   saved?: QuestionDetail;
-  /** Off where the caller has no authority to file: a proof-reader fixes a question, never promotes it. */
-  filing?: boolean;
 }>) {
   // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
   const type = useWatch({ control: form.control, name: 'type' });
   const subjectId = useWatch({ control: form.control, name: 'subjectId' });
-  // Being drawn settles taxonomy, not being published: a drawn draft would move under its section.
+  // Being drawn settles taxonomy, not being published: a drawn question would move under its section.
   const taxonomySettled = saved?.inUse === true;
   const topicId = useWatch({ control: form.control, name: 'topicId' });
   // However many it has: a form that always drew four would drop a fifth on the next save.
@@ -136,10 +117,6 @@ export function QuestionFields({
             label="Difficulty"
             items={DIFFICULTY_LEVELS.map((value) => ({ value, label: value }))}
           />
-
-          {filing ? (
-            <FormCombobox form={form} name="status" label="Status" items={statusChoices(saved)} />
-          ) : null}
         </div>
       </FormSection>
 

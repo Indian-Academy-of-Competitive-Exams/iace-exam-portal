@@ -88,24 +88,12 @@ export const DIFFICULTY_LABELS: Record<DifficultyLevel, string> = {
 };
 
 export const QUESTION_STATUS = {
-  DRAFT: 'DRAFT',
   ACTIVE: 'ACTIVE',
   ARCHIVED: 'ARCHIVED',
 } as const;
 export const questionStatusSchema = z.enum(QUESTION_STATUS);
 export type QuestionStatus = z.infer<typeof questionStatusSchema>;
 export const QUESTION_STATUSES = questionStatusSchema.options;
-
-/** What a question may be CREATED as. ARCHIVED is a retirement, so nothing arrives in it. */
-export const questionIntakeStatusSchema = z.enum([QUESTION_STATUS.DRAFT, QUESTION_STATUS.ACTIVE]);
-export type QuestionIntakeStatus = z.infer<typeof questionIntakeStatusSchema>;
-export const QUESTION_INTAKE_STATUSES = questionIntakeStatusSchema.options;
-
-/** The one gloss for each, so the form and the importer offer the same words. */
-export const QUESTION_INTAKE_HINTS: Record<QuestionIntakeStatus, string> = {
-  [QUESTION_STATUS.DRAFT]: 'Held for review; no paper can draw it',
-  [QUESTION_STATUS.ACTIVE]: 'Live in the bank straight away',
-};
 
 /**
  * How a typed answer is compared. EXACT is text, folded for case and spacing;
@@ -501,8 +489,6 @@ export const questionSummarySchema = z.object({
   author: questionAuthorSchema.nullable(),
   /** Whether a paper, an attempt or a stat points at it — what decides if it can still be undone. */
   inUse: z.boolean(),
-  /** Open proof-reading flags. Above zero, the question cannot be approved into ACTIVE. */
-  openFlags: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -510,7 +496,7 @@ export type QuestionSummary = z.infer<typeof questionSummarySchema>;
 
 /** Everything below comes from the CURRENT version — a question itself carries no content. */
 export const questionDetailSchema = questionSummarySchema.extend({
-  /** Which version this is: 1, 2, 3… Anything past the draft gains the next one on a real edit. */
+  /** Which version this is: 1, 2, 3… A reachable test pinning the old one gains the next. */
   version: z.number().int(),
   content: localizedContentSchema,
   options: z.array(questionOptionSchema),
@@ -549,7 +535,7 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   /** Civil days in Asia/Kolkata, widened to the whole day by the service. */
   from: dateOnlySchema.optional(),
   to: dateOnlySchema.optional(),
-  /** Only what a paper may draw: not archived, carrying a version, and no open flag. */
+  /** Only what a paper may draw: not archived and carrying a version. */
   drawable: z.stringbool().optional(),
   /** Which test's authoring the split is drawn against — meaningless without `writtenFor`. */
   writtenForTestId: z.string().optional(),
@@ -566,27 +552,12 @@ export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;
  * drawn into no future paper, while every paper that already pinned a version is untouched.
  */
 /** A page of drafts is 100 at most, so a bulk decision can never be larger than what was shown. */
-const BULK_STATUS_MAX = 100;
 
 export const setQuestionStatusSchema = z.object({
   status: questionStatusSchema,
 });
 export type SetQuestionStatusInput = z.input<typeof setQuestionStatusSchema>;
 export type SetQuestionStatusBody = z.infer<typeof setQuestionStatusSchema>;
-
-/** Reviewing a batch is one decision, so it is one request rather than one per row. */
-export const bulkQuestionStatusSchema = z.object({
-  ids: z.array(z.string().min(1)).min(1).max(BULK_STATUS_MAX),
-  status: questionStatusSchema,
-});
-export type BulkQuestionStatusInput = z.input<typeof bulkQuestionStatusSchema>;
-export type BulkQuestionStatusBody = z.infer<typeof bulkQuestionStatusSchema>;
-
-/** What one bulk decision did, so the screen can say it rather than guess. */
-export const bulkQuestionStatusResultSchema = z.object({
-  updated: z.number(),
-});
-export type BulkQuestionStatusResult = z.infer<typeof bulkQuestionStatusResultSchema>;
 
 // ============================================================================
 // The import sheet. These columns are the ONE definition of the format: the
@@ -728,8 +699,6 @@ export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
 
 export const questionImportCommitSchema = z.object({
   importLogId: z.string().min(1),
-  /** Defaulted, not required: an older client that names no status still lands its rows in review. */
-  status: questionIntakeStatusSchema.default(QUESTION_STATUS.DRAFT),
 });
 export type QuestionImportCommitBody = z.infer<typeof questionImportCommitSchema>;
 
@@ -772,7 +741,6 @@ export const ADMIN_QUESTION_ROUTES = {
   archive: (id: string) => `/admin/questions/${id}/archive`,
   unarchive: (id: string) => `/admin/questions/${id}/unarchive`,
   remove: (id: string) => `/admin/questions/${id}`,
-  bulkStatus: '/admin/questions/status',
   uploadImage: '/admin/questions/images',
 } as const;
 

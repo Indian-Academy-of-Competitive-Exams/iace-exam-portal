@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   DIFFICULTY_LEVEL,
-  QUESTION_STATUS,
   QUESTION_STATUSES,
   TEST_STATUSES,
   type Dashboard,
@@ -102,15 +101,7 @@ function Headline({ headline }: Readonly<{ headline: DashboardHeadline }>) {
               key={status}
               size="md"
               label={QUESTION_STATUS_LABELS[status]}
-              value={
-                status === QUESTION_STATUS.DRAFT ? (
-                  <Link to={ROUTES.QUESTION_APPROVALS} className={linkVariants()}>
-                    {questions[status] ?? 0}
-                  </Link>
-                ) : (
-                  (questions[status] ?? 0)
-                )
-              }
+              value={questions[status] ?? 0}
             />
           ))}
         </Tile>
@@ -167,8 +158,16 @@ function BankFigure({ bank }: Readonly<{ bank: DashboardBank }>) {
       title="Coverage"
       meta={`${drawn.length} subjects`}
       figure={
-        bank.openFlags === undefined ? null : (
-          <Metric size="md" label="Open flags" value={bank.openFlags} />
+        bank.openAssignments === undefined ? null : (
+          <Metric
+            size="md"
+            label="Open assignments"
+            value={
+              <Link to={ROUTES.PROOFREADING_ASSIGNMENTS} className={linkVariants()}>
+                {bank.openAssignments}
+              </Link>
+            }
+          />
         )
       }
     >

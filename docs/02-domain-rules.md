@@ -73,11 +73,10 @@ Setup, then paper, then offer. There is no certificate step.
   as many of one difficulty as its mix allows, the next pick of that difficulty is refused and the
   admin is told to take one off first — otherwise the draw could only ever top up a section the hand
   had already made impossible to balance.
-- Any question that is not ARCHIVED, carries a current version, and has no open proof-reading
-  flag is drawable. A paper pins a version, so there has to be one; a DRAFT is drawable because a
-  paper is built before its questions are finished, and the flag check is what still keeps an
-  unresolved objection from being drawn now that activation no longer gates it. It gates the DRAW
-  only: a flag raised after the question is already on a paper leaves it there.
+- Any question that is not ARCHIVED and carries a current version is drawable. A paper pins a
+  version, so there has to be one; nothing else gates the draw, because a paper is built before its
+  questions are finished and what stops an unfinished one reaching students is the offer, which
+  refuses while any assignment on the test is unfinalized.
 - Finalize freezes rows that already exist and draws nothing. The paper must hold every section at
   its exact count or the freeze rolls back naming the shortfall — a paper that is not whole leaves
   the test unlocked.
@@ -320,19 +319,18 @@ and needs no mapping at all.
   before it claims the question row, because the version guard reaches those tests anyway on the way
   out. Nothing enforces this but the rule: two admins crossing on one order deadlock, and Postgres
   kills one of them with a save the admin never asked to lose.
-- **Proof-reading reads DRAFTS and nothing else.** A reader's flags gate ACTIVATION, so a question
-  that is already live is past the point their reading changes, and an archived one is past caring.
-  The server forces `status: DRAFT` rather than filtering on it, so a hand-edited URL cannot widen
-  the document; the screen has no Status control, because there is no longer a choice to offer.
+- **Proof-reading is per test, per section.** A reader opens the assignment they hold and sees what
+  its typist wrote for that section plus what the paper picked into it — nothing else, and no
+  bank-wide document. They fix what they find by editing it directly; there are no per-question
+  flags. Marking the section read sets `finalizedAt` and ends their authority over it.
 - **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion` or
-  `TestQuestionStat` references may be returned to DRAFT or deleted; every served question is a paper
-  row a sat test cannot lose, and the rule counts those two tables before it allows the move, so it
-  refuses before a foreign key does.
+  `TestQuestionStat` references may be deleted; every served question is a paper row a sat test
+  cannot lose, and the rule counts those two tables before it allows the move, so it refuses before
+  a foreign key does.
 - **Subject and topic settle when something DEPENDS on the question, not when it is published.**
   Taxonomy is what a section draws on, so moving it afterwards would change what a finalized paper
   was built from — and a `PaperQuestion` records no subject of its own, so a moved question would be
-  served inside a section it no longer belongs to and counted there. Leaving the draft was only ever
-  a proxy for this, and it stopped being one when drafts became drawable.
+  served inside a section it no longer belongs to and counted there.
 - **Option ids carry over by position.** A sitting stores the id it was shown, so a position that
   already had an id keeps it and only a genuinely new position gets a new one — editing an option's
   wording can never orphan an answer.

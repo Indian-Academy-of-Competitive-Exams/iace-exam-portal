@@ -52,10 +52,10 @@ const dashboardCoverageSchema = z.object({
 });
 export type DashboardCoverage = z.infer<typeof dashboardCoverageSchema>;
 
-/** Band B. Drafts awaiting review are not repeated here — `headline.questions` carries that count. */
+/** Band B. The bank's depth, and the authoring still owed on it. */
 const dashboardBankSchema = z.object({
-  /** Absent until proof-reading has raised one — the tile is skipped, never a zero. */
-  openFlags: z.number().int().optional(),
+  /** Assignments nobody has marked finished. Absent at zero — the tile is skipped, never a zero. */
+  openAssignments: z.number().int().optional(),
   coverage: z.array(dashboardCoverageSchema),
 });
 export type DashboardBank = z.infer<typeof dashboardBankSchema>;
