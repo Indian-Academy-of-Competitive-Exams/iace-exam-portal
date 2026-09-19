@@ -6,9 +6,8 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useInfinitePages } from '@iace/app-kit';
+import { asText, NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
-import { asText, NOTIFICATION_FILTERS, READ_STATE } from '@iace/app-kit';
 import { Settings } from 'lucide-react';
 import {
   Badge,

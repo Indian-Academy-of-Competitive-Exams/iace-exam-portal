@@ -41,7 +41,7 @@ export class FcmSender {
     const projectId = config.get('FCM_PROJECT_ID');
     const clientEmail = config.get('FCM_CLIENT_EMAIL');
     // Stored as one line, because an .env value cannot carry the real newlines a PEM has.
-    const privateKey = config.get('FCM_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+    const privateKey = config.get('FCM_PRIVATE_KEY')?.replaceAll(String.raw`\n`, '\n');
 
     this.isConfigured = Boolean(projectId && clientEmail && privateKey);
     this.account = this.isConfigured

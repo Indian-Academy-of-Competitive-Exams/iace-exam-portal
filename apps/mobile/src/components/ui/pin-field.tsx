@@ -47,6 +47,7 @@ export function PinField<TValues extends FieldValues>({
         const message = fieldState.error?.message ?? hint;
         // The box the next keystroke lands in. Clamped, so a full value highlights the last.
         const active = Math.min(held.length, length - 1);
+        const boxes = Array.from({ length }, (_, index) => index);
 
         return (
           <View className="flex flex-col gap-1.5">
@@ -54,17 +55,17 @@ export function PinField<TValues extends FieldValues>({
 
             <View className="relative">
               <View className="flex-row gap-2">
-                {Array.from({ length }, (_, index) => (
+                {boxes.map((box) => (
                   <View
-                    key={index}
+                    key={box}
                     className={cn(
                       BOX,
-                      focused && index === active ? 'border-ring' : 'border-input',
+                      focused && box === active ? 'border-ring' : 'border-input',
                       fieldState.error && 'border-destructive',
                     )}
                   >
                     <Text className="text-lg font-medium text-foreground">
-                      {cellOf(held[index], masked)}
+                      {cellOf(held[box], masked)}
                     </Text>
                   </View>
                 ))}

@@ -71,6 +71,6 @@ export function reviewScreen({
 function keyText(question: ReviewedQuestion, shown: readonly QuestionLanguage[]): string | null {
   const answers = question.answerKey?.answers;
   if (!answers) return null;
-  const said = shown.map((language) => answers[language]).find((text) => Boolean(text));
+  const said = shown.map((language) => answers[language]).find(Boolean);
   return said ?? null;
 }

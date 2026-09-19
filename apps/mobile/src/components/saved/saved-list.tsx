@@ -180,7 +180,7 @@ function SavedRow({
 function footOf(row: SavedQuestion): string {
   const parts = [row.testTitle, instituteDayLabel(row.createdAt)];
   if (row.timeSpentSec !== null) parts.push(`${row.timeSpentSec}s`);
-  return parts.filter((part) => Boolean(part)).join(' · ');
+  return parts.filter(Boolean).join(' · ');
 }
 
 const removalOf = (kind: SavedQuestionKind) =>

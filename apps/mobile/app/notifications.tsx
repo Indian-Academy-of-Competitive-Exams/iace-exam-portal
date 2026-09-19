@@ -8,7 +8,7 @@ import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
 import { useTokenColor } from '../src/lib/use-token-color';
-import { asText, useFilterState } from '../src/lib/filters';
+import { asText, useFilterState, type FilterState } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
 import { Card } from '../src/components/ui/card';
 import { FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
@@ -45,11 +45,7 @@ export default function NotificationsScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerRight: () => <FilterTrigger bare state={state} filters={NOTIFICATION_FILTERS} />,
-        }}
-      />
+      <Stack.Screen options={{ headerRight: filterHeader(state) }} />
       <FlatList
         className="flex-1 bg-background"
         contentContainerStyle={CONTENT_STYLE}
@@ -69,6 +65,11 @@ export default function NotificationsScreen() {
 }
 
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, gap: 12 };
+
+/** A header action is a render function the navigator calls, so it is built outside the screen. */
+const filterHeader = (state: FilterState) => () => (
+  <FilterTrigger bare state={state} filters={NOTIFICATION_FILTERS} />
+);
 
 function ListBody({
   list,

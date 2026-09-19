@@ -317,13 +317,13 @@ function History({ title, lines }: Readonly<{ title: string; lines: readonly str
 const educationLines = (me: Me): string[] =>
   (me.profile?.educationDetails ?? []).map((row) =>
     [row.level, row.institution, row.board, row.year, percent(row.percentage)]
-      .filter((part) => Boolean(part))
+      .filter(Boolean)
       .join(' · '),
   );
 
 const examLines = (me: Me): string[] =>
   (me.profile?.pastExamHistory ?? []).map((row) =>
-    [row.exam, row.year, row.result].filter((part) => Boolean(part)).join(' · '),
+    [row.exam, row.year, row.result].filter(Boolean).join(' · '),
   );
 
 const percent = (value: number | undefined) => (value === undefined ? '' : `${value}%`);

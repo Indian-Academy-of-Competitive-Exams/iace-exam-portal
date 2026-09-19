@@ -2,7 +2,9 @@
 import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { Controller, type Control, type FieldValues, type Path } from 'react-hook-form';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  type DateTimePickerChangeEvent,
+} from '@react-native-community/datetimepicker';
 import { civilDate } from '@iace/contracts';
 import { cn } from '../../lib/cn';
 
@@ -36,10 +38,10 @@ export function DateField<TValues extends FieldValues>({
         // The hint gives way to the error rather than stacking, so the height never changes.
         const message = fieldState.error?.message ?? hint;
 
-        const chosen = (event: DateTimePickerEvent, picked?: Date) => {
+        const chosen = (_event: DateTimePickerChangeEvent, picked: Date) => {
           // Android's dialog dismisses itself; iOS's spinner stays until the field is tapped again.
           if (Platform.OS !== 'ios') setOpen(false);
-          if (event.type === 'set' && picked) field.onChange(civilDate(picked));
+          field.onChange(civilDate(picked));
         };
 
         return (
@@ -66,7 +68,8 @@ export function DateField<TValues extends FieldValues>({
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 minimumDate={minimum ? dayOf(minimum) : undefined}
                 maximumDate={maximum ? dayOf(maximum) : undefined}
-                onChange={chosen}
+                onValueChange={chosen}
+                onDismiss={() => setOpen(false)}
               />
             ) : null}
 
