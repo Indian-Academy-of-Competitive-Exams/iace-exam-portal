@@ -207,11 +207,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             }
           />
 
-          {banner ? (
-            <Alert variant="danger" className="mb-4">
-              {banner}
-            </Alert>
-          ) : null}
+          {banner ? <Alert variant="danger">{banner}</Alert> : null}
         </>
       }
     />

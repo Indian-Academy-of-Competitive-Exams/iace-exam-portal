@@ -92,7 +92,7 @@ const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
           autoComplete={autoComplete}
           maxLength={length}
           aria-invalid={invalid || undefined}
-          className="absolute inset-0 h-full w-full cursor-default opacity-0 outline-none disabled:cursor-not-allowed"
+          className="absolute inset-0 size-full cursor-default opacity-0 outline-none disabled:cursor-not-allowed"
           onChange={(event) => {
             const next = digitsOnly(event.currentTarget.value, length);
             onChange(next);

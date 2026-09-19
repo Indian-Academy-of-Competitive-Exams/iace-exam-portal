@@ -307,7 +307,7 @@ export function StudentsPage() {
   const branchBanner =
     chosenBranches.length > 0 ? (
       // Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once.
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Showing</span>
         {chosenBranches.map((entry) => (
           <Badge key={entry.id} variant={entry.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>

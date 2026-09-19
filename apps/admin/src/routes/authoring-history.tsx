@@ -224,7 +224,7 @@ function Output({ stats }: Readonly<{ stats: AuthoringStats | undefined }>) {
   }));
 
   return (
-    <div className="mb-4 space-y-4">
+    <div className="mb-4 flex flex-col gap-4">
       <MetricGroup>
         <Metric label="Today" value={String(stats.today)} />
         <Metric label="Last 7 days" value={String(stats.lastSevenDays)} />

@@ -46,13 +46,13 @@ export function AppShell() {
  */
 function DeactivatedNotice() {
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <PageHeader title="Access removed" />
       <EmptyState
         kind={EMPTY_STATE_KINDS.REFUSED}
         title="Every section is closed to you"
         hint="Nothing you created has been deleted; a super admin can restore your access."
       />
-    </>
+    </div>
   );
 }

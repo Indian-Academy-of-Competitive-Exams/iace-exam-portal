@@ -18,6 +18,9 @@ export const PAGE_CONTENT_CLASS = [
 /** Every ancestor between the frame and the table has to shrink, or the page takes the scroll. */
 const FILLS = 'flex min-h-0 flex-1 flex-col';
 
+/** `header` is a fragment, so the space between what a screen puts in it is the frame's to give. */
+const HEADER_BLOCK = 'mb-4 flex shrink-0 flex-col gap-4';
+
 /** Bled back out to the content region so the bar rides its edge, not the text it sits beside. */
 const REGION_BLEED = '-mx-5 px-5 xl:-mx-8 xl:px-8 2xl:-mx-10 2xl:px-10 [scrollbar-gutter:stable]';
 
@@ -149,8 +152,8 @@ function FrameTop({
 }>) {
   if (beside) {
     return (
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
-        <div className="min-w-0 flex-auto">{header}</div>
+      <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+        <div className="flex min-w-0 flex-auto flex-col gap-4">{header}</div>
         <FrameFilterRow filters={filters} beside />
       </div>
     );
@@ -158,7 +161,7 @@ function FrameTop({
 
   return (
     <>
-      {header ? <div className="shrink-0">{header}</div> : null}
+      {header ? <div className={HEADER_BLOCK}>{header}</div> : null}
       {stacksFilters ? <FrameFilterRow filters={filters} /> : null}
     </>
   );
@@ -272,7 +275,7 @@ export interface TableFrameProps {
 export function TableFrame({ header, toolbar, tabs, children }: Readonly<TableFrameProps>) {
   const frame = (
     <div data-page-frame className={FILLS}>
-      {header ? <div className="shrink-0">{header}</div> : null}
+      {header ? <div className={HEADER_BLOCK}>{header}</div> : null}
       <Card className={cn(FILLS, 'p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}

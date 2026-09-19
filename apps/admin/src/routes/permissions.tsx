@@ -93,7 +93,7 @@ export function PermissionsPage() {
             <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Permissions" />
 
             {!isLoading && registered.length === 0 ? (
-              <Alert variant="warning" className="mb-5">
+              <Alert variant="warning">
                 <span>
                   No features are defined, so there is nothing to grant. Feature keys live in the
                   code, not on this screen.

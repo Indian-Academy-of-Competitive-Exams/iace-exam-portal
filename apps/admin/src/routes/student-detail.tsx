@@ -170,10 +170,7 @@ function StudentStateNotice({
   if (notes.length === 0) return null;
 
   return (
-    <Alert
-      variant={!detail.isActive || detail.isTestBlocked ? 'danger' : 'warning'}
-      className="mb-4"
-    >
+    <Alert variant={!detail.isActive || detail.isTestBlocked ? 'danger' : 'warning'}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>{notes.join(' ')}</span>
         {!detail.preTestReady && onAddPreTestDetails ? (

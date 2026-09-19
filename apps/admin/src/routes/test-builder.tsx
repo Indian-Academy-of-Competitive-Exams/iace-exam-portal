@@ -39,6 +39,7 @@ import {
   TEST_BUILDER_STEP_LABELS,
   TEST_STATUS_LABELS,
 } from '../lib/constants';
+import { useAuth } from '../providers/auth';
 import { ConfigSummaryButton } from '../components/config-summary';
 import {
   applyServerErrors,
@@ -264,17 +265,12 @@ function TestBuilder({
           />
 
           <Stepper
-            className="mb-4"
             label="Building this test"
             steps={steps}
             onValueChange={(value) => open(value as TestBuilderStep)}
           />
 
-          {banner ? (
-            <Alert variant="danger" className="mb-4">
-              {banner}
-            </Alert>
-          ) : null}
+          {banner ? <Alert variant="danger">{banner}</Alert> : null}
         </>
       }
     >
@@ -378,8 +374,19 @@ function StepBody({
   sat: boolean;
   offer: OfferHold;
 }>) {
+  const { identity } = useAuth();
+  const editingBy = detail?.editingBy ?? null;
+  const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
+
   return (
     <>
+      {elsewhere ? (
+        <Alert variant="warning">
+          {elsewhere.fullName ?? 'Another admin'} is editing this test. Their changes have to land
+          first.
+        </Alert>
+      ) : null}
+
       {sat ? (
         <Alert variant="warning">
           Students have sat this test, so its paper cannot move under their results. Only its name

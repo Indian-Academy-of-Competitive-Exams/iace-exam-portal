@@ -20,11 +20,11 @@ export function AuthoringPreview({
   const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
 
   return (
-    <section className="rounded-md border border-border bg-surface p-5">
+    <section className="flex flex-col gap-4 rounded-md border border-border bg-surface p-5">
       <RichContent html={content.stem} lang={language} />
 
       {isMcq ? (
-        <ol className="mt-4 space-y-2">
+        <ol className="flex flex-col gap-2">
           {content.options.map((option, index) => (
             <li
               key={optionLetter(index)}
@@ -49,14 +49,14 @@ export function AuthoringPreview({
           ))}
         </ol>
       ) : (
-        <p className="mt-4 border-l-2 border-border pl-3 text-sm">
+        <p className="border-l-2 border-border pl-3 text-sm">
           <span className="font-semibold">Answer. </span>
           {previewTextOf(state.answer) || '—'}
         </p>
       )}
 
       {content.solution ? (
-        <div className="mt-4 flex gap-2 border-l-2 border-border pl-3 text-sm">
+        <div className="flex gap-2 border-l-2 border-border pl-3 text-sm">
           <span className="shrink-0 font-semibold">Explanation.</span>
           <RichContent html={content.solution} lang={language} />
         </div>

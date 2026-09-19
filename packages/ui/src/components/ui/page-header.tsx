@@ -26,7 +26,7 @@ export function PageHeader({
   size?: PageHeaderSize;
 }>) {
   return (
-    <div className="mb-4">
+    <div>
       {breadcrumbs}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-4">

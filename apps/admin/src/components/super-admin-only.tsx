@@ -14,14 +14,14 @@ export function SuperAdminOnly({
 
   if (!admin?.isSuperAdmin) {
     return (
-      <>
+      <div className="flex flex-col gap-4">
         <PageHeader title={title} />
         <EmptyState
           kind={EMPTY_STATE_KINDS.REFUSED}
           title="Only a super admin can open this"
           hint="Ask one to grant you super admin."
         />
-      </>
+      </div>
     );
   }
 

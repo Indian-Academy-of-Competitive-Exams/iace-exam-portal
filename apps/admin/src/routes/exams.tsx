@@ -163,7 +163,7 @@ export function ExamsPage() {
       />
 
       {!canWrite ? (
-        <Alert variant="info" className="mb-4">
+        <Alert variant="info">
           <span>
             Only a super admin can add or change the catalog. You can see it to pick from.
           </span>

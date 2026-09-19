@@ -272,7 +272,7 @@ export function AuditActivityPage() {
         columns={columns}
         rowKey={(row) => row.id}
         banner={
-          <Alert variant="info" className="mb-4">
+          <Alert variant="info">
             <span>
               Showing the last {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and
               is not shown here.

@@ -473,11 +473,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             }
           />
 
-          {banner ? (
-            <Alert variant="danger" className="mb-4">
-              {banner}
-            </Alert>
-          ) : null}
+          {banner ? <Alert variant="danger">{banner}</Alert> : null}
         </>
       }
     >

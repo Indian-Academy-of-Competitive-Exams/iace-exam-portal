@@ -75,7 +75,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             onKeyDown?.(event);
           }}
           className={cn(
-            'h-full w-full min-w-0 bg-transparent text-foreground outline-none',
+            'size-full min-w-0 bg-transparent text-foreground outline-none',
             'placeholder:text-placeholder',
             'disabled:cursor-not-allowed',
           )}

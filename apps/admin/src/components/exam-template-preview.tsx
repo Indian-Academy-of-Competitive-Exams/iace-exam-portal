@@ -87,14 +87,14 @@ export function ExamTemplatePreview({ template }: Readonly<{ template: ExamTempl
 
       <span className="flex h-[52px]">
         {config.palettePosition === 'LEFT' ? palette : null}
-        <span className="relative flex-1 space-y-1 p-1.5">
+        <span className="relative flex flex-1 flex-col gap-1 p-1.5">
           {config.watermark === 'PAPER' ? (
             <span className="pointer-events-none absolute inset-0 grid place-items-center text-[9px] font-bold uppercase tracking-wide text-exam-ink opacity-[0.06]">
               IACE
             </span>
           ) : null}
           <span className="block h-1 w-2/3 rounded-full bg-exam-ink opacity-40" />
-          <span className="block h-1 w-1/2 rounded-full bg-exam-ink-muted opacity-30" />
+          <span className="block size-1/2 rounded-full bg-exam-ink-muted opacity-30" />
           {[0, 1].map((row) => (
             <span
               key={row}

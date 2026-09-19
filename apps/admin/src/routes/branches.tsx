@@ -158,7 +158,7 @@ export function BranchesPage() {
       />
 
       {!isSuperAdmin ? (
-        <Alert variant="info" className="mb-5">
+        <Alert variant="info">
           <span>
             Only a super admin can add or change a branch. You can see the list to pick from.
           </span>

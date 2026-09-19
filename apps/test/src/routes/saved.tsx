@@ -162,9 +162,7 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
       banner={
         <>
           {/* ui-copy-ok: rule */}
-          <Alert variant="info" className="mb-4">
-            {KIND_NOTE[kind]}
-          </Alert>
+          <Alert variant="info">{KIND_NOTE[kind]}</Alert>
           {reading ? (
             <SavedQuestionDialog saved={reading} onClose={() => setReading(null)} />
           ) : null}

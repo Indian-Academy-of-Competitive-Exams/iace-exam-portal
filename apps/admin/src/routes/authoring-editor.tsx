@@ -303,7 +303,7 @@ function EditorPanes({
 
       <section className="flex min-h-0 flex-col">
         <PanelHeading title="Preview and validation" />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           <AuthoringPreview state={state} language={language} />
           <AuthoringChecks checks={checks} />
         </div>
