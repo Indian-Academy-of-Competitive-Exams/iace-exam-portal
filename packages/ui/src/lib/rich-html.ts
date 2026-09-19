@@ -5,6 +5,7 @@
  * paper is read mid-test where nothing can be taken back.
  */
 import katex from 'katex';
+import { SIZE_ATTR } from '../components/ui/rich-text-size';
 
 /** What a question may say. An element outside this keeps its text and loses its tag. */
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {
@@ -25,7 +26,7 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
   TD: ['colspan', 'rowspan'],
   TH: ['colspan', 'rowspan'],
   IMG: ['src', 'alt', 'width'],
-  SPAN: [],
+  SPAN: [SIZE_ATTR],
 };
 
 /** Unwrapping these would set their contents loose as markup, so they go whole. */

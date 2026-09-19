@@ -9,6 +9,7 @@ import { cn } from '../../lib/utils';
 import { TableTools } from './rich-text-table';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
+import { TextSizeMark } from './rich-text-size';
 import { QuestionImage, takeImages, type ImageLimits, type UploadImage } from './rich-text-image';
 
 export interface RichTextProps {
@@ -82,6 +83,7 @@ export function RichText({
       ),
       Superscript,
       Subscript,
+      TextSizeMark,
       ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } }), TableTools]),
       ...(onUploadImage ? [QuestionImage] : []),
       // A half-typed formula shows in red rather than taking the editor down with it.

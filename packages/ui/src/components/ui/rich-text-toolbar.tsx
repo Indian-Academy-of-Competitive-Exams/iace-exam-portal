@@ -2,6 +2,8 @@ import * as React from 'react';
 import katex from 'katex';
 import { type Editor } from '@tiptap/react';
 import {
+  AArrowDown,
+  AArrowUp,
   Bold,
   Italic,
   List,
@@ -28,6 +30,7 @@ import {
 import { Label } from './label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { insertUploaded, type ImageLimits, type UploadImage } from './rich-text-image';
+import { TEXT_SIZES, TEXT_SIZE_MARK, type TextSize } from './rich-text-size';
 
 /** The mark buttons, in the order a writer reaches for them. */
 const MARKS = [
@@ -36,6 +39,12 @@ const MARKS = [
   { name: 'underline', label: 'Underline', Icon: UnderlineIcon },
   { name: 'superscript', label: 'Superscript', Icon: SuperscriptIcon },
   { name: 'subscript', label: 'Subscript', Icon: SubscriptIcon },
+] as const;
+
+/** Steps either side of the paper's own size. Neither pressed IS normal, so there is no third button. */
+const SIZES = [
+  { size: TEXT_SIZES.SMALL, label: 'Smaller', Icon: AArrowDown },
+  { size: TEXT_SIZES.LARGE, label: 'Larger', Icon: AArrowUp },
 ] as const;
 
 const LISTS = [
@@ -185,6 +194,12 @@ export function RichTextToolbar({
   // `.run()` is what commits it — a chain that is only built does nothing at all.
   const run = (act: (chain: Chain) => Chain) => act(editor.chain().focus()).run();
 
+  // Pressing the step already under the caret takes it back off, which is what makes normal reachable.
+  const setSize = (size: TextSize) =>
+    editor.isActive(TEXT_SIZE_MARK, { size })
+      ? run((chain) => chain.unsetMark(TEXT_SIZE_MARK))
+      : run((chain) => chain.setMark(TEXT_SIZE_MARK, { size }));
+
   const choose = (file: File | undefined) => {
     if (file && onUploadImage) insertUploaded(editor.view, file, onUploadImage, imageLimits);
   };
@@ -212,6 +227,17 @@ export function RichTextToolbar({
           label={label}
           active={editor.isActive(name)}
           onClick={() => editor.chain().focus().toggleMark(name).run()}
+        >
+          <Icon aria-hidden />
+        </ToolButton>
+      ))}
+
+      {SIZES.map(({ size, label, Icon }) => (
+        <ToolButton
+          key={size}
+          label={label}
+          active={editor.isActive(TEXT_SIZE_MARK, { size })}
+          onClick={() => setSize(size)}
         >
           <Icon aria-hidden />
         </ToolButton>

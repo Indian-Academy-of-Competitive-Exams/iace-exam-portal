@@ -114,6 +114,24 @@ describe('richHtml', () => {
     assert.match(richHtml('<span data-latex="\\frac{"></span>'), /math-render/);
   });
 
+  /** A step of emphasis is the one thing a span may carry out of the bank and onto the paper. */
+  it('keeps the size step on a span', () => {
+    const html = richHtml('<p><span data-size="large">20%</span> of 150</p>');
+
+    assert.match(html, /data-size="large"/);
+    assert.match(html, />20%</);
+  });
+
+  it('strips anything else a span arrives with', () => {
+    const html = richHtml(
+      '<p><span class="x" style="font-size:40px" data-size="small">a</span></p>',
+    );
+
+    assert.match(html, /data-size="small"/);
+    assert.doesNotMatch(html, /style=/);
+    assert.doesNotMatch(html, /class="x"/);
+  });
+
   it('reads a formula through its escaping, the way the editor stored it', () => {
     const html = richHtml('<span data-latex="a &lt; b"></span>');
 

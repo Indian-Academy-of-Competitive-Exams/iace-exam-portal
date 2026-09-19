@@ -100,6 +100,15 @@ h3 {
 }
 
 /* Reachable by typing "> " even with no button for it, so it is flattened the same way. */
+/* Relative on purpose: a step follows whatever size the paper sets, rather than fixing one of its own. */
+.rich-content [data-size='small'] {
+  font-size: 0.875em;
+}
+
+.rich-content [data-size='large'] {
+  font-size: 1.125em;
+}
+
 .rich-content blockquote {
   border-left: 2px solid var(--border-strong);
   padding-left: var(--space-3);

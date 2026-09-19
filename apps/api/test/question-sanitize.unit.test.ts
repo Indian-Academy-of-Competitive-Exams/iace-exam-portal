@@ -124,6 +124,18 @@ describe('sanitizeContentHtml', () => {
   });
 });
 
+/** The step the toolbar writes is a data attribute, which is why the allow-list needs no widening. */
+describe('a size step on the way in', () => {
+  it('keeps data-size and drops the style beside it', () => {
+    const html = sanitizeContentHtml(
+      '<p><span style="font-size:40px" data-size="large">x</span></p>',
+    );
+
+    assert.match(html, /data-size="large"/);
+    assert.doesNotMatch(html, /style=/);
+  });
+});
+
 describe('buildContent sanitizes', () => {
   /** The editor's save and the importer's commit both build content here, so both are covered. */
   it('stores no script, whichever path wrote the question', () => {

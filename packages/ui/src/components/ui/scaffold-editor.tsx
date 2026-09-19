@@ -12,6 +12,7 @@ import { TableTools } from './rich-text-table';
 import { Transliterate, writeIn, type IndicScript } from './rich-text-transliterate';
 import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
+import { TextSizeMark } from './rich-text-size';
 import { QuestionImage, takeImages, type ImageLimits, type UploadImage } from './rich-text-image';
 import {
   REGION_KIND,
@@ -162,6 +163,7 @@ export function ScaffoldEditor({
       ScaffoldRegionNode,
       Superscript,
       Subscript,
+      TextSizeMark,
       TableKit.configure({ table: { resizable: true } }),
       TableTools,
       Transliterate,
