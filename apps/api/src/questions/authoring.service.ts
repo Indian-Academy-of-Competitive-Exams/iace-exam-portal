@@ -36,8 +36,9 @@ export class AuthoringService {
     draft: QuestionDraft,
     adminId: string,
     assignmentId: string | null = null,
+    isSuperAdmin = false,
   ): Promise<AuthoringSaveResult> {
-    if (assignmentId) await this.assertOwnAssignment(assignmentId, adminId);
+    if (assignmentId) await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
     const question = await this.questions.create(asDraftEntry(draft), adminId, {
       allowDuplicate: true,
       assignmentId,
@@ -144,13 +145,13 @@ export class AuthoringService {
     }
   }
 
-  /** Not theirs reads as not there — the same guard `finalize` uses on the assignment itself. */
-  private async assertOwnAssignment(id: string, adminId: string) {
+  /** Not theirs reads as not there — unless a super admin, who takes up a section nobody holds. */
+  private async assertOwnAssignment(id: string, adminId: string, isSuperAdmin: boolean) {
     const row = await this.prisma.questionAssignment.findUnique({
       where: { id },
       select: { assigneeId: true },
     });
-    if (row?.assigneeId !== adminId) {
+    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
   }

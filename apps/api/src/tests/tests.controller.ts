@@ -115,8 +115,9 @@ export class TestsController {
   addPaperQuestions(
     @Param('id') id: string,
     @Body(new ZodBody(addPaperQuestionSchema)) body: AddPaperQuestionBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.addQuestions(id, body);
+    return this.paper.addQuestions(id, body, user.isSuperAdmin);
   }
 
   /** One row of the paper, so a paper right but for a single question is not redrawn whole. */
@@ -127,8 +128,9 @@ export class TestsController {
     @Param('id') id: string,
     @Param('rowId') rowId: string,
     @Body(new ZodBody(replacePaperQuestionSchema)) body: ReplacePaperQuestionBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.replaceQuestion(id, rowId, body);
+    return this.paper.replaceQuestion(id, rowId, body, user.isSuperAdmin);
   }
 
   /** The only change a finalized paper allows — and it re-scores every sitting that served it. */
@@ -149,8 +151,9 @@ export class TestsController {
   removePaperQuestions(
     @Param('id') id: string,
     @Query(new ZodQuery(removePaperQuestionsSchema)) query: RemovePaperQuestionsQuery,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.removeQuestions(id, query.rowIds ?? []);
+    return this.paper.removeQuestions(id, query.rowIds ?? [], user.isSuperAdmin);
   }
 
   /** Draws what one section still lacks. It only ever adds: a hand-picked row is never displaced. */
@@ -161,8 +164,9 @@ export class TestsController {
   fillPaperSection(
     @Param('id') id: string,
     @Param('sectionId') sectionId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
-    return this.paper.fillSection(id, sectionId);
+    return this.paper.fillSection(id, sectionId, user.isSuperAdmin);
   }
 
   /** Idempotent: a second finalize reports the first one's outcome rather than freezing twice. */
@@ -202,8 +206,8 @@ export class TestsController {
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/offer')
   @HttpCode(HttpStatus.OK)
-  offer(@Param('id') id: string): Promise<OfferResult> {
-    return this.finalizer.offer(id);
+  offer(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<OfferResult> {
+    return this.finalizer.offer(id, user.isSuperAdmin);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

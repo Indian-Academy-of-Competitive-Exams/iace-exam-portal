@@ -161,6 +161,17 @@ describe('AuthoringService.create — assignment provenance', () => {
     );
     assert.equal(await prisma.question.count(), 0);
   });
+
+  /** The override: a super admin types into a section whoever holds it, or nobody does. */
+  it('lets a super admin write against an assignment that is not theirs', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(THEIRS);
+
+    const { question } = await authoring.create(draft(), MINE, assignment.id, true);
+
+    const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+    assert.equal(row.assignmentId, assignment.id);
+  });
 });
 
 describe('AuthoringService.history', () => {

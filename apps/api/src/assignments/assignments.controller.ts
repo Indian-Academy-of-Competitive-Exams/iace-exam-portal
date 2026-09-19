@@ -76,7 +76,7 @@ export class AssignmentsController {
   @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.WRITE)
   @Patch(':id/finalize')
   finalize(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Assignment> {
-    return this.assignments.finalize(id, user.id);
+    return this.assignments.finalize(id, user.id, user.isSuperAdmin);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)

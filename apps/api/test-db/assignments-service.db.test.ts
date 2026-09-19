@@ -506,6 +506,30 @@ describe('AssignmentsService — finalizing', () => {
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
+
+  /** The override: somebody has to be able to close a row whose assignee never will. */
+  it('lets a super admin finalize the row it refuses everybody else', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const section = await makeSection(prisma, catalog);
+    const reader = await makeAdmin(prisma);
+    const superAdmin = await makeAdmin(prisma, { isSuperAdmin: true });
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const created = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+
+    const finalized = await assignments.finalize(created.id, superAdmin.id, true);
+
+    assert.ok(finalized.finalizedAt);
+  });
 });
 
 describe('the offer gate', () => {
@@ -587,6 +611,36 @@ describe('the offer gate', () => {
 
     await assignments.finalize(readerRow.id, reader.id);
     const result = await finalizer.offer(paper.testId);
+
+    assert.equal(result.status, TEST_STATUS.ACTIVE);
+  });
+
+  /** The override: a test cannot be unshippable because one person's row will never be finalized. */
+  it('lets a super admin offer over a section nobody has marked read', async () => {
+    const { assignments } = build();
+    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
+    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+    await prisma.baseConfigSection.update({
+      where: { id: paper.sectionIds[0] ?? '' },
+      data: { questionCount: 1 },
+    });
+    const reader = await makeAdmin(prisma);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    await assignments.assign(
+      paper.testId,
+      body({
+        baseConfigSectionId: paper.sectionIds[0] ?? '',
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+
+    await assert.rejects(
+      () => finalizer.offer(paper.testId),
+      refusedWith(ErrorCodes.VALIDATION_ERROR),
+    );
+    const result = await finalizer.offer(paper.testId, true);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });

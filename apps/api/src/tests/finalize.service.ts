@@ -43,9 +43,9 @@ export class FinalizeService {
   ) {}
 
   /** One transaction: as two calls, a failure between them froze a test and offered it to nobody. */
-  async offer(testId: string): Promise<OfferResult> {
+  async offer(testId: string, isSuperAdmin = false): Promise<OfferResult> {
     const test = await this.requireTest(testId);
-    await this.assertAssignmentsRead(testId);
+    await this.assertAssignmentsRead(testId, isSuperAdmin);
 
     const frozen = test.isLocked
       ? await this.openAlreadyFrozen(test)
@@ -143,7 +143,9 @@ export class FinalizeService {
   }
 
   /** A section still being typed or read is not ready for a student to sit. No rows, no gate. */
-  private async assertAssignmentsRead(testId: string): Promise<void> {
+  private async assertAssignmentsRead(testId: string, isSuperAdmin: boolean): Promise<void> {
+    if (isSuperAdmin) return;
+
     const outstanding = await this.prisma.questionAssignment.findMany({
       where: { testId, finalizedAt: null },
       select: { baseConfigSection: { select: { name: true } } },

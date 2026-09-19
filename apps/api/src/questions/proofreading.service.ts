@@ -56,8 +56,12 @@ export class ProofreadingService {
   }
 
   /** The section this reader was handed: what its typist wrote, and what the paper picked into it. */
-  async forAssignment(assignmentId: string, adminId: string): Promise<ProofreadQuestion[]> {
-    const assignment = await this.requireOwnSection(assignmentId, adminId);
+  async forAssignment(
+    assignmentId: string,
+    adminId: string,
+    isSuperAdmin = false,
+  ): Promise<ProofreadQuestion[]> {
+    const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
     return this.withFlags(await this.questions.allIn(sectionScope(assignment)));
   }
 
@@ -67,9 +71,11 @@ export class ProofreadingService {
     questionId: string,
     draft: QuestionDraft,
     adminId: string,
+    isSuperAdmin = false,
   ): Promise<QuestionDetail> {
-    const assignment = await this.requireOwnSection(assignmentId, adminId);
-    if (assignment.finalizedAt) throw alreadyRead();
+    const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
+    // Finalising ends a reader's authority over the section; it never ends a super admin's.
+    if (assignment.finalizedAt && !isSuperAdmin) throw alreadyRead();
 
     const question = await this.prisma.question.findFirst({
       where: { id: questionId, ...sectionScope(assignment) },
@@ -81,8 +87,12 @@ export class ProofreadingService {
     return this.questions.update(questionId, { ...draft, status: question.status }, adminId);
   }
 
-  /** Not theirs reads as not there — the same guard `finalize` uses on the assignment itself. */
-  private async requireOwnSection(assignmentId: string, adminId: string): Promise<SectionRef> {
+  /** Not theirs reads as not there — unless a super admin, who is refused no section of their own institute. */
+  private async requireOwnSection(
+    assignmentId: string,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<SectionRef> {
     const row = await this.prisma.questionAssignment.findUnique({
       where: { id: assignmentId },
       select: {
@@ -93,7 +103,8 @@ export class ProofreadingService {
         finalizedAt: true,
       },
     });
-    if (row?.assigneeId !== adminId || row.role !== ASSIGNMENT_ROLES.PROOFREADER) {
+    const theirs = row?.assigneeId === adminId && row?.role === ASSIGNMENT_ROLES.PROOFREADER;
+    if (!row || (!theirs && !isSuperAdmin)) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     return row;

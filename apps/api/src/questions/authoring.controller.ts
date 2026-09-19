@@ -61,7 +61,7 @@ export class AuthoringController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AuthoringSaveResult> {
     const { assignmentId, ...draft } = body;
-    return this.authoring.create(draft, user.id, assignmentId ?? null);
+    return this.authoring.create(draft, user.id, assignmentId ?? null, user.isSuperAdmin);
   }
 
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)

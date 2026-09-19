@@ -329,6 +329,20 @@ describe('ProofreadingService.forAssignment', () => {
     );
   });
 
+  /** The override: a super admin is refused no section of their own institute. */
+  it('hands a super admin the section it just refused a stranger', async () => {
+    const { proofreading, questions } = await build();
+    const section = await aSection();
+    const written = await questions.create(draft(), AUTHOR, { assignmentId: section.typing.id });
+
+    const rows = await proofreading.forAssignment(section.reading.id, STRANGER, true);
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      [written.id],
+    );
+  });
+
   /** Spec §11: reading a section is never checking your own typing, so a typist's row is not one. */
   it('refuses a typist their own row', async () => {
     const { proofreading } = await build();

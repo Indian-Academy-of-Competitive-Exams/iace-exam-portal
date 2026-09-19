@@ -137,13 +137,13 @@ export class AssignmentsService {
   }
 
   /** Idempotent: finalising twice hands back the same row rather than erroring on the second call. */
-  async finalize(id: string, adminId: string): Promise<Assignment> {
+  async finalize(id: string, adminId: string, isSuperAdmin = false): Promise<Assignment> {
     const row = await this.prisma.questionAssignment.findUnique({
       where: { id },
       include: ASSIGNMENT_INCLUDE,
     });
     // Not theirs reads as not there — the same guard authoring.service.ts uses for a draft.
-    if (row?.assigneeId !== adminId) {
+    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     // One fact per role — "I wrote this" and "I read this" — with no ordering between them.

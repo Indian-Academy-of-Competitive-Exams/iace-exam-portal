@@ -794,6 +794,19 @@ describe("PaperService — a section that is somebody else's job", () => {
     assert.match(error.message, /Priya/);
   });
 
+  /** The override: a typist who has left the institute cannot hold a section hostage. */
+  it('lets a super admin pick into the very section it just refused', async () => {
+    const service = await assigned(null);
+
+    const paper = await service.addQuestions(
+      TEST,
+      { baseConfigSectionId: idFor('sec_2'), questionIds: [idFor('q1')] },
+      true,
+    );
+
+    assert.ok(paper.sections.some((section) => section.questions.length > 0));
+  });
+
   it('refuses filling it from the spec too', async () => {
     const service = await assigned(null);
 

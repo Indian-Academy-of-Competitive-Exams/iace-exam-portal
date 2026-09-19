@@ -67,7 +67,7 @@ export class ProofreadingController {
     @Param('assignmentId') assignmentId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ProofreadQuestion[]> {
-    return this.proofreading.forAssignment(assignmentId, user.id);
+    return this.proofreading.forAssignment(assignmentId, user.id, user.isSuperAdmin);
   }
 
   /** The point of the feature: a reader fixes what they find rather than only naming it. */
@@ -80,7 +80,13 @@ export class ProofreadingController {
     @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionDetail> {
-    return this.proofreading.editQuestion(assignmentId, questionId, body, user.id);
+    return this.proofreading.editQuestion(
+      assignmentId,
+      questionId,
+      body,
+      user.id,
+      user.isSuperAdmin,
+    );
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)

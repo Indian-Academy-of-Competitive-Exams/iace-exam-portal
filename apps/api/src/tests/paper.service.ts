@@ -107,14 +107,18 @@ export class PaperService {
   }
 
   /** Several at once, numbered from the section's current highest order; every one resolved and checked before any write. */
-  async addQuestions(testId: string, input: AddPaperQuestionBody): Promise<TestPaper> {
+  async addQuestions(
+    testId: string,
+    input: AddPaperQuestionBody,
+    isSuperAdmin = false,
+  ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    await this.assertSectionsNotAssigned(testId, [section.id]);
+    await this.assertSectionsNotAssigned(testId, [section.id], isSuperAdmin);
 
     this.assertNoRepeats(input.questionIds);
 
@@ -173,14 +177,18 @@ export class PaperService {
   }
 
   /** Tops a hand-picked section up to its count from its own spec: the draw only ever ADDS. */
-  async fillSection(testId: string, baseConfigSectionId: string): Promise<TestPaper> {
+  async fillSection(
+    testId: string,
+    baseConfigSectionId: string,
+    isSuperAdmin = false,
+  ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    await this.assertSectionsNotAssigned(testId, [section.id]);
+    await this.assertSectionsNotAssigned(testId, [section.id], isSuperAdmin);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -267,12 +275,13 @@ export class PaperService {
     testId: string,
     rowId: string,
     input: ReplacePaperQuestionBody,
+    isSuperAdmin = false,
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const row = await this.requireRow(testId, rowId);
-    await this.assertSectionsNotAssigned(testId, [row.baseConfigSectionId]);
+    await this.assertSectionsNotAssigned(testId, [row.baseConfigSectionId], isSuperAdmin);
     const question = await this.requireDrawable(input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
@@ -288,16 +297,22 @@ export class PaperService {
   }
 
   /** Dropped, leaving its section short of the count its config asks for until one is drawn. */
-  async removeQuestions(testId: string, rowIds: readonly string[]): Promise<TestPaper> {
+  async removeQuestions(
+    testId: string,
+    rowIds: readonly string[],
+    isSuperAdmin = false,
+  ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
     const rows = [];
     for (const rowId of rowIds) rows.push(await this.requireRow(testId, rowId));
-    await this.assertSectionsNotAssigned(testId, [
-      ...new Set(rows.map((row) => row.baseConfigSectionId)),
-    ]);
+    await this.assertSectionsNotAssigned(
+      testId,
+      [...new Set(rows.map((row) => row.baseConfigSectionId))],
+      isSuperAdmin,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await thaw(tx, test);
@@ -443,11 +458,14 @@ export class PaperService {
     return rows.filter(hasVersion);
   }
 
-  /** A section handed to somebody is theirs until they are done — nobody else fills it underneath. */
+  /** A section handed to somebody is theirs until they are done — nobody but a super admin fills it underneath. */
   private async assertSectionsNotAssigned(
     testId: string,
     baseConfigSectionIds: readonly string[],
+    isSuperAdmin: boolean,
   ): Promise<void> {
+    if (isSuperAdmin) return;
+
     const outstanding = await this.prisma.questionAssignment.findMany({
       where: { testId, finalizedAt: null, baseConfigSectionId: { in: [...baseConfigSectionIds] } },
       select: {
