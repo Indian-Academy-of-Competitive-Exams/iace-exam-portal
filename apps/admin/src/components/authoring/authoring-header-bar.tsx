@@ -31,15 +31,12 @@ const CAPTION = 'text-[0.625rem] font-semibold uppercase tracking-wide text-mute
 export function AuthoringHeaderBar({
   header,
   state,
-  counter,
   actions,
   onHeaderChange,
   onStateChange,
 }: Readonly<{
   header: AuthoringHeader;
   state: AuthoringState;
-  /** Which question of this batch is in the box — a value, not a label. */
-  counter: string;
   actions: React.ReactNode;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
@@ -148,10 +145,7 @@ export function AuthoringHeaderBar({
         ) : null}
       </div>
 
-      <div className="flex flex-none items-center gap-3">
-        <span className="text-xs tabular-nums text-muted-foreground">{counter}</span>
-        {actions}
-      </div>
+      <div className="flex flex-none items-center gap-3">{actions}</div>
     </div>
   );
 }

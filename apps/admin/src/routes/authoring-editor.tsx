@@ -181,7 +181,6 @@ export function AuthoringEditorPage() {
       <AuthoringHeaderBar
         header={header}
         state={state}
-        counter={id ? 'Editing' : `Question ${written + 1}`}
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
@@ -212,6 +211,7 @@ export function AuthoringEditorPage() {
           canSave={canSave}
           boxVersion={boxVersion}
           checks={checks}
+          counter={id ? 'Editing' : `Question ${written + 1}`}
           onRegions={onRegions}
           onCycleLanguage={cycleLanguage}
           onLanguageChange={switchLanguage}
@@ -245,6 +245,7 @@ function EditorPanes({
   canSave,
   boxVersion,
   checks,
+  counter,
   onRegions,
   onCycleLanguage,
   onLanguageChange,
@@ -257,6 +258,8 @@ function EditorPanes({
   canSave: boolean;
   boxVersion: number;
   checks: readonly Check[];
+  /** Which question of this batch is in the box — a value, and the only title the pane needs. */
+  counter: string;
   onRegions: (regions: ScaffoldRegion[]) => void;
   onCycleLanguage: () => void;
   onLanguageChange: (next: QuestionLanguage) => void;
@@ -268,7 +271,7 @@ function EditorPanes({
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
         <PanelHeading
-          title="Editor"
+          title={counter}
           action={
             <SegmentedControl
               value={language}
