@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SlidersHorizontal } from 'lucide-react';
 import {
@@ -19,6 +19,7 @@ import {
 import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import {
   EmptyState,
+  linkVariants,
   EMPTY_STATE_KINDS,
   Alert,
   Badge,
@@ -171,6 +172,24 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
       ].join(' · ')}
     />
   );
+
+  // Choosing questions IS saying where they come from, so the picker waits on that decision.
+  if (detail.paperSource === null) {
+    return (
+      <PanelFrame fills header={header}>
+        <EmptyState
+          title="No paper yet"
+          /* ui-copy-ok: rule */
+          hint="This test has not said whether its questions are typed for it or picked from the bank."
+          action={
+            <Link to={ROUTES.TEST(detail.id)} className={linkVariants()}>
+              Open the builder
+            </Link>
+          }
+        />
+      </PanelFrame>
+    );
+  }
 
   if (!openSection) {
     return (
