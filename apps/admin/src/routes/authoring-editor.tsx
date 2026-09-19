@@ -25,6 +25,7 @@ import {
   EMPTY_STATE_KINDS,
   Kbd,
   LoadingState,
+  SegmentedControl,
   StatRow,
   Tooltip,
   TooltipContent,
@@ -180,14 +181,12 @@ export function AuthoringEditorPage() {
       <AuthoringHeaderBar
         header={header}
         state={state}
-        language={language}
         counter={id ? 'Editing' : `Question ${written + 1}`}
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
           rebuildBox();
         }}
-        onLanguageChange={switchLanguage}
         actions={
           <EditorActions
             language={language}
@@ -215,6 +214,7 @@ export function AuthoringEditorPage() {
           checks={checks}
           onRegions={onRegions}
           onCycleLanguage={cycleLanguage}
+          onLanguageChange={switchLanguage}
           onSave={() => save.mutate()}
         />
       )}
@@ -247,6 +247,7 @@ function EditorPanes({
   checks,
   onRegions,
   onCycleLanguage,
+  onLanguageChange,
   onSave,
 }: Readonly<{
   questionId: string;
@@ -258,6 +259,7 @@ function EditorPanes({
   checks: readonly Check[];
   onRegions: (regions: ScaffoldRegion[]) => void;
   onCycleLanguage: () => void;
+  onLanguageChange: (next: QuestionLanguage) => void;
   onSave: () => void;
 }>) {
   const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
@@ -265,7 +267,21 @@ function EditorPanes({
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
-        <PanelHeading title="Editor" />
+        <PanelHeading
+          title="Editor"
+          action={
+            <SegmentedControl
+              value={language}
+              onChange={(value) => onLanguageChange(value as QuestionLanguage)}
+              aria-label="Language"
+              items={LANGUAGE_ORDER.map((code) => ({
+                value: code,
+                label: code.toUpperCase(),
+                name: LANGUAGE_LABELS[code],
+              }))}
+            />
+          }
+        />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <ScaffoldEditor
             aria-label="Question"
@@ -396,11 +412,12 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
   );
 }
 
-function PanelHeading({ title }: Readonly<{ title: string }>) {
+function PanelHeading({ title, action }: Readonly<{ title: string; action?: React.ReactNode }>) {
   return (
-    <h2 className="flex-none border-b border-border bg-surface px-4 py-2 text-sm font-semibold">
-      {title}
-    </h2>
+    <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      {action}
+    </div>
   );
 }
 

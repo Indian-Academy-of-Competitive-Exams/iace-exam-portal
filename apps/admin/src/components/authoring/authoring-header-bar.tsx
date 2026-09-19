@@ -2,14 +2,11 @@ import {
   ANSWER_MODE,
   ANSWER_MODES,
   DIFFICULTY_LEVELS,
-  LANGUAGE_LABELS,
-  LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
   QUESTION_TYPE,
   QUESTION_TYPES,
   type AnswerMode,
   type DifficultyLevel,
-  type QuestionLanguage,
   type QuestionType,
 } from '@iace/contracts';
 import { Combobox, Input, SegmentedControl, cn } from '@iace/ui';
@@ -34,134 +31,125 @@ const CAPTION = 'text-[0.625rem] font-semibold uppercase tracking-wide text-mute
 export function AuthoringHeaderBar({
   header,
   state,
-  language,
   counter,
   actions,
   onHeaderChange,
   onStateChange,
-  onLanguageChange,
 }: Readonly<{
   header: AuthoringHeader;
   state: AuthoringState;
-  language: QuestionLanguage;
   /** Which question of this batch is in the box — a value, not a label. */
   counter: string;
   actions: React.ReactNode;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
-  onLanguageChange: (next: QuestionLanguage) => void;
 }>) {
   const typed = state.type === QUESTION_TYPE.TEXT_FIELD;
 
   return (
-    <div className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-2">
-      <Slot caption="Subject">
-        <SubjectPicker
-          value={header.subjectId}
-          placeholder="Choose a subject"
-          className={CONTROL}
-          aria-label="Subject"
-          onChange={(subjectId) => onHeaderChange({ ...header, subjectId, topicId: '' })}
-        />
-      </Slot>
-
-      <Slot caption="Topic">
-        <TopicPicker
-          value={header.topicId}
-          subjectId={header.subjectId}
-          placeholder="Any topic"
-          clearable
-          className={CONTROL}
-          aria-label="Topic"
-          onChange={(topicId) => onHeaderChange({ ...header, topicId })}
-        />
-      </Slot>
-
-      <Slot caption="Tags">
-        <Input
-          value={header.tags}
-          placeholder="ssc, time and work"
-          aria-label="Tags"
-          className={cn(FIELD, 'w-auto min-w-40 max-w-56')}
-          onChange={(event) => onHeaderChange({ ...header, tags: event.target.value })}
-        />
-      </Slot>
-
-      <Slot caption="Difficulty">
-        <Combobox
-          value={header.difficulty}
-          clearable={false}
-          className={CONTROL}
-          aria-label="Difficulty"
-          items={DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level }))}
-          onChange={(value) => onHeaderChange({ ...header, difficulty: value as DifficultyLevel })}
-        />
-      </Slot>
-
-      <Slot caption="Type">
-        <Combobox
-          value={state.type}
-          clearable={false}
-          className={CONTROL}
-          aria-label="Type"
-          items={QUESTION_TYPES.map((type) => ({
-            value: type,
-            label: QUESTION_TYPE_LABELS[type],
-          }))}
-          onChange={(value) => onStateChange(retyped(state, value as QuestionType))}
-        />
-      </Slot>
-
-      {typed ? null : (
-        <Slot caption="Options">
-          <SegmentedControl
-            value={String(state.optionCount)}
-            aria-label="How many options"
-            items={OPTION_COUNTS.map((count) => ({ value: String(count), label: String(count) }))}
-            onChange={(value) => onStateChange(withOptionCount(state, Number(value)))}
+    <div className="flex flex-none items-center gap-x-4 border-b border-border bg-surface px-4 py-2">
+      {/* The batch's settings give way first; what a typist presses must never leave the row. */}
+      <div className="flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto">
+        <Slot caption="Subject">
+          <SubjectPicker
+            value={header.subjectId}
+            placeholder="Choose a subject"
+            className={CONTROL}
+            aria-label="Subject"
+            onChange={(subjectId) => onHeaderChange({ ...header, subjectId, topicId: '' })}
           />
         </Slot>
-      )}
 
-      {typed ? (
-        <Slot caption="Answer match">
+        <Slot caption="Topic">
+          <TopicPicker
+            value={header.topicId}
+            subjectId={header.subjectId}
+            placeholder="Any topic"
+            clearable
+            className={CONTROL}
+            aria-label="Topic"
+            onChange={(topicId) => onHeaderChange({ ...header, topicId })}
+          />
+        </Slot>
+
+        <Slot caption="Tags">
+          <Input
+            value={header.tags}
+            placeholder="ssc, time and work"
+            aria-label="Tags"
+            className={cn(FIELD, 'w-auto min-w-40 max-w-56')}
+            onChange={(event) => onHeaderChange({ ...header, tags: event.target.value })}
+          />
+        </Slot>
+
+        <Slot caption="Difficulty">
           <Combobox
-            value={state.answerMode}
+            value={header.difficulty}
             clearable={false}
             className={CONTROL}
-            aria-label="Answer match"
-            items={ANSWER_MODES.map((mode) => ({ value: mode, label: ANSWER_MODE_LABELS[mode] }))}
+            aria-label="Difficulty"
+            items={DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level }))}
             onChange={(value) =>
-              onStateChange({ ...state, answerMode: value as AnswerMode, tolerance: '' })
+              onHeaderChange({ ...header, difficulty: value as DifficultyLevel })
             }
           />
         </Slot>
-      ) : null}
 
-      {typed && state.answerMode === ANSWER_MODE.NUMERIC ? (
-        <Slot caption="Tolerance">
-          <Input
-            value={state.tolerance}
-            inputMode="decimal"
-            aria-label="Tolerance"
-            className={cn(FIELD, 'w-24')}
-            onChange={(event) => onStateChange({ ...state, tolerance: event.target.value })}
+        <Slot caption="Type">
+          <Combobox
+            value={state.type}
+            clearable={false}
+            className={CONTROL}
+            aria-label="Type"
+            items={QUESTION_TYPES.map((type) => ({
+              value: type,
+              label: QUESTION_TYPE_LABELS[type],
+            }))}
+            onChange={(value) => onStateChange(retyped(state, value as QuestionType))}
           />
         </Slot>
-      ) : null}
 
-      <div className="ml-auto flex items-center gap-3">
+        {typed ? null : (
+          <Slot caption="Options">
+            <SegmentedControl
+              value={String(state.optionCount)}
+              aria-label="How many options"
+              items={OPTION_COUNTS.map((count) => ({ value: String(count), label: String(count) }))}
+              onChange={(value) => onStateChange(withOptionCount(state, Number(value)))}
+            />
+          </Slot>
+        )}
+
+        {typed ? (
+          <Slot caption="Answer match">
+            <Combobox
+              value={state.answerMode}
+              clearable={false}
+              className={CONTROL}
+              aria-label="Answer match"
+              items={ANSWER_MODES.map((mode) => ({ value: mode, label: ANSWER_MODE_LABELS[mode] }))}
+              onChange={(value) =>
+                onStateChange({ ...state, answerMode: value as AnswerMode, tolerance: '' })
+              }
+            />
+          </Slot>
+        ) : null}
+
+        {typed && state.answerMode === ANSWER_MODE.NUMERIC ? (
+          <Slot caption="Tolerance">
+            <Input
+              value={state.tolerance}
+              inputMode="decimal"
+              aria-label="Tolerance"
+              className={cn(FIELD, 'w-24')}
+              onChange={(event) => onStateChange({ ...state, tolerance: event.target.value })}
+            />
+          </Slot>
+        ) : null}
+      </div>
+
+      <div className="flex flex-none items-center gap-3">
         <span className="text-xs tabular-nums text-muted-foreground">{counter}</span>
-        <SegmentedControl
-          value={language}
-          onChange={(value) => onLanguageChange(value as QuestionLanguage)}
-          aria-label="Language"
-          items={LANGUAGE_ORDER.map((code) => ({
-            value: code,
-            label: code.toUpperCase(),
-            name: LANGUAGE_LABELS[code],
-          }))}
-        />
         {actions}
       </div>
     </div>
@@ -170,7 +158,7 @@ export function AuthoringHeaderBar({
 
 function Slot({ caption, children }: Readonly<{ caption: string; children: React.ReactNode }>) {
   return (
-    <label className="flex items-center gap-2">
+    <label className="flex shrink-0 items-center gap-2">
       <span className={CAPTION}>{caption}</span>
       {children}
     </label>
