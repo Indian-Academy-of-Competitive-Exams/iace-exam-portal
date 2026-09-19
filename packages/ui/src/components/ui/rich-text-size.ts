@@ -24,7 +24,7 @@ export const TextSizeMark = Mark.create({
         default: null,
         parseHTML: (element: HTMLElement) => element.getAttribute(SIZE_ATTR),
         renderHTML: (attrs: Record<string, unknown>) =>
-          attrs.size ? { [SIZE_ATTR]: String(attrs.size) } : {},
+          typeof attrs.size === 'string' ? { [SIZE_ATTR]: attrs.size } : {},
       },
     };
   },

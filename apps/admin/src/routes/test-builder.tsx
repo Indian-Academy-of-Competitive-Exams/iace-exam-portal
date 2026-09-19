@@ -376,7 +376,7 @@ function StepBody({
 }>) {
   const { identity } = useAuth();
   const editingBy = detail?.editingBy ?? null;
-  const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
+  const elsewhere = editingBy?.adminId !== identity?.id ? editingBy : null;
   // Picking questions IS saying where they come from, so the paper waits on the choice above it.
   const sourceChosen = !detail || detail.paperSource !== null;
 
