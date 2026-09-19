@@ -47,6 +47,7 @@ const SERIES_TEST_SELECT = {
   opensAt: true,
   status: true,
   finalizedAt: true,
+  paperSource: true,
   // A test's questions and clock are DERIVED: a scoped paper is its own sections' worth, not the config's.
   scope: true,
   scopeRef: true,
@@ -273,6 +274,7 @@ export class OfferingService {
       finalizedAt: row.finalizedAt?.toISOString() ?? null,
       ...testShapeOf(row),
       attemptCount: row._count.attempts,
+      paperSource: row.paperSource,
     }));
   }
 

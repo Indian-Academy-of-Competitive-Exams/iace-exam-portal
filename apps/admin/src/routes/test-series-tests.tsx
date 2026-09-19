@@ -139,12 +139,15 @@ function testColumns(
               Analytics
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link to={ROUTES.TEST_PAPER(row.testId)}>
-              <FileText aria-hidden />
-              Paper
-            </Link>
-          </DropdownMenuItem>
+          {/* Left out rather than offered and refused: the paper waits on the source. */}
+          {row.paperSource ? (
+            <DropdownMenuItem asChild>
+              <Link to={ROUTES.TEST_PAPER(row.testId)}>
+                <FileText aria-hidden />
+                Paper
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           {/* Unsat-only: a sat test's series is part of the record. */}
           {canWrite && row.attemptCount === 0 ? (
             <DropdownMenuItem onSelect={() => onMoving(row)}>

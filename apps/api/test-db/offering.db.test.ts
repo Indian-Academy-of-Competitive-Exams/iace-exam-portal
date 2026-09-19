@@ -288,6 +288,7 @@ describe('OfferingService — a series and the tests it holds', () => {
         totalQuestions: 100,
         durationSec: 3600,
         attemptCount: 1,
+        paperSource: null,
       },
     ]);
   });

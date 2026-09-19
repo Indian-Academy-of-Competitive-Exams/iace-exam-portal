@@ -576,6 +576,8 @@ export const seriesTestRowSchema = z.object({
   durationSec: z.number().int(),
   /** Nothing that has been sat may be taken out of a series, so the row says whether it has. */
   attemptCount: z.number().int(),
+  /** Null until declared, and the paper cannot be opened before it is. */
+  paperSource: paperSourceSchema.nullable(),
 });
 export type SeriesTestRow = z.infer<typeof seriesTestRowSchema>;
 
