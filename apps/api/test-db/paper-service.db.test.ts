@@ -20,6 +20,7 @@ import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
 import { FakeQueue } from '../test/support/fakes';
 import {
   BUILDER,
+  makeAdmin,
   makeBankQuestion,
   makeBuilder,
   makeSitting,
@@ -757,5 +758,69 @@ describe('PaperService — a test only has the sections its scope covers', () =>
       paper.sections.map((section) => section.baseConfigSectionId),
       [idFor('sec_1')],
     );
+  });
+});
+
+describe("PaperService — a section that is somebody else's job", () => {
+  /** The failure this prevents: two people filling one section, each unaware of the other. */
+  async function assigned(finalized: Date | null) {
+    const service = await serviceWith();
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    await prisma.questionAssignment.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_2'),
+        assigneeId: typist.id,
+        role: 'TYPIST',
+        finalizedAt: finalized,
+      },
+    });
+    return service;
+  }
+
+  it('refuses a pick while the section is still with its typist, and names who has it', async () => {
+    const service = await assigned(null);
+
+    const error = await refused(
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_2'),
+        questionIds: [idFor('q1')],
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /Priya/);
+  });
+
+  it('refuses filling it from the spec too', async () => {
+    const service = await assigned(null);
+
+    const error = await refused(service.fillSection(TEST, idFor('sec_2')));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+  });
+
+  it('lets the pick through once the section has been marked done', async () => {
+    const service = await assigned(new Date());
+
+    const paper = await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q1')],
+    });
+
+    assert.ok(paper.sections.some((section) => section.questions.length > 0));
+  });
+
+  it('leaves a section nobody was assigned alone', async () => {
+    const service = await assigned(null);
+
+    const paper = await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_1'),
+      questionIds: [idFor('r1')],
+    });
+
+    assert.ok(paper.sections.some((section) => section.questions.length > 0));
   });
 });

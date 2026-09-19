@@ -12,9 +12,11 @@ import {
   type TestDetail,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
+import { UserPlus } from 'lucide-react';
 import {
   Alert,
   Badge,
+  Button,
   ConfirmDialog,
   DataTable,
   DropdownMenuItem,
@@ -25,6 +27,9 @@ import {
   FormDialog,
   FormSection,
   RowActions,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   TruncatedText,
   DatePicker,
   type BadgeProps,
@@ -145,45 +150,51 @@ function columnsOf(
       key: 'typist',
       header: 'Typist',
       className: 'max-w-[12rem]',
-      cell: (row) => <RoleCell assignment={row.typist} questionCount={row.section.questionCount} />,
+      cell: (row) => (
+        <RoleCell
+          assignment={row.typist}
+          questionCount={row.section.questionCount}
+          onAssign={() => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.TYPIST })}
+        />
+      ),
     },
     {
       key: 'proofreader',
       header: 'Proof-reader',
       className: 'max-w-[12rem]',
       cell: (row) => (
-        <RoleCell assignment={row.proofreader} questionCount={row.section.questionCount} />
+        <RoleCell
+          assignment={row.proofreader}
+          questionCount={row.section.questionCount}
+          onAssign={() => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.PROOFREADER })}
+        />
       ),
     },
     {
       key: 'actions',
       className: 'text-right',
-      cell: (row) => (
-        <RowActions label={`Actions for ${row.section.name}`}>
-          {actionItemsFor(row, onAssign, onRemove)}
-        </RowActions>
-      ),
+      cell: (row) => <SectionActions row={row} onRemove={onRemove} />,
     },
   ];
 }
 
-function actionItemsFor(
-  row: SectionRow,
-  onAssign: (target: AssignTarget) => void,
-  onRemove: (assignment: Assignment) => void,
-): ReactNode[] {
+/** Assigning is the icon beside the tag now, so the menu is only ever what is already there. */
+function SectionActions({
+  row,
+  onRemove,
+}: Readonly<{ row: SectionRow; onRemove: (assignment: Assignment) => void }>) {
+  const items = removeItemsFor(row, onRemove);
+  if (items.length === 0) return null;
+  return <RowActions label={`Actions for ${row.section.name}`}>{items}</RowActions>;
+}
+
+function removeItemsFor(row: SectionRow, onRemove: (assignment: Assignment) => void): ReactNode[] {
   const items: ReactNode[] = [];
   for (const role of ROLE_ORDER) {
     const assignment = role === ASSIGNMENT_ROLES.TYPIST ? row.typist : row.proofreader;
     const word = ASSIGNMENT_ROLE_LABELS[role].toLowerCase();
 
-    if (!assignment) {
-      items.push(
-        <DropdownMenuItem key={role} onSelect={() => onAssign({ section: row.section, role })}>
-          Assign {word}
-        </DropdownMenuItem>,
-      );
-    } else if (!assignment.finalizedAt) {
+    if (assignment && !assignment.finalizedAt) {
       items.push(
         <DropdownMenuItem key={role} destructive onSelect={() => onRemove(assignment)}>
           Remove {word}
@@ -197,9 +208,27 @@ function actionItemsFor(
 function RoleCell({
   assignment,
   questionCount,
-}: Readonly<{ assignment: Assignment | undefined; questionCount: number }>) {
+  onAssign,
+}: Readonly<{
+  assignment: Assignment | undefined;
+  questionCount: number;
+  onAssign: () => void;
+}>) {
   if (!assignment) {
-    return <span className="text-sm text-muted-foreground">Unassigned</span>;
+    return (
+      <span className="flex items-center gap-1">
+        <span className="text-sm text-muted-foreground">Unassigned</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" variant="ghost" onClick={onAssign}>
+              <UserPlus />
+              <span className="sr-only">Assign</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Assign</TooltipContent>
+        </Tooltip>
+      </span>
+    );
   }
 
   const progress = progressOf(assignment, questionCount);

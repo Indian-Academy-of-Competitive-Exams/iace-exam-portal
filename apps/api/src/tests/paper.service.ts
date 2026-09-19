@@ -114,6 +114,7 @@ export class PaperService {
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
+    await this.assertSectionsNotAssigned(testId, [section.id]);
 
     this.assertNoRepeats(input.questionIds);
 
@@ -179,6 +180,7 @@ export class PaperService {
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
+    await this.assertSectionsNotAssigned(testId, [section.id]);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -270,6 +272,7 @@ export class PaperService {
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const row = await this.requireRow(testId, rowId);
+    await this.assertSectionsNotAssigned(testId, [row.baseConfigSectionId]);
     const question = await this.requireDrawable(input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
@@ -290,7 +293,11 @@ export class PaperService {
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
-    for (const rowId of rowIds) await this.requireRow(testId, rowId);
+    const rows = [];
+    for (const rowId of rowIds) rows.push(await this.requireRow(testId, rowId));
+    await this.assertSectionsNotAssigned(testId, [
+      ...new Set(rows.map((row) => row.baseConfigSectionId)),
+    ]);
 
     await this.prisma.$transaction(async (tx) => {
       await thaw(tx, test);
@@ -434,6 +441,30 @@ export class PaperService {
       select: CANDIDATE_SELECT,
     });
     return rows.filter(hasVersion);
+  }
+
+  /** A section handed to somebody is theirs until they are done — nobody else fills it underneath. */
+  private async assertSectionsNotAssigned(
+    testId: string,
+    baseConfigSectionIds: readonly string[],
+  ): Promise<void> {
+    const outstanding = await this.prisma.questionAssignment.findMany({
+      where: { testId, finalizedAt: null, baseConfigSectionId: { in: [...baseConfigSectionIds] } },
+      select: {
+        baseConfigSection: { select: { name: true } },
+        assignee: { select: { fullName: true } },
+      },
+    });
+    if (outstanding.length === 0) return;
+
+    const issues = outstanding.map(
+      (row) =>
+        `${row.baseConfigSection.name} is with ${row.assignee.fullName ?? 'its assignee'} until they mark it done.`,
+    );
+    const [first] = issues;
+    throw new AppException(ErrorCodes.CONFLICT, first ?? '', {
+      fieldErrors: { [FORM_LEVEL_FIELD]: issues },
+    });
   }
 
   private assertAssemblable(test: { attemptCount: number }): void {
