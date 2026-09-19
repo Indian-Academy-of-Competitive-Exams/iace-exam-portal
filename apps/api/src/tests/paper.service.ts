@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
@@ -20,6 +21,7 @@ import {
   type SetPaperQuestionStatusBody,
   type TestPaper,
   type LocalizedContent,
+  type PaperSource,
   type TestScope,
   type TestScopeRef,
   scopedSections,
@@ -48,6 +50,8 @@ const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
   'Only a finalized paper can have a question dropped or made a bonus. Edit the draft instead.';
 const NO_SUCH_SECTION_MESSAGE = 'No such section on this paper';
+const SOURCE_UNCHOSEN_MESSAGE =
+  'This test has not said where its questions come from yet. Choose that before picking any.';
 const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
 
@@ -114,6 +118,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
@@ -184,6 +189,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
@@ -279,6 +285,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    assertSourceChosen(test);
 
     const row = await this.requireRow(testId, rowId);
     await this.assertSectionsNotAssigned(testId, [row.baseConfigSectionId], isSuperAdmin);
@@ -458,7 +465,7 @@ export class PaperService {
     return rows.filter(hasVersion);
   }
 
-  /** A section handed to somebody is theirs until they are done — nobody but a super admin fills it underneath. */
+  /** A section is its TYPIST's until they are done — nobody but a super admin fills it underneath. */
   private async assertSectionsNotAssigned(
     testId: string,
     baseConfigSectionIds: readonly string[],
@@ -467,7 +474,13 @@ export class PaperService {
     if (isSuperAdmin) return;
 
     const outstanding = await this.prisma.questionAssignment.findMany({
-      where: { testId, finalizedAt: null, baseConfigSectionId: { in: [...baseConfigSectionIds] } },
+      where: {
+        testId,
+        // A reader reads what is already there, so only an outstanding typist holds the section.
+        role: ASSIGNMENT_ROLES.TYPIST,
+        finalizedAt: null,
+        baseConfigSectionId: { in: [...baseConfigSectionIds] },
+      },
       select: {
         baseConfigSection: { select: { name: true } },
         assignee: { select: { fullName: true } },
@@ -555,6 +568,7 @@ export class PaperService {
         id: true,
         baseConfigId: true,
         isLocked: true,
+        paperSource: true,
         scope: true,
         scopeRef: true,
         questionPoolFilter: true,
@@ -564,6 +578,14 @@ export class PaperService {
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }
+}
+
+/** Picking IS choosing where questions come from, so it waits on the decision — a super admin makes it, not skips it. */
+function assertSourceChosen(test: { paperSource: PaperSource | null }): void {
+  if (test.paperSource !== null) return;
+  throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE, {
+    fieldErrors: { [FORM_LEVEL_FIELD]: [SOURCE_UNCHOSEN_MESSAGE] },
+  });
 }
 
 function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId: string } {

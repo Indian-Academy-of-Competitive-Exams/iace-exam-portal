@@ -98,8 +98,9 @@ export class TestsController {
   update(
     @Param('id') id: string,
     @Body(new ZodBody(updateTestSchema)) body: UpdateTestBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestDetail> {
-    return this.tests.update(id, body);
+    return this.tests.update(id, body, user.isSuperAdmin);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

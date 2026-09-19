@@ -5,6 +5,8 @@ import {
   AppException,
   ErrorCodes,
   FEATURE_KEYS,
+  FORM_LEVEL_FIELD,
+  PAPER_SOURCES,
   PERMISSION_LEVELS,
   TEST_STATUS,
   createAssignmentSchema,
@@ -16,7 +18,10 @@ import {
 import { AuditContext } from '../src/audit';
 import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
+import { BaseConfigsService } from '../src/configs/base-configs.service';
+import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { FinalizeService } from '../src/tests/finalize.service';
+import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus } from '../test/support/fakes';
 import {
   makeAdmin,
@@ -28,6 +33,7 @@ import {
   makeTest,
   resetDatabase,
   testPrisma,
+  type Catalog,
 } from './support/database';
 
 const prisma = testPrisma();
@@ -36,8 +42,14 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 function build() {
-  const admins = new AdminsService(prisma, new AuditContext());
-  return { assignments: new AssignmentsService(prisma, admins), admins };
+  const audit = new AuditContext();
+  const admins = new AdminsService(prisma, audit);
+  const configs = new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit);
+  return {
+    assignments: new AssignmentsService(prisma, admins),
+    admins,
+    tests: new TestsService(prisma, configs, audit, new FakeEventBus().asService()),
+  };
 }
 
 const grant = (
@@ -57,11 +69,23 @@ const body = (over: Partial<CreateAssignmentInput>): CreateAssignmentInput =>
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
 
+/** Assigning waits on the source being declared, so every test below starts with it said. */
+const framed = (catalog: Catalog, over: { title?: string } = {}) =>
+  makeTest(prisma, catalog, { ...over, paperSource: PAPER_SOURCES.FRAMED });
+
+/** The same, for a paper built whole: `makePaper` leaves the source unsaid. */
+const sayFramed = (testId: string) =>
+  prisma.test.update({
+    where: { id: testId },
+    data: { paperSource: PAPER_SOURCES.FRAMED },
+    select: { id: true },
+  });
+
 describe('AssignmentsService — assigning', () => {
   it('takes one typist and one proof-reader, and lists both with names and counts', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
     const typist = await makeAdmin(prisma, { fullName: 'Priya' });
     const reader = await makeAdmin(prisma, { fullName: 'Arjun' });
@@ -103,7 +127,7 @@ describe('AssignmentsService — assigning', () => {
   it('refuses a second typist on a section that already has one', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const first = await makeAdmin(prisma);
     const second = await makeAdmin(prisma);
@@ -141,7 +165,7 @@ describe('AssignmentsService — assigning', () => {
   it('refuses an assignee who does not hold the feature the role needs', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const admin = await makeAdmin(prisma);
 
@@ -167,7 +191,7 @@ describe('AssignmentsService — assigning', () => {
   it('refuses a proof-reader who is already the typist on the same section', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const admin = await makeAdmin(prisma);
     await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
@@ -218,11 +242,89 @@ describe('AssignmentsService — assignable', () => {
   });
 });
 
+describe('AssignmentsService — where the questions come from', () => {
+  /** The failure this prevents: a typist handed a section on a test that was never going to be typed. */
+  it('refuses to hand out a section before the test says where its questions come from', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+
+    await assert.rejects(
+      () =>
+        assignments.assign(
+          test.id,
+          body({
+            baseConfigSectionId: section.id,
+            assigneeId: typist.id,
+            role: ASSIGNMENT_ROLES.TYPIST,
+          }),
+          typist.id,
+        ),
+      (error: unknown) =>
+        AppException.is(error) &&
+        error.code === ErrorCodes.CONFLICT &&
+        Boolean(error.fieldErrors?.[FORM_LEVEL_FIELD]),
+    );
+  });
+
+  it('refuses a typist on a test picked from the bank, and says so on the role', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+
+    await assert.rejects(
+      () =>
+        assignments.assign(
+          test.id,
+          body({
+            baseConfigSectionId: section.id,
+            assigneeId: typist.id,
+            role: ASSIGNMENT_ROLES.TYPIST,
+          }),
+          typist.id,
+        ),
+      (error: unknown) =>
+        AppException.is(error) &&
+        error.code === ErrorCodes.VALIDATION_ERROR &&
+        Boolean(error.fieldErrors?.role),
+    );
+  });
+
+  /** The half of PICKED that still happens: somebody reads what was picked. */
+  it('takes the proof-reader a picked test does need', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
+    const section = await makeSection(prisma, catalog);
+    const reader = await makeAdmin(prisma, { fullName: 'Arjun' });
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+
+    const created = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+
+    assert.equal(created.role, ASSIGNMENT_ROLES.PROOFREADER);
+    assert.equal(created.assigneeName, 'Arjun');
+  });
+});
+
 describe('AssignmentsService — removing', () => {
   it('removes an assignment nobody has finalized', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
@@ -245,7 +347,7 @@ describe('AssignmentsService — removing', () => {
   it('refuses to remove a finalized assignment', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
@@ -268,8 +370,8 @@ describe('AssignmentsService — mine', () => {
   it('lists an admin’s own assignments, newest first, with the test title', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const testOne = await makeTest(prisma, catalog, { title: 'First mock' });
-    const testTwo = await makeTest(prisma, catalog, { title: 'Second mock' });
+    const testOne = await framed(catalog, { title: 'First mock' });
+    const testTwo = await framed(catalog, { title: 'Second mock' });
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
@@ -303,7 +405,7 @@ describe('AssignmentsService — mine', () => {
   it('the role filter narrows a work queue to its own role', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const admin = await makeAdmin(prisma);
     await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
@@ -333,7 +435,7 @@ describe('AssignmentsService — mine', () => {
   it('carries the section’s own question count', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
@@ -356,8 +458,8 @@ describe('AssignmentsService — mine', () => {
   it('reports the test’s own draw-spec mix for the section, and null when the test sets none', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const withMix = await makeTest(prisma, catalog);
-    const withoutMix = await makeTest(prisma, catalog);
+    const withMix = await framed(catalog);
+    const withoutMix = await framed(catalog);
     const sectionA = await makeSection(prisma, catalog, { order: 1 });
     const sectionB = await makeSection(prisma, catalog, { order: 2 });
     const typist = await makeAdmin(prisma);
@@ -402,7 +504,7 @@ describe('AssignmentsService — mine', () => {
   it('the outstanding filter narrows to unfinalized rows', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const sectionA = await makeSection(prisma, catalog, { order: 1 });
     const sectionB = await makeSection(prisma, catalog, { order: 2 });
     const reader = await makeAdmin(prisma);
@@ -438,7 +540,7 @@ describe('AssignmentsService — finalizing', () => {
   it('sets finalizedAt, and finalizing again returns the same row', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
@@ -463,7 +565,7 @@ describe('AssignmentsService — finalizing', () => {
   it('a typist finalises their own row too', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
@@ -486,7 +588,7 @@ describe('AssignmentsService — finalizing', () => {
   it('refuses finalizing someone else’s assignment', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     const somebodyElse = await makeAdmin(prisma);
@@ -511,7 +613,7 @@ describe('AssignmentsService — finalizing', () => {
   it('lets a super admin finalize the row it refuses everybody else', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     const superAdmin = await makeAdmin(prisma, { isSuperAdmin: true });
@@ -537,6 +639,7 @@ describe('the offer gate', () => {
     const { assignments } = build();
     const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+    await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
       where: { id: paper.sectionIds[0] ?? '' },
       data: { questionCount: 1 },
@@ -572,6 +675,7 @@ describe('the offer gate', () => {
     const { assignments } = build();
     const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+    await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
       where: { id: paper.sectionIds[0] ?? '' },
       data: { questionCount: 1 },
@@ -620,6 +724,7 @@ describe('the offer gate', () => {
     const { assignments } = build();
     const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+    await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
       where: { id: paper.sectionIds[0] ?? '' },
       data: { questionCount: 1 },
@@ -645,10 +750,45 @@ describe('the offer gate', () => {
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });
 
+  /** THE deadlock: switching to PICKED once left a typist row nobody could finalize, shutting offer for good. */
+  it('offers a test switched to picked, the typist it discarded no longer holding it', async () => {
+    const { assignments, tests } = build();
+    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
+    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+    await sayFramed(paper.testId);
+    await prisma.baseConfigSection.update({
+      where: { id: paper.sectionIds[0] ?? '' },
+      data: { questionCount: 1 },
+    });
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await assignments.assign(
+      paper.testId,
+      body({
+        baseConfigSectionId: paper.sectionIds[0] ?? '',
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+
+    await assert.rejects(
+      () => finalizer.offer(paper.testId),
+      refusedWith(ErrorCodes.VALIDATION_ERROR),
+    );
+
+    await tests.update(paper.testId, { paperSource: PAPER_SOURCES.PICKED }, true);
+    const result = await finalizer.offer(paper.testId);
+
+    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(await prisma.questionAssignment.count({ where: { testId: paper.testId } }), 0);
+  });
+
   /** This replaces nothing: a test with no assignments offers exactly as it does today. */
   it('does not block a test that never had any assignments', async () => {
     const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+    await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
       where: { id: paper.sectionIds[0] ?? '' },
       data: { questionCount: 1 },
@@ -665,7 +805,7 @@ describe('AssignmentsService — what a section has written so far', () => {
   it('counts the section, so both roles report the same progress', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
+    const test = await framed(catalog);
     const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
     const subject = await makeSubject(prisma);
     const typist = await makeAdmin(prisma, { fullName: 'Priya' });

@@ -2,8 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  PAPER_SOURCES,
   TEST_SCOPE,
   fieldDiff,
   type BaseConfigDetail,
@@ -21,6 +23,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
 import {
+  PAPER_SOURCE_FIXED_MESSAGE,
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
   locksOutTestEdit,
@@ -75,6 +78,7 @@ export const AUDITED_TEST_FIELDS = [
   'scope',
   'examTemplate',
   'status',
+  'paperSource',
 ] as const;
 
 /** Owns `Test`: what it covers and how it is judged. Its shape is its `BaseConfig`'s. */
@@ -162,8 +166,9 @@ export class TestsService {
     return series;
   }
 
-  async update(id: string, input: UpdateTestBody): Promise<TestDetail> {
+  async update(id: string, input: UpdateTestBody, isSuperAdmin = false): Promise<TestDetail> {
     const test = await this.requireTest(id);
+    if (input.paperSource !== undefined) this.assertPaperSourceOpen(test, isSuperAdmin);
 
     const shapeChange = locksOutTestEdit(input);
     if (test._count.attempts > 0 && shapeChange) {
@@ -184,6 +189,12 @@ export class TestsService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (thawsThePaper(input)) await thaw(tx, test);
+      // A picked test has no typist, and a row nobody will finalize would hold `offer` shut forever.
+      if (input.paperSource === PAPER_SOURCES.PICKED) {
+        await tx.questionAssignment.deleteMany({
+          where: { testId: id, role: ASSIGNMENT_ROLES.TYPIST, finalizedAt: null },
+        });
+      }
 
       return tx.test.update({
         where: { id },
@@ -192,6 +203,7 @@ export class TestsService {
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
+          ...(input.paperSource === undefined ? {} : { paperSource: input.paperSource }),
           ...(input.questionPoolFilter === undefined
             ? {}
             : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
@@ -216,6 +228,14 @@ export class TestsService {
     await this.prisma.test.delete({ where: { id } });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
+  }
+
+  /** A one-way door: the choice is made once, and only a super admin can correct a wrong one. */
+  private assertPaperSourceOpen(test: TestRow, isSuperAdmin: boolean): void {
+    if (test.paperSource === null || isSuperAdmin) return;
+    throw new AppException(ErrorCodes.CONFLICT, PAPER_SOURCE_FIXED_MESSAGE, {
+      fieldErrors: { paperSource: [PAPER_SOURCE_FIXED_MESSAGE] },
+    });
   }
 
   /** The scope has to name a part of THIS config, or the draw has nothing to narrow to. */
@@ -291,6 +311,7 @@ function toTest(row: TestRow): Test {
     scopeRef: scopeRefOf(row),
     examTemplate: row.examTemplate,
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
+    paperSource: row.paperSource,
     status: row.status,
     isLocked: row.isLocked,
     version: row.version,

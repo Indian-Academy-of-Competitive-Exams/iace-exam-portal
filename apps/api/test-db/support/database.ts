@@ -25,6 +25,7 @@ import {
   type QuestionStatus,
   type QuestionType,
   type LiveAnswer,
+  type PaperSource,
   type StudentType,
   type TestScope,
   type TestStatus,
@@ -49,6 +50,7 @@ export interface TestOverrides {
   opensAt?: Date | null;
   scope?: TestScope;
   seriesOrder?: number;
+  paperSource?: PaperSource;
 }
 
 export interface StudentOverrides {

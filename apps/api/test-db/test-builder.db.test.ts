@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, ErrorCodes, TEST_STATUS } from '@iace/contracts';
+import { AppException, ErrorCodes, PAPER_SOURCES, TEST_STATUS } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
@@ -65,10 +65,12 @@ async function builder() {
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
   );
-  const draft = await tests.create(
+  const created = await tests.create(
     { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: seriesId },
     ADMIN,
   );
+  // The builder says where its questions come from before the paper is allowed to take any.
+  const draft = await tests.update(created.id, { paperSource: PAPER_SOURCES.PICKED });
   return {
     draft,
     paper,

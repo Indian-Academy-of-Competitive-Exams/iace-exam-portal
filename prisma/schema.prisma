@@ -131,6 +131,12 @@ enum TestScope {
   SECTIONAL
 }
 
+// Declared once per test and never again: FRAMED is typed for it, PICKED is drawn from the bank.
+enum PaperSource {
+  FRAMED
+  PICKED
+}
+
 enum PaperQuestionStatus {
   ACTIVE
   DROPPED
@@ -502,6 +508,8 @@ model Test {
   scope              TestScope    @default(FULL)
   scopeRef           Json?
   questionPoolFilter Json?
+  // Null until an admin declares it; set once, and only a super admin ever moves it after.
+  paperSource        PaperSource?
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate @default(DEFAULT)
   status             TestStatus   @default(DRAFT)

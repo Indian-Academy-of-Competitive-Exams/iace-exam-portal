@@ -42,6 +42,19 @@ export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
   SECTIONAL: 'Sectional',
 };
 
+/** Where a test's questions come from. Declared once, and a typist is only ever part of FRAMED. */
+export const PAPER_SOURCES = {
+  FRAMED: 'FRAMED',
+  PICKED: 'PICKED',
+} as const;
+export const paperSourceSchema = z.enum(PAPER_SOURCES);
+export type PaperSource = z.infer<typeof paperSourceSchema>;
+
+export const PAPER_SOURCE_LABELS: Readonly<Record<PaperSource, string>> = {
+  FRAMED: 'Framed for this test',
+  PICKED: 'Picked from the bank',
+};
+
 /** What a test is called by: the part of the paper it covers, or failing that a mock. */
 export function testNameKind(input: { scope: TestScope; scopeName?: string | null }): string {
   const named = input.scopeName?.trim();
@@ -326,6 +339,8 @@ export const testSchema = z.object({
   examTemplate: examTemplateSchema,
   /** What each section is drawn from. Named for the column it has always lived in. */
   questionPoolFilter: drawSpecSchema.nullable(),
+  /** Null until it is declared, and declaring it is the one-way door `assign` waits on. */
+  paperSource: paperSourceSchema.nullable(),
   status: testStatusSchema,
   /** True once the paper is frozen. */
   isLocked: z.boolean(),
@@ -482,6 +497,8 @@ export type CreateTestBody = z.infer<typeof createTestSchema>;
 /** A test never changes config — that would change its whole shape. Clone the test instead. */
 export const updateTestSchema = testOwnFieldsSchema.extend({
   title: testTitleSchema.optional(),
+  /** Absent on create: the choice is made in the builder, once, and the server refuses a second. */
+  paperSource: paperSourceSchema.optional(),
 });
 export type UpdateTestInput = z.input<typeof updateTestSchema>;
 export type UpdateTestBody = z.infer<typeof updateTestSchema>;

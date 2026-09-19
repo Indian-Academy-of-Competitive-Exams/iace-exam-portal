@@ -96,8 +96,11 @@ export function scopeRefIssue(scope: TestScope, scopeRef: TestScopeRef | null): 
 /** The one field a sat test may still change: renaming it moves no question. */
 export const TEST_UNFROZEN_FIELDS = ['title'] as const;
 
-/** Neither of these can change WHICH questions the paper holds, so neither unfreezes one. */
-export const PAPER_NEUTRAL_FIELDS = ['title', 'examTemplate'] as const;
+/** None of these can change WHICH questions the paper holds, so none unfreezes one. */
+export const PAPER_NEUTRAL_FIELDS = ['title', 'examTemplate', 'paperSource'] as const;
+
+export const PAPER_SOURCE_FIXED_MESSAGE =
+  'Where the questions on this test come from is fixed once chosen, and cannot be changed.';
 
 export const SAT_TEST_MESSAGE =
   'Students have sat this test, so its paper cannot move under their results. Only its name still changes.';

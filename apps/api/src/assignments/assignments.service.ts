@@ -6,6 +6,8 @@ import {
   ErrorCodes,
   FEATURES,
   FEATURE_KEYS,
+  FORM_LEVEL_FIELD,
+  PAPER_SOURCES,
   PERMISSION_LEVELS,
   satisfiesLevel,
   type Assignment,
@@ -17,6 +19,7 @@ import {
   type DrawSpec,
   type FeatureKey,
   type MineAssignmentsQuery,
+  type PaperSource,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminsService } from '../admins';
@@ -44,6 +47,12 @@ const FEATURE_FOR_ROLE: Record<AssignmentRole, FeatureKey> = {
   [ASSIGNMENT_ROLES.TYPIST]: FEATURE_KEYS.QUESTION_AUTHORING,
   [ASSIGNMENT_ROLES.PROOFREADER]: FEATURE_KEYS.QUESTION_PROOFREAD,
 };
+
+const SOURCE_UNCHOSEN_MESSAGE =
+  'Say where this test gets its questions before handing a section to anybody.';
+
+const PICKED_NEEDS_NO_TYPIST_MESSAGE =
+  'This test is picked from the bank, so its sections take a proof-reader and no typist.';
 
 const otherRole = (role: AssignmentRole): AssignmentRole =>
   role === ASSIGNMENT_ROLES.TYPIST ? ASSIGNMENT_ROLES.PROOFREADER : ASSIGNMENT_ROLES.TYPIST;
@@ -77,6 +86,7 @@ export class AssignmentsService {
 
   async assign(testId: string, body: CreateAssignmentBody, actorId: string): Promise<Assignment> {
     const test = await this.requireTest(testId);
+    assertRoleFits(test.paperSource, body.role);
     const section = await this.requireSection(test.baseConfigId, body.baseConfigSectionId);
     const assignee = await this.requireAssignee(body.assigneeId);
     await this.assertHoldsFeature(assignee, body.role);
@@ -185,10 +195,12 @@ export class AssignmentsService {
     return toAssignment(row, written.get(sectionKey(row)) ?? 0);
   }
 
-  private async requireTest(id: string): Promise<{ id: string; baseConfigId: string }> {
+  private async requireTest(
+    id: string,
+  ): Promise<{ id: string; baseConfigId: string; paperSource: PaperSource | null }> {
     const test = await this.prisma.test.findUnique({
       where: { id },
-      select: { id: true, baseConfigId: true },
+      select: { id: true, baseConfigId: true, paperSource: true },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
@@ -251,6 +263,20 @@ export class AssignmentsService {
         : 'This admin is already the proof-reader on this section';
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
       fieldErrors: { assigneeId: [message] },
+    });
+  }
+}
+
+/** Nobody is handed a section until the test says where its questions come from, and PICKED needs no typist. */
+function assertRoleFits(paperSource: PaperSource | null, role: AssignmentRole): void {
+  if (paperSource === null) {
+    throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [SOURCE_UNCHOSEN_MESSAGE] },
+    });
+  }
+  if (paperSource === PAPER_SOURCES.PICKED && role === ASSIGNMENT_ROLES.TYPIST) {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, PICKED_NEEDS_NO_TYPIST_MESSAGE, {
+      fieldErrors: { role: [PICKED_NEEDS_NO_TYPIST_MESSAGE] },
     });
   }
 }

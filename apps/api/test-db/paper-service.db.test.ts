@@ -7,6 +7,7 @@ import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
+  PAPER_SOURCES,
   QUESTION_FLAG_CATEGORY,
   QUESTION_STATUS,
   TEST_SCOPE,
@@ -111,6 +112,8 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
       baseConfigId: BUILDER.CONFIG,
       examStageId: BUILDER.STAGE,
       testSeriesId: seriesId,
+      // Picking waits on the source being said, so every bench below has already said it.
+      paperSource: PAPER_SOURCES.FRAMED,
       ...over.test,
     },
   });
@@ -761,19 +764,69 @@ describe('PaperService — a test only has the sections its scope covers', () =>
   });
 });
 
-describe("PaperService — a section that is somebody else's job", () => {
+describe('PaperService — where the questions come from', () => {
+  /** The failure this prevents: picking a paper for a test that was going to be typed from scratch. */
+  it('refuses a pick until the test says where its questions come from, then allows it', async () => {
+    const service = await serviceWith({ test: { paperSource: null } });
+
+    const error = await refused(
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_1'),
+        questionIds: [idFor('r1')],
+      }),
+    );
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+
+    // Not a gate a super admin overrides: there is no decision to override, only one to make.
+    const asSuperAdmin = await refused(
+      service.addQuestions(
+        TEST,
+        { baseConfigSectionId: idFor('sec_1'), questionIds: [idFor('r1')] },
+        true,
+      ),
+    );
+    assert.equal(asSuperAdmin.code, ErrorCodes.CONFLICT);
+
+    await prisma.test.update({
+      where: { id: TEST },
+      data: { paperSource: PAPER_SOURCES.PICKED },
+    });
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_1'),
+      questionIds: [idFor('r1')],
+    });
+
+    assert.deepEqual(await heldIds(), [idFor('r1')]);
+  });
+
+  it('refuses filling and replacing on the same grounds', async () => {
+    const service = await serviceWith({ test: { paperSource: null } });
+
+    assert.equal(
+      (await refused(service.fillSection(TEST, idFor('sec_1')))).code,
+      ErrorCodes.CONFLICT,
+    );
+    assert.equal(
+      (await refused(service.replaceQuestion(TEST, randomUUID(), { questionId: idFor('r1') })))
+        .code,
+      ErrorCodes.CONFLICT,
+    );
+  });
+});
+
+describe("PaperService — a section that is its typist's job", () => {
   /** The failure this prevents: two people filling one section, each unaware of the other. */
-  async function assigned(finalized: Date | null) {
+  async function assigned(finalized: Date | null, role: 'TYPIST' | 'PROOFREADER' = 'TYPIST') {
     const service = await serviceWith();
-    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    const assignee = await makeAdmin(prisma, { fullName: 'Priya' });
     await prisma.questionAssignment.create({
       data: {
         id: randomUUID(),
         testId: TEST,
         baseConfigId: BUILDER.CONFIG,
         baseConfigSectionId: idFor('sec_2'),
-        assigneeId: typist.id,
-        role: 'TYPIST',
+        assigneeId: assignee.id,
+        role,
         finalizedAt: finalized,
       },
     });
@@ -817,6 +870,18 @@ describe("PaperService — a section that is somebody else's job", () => {
 
   it('lets the pick through once the section has been marked done', async () => {
     const service = await assigned(new Date());
+
+    const paper = await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q1')],
+    });
+
+    assert.ok(paper.sections.some((section) => section.questions.length > 0));
+  });
+
+  /** What makes a PICKED test work at all: its reader must not block the picking they are to read. */
+  it('lets the pick through while only its proof-reader is outstanding', async () => {
+    const service = await assigned(null, 'PROOFREADER');
 
     const paper = await service.addQuestions(TEST, {
       baseConfigSectionId: idFor('sec_2'),

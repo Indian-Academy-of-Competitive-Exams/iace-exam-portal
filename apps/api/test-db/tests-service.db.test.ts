@@ -5,8 +5,10 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   EXAM_TEMPLATE,
   ErrorCodes,
+  PAPER_SOURCES,
   TEST_SCOPE,
   TEST_SERIES_KIND,
   TEST_STATUS,
@@ -19,6 +21,7 @@ import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus } from '../test/support/fakes';
 import {
   BUILDER,
+  makeAdmin,
   makeBuilder,
   makeSitting,
   makeStudent,
@@ -94,6 +97,22 @@ const testRow = () => prisma.test.findUnique({ where: { id: TEST } });
 
 const sat = async () =>
   makeSitting(prisma, { testId: TEST, studentId: (await makeStudent(prisma)).id, score: 0 });
+
+const assignTypist = async (assigneeId: string, sectionId: string, finalizedAt: Date | null) => {
+  const row = await prisma.questionAssignment.create({
+    data: {
+      id: randomUUID(),
+      testId: TEST,
+      baseConfigId: BUILDER.CONFIG,
+      baseConfigSectionId: sectionId,
+      assigneeId,
+      role: ASSIGNMENT_ROLES.TYPIST,
+      finalizedAt,
+    },
+    select: { id: true },
+  });
+  return row.id;
+};
 
 const refused = async (attempt: Promise<unknown>) => {
   const error = await attempt.catch((caught: unknown) => caught);
@@ -272,6 +291,58 @@ describe('TestsService — a name belongs to one test inside its series', () => 
     const { service } = await serviceWith({ test: {} });
 
     assert.equal((await service.update(TEST, { title: 'Mock 1' })).title, 'Mock 1');
+  });
+});
+
+describe('TestsService — where a test gets its questions', () => {
+  /** The failure this prevents: a test switched to PICKED after a typist has already filled a section. */
+  it('takes the choice once and refuses the second', async () => {
+    const { service } = await serviceWith({ test: {} });
+
+    const chosen = await service.update(TEST, { paperSource: PAPER_SOURCES.FRAMED });
+    assert.equal(chosen.paperSource, PAPER_SOURCES.FRAMED);
+
+    const error = await refused(service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.ok(error.fieldErrors?.paperSource);
+    assert.equal((await testRow())?.paperSource, PAPER_SOURCES.FRAMED);
+  });
+
+  /** The override: a wrong choice on day one must not cost the institute the whole test. */
+  it('lets a super admin move the very choice it just refused', async () => {
+    const { service } = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+
+    const moved = await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, true);
+
+    assert.equal(moved.paperSource, PAPER_SOURCES.PICKED);
+  });
+
+  /** The deadlock this prevents: a typist row nobody will ever finalize, holding `offer` shut for good. */
+  it('takes an outstanding typist off the test, and leaves a finalised one', async () => {
+    const { service } = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    const outstanding = await assignTypist(typist.id, idFor('sec_1'), null);
+    const done = await assignTypist(typist.id, idFor('sec_2'), new Date());
+
+    await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, true);
+
+    const left = await prisma.questionAssignment.findMany({ select: { id: true } });
+    assert.deepEqual(
+      left.map((row) => row.id),
+      [done],
+    );
+    assert.equal(await prisma.questionAssignment.count({ where: { id: outstanding } }), 0);
+  });
+
+  /** Choosing it moves no question, so a frozen paper must not thaw underneath the choice. */
+  it('leaves a frozen paper frozen', async () => {
+    const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
+
+    await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED });
+
+    const row = await testRow();
+    assert.deepEqual([row?.isLocked, row?.status], [true, TEST_STATUS.ACTIVE]);
   });
 });
 

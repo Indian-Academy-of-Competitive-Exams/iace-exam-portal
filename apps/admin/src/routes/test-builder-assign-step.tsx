@@ -1,14 +1,17 @@
 import { useState, type ReactNode } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
+  PAPER_SOURCES,
+  PAPER_SOURCE_LABELS,
   scopedSections,
   instituteDayLabel,
   type Assignment,
   type AssignmentRole,
   type BaseConfigDetail,
   type BaseConfigSection,
+  type PaperSource,
   type TestDetail,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -36,11 +39,34 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { useAuth } from '../providers/auth';
 import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
 
 /** Sits beside the paper it staffs: who types and reads each section, before the paper is judged. */
 
 const ROLE_ORDER = [ASSIGNMENT_ROLES.TYPIST, ASSIGNMENT_ROLES.PROOFREADER] as const;
+
+/** The consequence of each source, in the words the confirm repeats back before it is fixed. */
+const SOURCE_CHOICES = {
+  [PAPER_SOURCES.FRAMED]: {
+    action: 'Have them framed',
+    consequence:
+      'Every section takes a typist to write its questions and a proof-reader to read them.',
+  },
+  [PAPER_SOURCES.PICKED]: {
+    action: 'Pick them from the bank',
+    consequence:
+      'Every section takes a proof-reader only, and you pick its questions from the bank yourself.',
+  },
+} as const;
+
+const NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });
+
+/** Only an unfinalized typist is discarded by a switch to PICKED — a finished one is a record. */
+const comingOffFor = (assignments: readonly Assignment[] | undefined): Assignment[] =>
+  (assignments ?? []).filter(
+    (row) => row.role === ASSIGNMENT_ROLES.TYPIST && row.finalizedAt === null,
+  );
 
 interface SectionRow {
   section: BaseConfigSection;
@@ -70,6 +96,11 @@ export function AssignStep({
   const sections = scopedSections(config.sections, detail.scope, detail.scopeRef);
   if (sections.length === 0) return null;
 
+  const comingOff = comingOffFor(assignments.data);
+  if (detail.paperSource === null) {
+    return <SourceChoice testId={detail.id} current={null} comingOff={comingOff} />;
+  }
+
   if (assignments.isError) {
     return (
       <FormSection title="Assignments">
@@ -94,15 +125,16 @@ export function AssignStep({
   const outstanding = (assignments.data ?? []).some((row) => row.finalizedAt === null);
 
   return (
-    <FormSection title="Assignments">
+    <FormSection title="Assignments" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
       {outstanding ? (
         <Alert variant="info">
-          A test cannot be offered until every section is typed and read.
+          A test cannot be offered until every section is
+          {detail.paperSource === PAPER_SOURCES.PICKED ? ' read.' : ' typed and read.'}
         </Alert>
       ) : null}
 
       <DataTable
-        columns={columnsOf(setAssigning, setRemoving)}
+        columns={columnsOf(detail.paperSource, setAssigning, setRemoving)}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
         isLoading={assignments.isLoading}
@@ -125,15 +157,18 @@ export function AssignStep({
         onClose={() => setRemoving(null)}
         onRemoved={() => assignments.refetch()}
       />
+
+      <SourceChoice testId={detail.id} current={detail.paperSource} comingOff={comingOff} />
     </FormSection>
   );
 }
 
 function columnsOf(
+  source: PaperSource,
   onAssign: (target: AssignTarget) => void,
   onRemove: (assignment: Assignment) => void,
 ): DataTableColumn<SectionRow>[] {
-  return [
+  const columns: DataTableColumn<SectionRow>[] = [
     {
       key: 'section',
       header: 'Section',
@@ -176,6 +211,89 @@ function columnsOf(
       cell: (row) => <SectionActions row={row} onRemove={onRemove} />,
     },
   ];
+
+  // A picked test has no typist to name, and an action a row cannot take is left out.
+  if (source === PAPER_SOURCES.PICKED) return columns.filter((column) => column.key !== 'typist');
+  return columns;
+}
+
+/** Switching to PICKED takes the unfinished typists with it, so the confirm names them first. */
+function descriptionOf(choosing: PaperSource | null, comingOff: readonly Assignment[]): string {
+  if (!choosing) return '';
+  const discarded = choosing === PAPER_SOURCES.PICKED ? comingOff : [];
+  const names = NAMES.format(discarded.map((row) => `${row.assigneeName} on ${row.sectionName}`));
+  const takes = names ? ` This takes ${names} off the test.` : '';
+  return `${SOURCE_CHOICES[choosing].consequence}${takes} This cannot be undone.`;
+}
+
+/** The one-way door: a test says where its questions come from before anybody is handed a section. */
+function SourceChoice({
+  testId,
+  current,
+  comingOff,
+}: Readonly<{ testId: string; current: PaperSource | null; comingOff: readonly Assignment[] }>) {
+  const { identity } = useAuth();
+  const queryClient = useQueryClient();
+  const [choosing, setChoosing] = useState<PaperSource | null>(null);
+
+  const choose = useMutation({
+    meta: { success: 'Question source set.' },
+    mutationFn: (paperSource: PaperSource) => api.admin.tests.update(testId, { paperSource }),
+    onSuccess: async (saved) => {
+      queryClient.setQueryData([...QUERY_KEYS.TEST, saved.id], saved);
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
+      setChoosing(null);
+    },
+  });
+
+  const dialog = (
+    <ConfirmDialog
+      open={choosing !== null}
+      onOpenChange={(open) => !open && setChoosing(null)}
+      destructive={choosing === PAPER_SOURCES.PICKED && comingOff.length > 0}
+      title={choosing ? PAPER_SOURCE_LABELS[choosing] : ''}
+      description={descriptionOf(choosing, comingOff)}
+      confirmLabel={choosing ? SOURCE_CHOICES[choosing].action : ''}
+      loading={choose.isPending}
+      onConfirm={() => choosing && choose.mutate(choosing)}
+    />
+  );
+
+  // Already chosen: the one hand that may still move it, and nobody else is shown a door they cannot open.
+  if (current !== null) {
+    if (!identity?.isSuperAdmin) return null;
+    const other = current === PAPER_SOURCES.FRAMED ? PAPER_SOURCES.PICKED : PAPER_SOURCES.FRAMED;
+    return (
+      <div>
+        <Button type="button" size="sm" variant="outline" onClick={() => setChoosing(other)}>
+          {SOURCE_CHOICES[other].action}
+        </Button>
+        {dialog}
+      </div>
+    );
+  }
+
+  return (
+    <FormSection title="Question source">
+      <Alert variant="warning">
+        <span>
+          {SOURCE_CHOICES.FRAMED.consequence} {SOURCE_CHOICES.PICKED.consequence} This is chosen
+          once and cannot be changed.
+        </span>
+      </Alert>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={() => setChoosing(PAPER_SOURCES.FRAMED)}>
+          {SOURCE_CHOICES.FRAMED.action}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => setChoosing(PAPER_SOURCES.PICKED)}>
+          {SOURCE_CHOICES.PICKED.action}
+        </Button>
+      </div>
+
+      {dialog}
+    </FormSection>
+  );
 }
 
 /** Assigning is the icon beside the tag now, so the menu is only ever what is already there. */
