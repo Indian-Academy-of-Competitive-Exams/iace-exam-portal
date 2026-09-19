@@ -18,22 +18,25 @@ import {
   createAssignmentSchema,
   createSectionCommentSchema,
   mineAssignmentsQuerySchema,
+  sectionProgressQuerySchema,
   type Assignment,
   type AssignableAdmin,
   type AssignableQuery,
-  type AssignmentQueueRow,
   type AssignmentWithTest,
   type CreateAssignmentBody,
   type CreateSectionCommentBody,
   type MineAssignmentsQuery,
   type Paginated,
   type SectionComment,
+  type SectionProgressQuery,
+  type SectionProgressRow,
 } from '@iace/contracts';
 import {
   Actors,
   CurrentUser,
   RequiresAnyFeature,
   RequiresFeature,
+  RequiresSuperAdmin,
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
@@ -75,14 +78,22 @@ export class AssignmentsController {
     return this.assignments.assign(testId, body, user.id);
   }
 
-  /** A super admin's queue is the institute's outstanding work, assigned or not — never only theirs. */
   @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.READ)
   @Get('mine')
   mine(
     @Query(new ZodQuery(mineAssignmentsQuerySchema)) query: MineAssignmentsQuery,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<Paginated<AssignmentQueueRow>> {
-    return this.assignments.mine(user.id, query, user.isSuperAdmin);
+  ): Promise<Paginated<AssignmentWithTest>> {
+    return this.assignments.mine(user.id, query);
+  }
+
+  /** Read access over the institute's sections — assigned or not, finished or not. No actions. */
+  @RequiresSuperAdmin()
+  @Get('progress')
+  progress(
+    @Query(new ZodQuery(sectionProgressQuerySchema)) query: SectionProgressQuery,
+  ): Promise<Paginated<SectionProgressRow>> {
+    return this.assignments.progress(query);
   }
 
   /** Either role finalises their own row — "I've written this" and "I've read this" are independent. */
@@ -131,7 +142,7 @@ export class AssignmentsController {
     return this.assignments.assignable(query.role);
   }
 
-  /** Last, so `mine`, `assignable` and `tests/:testId` are never read as an assignment id. */
+  /** Last, so `mine`, `progress`, `assignable` and `tests/:testId` are never read as an assignment id. */
   @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.READ)
   @Get(':id')
   one(

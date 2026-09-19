@@ -32,12 +32,15 @@ export function AuthoringHeaderBar({
   header,
   state,
   actions,
+  subjectLocked = false,
   onHeaderChange,
   onStateChange,
 }: Readonly<{
   header: AuthoringHeader;
   state: AuthoringState;
   actions: React.ReactNode;
+  /** The section a scoped editor was opened on names the subject; a typist must not write past it. */
+  subjectLocked?: boolean;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
 }>) {
@@ -50,6 +53,7 @@ export function AuthoringHeaderBar({
         <Slot caption="Subject">
           <SubjectPicker
             value={header.subjectId}
+            disabled={subjectLocked}
             placeholder="Choose a subject"
             className={CONTROL}
             aria-label="Subject"

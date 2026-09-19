@@ -36,6 +36,8 @@ export const assignmentSchema = z.object({
   sectionQuestionCount: z.number().int(),
   /** The test's own draw spec for this section. Absent means every difficulty, not zero of each. */
   sectionMix: difficultyMixSchema.nullable(),
+  /** The subject the SECTION names. Null where the base config left it open, and then only then. */
+  sectionSubjectId: z.string().nullable(),
 });
 export type Assignment = z.infer<typeof assignmentSchema>;
 
@@ -54,17 +56,8 @@ export const assignmentWithTestSchema = assignmentSchema.extend({
 });
 export type AssignmentWithTest = z.infer<typeof assignmentWithTestSchema>;
 
-/** A queue row: an assignment, or a section still needing work that nobody holds — both read alike. */
-export const assignmentQueueRowSchema = assignmentWithTestSchema.extend({
-  /** Null where nobody has been given the section: there is no row to open, edit or finalize. */
-  id: z.string().nullable(),
-  assigneeId: z.string().nullable(),
-  assigneeName: z.string().nullable(),
-});
-export type AssignmentQueueRow = z.infer<typeof assignmentQueueRowSchema>;
-
 export const mineAssignmentsQuerySchema = paginationQuerySchema.extend({
-  /** Unfinalized only. A super admin's queue is only ever outstanding work, so it ignores this. */
+  /** Unfinalized only. */
   outstanding: optionalBooleanQuery(),
   /** Absent reads both roles; a role's own queue always sends its own. */
   role: assignmentRoleSchema.optional(),
@@ -72,14 +65,57 @@ export const mineAssignmentsQuerySchema = paginationQuerySchema.extend({
   test: searchQuery(),
   /** Matches the section's name. */
   section: searchQuery(),
-  /** Institute days, inclusive, against the due date. An unassigned section has none. */
+  /** Institute days, inclusive, against the due date. */
   dueFrom: dateOnlySchema.optional(),
   dueTo: dateOnlySchema.optional(),
-  /** Read for a super admin only — nobody else is shown a row that is not their own. */
-  assigneeId: csvIdQuery(),
 });
 export type MineAssignmentsQuery = z.infer<typeof mineAssignmentsQuerySchema>;
 export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchema>;
+
+// ============================================================================
+// Section progress. A super admin's read-only view of how the institute's
+// typing and proof-reading are going: one row per (test, section) whether or
+// not anybody holds it and whether or not it is finished. No actions live here.
+// ============================================================================
+
+/** One role's standing on one section. */
+export const sectionRoleProgressSchema = z.object({
+  /** Null where nobody has been given the section: there is nothing to open. */
+  assignmentId: z.string().nullable(),
+  assigneeId: z.string().nullable(),
+  assigneeName: z.string().nullable(),
+  dueAt: z.string().nullable(),
+  finalizedAt: z.string().nullable(),
+});
+export type SectionRoleProgress = z.infer<typeof sectionRoleProgressSchema>;
+
+export const sectionProgressRowSchema = z.object({
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  baseConfigSectionId: z.string(),
+  sectionName: z.string(),
+  /** Questions written under ANY assignment on this section, against the section's own target. */
+  writtenCount: z.number().int(),
+  sectionQuestionCount: z.number().int(),
+  /** Null where the paper's source gives the role nothing to do — a PICKED test is never typed. */
+  typing: sectionRoleProgressSchema.nullable(),
+  reading: sectionRoleProgressSchema.nullable(),
+});
+export type SectionProgressRow = z.infer<typeof sectionProgressRowSchema>;
+
+export const sectionProgressQuerySchema = paginationQuerySchema.extend({
+  /** Matches the test's title. */
+  test: searchQuery(),
+  /** Matches the section's name. */
+  section: searchQuery(),
+  /** Institute days, inclusive, against EITHER role's due date. */
+  dueFrom: dateOnlySchema.optional(),
+  dueTo: dateOnlySchema.optional(),
+  /** Matches a section EITHER of whose roles one of them holds. */
+  assigneeId: csvIdQuery(),
+});
+export type SectionProgressQuery = z.infer<typeof sectionProgressQuerySchema>;
+export type SectionProgressQueryInput = z.input<typeof sectionProgressQuerySchema>;
 
 /** id and name only — a picker needs someone to choose, not the directory `admins.list` guards. */
 export const assignableAdminSchema = z.object({
@@ -140,6 +176,8 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   assign: (testId: string) => `/admin/assignments/tests/${testId}`,
   remove: (id: string) => `/admin/assignments/${id}`,
   mine: '/admin/assignments/mine',
+  /** Read access over every section, for a super admin. Assigned or not, finished or not. */
+  progress: '/admin/assignments/progress',
   /** One row by id, for the screen a queue row opens — a super admin reaches anybody's. */
   one: (id: string) => `/admin/assignments/${id}`,
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,

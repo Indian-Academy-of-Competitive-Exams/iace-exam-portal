@@ -10,6 +10,7 @@ import {
   QUESTION_IMAGE_ACCEPTED_TYPES,
   QUESTION_IMAGE_MAX_BYTES,
   hasText,
+  instituteDayLabel,
   validateQuestion,
   type AssignmentWithTest,
   type AuthoringSaveResult,
@@ -127,6 +128,8 @@ export function AuthoringEditorPage() {
     enabled: editingId !== '',
   });
   const assignment = useTypistAssignment(assignmentId);
+  const sectionSubjectId = assignment.section?.sectionSubjectId ?? null;
+  useSectionSubject(editingId === '' ? sectionSubjectId : null, setHeader);
 
   useFilledOnce(editing.data, (question) => {
     setHeader(headerOf(question));
@@ -183,6 +186,7 @@ export function AuthoringEditorPage() {
       <AuthoringHeaderBar
         header={header}
         state={state}
+        subjectLocked={sectionSubjectId !== null}
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
@@ -405,6 +409,11 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
           value={`${assignment.writtenCount} / ${assignment.sectionQuestionCount}`}
         />
         <StatRow className="w-auto" label="Remaining" value={remaining} />
+        <StatRow
+          className="w-auto"
+          label="Due"
+          value={instituteDayLabel(assignment.dueAt) ?? 'No due date'}
+        />
         {mix ? (
           <StatRow
             className="w-auto"
@@ -516,6 +525,19 @@ function useSaveQuestion(
       if (assignmentId) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
     },
   });
+}
+
+/** The section names the subject, so it wins over whatever the last batch left in the draft. */
+function useSectionSubject(
+  subjectId: string | null,
+  setHeader: React.Dispatch<React.SetStateAction<AuthoringHeader>>,
+) {
+  useEffect(() => {
+    if (subjectId === null) return;
+    setHeader((current) =>
+      current.subjectId === subjectId ? current : { ...current, subjectId, topicId: '' },
+    );
+  }, [subjectId, setHeader]);
 }
 
 /** The fetched question fills the boxes once; a refetch must not overwrite what is being typed. */

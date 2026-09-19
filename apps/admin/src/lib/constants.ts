@@ -70,6 +70,7 @@ export const ROUTES = {
   QUESTION_NEW: '/questions/new',
   /** The reader's own queue, and one section under it — nested, so the trail reads off the nav. */
   PROOFREADING_ASSIGNMENTS: '/proofreading/assignments',
+  SECTION_PROGRESS: '/tests/section-progress',
   PROOFREADING_SECTION: (assignmentId: string) => `/proofreading/assignments/${assignmentId}`,
   PROOFREADING_SECTION_PATTERN: '/proofreading/assignments/:assignmentId',
   IMPORT_QUESTIONS: '/questions/import',
@@ -417,6 +418,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     children: [
       { to: ROUTES.TESTS, label: 'Tests & Test Series', icon: Layers },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
+      {
+        to: ROUTES.SECTION_PROGRESS,
+        label: 'Section progress',
+        icon: ListChecks,
+        superAdminOnly: true,
+      },
     ],
   },
   {

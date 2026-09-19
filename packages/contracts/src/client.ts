@@ -336,21 +336,22 @@ import {
   ADMIN_ASSIGNMENTS_ROUTES,
   ADMIN_PROOFREADING_ROUTES,
   assignableAdminSchema,
-  assignmentQueueRowSchema,
   assignmentSchema,
   assignmentWithTestSchema,
   questionOnOtherTestSchema,
   sectionCommentSchema,
+  sectionProgressRowSchema,
   type Assignment,
   type AssignableAdmin,
   type AssignableQueryInput,
-  type AssignmentQueueRow,
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type CreateSectionCommentInput,
   type MineAssignmentsQueryInput,
   type QuestionOnOtherTest,
   type SectionComment,
+  type SectionProgressQueryInput,
+  type SectionProgressRow,
 } from './assignments';
 
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
@@ -1272,8 +1273,12 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           write('DELETE', ADMIN_ASSIGNMENTS_ROUTES.remove(id), noContentSchema),
 
-        mine: (query: MineAssignmentsQueryInput = {}): Promise<Paginated<AssignmentQueueRow>> =>
-          list(ADMIN_ASSIGNMENTS_ROUTES.mine, query, assignmentQueueRowSchema),
+        mine: (query: MineAssignmentsQueryInput = {}): Promise<Paginated<AssignmentWithTest>> =>
+          list(ADMIN_ASSIGNMENTS_ROUTES.mine, query, assignmentWithTestSchema),
+
+        /** How every section is going, for a super admin. Read only — nothing here acts. */
+        progress: (query: SectionProgressQueryInput = {}): Promise<Paginated<SectionProgressRow>> =>
+          list(ADMIN_ASSIGNMENTS_ROUTES.progress, query, sectionProgressRowSchema),
 
         /** The row a queue link opens, read on its own so a long queue never hides it. */
         one: (id: string): Promise<AssignmentWithTest> =>

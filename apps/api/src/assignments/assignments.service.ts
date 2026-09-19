@@ -15,7 +15,6 @@ import {
   type AdminRole,
   type Assignment,
   type AssignableAdmin,
-  type AssignmentQueueRow,
   type AssignmentRole,
   type AssignmentWithTest,
   type CreateAssignmentBody,
@@ -25,6 +24,9 @@ import {
   type MineAssignmentsQuery,
   type Paginated,
   type PaperSource,
+  type SectionProgressQuery,
+  type SectionProgressRow,
+  type SectionRoleProgress,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,7 +36,7 @@ import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 const ASSIGNMENT_INCLUDE = {
-  baseConfigSection: { select: { name: true, questionCount: true } },
+  baseConfigSection: { select: { name: true, questionCount: true, subjectId: true } },
   assignee: { select: { fullName: true, email: true } },
   test: { select: { questionPoolFilter: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
@@ -61,8 +63,6 @@ const ADMIN_ROLE_FOR_ROLE: Record<AssignmentRole, AdminRole> = {
   [ASSIGNMENT_ROLES.TYPIST]: ADMIN_ROLES.TYPIST,
   [ASSIGNMENT_ROLES.PROOFREADER]: ADMIN_ROLES.PROOFREADER,
 };
-
-const ROLE_ORDER = [ASSIGNMENT_ROLES.TYPIST, ASSIGNMENT_ROLES.PROOFREADER] as const;
 
 /** A picked paper is drawn from the bank, so it has nothing to type — it still has everything to read. */
 const SOURCES_FOR_ROLE: Record<AssignmentRole, readonly PaperSource[]> = {
@@ -108,7 +108,7 @@ interface DueBounds {
 }
 
 /** Institute days, inclusive at both ends — a UTC midnight would drop everything due that evening. */
-function dueBounds(query: MineAssignmentsQuery): DueBounds | undefined {
+function dueBounds(query: { dueFrom?: string; dueTo?: string }): DueBounds | undefined {
   if (!query.dueFrom && !query.dueTo) return undefined;
   return {
     ...(query.dueFrom ? { from: startOfInstituteDay(query.dueFrom) } : {}),
@@ -116,7 +116,7 @@ function dueBounds(query: MineAssignmentsQuery): DueBounds | undefined {
   };
 }
 
-/** A section nobody holds has no due date, so a due-date filter cannot be looking for it. */
+/** A role nobody holds has no due date, so a due-date filter cannot be looking for it. */
 const withinDue = (at: Date | null, bounds: DueBounds): boolean =>
   at !== null && (!bounds.from || at >= bounds.from) && (!bounds.to || at <= bounds.to);
 
@@ -129,45 +129,38 @@ const sectionsOf = (test: QueueTest): QueueSection[] => [
   ...scopedSections(test.baseConfig.sections, test.scope, (test.scopeRef as TestScopeRef) ?? null),
 ];
 
-const isHeld = (row: AssignmentQueueRow): row is AssignmentQueueRow & { id: string } =>
-  row.id !== null;
-
-/** In the queue while the paper's source gives the role work and nobody has finished it. */
-function needingRole(
+/** Null where the paper's source gives the role nothing to do; otherwise who holds it, if anybody. */
+function roleProgress(
   test: QueueTest,
   section: QueueSection,
   role: AssignmentRole,
-  query: MineAssignmentsQuery,
-  due: DueBounds | undefined,
-): AssignmentQueueRow[] {
+): SectionRoleProgress | null {
   const source = test.paperSource;
-  if (source === null || !SOURCES_FOR_ROLE[role].includes(source)) return [];
+  if (source === null || !SOURCES_FOR_ROLE[role].includes(source)) return null;
 
   const held =
     test.assignments.find((row) => row.role === role && row.baseConfigSectionId === section.id) ??
     null;
-  if (held?.finalizedAt) return [];
-  if (query.assigneeId && !(held && query.assigneeId.includes(held.assigneeId))) return [];
-  if (due && !withinDue(held?.dueAt ?? null, due)) return [];
 
-  return [
-    {
-      id: held?.id ?? null,
-      testId: test.id,
-      testTitle: test.title,
-      baseConfigSectionId: section.id,
-      sectionName: section.name,
-      assigneeId: held?.assigneeId ?? null,
-      assigneeName: held ? nameOf(held.assignee) : null,
-      role,
-      dueAt: held?.dueAt?.toISOString() ?? null,
-      finalizedAt: null,
-      writtenCount: 0,
-      sectionQuestionCount: section.questionCount,
-      sectionMix: sectionMixOf(test.questionPoolFilter, section.id),
-    },
-  ];
+  return {
+    assignmentId: held?.id ?? null,
+    assigneeId: held?.assigneeId ?? null,
+    assigneeName: held ? nameOf(held.assignee) : null,
+    dueAt: held?.dueAt?.toISOString() ?? null,
+    finalizedAt: held?.finalizedAt?.toISOString() ?? null,
+  };
 }
+
+const roles = (row: SectionProgressRow): SectionRoleProgress[] =>
+  [row.typing, row.reading].filter((held): held is SectionRoleProgress => held !== null);
+
+/** Either half satisfies it: a section is theirs if they type it or read it. */
+const heldByAnyOf = (row: SectionProgressRow, wanted: readonly string[]): boolean =>
+  roles(row).some((held) => held.assigneeId !== null && wanted.includes(held.assigneeId));
+
+/** Either half satisfies it: the two roles carry their own dates and need not agree. */
+const dueWithin = (row: SectionProgressRow, bounds: DueBounds): boolean =>
+  roles(row).some((held) => withinDue(held.dueAt === null ? null : new Date(held.dueAt), bounds));
 
 const nameOf = (assignee: HeldAssignment['assignee']): string =>
   assignee.fullName ?? assignee.email;
@@ -259,13 +252,9 @@ export class AssignmentsService {
     await this.prisma.questionAssignment.delete({ where: { id } });
   }
 
-  /** An ordinary admin's own rows; a super admin's every section still needing the role's work. */
-  mine(
-    adminId: string,
-    query: MineAssignmentsQuery,
-    isSuperAdmin = false,
-  ): Promise<Paginated<AssignmentQueueRow>> {
-    return isSuperAdmin ? this.needingWork(query) : this.assignedTo(adminId, query);
+  /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
+  mine(adminId: string, query: MineAssignmentsQuery): Promise<Paginated<AssignmentWithTest>> {
+    return this.assignedTo(adminId, query);
   }
 
   /** One row by id. Not theirs reads as not there, unless they own the institute. */
@@ -284,7 +273,7 @@ export class AssignmentsService {
   private async assignedTo(
     adminId: string,
     query: MineAssignmentsQuery,
-  ): Promise<Paginated<AssignmentQueueRow>> {
+  ): Promise<Paginated<AssignmentWithTest>> {
     const due = dueBounds(query);
     const where: Prisma.QuestionAssignmentWhereInput = {
       assigneeId: adminId,
@@ -315,29 +304,29 @@ export class AssignmentsService {
   }
 
   /** Expanded in memory: the cross of unfrozen tests and their sections is thousands of rows here, not millions. */
-  private async needingWork(query: MineAssignmentsQuery): Promise<Paginated<AssignmentQueueRow>> {
-    const roles = query.role ? [query.role] : [...ROLE_ORDER];
+  async progress(query: SectionProgressQuery): Promise<Paginated<SectionProgressRow>> {
     const due = dueBounds(query);
     const tests = await this.prisma.test.findMany({
       where: {
         finalizedAt: null,
-        paperSource: { in: [...new Set(roles.flatMap((role) => SOURCES_FOR_ROLE[role]))] },
+        paperSource: { not: null },
         ...(query.test ? { title: nameLike(query.test) } : {}),
       },
       select: TEST_QUEUE_SELECT,
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
     });
 
-    const rows = tests.flatMap((test) =>
-      sectionsOf(test)
-        .filter((section) => matchesSection(section.name, query.section))
-        .flatMap((section) =>
-          roles.flatMap((role) => needingRole(test, section, role, query, due)),
-        ),
-    );
+    const rows = tests
+      .flatMap((test) =>
+        sectionsOf(test)
+          .filter((section) => matchesSection(section.name, query.section))
+          .map((section) => sectionRow(test, section)),
+      )
+      .filter((row) => !query.assigneeId || heldByAnyOf(row, query.assigneeId))
+      .filter((row) => !due || dueWithin(row, due));
 
     const items = rows.slice((query.page - 1) * query.pageSize, query.page * query.pageSize);
-    const written = await this.sectionWrittenCounts(items.filter(isHeld));
+    const written = await this.sectionWrittenCounts(items);
     return paged(
       query,
       items.map((row) => ({ ...row, writtenCount: written.get(sectionKey(row)) ?? 0 })),
@@ -366,25 +355,34 @@ export class AssignmentsService {
     return this.withWrittenCount(updated);
   }
 
-  /** How many questions any assignment on a row's own (test, section) carries — a section fact. */
+  /** Every assignment on a row's own (test, section), not just the row's — the typist's work counts for the reader. */
   private async sectionWrittenCounts(
-    rows: readonly { id: string; testId: string; baseConfigSectionId: string }[],
+    rows: readonly { testId: string; baseConfigSectionId: string }[],
   ): Promise<Map<string, number>> {
-    const ids = rows.map((row) => row.id);
+    const sections = [...new Map(rows.map((row) => [sectionKey(row), row])).values()];
+    if (sections.length === 0) return new Map();
+
+    const held = await this.prisma.questionAssignment.findMany({
+      where: {
+        OR: sections.map(({ testId, baseConfigSectionId }) => ({ testId, baseConfigSectionId })),
+      },
+      select: { id: true, testId: true, baseConfigSectionId: true },
+    });
     const counts =
-      ids.length === 0
+      held.length === 0
         ? []
         : await this.prisma.question.groupBy({
             by: ['assignmentId'],
-            where: { assignmentId: { in: ids } },
+            where: { assignmentId: { in: held.map((row) => row.id) } },
             _count: { _all: true },
           });
     const byAssignmentId = new Map(counts.map((row) => [row.assignmentId, row._count._all]));
 
-    const bySection = new Map<string, number>();
-    for (const row of rows) {
+    const bySection = new Map(sections.map((row) => [sectionKey(row), 0]));
+    for (const row of held) {
       const key = sectionKey(row);
-      bySection.set(key, (bySection.get(key) ?? 0) + (byAssignmentId.get(row.id) ?? 0));
+      if (bySection.has(key))
+        bySection.set(key, (bySection.get(key) ?? 0) + (byAssignmentId.get(row.id) ?? 0));
     }
     return bySection;
   }
@@ -480,6 +478,20 @@ function assertRoleFits(paperSource: PaperSource | null, role: AssignmentRole): 
   }
 }
 
+/** One row per (test, section), carrying both halves of its work — never one row per role. */
+function sectionRow(test: QueueTest, section: QueueSection): SectionProgressRow {
+  return {
+    testId: test.id,
+    testTitle: test.title,
+    baseConfigSectionId: section.id,
+    sectionName: section.name,
+    writtenCount: 0,
+    sectionQuestionCount: section.questionCount,
+    typing: roleProgress(test, section, ASSIGNMENT_ROLES.TYPIST),
+    reading: roleProgress(test, section, ASSIGNMENT_ROLES.PROOFREADER),
+  };
+}
+
 /** A section is only unique within its own test — two tests can share a base config's section id. */
 const sectionKey = (row: { testId: string; baseConfigSectionId: string }): string =>
   `${row.testId}:${row.baseConfigSectionId}`;
@@ -498,6 +510,7 @@ function toAssignment(row: AssignmentRow, writtenCount: number): Assignment {
     writtenCount,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
+    sectionSubjectId: row.baseConfigSection.subjectId,
   };
 }
 

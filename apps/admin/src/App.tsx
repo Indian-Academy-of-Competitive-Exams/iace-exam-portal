@@ -17,6 +17,7 @@ import { QuestionsPage } from './routes/questions';
 import { QuestionFormPage } from './routes/question-form';
 import { ImportQuestionsPage } from './routes/import-questions';
 import { AssignmentQueuePage } from './routes/assignment-queue';
+import { SectionProgressPage } from './routes/section-progress';
 import { ProofreadingSectionPage } from './routes/proofreading-section';
 import { AuthoringEditorPage } from './routes/authoring-editor';
 import { AuthoringHistoryPage } from './routes/authoring-history';
@@ -94,6 +95,7 @@ export function App() {
 
           <Route path={ROUTES.EVENT_IMPORT_PATTERN} element={<ImportEventCandidatesPage />} />
           <Route path={ROUTES.PROGRAM_IMPORT_PATTERN} element={<ImportProgramStudentsPage />} />
+          <Route path={ROUTES.SECTION_PROGRESS} element={<SectionProgressPage />} />
           <Route path={ROUTES.TESTS} element={<TestsAndSeriesPage />} />
           {/* Ranked by specificity, not order: "configs", "series" and "new" outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />
