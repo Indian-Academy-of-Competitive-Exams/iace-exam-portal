@@ -84,15 +84,42 @@ describe('AuthoringService.create', () => {
     assert.equal(await prisma.questionVersion.count(), 1);
   });
 
-  it('reports a near-duplicate and writes it anyway, unlike the bank', async () => {
+  /** The bug this closes: the screen wrote the row and mentioned the duplicate afterwards. */
+  it('refuses a question the bank already holds', async () => {
     const authoring = await build();
     const first = await authoring.create(draft(), MINE);
 
-    const second = await authoring.create(draft(), MINE);
+    await assert.rejects(
+      () => authoring.create(draft(), MINE),
+      (error: AppException) => error.code === ErrorCodes.CONFLICT,
+    );
 
-    assert.equal(second.duplicateOf?.id, first.question.id);
-    assert.equal(second.duplicateOf?.stemPreview, 'What is 20% of 150?');
-    assert.notEqual(second.question.id, first.question.id);
+    assert.equal(await prisma.question.count(), 1);
+    assert.ok(first.question.id);
+  });
+
+  it('names the question a draft repeats, before anything is written', async () => {
+    const authoring = await build();
+    const first = await authoring.create(draft(), MINE);
+
+    const found = await authoring.duplicateFor(questionDraftSchema.parse(draft()), null);
+
+    assert.equal(found?.id, first.question.id);
+    assert.equal(found?.stemPreview, 'What is 20% of 150?');
+    assert.equal(await prisma.question.count(), 1);
+  });
+
+  /** An edit is not its own duplicate, or nobody could ever save a question twice. */
+  it('does not call a question a repeat of itself', async () => {
+    const authoring = await build();
+    const first = await authoring.create(draft(), MINE);
+
+    const found = await authoring.duplicateFor(
+      questionDraftSchema.parse(draft()),
+      first.question.id,
+    );
+
+    assert.equal(found, null);
   });
 
   it('says nothing about a duplicate when there is not one', async () => {

@@ -37,16 +37,13 @@ export class AuthoringService {
     isSuperAdmin = false,
   ): Promise<AuthoringSaveResult> {
     if (assignmentId) await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
-    const question = await this.questions.create(draft, adminId, {
-      allowDuplicate: true,
-      assignmentId,
-    });
+    const question = await this.questions.create(draft, adminId, { assignmentId });
     return { question, duplicateOf: await this.duplicateFor(draft, question.id) };
   }
 
   async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
     await this.assertTheirs(id, adminId);
-    const question = await this.questions.update(id, draft, adminId, { allowDuplicate: true });
+    const question = await this.questions.update(id, draft, adminId);
     return { question, duplicateOf: await this.duplicateFor(draft, id) };
   }
 
@@ -118,7 +115,8 @@ export class AuthoringService {
     return new Map(rows.map((row) => [row.day, Number(row.written)]));
   }
 
-  private async duplicateFor(draft: QuestionDraft, exceptId: string) {
+  /** Asked twice: once while the question is typed, and once by the save that refuses it. */
+  async duplicateFor(draft: QuestionDraft, exceptId: string | null) {
     return this.questions.duplicateOf(computeStemHash(draft), exceptId);
   }
 

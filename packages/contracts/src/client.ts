@@ -14,10 +14,12 @@ import {
 } from './envelope';
 import {
   ADMIN_AUTHORING_ROUTES,
+  authoringDuplicateSchema,
   authoringSaveResultSchema,
   authoringStatsSchema,
   type AuthoringCreateInput,
   type AuthoringHistoryQueryInput,
+  type AuthoringDuplicate,
   type AuthoringSaveResult,
   type AuthoringStats,
 } from './authoring';
@@ -1173,6 +1175,12 @@ export function createApiClient(options: ApiClientOptions) {
 
         create: (input: AuthoringCreateInput): Promise<AuthoringSaveResult> =>
           write('POST', ADMIN_AUTHORING_ROUTES.create, authoringSaveResultSchema, input),
+        // A POST for a read: the key is folded from the whole draft, which no query string carries.
+        duplicate: (input: QuestionDraftInput, exceptId?: string): Promise<AuthoringDuplicate> =>
+          write('POST', ADMIN_AUTHORING_ROUTES.duplicate, authoringDuplicateSchema, {
+            ...input,
+            exceptId: exceptId || null,
+          }),
 
         update: (id: string, input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
           write('PATCH', ADMIN_AUTHORING_ROUTES.update(id), authoringSaveResultSchema, input),

@@ -72,7 +72,7 @@ export function checksFor(
   }
 
   if (duplicate) {
-    checks.push({ key: 'duplicate', label: duplicate, state: 'warn', meta: 'already in the bank' });
+    checks.push({ key: 'duplicate', label: duplicate, state: 'fail', meta: 'already in the bank' });
   }
 
   return checks;

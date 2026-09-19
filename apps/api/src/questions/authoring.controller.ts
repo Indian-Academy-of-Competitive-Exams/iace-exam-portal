@@ -6,9 +6,12 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   authoringCreateSchema,
+  authoringDuplicateQuerySchema,
   authoringHistoryQuerySchema,
   questionDraftSchema,
   type AuthoringCreateInput,
+  type AuthoringDuplicate,
+  type AuthoringDuplicateQuery,
   type AuthoringHistoryQuery,
   type AuthoringSaveResult,
   type AuthoringStats,
@@ -51,6 +54,16 @@ export class AuthoringController {
   @Get('questions/:id')
   detail(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<QuestionDetail> {
     return this.authoring.detail(id, user.id);
+  }
+
+  /** No @Audit: asking whether a question exists changes nothing and happens on every keystroke. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.READ)
+  @Post('duplicate')
+  async duplicate(
+    @Body(new ZodBody(authoringDuplicateQuerySchema)) body: AuthoringDuplicateQuery,
+  ): Promise<AuthoringDuplicate> {
+    const { exceptId, ...draft } = body;
+    return { duplicateOf: await this.authoring.duplicateFor(draft, exceptId) };
   }
 
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)

@@ -64,6 +64,9 @@ const IMAGE_LIMITS = {
 
 const PREVIEW_DEBOUNCE_MS = 600;
 
+/** Longer than the preview's: this one leaves the machine, and a half-typed stem matches nothing. */
+const DUPLICATE_DEBOUNCE_MS = 900;
+
 /** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
 const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
 
@@ -110,7 +113,7 @@ export function AuthoringEditorPage() {
   const [language, setLanguage] = useState<QuestionLanguage>(restored.language);
   const [written, setWritten] = useState(restored.written);
   const [romanised, setRomanised] = useState(restored.romanised);
-  const [duplicate, setDuplicate] = useState<string | null>(null);
+
   // Bumped whenever the box must be rebuilt: a language, a type, or a question loaded into it.
   const [boxVersion, setBoxVersion] = useState(0);
   const rebuildBox = useCallback(() => setBoxVersion((version) => version + 1), []);
@@ -139,10 +142,10 @@ export function AuthoringEditorPage() {
   usePersistedDraft(storageKey, editingId === '', saved);
 
   const draft = useMemo(() => toDraft(state, header), [state, header]);
+  const duplicate = useDuplicate(draft, editingId);
   const { issues, checks } = useChecked(draft, header, state, duplicate);
 
-  const save = useSaveQuestion(editingId, draft, assignment.scoped, (result) => {
-    setDuplicate(result.duplicateOf?.stemPreview ?? null);
+  const save = useSaveQuestion(editingId, draft, assignment.scoped, () => {
     if (editingId) return;
     // The header survives: the next fifty questions are the same subject at the same level.
     setState(emptyState(state.type));
@@ -150,7 +153,7 @@ export function AuthoringEditorPage() {
     rebuildBox();
   });
 
-  const canSave = issues.length === 0 && !save.isPending;
+  const canSave = issues.length === 0 && duplicate === null && !save.isPending;
 
   const cycleLanguage = useCallback(() => {
     setLanguage((current) => {
@@ -535,6 +538,24 @@ function usePersistedDraft(key: string, enabled: boolean, saved: Saved) {
     if (!enabled) return;
     window.localStorage.setItem(key, JSON.stringify(saved));
   }, [key, enabled, saved]);
+}
+
+/** Asked of the draft on screen, not of the row a save would otherwise have left behind. */
+function useDuplicate(draft: QuestionDraft, editingId: string): string | null {
+  const [asked, setAsked] = useState<QuestionDraft | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAsked(draft), DUPLICATE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [draft]);
+
+  const found = useQuery({
+    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', asked, editingId],
+    queryFn: () => api.admin.authoring.duplicate(asked as QuestionDraft, editingId || undefined),
+    enabled: asked !== null && hasText(asked.stem[DEFAULT_LANGUAGE] ?? ''),
+  });
+
+  return found.data?.duplicateOf?.stemPreview ?? null;
 }
 
 /** The rules the save and the sheet are judged by, debounced so the panel settles as you type. */

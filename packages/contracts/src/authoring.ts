@@ -64,12 +64,24 @@ export const authoringStatsSchema = z.object({
 });
 export type AuthoringStats = z.infer<typeof authoringStatsSchema>;
 
-/** A near-duplicate is reported and written anyway: two similar questions may both be real. */
+const duplicateRefSchema = z.object({ id: z.string(), stemPreview: z.string() }).nullable();
+
+/** The save refuses a duplicate now, so this says which question it was refused against. */
 export const authoringSaveResultSchema = z.object({
   question: questionDetailSchema,
-  duplicateOf: z.object({ id: z.string(), stemPreview: z.string() }).nullable().default(null),
+  duplicateOf: duplicateRefSchema.default(null),
 });
 export type AuthoringSaveResult = z.infer<typeof authoringSaveResultSchema>;
+
+/** Asked while the question is still being typed, so the answer arrives before the Save. */
+export const authoringDuplicateSchema = z.object({ duplicateOf: duplicateRefSchema });
+export type AuthoringDuplicate = z.infer<typeof authoringDuplicateSchema>;
+
+/** The draft as typed, plus the question being edited, which is never its own duplicate. */
+export const authoringDuplicateQuerySchema = questionDraftSchema.extend({
+  exceptId: z.string().nullable().default(null),
+});
+export type AuthoringDuplicateQuery = z.infer<typeof authoringDuplicateQuerySchema>;
 
 export const authoringTagsSchema = z.object({ tags: z.array(z.string()) });
 export type AuthoringTags = z.infer<typeof authoringTagsSchema>;
@@ -80,4 +92,5 @@ export const ADMIN_AUTHORING_ROUTES = {
   create: '/admin/authoring/questions',
   get: (id: string) => `/admin/authoring/questions/${id}`,
   update: (id: string) => `/admin/authoring/questions/${id}`,
+  duplicate: '/admin/authoring/duplicate',
 } as const;
