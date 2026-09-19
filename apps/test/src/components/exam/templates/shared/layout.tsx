@@ -1,5 +1,5 @@
 /** Where the slots sit. Both skins compose the same way; the config moves the pieces. */
-import { Tabs, cn } from '@iace/ui';
+import { FILLS, Tabs, cn } from '@iace/ui';
 import {
   BottomBar,
   Header,
@@ -20,11 +20,7 @@ export function Layout({ view, config }: Readonly<ExamSlotProps>) {
       <Header view={view} config={config} />
 
       {/* A COLUMN: without it the section bar and the paper size to their content and spill over the bottom bar. */}
-      <Tabs
-        value={view.sectionId}
-        onValueChange={view.openSection}
-        className="flex min-h-0 flex-1 flex-col"
-      >
+      <Tabs value={view.sectionId} onValueChange={view.openSection} className={FILLS}>
         <SectionBar view={view} config={config} />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

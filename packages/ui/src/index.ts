@@ -1,4 +1,4 @@
-export { cn, plural } from './lib/utils';
+export { cn, plural, FILLS } from './lib/utils';
 export { Button } from './components/ui/button';
 export { Input, UPPERCASE_CODE } from './components/ui/input';
 export { NumericInput, digitsOnly } from './components/ui/numeric-input';

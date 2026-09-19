@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Card } from './card';
 import { FilterRow, type FilterState, type ListFilter } from './list-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
-import { cn } from '../../lib/utils';
+import { cn, FILLS } from '../../lib/utils';
 
 /**
  * The app shell's content wrapper. Here rather than in the shell so this and the
@@ -14,9 +14,6 @@ export const PAGE_CONTENT_CLASS = [
   'has-[[data-page-frame]]:flex has-[[data-page-frame]]:flex-col',
   'has-[[data-page-frame]]:overflow-hidden',
 ].join(' ');
-
-/** Every ancestor between the frame and the table has to shrink, or the page takes the scroll. */
-const FILLS = 'flex min-h-0 flex-1 flex-col';
 
 /** `header` is a fragment, so the space between what a screen puts in it is the frame's to give. */
 const HEADER_BLOCK = 'mb-4 flex shrink-0 flex-col gap-4';

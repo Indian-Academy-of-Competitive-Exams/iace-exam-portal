@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { FieldValues, SubmitHandler, UseFormReturn } from 'react-hook-form';
+import { FILLS } from '../../lib/utils';
 import { Button } from './button';
 import {
   Dialog,
@@ -48,11 +49,7 @@ export function FormDialog<TValues extends FieldValues>({
   return (
     <Dialog open={open} onOpenChange={change}>
       <DialogContent size={size} closeLabel={`Close ${title}`}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          noValidate
-          className="flex min-h-0 flex-1 flex-col"
-        >
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className={FILLS}>
           <DialogHeader className="flex-col gap-1">
             <DialogTitle>{title}</DialogTitle>
             {description ? <DialogDescription>{description}</DialogDescription> : null}

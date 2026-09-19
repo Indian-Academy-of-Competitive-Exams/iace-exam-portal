@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ChevronRight } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, FILLS } from '../../lib/utils';
 import { nearTheEnd } from '../../lib/scroll';
 import { Checkbox } from './checkbox';
 import { useInTableFrame } from './table-frame';
@@ -239,5 +239,5 @@ export function DataTable<TRow>({
   );
 
   // Owning the column rather than borrowing the parent's: the footer pins wherever this is dropped.
-  return fills ? <div className="flex min-h-0 flex-1 flex-col">{body}</div> : body;
+  return fills ? <div className={FILLS}>{body}</div> : body;
 }

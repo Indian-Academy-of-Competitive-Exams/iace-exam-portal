@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/utils';
+import { cn, FILLS } from '../../lib/utils';
 import { Card } from './card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
@@ -88,11 +88,7 @@ export function FormPanel({
   ) : null;
 
   const body = tabs ? (
-    <Tabs
-      value={tabs.value}
-      onValueChange={tabs.onValueChange}
-      className="flex min-h-0 flex-1 flex-col"
-    >
+    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
       {strip}
     </Tabs>
   ) : (
@@ -109,12 +105,12 @@ export function FormPanel({
     ) : null;
 
   return (
-    <div data-page-frame className="flex min-h-0 flex-1 flex-col">
+    <div data-page-frame className={FILLS}>
       {header ? <div className="shrink-0">{header}</div> : null}
 
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {onSubmit ? (
-          <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
+          <form onSubmit={onSubmit} noValidate className={FILLS}>
             {body}
             {foot}
           </form>

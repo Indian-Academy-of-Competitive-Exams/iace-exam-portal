@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, FILLS } from '../../lib/utils';
 import { Badge } from './badge';
 import { Button } from './button';
 import { Combobox, type ComboboxItem } from './combobox';
@@ -355,7 +355,7 @@ export function ListView<TRow>({
   );
 
   return fills ? (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className={FILLS}>
       {head}
       {table}
     </div>
