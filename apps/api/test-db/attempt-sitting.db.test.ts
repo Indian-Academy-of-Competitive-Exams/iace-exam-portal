@@ -67,7 +67,7 @@ async function hall(questionCount = 2) {
   });
   await prisma.test.update({
     where: { id: paper.testId },
-    data: { status: TEST_STATUS.ACTIVE, isLocked: true },
+    data: { status: TEST_STATUS.ACTIVE, finalizedAt: new Date() },
   });
   const student = (
     await makeStudent(prisma, { currentBranchId: branch, enrolledCourses: [DEFAULT_EXAM_COURSE] })

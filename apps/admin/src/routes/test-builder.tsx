@@ -64,7 +64,7 @@ function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
   if (!detail) return done;
   done.add(TEST_BUILDER_STEP.SETUP);
   if (!owesAPaper(detail)) done.add(TEST_BUILDER_STEP.PAPER);
-  if (detail.isLocked) done.add(TEST_BUILDER_STEP.OFFER);
+  if (detail.finalizedAt !== null) done.add(TEST_BUILDER_STEP.OFFER);
   return done;
 }
 

@@ -52,7 +52,7 @@ function resolver(permitted = true): AccessResolverService {
 
 interface Hall {
   status?: TestStatus;
-  isLocked?: boolean;
+  offered?: boolean;
   shuffleQuestions?: boolean;
   languageMode?: LanguageMode;
   languages?: (typeof LANGUAGE_CODE)[keyof typeof LANGUAGE_CODE][];
@@ -62,7 +62,7 @@ interface Hall {
   sections?: readonly number[];
 }
 
-/** A finalized, offered test on an hour-long config — the only kind that can be sat — and a student. */
+/** An offered test on an hour-long config — the only kind that can be sat — and a student. */
 async function hall(over: Hall = {}) {
   const shape = over.sections ?? [3];
   const paper = await makePaper(prisma, {
@@ -83,7 +83,10 @@ async function hall(over: Hall = {}) {
   });
   await prisma.test.update({
     where: { id: paper.testId },
-    data: { status: over.status ?? TEST_STATUS.ACTIVE, isLocked: over.isLocked ?? true },
+    data: {
+      status: over.status ?? TEST_STATUS.ACTIVE,
+      finalizedAt: (over.offered ?? true) ? new Date() : null,
+    },
   });
   if (over.locked) {
     await prisma.baseConfig.update({
@@ -273,9 +276,9 @@ describe('AttemptsService — what cannot be sat', () => {
   });
 
   it('refuses a test whose paper is not frozen', async () => {
-    const { service, student, paper } = await hall({ isLocked: false });
+    const { service, student, paper } = await hall({ offered: false });
 
-    await assert.rejects(() => service.start(student, paper.testId, {}), /not been finalized/);
+    await assert.rejects(() => service.start(student, paper.testId, {}), /not been offered/);
   });
 
   it('lets the resolver refuse a student who cannot reach it, and writes nothing', async () => {

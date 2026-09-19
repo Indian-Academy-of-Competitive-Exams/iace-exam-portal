@@ -55,8 +55,9 @@ const NO_PICKS: QuestionPicks = new Map();
 /** A batch is refused whole, under whichever of these keys the server reached for. */
 const ADD_ERROR_FIELDS = ['questionId', 'questionIds', FORM_LEVEL_FIELD] as const;
 
-/** The Offer step's own words, so both screens name one price for the same edit. */
-const THAWS_THE_TEST = 'Editing the paper takes the test back out until it is offered again.';
+/** The Offer step's own words, so both screens say one thing about a paper that has gone out. */
+const PAPER_IS_FROZEN =
+  'This test has been offered, so its paper is frozen. A question on it can still be dropped or made a bonus.';
 
 /** The rebuild is a delayed, deduped job — no screen can say it is done, so none of them claims it. */
 const RE_SCORING_RUNS =
@@ -148,12 +149,11 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
   };
 
   const spec = draft ?? detail.questionPoolFilter ?? NO_SPEC;
-  // What the server assembles: a sat test is refused, a frozen one is thawed.
-  const canEditPaper = detail.attemptCount === 0;
-  // Saving the pool moves the paper, so on a frozen test it would thaw the finalize away.
-  const canSaveSpec = canEditPaper && !detail.isLocked;
-  // The service refuses it on a draft, so the menu is absent rather than there and refused.
-  const canDispose = detail.isLocked && canWrite;
+  const offered = detail.finalizedAt !== null;
+  // What the server assembles: an offered paper is frozen, and a sat one for good.
+  const canEditPaper = detail.attemptCount === 0 && !offered;
+  // The service refuses it before the offer, so the menu is absent rather than there and refused.
+  const canDispose = offered && canWrite;
   const openSection = sections.find((section) => section.id === openSectionId) ?? sections[0];
   const title = detail.title ?? 'Untitled test';
   const chosen = [...held.values()].reduce((sum, count) => sum + count, 0);
@@ -182,15 +182,14 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     );
   }
 
-  const thaws = canEditPaper && detail.isLocked;
   // The screen owns these, not any one section, so they ride the toolbar above the strip.
   const banners =
-    thaws || rescoring ? <PaperBanners thaws={thaws} rescoring={rescoring} /> : undefined;
+    offered || rescoring ? <PaperBanners frozen={offered} rescoring={rescoring} /> : undefined;
 
   const stripAction = (
     <StripActions
       dirty={draft !== null}
-      canSave={canSaveSpec}
+      canSave={canEditPaper}
       saving={save.isPending}
       poolOpen={poolOpen}
       onPoolOpen={setPoolOpen}
@@ -210,7 +209,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
           <DrawnFrom
             section={section}
             spec={spec.sections[section.id] ?? {}}
-            canSave={canSaveSpec}
+            canSave={canEditPaper}
             open={poolOpen}
             onChange={(next) => setDraft({ sections: { ...spec.sections, [section.id]: next } })}
           />
@@ -246,10 +245,10 @@ const CHIP_VARIANT = {
 } as const;
 
 /** What the screen says about the paper as a whole, above the section strip. */
-function PaperBanners({ thaws, rescoring }: Readonly<{ thaws: boolean; rescoring: boolean }>) {
+function PaperBanners({ frozen, rescoring }: Readonly<{ frozen: boolean; rescoring: boolean }>) {
   return (
     <div className="flex flex-col gap-4 pb-4">
-      {thaws ? <Alert variant="warning">{THAWS_THE_TEST}</Alert> : null}
+      {frozen ? <Alert variant="info">{PAPER_IS_FROZEN}</Alert> : null}
       {rescoring ? <Alert variant="info">{RE_SCORING_RUNS}</Alert> : null}
     </div>
   );
@@ -371,7 +370,7 @@ function SectionWorkspace({
   /** Every question the whole paper holds, since one sits on it once wherever it was put. */
   held: ReadonlySet<string>;
   editable: boolean;
-  /** A finalized paper's one permitted change, and only for somebody who may write tests. */
+  /** An offered paper's one permitted change, and only for somebody who may write tests. */
   disposable: boolean;
   attemptCount: number;
   /** Both writes draw from the stored pool, so an unsaved one has to stop them. */

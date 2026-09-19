@@ -29,7 +29,6 @@ import {
   type AddPaperQuestionBody,
   type ReplacePaperQuestionBody,
   type CreateTestBody,
-  type FinalizeResult,
   type Paginated,
   type SetTestSeriesBody,
   type SetTestStatusBody,
@@ -170,15 +169,6 @@ export class TestsController {
     return this.paper.fillSection(id, sectionId, user);
   }
 
-  /** Idempotent: a second finalize reports the first one's outcome rather than freezing twice. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post(':id/finalize')
-  @HttpCode(HttpStatus.OK)
-  finalize(@Param('id') id: string): Promise<FinalizeResult> {
-    return this.finalizer.finalize(id);
-  }
-
   /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -202,7 +192,7 @@ export class TestsController {
     return this.offering.clearProgramUnlock(id, programCode);
   }
 
-  /** The last step of the builder: freeze the paper and open it, or neither. */
+  /** The last step of the builder, and idempotent: a second offer freezes nothing twice. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/offer')

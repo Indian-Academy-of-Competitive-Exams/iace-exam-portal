@@ -422,7 +422,6 @@ Table Test {
   paperSource PaperSource
   examTemplate ExamTemplate [not null, default: 'DEFAULT']
   status TestStatus [not null, default: 'DRAFT']
-  isLocked boolean [not null, default: false]
   version integer [not null, default: 0]
   finalizedAt timestamptz(3)
   createdById uuid

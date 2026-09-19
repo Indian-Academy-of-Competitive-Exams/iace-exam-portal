@@ -17,7 +17,8 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { PaperService } from '../src/tests/paper.service';
 import { type Editor } from '../src/tests/edit-lock';
-import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
+import type { PrismaService } from '../src/prisma/prisma.service';
+import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from '../src/tests/test-rules';
 import { FakeQueue, FakeRedis } from '../test/support/fakes';
 import {
   BUILDER,
@@ -93,6 +94,7 @@ interface Bench {
   questions?: BankEntry[];
   test?: Partial<Prisma.TestUncheckedCreateInput>;
   sections?: BuilderSection[];
+  client?: PrismaService;
 }
 
 /** A draft test on a five-question config, over the bank given. */
@@ -120,7 +122,7 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
   const audit = new AuditContext();
   const redis = new FakeRedis().asService();
   return new PaperService(
-    prisma,
+    over.client ?? prisma,
     new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit, redis),
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
@@ -577,7 +579,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
 
 describe('PaperService — what it refuses to edit', () => {
   it('refuses a test a student has already sat, and one that does not exist', async () => {
-    const service = await serviceWith({ test: { isLocked: true, finalizedAt: new Date() } });
+    const service = await serviceWith({ test: { finalizedAt: new Date() } });
     await sat();
     const addOne = (testId: string) =>
       refused(
@@ -903,5 +905,77 @@ describe('PaperService — two admins on one paper', () => {
 
     assert.deepEqual(await heldIds(), [idFor('r1'), idFor('r2')]);
     assert.match((await refused(pick(service, idFor('r3'), { id: priya.id }))).message, /Ravi/);
+  });
+});
+
+const LOCK_ORDER = { TEST: 'the test row', PAPER: 'the paper rows' } as const;
+
+/** Nothing outside the transaction can see a lock, so what it records is the order the statements left in. */
+function watchingLocks(order: string[]): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) => work(recordingLocks(tx, order)));
+    },
+  });
+}
+
+function recordingLocks(tx: Prisma.TransactionClient, order: string[]): Prisma.TransactionClient {
+  return new Proxy(tx, {
+    get(inner, member: string | symbol) {
+      if (member === '$queryRaw') {
+        return (sql: TemplateStringsArray, ...values: unknown[]) => {
+          const statement = sql.join('?');
+          if (statement.includes('FROM "Test"') && statement.includes('FOR UPDATE')) {
+            order.push(LOCK_ORDER.TEST);
+          }
+          return inner.$queryRaw(sql, ...values);
+        };
+      }
+      if (member !== 'paperQuestion') return Reflect.get(inner, member) as unknown;
+      return new Proxy(inner.paperQuestion, {
+        get(delegate, method: string | symbol) {
+          if (method !== 'createMany') return Reflect.get(delegate, method) as unknown;
+          return (args: Prisma.PaperQuestionCreateManyArgs) => {
+            order.push(LOCK_ORDER.PAPER);
+            return delegate.createMany(args);
+          };
+        },
+      });
+    },
+  });
+}
+
+describe('PaperService — one lock order, Test before its paper', () => {
+  /** The failure this prevents: this and a version rewrite taking the same rows in opposite orders. */
+  it('locks the test before it writes the paper row that takes the same test as an FK parent', async () => {
+    const order: string[] = [];
+    const service = await serviceWith({ client: watchingLocks(order) });
+
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_1'),
+      questionIds: [idFor('r1')],
+    });
+
+    assert.deepEqual(order, [LOCK_ORDER.TEST, LOCK_ORDER.PAPER]);
+  });
+});
+
+describe('PaperService — an offered paper no longer moves', () => {
+  /** The failure this prevents: a live paper changing under students who can already reach it. */
+  it('refuses to add to it, and says a question on it may still be dropped', async () => {
+    const service = await serviceWith({ test: { finalizedAt: new Date() } });
+
+    const error = await refused(
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_1'),
+        questionIds: [idFor('r1')],
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(error.message, OFFERED_TEST_MESSAGE);
+    assert.deepEqual(await heldIds(), []);
   });
 });

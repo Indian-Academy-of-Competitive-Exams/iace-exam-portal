@@ -99,9 +99,12 @@ describe('TEST_BUILDER_STEP', () => {
   });
 });
 
+/** The watermark the first offer writes; a frozen paper is one that carries it. */
+const OFFERED_AT = '2026-08-01T00:00:00.000Z';
+
 describe('offerRequirements', () => {
   const built = {
-    isLocked: false,
+    finalizedAt: null,
     paperQuestionCount: 100,
     totalQuestions: 100,
   };
@@ -123,13 +126,13 @@ describe('offerRequirements', () => {
 
   /** A frozen paper is whole by definition — a retired test must be offerable again. */
   it('takes a frozen paper as whole however its rows are counted', () => {
-    assert.deepEqual(met({ ...built, isLocked: true, paperQuestionCount: 0 }), [true]);
+    assert.deepEqual(met({ ...built, finalizedAt: OFFERED_AT, paperQuestionCount: 0 }), [true]);
   });
 });
 
 describe('testBuilderStepOf', () => {
   const built = {
-    isLocked: false,
+    finalizedAt: null,
     paperQuestionCount: 100,
     totalQuestions: 100,
   };
@@ -147,7 +150,7 @@ describe('testBuilderStepOf', () => {
   /** A frozen paper cannot be built further, so there is nothing on that step to send them to. */
   it('lands on offer for a frozen test, however few questions it counted', () => {
     assert.equal(
-      testBuilderStepOf({ ...built, isLocked: true, paperQuestionCount: 0 }),
+      testBuilderStepOf({ ...built, finalizedAt: OFFERED_AT, paperQuestionCount: 0 }),
       TEST_BUILDER_STEP.OFFER,
     );
   });
@@ -296,7 +299,7 @@ describe('scopedDurationSec', () => {
 
 describe('owesAPaper', () => {
   const built = {
-    isLocked: false,
+    finalizedAt: null,
     paperQuestionCount: 100,
     totalQuestions: 100,
   };

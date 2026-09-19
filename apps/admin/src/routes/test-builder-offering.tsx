@@ -248,12 +248,13 @@ function OfferSection({
 /** What the switch means right now, said beside it because Done is the only thing that acts on it. */
 function offerNote(detail: TestDetail, saved: OfferDraft, held: OfferDraft): string {
   if (held.offered && saved.offered) {
-    return `Offered to every student reached through ${held.series.name}. Its paper is frozen, and editing it takes the test back out until it is offered again.`;
+    return `Offered to every student reached through ${held.series.name}. Its paper is frozen and no longer moves.`;
   }
   if (held.offered) {
-    const freeze = detail.isLocked
-      ? ''
-      : `freezes its ${plural(detail.totalQuestions, 'question')} and `;
+    const freeze =
+      detail.finalizedAt === null
+        ? `freezes its ${plural(detail.totalQuestions, 'question')} for good and `
+        : '';
     return `Pressing Done ${freeze}offers it to every student reached through ${held.series.name}.`;
   }
   if (saved.offered) {

@@ -25,12 +25,13 @@ import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
 import {
   PAPER_SOURCE_FIXED_MESSAGE,
+  OFFERED_TEST_MESSAGE,
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
   locksOutTestEdit,
   scopeRefOf,
   testShapeOf,
-  thawsThePaper,
+  movesThePaper,
   scopeRefIssue,
   seriesFitIssue,
   seriesRefused,
@@ -76,7 +77,6 @@ type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
 /** What a test's audit diff covers. Its shape lives on the config and is diffed there. */
 export const AUDITED_TEST_FIELDS = [
   'title',
-  'isLocked',
   'scope',
   'examTemplate',
   'status',
@@ -183,6 +183,11 @@ export class TestsService {
         fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
       });
     }
+    if (test.finalizedAt !== null && movesThePaper(input)) {
+      throw new AppException(ErrorCodes.CONFLICT, OFFERED_TEST_MESSAGE, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [OFFERED_TEST_MESSAGE] },
+      });
+    }
 
     if (input.title !== undefined) {
       await this.assertTitleFree(test.testSeriesId, input.title, id);
@@ -195,7 +200,7 @@ export class TestsService {
     this.assertCovers(config, scope, scopeRef);
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (thawsThePaper(input)) await beginPaperEdit(tx, test);
+      if (movesThePaper(input)) await beginPaperEdit(tx, id);
       // A picked test has no typist, and a row nobody will finalize would hold `offer` shut forever.
       if (input.paperSource === PAPER_SOURCES.PICKED) {
         await tx.questionAssignment.deleteMany({
@@ -214,8 +219,8 @@ export class TestsService {
           ...(input.questionPoolFilter === undefined
             ? {}
             : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
-          // A finalize drawing from these must lose its claim, so every paper edit moves the version.
-          ...(thawsThePaper(input) ? { version: { increment: 1 } } : {}),
+          // An offer drawing from these must lose its claim, so every paper edit moves the version.
+          ...(movesThePaper(input) ? { version: { increment: 1 } } : {}),
         },
         include: TEST_INCLUDE,
       });
@@ -325,7 +330,6 @@ function toTest(row: TestRow): Test {
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     paperSource: row.paperSource,
     status: row.status,
-    isLocked: row.isLocked,
     version: row.version,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     attemptCount: row._count.attempts,

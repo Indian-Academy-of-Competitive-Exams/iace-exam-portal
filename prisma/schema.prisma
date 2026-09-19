@@ -520,9 +520,9 @@ model Test {
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate @default(DEFAULT)
   status             TestStatus   @default(DRAFT)
-  isLocked           Boolean      @default(false)
-  // Optimistic lock — finalize is a conditional UPDATE ... WHERE version = $n.
+  // Optimistic lock — offer is a conditional UPDATE ... WHERE version = $n.
   version            Int          @default(0)
+  // Set by the first offer and never cleared: the paper is frozen iff this is set.
   finalizedAt        DateTime?    @db.Timestamptz(3)
   createdById        String?      @db.Uuid
   createdAt          DateTime     @default(now()) @db.Timestamptz(3)

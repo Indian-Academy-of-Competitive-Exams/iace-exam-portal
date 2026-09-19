@@ -14,13 +14,16 @@ export const TEST_NOT_OFFERED_MESSAGE =
   'This test is not being offered right now. Ask your branch if you think that is wrong.';
 
 export const PAPER_NOT_READY_MESSAGE =
-  'This test has not been finalized yet, so it has no paper to sit.';
+  'This test has not been offered yet, so it has no paper to sit.';
 
 /** What stops a test being sat at all, whatever the student's access says. */
-export function testStartBlocker(test: { status: TestStatus; isLocked: boolean }): string | null {
+export function testStartBlocker(test: {
+  status: TestStatus;
+  finalizedAt: Date | null;
+}): string | null {
   if (test.status !== TEST_STATUS.ACTIVE) return TEST_NOT_OFFERED_MESSAGE;
   // Until the freeze the paper can still move, so there is nothing settled to sit.
-  if (!test.isLocked) return PAPER_NOT_READY_MESSAGE;
+  if (test.finalizedAt === null) return PAPER_NOT_READY_MESSAGE;
   return null;
 }
 

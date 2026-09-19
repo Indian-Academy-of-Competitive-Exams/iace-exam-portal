@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
+  ADMIN_ROLES,
   ASSIGNMENT_ROLES,
   AppException,
   ErrorCodes,
@@ -248,7 +249,7 @@ describe('AssignmentsService — assignable', () => {
 
     const typists = await assignments.assignable(ASSIGNMENT_ROLES.TYPIST);
 
-    assert.deepEqual(typists, [{ id: holder.id, fullName: 'Priya' }]);
+    assert.deepEqual(typists, [{ id: holder.id, fullName: 'Priya', role: ADMIN_ROLES.ADMIN }]);
     assert.ok(!typists.some((admin) => admin.id === stranger.id));
     assert.ok(!typists.some((admin) => admin.id === deactivated.id));
   });

@@ -5,27 +5,27 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
-  type FinalizeResult,
   type OfferResult,
-  type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
-import { ALREADY_FINALIZED_MESSAGE, paperCompletenessIssues } from './test-rules';
+import { paperCompletenessIssues } from './test-rules';
 
-const FINALIZE_SELECT = {
+const OFFER_SELECT = {
   id: true,
   baseConfigId: true,
-  isLocked: true,
+  finalizedAt: true,
   status: true,
   version: true,
   testSeriesId: true,
 } as const satisfies Prisma.TestSelect;
 
-type FinalizeRow = Prisma.TestGetPayload<{ select: typeof FINALIZE_SELECT }>;
+type OfferRow = Prisma.TestGetPayload<{ select: typeof OFFER_SELECT }>;
 
 /** Prisma's 5s default is a cliff nobody sees, so the freeze names its own. */
 const FREEZE_LIMITS = { maxWait: 10_000, timeout: 15_000 } as const;
+
+const RACED_MESSAGE = 'Another change landed on this test while it was being offered. Try again.';
 
 const PAPER_REF_SELECT = {
   questionId: true,
@@ -34,7 +34,7 @@ const PAPER_REF_SELECT = {
 
 type PaperRowRef = Prisma.PaperQuestionGetPayload<{ select: typeof PAPER_REF_SELECT }>;
 
-/** Freezes a test: the draft rows already exist, so this locks them rather than writing them. */
+/** Offers a test: the paper rows already exist, so this freezes them rather than writing them. */
 @Injectable()
 export class FinalizeService {
   constructor(
@@ -42,53 +42,37 @@ export class FinalizeService {
     private readonly events: DomainEventBus,
   ) {}
 
-  /** One transaction: as two calls, a failure between them froze a test and offered it to nobody. */
+  /** The freeze and the opening are ONE call: a failure between them offered a test to nobody. */
   async offer(testId: string, isSuperAdmin = false): Promise<OfferResult> {
     const test = await this.requireTest(testId);
     await this.assertAssignmentsRead(testId, isSuperAdmin);
 
-    const frozen = test.isLocked
-      ? await this.openAlreadyFrozen(test)
-      : { ...(await this.finalize(testId, TEST_STATUS.ACTIVE)), status: TEST_STATUS.ACTIVE };
+    const offered = test.finalizedAt === null ? await this.freeze(test) : await this.reopen(test);
 
     // The series carrying it: the catalog a student reads is cached against it.
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
-    return frozen;
+    return offered;
   }
 
-  /** Offering a retired test again: the paper never moved, so only its status does. */
-  private async openAlreadyFrozen(test: FinalizeRow): Promise<OfferResult> {
-    if (test.status !== TEST_STATUS.ACTIVE) {
-      await this.prisma.test.update({
-        where: { id: test.id },
-        data: { status: TEST_STATUS.ACTIVE },
-      });
-    }
-    return { ...(await this.alreadyFinalized(test)), status: TEST_STATUS.ACTIVE };
-  }
-
-  async finalize(testId: string, opening?: TestStatus): Promise<FinalizeResult> {
-    const test = await this.requireTest(testId);
-    if (test.isLocked) return this.alreadyFinalized(test);
-
+  /** The first offer, and the only one that freezes anything or counts a question's use. */
+  private async freeze(test: OfferRow): Promise<OfferResult> {
     const finalizedAt = new Date();
     const frozen = await this.prisma.$transaction(async (tx) => {
       // The one gate: the request whose `version` still matches wins, the other writes nothing.
       const claimed = await tx.test.updateMany({
-        where: { id: test.id, version: test.version, isLocked: false },
+        where: { id: test.id, version: test.version, finalizedAt: null },
         // The status rides the SAME claim, so the two can never land apart.
         data: {
-          isLocked: true,
           finalizedAt,
+          status: TEST_STATUS.ACTIVE,
           version: { increment: 1 },
-          ...(opening ? { status: opening } : {}),
         },
       });
       if (claimed.count === 0) return null;
 
       // Behind the gate: a paper counted outside it can be redrawn before the freeze.
       const paper = await this.paperOf(tx, test);
-      // Throwing here rolls the claim back, so a paper that is not whole leaves the test unlocked.
+      // Throwing here rolls the claim back, so a paper that is not whole leaves the test a draft.
       await this.assertPaperIsWhole(tx, test, paper);
 
       const served = [...new Set(paper.map((row) => row.questionId))];
@@ -101,18 +85,39 @@ export class FinalizeService {
       return paper.length;
     }, FREEZE_LIMITS);
 
-    if (frozen === null) return this.alreadyFinalized(await this.requireTest(testId));
+    if (frozen === null) return this.reopen(await this.requireTest(test.id));
 
     return {
       testId: test.id,
       finalizedAt: finalizedAt.toISOString(),
       finalizedByThisCall: true,
       frozenQuestions: frozen,
+      status: TEST_STATUS.ACTIVE,
+    };
+  }
+
+  /** Offered before: the paper never moved after that, so only the status can still change. */
+  private async reopen(test: OfferRow): Promise<OfferResult> {
+    if (test.finalizedAt === null) throw new AppException(ErrorCodes.CONFLICT, RACED_MESSAGE);
+
+    if (test.status !== TEST_STATUS.ACTIVE) {
+      await this.prisma.test.update({
+        where: { id: test.id },
+        data: { status: TEST_STATUS.ACTIVE },
+      });
+    }
+
+    return {
+      testId: test.id,
+      finalizedAt: test.finalizedAt.toISOString(),
+      finalizedByThisCall: false,
+      frozenQuestions: await this.prisma.paperQuestion.count({ where: { testId: test.id } }),
+      status: TEST_STATUS.ACTIVE,
     };
   }
 
   /** Every row the test holds, which is the whole of its one paper. */
-  private async paperOf(tx: Prisma.TransactionClient, test: FinalizeRow): Promise<PaperRowRef[]> {
+  private async paperOf(tx: Prisma.TransactionClient, test: OfferRow): Promise<PaperRowRef[]> {
     return tx.paperQuestion.findMany({
       where: { testId: test.id },
       select: PAPER_REF_SELECT,
@@ -121,7 +126,7 @@ export class FinalizeService {
 
   private async assertPaperIsWhole(
     tx: Prisma.TransactionClient,
-    test: FinalizeRow,
+    test: OfferRow,
     paper: readonly PaperRowRef[],
   ): Promise<void> {
     const sections = await tx.baseConfigSection.findMany({
@@ -159,24 +164,8 @@ export class FinalizeService {
     });
   }
 
-  private async alreadyFinalized(test: FinalizeRow): Promise<FinalizeResult> {
-    const row = await this.prisma.test.findUnique({
-      where: { id: test.id },
-      select: { finalizedAt: true, _count: { select: { paperQuestions: true } } },
-    });
-    if (!row?.finalizedAt) {
-      throw new AppException(ErrorCodes.CONFLICT, ALREADY_FINALIZED_MESSAGE);
-    }
-    return {
-      testId: test.id,
-      finalizedAt: row.finalizedAt.toISOString(),
-      finalizedByThisCall: false,
-      frozenQuestions: row._count.paperQuestions,
-    };
-  }
-
-  private async requireTest(id: string): Promise<FinalizeRow> {
-    const test = await this.prisma.test.findUnique({ where: { id }, select: FINALIZE_SELECT });
+  private async requireTest(id: string): Promise<OfferRow> {
+    const test = await this.prisma.test.findUnique({ where: { id }, select: OFFER_SELECT });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }

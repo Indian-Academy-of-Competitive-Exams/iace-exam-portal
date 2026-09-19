@@ -97,7 +97,7 @@ async function serviceWith(over: Bench = {}) {
   return { events, service: new TestsService(prisma, configs, audit, events.asService(), redis) };
 }
 
-const FROZEN = { isLocked: true, finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
+const FROZEN = { finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
 
 const testRow = () => prisma.test.findUnique({ where: { id: TEST } });
 
@@ -345,14 +345,14 @@ describe('TestsService — where a test gets its questions', () => {
     assert.equal(await prisma.questionAssignment.count({ where: { id: outstanding } }), 0);
   });
 
-  /** Choosing it moves no question, so a frozen paper must not thaw underneath the choice. */
+  /** Choosing it moves no question, so an offered test must not be refused the choice. */
   it('leaves a frozen paper frozen', async () => {
     const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
 
     await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED });
 
     const row = await testRow();
-    assert.deepEqual([row?.isLocked, row?.status], [true, TEST_STATUS.ACTIVE]);
+    assert.deepEqual([row?.finalizedAt, row?.status], [FROZEN.finalizedAt, TEST_STATUS.ACTIVE]);
   });
 });
 
@@ -384,19 +384,19 @@ describe('TestsService — editing and removing', () => {
 
     const renamed = await service.update(TEST, { title: 'Mock 1 (revised)' });
     assert.equal(renamed.title, 'Mock 1 (revised)');
-    // A rename moves no question, so it must not thaw the paper it was allowed to leave alone.
-    assert.equal((await testRow())?.isLocked, true);
+    // A rename moves no question, so it leaves alone the paper it was allowed to leave alone.
+    assert.deepEqual((await testRow())?.finalizedAt, FROZEN.finalizedAt);
   });
 
-  /** THE failure this prevents: a re-skin silently un-finalizing a paper it moves no question in. */
-  it('re-skins a frozen test without thawing the paper', async () => {
+  /** THE failure this prevents: a re-skin refused on a paper it moves no question in. */
+  it('re-skins an offered test, which moves nothing its paper holds', async () => {
     const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
 
     const updated = await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
 
     assert.equal(updated.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
     const row = await testRow();
-    assert.deepEqual([row?.isLocked, row?.status], [true, TEST_STATUS.ACTIVE]);
+    assert.deepEqual([row?.finalizedAt, row?.status], [FROZEN.finalizedAt, TEST_STATUS.ACTIVE]);
   });
 
   /** A student who sat the comfortable screen must not have their test re-skinned under them. */
@@ -410,16 +410,14 @@ describe('TestsService — editing and removing', () => {
   });
 
   /** The failure this prevents: a frozen paper left pointing at a scope it no longer covers. */
-  it('thaws a frozen test nobody has sat when its shape changes', async () => {
+  it('refuses a shape change on an offered test, sat or not', async () => {
     const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
 
-    await service.update(TEST, { questionPoolFilter: { sections: {} } });
+    const error = await refused(service.update(TEST, { questionPoolFilter: { sections: {} } }));
 
+    assert.equal(error.code, ErrorCodes.CONFLICT);
     const row = await testRow();
-    assert.equal(row?.isLocked, false);
-    assert.equal(row?.finalizedAt, null);
-    // An unfrozen test cannot be offered, so it stops being offered rather than going incoherent.
-    assert.equal(row?.status, TEST_STATUS.DRAFT);
+    assert.deepEqual([row?.finalizedAt, row?.status], [FROZEN.finalizedAt, TEST_STATUS.ACTIVE]);
   });
 
   it('refuses to delete a test students have sat', async () => {

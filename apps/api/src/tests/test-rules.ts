@@ -5,7 +5,6 @@ import {
   scopedDurationSec,
   scopedQuestionCount,
   TEST_SCOPE,
-  TEST_STATUS,
   type TestScope,
   type TestScopeRef,
   type TimedScopedSection,
@@ -96,7 +95,7 @@ export function scopeRefIssue(scope: TestScope, scopeRef: TestScopeRef | null): 
 /** The one field a sat test may still change: renaming it moves no question. */
 export const TEST_UNFROZEN_FIELDS = ['title'] as const;
 
-/** None of these can change WHICH questions the paper holds, so none unfreezes one. */
+/** None of these can change WHICH questions the paper holds, so none of them moves one. */
 export const PAPER_NEUTRAL_FIELDS = ['title', 'examTemplate', 'paperSource'] as const;
 
 export const PAPER_SOURCE_FIXED_MESSAGE =
@@ -105,34 +104,22 @@ export const PAPER_SOURCE_FIXED_MESSAGE =
 export const SAT_TEST_MESSAGE =
   'Students have sat this test, so its paper cannot move under their results. Only its name still changes.';
 
+export const OFFERED_TEST_MESSAGE =
+  'This test has been offered, so its paper is frozen and no longer moves. A question already on it can still be dropped or made a bonus.';
+
 export function locksOutTestEdit(input: UpdateTestBody): boolean {
   const unfrozen = new Set<string>(TEST_UNFROZEN_FIELDS);
   return Object.keys(input).some((key) => !unfrozen.has(key));
 }
 
-/** A frozen paper thaws only for an edit that could change what it holds — a re-skin cannot. */
-export function thawsThePaper(input: UpdateTestBody): boolean {
+/** An edit moves the paper if it could change what the paper holds — a re-skin cannot. */
+export function movesThePaper(input: UpdateTestBody): boolean {
   const neutral = new Set<string>(PAPER_NEUTRAL_FIELDS);
   return Object.keys(input).some((key) => !neutral.has(key));
 }
 
-/** A frozen paper that no longer matches its own scope is worse than either state, so it thaws. */
-export function unfreezing(test: { isLocked: boolean }) {
-  if (!test.isLocked) return {};
-  return {
-    isLocked: false,
-    finalizedAt: null,
-    status: TEST_STATUS.DRAFT,
-    // Or a finalize still holding the version it read could re-freeze behind this edit.
-    version: { increment: 1 },
-  };
-}
-
-export const ALREADY_FINALIZED_MESSAGE =
-  'This test is already finalized. Its paper is frozen and cannot be drawn again.';
-
 export const NO_PAPER_MESSAGE =
-  'This test has no paper yet. Draw or choose its questions before finalizing it.';
+  'This test has no paper yet. Draw or choose its questions before offering it.';
 
 /** Every section at its exact count, or the paper is not the one the config describes. */
 export function paperCompletenessIssues(
@@ -160,9 +147,9 @@ export function paperCompletenessIssues(
 }
 
 /** A test reaches a student only once its paper has stopped moving; its series is a column now. */
-export function activationBlocker(test: { isLocked: boolean }): string | null {
-  if (test.isLocked) return null;
-  return 'Finalize this test before offering it. Until its paper is frozen there is nothing for a student to sit.';
+export function activationBlocker(test: { finalizedAt: Date | null }): string | null {
+  if (test.finalizedAt !== null) return null;
+  return 'This test has never been offered, so its paper is not frozen and there is nothing for a student to sit. Offer it instead.';
 }
 
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */

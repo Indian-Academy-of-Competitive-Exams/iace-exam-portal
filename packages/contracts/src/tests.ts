@@ -342,10 +342,9 @@ export const testSchema = z.object({
   /** Null until it is declared, and declaring it is the one-way door `assign` waits on. */
   paperSource: paperSourceSchema.nullable(),
   status: testStatusSchema,
-  /** True once the paper is frozen. */
-  isLocked: z.boolean(),
-  /** Optimistic lock: finalize is a conditional update against it. */
+  /** Optimistic lock: the offer is a conditional update against it. */
   version: z.number().int(),
+  /** Set by the first offer and never cleared: the paper is frozen iff this is set. */
   finalizedAt: z.string().nullable(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
@@ -406,7 +405,7 @@ interface OfferRequirement {
 
 /** A full TOTAL is every section full: nothing may exceed a section's own count, so it cannot hide. */
 export function offerRequirements(
-  test: Pick<Test, 'isLocked' | 'paperQuestionCount' | 'totalQuestions'>,
+  test: Pick<Test, 'finalizedAt' | 'paperQuestionCount' | 'totalQuestions'>,
 ): OfferRequirement[] {
   return [paperRequirement(test)];
 }
@@ -425,7 +424,7 @@ export function testBuilderStepOf(test: Parameters<typeof offerRequirements>[0])
 }
 
 function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
-  const met = test.isLocked || test.paperQuestionCount === test.totalQuestions;
+  const met = test.finalizedAt !== null || test.paperQuestionCount === test.totalQuestions;
   return {
     key: OFFER_REQUIREMENT.PAPER,
     met,
@@ -528,8 +527,8 @@ export const ADMIN_TEST_ROUTES = {
 } as const;
 
 // ============================================================================
-// The paper. Drawn or hand-picked while the test is still a draft, frozen at
-// finalize — `Test.isLocked` is the freeze, not the existence of these rows.
+// The paper. Drawn or hand-picked while the test is still a draft, frozen by
+// the offer — `Test.finalizedAt` is the freeze, not the existence of these rows.
 // ============================================================================
 
 /** Enough of a question to READ a row of the paper, not merely to recognise its code. */
@@ -571,8 +570,8 @@ export const seriesTestRowSchema = z.object({
   order: z.number().int().nullable(),
   unlockAt: z.string().nullable(),
   status: testStatusSchema,
-  /** Whether the paper is frozen. Draft, finalized and offered are three states, not two. */
-  isLocked: z.boolean(),
+  /** Set by the first offer and never cleared: the paper is frozen iff this is set. */
+  finalizedAt: z.string().nullable(),
   totalQuestions: z.number().int(),
   durationSec: z.number().int(),
   /** Nothing that has been sat may be taken out of a series, so the row says whether it has. */
@@ -590,14 +589,15 @@ export const setProgramUnlockSchema = z.object({ opensAt: z.iso.datetime() });
 export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
 export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
 
-/** What a finalize did. `finalizedByThisCall` is false when another request got there first. */
-const finalizeResultSchema = z.object({
+/** What an offer did. `finalizedByThisCall` is false when the test was already frozen. */
+export const offerResultSchema = z.object({
   testId: z.string(),
   finalizedAt: z.string(),
   finalizedByThisCall: z.boolean(),
   frozenQuestions: z.number().int(),
+  status: testStatusSchema,
 });
-export type FinalizeResult = z.infer<typeof finalizeResultSchema>;
+export type OfferResult = z.infer<typeof offerResultSchema>;
 
 export const setTestStatusSchema = z.object({
   status: testStatusSchema,
@@ -640,10 +640,6 @@ export const addPaperQuestionSchema = z.object({
 export type AddPaperQuestionInput = z.input<typeof addPaperQuestionSchema>;
 export type AddPaperQuestionBody = z.infer<typeof addPaperQuestionSchema>;
 
-/** Freezing and opening are ONE action, so they answer with one result. */
-export const offerResultSchema = finalizeResultSchema.extend({ status: testStatusSchema });
-export type OfferResult = z.infer<typeof offerResultSchema>;
-
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
@@ -651,7 +647,7 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   /** Draws the rest of one section from its own spec, around the rows already on it. */
   fillSection: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/fill`,
-  /** The ONE change a finalized paper still allows: withdrawing a question, or paying it to all. */
+  /** The ONE change an offered paper still allows: withdrawing a question, or paying it to all. */
   questionStatus: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}/status`,
   offer: (id: string) => `/admin/tests/${id}/offer`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,

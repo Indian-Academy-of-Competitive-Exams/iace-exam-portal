@@ -35,7 +35,7 @@ import {
   type DrawnQuestion,
   type DrawSection,
 } from './draw-engine';
-import { SAT_TEST_MESSAGE } from './test-rules';
+import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from './test-rules';
 import { beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
 import { DRAWABLE_QUESTION, stemPreviewOf } from '../questions';
@@ -47,7 +47,7 @@ const NOT_DRAWABLE_MESSAGE =
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
-  'Only a finalized paper can have a question dropped or made a bonus. Edit the draft instead.';
+  'Only an offered test can have a question dropped or made a bonus. Edit the paper before offering it instead.';
 const NO_SUCH_SECTION_MESSAGE = 'No such section on this paper';
 const SOURCE_UNCHOSEN_MESSAGE =
   'This test has not said where its questions come from yet. Choose that before picking any.';
@@ -118,7 +118,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     await takeTestEditLock(this.redis, this.prisma, testId, editor);
-    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    this.assertAssemblable(test);
     assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
@@ -164,7 +164,7 @@ export class PaperService {
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, test);
+      await beginPaperEdit(tx, testId);
       await tx.paperQuestion.createMany({
         data: questions.map((question, index) => ({
           testId,
@@ -190,7 +190,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     await takeTestEditLock(this.redis, this.prisma, testId, editor);
-    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    this.assertAssemblable(test);
     assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
@@ -208,7 +208,7 @@ export class PaperService {
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, test);
+      await beginPaperEdit(tx, testId);
       await tx.paperQuestion.createMany({
         data: added.map((row, index) => ({
           ...row,
@@ -287,7 +287,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     await takeTestEditLock(this.redis, this.prisma, testId, editor);
-    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    this.assertAssemblable(test);
     assertSourceChosen(test);
 
     const row = await this.requireRow(testId, rowId);
@@ -300,7 +300,7 @@ export class PaperService {
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, test);
+      await beginPaperEdit(tx, testId);
       await tx.paperQuestion.update({
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
@@ -318,7 +318,7 @@ export class PaperService {
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     await takeTestEditLock(this.redis, this.prisma, testId, editor);
-    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    this.assertAssemblable(test);
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
     const rows = [];
@@ -330,21 +330,21 @@ export class PaperService {
     );
 
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, test);
+      await beginPaperEdit(tx, testId);
       await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
     });
 
     return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
-  /** The only change a LOCKED paper allows; a draft's question is edited, never withdrawn. */
+  /** The only change an OFFERED paper allows; before that a question is edited, never withdrawn. */
   async setQuestionStatus(
     testId: string,
     rowId: string,
     { status, reason }: SetPaperQuestionStatusBody,
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
-    if (!test.isLocked) {
+    if (test.finalizedAt === null) {
       throw new AppException(ErrorCodes.CONFLICT, NOT_FROZEN_MESSAGE);
     }
     const row = await this.requireRow(testId, rowId);
@@ -500,12 +500,16 @@ export class PaperService {
     });
   }
 
-  private assertAssemblable(test: { attemptCount: number }): void {
-    if (test.attemptCount > 0) {
-      throw new AppException(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
-      });
-    }
+  /** A paper stops moving when it is offered, and stops for good once somebody has sat it. */
+  private assertAssemblable(test: {
+    finalizedAt: Date | null;
+    _count: { attempts: number };
+  }): void {
+    if (test._count.attempts === 0 && test.finalizedAt === null) return;
+    const refusal = test._count.attempts > 0 ? SAT_TEST_MESSAGE : OFFERED_TEST_MESSAGE;
+    throw new AppException(ErrorCodes.CONFLICT, refusal, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [refusal] },
+    });
   }
 
   private async paperOf(
@@ -569,7 +573,7 @@ export class PaperService {
       select: {
         id: true,
         baseConfigId: true,
-        isLocked: true,
+        finalizedAt: true,
         paperSource: true,
         scope: true,
         scopeRef: true,

@@ -42,6 +42,8 @@ const testRow = (paper: Paper) => prisma.test.findUniqueOrThrow({ where: { id: p
 const configRow = (paper: Paper) =>
   prisma.baseConfig.findUniqueOrThrow({ where: { id: paper.catalog.baseConfigId } });
 
+const statusOf = async (paper: Paper): Promise<TestStatus> => (await testRow(paper)).status;
+
 const useCounts = async (paper: Paper) =>
   (
     await prisma.question.findMany({
@@ -50,17 +52,18 @@ const useCounts = async (paper: Paper) =>
     })
   ).map((row) => row.fixedUseCount);
 
-describe('FinalizeService — freezing the paper', () => {
-  it('locks the test, stamps it, and bumps the optimistic version', async () => {
+describe('FinalizeService — the offer freezes the paper', () => {
+  it('stamps the test, opens it, and bumps the optimistic version in one write', async () => {
     const paper = await draft();
 
-    const result = await service.finalize(paper.testId);
+    const result = await service.offer(paper.testId);
 
     assert.equal(result.finalizedByThisCall, true);
     assert.equal(result.frozenQuestions, 5);
+    assert.equal(result.status, TEST_STATUS.ACTIVE);
     const test = await testRow(paper);
-    assert.equal(test.isLocked, true);
     assert.ok(test.finalizedAt);
+    assert.equal(test.status, TEST_STATUS.ACTIVE);
     assert.equal(test.version, 1);
   });
 
@@ -68,7 +71,7 @@ describe('FinalizeService — freezing the paper', () => {
   it('leaves the config alone, because nobody is sitting anything yet', async () => {
     const paper = await draft();
 
-    await service.finalize(paper.testId);
+    await service.offer(paper.testId);
 
     assert.equal((await configRow(paper)).locked, false);
   });
@@ -78,7 +81,7 @@ describe('FinalizeService — freezing the paper', () => {
     const paper = await draft();
     const unused = await makeQuestion(prisma, { subjectId: paper.items[0]?.subjectId ?? '' });
 
-    await service.finalize(paper.testId);
+    await service.offer(paper.testId);
 
     assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
     const untouched = await prisma.question.findUniqueOrThrow({ where: { id: unused.id } });
@@ -86,12 +89,12 @@ describe('FinalizeService — freezing the paper', () => {
   });
 });
 
-describe('FinalizeService — a second finalize', () => {
+describe('FinalizeService — a second offer', () => {
   it('is a no-op that reports the first one’s outcome', async () => {
     const paper = await draft();
 
-    const first = await service.finalize(paper.testId);
-    const second = await service.finalize(paper.testId);
+    const first = await service.offer(paper.testId);
+    const second = await service.offer(paper.testId);
 
     assert.equal(first.finalizedByThisCall, true);
     assert.equal(second.finalizedByThisCall, false);
@@ -101,81 +104,66 @@ describe('FinalizeService — a second finalize', () => {
     assert.equal((await testRow(paper)).version, 1);
   });
 
-  it('lets exactly one of two concurrent finalizes do the work', async () => {
+  it('lets exactly one of two concurrent offers do the work', async () => {
     const paper = await draft();
 
-    const results = await Promise.all([
-      service.finalize(paper.testId),
-      service.finalize(paper.testId),
-    ]);
+    const results = await Promise.all([service.offer(paper.testId), service.offer(paper.testId)]);
 
     // Both read version 0; only the one whose conditional update still matched may write.
     assert.equal(results.filter((result) => result.finalizedByThisCall).length, 1);
     assert.equal((await testRow(paper)).version, 1);
     assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
   });
+
+  /** `finalizedAt` is the watermark: without it a retired test re-offered counts its paper twice. */
+  it('opens a retired test again without re-freezing or re-counting its paper', async () => {
+    const paper = await draft();
+    const first = await service.offer(paper.testId);
+    await prisma.test.update({
+      where: { id: paper.testId },
+      data: { status: TEST_STATUS.INACTIVE },
+    });
+
+    const again = await service.offer(paper.testId);
+
+    assert.equal(again.status, TEST_STATUS.ACTIVE);
+    assert.equal(again.finalizedByThisCall, false);
+    assert.equal(again.finalizedAt, first.finalizedAt);
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+    assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
+  });
 });
 
-describe('FinalizeService — what it refuses to freeze', () => {
+describe('FinalizeService — what it refuses to offer', () => {
   it('refuses a test with no paper at all', async () => {
     const paper = await draft([0, 0]);
 
     await assert.rejects(
-      () => service.finalize(paper.testId),
+      () => service.offer(paper.testId),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.VALIDATION_ERROR,
     );
-    assert.equal((await testRow(paper)).isLocked, false);
+    const test = await testRow(paper);
+    assert.deepEqual([test.finalizedAt, test.status], [null, TEST_STATUS.DRAFT]);
     assert.equal((await configRow(paper)).locked, false);
   });
 
-  /** The failure this prevents: a 5-question paper frozen holding 4, and scored as if whole. */
+  /** The failure this prevents: a 5-question paper offered holding 4, and scored as if whole. */
   it('refuses a section short of the count its config asks for, and puts the claim back', async () => {
     const paper = await draft([3, 1]);
 
-    await assert.rejects(() => service.finalize(paper.testId), /Quant holds 1 of the 2/);
+    await assert.rejects(() => service.offer(paper.testId), /Quant holds 1 of the 2/);
 
     // The refusal happens INSIDE the transaction, so nothing it had already written survives.
     const test = await testRow(paper);
-    assert.deepEqual([test.isLocked, test.version], [false, 0]);
+    assert.deepEqual([test.finalizedAt, test.status, test.version], [null, TEST_STATUS.DRAFT, 0]);
     assert.equal((await configRow(paper)).locked, false);
     assert.deepEqual(await useCounts(paper), [0, 0, 0, 0]);
   });
 
   it('refuses a test that does not exist', async () => {
     await assert.rejects(
-      () => service.finalize(uid()),
+      () => service.offer(uid()),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
-  });
-});
-
-describe('FinalizeService — offering', () => {
-  const statusOf = async (paper: Paper): Promise<TestStatus> => (await testRow(paper)).status;
-
-  it('freezes and opens in one write, so neither can land without the other', async () => {
-    const paper = await draft();
-
-    const result = await service.offer(paper.testId);
-
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
-    assert.equal(result.finalizedByThisCall, true);
-    assert.equal((await testRow(paper)).isLocked, true);
-    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
-  });
-
-  it('opens a retired test again without re-freezing its paper', async () => {
-    const paper = await draft();
-    await service.finalize(paper.testId);
-    await prisma.test.update({
-      where: { id: paper.testId },
-      data: { status: TEST_STATUS.INACTIVE },
-    });
-
-    const result = await service.offer(paper.testId);
-
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
-    assert.equal(result.finalizedByThisCall, false);
-    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
-    assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
   });
 });

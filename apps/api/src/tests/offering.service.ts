@@ -31,7 +31,7 @@ const OFFERING_SELECT = {
   id: true,
   title: true,
   status: true,
-  isLocked: true,
+  finalizedAt: true,
   examStageId: true,
   opensAt: true,
   testSeriesId: true,
@@ -46,7 +46,7 @@ const SERIES_TEST_SELECT = {
   seriesOrder: true,
   opensAt: true,
   status: true,
-  isLocked: true,
+  finalizedAt: true,
   // A test's questions and clock are DERIVED: a scoped paper is its own sections' worth, not the config's.
   scope: true,
   scopeRef: true,
@@ -270,7 +270,7 @@ export class OfferingService {
       order: row.seriesOrder,
       unlockAt: row.opensAt?.toISOString() ?? null,
       status: row.status,
-      isLocked: row.isLocked,
+      finalizedAt: row.finalizedAt?.toISOString() ?? null,
       ...testShapeOf(row),
       attemptCount: row._count.attempts,
     }));

@@ -125,7 +125,7 @@ function testColumns(
     {
       key: 'status',
       header: 'Status',
-      cell: (row) => <TestStatusBadges status={row.status} isLocked={row.isLocked} />,
+      cell: (row) => <TestStatusBadges status={row.status} finalizedAt={row.finalizedAt} />,
     },
     { key: 'sat', header: 'Sat', numeric: true, cell: (row) => row.attemptCount },
     {

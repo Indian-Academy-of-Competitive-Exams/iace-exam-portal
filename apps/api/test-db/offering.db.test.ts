@@ -83,7 +83,7 @@ async function serviceWith(test: TestFields = {}, sittings = 0) {
   return { events, service: new OfferingService(prisma, events.asService(), new AuditContext()) };
 }
 
-const FROZEN = { isLocked: true, finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
+const FROZEN = { finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
 
 const testRow = () => prisma.test.findUniqueOrThrow({ where: { id: TEST } });
 
@@ -242,12 +242,12 @@ describe('OfferingService — offering a test', () => {
     assert.equal((await testRow()).status, TEST_STATUS.ACTIVE);
   });
 
-  it('refuses to offer a test whose paper is not frozen', async () => {
+  it('refuses to make a test active before it has ever been offered', async () => {
     const { service } = await serviceWith();
 
     const error = await refused(service.setStatus(TEST, TEST_STATUS.ACTIVE));
 
-    assert.match(error.message, /Finalize this test/);
+    assert.match(error.message, /never been offered/);
     assert.equal((await testRow()).status, TEST_STATUS.DRAFT);
   });
 
@@ -284,7 +284,7 @@ describe('OfferingService — a series and the tests it holds', () => {
         order: 1,
         unlockAt: OPENS_AT.toISOString(),
         status: TEST_STATUS.ACTIVE,
-        isLocked: true,
+        finalizedAt: FROZEN.finalizedAt.toISOString(),
         totalQuestions: 100,
         durationSec: 3600,
         attemptCount: 1,

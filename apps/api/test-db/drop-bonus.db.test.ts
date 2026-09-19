@@ -31,11 +31,11 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 /** A frozen two-question paper; two sittings ended and one still running, all served the first row. */
-async function bench({ isLocked = true, sat = true } = {}) {
+async function bench({ offered = true, sat = true } = {}) {
   const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
   await prisma.test.update({
     where: { id: paper.testId },
-    data: { isLocked, ...(isLocked ? { finalizedAt: new Date() } : {}) },
+    data: { finalizedAt: offered ? new Date() : null },
   });
   const ended: string[] = [];
   if (sat) {
@@ -129,8 +129,8 @@ describe('dropping a question on a paper somebody has already sat', () => {
     assert.equal((await scoringRequests()).length, 4);
   });
 
-  it('refuses on a paper nobody has finalized, where the draft is the thing to edit', async () => {
-    const { set } = await bench({ isLocked: false });
+  it('refuses on a test nobody has offered, where the paper itself is still the thing to edit', async () => {
+    const { set } = await bench({ offered: false });
 
     await assert.rejects(
       () => set(PAPER_QUESTION_STATUS.DROPPED),

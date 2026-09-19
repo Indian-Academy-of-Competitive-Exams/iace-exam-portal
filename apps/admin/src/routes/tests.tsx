@@ -98,7 +98,7 @@ function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Te
     {
       key: 'status',
       header: 'Status',
-      cell: (test) => <TestStatusBadges status={test.status} isLocked={test.isLocked} />,
+      cell: (test) => <TestStatusBadges status={test.status} finalizedAt={test.finalizedAt} />,
     },
     {
       key: 'actions',

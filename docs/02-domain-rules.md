@@ -77,17 +77,21 @@ Setup, then paper, then offer. There is no certificate step.
   version, so there has to be one; nothing else gates the draw, because a paper is built before its
   questions are finished and what stops an unfinished one reaching students is the offer, which
   refuses while any assignment on the test is unfinalized.
-- Finalize freezes rows that already exist and draws nothing. The paper must hold every section at
+- **A test's paper is frozen iff it has been offered**, which is the whole of the rule: `finalizedAt`
+  is set by the first offer and never cleared, and there is no separate flag and no unfreezing.
+- The offer freezes rows that already exist and draws nothing. The paper must hold every section at
   its exact count or the freeze rolls back naming the shortfall — a paper that is not whole leaves
-  the test unlocked.
-- Finalize is a conditional update on the test's version. Two finalizes cannot both win, and a
-  request that lost writes nothing.
-- Finalize increments `Question.fixedUseCount` for every question it served. Thawing decrements it,
-  or a refreeze would count twice.
-- Offering a test needs a frozen paper and nothing else. The series it reaches a student through is
+  the test a draft.
+- The offer is a conditional update on the test's version. Two offers cannot both win, and a request
+  that lost writes nothing.
+- The offer increments `Question.fixedUseCount` for every question it served, once. `finalizedAt` is
+  the watermark that makes it idempotent: a retired test offered again only changes status.
+- Offering needs a whole paper and every assignment read. The series it reaches a student through is
   not a second condition: a test is created inside one and cannot leave.
-- Editing a finalized test **thaws** its paper unless the edit could not change what the paper holds
-  — a rename and a re-skin cannot. Once the test has been **sat**, only its title moves.
+- **An offered test's paper no longer moves** — adding, replacing and removing are refused, and so is
+  any test edit that could change what the paper holds; a rename and a re-skin cannot, so they are
+  allowed. Dropping a question or paying it as a bonus is the one change left. Once the test has been
+  **sat**, only its title moves.
 - A sat test is never deleted — it is part of the record of everyone who sat it. Retire it; it keeps
   its results.
 
@@ -96,7 +100,7 @@ Setup, then paper, then offer. There is no certificate step.
 The first sitting freezes both the paper and the blueprint it came from.
 
 - The **only** permitted post-start change is moving a `PaperQuestion` to `DROPPED` or `BONUS`, and
-  it is refused on a paper that is not frozen.
+  it is refused on a test that has not been offered.
 - The move and a re-score for every ended sitting that served the question commit together, so no
   drop or bonus lands without the marks following it.
 - `DROPPED` pays its marks to everyone who attempted it and takes back the negative; a student who
@@ -315,7 +319,7 @@ and needs no mapping at all.
   trigger rebuilds that array on every pinning paper whenever a version's options change. Editing
   one test's copy of a question silently repairs every other unopened paper holding it.
 - **Every path that touches both takes the TEST before the QUESTION, its tests in `id` order.**
-  Finalize and thaw already did; an edit now takes the same lock on the tests its paper rows reach
+  The offer and every paper edit already did; an edit now takes the same lock on the tests it reaches
   before it claims the question row, because the version guard reaches those tests anyway on the way
   out. Nothing enforces this but the rule: two admins crossing on one order deadlock, and Postgres
   kills one of them with a save the admin never asked to lose.
