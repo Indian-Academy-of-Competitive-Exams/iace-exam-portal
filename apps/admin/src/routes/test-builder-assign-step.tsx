@@ -234,12 +234,20 @@ function columnsOf(
 }
 
 /** Switching to PICKED takes the unfinished typists with it, so the confirm names them first. */
-function descriptionOf(choosing: PaperSource | null, comingOff: readonly Assignment[]): string {
+function descriptionOf(
+  choosing: PaperSource | null,
+  comingOff: readonly Assignment[],
+  mayMoveItLater: boolean,
+): string {
   if (!choosing) return '';
   const discarded = choosing === PAPER_SOURCES.PICKED ? comingOff : [];
   const names = NAMES.format(discarded.map((row) => `${row.assigneeName} on ${row.sectionName}`));
   const takes = names ? ` This takes ${names} off the test.` : '';
-  return `${SOURCE_CHOICES[choosing].consequence}${takes} This cannot be undone.`;
+  // Telling a super admin it cannot be undone, beside the button they undo it with, is just untrue.
+  const after = mayMoveItLater
+    ? ' Nobody but a super admin can move it after this.'
+    : ' This cannot be undone.';
+  return `${SOURCE_CHOICES[choosing].consequence}${takes}${after}`;
 }
 
 /** The one-way door: a test says where its questions come from before anybody is handed a section. */
@@ -268,7 +276,7 @@ function SourceChoice({
       onOpenChange={(open) => !open && setChoosing(null)}
       destructive={choosing === PAPER_SOURCES.PICKED && comingOff.length > 0}
       title={choosing ? PAPER_SOURCE_LABELS[choosing] : ''}
-      description={descriptionOf(choosing, comingOff)}
+      description={descriptionOf(choosing, comingOff, identity?.isSuperAdmin ?? false)}
       confirmLabel={choosing ? SOURCE_CHOICES[choosing].action : ''}
       loading={choose.isPending}
       onConfirm={() => choosing && choose.mutate(choosing)}
