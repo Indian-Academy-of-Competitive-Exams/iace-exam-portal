@@ -49,10 +49,11 @@ export function ProofreadingSectionPage() {
 
   const id = assignmentId ?? '';
   const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', ASSIGNMENT_ROLES.PROOFREADER, null],
-    queryFn: () => api.admin.assignments.mine({ role: ASSIGNMENT_ROLES.PROOFREADER }),
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'one', id],
+    queryFn: () => api.admin.assignments.one(id),
+    enabled: id !== '',
   });
-  const assignment = assignments.data?.find((row) => row.id === id) ?? null;
+  const assignment = assignments.data ?? null;
 
   const questions = useQuery({
     queryKey: [...QUERY_KEYS.PROOFREADING, 'assignment', id],

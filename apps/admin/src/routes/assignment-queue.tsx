@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
   instituteDayLabel,
-  type Assignment,
+  type AssignmentQueueRow,
   type AssignmentRole,
-  type AssignmentWithTest,
 } from '@iace/contracts';
-import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
+import { usePagedPicker } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ConfirmDialog,
   DropdownMenuItem,
   ListView,
+  MultiCombobox,
   PageHeader,
   RowActions,
   TableFrame,
@@ -22,31 +23,24 @@ import {
   plural,
   type BadgeProps,
   type DataTableColumn,
-  type ListState,
+  type ListFilter,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { useAuth } from '../providers/auth';
 
-/** One section handed to one admin, from either side of it — a typist's queue and a reader's queue. */
-
-const FILTER_SPEC = [
-  {
-    key: 'outstanding',
-    kind: 'choice',
-    label: 'State',
-    primary: true,
-    items: [
-      { value: '', label: 'All' },
-      { value: 'true', label: 'Outstanding' },
-    ],
-  },
-] as const;
+/** One section handed to one admin, from either side of it — and, for a super admin, the unheld ones too. */
 
 const isTypist = (role: AssignmentRole) => role === ASSIGNMENT_ROLES.TYPIST;
 
-/** Where a row opens: the typist types into the editor, the reader reads the section. */
-const rowHref = (role: AssignmentRole, id: string) =>
-  isTypist(role) ? ROUTES.AUTHORING_FOR_ASSIGNMENT(id) : ROUTES.PROOFREADING_SECTION(id);
+/** Where a row opens: the held ones open the work, an unheld section opens the test that owns it. */
+const rowHref = (row: AssignmentQueueRow): string => {
+  if (row.id === null) return ROUTES.TEST(row.testId);
+  return isTypist(row.role)
+    ? ROUTES.AUTHORING_FOR_ASSIGNMENT(row.id)
+    : ROUTES.PROOFREADING_SECTION(row.id);
+};
 
 /** Two jobs, two verbs — "I wrote this" and "I read this", with no ordering between them. */
 const finalizeLabel = (role: AssignmentRole) => (isTypist(role) ? 'Mark written' : 'Mark read');
@@ -57,7 +51,7 @@ function progressVariant(written: number, target: number): BadgeProps['variant']
 }
 
 /** Written against the section's own target — the same fact the editor shows while writing. */
-function SectionProgress({ row }: Readonly<{ row: Assignment }>) {
+function SectionProgress({ row }: Readonly<{ row: AssignmentQueueRow }>) {
   const { writtenCount, sectionQuestionCount } = row;
 
   return (
@@ -67,17 +61,41 @@ function SectionProgress({ row }: Readonly<{ row: Assignment }>) {
   );
 }
 
+const ASSIGNEE_COLUMN: DataTableColumn<AssignmentQueueRow> = {
+  key: 'assignee',
+  header: 'Assignee',
+  className: 'max-w-[12rem]',
+  // Not missing data: an unheld section is the thing a super admin opened this queue to find.
+  cell: (row) =>
+    row.assigneeName === null ? (
+      <Badge variant="warning">Unassigned</Badge>
+    ) : (
+      <TruncatedText>{row.assigneeName}</TruncatedText>
+    ),
+};
+
+const STATE_COLUMN: DataTableColumn<AssignmentQueueRow> = {
+  key: 'state',
+  header: 'State',
+  cell: (row) => (
+    <Badge variant={row.finalizedAt ? 'success' : 'neutral'}>
+      {row.finalizedAt ? 'Finalized' : 'Outstanding'}
+    </Badge>
+  ),
+};
+
 function columnsOf(
   role: AssignmentRole,
-  onFinalize: (row: AssignmentWithTest) => void,
-): DataTableColumn<AssignmentWithTest>[] {
+  isSuperAdmin: boolean,
+  onFinalize: (row: AssignmentQueueRow) => void,
+): DataTableColumn<AssignmentQueueRow>[] {
   return [
     {
       key: 'test',
       header: 'Test',
       className: 'max-w-[16rem] font-medium',
       cell: (row) => (
-        <Link to={rowHref(role, row.id)} className={linkVariants()}>
+        <Link to={rowHref(row)} className={linkVariants()}>
           <TruncatedText>{row.testTitle ?? 'Untitled test'}</TruncatedText>
         </Link>
       ),
@@ -88,6 +106,7 @@ function columnsOf(
       className: 'max-w-[14rem]',
       cell: (row) => <TruncatedText>{row.sectionName}</TruncatedText>,
     },
+    ...(isSuperAdmin ? [ASSIGNEE_COLUMN] : []),
     {
       key: 'due',
       header: 'Due',
@@ -103,27 +122,19 @@ function columnsOf(
       header: 'Progress',
       cell: (row) => <SectionProgress row={row} />,
     },
-    {
-      key: 'state',
-      header: 'State',
-      cell: (row) => (
-        <Badge variant={row.finalizedAt ? 'success' : 'neutral'}>
-          {row.finalizedAt ? 'Finalized' : 'Outstanding'}
-        </Badge>
-      ),
-    },
+    ...(isSuperAdmin ? [] : [STATE_COLUMN]),
     {
       key: 'actions',
       className: 'text-right',
-      cell: (row) => (
-        <RowActions label={`Actions for ${row.sectionName}`}>
-          {row.finalizedAt ? null : (
+      // A section nobody holds has no row to finalize, so it is offered no menu at all.
+      cell: (row) =>
+        row.id === null || row.finalizedAt ? null : (
+          <RowActions label={`Actions for ${row.sectionName}`}>
             <DropdownMenuItem onSelect={() => onFinalize(row)}>
               {finalizeLabel(role)}
             </DropdownMenuItem>
-          )}
-        </RowActions>
-      ),
+          </RowActions>
+        ),
     },
   ];
 }
@@ -131,39 +142,107 @@ function columnsOf(
 /** Every section handed to this admin in one role, and the screen a row of it opens. */
 export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>) {
   const queryClient = useQueryClient();
-  const spec = useFilterSpec(FILTER_SPEC);
-  const outstanding = spec.values.outstanding === 'true' ? 'true' : undefined;
-  const [finalizing, setFinalizing] = useState<AssignmentWithTest | null>(null);
+  const { identity } = useAuth();
+  const isSuperAdmin = identity?.isSuperAdmin ?? false;
+  const [finalizing, setFinalizing] = useState<AssignmentQueueRow | null>(null);
 
-  const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', role, outstanding ?? null],
-    queryFn: () => api.admin.assignments.mine({ role, outstanding }),
+  // Nobody but a super admin is shown a row that is not their own, so only they fetch the picker.
+  const assignees = usePagedPicker({
+    queryKey: [...QUERY_KEYS.ADMINS, 'assignment-filter'],
+    fetchPage: (params) => api.admin.admins.list(params),
+    enabled: isSuperAdmin,
   });
 
-  const columns = useMemo(() => columnsOf(role, setFinalizing), [role]);
+  const buildFilters = (selectedAssigneeLabels: Record<string, string>) =>
+    [
+      { key: 'test', kind: 'search', label: 'Test', placeholder: 'Search tests', primary: true },
+      {
+        key: 'section',
+        kind: 'search',
+        label: 'Section',
+        placeholder: 'Search sections',
+        primary: true,
+      },
+      ...(isSuperAdmin
+        ? ([
+            {
+              key: 'assigneeId',
+              kind: 'customMulti',
+              label: 'Assignee',
+              primary: true,
+              render: (control: ListFilterMultiControl) => (
+                <MultiCombobox
+                  {...control}
+                  {...assignees.paging}
+                  chips={false}
+                  selectedLabels={selectedAssigneeLabels}
+                  items={assignees.items.map((admin) => ({
+                    value: admin.id,
+                    label: admin.fullName ?? admin.email,
+                    hint: admin.fullName ? admin.email : undefined,
+                  }))}
+                  placeholder="Any assignee"
+                  searchPlaceholder="Search admins"
+                  emptyLabel="No admin matches that"
+                />
+              ),
+            },
+          ] as const)
+        : // A super admin's queue holds nothing but outstanding work, so there is no state to pick.
+          ([
+            {
+              key: 'outstanding',
+              kind: 'choice',
+              label: 'State',
+              primary: true,
+              items: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Outstanding' },
+              ],
+            },
+          ] as const)),
+      { key: 'dueFrom', kind: 'date', label: 'Due from' },
+      { key: 'dueTo', kind: 'date', label: 'Due to' },
+    ] as const satisfies readonly ListFilter[];
 
-  const list: ListState<AssignmentWithTest> = {
-    rows: assignments.data ?? [],
-    isLoading: assignments.isLoading,
-    hasLoaded: assignments.data !== undefined,
-    isError: assignments.isError,
-    retry: assignments.refetch,
-    values: spec.values,
-    setFilter: spec.setFilter,
-    clearFilters: spec.clearFilters,
-  };
+  const queue = useListScreen({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', role, isSuperAdmin],
+    filters: buildFilters({}),
+    toQuery: (values) => ({
+      role,
+      outstanding: values.outstanding === 'true' ? ('true' as const) : undefined,
+      test: values.test || undefined,
+      section: values.section || undefined,
+      dueFrom: values.dueFrom || undefined,
+      dueTo: values.dueTo || undefined,
+      assigneeId: isSuperAdmin ? values.assigneeId : undefined,
+    }),
+    fetchPage: (params) => api.admin.assignments.mine(params),
+  });
+
+  const columns = useMemo(() => columnsOf(role, isSuperAdmin, setFinalizing), [role, isSuperAdmin]);
+
+  // A chosen admin may sit outside the loaded picker pages; the rows on screen still name them.
+  const chosen = queue.values.assigneeId;
+  const selectedAssigneeLabels = Object.fromEntries(
+    queue.rows.flatMap((row) =>
+      row.assigneeId && row.assigneeName && chosen?.includes(row.assigneeId)
+        ? [[row.assigneeId, row.assigneeName] as const]
+        : [],
+    ),
+  );
 
   const header = <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="My sections" />;
 
   return (
     <TableFrame header={header}>
       <ListView
-        list={list}
-        filters={FILTER_SPEC}
+        list={queue}
+        filters={buildFilters(selectedAssigneeLabels)}
         columns={columns}
-        rowKey={(row) => row.id}
-        empty="No sections assigned yet"
-        emptyFiltered="No outstanding sections"
+        rowKey={(row) => row.id ?? `${row.testId}:${row.baseConfigSectionId}:${row.role}`}
+        empty={isSuperAdmin ? 'No sections waiting for work' : 'No sections assigned yet'}
+        emptyFiltered="No sections match those filters"
       />
 
       <FinalizeAssignmentDialog
@@ -176,7 +255,7 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   );
 }
 
-function promptFor(role: AssignmentRole, assignment: AssignmentWithTest, covering: number) {
+function promptFor(role: AssignmentRole, assignment: AssignmentQueueRow, covering: number) {
   const test = assignment.testTitle ?? 'this test';
 
   if (isTypist(role)) {
@@ -204,7 +283,7 @@ export function FinalizeAssignmentDialog({
   onFinalized,
 }: Readonly<{
   role: AssignmentRole;
-  assignment: AssignmentWithTest | null;
+  assignment: AssignmentQueueRow | null;
   /** What the section actually holds — the queue knows the typed ones, the section screen all of them. */
   covering?: number;
   onClose: () => void;
@@ -231,7 +310,7 @@ export function FinalizeAssignmentDialog({
       description={prompt?.description ?? ''}
       confirmLabel={prompt?.confirmLabel ?? finalizeLabel(role)}
       loading={finalize.isPending}
-      onConfirm={() => assignment && finalize.mutate(assignment.id)}
+      onConfirm={() => assignment?.id && finalize.mutate(assignment.id)}
     />
   );
 }

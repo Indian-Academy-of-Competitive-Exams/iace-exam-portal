@@ -12,8 +12,10 @@ import {
   TEST_STATUS,
   createAssignmentSchema,
   mineAssignmentsQuerySchema,
+  type AssignmentQueueRow,
   type CreateAssignmentInput,
   type FeatureKey,
+  type MineAssignmentsQueryInput,
   type PermissionLevel,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
@@ -78,6 +80,15 @@ const body = (over: Partial<CreateAssignmentInput>): CreateAssignmentInput =>
     role: ASSIGNMENT_ROLES.TYPIST,
     ...over,
   });
+
+/** The rows a queue read hands back — every caller below reads those, not the page around them. */
+const queue = async (
+  assignments: AssignmentsService,
+  adminId: string,
+  query: MineAssignmentsQueryInput = {},
+  isSuperAdmin = false,
+): Promise<AssignmentQueueRow[]> =>
+  (await assignments.mine(adminId, mineAssignmentsQuerySchema.parse(query), isSuperAdmin)).items;
 
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
@@ -408,7 +419,7 @@ describe('AssignmentsService — mine', () => {
       reader.id,
     );
 
-    const mine = await assignments.mine(reader.id, mineAssignmentsQuerySchema.parse({}));
+    const mine = await queue(assignments, reader.id);
 
     assert.equal(mine.length, 2);
     assert.equal(mine[0]?.id, second.id);
@@ -433,10 +444,7 @@ describe('AssignmentsService — mine', () => {
       admin.id,
     );
 
-    const typistQueue = await assignments.mine(admin.id, {
-      outstanding: undefined,
-      role: ASSIGNMENT_ROLES.TYPIST,
-    });
+    const typistQueue = await queue(assignments, admin.id, { role: ASSIGNMENT_ROLES.TYPIST });
 
     assert.deepEqual(
       typistQueue.map((row) => row.id),
@@ -462,7 +470,7 @@ describe('AssignmentsService — mine', () => {
       reader.id,
     );
 
-    const mine = await assignments.mine(reader.id, mineAssignmentsQuerySchema.parse({}));
+    const mine = await queue(assignments, reader.id);
 
     assert.equal(mine[0]?.sectionQuestionCount, 10);
   });
@@ -504,7 +512,7 @@ describe('AssignmentsService — mine', () => {
       typist.id,
     );
 
-    const mine = await assignments.mine(typist.id, mineAssignmentsQuerySchema.parse({}));
+    const mine = await queue(assignments, typist.id);
 
     assert.deepEqual(mine.find((row) => row.testId === withMix.id)?.sectionMix, {
       LOW: 2,
@@ -542,10 +550,398 @@ describe('AssignmentsService — mine', () => {
     );
     await assignments.finalize(done.id, reader.id);
 
-    const outstanding = await assignments.mine(reader.id, { outstanding: true });
+    const outstanding = await queue(assignments, reader.id, { outstanding: 'true' });
 
     assert.equal(outstanding.length, 1);
     assert.equal(outstanding[0]?.baseConfigSectionId, sectionB.id);
+  });
+
+  /** The queue is per-assignee for everybody but a super admin: another's row and an unheld section are both absent. */
+  it('shows an ordinary admin their own rows and nothing else', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const ours = await makeSection(prisma, catalog, { name: 'Ours', order: 1 });
+    const theirs = await makeSection(prisma, catalog, { name: 'Theirs', order: 2 });
+    await makeSection(prisma, catalog, { name: 'Nobody’s', order: 3 });
+    const typist = await makeAdmin(prisma);
+    const other = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(other.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const own = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: ours.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: theirs.id,
+        assigneeId: other.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      other.id,
+    );
+
+    const rows = await queue(assignments, typist.id, { role: ASSIGNMENT_ROLES.TYPIST });
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      [own.id],
+    );
+  });
+
+  it('the test, section and due-date filters narrow an admin’s own queue', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const banking = await framed(catalog, { title: 'Banking prelims mock' });
+    const railway = await framed(catalog, { title: 'Railway mock' });
+    const reasoning = await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
+    const english = await makeSection(prisma, catalog, { name: 'English', order: 2 });
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await assignments.assign(
+      banking.id,
+      body({
+        baseConfigSectionId: reasoning.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        dueAt: '2026-10-05T04:00:00.000Z',
+      }),
+      typist.id,
+    );
+    await assignments.assign(
+      railway.id,
+      body({
+        baseConfigSectionId: english.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        dueAt: '2026-10-09T04:00:00.000Z',
+      }),
+      typist.id,
+    );
+
+    const byTest = await queue(assignments, typist.id, { test: 'railway' });
+    const bySection = await queue(assignments, typist.id, { section: 'reason' });
+    const byDue = await queue(assignments, typist.id, { dueFrom: '2026-10-06' });
+
+    assert.deepEqual(
+      byTest.map((row) => row.sectionName),
+      ['English'],
+    );
+    assert.deepEqual(
+      bySection.map((row) => row.testTitle),
+      ['Banking prelims mock'],
+    );
+    assert.deepEqual(
+      byDue.map((row) => row.sectionName),
+      ['English'],
+    );
+  });
+});
+
+describe('AssignmentsService — a super admin’s queue', () => {
+  const boss = () => makeAdmin(prisma, { isSuperAdmin: true });
+
+  /** The reported case: a DRAFT, FRAMED test with not one assignment row on it. */
+  it('lists a FRAMED test’s sections that nobody has been assigned', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog, { title: 'SSC CGL Tier 1 — Mock 01' });
+    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const superAdmin = await boss();
+
+    const rows = await queue(assignments, superAdmin.id, { role: ASSIGNMENT_ROLES.TYPIST }, true);
+
+    assert.equal(rows.length, 1);
+    assert.deepEqual(
+      [rows[0]?.testId, rows[0]?.baseConfigSectionId, rows[0]?.id, rows[0]?.assigneeId],
+      [test.id, section.id, null, null],
+    );
+    assert.equal(rows[0]?.testTitle, 'SSC CGL Tier 1 — Mock 01');
+    assert.equal(rows[0]?.sectionName, 'Reasoning');
+    assert.equal(rows[0]?.sectionQuestionCount, 10);
+    assert.equal(rows[0]?.dueAt, null);
+    assert.equal(rows[0]?.finalizedAt, null);
+  });
+
+  /** The gate the override exists for: nothing about the queue is per-assignee for a super admin. */
+  it('lists a section held by somebody else beside one held by nobody', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const held = await makeSection(prisma, catalog, { name: 'English', order: 1 });
+    await makeSection(prisma, catalog, { name: 'Maths', order: 2 });
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const row = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: held.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    const superAdmin = await boss();
+
+    const rows = await queue(assignments, superAdmin.id, { role: ASSIGNMENT_ROLES.TYPIST }, true);
+
+    assert.deepEqual(
+      rows.map((one) => [one.sectionName, one.id, one.assigneeName]),
+      [
+        ['English', row.id, 'Priya'],
+        ['Maths', null, null],
+      ],
+    );
+  });
+
+  it('drops a section whose work for that role is done, and keeps the other role’s', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const written = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    await assignments.finalize(written.id, typist.id);
+    const superAdmin = await boss();
+
+    const typing = await queue(assignments, superAdmin.id, { role: ASSIGNMENT_ROLES.TYPIST }, true);
+    const reading = await queue(
+      assignments,
+      superAdmin.id,
+      { role: ASSIGNMENT_ROLES.PROOFREADER },
+      true,
+    );
+
+    assert.deepEqual(typing, []);
+    assert.deepEqual(
+      reading.map((one) => [one.baseConfigSectionId, one.id]),
+      [[section.id, null]],
+    );
+  });
+
+  it('gives a PICKED test reading to do and no typing', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
+    const section = await makeSection(prisma, catalog);
+    const superAdmin = await boss();
+
+    const typing = await queue(assignments, superAdmin.id, { role: ASSIGNMENT_ROLES.TYPIST }, true);
+    const reading = await queue(
+      assignments,
+      superAdmin.id,
+      { role: ASSIGNMENT_ROLES.PROOFREADER },
+      true,
+    );
+
+    assert.deepEqual(typing, []);
+    assert.deepEqual(
+      reading.map((one) => one.baseConfigSectionId),
+      [section.id],
+    );
+  });
+
+  /** A frozen paper cannot be typed or read again, so its sections are not work. */
+  it('drops every section of a test whose paper has been frozen', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    await makeSection(prisma, catalog);
+    await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
+    const superAdmin = await boss();
+
+    const rows = await queue(assignments, superAdmin.id, { role: ASSIGNMENT_ROLES.TYPIST }, true);
+
+    assert.deepEqual(rows, []);
+  });
+
+  it('the test and section filters narrow it to one row', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    await framed(catalog, { title: 'Banking prelims mock' });
+    await framed(catalog, { title: 'Railway mock' });
+    await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
+    await makeSection(prisma, catalog, { name: 'Quantitative aptitude', order: 2 });
+    const superAdmin = await boss();
+
+    const byTest = await queue(
+      assignments,
+      superAdmin.id,
+      { role: ASSIGNMENT_ROLES.TYPIST, test: 'banking' },
+      true,
+    );
+    const byBoth = await queue(
+      assignments,
+      superAdmin.id,
+      { role: ASSIGNMENT_ROLES.TYPIST, test: 'banking', section: 'quantitative' },
+      true,
+    );
+
+    assert.deepEqual(
+      byTest.map((one) => one.testTitle),
+      ['Banking prelims mock', 'Banking prelims mock'],
+    );
+    assert.deepEqual(
+      byBoth.map((one) => [one.testTitle, one.sectionName]),
+      [['Banking prelims mock', 'Quantitative aptitude']],
+    );
+  });
+
+  it('the assignee and due-date filters narrow it to the rows somebody holds', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const early = await makeSection(prisma, catalog, { name: 'Early', order: 1 });
+    const late = await makeSection(prisma, catalog, { name: 'Late', order: 2 });
+    await makeSection(prisma, catalog, { name: 'Unheld', order: 3 });
+    const priya = await makeAdmin(prisma, { fullName: 'Priya' });
+    const arjun = await makeAdmin(prisma, { fullName: 'Arjun' });
+    await grant(priya.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(arjun.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: early.id,
+        assigneeId: priya.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        dueAt: '2026-10-05T04:00:00.000Z',
+      }),
+      priya.id,
+    );
+    await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: late.id,
+        assigneeId: arjun.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        dueAt: '2026-10-09T04:00:00.000Z',
+      }),
+      arjun.id,
+    );
+    const superAdmin = await boss();
+
+    const hers = await queue(
+      assignments,
+      superAdmin.id,
+      { role: ASSIGNMENT_ROLES.TYPIST, assigneeId: [priya.id] },
+      true,
+    );
+    const thatWeek = await queue(
+      assignments,
+      superAdmin.id,
+      { role: ASSIGNMENT_ROLES.TYPIST, dueFrom: '2026-10-05', dueTo: '2026-10-06' },
+      true,
+    );
+
+    assert.deepEqual(
+      hers.map((one) => one.sectionName),
+      ['Early'],
+    );
+    assert.deepEqual(
+      thatWeek.map((one) => one.sectionName),
+      ['Early'],
+    );
+  });
+
+  /** Institute-wide work outgrows a page, and a list that stops at its first one lies about the rest. */
+  it('pages, and reports the whole count with the page', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    await framed(catalog);
+    for (const order of [1, 2, 3]) {
+      await makeSection(prisma, catalog, { name: `Section ${order}`, order });
+    }
+    const superAdmin = await boss();
+
+    const first = await assignments.mine(
+      superAdmin.id,
+      mineAssignmentsQuerySchema.parse({ role: ASSIGNMENT_ROLES.TYPIST, page: 1, pageSize: 2 }),
+      true,
+    );
+    const second = await assignments.mine(
+      superAdmin.id,
+      mineAssignmentsQuerySchema.parse({ role: ASSIGNMENT_ROLES.TYPIST, page: 2, pageSize: 2 }),
+      true,
+    );
+
+    assert.equal(first.total, 3);
+    assert.deepEqual(
+      first.items.map((one) => one.sectionName),
+      ['Section 1', 'Section 2'],
+    );
+    assert.deepEqual(
+      second.items.map((one) => one.sectionName),
+      ['Section 3'],
+    );
+  });
+});
+
+describe('AssignmentsService — one', () => {
+  it('hands an admin their own row and refuses somebody else’s', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog, { title: 'Mock 01' });
+    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const typist = await makeAdmin(prisma);
+    const stranger = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const row = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+
+    const own = await assignments.one(row.id, typist.id, false);
+
+    assert.equal(own.testTitle, 'Mock 01');
+    assert.equal(own.sectionName, 'Reasoning');
+    await assert.rejects(
+      () => assignments.one(row.id, stranger.id, false),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+
+  /** The same override f88acce gave every other gate: whoever owns the institute reads any row. */
+  it('hands a super admin somebody else’s row', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const row = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    const superAdmin = await makeAdmin(prisma, { isSuperAdmin: true });
+
+    const seen = await assignments.one(row.id, superAdmin.id, true);
+
+    assert.equal(seen.id, row.id);
   });
 });
 

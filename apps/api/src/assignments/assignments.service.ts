@@ -11,9 +11,11 @@ import {
   PAPER_SOURCES,
   PERMISSION_LEVELS,
   satisfiesLevel,
+  scopedSections,
   type AdminRole,
   type Assignment,
   type AssignableAdmin,
+  type AssignmentQueueRow,
   type AssignmentRole,
   type AssignmentWithTest,
   type CreateAssignmentBody,
@@ -21,11 +23,15 @@ import {
   type DrawSpec,
   type FeatureKey,
   type MineAssignmentsQuery,
+  type Paginated,
   type PaperSource,
+  type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminsService } from '../admins';
 import { isUniqueViolation } from '../common/prisma-errors';
+import { pageArgs, paged } from '../common/pagination';
+import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: { select: { name: true, questionCount: true } },
@@ -55,6 +61,116 @@ const ADMIN_ROLE_FOR_ROLE: Record<AssignmentRole, AdminRole> = {
   [ASSIGNMENT_ROLES.TYPIST]: ADMIN_ROLES.TYPIST,
   [ASSIGNMENT_ROLES.PROOFREADER]: ADMIN_ROLES.PROOFREADER,
 };
+
+const ROLE_ORDER = [ASSIGNMENT_ROLES.TYPIST, ASSIGNMENT_ROLES.PROOFREADER] as const;
+
+/** A picked paper is drawn from the bank, so it has nothing to type — it still has everything to read. */
+const SOURCES_FOR_ROLE: Record<AssignmentRole, readonly PaperSource[]> = {
+  [ASSIGNMENT_ROLES.TYPIST]: [PAPER_SOURCES.FRAMED],
+  [ASSIGNMENT_ROLES.PROOFREADER]: [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED],
+};
+
+const TEST_QUEUE_SELECT = {
+  id: true,
+  title: true,
+  paperSource: true,
+  scope: true,
+  scopeRef: true,
+  questionPoolFilter: true,
+  baseConfig: {
+    select: {
+      sections: {
+        select: { id: true, name: true, order: true, moduleId: true, questionCount: true },
+        orderBy: { order: 'asc' },
+      },
+    },
+  },
+  assignments: {
+    select: {
+      id: true,
+      role: true,
+      baseConfigSectionId: true,
+      assigneeId: true,
+      dueAt: true,
+      finalizedAt: true,
+      assignee: { select: { fullName: true, email: true } },
+    },
+  },
+} as const satisfies Prisma.TestSelect;
+
+type QueueTest = Prisma.TestGetPayload<{ select: typeof TEST_QUEUE_SELECT }>;
+type QueueSection = QueueTest['baseConfig']['sections'][number];
+type HeldAssignment = QueueTest['assignments'][number];
+
+interface DueBounds {
+  from?: Date;
+  to?: Date;
+}
+
+/** Institute days, inclusive at both ends — a UTC midnight would drop everything due that evening. */
+function dueBounds(query: MineAssignmentsQuery): DueBounds | undefined {
+  if (!query.dueFrom && !query.dueTo) return undefined;
+  return {
+    ...(query.dueFrom ? { from: startOfInstituteDay(query.dueFrom) } : {}),
+    ...(query.dueTo ? { to: endOfInstituteDay(query.dueTo) } : {}),
+  };
+}
+
+/** A section nobody holds has no due date, so a due-date filter cannot be looking for it. */
+const withinDue = (at: Date | null, bounds: DueBounds): boolean =>
+  at !== null && (!bounds.from || at >= bounds.from) && (!bounds.to || at <= bounds.to);
+
+const nameLike = (text: string): Prisma.StringFilter => ({ contains: text, mode: 'insensitive' });
+
+const matchesSection = (name: string, wanted: string | undefined): boolean =>
+  !wanted || name.toLowerCase().includes(wanted.toLowerCase());
+
+const sectionsOf = (test: QueueTest): QueueSection[] => [
+  ...scopedSections(test.baseConfig.sections, test.scope, (test.scopeRef as TestScopeRef) ?? null),
+];
+
+const isHeld = (row: AssignmentQueueRow): row is AssignmentQueueRow & { id: string } =>
+  row.id !== null;
+
+/** In the queue while the paper's source gives the role work and nobody has finished it. */
+function needingRole(
+  test: QueueTest,
+  section: QueueSection,
+  role: AssignmentRole,
+  query: MineAssignmentsQuery,
+  due: DueBounds | undefined,
+): AssignmentQueueRow[] {
+  const source = test.paperSource;
+  if (source === null || !SOURCES_FOR_ROLE[role].includes(source)) return [];
+
+  const held =
+    test.assignments.find((row) => row.role === role && row.baseConfigSectionId === section.id) ??
+    null;
+  if (held?.finalizedAt) return [];
+  if (query.assigneeId && !(held && query.assigneeId.includes(held.assigneeId))) return [];
+  if (due && !withinDue(held?.dueAt ?? null, due)) return [];
+
+  return [
+    {
+      id: held?.id ?? null,
+      testId: test.id,
+      testTitle: test.title,
+      baseConfigSectionId: section.id,
+      sectionName: section.name,
+      assigneeId: held?.assigneeId ?? null,
+      assigneeName: held ? nameOf(held.assignee) : null,
+      role,
+      dueAt: held?.dueAt?.toISOString() ?? null,
+      finalizedAt: null,
+      writtenCount: 0,
+      sectionQuestionCount: section.questionCount,
+      sectionMix: sectionMixOf(test.questionPoolFilter, section.id),
+    },
+  ];
+}
+
+const nameOf = (assignee: HeldAssignment['assignee']): string =>
+  assignee.fullName ?? assignee.email;
 
 const SOURCE_UNCHOSEN_MESSAGE =
   'Say where this test gets its questions before handing a section to anybody.';
@@ -143,18 +259,90 @@ export class AssignmentsService {
     await this.prisma.questionAssignment.delete({ where: { id } });
   }
 
-  async mine(adminId: string, query: MineAssignmentsQuery): Promise<AssignmentWithTest[]> {
-    const rows = await this.prisma.questionAssignment.findMany({
-      where: {
-        assigneeId: adminId,
-        ...(query.outstanding ? { finalizedAt: null } : {}),
-        ...(query.role ? { role: query.role } : {}),
-      },
+  /** An ordinary admin's own rows; a super admin's every section still needing the role's work. */
+  mine(
+    adminId: string,
+    query: MineAssignmentsQuery,
+    isSuperAdmin = false,
+  ): Promise<Paginated<AssignmentQueueRow>> {
+    return isSuperAdmin ? this.needingWork(query) : this.assignedTo(adminId, query);
+  }
+
+  /** One row by id. Not theirs reads as not there, unless they own the institute. */
+  async one(id: string, adminId: string, isSuperAdmin: boolean): Promise<AssignmentWithTest> {
+    const row = await this.prisma.questionAssignment.findUnique({
+      where: { id },
       include: WITH_TEST_INCLUDE,
-      orderBy: { createdAt: 'desc' },
     });
+    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+    }
+    const written = await this.sectionWrittenCounts([row]);
+    return toAssignmentWithTest(row, written.get(sectionKey(row)) ?? 0);
+  }
+
+  private async assignedTo(
+    adminId: string,
+    query: MineAssignmentsQuery,
+  ): Promise<Paginated<AssignmentQueueRow>> {
+    const due = dueBounds(query);
+    const where: Prisma.QuestionAssignmentWhereInput = {
+      assigneeId: adminId,
+      ...(query.outstanding ? { finalizedAt: null } : {}),
+      ...(query.role ? { role: query.role } : {}),
+      ...(query.test ? { test: { title: nameLike(query.test) } } : {}),
+      ...(query.section ? { baseConfigSection: { name: nameLike(query.section) } } : {}),
+      ...(due
+        ? { dueAt: { ...(due.from ? { gte: due.from } : {}), ...(due.to ? { lte: due.to } : {}) } }
+        : {}),
+    };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.questionAssignment.findMany({
+        where,
+        include: WITH_TEST_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        ...pageArgs(query),
+      }),
+      this.prisma.questionAssignment.count({ where }),
+    ]);
     const written = await this.sectionWrittenCounts(rows);
-    return rows.map((row) => toAssignmentWithTest(row, written.get(sectionKey(row)) ?? 0));
+    return paged(
+      query,
+      rows.map((row) => toAssignmentWithTest(row, written.get(sectionKey(row)) ?? 0)),
+      total,
+    );
+  }
+
+  /** Expanded in memory: the cross of unfrozen tests and their sections is thousands of rows here, not millions. */
+  private async needingWork(query: MineAssignmentsQuery): Promise<Paginated<AssignmentQueueRow>> {
+    const roles = query.role ? [query.role] : [...ROLE_ORDER];
+    const due = dueBounds(query);
+    const tests = await this.prisma.test.findMany({
+      where: {
+        finalizedAt: null,
+        paperSource: { in: [...new Set(roles.flatMap((role) => SOURCES_FOR_ROLE[role]))] },
+        ...(query.test ? { title: nameLike(query.test) } : {}),
+      },
+      select: TEST_QUEUE_SELECT,
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+    });
+
+    const rows = tests.flatMap((test) =>
+      sectionsOf(test)
+        .filter((section) => matchesSection(section.name, query.section))
+        .flatMap((section) =>
+          roles.flatMap((role) => needingRole(test, section, role, query, due)),
+        ),
+    );
+
+    const items = rows.slice((query.page - 1) * query.pageSize, query.page * query.pageSize);
+    const written = await this.sectionWrittenCounts(items.filter(isHeld));
+    return paged(
+      query,
+      items.map((row) => ({ ...row, writtenCount: written.get(sectionKey(row)) ?? 0 })),
+      rows.length,
+    );
   }
 
   /** Idempotent: finalising twice hands back the same row rather than erroring on the second call. */

@@ -334,6 +334,7 @@ import {
   ADMIN_ASSIGNMENTS_ROUTES,
   ADMIN_PROOFREADING_ROUTES,
   assignableAdminSchema,
+  assignmentQueueRowSchema,
   assignmentSchema,
   assignmentWithTestSchema,
   questionOnOtherTestSchema,
@@ -341,6 +342,7 @@ import {
   type Assignment,
   type AssignableAdmin,
   type AssignableQueryInput,
+  type AssignmentQueueRow,
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type CreateSectionCommentInput,
@@ -1262,11 +1264,12 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           write('DELETE', ADMIN_ASSIGNMENTS_ROUTES.remove(id), noContentSchema),
 
-        mine: (query: MineAssignmentsQueryInput = {}): Promise<AssignmentWithTest[]> =>
-          get(
-            `${ADMIN_ASSIGNMENTS_ROUTES.mine}${queryString({ ...query })}`,
-            assignmentWithTestSchema.array(),
-          ),
+        mine: (query: MineAssignmentsQueryInput = {}): Promise<Paginated<AssignmentQueueRow>> =>
+          list(ADMIN_ASSIGNMENTS_ROUTES.mine, query, assignmentQueueRowSchema),
+
+        /** The row a queue link opens, read on its own so a long queue never hides it. */
+        one: (id: string): Promise<AssignmentWithTest> =>
+          get(ADMIN_ASSIGNMENTS_ROUTES.one(id), assignmentWithTestSchema),
 
         finalize: (id: string): Promise<Assignment> =>
           write('PATCH', ADMIN_ASSIGNMENTS_ROUTES.finalize(id), assignmentSchema),

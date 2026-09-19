@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { adminRoleSchema } from './admins';
-import { optionalBooleanQuery } from './common';
+import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
+import { paginationQuerySchema } from './envelope';
+import { dateOnlySchema } from './students';
 import { difficultyMixSchema } from './tests';
 
 // ============================================================================
@@ -52,11 +54,29 @@ export const assignmentWithTestSchema = assignmentSchema.extend({
 });
 export type AssignmentWithTest = z.infer<typeof assignmentWithTestSchema>;
 
-export const mineAssignmentsQuerySchema = z.object({
-  /** Unfinalized only — what a work queue opens to by default. */
+/** A queue row: an assignment, or a section still needing work that nobody holds — both read alike. */
+export const assignmentQueueRowSchema = assignmentWithTestSchema.extend({
+  /** Null where nobody has been given the section: there is no row to open, edit or finalize. */
+  id: z.string().nullable(),
+  assigneeId: z.string().nullable(),
+  assigneeName: z.string().nullable(),
+});
+export type AssignmentQueueRow = z.infer<typeof assignmentQueueRowSchema>;
+
+export const mineAssignmentsQuerySchema = paginationQuerySchema.extend({
+  /** Unfinalized only. A super admin's queue is only ever outstanding work, so it ignores this. */
   outstanding: optionalBooleanQuery(),
   /** Absent reads both roles; a role's own queue always sends its own. */
   role: assignmentRoleSchema.optional(),
+  /** Matches the test's title. */
+  test: searchQuery(),
+  /** Matches the section's name. */
+  section: searchQuery(),
+  /** Institute days, inclusive, against the due date. An unassigned section has none. */
+  dueFrom: dateOnlySchema.optional(),
+  dueTo: dateOnlySchema.optional(),
+  /** Read for a super admin only — nobody else is shown a row that is not their own. */
+  assigneeId: csvIdQuery(),
 });
 export type MineAssignmentsQuery = z.infer<typeof mineAssignmentsQuerySchema>;
 export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchema>;
@@ -120,6 +140,8 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   assign: (testId: string) => `/admin/assignments/tests/${testId}`,
   remove: (id: string) => `/admin/assignments/${id}`,
   mine: '/admin/assignments/mine',
+  /** One row by id, for the screen a queue row opens — a super admin reaches anybody's. */
+  one: (id: string) => `/admin/assignments/${id}`,
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,
   /** Who a role can be given to — active admins already holding the feature key it needs. */
   assignable: '/admin/assignments/assignable',

@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
 import {
-  ASSIGNMENT_ROLES,
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
   LANGUAGE_LABELS,
@@ -477,18 +476,19 @@ function useFocusMode() {
 
 /** Their own sections, so a URL naming somebody else's is refused rather than opened empty. */
 function useTypistAssignment(scoped = ''): ScopedSection {
-  const mine = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', ASSIGNMENT_ROLES.TYPIST],
-    queryFn: () => api.admin.assignments.mine({ role: ASSIGNMENT_ROLES.TYPIST }),
+  const held = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'one', scoped],
+    queryFn: () => api.admin.assignments.one(scoped),
     enabled: scoped !== '',
+    retry: false,
   });
-  const section = mine.data?.find((row) => row.id === scoped) ?? null;
+  const section = held.data ?? null;
 
   return {
     scoped,
     section,
-    loading: scoped !== '' && mine.isPending,
-    refused: scoped !== '' && !mine.isPending && section === null,
+    loading: scoped !== '' && held.isPending,
+    refused: scoped !== '' && !held.isPending && section === null,
   };
 }
 

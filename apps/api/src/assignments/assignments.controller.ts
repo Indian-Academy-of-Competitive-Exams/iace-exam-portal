@@ -21,10 +21,12 @@ import {
   type Assignment,
   type AssignableAdmin,
   type AssignableQuery,
+  type AssignmentQueueRow,
   type AssignmentWithTest,
   type CreateAssignmentBody,
   type CreateSectionCommentBody,
   type MineAssignmentsQuery,
+  type Paginated,
   type SectionComment,
 } from '@iace/contracts';
 import {
@@ -73,13 +75,14 @@ export class AssignmentsController {
     return this.assignments.assign(testId, body, user.id);
   }
 
+  /** A super admin's queue is the institute's outstanding work, assigned or not — never only theirs. */
   @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.READ)
   @Get('mine')
   mine(
     @Query(new ZodQuery(mineAssignmentsQuerySchema)) query: MineAssignmentsQuery,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<AssignmentWithTest[]> {
-    return this.assignments.mine(user.id, query);
+  ): Promise<Paginated<AssignmentQueueRow>> {
+    return this.assignments.mine(user.id, query, user.isSuperAdmin);
   }
 
   /** Either role finalises their own row — "I've written this" and "I've read this" are independent. */
@@ -126,5 +129,15 @@ export class AssignmentsController {
     @Query(new ZodQuery(assignableQuerySchema)) query: AssignableQuery,
   ): Promise<AssignableAdmin[]> {
     return this.assignments.assignable(query.role);
+  }
+
+  /** Last, so `mine`, `assignable` and `tests/:testId` are never read as an assignment id. */
+  @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.READ)
+  @Get(':id')
+  one(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AssignmentWithTest> {
+    return this.assignments.one(id, user.id, user.isSuperAdmin);
   }
 }
