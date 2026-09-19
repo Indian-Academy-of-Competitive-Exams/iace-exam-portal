@@ -309,6 +309,7 @@ import {
   questionImportResultSchema,
   questionAvailabilitySchema,
   questionSummarySchema,
+  questionVersionSummarySchema,
   subjectSchema,
   topicSchema,
   type CreateSubjectInput,
@@ -322,6 +323,7 @@ import {
   type QuestionAvailabilityQueryInput,
   type QuestionListQueryInput,
   type QuestionSummary,
+  type QuestionVersionSummary,
   type SetQuestionStatusInput,
   type Subject,
   type SubjectListQueryInput,
@@ -1180,6 +1182,10 @@ export function createApiClient(options: ApiClientOptions) {
 
         detail: (id: string): Promise<QuestionDetail> =>
           get(ADMIN_QUESTION_ROUTES.get(id), questionDetailSchema),
+
+        /** Newest first, and never long: a chain gains a link only once a paper pins the old one. */
+        versions: (id: string): Promise<QuestionVersionSummary[]> =>
+          get(ADMIN_QUESTION_ROUTES.versions(id), questionVersionSummarySchema.array()),
 
         /** Counts, not a page: what a section can actually be drawn from. */
         availability: (query: QuestionAvailabilityQueryInput = {}): Promise<QuestionAvailability> =>

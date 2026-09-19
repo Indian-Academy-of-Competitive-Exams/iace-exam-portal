@@ -505,6 +505,17 @@ export const questionDetailSchema = questionSummarySchema.extend({
 });
 export type QuestionDetail = z.infer<typeof questionDetailSchema>;
 
+/** One link in a question's version chain. `createdById` has no FK, so the name is resolved server-side. */
+export const questionVersionSummarySchema = z.object({
+  id: z.string(),
+  version: z.number().int(),
+  createdAt: z.string(),
+  authorName: z.string().nullable(),
+  /** The tests whose paper pins this version — empty means no paper has drawn it. */
+  pinnedBy: z.array(z.string()),
+});
+export type QuestionVersionSummary = z.infer<typeof questionVersionSummarySchema>;
+
 export const QUESTION_SORTS = {
   RECENT: 'recent',
   OLDEST: 'oldest',
@@ -736,6 +747,7 @@ export const ADMIN_QUESTION_ROUTES = {
   availability: '/admin/questions/availability',
   create: '/admin/questions',
   get: (id: string) => `/admin/questions/${id}`,
+  versions: (id: string) => `/admin/questions/${id}/versions`,
   update: (id: string) => `/admin/questions/${id}`,
   setStatus: (id: string) => `/admin/questions/${id}/status`,
   archive: (id: string) => `/admin/questions/${id}/archive`,

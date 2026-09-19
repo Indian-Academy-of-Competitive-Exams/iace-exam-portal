@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import {
   FEATURE_KEYS,
   LANGUAGE_LABELS,
@@ -29,6 +29,7 @@ import { api } from '../lib/api';
 import { DIFFICULTY_VARIANT, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { questionFacetFilters } from '../lib/question-filters';
+import { QuestionHistorySheet } from '../components/question-history';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
 
@@ -211,6 +212,7 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [asking, setAsking] = useState<Move | null>(null);
+  const [showingHistory, setShowingHistory] = useState(false);
   const queryClient = useQueryClient();
 
   const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
@@ -229,8 +231,6 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
     onError: () => setAsking(null),
   });
 
-  if (!canWrite) return null;
-
   const ask = (move: Move) => {
     act.reset();
     setAsking(move);
@@ -241,29 +241,45 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   return (
     <>
       <RowActions label={`Actions for question ${question.questionCode ?? question.id}`}>
-        <DropdownMenuItem asChild>
-          <Link to={ROUTES.QUESTION(question.id)}>
-            <Pencil aria-hidden />
-            Edit
-          </Link>
+        {/* Outside the write guard: reading the trail is what a READ grant already allows. */}
+        <DropdownMenuItem onSelect={() => setShowingHistory(true)}>
+          <History aria-hidden />
+          History
         </DropdownMenuItem>
 
-        <DropdownMenuItem
-          destructive={!isArchived}
-          disabled={act.isPending}
-          onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
-        >
-          {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
-          {isArchived ? 'Unarchive' : 'Archive'}
-        </DropdownMenuItem>
+        {canWrite ? (
+          <>
+            <DropdownMenuItem asChild>
+              <Link to={ROUTES.QUESTION(question.id)}>
+                <Pencil aria-hidden />
+                Edit
+              </Link>
+            </DropdownMenuItem>
 
-        {question.inUse ? null : (
-          <DropdownMenuItem destructive disabled={act.isPending} onSelect={() => ask('DELETE')}>
-            <Trash2 aria-hidden />
-            Delete
-          </DropdownMenuItem>
-        )}
+            <DropdownMenuItem
+              destructive={!isArchived}
+              disabled={act.isPending}
+              onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
+            >
+              {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
+              {isArchived ? 'Unarchive' : 'Archive'}
+            </DropdownMenuItem>
+
+            {question.inUse ? null : (
+              <DropdownMenuItem destructive disabled={act.isPending} onSelect={() => ask('DELETE')}>
+                <Trash2 aria-hidden />
+                Delete
+              </DropdownMenuItem>
+            )}
+          </>
+        ) : null}
       </RowActions>
+
+      <QuestionHistorySheet
+        question={question}
+        open={showingHistory}
+        onOpenChange={setShowingHistory}
+      />
 
       {/* Each of these changes what future papers can draw, and nothing on the row shows it. */}
       {prompt ? (

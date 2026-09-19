@@ -22,6 +22,7 @@ import {
   type QuestionListQuery,
   type QuestionOption,
   type QuestionSummary,
+  type QuestionVersionSummary,
   type RichContent,
   type SetQuestionStatusBody,
   type ValidationIssue,
@@ -198,6 +199,47 @@ export class QuestionsService {
 
   async detail(id: string): Promise<QuestionDetail> {
     return this.signed(toDetail(await this.require(id)));
+  }
+
+  /** The chain, newest first, and which papers pin each link — what says who sat which wording. */
+  async versions(id: string): Promise<QuestionVersionSummary[]> {
+    await this.require(id);
+
+    const rows = await this.prisma.questionVersion.findMany({
+      where: { questionId: id },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        createdAt: true,
+        createdById: true,
+        paperQuestions: { select: { test: { select: { title: true } } } },
+      },
+    });
+
+    const names = await this.authorNames(rows);
+
+    return rows.map((row) => ({
+      id: row.id,
+      version: row.version,
+      createdAt: row.createdAt.toISOString(),
+      authorName: (row.createdById && names.get(row.createdById)) || null,
+      pinnedBy: row.paperQuestions.map((pinned) => pinned.test.title ?? 'Untitled test'),
+    }));
+  }
+
+  /** `QuestionVersion.createdById` carries no FK, so the hands behind a chain resolve in one pass. */
+  private async authorNames(
+    rows: readonly { createdById: string | null }[],
+  ): Promise<Map<string, string>> {
+    const ids = [...new Set(rows.flatMap((row) => (row.createdById ? [row.createdById] : [])))];
+    if (ids.length === 0) return new Map();
+
+    const admins = await this.prisma.admin.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, fullName: true, email: true },
+    });
+    return new Map(admins.map((admin) => [admin.id, admin.fullName ?? admin.email]));
   }
 
   async create(

@@ -33,6 +33,7 @@ import {
   type QuestionAvailabilityQuery,
   type QuestionListQuery,
   type QuestionSummary,
+  type QuestionVersionSummary,
   type SetQuestionStatusBody,
 } from '@iace/contracts';
 import {
@@ -95,6 +96,12 @@ export class QuestionsController {
   @Get(':id')
   detail(@Param('id') id: string): Promise<QuestionDetail> {
     return this.questions.detail(id);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get(':id/versions')
+  versions(@Param('id') id: string): Promise<QuestionVersionSummary[]> {
+    return this.questions.versions(id);
   }
 
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)

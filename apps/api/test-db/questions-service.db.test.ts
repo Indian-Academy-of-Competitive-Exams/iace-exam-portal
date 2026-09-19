@@ -726,6 +726,42 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   });
 });
 
+describe('QuestionsService.versions — the chain, and who sat which wording', () => {
+  it('reads newest first, naming the hand behind each link and the papers pinning it', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    await openedAgo(testId);
+    await questions.update(created.id, live({ stem: REWORDED }), OTHER_ADMIN);
+    const sat = await prisma.test.findUniqueOrThrow({
+      where: { id: testId },
+      select: { title: true },
+    });
+
+    const chain = await questions.versions(created.id);
+
+    assert.deepEqual(
+      chain.map((link) => link.version),
+      [2, 1],
+    );
+    assert.deepEqual(
+      chain.map((link) => link.authorName),
+      ['Admin Two', 'Admin One'],
+    );
+    assert.deepEqual(
+      chain.map((link) => link.pinnedBy),
+      [[], [sat.title]],
+      'the opened paper still points at version one, and nothing points at two',
+    );
+  });
+
+  it('refuses a question that does not exist', async () => {
+    const { questions } = await build();
+
+    await assert.rejects(() => questions.versions(uid()), missing);
+  });
+});
+
 describe('QuestionsService — being depended on is what settles taxonomy', () => {
   /** The failure this prevents: a Quant question served inside the Reasoning section that drew it. */
   it('refuses to move a question a paper has drawn to another subject', async () => {
