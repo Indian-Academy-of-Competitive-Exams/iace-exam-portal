@@ -23,6 +23,7 @@ import {
   ListView,
   TruncatedText,
   type DataTableColumn,
+  UPPERCASE_CODE,
 } from '@iace/ui';
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
@@ -247,11 +248,7 @@ function ProgramDialog({
         /* ui-copy-ok: rule */ hint={program ? 'Locked once anything carries it' : undefined}
       >
         {(control) => (
-          <Input
-            {...control}
-            className="uppercase placeholder:normal-case"
-            placeholder="SSC FOUNDATION"
-          />
+          <Input {...control} className={UPPERCASE_CODE} placeholder="SSC FOUNDATION" />
         )}
       </FormField>
     </FormDialog>

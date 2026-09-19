@@ -11,7 +11,7 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
-import { StatTile } from '../ui/stat-tile';
+import { StatTile, StatTileRow } from '../ui/stat-tile';
 
 export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const card = useQuery(scoreCardQuery(attemptId));
@@ -48,7 +48,7 @@ function Result({
     <>
       <Headline card={card} />
 
-      <View className="flex-row flex-wrap gap-3">
+      <StatTileRow>
         {card.percentile === null ? null : <StatTile label="Rank" value={rankOf(card)} />}
         {card.percentile === null ? null : (
           <StatTile label="Marks" value={`${card.score} / ${card.maxMarks}`} />
@@ -63,7 +63,7 @@ function Result({
           label="Time taken"
           value={`${minutes(card.timeTakenSec)} of ${minutes(card.durationSec)}`}
         />
-      </View>
+      </StatTileRow>
 
       {composition ? <Marks composition={composition} /> : null}
     </>

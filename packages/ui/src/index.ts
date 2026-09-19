@@ -1,6 +1,6 @@
 export { cn, plural } from './lib/utils';
 export { Button } from './components/ui/button';
-export { Input } from './components/ui/input';
+export { Input, UPPERCASE_CODE } from './components/ui/input';
 export { NumericInput, digitsOnly } from './components/ui/numeric-input';
 export { PinField } from './components/ui/pin-field';
 export { StatRow } from './components/ui/stat-row';
@@ -9,7 +9,7 @@ export { MetricGroup } from './components/ui/metric-group';
 export { Stepper, STEPPER_STATES, type StepperStep } from './components/ui/stepper';
 export { Kbd } from './components/ui/kbd';
 export { Label } from './components/ui/label';
-export { Field } from './components/ui/field';
+export { Field, FieldRow } from './components/ui/field';
 export { FormCombobox, FormField, type FieldControl } from './components/ui/form-field';
 export { Accordion } from './components/ui/accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';

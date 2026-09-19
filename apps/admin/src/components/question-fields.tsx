@@ -17,8 +17,9 @@ import {
   QUESTION_IMAGE_MAX_BYTES,
 } from '@iace/contracts';
 import {
-  FormCombobox,
   Alert,
+  FieldRow,
+  FormCombobox,
   FormField,
   FormSection,
   Input,
@@ -161,7 +162,7 @@ export function QuestionFields({
         </Tabs>
 
         {type === QUESTION_TYPE.SINGLE_MCQ ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             <FormCombobox
               form={form}
               name="correctOption"
@@ -171,9 +172,9 @@ export function QuestionFields({
                 label: `Option ${index + 1}`,
               }))}
             />
-          </div>
+          </FieldRow>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow>
             <FormCombobox
               form={form}
               name="answerMode"
@@ -192,12 +193,12 @@ export function QuestionFields({
                 {(control) => <Input {...control} inputMode="decimal" placeholder="0.01" />}
               </FormField>
             ) : null}
-          </div>
+          </FieldRow>
         )}
       </FormSection>
 
       <FormSection title="Filing">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FieldRow>
           <FormField
             form={form}
             name="questionCode"
@@ -216,7 +217,7 @@ export function QuestionFields({
           >
             {(control) => <Input {...control} placeholder="ssc cgl, percentages" />}
           </FormField>
-        </div>
+        </FieldRow>
       </FormSection>
     </>
   );
@@ -275,7 +276,7 @@ function LanguagePanel({
       </FormField>
 
       {type === QUESTION_TYPE.SINGLE_MCQ ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FieldRow>
           {Array.from({ length: options }, (_, index) => (
             <FormField
               key={index}
@@ -294,7 +295,7 @@ function LanguagePanel({
               )}
             </FormField>
           ))}
-        </div>
+        </FieldRow>
       ) : (
         <FormField form={form} name={`answers.${language}`} label={`Answer (${label})`}>
           {(control) => (

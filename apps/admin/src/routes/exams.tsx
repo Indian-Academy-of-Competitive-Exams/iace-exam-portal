@@ -21,11 +21,11 @@ import {
   type UpdateExamStageInput,
 } from '@iace/contracts';
 import {
-  FormCombobox,
   Alert,
   Badge,
   Button,
   DropdownMenuItem,
+  FormCombobox,
   FormDialog,
   FormField,
   Input,
@@ -36,6 +36,7 @@ import {
   TableFrame,
   TruncatedText,
   type DataTableColumn,
+  UPPERCASE_CODE,
 } from '@iace/ui';
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
@@ -254,9 +255,7 @@ function ExamDialog({
         label="Code"
         /* ui-copy-ok: rule */ hint={exam ? 'Locked once a student is enrolled' : undefined}
       >
-        {(control) => (
-          <Input {...control} className="uppercase placeholder:normal-case" placeholder="SSC CGL" />
-        )}
+        {(control) => <Input {...control} className={UPPERCASE_CODE} placeholder="SSC CGL" />}
       </FormField>
     </FormDialog>
   );
@@ -501,13 +500,7 @@ function NewStageDialog({
       </FormField>
 
       <FormField form={form} name="stageKey" label="Key">
-        {(control) => (
-          <Input
-            {...control}
-            className="uppercase placeholder:normal-case"
-            placeholder="SSC_CGL_T1"
-          />
-        )}
+        {(control) => <Input {...control} className={UPPERCASE_CODE} placeholder="SSC_CGL_T1" />}
       </FormField>
 
       <FormField form={form} name="order" label="Order" /* ui-copy-ok: rule */ hint="Lowest first">
@@ -572,11 +565,7 @@ function EditStageDialog({
         }
       >
         {(control) => (
-          <Input
-            {...control}
-            disabled={stage.configCount > 0}
-            className="uppercase placeholder:normal-case"
-          />
+          <Input {...control} disabled={stage.configCount > 0} className={UPPERCASE_CODE} />
         )}
       </FormField>
 

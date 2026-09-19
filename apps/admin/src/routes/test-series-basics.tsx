@@ -1,5 +1,5 @@
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import { Checkbox, FormField, FormSection, Input } from '@iace/ui';
+import { Checkbox, FieldRow, FormField, FormSection, Input } from '@iace/ui';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { type SeriesFormValues } from './test-series-detail';
 import { type StageChoice } from '../components/exam-picker';
@@ -29,7 +29,7 @@ export function SeriesBasics({
 
   return (
     <FormSection title="Details">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <FormField form={form} name="name" label="Name">
           {(control) => (
             <Input
@@ -55,7 +55,7 @@ export function SeriesBasics({
             hint="Each test opens after the one before it; off opens them all together."
           />
         </div>
-      </div>
+      </FieldRow>
     </FormSection>
   );
 }

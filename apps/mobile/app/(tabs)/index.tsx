@@ -31,7 +31,7 @@ import { Card } from '../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
 import { RefreshScroll } from '../../src/components/ui/refresh-scroll';
 import { Skeleton } from '../../src/components/ui/skeleton';
-import { StatTile } from '../../src/components/ui/stat-tile';
+import { StatTile, StatTileRow } from '../../src/components/ui/stat-tile';
 import { ScoreTrend } from '../../src/components/performance/score-trend';
 import { TestTile } from '../../src/components/tests/test-tile';
 import { useAuth } from '../../src/providers/auth';
@@ -77,10 +77,10 @@ export default function HomeScreen() {
       {overview.data ? <Standing overview={overview.data} /> : null}
 
       {testDays.data ? (
-        <View className="flex-row flex-wrap gap-3">
+        <StatTileRow>
           <StatTile label="Current streak" value={days(currentStreak(testDays.data.days))} />
           <StatTile label="Longest streak" value={days(longestStreak(testDays.data.days))} />
-        </View>
+        </StatTileRow>
       ) : null}
 
       <ScoreTrend points={trend.data?.points ?? []} />
@@ -161,12 +161,12 @@ function Standing({ overview }: Readonly<{ overview: StudentOverview }>) {
   const rates = dispositionRates(overview.disposition);
 
   return (
-    <View className="flex-row flex-wrap gap-3">
+    <StatTileRow>
       <StatTile label="Average percentile" value={overview.standing.avgPercentile ?? DASH} />
       <StatTile label="Best percentile" value={overview.standing.bestPercentile ?? DASH} />
       <StatTile label="Sittings" value={overview.standing.testsAttempted} />
       <StatTile label="Accuracy" value={percentLabel(rates.accuracy, DASH)} />
-    </View>
+    </StatTileRow>
   );
 }
 

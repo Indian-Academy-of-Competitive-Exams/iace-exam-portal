@@ -20,16 +20,17 @@ import {
   type StudentType,
 } from '@iace/contracts';
 import {
-  FormCombobox,
   Alert,
   Avatar,
   Badge,
   Button,
   Combobox,
   DatePicker,
-  EmptyState,
   EMPTY_STATE_KINDS,
+  EmptyState,
   Field,
+  FieldRow,
+  FormCombobox,
   FormField,
   FormPanel,
   FormSection,
@@ -300,16 +301,16 @@ function DetailsTab({
               {(control) => <Input {...control} />}
             </FormField>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow>
               <FormField form={form} name="motherName" label="Mother's name">
                 {(control) => <Input {...control} />}
               </FormField>
               <FormField form={form} name="fatherName" label="Father's name">
                 {(control) => <Input {...control} />}
               </FormField>
-            </div>
+            </FieldRow>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <FieldRow>
               <Field htmlFor="dob" label="Date of birth" error={form.formState.errors.dob?.message}>
                 {/* Bounded both ends: a picker offering what the server refuses is a dead end. */}
                 {(control) => (
@@ -330,7 +331,7 @@ function DetailsTab({
                 placeholder="Not recorded"
                 items={GENDERS.map((value) => ({ value, label: GENDER_LABELS[value] }))}
               />
-            </div>
+            </FieldRow>
 
             <FormField form={form} name="email" label="Email">
               {(control) => <Input {...control} type="email" />}

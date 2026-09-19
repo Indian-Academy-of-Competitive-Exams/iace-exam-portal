@@ -34,14 +34,15 @@ import {
 import { applyFieldErrors, bannerMessage, numberOr, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
-  FormCombobox,
-  EmptyState,
-  EMPTY_STATE_KINDS,
   Alert,
   Button,
   Card,
   Checkbox,
   ConfirmDialog,
+  EMPTY_STATE_KINDS,
+  EmptyState,
+  FieldRow,
+  FormCombobox,
   FormField,
   FormPanel,
   FormSection,
@@ -71,6 +72,7 @@ import {
   TIMER_TEMPLATE_LABELS,
 } from '../lib/constants';
 import { minutesFieldOf, secondsFromMinutes } from '../lib/duration';
+import { useAuth } from '../providers/auth';
 import { ExamStagePicker } from '../components/exam-picker';
 import { SubjectPicker } from '../components/taxonomy-picker';
 
@@ -379,9 +381,12 @@ function HeaderAction({
 function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { identity } = useAuth();
   const existing = detail !== null;
   // A locked config can never be edited, so it is the one that never leaves read-only.
   const locked = detail?.locked ?? false;
+  const editingBy = detail?.editingBy ?? null;
+  const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
   const [isEditing, setIsEditing] = useState(!existing);
   const [asking, setAsking] = useState(false);
 
@@ -407,6 +412,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             name: values.name,
             isDefault: values.isDefault,
             isActive: values.isActive,
+            expectedUpdatedAt: detail.updatedAt,
             ...shapeOf(values),
           })
         : api.admin.baseConfigs.create({
@@ -477,6 +483,13 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </>
       }
     >
+      {elsewhere ? (
+        <Alert variant="warning">
+          {elsewhere.fullName ?? 'Another admin'} is editing this configuration. Their changes have
+          to land first.
+        </Alert>
+      ) : null}
+
       {locked ? (
         <Alert variant="warning">
           <span>
@@ -490,7 +503,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       ) : null}
 
       <FormSection title="Stage">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FieldRow>
           {existing ? (
             <ReadOnlyField
               label="Stage"
@@ -525,7 +538,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               /* ui-copy-ok: rule */ hint="Tests already built keep it"
             />
           ) : null}
-        </div>
+        </FieldRow>
       </FormSection>
 
       <FormSection title="How the paper runs">

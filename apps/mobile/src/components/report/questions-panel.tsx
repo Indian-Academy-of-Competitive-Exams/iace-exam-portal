@@ -21,7 +21,7 @@ import { FilterSummary, FilterTrigger } from '../ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { Skeleton } from '../ui/skeleton';
-import { StatTile } from '../ui/stat-tile';
+import { StatTile, StatTileRow } from '../ui/stat-tile';
 
 const DASH = '—';
 
@@ -93,7 +93,7 @@ function Header({
 
   return (
     <View className="gap-4 pb-1">
-      <View className="flex-row flex-wrap gap-3">
+      <StatTileRow>
         <StatTile label="Pace" value={paceOf(report.paceIndex)} />
         <StatTile label="Sittings" value={report.cohortSize} />
         <StatTile label="Questions" value={report.questions.length} />
@@ -102,7 +102,7 @@ function Header({
           label="Time that bought nothing"
           value={percentLabel(insights.wastedShare, DASH)}
         />
-      </View>
+      </StatTileRow>
 
       <View className="flex-row items-center justify-between gap-3">
         <Text variant="muted" className="flex-1">

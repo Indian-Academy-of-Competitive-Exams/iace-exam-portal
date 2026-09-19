@@ -20,7 +20,7 @@ import { Button } from '../../../src/components/ui/button';
 import { Card } from '../../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { Skeleton } from '../../../src/components/ui/skeleton';
-import { StatTile } from '../../../src/components/ui/stat-tile';
+import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { SystemCheck } from '../../../src/components/tests/system-check';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { isBriefRefused } from '../../../src/lib/exam-routes';
@@ -113,11 +113,11 @@ function InstructionsContent({
     <Fragment>
       <Text variant="title">{paper.title ?? 'Instructions'}</Text>
 
-      <View className="flex-row flex-wrap gap-3">
+      <StatTileRow>
         <StatTile label="Duration" value={`${Math.round(paper.durationSec / 60)} min`} />
         <StatTile label="Questions" value={paper.totalQuestions} />
         <StatTile label="Sections" value={paper.sections.length} />
-      </View>
+      </StatTileRow>
 
       <SectionsList paper={paper} />
 

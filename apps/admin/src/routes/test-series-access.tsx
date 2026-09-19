@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { TEST_SERIES_KIND, type TestSeriesKind, type TestSeriesSummary } from '@iace/contracts';
-import { Checkbox, ConfirmDialog, FormCombobox, FormField, FormSection, plural } from '@iace/ui';
+import {
+  Checkbox,
+  ConfirmDialog,
+  FieldRow,
+  FormCombobox,
+  FormField,
+  FormSection,
+  plural,
+} from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS } from '../lib/constants';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
@@ -74,7 +82,7 @@ export function SeriesAccess({
 
   return (
     <FormSection title="Access">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <FieldRow>
         <FormCombobox
           form={form}
           name="kind"
@@ -109,7 +117,7 @@ export function SeriesAccess({
         </FormField>
 
         <KindTarget form={form} detail={detail} kind={kind} />
-      </div>
+      </FieldRow>
     </FormSection>
   );
 }

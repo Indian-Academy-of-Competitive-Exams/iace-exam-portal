@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
+/** A code reads uppercase whatever was typed, while its example stays a sentence. */
+export const UPPERCASE_CODE = 'uppercase placeholder:normal-case';
+
 // `prefix` is a global RDFa HTML attribute typed as string; ours is a node.
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   /** Marks the field invalid for both styling and assistive tech. */

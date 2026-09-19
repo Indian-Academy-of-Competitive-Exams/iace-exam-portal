@@ -48,3 +48,11 @@ export function Field({ htmlFor, label, hint, error, children, className }: Read
     </div>
   );
 }
+
+/** Two fields read as one row and stack when there is no width for both. Three is a section. */
+export function FieldRow({
+  children,
+  className,
+}: Readonly<{ children: React.ReactNode; className?: string }>) {
+  return <div className={cn('grid gap-4 sm:grid-cols-2', className)}>{children}</div>;
+}

@@ -26,7 +26,7 @@ import { Button } from '../../../src/components/ui/button';
 import { Card } from '../../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { Skeleton } from '../../../src/components/ui/skeleton';
-import { StatTile } from '../../../src/components/ui/stat-tile';
+import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
@@ -117,12 +117,12 @@ function AboutContent({
 
       {listed ? <ShutNotice test={listed} /> : null}
 
-      <View className="flex-row flex-wrap gap-3">
+      <StatTileRow>
         <StatTile label="Questions" value={brief.totalQuestions} />
         <StatTile label="Duration" value={`${Math.round(brief.durationSec / 60)} min`} />
         <StatTile label="Total marks" value={totalMarksOf(brief)} />
         <StatTile label="Negative" value={negativeOf(brief)} />
-      </View>
+      </StatTileRow>
 
       <SectionsCard brief={brief} />
       <PaperCard brief={brief} />

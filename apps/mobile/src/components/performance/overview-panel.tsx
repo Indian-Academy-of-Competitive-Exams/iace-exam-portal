@@ -29,7 +29,7 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
-import { StatTile } from '../ui/stat-tile';
+import { StatTile, StatTileRow } from '../ui/stat-tile';
 import { ScoreTrend } from './score-trend';
 
 const DASH = '—';
@@ -82,11 +82,11 @@ function Body({
     <>
       <Standing overview={overview} />
 
-      <View className="flex-row flex-wrap gap-3">
+      <StatTileRow>
         {standingTiles(overview.standing).map((tile) => (
           <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} />
         ))}
-      </View>
+      </StatTileRow>
 
       {scopes.length > 1 ? (
         <ChipRow
@@ -174,12 +174,12 @@ function Effort({ overview }: Readonly<{ overview: StudentOverview }>) {
       <Card className="p-5">
         <MeasureBars bars={bars} max={rates.served} />
       </Card>
-      <View className="flex-row flex-wrap gap-3">
+      <StatTileRow>
         <StatTile label="Attempted" value={percentLabel(rates.attemptRate, DASH)} />
         <StatTile label="Accuracy" value={percentLabel(rates.accuracy, DASH)} />
         <StatTile label="Questions a sitting" value={effort.questions ?? DASH} />
         <StatTile label="Time a sitting" value={minutes(effort.timeSec)} />
-      </View>
+      </StatTileRow>
     </View>
   );
 }

@@ -12,13 +12,14 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import {
+  FieldRow,
   FormCombobox,
   FormField,
   FormSection,
   Input,
+  plural,
   RadioGroup,
   RadioGroupItem,
-  plural,
 } from '@iace/ui';
 import { EXAM_TEMPLATE_LABELS } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
@@ -128,7 +129,7 @@ function Blueprint({
   };
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <FieldRow>
       {detail ? (
         <>
           <ReadOnlyField
@@ -267,7 +268,7 @@ function Blueprint({
           </RadioGroup>
         )}
       </FormField>
-    </div>
+    </FieldRow>
   );
 }
 

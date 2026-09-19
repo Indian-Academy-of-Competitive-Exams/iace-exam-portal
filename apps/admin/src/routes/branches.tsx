@@ -12,13 +12,13 @@ import {
   type CreateBranchInput,
 } from '@iace/contracts';
 import {
-  FormCombobox,
   Alert,
   Badge,
   Button,
   DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  FormCombobox,
   FormDialog,
   FormField,
   Input,
@@ -27,6 +27,7 @@ import {
   plural,
   TableFrame,
   type DataTableColumn,
+  UPPERCASE_CODE,
 } from '@iace/ui';
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
@@ -230,12 +231,7 @@ function NewBranchDialog({
     >
       <FormField form={form} name="name" label="Branch name">
         {(control) => (
-          <Input
-            {...control}
-            className="uppercase placeholder:normal-case"
-            placeholder="AMEERPET"
-            autoFocus
-          />
+          <Input {...control} className={UPPERCASE_CODE} placeholder="AMEERPET" autoFocus />
         )}
       </FormField>
 

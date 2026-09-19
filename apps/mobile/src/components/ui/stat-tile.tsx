@@ -1,4 +1,5 @@
 /// <reference types="nativewind/types" />
+import { View, type ViewProps } from 'react-native';
 import { Text } from './text';
 import { Card } from './card';
 import { cn } from '../../lib/cn';
@@ -17,4 +18,9 @@ export function StatTile({ label, value, className }: Readonly<StatTileProps>) {
       <Text className="text-xl font-semibold text-foreground">{value}</Text>
     </Card>
   );
+}
+
+// Wrapping tiles stretch to the tallest on their line, which is what keeps a wrapped row even.
+export function StatTileRow({ className, ...props }: Readonly<ViewProps>) {
+  return <View className={cn('flex-row flex-wrap gap-3', className)} {...props} />;
 }
