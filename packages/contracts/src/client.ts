@@ -506,19 +506,27 @@ export function createApiClient(options: ApiClientOptions) {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return null;
 
-    try {
-      const envelope = await parse(
-        await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null),
-        authTokensSchema,
-      );
-      onTokensRefreshed?.(envelope.data);
-      return envelope.data;
-    } catch (error) {
-      // Refresh failing is a normal end-of-session, not an error to propagate.
-      refreshFailure = AppException.is(error) ? error : undefined;
-      return null;
+    for (let asked = 0; ; asked += 1) {
+      try {
+        const envelope = await parse(
+          await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null),
+          authTokensSchema,
+        );
+        onTokensRefreshed?.(envelope.data);
+        return envelope.data;
+      } catch (error) {
+        // Refresh being REFUSED is a normal end-of-session; anything else is asked again below.
+        refreshFailure = AppException.is(error) ? error : undefined;
+        const backoff = worthAskingAgain(refreshFailure) ? refreshBackoffMs(asked) : undefined;
+        if (backoff === undefined) return null;
+        await new Promise((wake) => setTimeout(wake, backoff));
+      }
     }
   }
+
+  /** A refusal ends it, and so does having nothing to refresh with. A failure we could not reach does not. */
+  const sessionIsOver = (): boolean =>
+    getRefreshToken() === null || !worthAskingAgain(refreshFailure);
 
   async function envelopeOf<T>(path: string, opts: RequestOptions<T>): Promise<ApiSuccess<T>> {
     const { method = 'GET', body, schema, anonymous = false } = opts;
@@ -548,7 +556,7 @@ export function createApiClient(options: ApiClientOptions) {
     const refreshed = await refreshInFlight;
 
     if (!refreshed) {
-      onUnauthorized?.(refreshFailure);
+      if (sessionIsOver()) onUnauthorized?.(refreshFailure);
       throw endedBy(refreshFailure, peeked);
     }
 
@@ -586,10 +594,8 @@ export function createApiClient(options: ApiClientOptions) {
     if (response.status === 401) {
       const refreshed = await refreshTokens();
       if (!refreshed) {
-        onUnauthorized?.();
-        throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Your session has expired', {
-          httpStatus: 401,
-        });
+        if (sessionIsOver()) onUnauthorized?.();
+        throw endedBy(refreshFailure, await peekFailure(response));
       }
       response = await send(path, 'GET', undefined, refreshed.accessToken);
     }
@@ -1518,6 +1524,21 @@ function fileBody(file: File): FormData {
 /** Reads a failure body. Outside the factory because it closes over nothing. */
 const NO_CONTENT = 204;
 
+/** The only answer that ends a session. A throttle, a 5xx or a dropped packet says nothing about it. */
+const REFUSED = 401;
+
+/** Halved and jittered: a hall whose tokens expired in the same minute must not ask again in step. */
+const REFRESH_BACKOFF_MS = [1_000, 2_000, 4_000] as const;
+
+function refreshBackoffMs(asked: number): number | undefined {
+  const step = REFRESH_BACKOFF_MS[asked];
+  return step === undefined ? undefined : step / 2 + Math.random() * step;
+}
+
+function worthAskingAgain(failure: AppException | undefined): boolean {
+  return failure?.httpStatus !== REFUSED;
+}
+
 /** A 204 never has a body (Express drops one), so it can only mean null; a schema that refuses null is a real mismatch. */
 function noContentOf<T>(response: Response, schema: ZodType<T>): ApiSuccess<T> {
   const data = schema.safeParse(null);
@@ -1546,6 +1567,8 @@ function endedBy(
   peeked: Awaited<ReturnType<typeof peekFailure>>,
 ): AppException {
   if (refreshFailure?.code === ErrorCodes.SESSION_REPLACED) return refreshFailure;
+  // Never refused, only unreachable: say what actually went wrong rather than "sign in again".
+  if (refreshFailure && worthAskingAgain(refreshFailure)) return refreshFailure;
   if (peeked) return AppException.fromFailure(peeked, 401);
   return new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
 }

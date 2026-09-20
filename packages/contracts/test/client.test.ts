@@ -219,6 +219,40 @@ describe('typed client — 401 handling', () => {
     assert.equal((causes[0] as AppException).code, 'SESSION_REPLACED');
   });
 
+  /** The bug this prevents: a throttled refresh signing a student out with the clock still running. */
+  it('asks the refresh again when it was throttled, rather than ending the sitting', async () => {
+    const { api, calls, causes } = clientWith(
+      [
+        failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
+        failure(429, { code: 'RATE_LIMITED', message: 'Too many requests' }),
+        success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
+        success({ id: 'abc' }),
+      ],
+      { access: 'stale', refresh: 'r1' },
+    );
+
+    assert.deepEqual(await api.request('/thing', { schema }), { id: 'abc' });
+    assert.equal(calls.length, 4, 'the throttled refresh is asked a second time');
+    assert.deepEqual(causes, [], 'a throttle says nothing about whether the session is still good');
+  });
+
+  it('keeps the session when the refresh never gets through at all', async () => {
+    const { api, causes } = clientWith(
+      [
+        failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
+        ...Array.from({ length: 4 }, () => failure(429, { code: 'RATE_LIMITED', message: 'Busy' })),
+      ],
+      { access: 'stale', refresh: 'r1' },
+    );
+
+    await assert.rejects(
+      api.request('/thing', { schema }),
+      (e: unknown) => AppException.is(e) && e.httpStatus === 429,
+      'the throttle is the error, not an expired session the student must sign in for',
+    );
+    assert.deepEqual(causes, [], 'the student stays signed in and can go on answering');
+  });
+
   it('passes on why a refresh failed', async () => {
     const { api, causes } = clientWith(
       [
