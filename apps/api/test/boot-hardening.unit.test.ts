@@ -26,8 +26,11 @@ const production = (over: Record<string, string> = {}): Record<string, string> =
     NODE_ENV: NODE_ENVS.PRODUCTION,
     CORS_ORIGINS: 'https://admin.iace.co.in',
     METRICS_TOKEN: 'scraper-token',
+    DATABASE_URL: SIZED_POOL,
     ...over,
   });
+
+const SIZED_POOL = 'postgresql://iace:iace@db:5432/iace?schema=public&connection_limit=25';
 
 describe('CORS allowlist', () => {
   /** `origin: true` reflects whatever origin asks and answers it with credentials. */
@@ -66,6 +69,24 @@ describe('the metrics endpoint', () => {
 
   it('leaves development open, so a local Prometheus needs no secret', () => {
     assert.equal(validateEnv(env()).METRICS_TOKEN, undefined);
+  });
+});
+
+describe('the database pool', () => {
+  /** The bug this prevents: 20 worker slots per container queueing on Prisma's default pool as P2024. */
+  it('refuses to boot production on a URL that never sized it', () => {
+    assert.throws(
+      () => validateEnv(production({ DATABASE_URL: 'postgresql://iace:iace@db:5432/iace' })),
+      /DATABASE_URL.*connection_limit/s,
+    );
+  });
+
+  it('boots production once the pool is sized', () => {
+    assert.equal(validateEnv(production()).DATABASE_URL, SIZED_POOL);
+  });
+
+  it('leaves development alone, where one process serves everything', () => {
+    assert.ok(validateEnv(env()).DATABASE_URL);
   });
 });
 

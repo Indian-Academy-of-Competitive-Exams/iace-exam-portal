@@ -195,7 +195,16 @@ const corsIsClosed = (env: z.infer<typeof envSchema>): boolean =>
 const metricsAreGuarded = (env: z.infer<typeof envSchema>): boolean =>
   env.NODE_ENV !== NODE_ENVS.PRODUCTION || env.METRICS_TOKEN !== undefined;
 
+/** Prisma sizes its pool from the URL alone, and one container's worker slots outnumber the default. */
+const poolIsSized = (env: z.infer<typeof envSchema>): boolean =>
+  env.NODE_ENV !== NODE_ENVS.PRODUCTION || /[?&]connection_limit=\d/.test(env.DATABASE_URL);
+
 export const envSchemaChecked = envSchema
+  .refine(poolIsSized, {
+    path: ['DATABASE_URL'],
+    message:
+      'needs connection_limit in production — the default pool is smaller than the 20 worker slots one container runs',
+  })
   .refine(corsIsClosed, {
     path: ['CORS_ORIGINS'],
     message: 'is required in production — an empty list would let any site call the API',
