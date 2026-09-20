@@ -5,6 +5,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   DIFFICULTY_LEVEL,
   ErrorCodes,
   PAPER_SOURCES,
@@ -114,8 +115,8 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
       baseConfigId: BUILDER.CONFIG,
       examStageId: BUILDER.STAGE,
       testSeriesId: seriesId,
-      // Picking waits on the source being said, so every bench below has already said it.
-      paperSource: PAPER_SOURCES.FRAMED,
+      // Drawing from a bank IS picking; the framed benches below say so for themselves.
+      paperSource: PAPER_SOURCES.PICKED,
       ...over.test,
     },
   });
@@ -129,6 +130,11 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
     redis,
   );
 }
+
+const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>, sectionId: string) =>
+  paper.sections
+    .find((section) => section.baseConfigSectionId === sectionId)
+    ?.questions.map((row) => row.questionId) ?? [];
 
 const rows = () =>
   prisma.paperQuestion.findMany({ where: { testId: TEST }, orderBy: { order: 'asc' } });
@@ -361,11 +367,6 @@ describe('PaperService — putting several questions on a section in one request
 });
 
 describe('PaperService — filling a section’s remainder from its own spec', () => {
-  const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>, sectionId: string) =>
-    paper.sections
-      .find((section) => section.baseConfigSectionId === sectionId)
-      ?.questions.map((row) => row.questionId) ?? [];
-
   it('tops the section up to its count and leaves the hand-picked row where it was', async () => {
     const service = await serviceWith();
     await service.addQuestions(TEST, {
@@ -770,6 +771,52 @@ describe('PaperService — where the questions come from', () => {
         .code,
       ErrorCodes.CONFLICT,
     );
+  });
+});
+
+describe('PaperService — a framed section is made of what its own typist wrote', () => {
+  /** The failure this prevents: the typist writes the section, and the draw ignores every word of it. */
+  async function framed(written: readonly string[]) {
+    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+    const assignee = await makeAdmin(prisma, { fullName: 'Priya' });
+    const assignment = await prisma.questionAssignment.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_2'),
+        assigneeId: assignee.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        finalizedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    await prisma.question.updateMany({
+      where: { id: { in: written.map(idFor) } },
+      data: { assignmentId: assignment.id },
+    });
+    return service;
+  }
+
+  it('fills the section from its own authoring and leaves the bank alone', async () => {
+    const service = await framed(['q1', 'q2']);
+
+    const paper = await service.fillSection(TEST, idFor('sec_2'));
+
+    assert.deepEqual(
+      idsOf(paper, idFor('sec_2')).sort(),
+      [idFor('q1'), idFor('q2')].sort(),
+      'the other four quant questions in the bank are not this section to draw from',
+    );
+  });
+
+  it('says the typist is short rather than blaming the bank', async () => {
+    const service = await framed(['q1']);
+
+    const error = await refused(service.fillSection(TEST, idFor('sec_2')));
+
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.match(error.message, /typist/);
   });
 });
 

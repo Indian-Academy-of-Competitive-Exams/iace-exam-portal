@@ -7,6 +7,7 @@ import {
   DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  PAPER_SOURCES,
   type BaseConfigDetail,
   quotaWithPicks,
   sectionQuota,
@@ -52,6 +53,8 @@ const SOURCE_UNCHOSEN_MESSAGE =
   'This test has not said where its questions come from yet. Choose that before picking any.';
 const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
+const SECTION_UNDER_TYPED_MESSAGE =
+  'Its typist has not written enough questions to fill the rest of this section yet.';
 
 const overSplitMessage = (sectionName: string) =>
   `${sectionName} already holds more of one difficulty than its split allows. Take one off first.`;
@@ -202,7 +205,7 @@ export class PaperService {
       select: HELD_SELECT,
     });
     const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id];
-    const added = await this.drawRemainder(testId, section, spec, rows);
+    const added = await this.drawRemainder(testId, section, spec, rows, test.paperSource);
     if (added.length === 0) return this.paperOf(testId, this.scopedOf(test, config));
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
@@ -228,11 +231,12 @@ export class PaperService {
     section: BaseConfigDetail['sections'][number],
     spec: SectionDrawSpec | undefined,
     rows: readonly HeldRow[],
+    source: PaperSource | null,
   ): Promise<DrawnQuestion[]> {
     const held = rows.filter((row) => row.baseConfigSectionId === section.id);
     // One question sits on a paper once, so every row already on it is out of this draw's reach.
     const onPaper = new Set(rows.map((row) => row.questionId));
-    const pool = (await this.poolFor(testId, section, spec)).filter(
+    const pool = (await this.poolFor(testId, section, spec, source)).filter(
       (candidate) => !onPaper.has(candidate.id),
     );
 
@@ -250,13 +254,17 @@ export class PaperService {
     const result = drawSection({ section, pool, spec, seed: freshSeed(), pins });
     if (!result.ok) {
       const { baseConfigSectionId, sectionName, needed, available } = result.shortfall;
-      throw new AppException(ErrorCodes.DRAW_SHORTFALL, SECTION_TOO_THIN_MESSAGE, {
-        fieldErrors: {
-          [baseConfigSectionId]: [
-            `${sectionName} needs ${needed}, and the bank holds ${available}.`,
-          ],
+      const framed = source === PAPER_SOURCES.FRAMED;
+      const held = framed ? 'its typist has written' : 'the bank holds';
+      throw new AppException(
+        ErrorCodes.DRAW_SHORTFALL,
+        framed ? SECTION_UNDER_TYPED_MESSAGE : SECTION_TOO_THIN_MESSAGE,
+        {
+          fieldErrors: {
+            [baseConfigSectionId]: [`${sectionName} needs ${needed}, and ${held} ${available}.`],
+          },
         },
-      });
+      );
     }
 
     return result.questions.filter((row) => !onPaper.has(row.questionId));
@@ -453,13 +461,19 @@ export class PaperService {
     testId: string,
     section: DrawSection,
     spec: SectionDrawSpec | undefined,
+    source: PaperSource | null,
   ): Promise<DrawCandidate[]> {
     const rows = await this.prisma.question.findMany({
       where: {
         ...drawableFor(testId),
-        // The narrowing SQL can do; tags and the split are the engine's.
-        ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),
-        ...(narrows(spec?.topicIds) ? { topicId: { in: [...spec.topicIds] } } : {}),
+        ...(source === PAPER_SOURCES.FRAMED
+          ? // A framed section is made of what its own typist wrote, never of what the bank happens to hold.
+            { assignment: { testId, baseConfigSectionId: section.id } }
+          : {
+              // The narrowing SQL can do; tags and the split are the engine's.
+              ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),
+              ...(narrows(spec?.topicIds) ? { topicId: { in: [...spec.topicIds] } } : {}),
+            }),
       },
       select: CANDIDATE_SELECT,
     });
