@@ -493,6 +493,8 @@ export const questionSummarySchema = z.object({
   writtenFor: z
     .object({ testId: z.string(), testTitle: z.string().nullable(), sectionName: z.string() })
     .nullable(),
+  /** When its typist handed it to the proof-reader. Null for one still being written. */
+  releasedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

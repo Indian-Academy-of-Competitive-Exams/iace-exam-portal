@@ -15,10 +15,12 @@ import {
 import {
   ADMIN_AUTHORING_ROUTES,
   authoringDuplicateSchema,
+  authoringReleaseSchema,
   authoringSaveResultSchema,
   authoringStatsSchema,
   type AuthoringCreateInput,
   type AuthoringHistoryQueryInput,
+  type AuthoringRelease,
   type AuthoringDuplicate,
   type AuthoringSaveResult,
   type AuthoringStats,
@@ -354,6 +356,7 @@ import {
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type CreateSectionCommentInput,
+  type EditSectionCommentInput,
   type MineAssignmentsQueryInput,
   type QuestionOnOtherTest,
   type SectionComment,
@@ -1193,6 +1196,29 @@ export function createApiClient(options: ApiClientOptions) {
 
         update: (id: string, input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
           write('PATCH', ADMIN_AUTHORING_ROUTES.update(id), authoringSaveResultSchema, input),
+
+        remove: (id: string): Promise<NoContent> =>
+          write('DELETE', ADMIN_AUTHORING_ROUTES.remove(id), noContentSchema),
+
+        /** Hands the section's work so far to its proof-reader. */
+        release: (assignmentId: string): Promise<AuthoringRelease> =>
+          write('POST', ADMIN_AUTHORING_ROUTES.release(assignmentId), authoringReleaseSchema),
+
+        previewImport: (assignmentId: string, file: File): Promise<QuestionImportPlan> =>
+          write(
+            'POST',
+            ADMIN_AUTHORING_ROUTES.importPreview(assignmentId),
+            questionImportPlanSchema,
+            fileBody(file),
+          ),
+
+        commitImport: (assignmentId: string, importLogId: string): Promise<QuestionImportResult> =>
+          write(
+            'POST',
+            ADMIN_AUTHORING_ROUTES.importCommit(assignmentId),
+            questionImportResultSchema,
+            { importLogId },
+          ),
       },
 
       questions: {
@@ -1250,6 +1276,13 @@ export function createApiClient(options: ApiClientOptions) {
         forAssignment: (assignmentId: string): Promise<QuestionDetail[]> =>
           get(ADMIN_PROOFREADING_ROUTES.forAssignment(assignmentId), questionDetailSchema.array()),
 
+        /** One question of it, which is what the screen that edits it opens on. */
+        oneQuestion: (assignmentId: string, questionId: string): Promise<QuestionDetail> =>
+          get(
+            ADMIN_PROOFREADING_ROUTES.oneQuestion(assignmentId, questionId),
+            questionDetailSchema,
+          ),
+
         editQuestion: (
           assignmentId: string,
           questionId: string,
@@ -1274,6 +1307,16 @@ export function createApiClient(options: ApiClientOptions) {
           get(
             ADMIN_PROOFREADING_ROUTES.forSection(testId, sectionId),
             questionDetailSchema.array(),
+          ),
+
+        oneSectionQuestion: (
+          testId: string,
+          sectionId: string,
+          questionId: string,
+        ): Promise<QuestionDetail> =>
+          get(
+            ADMIN_PROOFREADING_ROUTES.oneSectionQuestion(testId, sectionId, questionId),
+            questionDetailSchema,
           ),
 
         editSectionQuestion: (
@@ -1361,6 +1404,20 @@ export function createApiClient(options: ApiClientOptions) {
           write(
             'POST',
             ADMIN_ASSIGNMENTS_ROUTES.comments(testId, sectionId),
+            sectionCommentSchema,
+            input,
+          ),
+
+        /** Rewording one, which only its own author does. */
+        editComment: (
+          testId: string,
+          sectionId: string,
+          commentId: string,
+          input: EditSectionCommentInput,
+        ): Promise<SectionComment> =>
+          write(
+            'PATCH',
+            ADMIN_ASSIGNMENTS_ROUTES.editComment(testId, sectionId, commentId),
             sectionCommentSchema,
             input,
           ),

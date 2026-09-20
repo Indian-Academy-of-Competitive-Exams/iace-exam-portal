@@ -193,6 +193,67 @@ describe('AuthoringService.create — assignment provenance', () => {
   });
 });
 
+describe('AuthoringService.release', () => {
+  /** The failure this prevents: a reader given every keystroke as it lands, with no way to tell. */
+  it('hands over everything not yet handed over, and counts only what moved', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(MINE);
+    const first = await authoring.create(draft(), MINE, assignment.id);
+
+    const once = await authoring.release(assignment.id, MINE);
+    const second = await authoring.create(
+      draft({ stem: { en: 'Written after the hand-over' } }),
+      MINE,
+      assignment.id,
+    );
+    const twice = await authoring.release(assignment.id, MINE);
+
+    assert.deepEqual(once, { handedOver: 1, released: 1 });
+    assert.deepEqual(twice, { handedOver: 1, released: 2 }, 'the first one does not move again');
+
+    const rows = await prisma.question.findMany({
+      where: { id: { in: [first.question.id, second.question.id] } },
+      select: { releasedAt: true },
+    });
+    assert.ok(rows.every((row) => row.releasedAt !== null));
+  });
+
+  it('refuses an assignment that is not the caller’s own', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(THEIRS);
+
+    await assert.rejects(
+      () => authoring.release(assignment.id, MINE),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+});
+
+describe('AuthoringService.remove', () => {
+  /** Typing twenty-five for a target of twenty and dropping five is the point of this. */
+  it('deletes a question the caller wrote', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(MINE);
+    const { question } = await authoring.create(draft(), MINE, assignment.id);
+
+    await authoring.remove(question.id, MINE);
+
+    assert.equal(await prisma.question.count({ where: { id: question.id } }), 0);
+  });
+
+  it('refuses a question somebody else wrote', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(MINE);
+    const { question } = await authoring.create(draft(), MINE, assignment.id);
+
+    await assert.rejects(
+      () => authoring.remove(question.id, THEIRS),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    assert.equal(await prisma.question.count({ where: { id: question.id } }), 1);
+  });
+});
+
 describe('AuthoringService.history', () => {
   it("shows the author their own work and nobody else's", async () => {
     const qstMine = randomUUID();

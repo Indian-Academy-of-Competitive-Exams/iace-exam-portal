@@ -30,13 +30,36 @@ export class ProofreadingService {
     isSuperAdmin = false,
   ): Promise<QuestionDetail[]> {
     const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
-    return this.questions.allIn(sectionScope(assignment));
+    return this.questions.allIn(sectionScope(assignment, isSuperAdmin));
+  }
+
+  /** One question of that section, for the screen that edits it — the list is not the authority, this is. */
+  async oneFor(
+    assignmentId: string,
+    questionId: string,
+    adminId: string,
+    isSuperAdmin = false,
+  ): Promise<QuestionDetail> {
+    const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
+    await this.requireInSection(assignment, questionId, isSuperAdmin);
+    return this.questions.detail(questionId);
+  }
+
+  /** The same question, reached by the section's own pair rather than by an assignment id. */
+  async oneInSection(
+    testId: string,
+    baseConfigSectionId: string,
+    questionId: string,
+  ): Promise<QuestionDetail> {
+    const section = await this.requireSection(testId, baseConfigSectionId);
+    await this.requireInSection(section, questionId, true);
+    return this.questions.detail(questionId);
   }
 
   /** The same section reached by its own pair, so a section nobody holds still opens for a super admin. */
   async forSection(testId: string, baseConfigSectionId: string): Promise<QuestionDetail[]> {
     return this.questions.allIn(
-      sectionScope(await this.requireSection(testId, baseConfigSectionId)),
+      sectionScope(await this.requireSection(testId, baseConfigSectionId), true),
     );
   }
 
@@ -76,7 +99,7 @@ export class ProofreadingService {
     await takeSectionEditLock(this.redis, this.prisma, section, { id: adminId, isSuperAdmin });
 
     const question = await this.prisma.question.findFirst({
-      where: { id: questionId, ...sectionScope(section) },
+      where: { id: questionId, ...sectionScope(section, isSuperAdmin) },
       select: { status: true },
     });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
@@ -93,7 +116,7 @@ export class ProofreadingService {
     isSuperAdmin = false,
   ): Promise<QuestionOnOtherTest[]> {
     const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
-    return this.otherTestsIn(assignment, questionId);
+    return this.otherTestsIn(assignment, questionId, isSuperAdmin);
   }
 
   /** The same warning, for the section a super admin opened without an assignment behind it. */
@@ -102,14 +125,16 @@ export class ProofreadingService {
     baseConfigSectionId: string,
     questionId: string,
   ): Promise<QuestionOnOtherTest[]> {
-    return this.otherTestsIn(await this.requireSection(testId, baseConfigSectionId), questionId);
+    const section = await this.requireSection(testId, baseConfigSectionId);
+    return this.otherTestsIn(section, questionId, true);
   }
 
   private async otherTestsIn(
     assignment: SectionRef,
     questionId: string,
+    unreleasedToo: boolean,
   ): Promise<QuestionOnOtherTest[]> {
-    await this.requireInSection(assignment, questionId);
+    await this.requireInSection(assignment, questionId, unreleasedToo);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { questionId, testId: { not: assignment.testId } },
@@ -146,9 +171,13 @@ export class ProofreadingService {
   }
 
   /** The same scope the edit rests on: a section is no licence to read the bank through it. */
-  private async requireInSection(assignment: SectionRef, questionId: string): Promise<void> {
+  private async requireInSection(
+    assignment: SectionRef,
+    questionId: string,
+    unreleasedToo: boolean,
+  ): Promise<void> {
     const question = await this.prisma.question.findFirst({
-      where: { id: questionId, ...sectionScope(assignment) },
+      where: { id: questionId, ...sectionScope(assignment, unreleasedToo) },
       select: { id: true },
     });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
@@ -212,11 +241,15 @@ interface SectionRef {
 }
 
 /** Spec §7.1, held to the SECTION the assignment is: what was written for it, and what was picked into it. */
-const sectionScope = (section: SectionRef): Prisma.QuestionWhereInput => {
+const sectionScope = (section: SectionRef, unreleasedToo: boolean): Prisma.QuestionWhereInput => {
   const { testId, baseConfigSectionId } = section;
   return {
     OR: [
-      { assignment: { testId, baseConfigSectionId } },
+      // A picked question has no typist and so nothing to wait for; only authored work is handed over.
+      {
+        assignment: { testId, baseConfigSectionId },
+        ...(unreleasedToo ? {} : { releasedAt: { not: null } }),
+      },
       { paperQuestions: { some: { testId, baseConfigSectionId } } },
     ],
   };

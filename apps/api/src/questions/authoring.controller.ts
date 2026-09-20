@@ -1,18 +1,38 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ActorTypes,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   FEATURE_KEYS,
+  IMPORT_FILE_FIELD,
   PERMISSION_LEVELS,
   authoringCreateSchema,
   authoringDuplicateQuerySchema,
   authoringHistoryQuerySchema,
   questionDraftSchema,
+  questionImportCommitSchema,
   type AuthoringCreateInput,
   type AuthoringDuplicate,
   type AuthoringDuplicateQuery,
   type AuthoringHistoryQuery,
+  type AuthoringRelease,
+  type QuestionImportCommitBody,
+  type QuestionImportPlan,
+  type QuestionImportResult,
   type AuthoringSaveResult,
   type AuthoringStats,
   type AuthoringTags,
@@ -24,14 +44,19 @@ import {
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
+import { requireFile, type UploadedSheet } from '../common/importing/upload';
 import { AuthoringService } from './authoring.service';
+import { QuestionImportService } from './question-import.service';
 
 /** Hiding the nav is not what keeps a typist out of the bank — these routes and their scoping are. */
 @Controller('admin/authoring')
 @Actors(ActorTypes.ADMIN)
 @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.READ)
 export class AuthoringController {
-  constructor(private readonly authoring: AuthoringService) {}
+  constructor(
+    private readonly authoring: AuthoringService,
+    private readonly imports: QuestionImportService,
+  ) {}
 
   @Get('tags')
   async tags(@CurrentUser() user: AuthenticatedUser): Promise<AuthoringTags> {
@@ -86,5 +111,59 @@ export class AuthoringController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AuthoringSaveResult> {
     return this.authoring.update(id, body, user.id);
+  }
+
+  /** The typist's own mistake, taken back. `questions.remove` still refuses anything in use. */
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.DELETE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Delete('questions/:id')
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    return this.authoring.remove(id, user.id, user.isSuperAdmin);
+  }
+
+  /** The same sheet the bank's importer reads, landing in the section rather than loose. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post('assignments/:assignmentId/import/preview')
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  previewImport(
+    @Param('assignmentId') assignmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: UploadedSheet,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.previewForAssignment(
+      assignmentId,
+      requireFile(file),
+      user.id,
+      user.isSuperAdmin,
+    );
+  }
+
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post('assignments/:assignmentId/import/commit')
+  commitImport(
+    @Param('assignmentId') assignmentId: string,
+    @Body(new ZodBody(questionImportCommitSchema)) body: QuestionImportCommitBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionImportResult> {
+    return this.imports.commitForAssignment(
+      assignmentId,
+      body.importLogId,
+      user.id,
+      user.isSuperAdmin,
+    );
+  }
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post('assignments/:assignmentId/release')
+  release(
+    @Param('assignmentId') assignmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AuthoringRelease> {
+    return this.authoring.release(assignmentId, user.id, user.isSuperAdmin);
   }
 }

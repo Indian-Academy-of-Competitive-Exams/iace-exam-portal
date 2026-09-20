@@ -164,6 +164,7 @@ describe('the section edit lock', () => {
     const { authoring, proofreading, redis } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    await authoring.release(section.typing.id, TYPIST);
 
     redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
 

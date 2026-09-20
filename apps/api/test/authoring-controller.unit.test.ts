@@ -50,8 +50,9 @@ describe('what the authoring routes charge', () => {
       key: both,
       level: PERMISSION_LEVELS.READ,
     });
+    // A proof-reader puts pictures in a section's thread, so the one upload path admits them too.
     assert.deepEqual(shared(QuestionsController.prototype.uploadImage, QuestionsController), {
-      key: both,
+      key: [...both, FEATURE_KEYS.QUESTION_PROOFREAD],
       level: PERMISSION_LEVELS.WRITE,
     });
 

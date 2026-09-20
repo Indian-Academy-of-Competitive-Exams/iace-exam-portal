@@ -175,8 +175,19 @@ export type AssignableQueryInput = z.input<typeof assignableQuerySchema>;
 // ============================================================================
 // The section thread. Comments live at (test, section) — the pair an assignment
 // keys on — because the typist and the proof-reader hold separate rows on one
-// section and share one discussion. Append-only: nothing edits or deletes one.
+// section and share one discussion. An author may reword their own; every
+// earlier wording stays on the same row, so the thread still reads as a record.
 // ============================================================================
+
+/** What a message said before it was reworded. Oldest first; the current body is never here. */
+export const commentRevisionSchema = z.object({
+  body: z.string(),
+  at: z.string(),
+});
+export type CommentRevision = z.infer<typeof commentRevisionSchema>;
+
+/** At most this many images on one message — a thread is a conversation, not an album. */
+export const COMMENT_MAX_IMAGES = 6;
 
 export const sectionCommentSchema = z.object({
   id: z.string(),
@@ -187,15 +198,33 @@ export const sectionCommentSchema = z.object({
   authorName: z.string(),
   authorRole: adminRoleSchema,
   body: z.string(),
+  /** Signed download URLs, not the stored keys — the same treatment a question's images get. */
+  images: z.string().array(),
+  /** Null until it is reworded, and then the last time it was. */
+  editedAt: z.string().nullable(),
+  revisions: commentRevisionSchema.array(),
   createdAt: z.string(),
 });
 export type SectionComment = z.infer<typeof sectionCommentSchema>;
 
-export const createSectionCommentSchema = z.object({
-  body: z.string().trim().min(1, 'Write something first').max(2000),
-});
+/** A message is text, images, or both — an empty one with no picture is nothing said. */
+export const createSectionCommentSchema = z
+  .object({
+    body: z.string().trim().max(2000).default(''),
+    /** Storage keys from the image upload, in the order they should read. */
+    images: z.string().array().max(COMMENT_MAX_IMAGES).default([]),
+  })
+  .refine((input) => input.body !== '' || input.images.length > 0, {
+    message: 'Write something, or add a picture',
+    path: ['body'],
+  });
 export type CreateSectionCommentInput = z.input<typeof createSectionCommentSchema>;
 export type CreateSectionCommentBody = z.infer<typeof createSectionCommentSchema>;
+
+/** The same shape: rewording replaces both, and what it replaced moves into `revisions`. */
+export const editSectionCommentSchema = createSectionCommentSchema;
+export type EditSectionCommentInput = z.input<typeof editSectionCommentSchema>;
+export type EditSectionCommentBody = z.infer<typeof editSectionCommentSchema>;
 
 /** Another test holding a question somebody is about to edit — the warning, not a report. */
 export const questionOnOtherTestSchema = z.object({
@@ -233,12 +262,18 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** GET reads the section thread; POST to the same path adds to it. */
   comments: (testId: string, baseConfigSectionId: string) =>
     `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/comments`,
+  /** Rewording one, which only its own author does. */
+  editComment: (testId: string, baseConfigSectionId: string, commentId: string) =>
+    `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/comments/${commentId}`,
 } as const;
 
 export const ADMIN_PROOFREADING_ROUTES = {
   /** One section of one test, as the reader assigned to it sees it. */
   forAssignment: (assignmentId: string) =>
     `/admin/proofreading/assignments/${assignmentId}/questions`,
+  /** One question of that section, for the screen that edits it — GET reads, PATCH saves. */
+  oneQuestion: (assignmentId: string, questionId: string) =>
+    `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}`,
   /** The assignment is in the path because it is the authority the edit rests on. */
   editQuestion: (assignmentId: string, questionId: string) =>
     `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}`,
@@ -248,6 +283,8 @@ export const ADMIN_PROOFREADING_ROUTES = {
   /** The same section, reached by the pair an assignment keys on. Super admin only, and unassigned. */
   forSection: (testId: string, baseConfigSectionId: string) =>
     `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions`,
+  oneSectionQuestion: (testId: string, baseConfigSectionId: string, questionId: string) =>
+    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}`,
   editSectionQuestion: (testId: string, baseConfigSectionId: string, questionId: string) =>
     `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}`,
   sectionOtherTests: (testId: string, baseConfigSectionId: string, questionId: string) =>

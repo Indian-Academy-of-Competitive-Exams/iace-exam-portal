@@ -37,6 +37,27 @@ export class ProofreadingController {
     return this.proofreading.forAssignment(assignmentId, user.id, user.isSuperAdmin);
   }
 
+  /** What the screen that edits one question opens on. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.READ)
+  @Get('assignments/:assignmentId/questions/:questionId')
+  oneFor(
+    @Param('assignmentId') assignmentId: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionDetail> {
+    return this.proofreading.oneFor(assignmentId, questionId, user.id, user.isSuperAdmin);
+  }
+
+  @RequiresSuperAdmin()
+  @Get('tests/:testId/sections/:sectionId/questions/:questionId')
+  oneInSection(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Param('questionId') questionId: string,
+  ): Promise<QuestionDetail> {
+    return this.proofreading.oneInSection(testId, sectionId, questionId);
+  }
+
   /** Read before the edit, not after: it is what makes the edit warning conditional. */
   @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.READ)
   @Get('assignments/:assignmentId/questions/:questionId/other-tests')

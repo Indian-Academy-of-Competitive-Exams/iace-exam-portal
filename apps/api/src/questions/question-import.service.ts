@@ -13,6 +13,7 @@ import {
 } from '@iace/contracts';
 import { importFileKey, readUploadedTable } from '../common/importing';
 import { AuditService } from '../audit';
+import { requireOwnAssignment } from './assignment-guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { buildContent, type BuiltQuestion } from './question-core';
@@ -73,9 +74,34 @@ export class QuestionImportService {
     return withoutDrafts(planning, log.id);
   }
 
-  async commit(importLogId: string): Promise<QuestionImportResult> {
+  /** The same sheet, landing in one section rather than loose in the bank. */
+  async previewForAssignment(
+    assignmentId: string,
+    file: Buffer,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<QuestionImportPlan> {
+    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
+    return this.preview(file, adminId);
+  }
+
+  async commitForAssignment(
+    assignmentId: string,
+    importLogId: string,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<QuestionImportResult> {
+    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
+    return this.commit(importLogId, { assignmentId, actorId: adminId });
+  }
+
+  async commit(importLogId: string, into: ImportTarget = {}): Promise<QuestionImportResult> {
     const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
     if (!log || log.feature !== AuditFeature.QUESTION || !log.fileS3Key) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'That upload is no longer available');
+    }
+    // A section's import commits the sheet that section's own typist previewed, never another's.
+    if (into.actorId !== undefined && log.actorId !== into.actorId) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That upload is no longer available');
     }
     if (log.status === IMPORT_LOG_STATUS.COMMITTED) {
@@ -95,7 +121,7 @@ export class QuestionImportService {
       for (const row of creatable) {
         const built = buildContent(row.draft);
         const question = await tx.question.create({
-          data: questionData(row.draft, built, log.actorId),
+          data: { ...questionData(row.draft, built, log.actorId), assignmentId: into.assignmentId },
         });
         const version = await tx.questionVersion.create({
           data: versionData(question.id, built, log.actorId),
@@ -220,4 +246,11 @@ function versionData(
 /** What was wrong with the FILE, kept on the run so the history explains itself. */
 function fileErrorsOf(planning: QuestionImportPlanning): Prisma.InputJsonValue | undefined {
   return planning.fileErrors.length > 0 ? { fileErrors: planning.fileErrors } : undefined;
+}
+
+/** Where an imported sheet lands: the bank by default, or one section's own authoring. */
+export interface ImportTarget {
+  assignmentId?: string;
+  /** Whose upload it has to be. Absent on the bank's importer, which nobody scopes. */
+  actorId?: string;
 }

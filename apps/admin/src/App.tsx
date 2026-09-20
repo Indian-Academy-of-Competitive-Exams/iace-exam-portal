@@ -19,6 +19,7 @@ import { ImportQuestionsPage } from './routes/import-questions';
 import { AssignmentQueuePage } from './routes/assignment-queue';
 import { SectionProgressPage } from './routes/section-progress';
 import { ProofreadingSectionPage } from './routes/proofreading-section';
+import { ProofreadingQuestionPage } from './routes/proofreading-question';
 import { AuthoringEditorPage } from './routes/authoring-editor';
 import { AuthoringHistoryPage } from './routes/authoring-history';
 import { TaxonomyPage } from './routes/taxonomy';
@@ -80,6 +81,14 @@ export function App() {
             path={ROUTES.PROOFREADING_OF_SECTION_PATTERN}
             element={<ProofreadingSectionPage />}
           />
+          <Route
+            path={ROUTES.PROOFREADING_QUESTION_PATTERN}
+            element={<ProofreadingQuestionPage />}
+          />
+          <Route
+            path={ROUTES.PROOFREADING_SECTION_QUESTION_PATTERN}
+            element={<ProofreadingQuestionPage />}
+          />
           <Route path={ROUTES.AUTHORING_EDITOR} element={<AuthoringEditorPage />} />
           {/* Before the :id route, or "history" would be read as a question id. */}
           <Route path={ROUTES.AUTHORING_HISTORY} element={<AuthoringHistoryPage />} />
@@ -87,6 +96,8 @@ export function App() {
             path={ROUTES.AUTHORING_ASSIGNMENTS}
             element={<AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />}
           />
+          {/* Before the :assignmentId route, or "import" is read as an assignment id. */}
+          <Route path={ROUTES.AUTHORING_IMPORT_PATTERN} element={<ImportQuestionsPage />} />
           <Route path={ROUTES.AUTHORING_FOR_ASSIGNMENT_PATTERN} element={<AuthoringEditorPage />} />
           <Route path={ROUTES.AUTHORING_EDITOR_PATTERN} element={<AuthoringEditorPage />} />
           <Route path={ROUTES.BASE_CONFIGS} element={<BaseConfigsPage />} />

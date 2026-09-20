@@ -769,6 +769,7 @@ function toSummary(row: QuestionRow): QuestionSummary {
           sectionName: row.assignment.baseConfigSection.name,
         }
       : null,
+    releasedAt: row.releasedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
@@ -8,6 +8,7 @@ import {
   type QuestionImportRow,
 } from '@iace/contracts';
 import {
+  Alert,
   Badge,
   ImportView,
   PageHeader,
@@ -33,7 +34,10 @@ import { saveBlob } from '../lib/save-blob';
  * opened, so committing names that run instead of sending the same file again.
  */
 export function ImportQuestionsPage() {
+  const { assignmentId } = useParams<{ assignmentId?: string }>();
   const queryClient = useQueryClient();
+  // The same sheet either way; the section is only where the questions land.
+  const into = assignmentId ?? null;
 
   const template = useMutation({
     mutationFn: () => api.admin.imports.questionTemplate(),
@@ -41,14 +45,23 @@ export function ImportQuestionsPage() {
   });
 
   const intake = useImportScreen({
-    preview: (file) => api.admin.imports.previewQuestions(file),
-    commit: (_file, plan) => api.admin.imports.commitQuestions(plan.importLogId),
+    preview: (file) =>
+      into
+        ? api.admin.authoring.previewImport(into, file)
+        : api.admin.imports.previewQuestions(file),
+    commit: (_file, plan) =>
+      into
+        ? api.admin.authoring.commitImport(into, plan.importLogId)
+        : api.admin.imports.commitQuestions(plan.importLogId),
     writes: (plan) => plan.summary.willCreate,
     success: (data) => {
       const result = data as { created: number; duplicates: number; invalid: number };
       return `Imported: ${result.created} created, ${result.duplicates} already in the bank, ${result.invalid} skipped.`;
     },
-    onCommitted: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS }),
+    onCommitted: () =>
+      queryClient.invalidateQueries({
+        queryKey: into ? QUERY_KEYS.AUTHORING : QUERY_KEYS.QUESTIONS,
+      }),
   });
 
   const plan = intake.plan;
@@ -56,6 +69,13 @@ export function ImportQuestionsPage() {
   return (
     <ImportView
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import questions" />}
+      options={
+        into ? (
+          <Alert variant="info">
+            These questions land in the section you were assigned, not loose in the bank.
+          </Alert>
+        ) : null
+      }
       onDownloadTemplate={() => template.mutate()}
       downloadingTemplate={template.isPending}
       dropzone={{
@@ -78,8 +98,11 @@ export function ImportQuestionsPage() {
           <>
             Imported: {intake.result.created} created, {intake.result.duplicates} already in the
             bank, {intake.result.invalid} skipped.{' '}
-            <Link to={ROUTES.QUESTIONS} className={linkVariants({ variant: 'inline' })}>
-              View questions
+            <Link
+              to={into ? ROUTES.AUTHORING_FOR_ASSIGNMENT(into) : ROUTES.QUESTIONS}
+              className={linkVariants({ variant: 'inline' })}
+            >
+              {into ? 'Back to the section' : 'View questions'}
             </Link>
           </>
         ) : null

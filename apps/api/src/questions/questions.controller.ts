@@ -71,7 +71,11 @@ export class QuestionsController {
   /** Before `:id`, or "images" is read as a question id. */
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)
   @RequiresAnyFeature(
-    [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHORING],
+    [
+      FEATURE_KEYS.QUESTION_MANAGEMENT,
+      FEATURE_KEYS.QUESTION_AUTHORING,
+      FEATURE_KEYS.QUESTION_PROOFREAD,
+    ],
     PERMISSION_LEVELS.WRITE,
   )
   @Post('images')

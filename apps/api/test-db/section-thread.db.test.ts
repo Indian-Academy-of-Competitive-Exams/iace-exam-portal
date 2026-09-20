@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ADMIN_ROLES, ASSIGNMENT_ROLES, AppException, ErrorCodes } from '@iace/contracts';
 import { SectionThreadService } from '../src/assignments/section-thread.service';
+import { FakeStorage } from '../test/support/fakes';
 import {
   makeCatalog,
   makeQuestionBank,
@@ -58,15 +59,29 @@ async function aSection() {
     ],
   });
 
-  return { thread: new SectionThreadService(prisma), testId: test.id, sectionId: section.id };
+  return {
+    thread: new SectionThreadService(prisma, new FakeStorage() as never),
+    testId: test.id,
+    sectionId: section.id,
+  };
 }
 
 describe('SectionThreadService', () => {
   it('takes a comment from either assignee and reads the thread back in the order it was said', async () => {
     const { thread, testId, sectionId } = await aSection();
 
-    await thread.comment(testId, sectionId, { body: 'Question 7 reads oddly.' }, READER);
-    await thread.comment(testId, sectionId, { body: 'Retyped it, have a look.' }, TYPIST);
+    await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Question 7 reads oddly.', images: [] },
+      READER,
+    );
+    await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Retyped it, have a look.', images: [] },
+      TYPIST,
+    );
 
     const rows = await thread.forSection(testId, sectionId);
 
@@ -80,11 +95,59 @@ describe('SectionThreadService', () => {
   });
 
   /** The whole write rule: holding a feature key is not the same as working on this section. */
+  /** The failure this prevents: an edit that quietly rewrites what somebody was answering. */
+  it('keeps the earlier wording when its author rewords a comment', async () => {
+    const { thread, testId, sectionId } = await aSection();
+    const said = await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Q7 is wrong', images: [] },
+      READER,
+    );
+
+    const reworded = await thread.editComment(
+      testId,
+      sectionId,
+      said.id,
+      { body: 'Q7 option C is wrong', images: [] },
+      READER,
+    );
+
+    assert.equal(reworded.body, 'Q7 option C is wrong');
+    assert.deepEqual(
+      reworded.revisions.map((revision) => revision.body),
+      ['Q7 is wrong'],
+    );
+    assert.notEqual(reworded.editedAt, null);
+  });
+
+  it('refuses to reword somebody else’s comment, super admin or not', async () => {
+    const { thread, testId, sectionId } = await aSection();
+    const said = await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Q7 is wrong', images: [] },
+      READER,
+    );
+
+    await assert.rejects(
+      () =>
+        thread.editComment(
+          testId,
+          sectionId,
+          said.id,
+          { body: 'No it is not', images: [] },
+          TYPIST,
+        ),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+  });
+
   it('refuses an admin who holds neither role on the section', async () => {
     const { thread, testId, sectionId } = await aSection();
 
     await assert.rejects(
-      () => thread.comment(testId, sectionId, { body: 'Passing through.' }, STRANGER),
+      () => thread.comment(testId, sectionId, { body: 'Passing through.', images: [] }, STRANGER),
       refusedWith(ErrorCodes.FORBIDDEN),
     );
     assert.deepEqual(await thread.forSection(testId, sectionId), []);
@@ -93,7 +156,13 @@ describe('SectionThreadService', () => {
   it('takes a comment from a super admin who holds no assignment at all', async () => {
     const { thread, testId, sectionId } = await aSection();
 
-    const said = await thread.comment(testId, sectionId, { body: 'Ship it.' }, BOSS, true);
+    const said = await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Ship it.', images: [] },
+      BOSS,
+      true,
+    );
 
     assert.equal(said.authorName, 'The Boss');
     assert.deepEqual(
@@ -107,7 +176,7 @@ describe('SectionThreadService', () => {
     const { thread, testId } = await aSection();
 
     await assert.rejects(
-      () => thread.comment(testId, uid(), { body: 'Into the void.' }, BOSS, true),
+      () => thread.comment(testId, uid(), { body: 'Into the void.', images: [] }, BOSS, true),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });

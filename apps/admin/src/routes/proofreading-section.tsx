@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
   ASSIGNMENT_ROLES,
@@ -11,19 +10,14 @@ import {
   LANGUAGE_ORDER,
   PERMISSION_LEVELS,
   instituteDayLabel,
-  type QuestionDetail,
-  type QuestionDraftInput,
   type QuestionLanguage,
-  type QuestionOnOtherTest,
 } from '@iace/contracts';
-import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
   EmptyState,
   EMPTY_STATE_KINDS,
-  FormDialog,
   PageFrame,
   PageHeader,
   SegmentedControl,
@@ -31,18 +25,11 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ProofreadQuestionBlock } from '../components/proofread-question';
-import { SectionThread } from '../components/section-thread';
+import { SectionThreadButton } from '../components/section-thread';
 import { SuperAdminOnly } from '../components/super-admin-only';
-import { QuestionFields } from '../components/question-fields';
-import {
-  SERVER_FIELDS,
-  toDraft,
-  valuesOf,
-  type QuestionFormValues,
-} from '../components/question-draft';
 import { FinalizeAssignmentDialog } from './assignment-queue';
 
 /** One section of one test, read top to bottom, with the fix in the reader's own hands. */
@@ -85,7 +72,6 @@ export function ProofreadingSectionPage() {
 function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
   const { can, identity } = useAuth();
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<QuestionDetail | null>(null);
   const [finalizing, setFinalizing] = useState(false);
 
   const byAssignment = sectionKey.assignmentId !== '';
@@ -144,11 +130,16 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
       title={sectionName}
       meta={metaOf(testTitle, questions.data?.length)}
       action={
-        canEdit && byAssignment ? (
-          <Button size="sm" onClick={() => setFinalizing(true)}>
-            Mark read
-          </Button>
-        ) : null
+        <>
+          {scoped ? (
+            <SectionThreadButton testId={testId} sectionId={sectionId} canWrite={canWrite} />
+          ) : null}
+          {canEdit && byAssignment ? (
+            <Button size="sm" onClick={() => setFinalizing(true)}>
+              Mark read
+            </Button>
+          ) : null}
+        </>
       }
     />
   );
@@ -167,12 +158,6 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
 
   return (
     <PageFrame header={header}>
-      {scoped ? (
-        <div data-print-hide className="mb-8">
-          <SectionThread testId={testId} sectionId={sectionId} canWrite={canWrite} />
-        </div>
-      ) : null}
-
       <section data-print-document className="flex flex-col gap-8">
         {rows.length > 0 ? (
           <div data-print-hide className="flex justify-end">
@@ -225,23 +210,16 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
             canWrite={canEdit}
             languages={shown.languages}
             action={
-              <Button size="sm" variant="outline" onClick={() => setEditing(question)}>
-                <Pencil aria-hidden />
-                Edit
+              <Button asChild size="sm" variant="outline">
+                <Link to={editHref(sectionKey, testId, sectionId, question.id)}>
+                  <Pencil aria-hidden />
+                  Edit
+                </Link>
               </Button>
             }
           />
         ))}
       </section>
-
-      {editing ? (
-        <EditQuestionDialog
-          sectionKey={{ ...sectionKey, testId, sectionId }}
-          question={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING })}
-        />
-      ) : null}
 
       <FinalizeAssignmentDialog
         role={ASSIGNMENT_ROLES.PROOFREADER}
@@ -276,106 +254,14 @@ function metaOf(testTitle: string | null, count: number | undefined) {
   return count === undefined ? title : `${title} · ${plural(count, 'question')}`;
 }
 
-/** One pair of calls, whichever key the section was opened on — the authority is the route's. */
-function readerFor(sectionKey: SectionKey) {
-  const { assignmentId, testId, sectionId } = sectionKey;
-  if (assignmentId !== '') {
-    return {
-      otherTests: (questionId: string) =>
-        api.admin.proofreading.otherTests(assignmentId, questionId),
-      edit: (questionId: string, draft: QuestionDraftInput) =>
-        api.admin.proofreading.editQuestion(assignmentId, questionId, draft),
-    };
-  }
-  return {
-    otherTests: (questionId: string) =>
-      api.admin.proofreading.sectionOtherTests(testId, sectionId, questionId),
-    edit: (questionId: string, draft: QuestionDraftInput) =>
-      api.admin.proofreading.editSectionQuestion(testId, sectionId, questionId, draft),
-  };
-}
-
-function EditQuestionDialog({
-  sectionKey,
-  question,
-  onClose,
-  onSaved,
-}: Readonly<{
-  sectionKey: SectionKey;
-  question: QuestionDetail;
-  onClose: () => void;
-  onSaved: () => void;
-}>) {
-  const form = useForm<QuestionFormValues>({ defaultValues: valuesOf(question) });
-  const reader = useMemo(() => readerFor(sectionKey), [sectionKey]);
-
-  const elsewhere = useQuery({
-    queryKey: [...QUERY_KEYS.PROOFREADING, 'other-tests', sectionKey.testId, question.id],
-    queryFn: () => reader.otherTests(question.id),
-  });
-
-  const save = useMutation({
-    meta: { success: 'Question saved.', fields: [...SERVER_FIELDS] },
-    mutationFn: (values: QuestionFormValues) => reader.edit(question.id, toDraft(values, question)),
-    onSuccess: () => {
-      onSaved();
-      onClose();
-    },
-    onError: (error) => applyFieldErrors(error, form.setError, [...SERVER_FIELDS]),
-  });
-
-  return (
-    <FormDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
-      form={form}
-      onSubmit={(values) => save.mutate(values)}
-      title={`Edit ${question.questionCode ?? 'this question'}`}
-      submitLabel="Save question"
-      loading={save.isPending}
-      size="lg"
-    >
-      <CrossTestWarning loading={elsewhere.isLoading} tests={elsewhere.data ?? []} />
-
-      <QuestionFields form={form} saved={question} />
-    </FormDialog>
-  );
-}
-
-const TEST_NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });
-
-/** "Untitled test" rather than a blank: an unnamed test is still a test somebody has to decide about. */
-const nameOf = (test: QuestionOnOtherTest): string => {
-  const title = test.testTitle ?? 'Untitled test';
-  return test.underReview ? `${title} (still under review)` : title;
-};
-
-/** Silent when nothing else holds the question, which is what makes it worth reading. */
-function CrossTestWarning({
-  loading,
-  tests,
-}: Readonly<{ loading: boolean; tests: readonly QuestionOnOtherTest[] }>) {
-  const [open, sharedOnly] = useMemo(
-    () => [tests.filter((test) => test.isOpen), tests.filter((test) => !test.isOpen)],
-    [tests],
-  );
-
-  if (loading) return <SkeletonParagraph lines={2} />;
-  if (tests.length === 0) return null;
-
-  return (
-    <>
-      {open.length > 0 ? (
-        <Alert variant="warning">
-          {`${TEST_NAMES.format(open.map(nameOf))} ${open.length === 1 ? 'has' : 'have'} already opened. A fix here appends a new version, and ${open.length === 1 ? 'that test keeps' : 'those tests keep'} the version its students were shown. Drop the question from it if that is not what you want.`}
-        </Alert>
-      ) : null}
-
-      {sharedOnly.length > 0 ? (
-        <Alert variant="info">
-          {`This question is also on ${TEST_NAMES.format(sharedOnly.map(nameOf))}, ${sharedOnly.length === 1 ? 'which has not' : 'none of which have'} opened. A fix here changes it there too.`}
-        </Alert>
-      ) : null}
-    </>
-  );
+/** Whichever key the section was opened on is the key its questions are edited under. */
+function editHref(
+  sectionKey: SectionKey,
+  testId: string,
+  sectionId: string,
+  questionId: string,
+): string {
+  return sectionKey.assignmentId !== ''
+    ? ROUTES.PROOFREADING_QUESTION(sectionKey.assignmentId, questionId)
+    : ROUTES.PROOFREADING_SECTION_QUESTION(testId, sectionId, questionId);
 }

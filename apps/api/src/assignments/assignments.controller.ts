@@ -19,6 +19,7 @@ import {
   assignmentTestsQuerySchema,
   createAssignmentSchema,
   createSectionCommentSchema,
+  editSectionCommentSchema,
   mineAssignmentsQuerySchema,
   sectionProgressQuerySchema,
   type Assignment,
@@ -31,6 +32,7 @@ import {
   type AssignmentWithTest,
   type CreateAssignmentBody,
   type CreateSectionCommentBody,
+  type EditSectionCommentBody,
   type MineAssignmentsQuery,
   type Paginated,
   type SectionComment,
@@ -169,6 +171,19 @@ export class AssignmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SectionComment> {
     return this.thread.comment(testId, sectionId, body, user.id, user.isSuperAdmin);
+  }
+
+  /** Its own author and nobody else, which the service decides — the guard only says they work here. */
+  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.WRITE)
+  @Patch('tests/:testId/sections/:sectionId/comments/:commentId')
+  editComment(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Param('commentId') commentId: string,
+    @Body(new ZodBody(editSectionCommentSchema)) body: EditSectionCommentBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SectionComment> {
+    return this.thread.editComment(testId, sectionId, commentId, body, user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

@@ -90,11 +90,26 @@ export type AuthoringDuplicateQuery = z.infer<typeof authoringDuplicateQuerySche
 export const authoringTagsSchema = z.object({ tags: z.array(z.string()) });
 export type AuthoringTags = z.infer<typeof authoringTagsSchema>;
 
+/** What a hand-over moved, and where the section stands after it. */
+export const authoringReleaseSchema = z.object({
+  handedOver: z.number().int(),
+  released: z.number().int(),
+});
+export type AuthoringRelease = z.infer<typeof authoringReleaseSchema>;
+
 export const ADMIN_AUTHORING_ROUTES = {
   stats: '/admin/authoring/stats',
   history: '/admin/authoring/questions',
   create: '/admin/authoring/questions',
   get: (id: string) => `/admin/authoring/questions/${id}`,
   update: (id: string) => `/admin/authoring/questions/${id}`,
+  remove: (id: string) => `/admin/authoring/questions/${id}`,
   duplicate: '/admin/authoring/duplicate',
+  /** Hands this section's work so far to its proof-reader. */
+  release: (assignmentId: string) => `/admin/authoring/assignments/${assignmentId}/release`,
+  /** A sheet of questions straight into the section, rather than loose in the bank. */
+  importPreview: (assignmentId: string) =>
+    `/admin/authoring/assignments/${assignmentId}/import/preview`,
+  importCommit: (assignmentId: string) =>
+    `/admin/authoring/assignments/${assignmentId}/import/commit`,
 } as const;

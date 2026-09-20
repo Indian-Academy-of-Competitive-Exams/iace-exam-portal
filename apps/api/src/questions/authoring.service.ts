@@ -9,6 +9,7 @@ import {
   QUESTION_SORTS,
   todayISO,
   type AuthoringHistoryQuery,
+  type AuthoringRelease,
   type AuthoringSaveResult,
   type AuthoringStats,
   type Paginated,
@@ -20,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { takeSectionEditLock } from '../common/edit-lock';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+import { requireOwnAssignment, type SectionRef } from './assignment-guard';
 import { computeStemHash } from './question-core';
 import { writtenBetween } from './question-query';
 import { QuestionsService } from './questions.service';
@@ -56,6 +58,36 @@ export class AuthoringService {
   async detail(id: string, adminId: string) {
     await this.assertTheirs(id, adminId);
     return this.questions.detail(id);
+  }
+
+  /** Hands the section's work so far to its reader. Released stays released; editing goes on. */
+  async release(
+    assignmentId: string,
+    adminId: string,
+    isSuperAdmin = false,
+  ): Promise<AuthoringRelease> {
+    const section = await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
+
+    const handed = await this.prisma.question.updateMany({
+      where: { assignment: section, releasedAt: null },
+      data: { releasedAt: new Date() },
+    });
+    const released = await this.prisma.question.count({
+      where: { assignment: section, releasedAt: { not: null } },
+    });
+    return { handedOver: handed.count, released };
+  }
+
+  /** A typist's own mistake, taken back the moment they see it — the bank never hears about it. */
+  async remove(id: string, adminId: string, isSuperAdmin = false): Promise<void> {
+    const row = await this.prisma.question.findFirst({
+      where: { id, ...(isSuperAdmin ? {} : { createdById: adminId }) },
+      select: { assignment: { select: { testId: true, baseConfigSectionId: true } } },
+    });
+    if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+
+    await this.claimSection(row.assignment, adminId, isSuperAdmin);
+    await this.questions.remove(id);
   }
 
   history(query: AuthoringHistoryQuery, adminId: string): Promise<Paginated<QuestionSummary>> {
@@ -148,27 +180,13 @@ export class AuthoringService {
     return row.assignment;
   }
 
-  /** Not theirs reads as not there — unless a super admin, who takes up a section nobody holds. */
-  private async assertOwnAssignment(
+  private assertOwnAssignment(
     id: string,
     adminId: string,
     isSuperAdmin: boolean,
   ): Promise<SectionRef> {
-    const row = await this.prisma.questionAssignment.findUnique({
-      where: { id },
-      select: { assigneeId: true, testId: true, baseConfigSectionId: true },
-    });
-    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    }
-    return row;
+    return requireOwnAssignment(this.prisma, id, adminId, isSuperAdmin);
   }
-}
-
-/** The pair a section lock keys on — a question outside an assignment has none. */
-interface SectionRef {
-  testId: string;
-  baseConfigSectionId: string;
 }
 
 const SEVEN_DAYS = 7;

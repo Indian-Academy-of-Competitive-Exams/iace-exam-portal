@@ -77,6 +77,14 @@ export const ROUTES = {
   PROOFREADING_OF_SECTION: (testId: string, sectionId: string) =>
     `/proofreading/sections/${testId}/${sectionId}`,
   PROOFREADING_OF_SECTION_PATTERN: '/proofreading/sections/:testId/:sectionId',
+  /** One question of a section, edited on a page rather than in a dialog a question outgrows. */
+  PROOFREADING_QUESTION: (assignmentId: string, questionId: string) =>
+    `/proofreading/assignments/${assignmentId}/questions/${questionId}`,
+  PROOFREADING_QUESTION_PATTERN: '/proofreading/assignments/:assignmentId/questions/:questionId',
+  PROOFREADING_SECTION_QUESTION: (testId: string, sectionId: string, questionId: string) =>
+    `/proofreading/sections/${testId}/${sectionId}/questions/${questionId}`,
+  PROOFREADING_SECTION_QUESTION_PATTERN:
+    '/proofreading/sections/:testId/:sectionId/questions/:questionId',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
@@ -90,6 +98,9 @@ export const ROUTES = {
   AUTHORING_ASSIGNMENTS: '/authoring/assignments',
   AUTHORING_FOR_ASSIGNMENT: (assignmentId: string) => `/authoring/assignments/${assignmentId}`,
   AUTHORING_FOR_ASSIGNMENT_PATTERN: '/authoring/assignments/:assignmentId',
+  /** A sheet of questions straight into the section it was written for. */
+  AUTHORING_IMPORT: (assignmentId: string) => `/authoring/assignments/${assignmentId}/import`,
+  AUTHORING_IMPORT_PATTERN: '/authoring/assignments/:assignmentId/import',
   /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
   BASE_CONFIGS: '/tests/configs',
   BASE_CONFIG_NEW: '/tests/configs/new',

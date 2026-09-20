@@ -458,6 +458,8 @@ model Question {
   // Times used on a paper; incremented atomically at finalize.
   fixedUseCount    Int             @default(0)
   assignmentId     String?         @db.Uuid
+  // Set when its typist hands the section's work so far to the proof-reader. Never cleared.
+  releasedAt       DateTime?       @db.Timestamptz(3)
   createdById      String?         @db.Uuid
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
@@ -609,14 +611,20 @@ model QuestionAssignment {
 }
 
 // The discussion on one section of one test, at the pair an assignment keys on.
-// Append-only: nothing edits or deletes a comment, so the thread reads as a record.
+// An author may edit their own message; every earlier body stays in `revisions`, so the
+// thread still reads as a record. No second table: the trail belongs to the line it is of.
 model SectionComment {
-  id                  String   @id @default(uuid(7)) @db.Uuid
-  testId              String   @db.Uuid
-  baseConfigSectionId String   @db.Uuid
-  authorId            String   @db.Uuid
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  testId              String    @db.Uuid
+  baseConfigSectionId String    @db.Uuid
+  authorId            String    @db.Uuid
   body                String
-  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  // Storage keys, signed on read — the same objects and the same bucket as a question's images.
+  images              String[]  @default([])
+  // `{ body, at }` per earlier wording, oldest first. The current one is never in here.
+  revisions           Json[]    @default([])
+  editedAt            DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
 
   test   Test  @relation(fields: [testId], references: [id], onDelete: Cascade)
   author Admin @relation(fields: [authorId], references: [id], onDelete: Restrict)
