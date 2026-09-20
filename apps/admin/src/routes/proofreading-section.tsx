@@ -69,11 +69,9 @@ export function ProofreadingSectionPage() {
   );
 }
 
-function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
-  const { can, identity } = useAuth();
-  const queryClient = useQueryClient();
-  const [finalizing, setFinalizing] = useState(false);
-
+/** Everything a section is, from either key: who holds it, what it holds, and who is in it. */
+function useSectionUnderReview(sectionKey: SectionKey) {
+  const { identity } = useAuth();
   const byAssignment = sectionKey.assignmentId !== '';
 
   const assignments = useQuery({
@@ -109,13 +107,61 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
     enabled: scoped,
   });
   const editingBy = lock.data?.editingBy ?? null;
-  const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
 
-  const sectionName =
-    assignment?.sectionName ??
-    test.data?.baseConfig.sections.find((one) => one.id === sectionId)?.name ??
-    'Section';
-  const testTitle = assignment?.testTitle ?? test.data?.title ?? null;
+  return {
+    byAssignment,
+    assignment,
+    testId,
+    sectionId,
+    scoped,
+    questions,
+    elsewhere: editingBy && editingBy.adminId !== identity?.id ? editingBy : null,
+    refused: byAssignment && assignments.data !== undefined && assignment === null,
+    loading: assignments.isLoading || questions.isLoading,
+    sectionName:
+      assignment?.sectionName ??
+      test.data?.baseConfig.sections.find((one) => one.id === sectionId)?.name ??
+      'Section',
+    testTitle: assignment?.testTitle ?? test.data?.title ?? null,
+  };
+}
+
+type SectionUnderReview = ReturnType<typeof useSectionUnderReview>;
+
+/** What is true of the section rather than of a question in it — each one silent until it is not. */
+function ReadingNotices({ section }: Readonly<{ section: SectionUnderReview }>) {
+  const { elsewhere, assignment, byAssignment, questions } = section;
+
+  return (
+    <>
+      {elsewhere ? (
+        <Alert variant="warning">
+          {`${elsewhere.fullName ?? 'Another admin'} is editing this section. Their changes have to land first.`}
+        </Alert>
+      ) : null}
+
+      {assignment?.finalizedAt ? (
+        <Alert variant="info">
+          {`You marked this section read on ${instituteDayLabel(assignment.finalizedAt)}. Its questions are no longer yours to change.`}
+        </Alert>
+      ) : null}
+
+      {!byAssignment && questions.data ? (
+        <Alert variant="info">
+          Nobody has been given this section to proof-read. Reading it here assigns it to nobody.
+        </Alert>
+      ) : null}
+    </>
+  );
+}
+
+function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
+  const { can } = useAuth();
+  const queryClient = useQueryClient();
+  const [finalizing, setFinalizing] = useState(false);
+
+  const section = useSectionUnderReview(sectionKey);
+  const { byAssignment, assignment, testId, sectionId, scoped, questions } = section;
 
   const rows = questions.data ?? [];
   const canWrite = can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE);
@@ -126,9 +172,9 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
 
   const header = (
     <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: sectionName }]} />}
-      title={sectionName}
-      meta={metaOf(testTitle, questions.data?.length)}
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: section.sectionName }]} />}
+      title={section.sectionName}
+      meta={metaOf(section.testTitle, questions.data?.length)}
       action={
         <>
           {scoped ? (
@@ -144,7 +190,7 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
     />
   );
 
-  if (byAssignment && assignments.data !== undefined && assignment === null) {
+  if (section.refused) {
     return (
       <PageFrame header={header}>
         <EmptyState
@@ -170,25 +216,9 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
           </div>
         ) : null}
 
-        {elsewhere ? (
-          <Alert variant="warning">
-            {`${elsewhere.fullName ?? 'Another admin'} is editing this section. Their changes have to land first.`}
-          </Alert>
-        ) : null}
+        <ReadingNotices section={section} />
 
-        {assignment?.finalizedAt ? (
-          <Alert variant="info">
-            {`You marked this section read on ${instituteDayLabel(assignment.finalizedAt)}. Its questions are no longer yours to change.`}
-          </Alert>
-        ) : null}
-
-        {!byAssignment && questions.data ? (
-          <Alert variant="info">
-            Nobody has been given this section to proof-read. Reading it here assigns it to nobody.
-          </Alert>
-        ) : null}
-
-        {assignments.isLoading || questions.isLoading ? <SkeletonParagraph lines={12} /> : null}
+        {section.loading ? <SkeletonParagraph lines={12} /> : null}
 
         {questions.isError ? (
           <EmptyState
