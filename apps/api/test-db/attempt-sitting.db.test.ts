@@ -77,7 +77,8 @@ async function hall(questionCount = 2) {
   const access = new AccessResolverService(prisma, redis.asService());
   const state = new AttemptStateService(prisma, redis.asService());
   const queue = new FakeQueue();
-  const sheets = new AttemptSheetService(prisma, new PaperSheetService(prisma));
+  const papers = new PaperSheetService(prisma);
+  const sheets = new AttemptSheetService(prisma, papers);
   return {
     paper,
     student,
@@ -86,7 +87,7 @@ async function hall(questionCount = 2) {
     queue,
     access,
     attempts: new AttemptsService(prisma, access, state, sheets),
-    sheet: new AttemptPaperService(prisma, access, noStorage()),
+    sheet: new AttemptPaperService(prisma, access, noStorage(), papers),
     flusher: new AttemptFlushProcessor(state, sheets, fakeQueueFailures()),
     submit: new SubmitService(
       prisma,

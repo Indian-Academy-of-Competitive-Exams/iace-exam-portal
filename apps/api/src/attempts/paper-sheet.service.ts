@@ -18,6 +18,17 @@ export const SHEET_ROW_SELECT = {
 
 export type SheetPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof SHEET_ROW_SELECT }>;
 
+/** The candidate's view: both guards freeze every column here once one student has sat the paper. */
+const SERVED_ROW_SELECT = {
+  questionId: true,
+  baseConfigSectionId: true,
+  marks: true,
+  negativeMarks: true,
+  questionVersion: { select: { content: true, options: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+export type ServedPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof SERVED_ROW_SELECT }>;
+
 const TERMS_SELECT = {
   ...SHEET_ROW_SELECT,
   marks: true,
@@ -65,6 +76,7 @@ export function remember<V>(held: Map<string, V>, key: string, value: V): void {
 export class PaperSheetService {
   private readonly rows = new Map<string, SheetPaperRow[]>();
   private readonly terms = new Map<string, PaperTerm[]>();
+  private readonly served = new Map<string, ServedPaperRow[]>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -78,6 +90,19 @@ export class PaperSheetService {
       select: SHEET_ROW_SELECT,
     });
     remember(this.rows, testId, read);
+    return read;
+  }
+
+  /** The same paper for every candidate, so it is read once. `type` is NOT frozen — `liveTermsOf` carries it. */
+  async servedOf(testId: string): Promise<ServedPaperRow[]> {
+    const held = this.served.get(testId);
+    if (held) return held;
+    const read = await this.prisma.paperQuestion.findMany({
+      where: { testId },
+      orderBy: { order: 'asc' },
+      select: SERVED_ROW_SELECT,
+    });
+    remember(this.served, testId, read);
     return read;
   }
 

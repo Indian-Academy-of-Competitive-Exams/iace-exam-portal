@@ -12,6 +12,8 @@ import {
   type LanguageCode,
   type LocalizedContent,
   type QuestionOption,
+  type QuestionType,
+  QUESTION_TYPE,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,6 +23,7 @@ import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
+import { PaperSheetService, type ServedPaperRow } from './paper-sheet.service';
 
 /** Named field by field, never `include`: the sitting's own scored columns never load at all. */
 const PAPER_SELECT = {
@@ -60,19 +63,7 @@ const PAPER_SELECT = {
   },
 } as const satisfies Prisma.AttemptSelect;
 
-/** `answerKey` never loads; `content` and `options` are whole JSON, so the mappers below strip them. */
-const EXAM_ROW_SELECT = {
-  questionId: true,
-  baseConfigSectionId: true,
-  marks: true,
-  negativeMarks: true,
-  question: { select: { type: true } },
-  questionVersion: { select: { content: true, options: true } },
-} as const satisfies Prisma.PaperQuestionSelect;
-
-type ServedQuestion = Prisma.PaperQuestionGetPayload<{ select: typeof EXAM_ROW_SELECT }> & {
-  order: number;
-};
+type ServedQuestion = ServedPaperRow & { type: QuestionType; order: number };
 
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
 @Injectable()
@@ -81,6 +72,7 @@ export class AttemptPaperService {
     private readonly prisma: PrismaService,
     private readonly access: AccessResolverService,
     private readonly storage: StorageService,
+    private readonly papers: PaperSheetService,
   ) {}
 
   /** Gated on REACH, not on the window: a test they cannot sit yet is one they may read about. */
@@ -162,11 +154,17 @@ export class AttemptPaperService {
     const languages = attempt.languages;
     const random = seededRandom(attempt.shuffleSeed);
 
-    const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId: attempt.testId },
-      orderBy: { order: 'asc' },
-      select: EXAM_ROW_SELECT,
-    });
+    const [frozen, live] = await Promise.all([
+      this.papers.servedOf(attempt.testId),
+      this.papers.liveTermsOf(attempt.testId),
+    ]);
+    if (frozen.length !== live.length) {
+      throw new Error(`Paper for test ${attempt.testId} changed under a sat sitting`);
+    }
+    const rows = frozen.map((row, slot) => ({
+      ...row,
+      type: live[slot]?.type ?? QUESTION_TYPE.SINGLE_MCQ,
+    }));
     const served = displayOrder(rows, attempt.shuffleSeed, config.shuffleQuestions);
 
     return {
@@ -219,7 +217,7 @@ function toExamQuestion(
     questionId: row.questionId,
     order: row.order,
     baseConfigSectionId: row.baseConfigSectionId,
-    type: row.question.type,
+    type: row.type,
     marks: Number(row.marks),
     negativeMarks: Number(row.negativeMarks),
     // The STEM only: `solution` explains the answer, so it stays behind.

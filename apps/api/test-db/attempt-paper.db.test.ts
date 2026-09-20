@@ -13,6 +13,7 @@ import {
   type TimerTemplate,
 } from '@iace/contracts';
 import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
@@ -40,7 +41,12 @@ const reachAll = () => ({ assertReachable: () => Promise.resolve() }) as never;
 const noStorage = () =>
   ({ createDownloadUrl: () => Promise.reject(new Error('unexpected sign')) }) as never;
 
-const service = new AttemptPaperService(prisma, reachAll(), noStorage());
+const service = new AttemptPaperService(
+  prisma,
+  reachAll(),
+  noStorage(),
+  new PaperSheetService(prisma),
+);
 const reports = () => new AttemptReportService(prisma, new LeaderboardService(prisma), noStorage());
 
 /** Content in three languages, and options as the column holds them — `isCorrect` and all. */
