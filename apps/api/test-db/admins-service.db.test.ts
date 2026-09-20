@@ -144,11 +144,7 @@ describe('AdminsService — admins', () => {
     await makeAdmin(prisma, { email: 'taken@iace.co.in' });
 
     await assert.rejects(
-      () =>
-        service.create(
-          { email: 'taken@iace.co.in', role: ADMIN_ROLES.ADMIN, isSuperAdmin: false },
-          ACTOR,
-        ),
+      () => service.create({ email: 'taken@iace.co.in', role: ADMIN_ROLES.ADMIN }, ACTOR),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, 'CONFLICT');
@@ -158,11 +154,60 @@ describe('AdminsService — admins', () => {
     );
   });
 
+  /** The role is the whole choice: it carries the bypass and the opening grants together. */
+  it('opens a typist with their role’s permissions, ready to work', async () => {
+    const { service } = build();
+
+    const created = await service.create(
+      { email: 'typist@iace.co.in', role: ADMIN_ROLES.TYPIST },
+      ACTOR,
+    );
+
+    assert.equal(created.isSuperAdmin, false);
+    assert.deepEqual(created.permissions, {
+      [FEATURE_KEYS.QUESTION_AUTHORING]: PERMISSION_LEVELS.WRITE,
+    });
+    const stored = await prisma.adminFeaturePermission.findMany({
+      where: { adminId: created.id },
+      select: { featureKey: true, level: true },
+    });
+    assert.deepEqual(stored, [
+      { featureKey: FEATURE_KEYS.QUESTION_AUTHORING, level: PERMISSION_LEVELS.WRITE },
+    ]);
+  });
+
+  /** The contradiction this removes: a super admin with the tick left off was not one. */
+  it('makes a super admin of the role alone, with nothing ticked to say so', async () => {
+    const { service } = build();
+
+    const created = await service.create(
+      { email: 'boss@iace.co.in', role: ADMIN_ROLES.SUPER_ADMIN },
+      ACTOR,
+    );
+
+    assert.equal(created.isSuperAdmin, true);
+    // Nothing to grant: a super admin is past every check the grants are read at.
+    assert.deepEqual(created.permissions, {});
+    assert.equal(await prisma.adminFeaturePermission.count({ where: { adminId: created.id } }), 0);
+  });
+
+  it('leaves the bypass off for every other role', async () => {
+    const { service } = build();
+
+    const created = await service.create(
+      { email: 'reader@iace.co.in', role: ADMIN_ROLES.PROOFREADER },
+      ACTOR,
+    );
+
+    assert.equal(created.isSuperAdmin, false);
+    assert.equal(created.permissions[FEATURE_KEYS.QUESTION_PROOFREAD], PERMISSION_LEVELS.WRITE);
+  });
+
   it('records who created an admin from the token, not the body', async () => {
     const { service } = build();
 
     const created = await service.create(
-      { email: 'new@iace.co.in', role: ADMIN_ROLES.SUPER_ADMIN, isSuperAdmin: true },
+      { email: 'new@iace.co.in', role: ADMIN_ROLES.SUPER_ADMIN },
       ACTOR,
     );
 
@@ -413,8 +458,9 @@ describe('AdminsService.update — the diff an admin edit contributes', () => {
     const admin = await makeAdmin(prisma, { isSuperAdmin: false });
 
     await auditContext.run(async () => {
-      await service.update(admin.id, { isSuperAdmin: true });
+      await service.update(admin.id, { role: ADMIN_ROLES.SUPER_ADMIN });
       assert.deepEqual(auditContext.current()?.changed, {
+        role: { from: ADMIN_ROLES.ADMIN, to: ADMIN_ROLES.SUPER_ADMIN },
         isSuperAdmin: { from: false, to: true },
       });
     });

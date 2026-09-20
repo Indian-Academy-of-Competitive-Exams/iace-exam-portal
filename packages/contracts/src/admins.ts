@@ -87,11 +87,12 @@ export const ADMIN_ROLE_VALUES = adminRoleSchema.options;
 export const adminPermissionsSchema = z.partialRecord(featureKeySchema, permissionLevelSchema);
 export type AdminPermissions = z.infer<typeof adminPermissionsSchema>;
 
-/** A suggestion the screen writes down as ordinary grants, never consulted at a gate. */
+/** Written down as ordinary grants when the admin is created, and never consulted at a gate. */
 export const ROLE_PERMISSION_PRESET: Readonly<Record<AdminRole, AdminPermissions>> = {
   [ADMIN_ROLES.TYPIST]: {
     [FEATURE_KEYS.QUESTION_AUTHORING]: PERMISSION_LEVELS.WRITE,
   },
+  // The audit log needs no key: every admin reaches it already, scoped to their own rows.
   [ADMIN_ROLES.PROOFREADER]: {
     [FEATURE_KEYS.QUESTION_PROOFREAD]: PERMISSION_LEVELS.WRITE,
     [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
@@ -163,9 +164,8 @@ const adminEmailSchema = z
 export const createAdminSchema = z.object({
   email: adminEmailSchema,
   fullName: z.string().trim().min(1).max(120).optional(),
+  /** The whole of it: the bypass and the opening permissions both follow from this one choice. */
   role: adminRoleSchema.default(ADMIN_ROLES.ADMIN),
-  /** A super admin may create another super admin. Nothing else may. */
-  isSuperAdmin: z.boolean().default(false),
 });
 export type CreateAdminInput = z.input<typeof createAdminSchema>;
 export type CreateAdminBody = z.infer<typeof createAdminSchema>;
@@ -177,7 +177,6 @@ export type SetAdminActiveBody = z.infer<typeof setAdminActiveSchema>;
 export const updateAdminSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
   role: adminRoleSchema.optional(),
-  isSuperAdmin: z.boolean().optional(),
 });
 export type UpdateAdminBody = z.infer<typeof updateAdminSchema>;
 

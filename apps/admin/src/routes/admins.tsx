@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
   ADMIN_ROLES,
@@ -15,7 +15,6 @@ import {
   Badge,
   BadgeList,
   Button,
-  Checkbox,
   ConfirmDialog,
   DropdownMenuItem,
   FormCombobox,
@@ -35,7 +34,7 @@ import { api } from '../lib/api';
 import { ADMIN_ROLE_LABELS, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
-const NEW_ADMIN_FIELDS = ['email', 'fullName', 'role', 'isSuperAdmin'] as const;
+const NEW_ADMIN_FIELDS = ['email', 'fullName', 'role'] as const;
 
 const ROLE_ITEMS = ADMIN_ROLE_VALUES.map((role) => ({
   value: role,
@@ -237,6 +236,10 @@ function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChange
   );
 }
 
+/** The one choice that carries the bypass, so the confirm step reads it rather than a tick. */
+const makesSuperAdmin = (pending: CreateAdminInput | null) =>
+  pending?.role === ADMIN_ROLES.SUPER_ADMIN;
+
 function NewAdminDialog({
   open,
   onOpenChange,
@@ -244,11 +247,8 @@ function NewAdminDialog({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateAdminInput>({
     resolver: zodResolver(createAdminSchema),
-    defaultValues: { email: '', fullName: '', role: ADMIN_ROLES.ADMIN, isSuperAdmin: false },
+    defaultValues: { email: '', fullName: '', role: ADMIN_ROLES.ADMIN },
   });
-
-  // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
-  const isSuperAdmin = useWatch({ control: form.control, name: 'isSuperAdmin' }) ?? false;
 
   /** Held between "submit" and "yes" — the form has already validated. */
   const [pending, setPending] = useState<CreateAdminInput | null>(null);
@@ -293,20 +293,8 @@ function NewAdminDialog({
           label="Role"
           clearable={false}
           items={ROLE_ITEMS}
-          /* ui-copy-ok: consequence */ hint="It grants nothing; access is granted on the Permissions screen"
+          /* ui-copy-ok: consequence */ hint="It grants that role's permissions, which the Permissions screen can change"
         />
-
-        <FormField form={form} name="isSuperAdmin" label="">
-          {(control) => (
-            <Checkbox
-              {...control}
-              checked={isSuperAdmin}
-              onChange={(event) => form.setValue('isSuperAdmin', event.target.checked)}
-              label="Super admin"
-              /* ui-copy-ok: consequence */ hint="Bypasses every feature check, and can manage admins."
-            />
-          )}
-        </FormField>
       </FormDialog>
 
       {/* Creating an admin is creating a way into this app, and a super admin
@@ -320,19 +308,19 @@ function NewAdminDialog({
         onOpenChange={(open) => {
           if (!open) setPending(null);
         }}
-        destructive={pending?.isSuperAdmin ?? false}
+        destructive={makesSuperAdmin(pending)}
         loading={create.isPending}
         title={
-          pending?.isSuperAdmin
+          makesSuperAdmin(pending)
             ? 'Create a SUPER admin?'
             : `Create an admin for ${pending?.email ?? ''}?`
         }
         description={
-          pending?.isSuperAdmin
-            ? `${pending.email} will bypass every feature check, can manage branches, and can create and deactivate other admins, including you. Grant it only to someone who already runs the institute.`
-            : 'They will be able to sign in with this email and a one-time code. They hold no permissions until you grant them some on the Permissions screen.'
+          makesSuperAdmin(pending)
+            ? `${pending?.email ?? ''} will bypass every feature check, can manage branches, and can create and deactivate other admins, including you. Grant it only to someone who already runs the institute.`
+            : 'They will be able to sign in with this email and a one-time code, holding the permissions their role opens with.'
         }
-        confirmLabel={pending?.isSuperAdmin ? 'Create super admin' : 'Create admin'}
+        confirmLabel={makesSuperAdmin(pending) ? 'Create super admin' : 'Create admin'}
         onConfirm={() => pending && create.mutate(pending)}
       />
     </>

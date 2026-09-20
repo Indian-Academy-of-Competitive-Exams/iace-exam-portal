@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import {
+  ADMIN_ROLES,
   AppException,
   ErrorCodes,
   FEATURES,
   FEATURE_KEY_VALUES,
   PERMISSION_LEVELS,
+  ROLE_PERMISSION_PRESET,
   fieldDiff,
   satisfiesLevel,
   type Admin as AdminDto,
@@ -128,18 +130,30 @@ export class AdminsService {
       });
     }
 
-    const row = await this.prisma.admin.create({
-      data: {
-        email: input.email,
-        fullName: input.fullName ?? null,
-        role: input.role,
-        isSuperAdmin: input.isSuperAdmin,
-        createdById,
-      },
+    const preset = ROLE_PERMISSION_PRESET[input.role];
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.admin.create({
+        data: {
+          email: input.email,
+          fullName: input.fullName ?? null,
+          role: input.role,
+          // Derived, never asked twice: the role IS whether they bypass the checks.
+          isSuperAdmin: input.role === ADMIN_ROLES.SUPER_ADMIN,
+          createdById,
+        },
+      });
+      const grants = Object.entries(preset) as [FeatureKey, PermissionLevel][];
+      if (grants.length > 0) {
+        await tx.adminFeaturePermission.createMany({
+          data: grants.map(([featureKey, level]) => ({ adminId: created.id, featureKey, level })),
+        });
+      }
+      return created;
     });
-    // A brand-new admin holds nothing until a grant is made, and a super admin
-    // never needs one.
-    return this.toAdminDto(row, {});
+
+    // The role's opening grants, which the Permissions screen is free to override afterwards.
+    return this.toAdminDto(row, preset);
   }
 
   async update(id: string, input: UpdateAdminBody): Promise<AdminDto> {
@@ -151,8 +165,9 @@ export class AdminsService {
       where: { id },
       data: {
         ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
-        ...(input.role === undefined ? {} : { role: input.role }),
-        ...(input.isSuperAdmin === undefined ? {} : { isSuperAdmin: input.isSuperAdmin }),
+        ...(input.role === undefined
+          ? {}
+          : { role: input.role, isSuperAdmin: input.role === ADMIN_ROLES.SUPER_ADMIN }),
       },
     });
 

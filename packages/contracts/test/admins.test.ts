@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  ADMIN_ROLES,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  ROLE_PERMISSION_PRESET,
   adminPermissionsSchema,
   createAdminSchema,
   featureKeySchema,
@@ -85,15 +87,22 @@ describe('admin input schemas', () => {
   it('lowercases and trims an email, so case cannot fork an account', () => {
     const parsed = createAdminSchema.parse({ email: '  Dev@IACE.co.in ' });
     assert.equal(parsed.email, 'dev@iace.co.in');
-    assert.equal(parsed.isSuperAdmin, false);
   });
 
-  it('defaults isSuperAdmin to false rather than inheriting anything', () => {
-    assert.equal(createAdminSchema.parse({ email: 'a@b.co' }).isSuperAdmin, false);
+  /** The role is the only thing asked: the bypass is read off it, never sent beside it. */
+  it('takes no super-admin flag of its own', () => {
+    const parsed = createAdminSchema.parse({ email: 'a@b.co', isSuperAdmin: true });
+    assert.equal('isSuperAdmin' in parsed, false);
+    assert.equal(parsed.role, ADMIN_ROLES.ADMIN);
+  });
+
+  it('opens every role with the permissions that role is for', () => {
     assert.equal(
-      createAdminSchema.parse({ email: 'a@b.co', isSuperAdmin: true }).isSuperAdmin,
-      true,
+      ROLE_PERMISSION_PRESET[ADMIN_ROLES.TYPIST][FEATURE_KEYS.QUESTION_AUTHORING],
+      PERMISSION_LEVELS.WRITE,
     );
+    // A super admin is past every check a grant is read at, so it opens with none.
+    assert.deepEqual(ROLE_PERMISSION_PRESET[ADMIN_ROLES.SUPER_ADMIN], {});
   });
 
   it('carries a partial grant map, and refuses a key or a level it does not define', () => {
