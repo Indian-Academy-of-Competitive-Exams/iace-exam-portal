@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImagePlus, MessageSquare, Pencil, Send, X } from 'lucide-react';
+import { ImagePlus, MessageSquare, Send, X } from 'lucide-react';
 import {
   COMMENT_MAX_IMAGES,
   INSTITUTE_TIME_ZONE,
@@ -30,7 +30,7 @@ import { ADMIN_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
 
 /** The discussion on one (test, section) — spec §9, read as a conversation rather than a log. */
 
-const PANEL = 'w-[--modal-w-md]';
+const PANEL = 'w-[--modal-w-lg]';
 
 const SAID_AT = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -52,6 +52,7 @@ interface Composing {
 
 const BLANK: Composing = { body: '', images: [], editingId: null };
 
+/** The button fetches nothing: ten sections on a page would be ten reads for a number. */
 export function SectionThreadButton({
   testId,
   sectionId,
@@ -59,48 +60,19 @@ export function SectionThreadButton({
 }: Readonly<{ testId: string; sectionId: string; canWrite: boolean }>) {
   const [open, setOpen] = useState(false);
 
-  const thread = useQuery({
-    queryKey: sectionThreadKey(testId, sectionId),
-    queryFn: () => api.admin.assignments.comments(testId, sectionId),
-  });
-  const count = thread.data?.length ?? 0;
-
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
         <MessageSquare aria-hidden />
-        {count > 0 ? `Comments (${count})` : 'Comments'}
+        Comments
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" aria-describedby={undefined} className={PANEL}>
-          <div className="mb-4 flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
-            <SheetTitle>Comments</SheetTitle>
-            <span className="min-w-0 flex-1 text-sm text-muted-foreground">
-              {thread.data ? plural(count, 'comment') : ''}
-            </span>
-            <SheetClose asChild>
-              <Button variant="ghost" size="iconSm" aria-label="Close comments">
-                <X aria-hidden />
-              </Button>
-            </SheetClose>
-          </div>
-
           <Thread testId={testId} sectionId={sectionId} canWrite={canWrite} />
         </SheetContent>
       </Sheet>
     </>
-  );
-}
-
-/** The same conversation inline, for the assign step's row panel, which has no sheet to open. */
-export function SectionThread(
-  props: Readonly<{ testId: string; sectionId: string; canWrite: boolean }>,
-) {
-  return (
-    <div className="flex h-96 flex-col">
-      <Thread {...props} />
-    </div>
   );
 }
 
@@ -140,33 +112,55 @@ function Thread({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
-        {thread.isLoading ? <SkeletonParagraph lines={6} /> : null}
+      <div className="mb-4 flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
+        <SheetTitle>Comments</SheetTitle>
+        <span className="min-w-0 flex-1 text-sm text-muted-foreground">
+          {thread.data ? plural(rows.length, 'comment') : ''}
+        </span>
+        <SheetClose asChild>
+          <Button variant="ghost" size="iconSm" aria-label="Close comments">
+            <X aria-hidden />
+          </Button>
+        </SheetClose>
+      </div>
 
-        {thread.isError ? (
-          <EmptyState
-            kind={EMPTY_STATE_KINDS.FAILURE}
-            size="sm"
-            level={3}
-            title="Could not load the comments"
-            onRetry={thread.refetch}
-          />
-        ) : null}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
+        {/* mt-auto, never justify-end: a justified flex scroller clips its overflow out of reach. */}
+        <div className="mt-auto flex flex-col gap-4">
+          {thread.isLoading ? <SkeletonParagraph lines={6} /> : null}
 
-        {thread.data && rows.length === 0 ? (
-          <EmptyState kind={EMPTY_STATE_KINDS.EMPTY} size="sm" level={3} title="Nothing said yet" />
-        ) : null}
+          {thread.isError ? (
+            <EmptyState
+              kind={EMPTY_STATE_KINDS.FAILURE}
+              size="sm"
+              level={3}
+              title="Could not load the comments"
+              onRetry={thread.refetch}
+            />
+          ) : null}
 
-        {rows.map((comment) => (
-          <Message
-            key={comment.id}
-            comment={comment}
-            mine={comment.authorId === identity?.id}
-            onReword={() => setComposing({ body: comment.body, images: [], editingId: comment.id })}
-          />
-        ))}
+          {thread.data && rows.length === 0 ? (
+            <EmptyState
+              kind={EMPTY_STATE_KINDS.EMPTY}
+              size="sm"
+              level={3}
+              title="Nothing said yet"
+            />
+          ) : null}
 
-        <div ref={foot} />
+          {rows.map((comment) => (
+            <Message
+              key={comment.id}
+              comment={comment}
+              mine={comment.authorId === identity?.id}
+              onReword={() =>
+                setComposing({ body: comment.body, images: [], editingId: comment.id })
+              }
+            />
+          ))}
+
+          <div ref={foot} />
+        </div>
       </div>
 
       {canWrite ? (
@@ -188,15 +182,29 @@ function Message({
   onReword,
 }: Readonly<{ comment: SectionComment; mine: boolean; onReword: () => void }>) {
   return (
-    <div className={cn('flex items-start gap-2', mine && 'flex-row-reverse')}>
+    <div className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>
       <Avatar name={comment.authorName} size="sm" />
 
       <div className={cn('flex min-w-0 max-w-[80%] flex-col gap-1', mine && 'items-end')}>
-        <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+        <div
+          className={cn(
+            'flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground',
+            mine && 'flex-row-reverse',
+          )}
+        >
           <span className="font-medium text-foreground">{comment.authorName}</span>
           <span>{ADMIN_ROLE_LABELS[comment.authorRole]}</span>
           <span>{SAID_AT.format(new Date(comment.createdAt))}</span>
           {comment.editedAt ? <EditedMark comment={comment} /> : null}
+          {mine ? (
+            <button
+              type="button"
+              onClick={onReword}
+              className="underline decoration-dotted hover:text-foreground"
+            >
+              Reword
+            </button>
+          ) : null}
         </div>
 
         <div
@@ -213,28 +221,21 @@ function Message({
             </a>
           ))}
         </div>
-
-        {mine ? (
-          <Button variant="ghost" size="sm" onClick={onReword}>
-            <Pencil aria-hidden />
-            Reword
-          </Button>
-        ) : null}
       </div>
     </div>
   );
 }
 
-/** The trail is why rewording is allowed at all, so it is on the message rather than behind a screen. */
+/** The trail is why rewording is allowed at all, so the last wording is one hover away. */
 function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
+  const previous = comment.revisions.at(-1)?.body;
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="cursor-help underline decoration-dotted">edited</span>
       </TooltipTrigger>
-      <TooltipContent>
-        {comment.revisions.map((revision) => revision.body).join(' — then — ') || 'Reworded'}
-      </TooltipContent>
+      <TooltipContent>{previous ? `Before: ${previous}` : 'Reworded'}</TooltipContent>
     </Tooltip>
   );
 }
@@ -295,7 +296,7 @@ function Composer({
           className="min-h-0 flex-1 resize-none"
         />
 
-        <label className="shrink-0">
+        <label className="relative shrink-0">
           <span className="sr-only">Add a picture</span>
           <input
             type="file"

@@ -41,7 +41,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
 import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
-import { SectionThread } from '../components/section-thread';
+import { SectionThreadButton } from '../components/section-thread';
 
 /** Sits beside the paper it staffs: who types and reads each section, before the paper is judged. */
 
@@ -140,21 +140,11 @@ export function AssignStep({
       ) : null}
 
       <DataTable
-        columns={columnsOf(detail.paperSource, setAssigning, setRemoving)}
+        columns={columnsOf(detail.id, detail.paperSource, mayComment, setAssigning, setRemoving)}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
         isLoading={assignments.isLoading}
         empty="No sections"
-        expand={{
-          label: (row) => `Comments on ${row.section.name}`,
-          render: (row) => (
-            <SectionThread
-              testId={detail.id}
-              sectionId={row.section.id}
-              canWrite={mayComment(row)}
-            />
-          ),
-        }}
       />
 
       {assigning ? (
@@ -180,7 +170,9 @@ export function AssignStep({
 }
 
 function columnsOf(
+  testId: string,
   source: PaperSource,
+  mayComment: (row: SectionRow) => boolean,
   onAssign: (target: AssignTarget) => void,
   onRemove: (assignment: Assignment) => void,
 ): DataTableColumn<SectionRow>[] {
@@ -218,6 +210,17 @@ function columnsOf(
           assignment={row.proofreader}
           questionCount={row.section.questionCount}
           onAssign={() => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.PROOFREADER })}
+        />
+      ),
+    },
+    {
+      key: 'comments',
+      header: 'Comments',
+      cell: (row) => (
+        <SectionThreadButton
+          testId={testId}
+          sectionId={row.section.id}
+          canWrite={mayComment(row)}
         />
       ),
     },
