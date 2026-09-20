@@ -203,13 +203,17 @@ export class AttemptStateService {
     await this.redis.client.srem(redisKeys.attemptsDirty, ...attemptIds);
   }
 
-  /** Only answers still as this pass wrote them: a save landing mid-flush keeps its mark. */
+  /** Clears only answers still as this pass wrote them, and says whether that settled the sitting. */
   async clearPending(
     attemptId: string,
     written: Readonly<Record<string, LiveAnswer>>,
-  ): Promise<void> {
-    if (Object.keys(written).length === 0) return;
-    await this.patch(attemptId, (held) => ({ ...held, pending: pendingAfter(held, written) }));
+  ): Promise<boolean> {
+    const next = await this.patch(attemptId, (held) => ({
+      ...held,
+      pending: pendingAfter(held, written),
+    }));
+    // A key taken by submit has nothing left to settle; anything still pending is a save that raced.
+    return next === null || (next.pending ?? []).length === 0;
   }
 
   /** Redis first, Postgres only if the key has gone — paying on a rare resume, not on every read. */

@@ -61,6 +61,8 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
 
   return {
     attemptId: attempt.id,
+    studentId,
+    questionId,
     startedAt,
     state,
     processor: new AttemptFlushProcessor(
@@ -118,6 +120,41 @@ describe('AttemptFlushProcessor', () => {
     const [onSheet] = await servedAnswers(prisma, attemptId);
     assert.equal(onSheet?.state, ANSWER_STATE.NOT_VISITED);
     assert.deepEqual(await state.dirtyIds(), []);
+  });
+
+  /** The race the pending list was built for: keep the answer marked, and the sitting with it. */
+  it('keeps the mark when a save lands inside the pass', async () => {
+    const { processor, state, attemptId, studentId, questionId } = await build();
+
+    // The save happens while the sheet is being written, which is the only window that matters.
+    const sheets = processor['sheets'] as { patch: (...args: never[]) => Promise<unknown> };
+    const wrote = sheets.patch.bind(sheets);
+    sheets.patch = async (...args: never[]) => {
+      const done = await wrote(...args);
+      await state.save(
+        studentId,
+        attemptId,
+        {
+          revision: 2,
+          answers: [
+            {
+              questionId,
+              state: ANSWER_STATE.ANSWERED,
+              selectedOptionId: 'o2',
+              typedAnswer: null,
+              timeSpentSec: 30,
+            },
+          ],
+        },
+        NOW,
+      );
+      return done;
+    };
+
+    await processor.process();
+
+    assert.deepEqual(await state.dirtyIds(), [attemptId]);
+    assert.deepEqual((await state.read(attemptId))?.pending, [questionId]);
   });
 
   it('drops the mark for a sitting whose state has expired', async () => {
