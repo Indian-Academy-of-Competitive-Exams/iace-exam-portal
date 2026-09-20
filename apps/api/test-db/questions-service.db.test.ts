@@ -1133,6 +1133,63 @@ describe('QuestionsService.page — the picker asks for what the draw would find
   });
 });
 
+describe('QuestionsService.page — work in progress belongs to the test it was written for', () => {
+  /** The failure this prevents: an unread question leaking onto somebody else's paper. */
+  it('offers a section’s own authoring to its test and to no other', async () => {
+    const { questions } = await build([{ id: 'typed' }, { id: 'banked' }]);
+    const ours = await assignedFor(idFor('typed'));
+    const other = await makeTest(prisma, await makeCatalog(prisma));
+
+    const mine = await questions.page(listQuery({ drawable: 'true', forTestId: ours }));
+    const theirs = await questions.page(listQuery({ drawable: 'true', forTestId: other.id }));
+
+    assert.deepEqual(
+      mine.items.map((row) => row.id).sort(),
+      [idFor('banked'), idFor('typed')].sort(),
+      'the test it was written for draws it like anything else',
+    );
+    assert.deepEqual(
+      theirs.items.map((row) => row.id),
+      [idFor('banked')],
+      'an unfinished section is nobody else’s to draw from',
+    );
+  });
+
+  it('returns it to the bank once every section of its test is finished', async () => {
+    const { questions } = await build([{ id: 'typed' }]);
+    const ours = await assignedFor(idFor('typed'));
+    const other = await makeTest(prisma, await makeCatalog(prisma));
+
+    await prisma.questionAssignment.updateMany({
+      where: { testId: ours },
+      data: { finalizedAt: new Date() },
+    });
+
+    const theirs = await questions.page(listQuery({ drawable: 'true', forTestId: other.id }));
+
+    assert.deepEqual(
+      theirs.items.map((row) => row.id),
+      [idFor('typed')],
+    );
+  });
+
+  /** Removing the assignment is the only way out of a test that is abandoned rather than finished. */
+  it('returns it to the bank when the assignment itself is removed', async () => {
+    const { questions } = await build([{ id: 'typed' }]);
+    const ours = await assignedFor(idFor('typed'));
+    const other = await makeTest(prisma, await makeCatalog(prisma));
+
+    await prisma.questionAssignment.deleteMany({ where: { testId: ours } });
+
+    const theirs = await questions.page(listQuery({ drawable: 'true', forTestId: other.id }));
+
+    assert.deepEqual(
+      theirs.items.map((row) => row.id),
+      [idFor('typed')],
+    );
+  });
+});
+
 /** One section of one test handed to a typist, with the question they wrote against it. */
 async function assignedFor(questionId: string): Promise<string> {
   const catalog = await makeCatalog(prisma);
@@ -1164,10 +1221,10 @@ describe('QuestionsService.page — a test’s own authoring, and the rest of th
     await assignedFor(idFor('theirs'));
 
     const written = await questions.page(
-      listQuery({ writtenForTestId: testId, writtenFor: WRITTEN_FOR.TEST }),
+      listQuery({ forTestId: testId, writtenFor: WRITTEN_FOR.TEST }),
     );
     const banked = await questions.page(
-      listQuery({ writtenForTestId: testId, writtenFor: WRITTEN_FOR.BANK }),
+      listQuery({ forTestId: testId, writtenFor: WRITTEN_FOR.BANK }),
     );
 
     assert.deepEqual(
@@ -1185,7 +1242,7 @@ describe('QuestionsService.page — a test’s own authoring, and the rest of th
     const { questions } = await build([{ id: 'ours' }, { id: 'banked' }]);
     const testId = await assignedFor(idFor('ours'));
 
-    const page = await questions.page(listQuery({ writtenForTestId: testId }));
+    const page = await questions.page(listQuery({ forTestId: testId }));
 
     assert.equal(page.total, 2);
   });

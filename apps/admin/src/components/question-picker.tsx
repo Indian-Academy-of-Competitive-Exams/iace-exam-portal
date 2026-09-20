@@ -232,7 +232,7 @@ export function QuestionChooser({
       subjectId: section.subjectId ? [section.subjectId] : undefined,
       topicId: spec.topicIds,
       writtenFor: (values.writtenFor as WrittenFor) || undefined,
-      writtenForTestId: values.writtenFor ? testId : undefined,
+      forTestId: testId,
     }),
     fetchPage: (params) => api.admin.questions.list({ ...params, pageSize: POOL_PAGE_SIZE }),
   });

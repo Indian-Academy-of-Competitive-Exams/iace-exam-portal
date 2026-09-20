@@ -8,7 +8,7 @@ import {
   type QuestionSort,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
-import { DRAWABLE_QUESTION } from './question-core';
+import { drawableFor } from './question-core';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 /** Spec §3: reachable is `min(Test.opensAt, min(TestProgramUnlock.opensAt)) <= now`, a program opening earlier than its test included. */
@@ -49,10 +49,10 @@ function narrowsTheBank(
   // Out of circulation is out of the bank: naming a status is how you ask to see them.
   if (!query.status) filters.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
   // The picker asks the same question the draw asks, so it cannot offer a row fillSection refuses.
-  if (query.drawable) filters.push(DRAWABLE_QUESTION);
+  if (query.drawable) filters.push(drawableFor(query.forTestId));
   // Resolved through the assignment relation, so no caller has to carry a list of ids in the URL.
-  if (query.writtenForTestId && query.writtenFor) {
-    const wroteIt = { assignment: { testId: query.writtenForTestId } };
+  if (query.forTestId && query.writtenFor) {
+    const wroteIt = { assignment: { testId: query.forTestId } };
     filters.push(query.writtenFor === WRITTEN_FOR.BANK ? { NOT: wroteIt } : wroteIt);
   }
   // The search ran as its own query, so an empty result must match nothing rather than be dropped.

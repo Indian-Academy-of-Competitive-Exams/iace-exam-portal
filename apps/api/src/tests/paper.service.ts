@@ -7,7 +7,6 @@ import {
   DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  QUESTION_STATUS,
   type BaseConfigDetail,
   quotaWithPicks,
   sectionQuota,
@@ -38,7 +37,7 @@ import {
 import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from './test-rules';
 import { beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
-import { DRAWABLE_QUESTION, stemPreviewOf } from '../questions';
+import { drawableFor, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
@@ -130,7 +129,7 @@ export class PaperService {
 
     const questions: Awaited<ReturnType<PaperService['requireDrawable']>>[] = [];
     for (const questionId of input.questionIds) {
-      const question = await this.requireDrawable(questionId, section.id);
+      const question = await this.requireDrawable(testId, questionId, section.id);
       await this.assertNotAlreadyOnThePaper(testId, question.id);
       questions.push(question);
     }
@@ -203,7 +202,7 @@ export class PaperService {
       select: HELD_SELECT,
     });
     const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id];
-    const added = await this.drawRemainder(section, spec, rows);
+    const added = await this.drawRemainder(testId, section, spec, rows);
     if (added.length === 0) return this.paperOf(testId, this.scopedOf(test, config));
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
@@ -225,6 +224,7 @@ export class PaperService {
 
   /** What the section still lacks. The engine hands the pins back, so only the new rows survive. */
   private async drawRemainder(
+    testId: string,
     section: BaseConfigDetail['sections'][number],
     spec: SectionDrawSpec | undefined,
     rows: readonly HeldRow[],
@@ -232,7 +232,7 @@ export class PaperService {
     const held = rows.filter((row) => row.baseConfigSectionId === section.id);
     // One question sits on a paper once, so every row already on it is out of this draw's reach.
     const onPaper = new Set(rows.map((row) => row.questionId));
-    const pool = (await this.poolFor(section, spec)).filter(
+    const pool = (await this.poolFor(testId, section, spec)).filter(
       (candidate) => !onPaper.has(candidate.id),
     );
 
@@ -296,7 +296,7 @@ export class PaperService {
       [row.baseConfigSectionId],
       editor.isSuperAdmin ?? false,
     );
-    const question = await this.requireDrawable(input.questionId, row.baseConfigSectionId);
+    const question = await this.requireDrawable(testId, input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
     await this.prisma.$transaction(async (tx) => {
@@ -394,24 +394,22 @@ export class PaperService {
   }
 
   /** The replacement has to be drawable for the same section, or the paper stops matching itself. */
-  private async requireDrawable(questionId: string, baseConfigSectionId: string) {
+  private async requireDrawable(testId: string, questionId: string, baseConfigSectionId: string) {
     const section = await this.prisma.baseConfigSection.findUnique({
       where: { id: baseConfigSectionId },
       select: { subjectId: true },
     });
     const question = await this.prisma.question.findUnique({
       where: { id: questionId },
-      select: {
-        id: true,
-        status: true,
-        subjectId: true,
-        currentVersionId: true,
-        difficulty: true,
-      },
+      select: { id: true, subjectId: true, currentVersionId: true, difficulty: true },
     });
-
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-    if (question.status === QUESTION_STATUS.ARCHIVED || !question.currentVersionId) {
+
+    // Asked of the database, not of the row: drawability now turns on other rows as well as this one.
+    const drawable = await this.prisma.question.count({
+      where: { id: questionId, ...drawableFor(testId) },
+    });
+    if (drawable === 0 || !question.currentVersionId) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
         fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
       });
@@ -452,12 +450,13 @@ export class PaperService {
 
   /** Anything not archived, unflagged and carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
+    testId: string,
     section: DrawSection,
     spec: SectionDrawSpec | undefined,
   ): Promise<DrawCandidate[]> {
     const rows = await this.prisma.question.findMany({
       where: {
-        ...DRAWABLE_QUESTION,
+        ...drawableFor(testId),
         // The narrowing SQL can do; tags and the split are the engine's.
         ...(section.subjectId === null ? {} : { subjectId: section.subjectId }),
         ...(narrows(spec?.topicIds) ? { topicId: { in: [...spec.topicIds] } } : {}),

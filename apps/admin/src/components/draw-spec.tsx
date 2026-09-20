@@ -24,11 +24,13 @@ const asValues = (mix: DifficultyMix): RatioValues => [mix.LOW, mix.MEDIUM, mix.
 const asMix = ([LOW, MEDIUM, HIGH]: RatioValues): DifficultyMix => ({ LOW, MEDIUM, HIGH });
 
 export function DrawSpecEditor({
+  testId,
   section,
   spec,
   onChange,
   disabled,
 }: Readonly<{
+  testId: string;
   section: BaseConfigSection;
   spec: SectionDrawSpec;
   onChange: (next: SectionDrawSpec) => void;
@@ -38,11 +40,12 @@ export function DrawSpecEditor({
 
   /** What the draw itself would find, counted by the database — not everything the bank holds. */
   const available = useQuery({
-    queryKey: [...QUERY_KEYS.QUESTIONS, 'available', section.subjectId, topicIds.join(',')],
+    queryKey: [...QUERY_KEYS.QUESTIONS, 'available', testId, section.subjectId, topicIds.join(',')],
     queryFn: () =>
       api.admin.questions.availability({
         subjectId: section.subjectId ? [section.subjectId] : undefined,
         topicId: topicIds.length > 0 ? topicIds : undefined,
+        forTestId: testId,
       }),
     enabled: section.subjectId !== null,
   });

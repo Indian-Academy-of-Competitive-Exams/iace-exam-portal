@@ -120,8 +120,13 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
   return stem.length > limit ? `${stem.slice(0, limit - 1)}…` : stem;
 }
 
-/** What a paper may draw, in one place: the preview count and the draw itself must not drift apart. */
-export const DRAWABLE_QUESTION = {
+/** What a paper may draw: work written under an assignment is its own test's until that test is done. */
+export const drawableFor = (testId?: string): Prisma.QuestionWhereInput => ({
   status: { not: QUESTION_STATUS.ARCHIVED },
   currentVersionId: { not: null },
-} as const satisfies Prisma.QuestionWhereInput;
+  OR: [
+    { assignmentId: null },
+    ...(testId ? [{ assignment: { testId } }] : []),
+    { assignment: { test: { assignments: { none: { finalizedAt: null } } } } },
+  ],
+});

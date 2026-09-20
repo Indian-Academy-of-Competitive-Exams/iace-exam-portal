@@ -226,6 +226,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
       content: (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
           <DrawnFrom
+            testId={detail.id}
             section={section}
             spec={spec.sections[section.id] ?? {}}
             canSave={canEditPaper}
@@ -335,12 +336,14 @@ function StripActions({
 
 /** What the open section draws from, folded away where the lists below need the pane. */
 function DrawnFrom({
+  testId,
   section,
   spec,
   canSave,
   open,
   onChange,
 }: Readonly<{
+  testId: string;
   section: BaseConfigSection;
   spec: SectionDrawSpec;
   canSave: boolean;
@@ -355,7 +358,13 @@ function DrawnFrom({
     <section className={cn('relative pr-2', CAPPED_VIEWPORT)}>
       {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
       <fieldset disabled={!canSave} className="contents">
-        <DrawSpecEditor section={section} spec={spec} disabled={!canSave} onChange={onChange} />
+        <DrawSpecEditor
+          testId={testId}
+          section={section}
+          spec={spec}
+          disabled={!canSave}
+          onChange={onChange}
+        />
       </fieldset>
     </section>
   );

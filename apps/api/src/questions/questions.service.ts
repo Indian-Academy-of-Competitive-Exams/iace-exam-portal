@@ -41,7 +41,7 @@ import {
 import { escapeForContent, mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
-  DRAWABLE_QUESTION,
+  drawableFor,
   buildContent,
   languagesIn,
   stemPreviewOf,
@@ -186,7 +186,7 @@ export class QuestionsService {
   /** Counted in the database, because a page of a hundred is not what a section can draw from. */
   async availability(query: QuestionAvailabilityQuery): Promise<QuestionAvailability> {
     const where: Prisma.QuestionWhereInput = {
-      ...DRAWABLE_QUESTION,
+      ...drawableFor(query.forTestId),
       ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
       ...(query.topicId ? { topicId: { in: query.topicId } } : {}),
     };
