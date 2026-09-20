@@ -6,12 +6,14 @@ import {
   AppException,
   FEATURE_KEYS,
   FORM_LEVEL_FIELD,
+  PAPER_SOURCES,
   PERMISSION_LEVELS,
   sectionQuota,
   scopedSections,
   type BaseConfigSection,
   type DrawSpec,
   type PaperRow,
+  type PaperSource,
   type SectionDrawSpec,
   type TestDetail,
   type TestPaper,
@@ -236,6 +238,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
 
           <SectionWorkspace
             testId={detail.id}
+            paperSource={detail.paperSource}
             section={section}
             spec={spec.sections[section.id] ?? {}}
             rows={
@@ -380,6 +383,7 @@ function refusalMessage(error: unknown, ...keys: readonly string[]): string | nu
 /** The bank and the paper side by side, and the two ways a section is filled from one. */
 function SectionWorkspace({
   testId,
+  paperSource,
   section,
   spec,
   rows,
@@ -392,6 +396,8 @@ function SectionWorkspace({
   onRescoring,
 }: Readonly<{
   testId: string;
+  /** A framed section is its typist's work, so there is no remainder for the bank to fill. */
+  paperSource: PaperSource | null;
   section: BaseConfigSection;
   spec: SectionDrawSpec;
   rows: readonly PaperRow[];
@@ -445,17 +451,30 @@ function SectionWorkspace({
     </Button>
   );
 
+  const framed = paperSource === PAPER_SOURCES.FRAMED;
   const fillAction =
     editable && rows.length < section.questionCount ? (
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={poolDirty}
-        loading={fill.isPending}
-        onClick={() => fill.mutate()}
-      >
-        Fill remaining
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* A span, because a disabled button fires no pointer events and the tooltip needs one. */}
+          <span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={poolDirty || framed}
+              loading={fill.isPending}
+              onClick={() => fill.mutate()}
+            >
+              Fill remaining
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {framed
+            ? 'This paper is framed, so its questions come from its typists. Add them from Written for this test.'
+            : 'Tops the section up from the bank, within its split'}
+        </TooltipContent>
+      </Tooltip>
     ) : null;
 
   const shortfallBanner = shortfall ? (
