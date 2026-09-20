@@ -14,7 +14,7 @@ import {
   type QuestionStatus,
   type QuestionSummary,
 } from '@iace/contracts';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ChartFigure,
@@ -40,6 +40,7 @@ import {
   ROUTES,
 } from '../lib/constants';
 import { SubjectMultiPicker } from '../components/taxonomy-picker';
+import { AssignmentMultiPicker } from '../components/assignment-picker';
 
 function historyColumns(): DataTableColumn<QuestionSummary>[] {
   return [
@@ -124,6 +125,7 @@ function LanguageBadges({ present }: Readonly<{ present: readonly QuestionLangua
 }
 
 export function AuthoringHistoryPage() {
+  const filters = useFilters<'view'>();
   const stats = useQuery({
     queryKey: [...QUERY_KEYS.AUTHORING, 'stats'],
     queryFn: () => api.admin.authoring.stats(),
@@ -155,6 +157,12 @@ export function AuthoringHistoryPage() {
       render: (control: ListFilterMultiControl) => <SubjectMultiPicker {...control} />,
     },
     {
+      key: 'assignmentId',
+      kind: 'customMulti',
+      label: 'Section',
+      render: (control: ListFilterMultiControl) => <AssignmentMultiPicker {...control} />,
+    },
+    {
       key: 'difficulty',
       kind: 'multi',
       label: 'Difficulty',
@@ -179,6 +187,7 @@ export function AuthoringHistoryPage() {
       q: values.q || undefined,
       status: values.status as QuestionStatus[],
       subjectId: values.subjectId,
+      assignmentId: values.assignmentId,
       difficulty: values.difficulty as QuestionSummary['difficulty'][],
       type: values.type as QuestionSummary['type'][],
       from: values.from || undefined,
@@ -197,21 +206,47 @@ export function AuthoringHistoryPage() {
     />
   );
 
-  return (
-    <TableFrame header={header}>
-      <Output stats={stats.data} />
+  const view = filters.get('view') || HISTORY_VIEWS.QUESTIONS;
 
-      <ListView
-        list={questions}
-        filters={filterSpec}
-        columns={columns}
-        rowKey={(question) => question.id}
-        empty="You have not written a question yet"
-        emptyFiltered="None of your questions match those filters"
-      />
-    </TableFrame>
+  return (
+    <TableFrame
+      header={header}
+      tabs={{
+        value: view,
+        onValueChange: (value) => filters.set({ view: value }),
+        items: [
+          {
+            value: HISTORY_VIEWS.QUESTIONS,
+            label: 'Questions',
+            content: (
+              <ListView
+                list={questions}
+                filters={filterSpec}
+                columns={columns}
+                rowKey={(question) => question.id}
+                empty="You have not written a question yet"
+                emptyFiltered="None of your questions match those filters"
+              />
+            ),
+          },
+          {
+            value: HISTORY_VIEWS.OUTPUT,
+            label: 'Output',
+            // Its own scroller: this pane holds no table, so nothing below it takes the scroll.
+            content: (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <Output stats={stats.data} />
+              </div>
+            ),
+          },
+        ],
+      }}
+    />
   );
 }
+
+/** The two ways a typist reads their own work: the rows, and the pace they came at. */
+const HISTORY_VIEWS = { QUESTIONS: 'questions', OUTPUT: 'output' } as const;
 
 /** The author's own pace. Blue-led, because a chart in this app is never brand red. */
 function Output({ stats }: Readonly<{ stats: AuthoringStats | undefined }>) {
@@ -224,7 +259,7 @@ function Output({ stats }: Readonly<{ stats: AuthoringStats | undefined }>) {
   }));
 
   return (
-    <div className="mb-4 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <MetricGroup>
         <Metric label="Today" value={String(stats.today)} />
         <Metric label="Last 7 days" value={String(stats.lastSevenDays)} />

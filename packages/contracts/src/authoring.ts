@@ -29,6 +29,8 @@ export const authoringHistoryQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   status: csvQuery(questionStatusSchema),
   subjectId: csvIdQuery(),
+  /** The section a question was written for, which is how a typist finds one batch again. */
+  assignmentId: csvIdQuery(),
   type: csvQuery(questionTypeSchema),
   difficulty: csvQuery(difficultyLevelSchema),
   tag: tagSchema.optional(),
