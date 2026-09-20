@@ -43,10 +43,16 @@ const SAID_AT = new Intl.DateTimeFormat('en-IN', {
 const sectionThreadKey = (testId: string, sectionId: string) =>
   [...QUERY_KEYS.SECTION_THREAD, testId, sectionId] as const;
 
-/** What a message is being written as: a new one, or a rewording of one already said. */
+/** One picture waiting to be sent: the key goes to the server, the url shows it meanwhile. */
+interface Attachment {
+  key: string;
+  url: string;
+}
+
+/** What a message is being written as: a new one, or an edit of one already said. */
 interface Composing {
   body: string;
-  images: string[];
+  images: Attachment[];
   editingId: string | null;
 }
 
@@ -100,7 +106,10 @@ function Thread({
   const say = useMutation({
     mutationFn: ({ body, images, editingId }: Composing) =>
       editingId === null
-        ? api.admin.assignments.comment(testId, sectionId, { body, images })
+        ? api.admin.assignments.comment(testId, sectionId, {
+            body,
+            images: images.map((image) => image.key),
+          })
         : api.admin.assignments.editComment(testId, sectionId, editingId, { body }),
     onSuccess: settle,
   });
@@ -153,9 +162,7 @@ function Thread({
               key={comment.id}
               comment={comment}
               mine={comment.authorId === identity?.id}
-              onReword={() =>
-                setComposing({ body: comment.body, images: [], editingId: comment.id })
-              }
+              onEdit={() => setComposing({ body: comment.body, images: [], editingId: comment.id })}
             />
           ))}
 
@@ -179,8 +186,8 @@ function Thread({
 function Message({
   comment,
   mine,
-  onReword,
-}: Readonly<{ comment: SectionComment; mine: boolean; onReword: () => void }>) {
+  onEdit,
+}: Readonly<{ comment: SectionComment; mine: boolean; onEdit: () => void }>) {
   return (
     <div className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>
       <Avatar name={comment.authorName} size="sm" />
@@ -199,10 +206,10 @@ function Message({
           {mine ? (
             <button
               type="button"
-              onClick={onReword}
+              onClick={onEdit}
               className="underline decoration-dotted hover:text-foreground"
             >
-              Reword
+              Edit
             </button>
           ) : null}
         </div>
@@ -226,7 +233,7 @@ function Message({
   );
 }
 
-/** The trail is why rewording is allowed at all, so the last wording is one hover away. */
+/** The trail is why editing is allowed at all, so the last wording is one hover away. */
 function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
   const previous = comment.revisions.at(-1)?.body;
 
@@ -235,7 +242,7 @@ function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
       <TooltipTrigger asChild>
         <span className="cursor-help underline decoration-dotted">edited</span>
       </TooltipTrigger>
-      <TooltipContent>{previous ? `Before: ${previous}` : 'Reworded'}</TooltipContent>
+      <TooltipContent>{previous ? `Before: ${previous}` : 'Edited'}</TooltipContent>
     </Tooltip>
   );
 }
@@ -261,7 +268,7 @@ function Composer({
     setUploading(true);
     try {
       const image = await api.admin.questions.uploadImage(file);
-      onChange({ ...composing, images: [...composing.images, image.key] });
+      onChange({ ...composing, images: [...composing.images, image] });
     } finally {
       setUploading(false);
     }
@@ -271,7 +278,7 @@ function Composer({
     <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
       {composing.editingId ? (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Rewording a comment. Its pictures stay as they are.</span>
+          <span>Editing a comment. Its pictures stay as they are.</span>
           <Button variant="ghost" size="sm" onClick={() => onChange(BLANK)}>
             Cancel
           </Button>
@@ -279,9 +286,31 @@ function Composer({
       ) : null}
 
       {composing.images.length > 0 ? (
-        <span className="text-xs text-muted-foreground">
-          {plural(composing.images.length, 'picture')} attached
-        </span>
+        <ul className="flex flex-wrap gap-2">
+          {composing.images.map((image) => (
+            <li key={image.key} className="relative">
+              <img
+                src={image.url}
+                alt=""
+                className="size-16 rounded-md border border-border object-cover"
+              />
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label="Remove this picture"
+                className="absolute -right-2 -top-2 bg-surface"
+                onClick={() =>
+                  onChange({
+                    ...composing,
+                    images: composing.images.filter((held) => held.key !== image.key),
+                  })
+                }
+              >
+                <X aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       <div className="flex items-end gap-2">
