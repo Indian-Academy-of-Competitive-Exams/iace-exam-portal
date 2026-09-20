@@ -19,19 +19,44 @@ describe('waiting for a queued job to land', () => {
   });
 
   it('settles at the ceiling rather than growing without bound', () => {
-    assert.ok(pollDelayMs(20) <= POLL_MAX_MS);
-    assert.ok(pollDelayMs(POLL_GIVES_UP_AFTER) <= POLL_MAX_MS);
+    assert.equal(
+      pollDelayMs(20, () => 1),
+      POLL_MAX_MS,
+    );
+    assert.equal(
+      pollDelayMs(POLL_GIVES_UP_AFTER, () => 1),
+      POLL_MAX_MS,
+    );
   });
 
   /** The bug this prevents: a whole hall polling in step, so the drain they wait on is starved. */
-  it('spreads a hall that handed in together', () => {
-    const hall = new Set(Array.from({ length: HALL }, () => pollDelayMs(20)));
-
-    assert.ok(hall.size > HALL / 2, `a hall of ${HALL} asked at ${hall.size} different moments`);
-    assert.ok(
-      Math.min(...hall) >= POLL_MAX_MS / 2,
-      'no ask lands near enough to now to be a retry storm',
+  it('spreads a hall that handed in together across the step', () => {
+    assert.equal(
+      pollDelayMs(20, () => 0),
+      POLL_MAX_MS / 2,
+      'the earliest a poll can land',
     );
+    assert.equal(
+      pollDelayMs(20, () => 1),
+      POLL_MAX_MS,
+      'the latest a poll can land',
+    );
+    assert.equal(
+      pollDelayMs(20, () => 0.5),
+      POLL_MAX_MS * 0.75,
+    );
+  });
+
+  /** A delay that could reach zero would hammer the drain instead of spreading across it. */
+  it('never leaves the step, whatever the source of randomness says', () => {
+    for (let at = 0; at <= 10; at += 1) {
+      const step = Math.min(POLL_FIRST_MS * 2 ** at, POLL_MAX_MS);
+      for (let draw = 0; draw <= 100; draw += 1) {
+        const delay = pollDelayMs(at, () => draw / 100);
+        assert.ok(delay >= step / 2, `try ${at} drew ${delay}, below half its step`);
+        assert.ok(delay <= step, `try ${at} drew ${delay}, past its step`);
+      }
+    }
   });
 
   /** The bug this prevents: a dead job polled forever, so the error the screen can show never arrives. */
@@ -52,6 +77,3 @@ describe('waiting for a queued job to land', () => {
 
 /** Far past any real ceiling, so a predicate that never stops fails the test instead of hanging it. */
 const RUNAWAY = 10_000;
-
-/** Enough draws that a policy with no jitter in it collapses to one value and fails. */
-const HALL = 200;

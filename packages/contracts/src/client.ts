@@ -1530,9 +1530,9 @@ const REFUSED = 401;
 /** Halved and jittered: a hall whose tokens expired in the same minute must not ask again in step. */
 const REFRESH_BACKOFF_MS = [1_000, 2_000, 4_000] as const;
 
-function refreshBackoffMs(asked: number): number | undefined {
+function refreshBackoffMs(asked: number, random: () => number = Math.random): number | undefined {
   const step = REFRESH_BACKOFF_MS[asked];
-  return step === undefined ? undefined : step / 2 + Math.random() * step;
+  return step === undefined ? undefined : step / 2 + random() * step;
 }
 
 function worthAskingAgain(failure: AppException | undefined): boolean {
