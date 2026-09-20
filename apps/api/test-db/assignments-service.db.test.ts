@@ -407,6 +407,40 @@ describe('AssignmentsService — removing', () => {
   });
 });
 
+describe('AssignmentsService — marking written hands the work over', () => {
+  /** The failure this prevents: a reader opening a section its typist called done, and finding it empty. */
+  it('releases everything still held back when its typist finalizes', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const created = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    const subject = await makeSubject(prisma);
+    const written = await makeQuestion(prisma, { subjectId: subject.id });
+    await prisma.question.update({
+      where: { id: written.id },
+      data: { assignmentId: created.id, releasedAt: null },
+    });
+
+    const done = await assignments.finalize(created.id, typist.id);
+
+    const row = await prisma.question.findUniqueOrThrow({ where: { id: written.id } });
+    assert.notEqual(row.releasedAt, null, 'marking written hands over what is still in hand');
+    assert.equal(done.releasedCount, 1);
+    assert.equal(done.writtenCount, 1);
+  });
+});
+
 describe('AssignmentsService — mine', () => {
   it('lists an admin’s own assignments, newest first, with the test title', async () => {
     const { assignments } = build();
@@ -1041,7 +1075,8 @@ describe('AssignmentsService — one', () => {
 });
 
 describe('AssignmentsService — finalizing', () => {
-  it('sets finalizedAt, and finalizing again returns the same row', async () => {
+  /** Re-reading is the same fact restated, so the stamp MOVES — that is what re-covers a paper. */
+  it('sets finalizedAt, and moves it when the section is marked again', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog);
@@ -1062,7 +1097,11 @@ describe('AssignmentsService — finalizing', () => {
     const second = await assignments.finalize(created.id, reader.id);
 
     assert.ok(first.finalizedAt);
-    assert.equal(second.finalizedAt, first.finalizedAt);
+    assert.ok(second.finalizedAt);
+    assert.ok(
+      new Date(second.finalizedAt) >= new Date(first.finalizedAt),
+      'a second reading never predates the first',
+    );
   });
 
   /** "I have written this section" — its own fact, independent of whether anyone has read it. */

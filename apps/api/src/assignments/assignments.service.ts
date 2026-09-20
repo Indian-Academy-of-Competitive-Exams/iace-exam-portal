@@ -204,7 +204,7 @@ export class AssignmentsService {
       orderBy: [{ baseConfigSection: { order: 'asc' } }, { role: 'asc' }],
     });
     const written = await this.sectionWrittenCounts(rows);
-    return rows.map((row) => toAssignment(row, written.get(sectionKey(row)) ?? 0));
+    return rows.map((row) => toAssignment(row, written.get(sectionKey(row)) ?? NO_COUNTS));
   }
 
   /** Active admins already holding what a role needs — who the picker offers, and nothing more. */
@@ -278,7 +278,7 @@ export class AssignmentsService {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     const written = await this.sectionWrittenCounts([row]);
-    return toAssignmentWithTest(row, written.get(sectionKey(row)) ?? 0);
+    return toAssignmentWithTest(row, written.get(sectionKey(row)) ?? NO_COUNTS);
   }
 
   private async assignedTo(
@@ -309,7 +309,7 @@ export class AssignmentsService {
     const written = await this.sectionWrittenCounts(rows);
     return paged(
       query,
-      rows.map((row) => toAssignmentWithTest(row, written.get(sectionKey(row)) ?? 0)),
+      rows.map((row) => toAssignmentWithTest(row, written.get(sectionKey(row)) ?? NO_COUNTS)),
       total,
     );
   }
@@ -341,7 +341,7 @@ export class AssignmentsService {
     const written = await this.sectionWrittenCounts(items);
     return paged(
       query,
-      items.map((row) => ({ ...row, writtenCount: written.get(sectionKey(row)) ?? 0 })),
+      items.map((row) => ({ ...row, ...(written.get(sectionKey(row)) ?? NO_COUNTS) })),
       rows.length,
     );
   }
@@ -412,9 +412,18 @@ export class AssignmentsService {
     if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
-    // One fact per role — "I wrote this" and "I read this" — with no ordering between them.
-    if (row.finalizedAt) return this.withWrittenCount(row);
+    // Written means written: anything still held back goes with it, or the reader gets an empty section.
+    if (row.role === ASSIGNMENT_ROLES.TYPIST) {
+      await this.prisma.question.updateMany({
+        where: {
+          assignment: { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId },
+          releasedAt: null,
+        },
+        data: { releasedAt: new Date() },
+      });
+    }
 
+    // Re-reading is the same fact restated: the stamp moves, so a section read again is covered again.
     const updated = await this.prisma.questionAssignment.update({
       where: { id },
       data: { finalizedAt: new Date() },
@@ -426,7 +435,7 @@ export class AssignmentsService {
   /** Every assignment on a row's own (test, section), not just the row's — the typist's work counts for the reader. */
   private async sectionWrittenCounts(
     rows: readonly { testId: string; baseConfigSectionId: string }[],
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, SectionCounts>> {
     const sections = [...new Map(rows.map((row) => [sectionKey(row), row])).values()];
     if (sections.length === 0) return new Map();
 
@@ -436,28 +445,41 @@ export class AssignmentsService {
       },
       select: { id: true, testId: true, baseConfigSectionId: true },
     });
-    const counts =
-      held.length === 0
-        ? []
-        : await this.prisma.question.groupBy({
-            by: ['assignmentId'],
-            where: { assignmentId: { in: held.map((row) => row.id) } },
-            _count: { _all: true },
-          });
-    const byAssignmentId = new Map(counts.map((row) => [row.assignmentId, row._count._all]));
+    const ids = held.map((row) => row.id);
+    const [written, released] =
+      ids.length === 0
+        ? [[], []]
+        : await Promise.all([
+            this.prisma.question.groupBy({
+              by: ['assignmentId'],
+              where: { assignmentId: { in: ids } },
+              _count: { _all: true },
+            }),
+            this.prisma.question.groupBy({
+              by: ['assignmentId'],
+              where: { assignmentId: { in: ids }, releasedAt: { not: null } },
+              _count: { _all: true },
+            }),
+          ]);
+    const writtenBy = new Map(written.map((row) => [row.assignmentId, row._count._all]));
+    const releasedBy = new Map(released.map((row) => [row.assignmentId, row._count._all]));
 
-    const bySection = new Map(sections.map((row) => [sectionKey(row), 0]));
+    const bySection = new Map(sections.map((row) => [sectionKey(row), NO_COUNTS]));
     for (const row of held) {
       const key = sectionKey(row);
-      if (bySection.has(key))
-        bySection.set(key, (bySection.get(key) ?? 0) + (byAssignmentId.get(row.id) ?? 0));
+      const so_far = bySection.get(key);
+      if (!so_far) continue;
+      bySection.set(key, {
+        writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0),
+        releasedCount: so_far.releasedCount + (releasedBy.get(row.id) ?? 0),
+      });
     }
     return bySection;
   }
 
   private async withWrittenCount(row: AssignmentRow): Promise<Assignment> {
-    const written = await this.sectionWrittenCounts([row]);
-    return toAssignment(row, written.get(sectionKey(row)) ?? 0);
+    const counts = await this.sectionWrittenCounts([row]);
+    return toAssignment(row, counts.get(sectionKey(row)) ?? NO_COUNTS);
   }
 
   private async requireTest(
@@ -565,7 +587,7 @@ function sectionRow(test: QueueTest, section: QueueSection): SectionProgressRow 
     testTitle: test.title,
     baseConfigSectionId: section.id,
     sectionName: section.name,
-    writtenCount: 0,
+    ...NO_COUNTS,
     sectionQuestionCount: section.questionCount,
     typing: roleProgress(test, section, ASSIGNMENT_ROLES.TYPIST),
     reading: roleProgress(test, section, ASSIGNMENT_ROLES.PROOFREADER),
@@ -576,7 +598,15 @@ function sectionRow(test: QueueTest, section: QueueSection): SectionProgressRow 
 const sectionKey = (row: { testId: string; baseConfigSectionId: string }): string =>
   `${row.testId}:${row.baseConfigSectionId}`;
 
-function toAssignment(row: AssignmentRow, writtenCount: number): Assignment {
+/** What a section holds and how much of it has reached its reader — two facts, never one. */
+export interface SectionCounts {
+  writtenCount: number;
+  releasedCount: number;
+}
+
+const NO_COUNTS: SectionCounts = { writtenCount: 0, releasedCount: 0 };
+
+function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
   return {
     id: row.id,
     testId: row.testId,
@@ -587,7 +617,8 @@ function toAssignment(row: AssignmentRow, writtenCount: number): Assignment {
     role: row.role,
     dueAt: row.dueAt?.toISOString() ?? null,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
-    writtenCount,
+    writtenCount: counts.writtenCount,
+    releasedCount: counts.releasedCount,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
     sectionSubjectId: row.baseConfigSection.subjectId,
@@ -602,7 +633,7 @@ function sectionMixOf(questionPoolFilter: unknown, sectionId: string): Difficult
 
 function toAssignmentWithTest(
   row: AssignmentWithTestRow,
-  writtenCount: number,
+  counts: SectionCounts,
 ): AssignmentWithTest {
-  return { ...toAssignment(row, writtenCount), testTitle: row.test.title };
+  return { ...toAssignment(row, counts), testTitle: row.test.title };
 }

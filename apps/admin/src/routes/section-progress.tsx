@@ -42,12 +42,16 @@ function progressVariant(written: number, target: number): BadgeProps['variant']
 
 /** A section fact: the questions written under either role, against the section's own target. */
 function SectionProgress({ row }: Readonly<{ row: SectionProgressRow }>) {
-  const { writtenCount, sectionQuestionCount } = row;
+  const { writtenCount, releasedCount, sectionQuestionCount } = row;
+  const held = writtenCount - releasedCount;
 
   return (
-    <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
-      {`${writtenCount}/${sectionQuestionCount}`}
-    </Badge>
+    <span className="flex items-center gap-2">
+      <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
+        {`${writtenCount}/${sectionQuestionCount}`}
+      </Badge>
+      {held > 0 ? <Badge variant="warning">{`${held} not handed over`}</Badge> : null}
+    </span>
   );
 }
 

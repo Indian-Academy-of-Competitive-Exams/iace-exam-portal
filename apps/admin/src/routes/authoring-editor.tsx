@@ -42,6 +42,7 @@ import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
 import { SectionWorkButton } from '../components/authoring/section-work-sheet';
+import { SectionThreadButton } from '../components/section-thread';
 import {
   AuthoringChecks,
   AuthoringPreview,
@@ -405,6 +406,12 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
         <SectionWorkButton assignment={assignment} />
+        {/* The other half of the conversation: the reader raises things here, and answers here. */}
+        <SectionThreadButton
+          testId={assignment.testId}
+          sectionId={assignment.baseConfigSectionId}
+          canWrite
+        />
         <StatRow
           className="w-auto"
           label="Written"

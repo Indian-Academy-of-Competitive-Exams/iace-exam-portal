@@ -32,6 +32,8 @@ export const assignmentSchema = z.object({
   finalizedAt: z.string().nullable(),
   /** Questions written under ANY assignment on this section — a section fact, not this row's own. */
   writtenCount: z.number().int(),
+  /** How many of those its typist has handed to the reader. Below `writtenCount` means work in hand. */
+  releasedCount: z.number().int(),
   /** The section's own target — a section fact, same as `writtenCount`. */
   sectionQuestionCount: z.number().int(),
   /** The test's own draw spec for this section. Absent means every difficulty, not zero of each. */
@@ -95,6 +97,8 @@ export const sectionProgressRowSchema = z.object({
   sectionName: z.string(),
   /** Questions written under ANY assignment on this section, against the section's own target. */
   writtenCount: z.number().int(),
+  /** How many have reached the reader. A gap here is why a reader's screen can look empty. */
+  releasedCount: z.number().int(),
   sectionQuestionCount: z.number().int(),
   /** Null where the paper's source gives the role nothing to do — a PICKED test is never typed. */
   typing: sectionRoleProgressSchema.nullable(),

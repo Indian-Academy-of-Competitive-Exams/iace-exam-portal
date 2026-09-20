@@ -9,6 +9,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { unreadBySection } from '../assignments';
 import { paperCompletenessIssues } from './test-rules';
 
 const OFFER_SELECT = {
@@ -155,12 +156,33 @@ export class FinalizeService {
       where: { testId, finalizedAt: null },
       select: { baseConfigSection: { select: { name: true } } },
     });
-    if (outstanding.length === 0) return;
+    if (outstanding.length > 0) {
+      const names = [...new Set(outstanding.map((row) => row.baseConfigSection.name))];
+      const message = `${names.length} section${names.length === 1 ? ' is' : 's are'} still being proof-read: ${names.join(', ')}`;
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
+      });
+    }
 
-    const names = [...new Set(outstanding.map((row) => row.baseConfigSection.name))];
-    const message = `${names.length} section${names.length === 1 ? ' is' : 's are'} still being proof-read: ${names.join(', ')}`;
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
+    await this.assertPaperWasRead(testId);
+  }
+
+  /** Finalized is not the same as covering the paper — the paper can change after the reading. */
+  private async assertPaperWasRead(testId: string): Promise<void> {
+    const unread = await unreadBySection(this.prisma, testId);
+    if (unread.size === 0) return;
+
+    const sections = await this.prisma.baseConfigSection.findMany({
+      where: { id: { in: [...unread.keys()] } },
+      select: { id: true, name: true },
+    });
+    const issues = sections.map((section) => {
+      const count = unread.get(section.id) ?? 0;
+      return `${section.name} has ${count} question${count === 1 ? '' : 's'} on the paper that its proof-reader has not seen.`;
+    });
+    const [first] = issues;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, first ?? '', {
+      fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });
   }
 

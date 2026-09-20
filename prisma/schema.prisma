@@ -570,6 +570,8 @@ model PaperQuestion {
   status              PaperQuestionStatus @default(ACTIVE)
   // The pinned version's option ids in stored order, copied by trigger; an answer sheet stores a position into this.
   optionIds           String[]            @default([])
+  // When it joined the paper — what says whether a proof-reader's finalize covered it.
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
 
   test              Test               @relation(fields: [testId, baseConfigId], references: [id, baseConfigId], onDelete: Cascade, onUpdate: NoAction)
   baseConfigSection BaseConfigSection  @relation(fields: [baseConfigId, baseConfigSectionId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)

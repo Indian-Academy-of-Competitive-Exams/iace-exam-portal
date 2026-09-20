@@ -44,6 +44,10 @@ const rowHref = (row: AssignmentWithTest): string =>
 /** Two jobs, two verbs — "I wrote this" and "I read this", with no ordering between them. */
 const finalizeLabel = (role: AssignmentRole) => (isTypist(role) ? 'Mark written' : 'Mark read');
 
+/** Written but still the typist's — what "mark written" is about to hand over. */
+const heldBack = (row: AssignmentWithTest): number =>
+  Math.max(row.writtenCount - row.releasedCount, 0);
+
 function progressVariant(written: number, target: number): BadgeProps['variant'] {
   if (written === 0) return 'neutral';
   return written < target ? 'warning' : 'success';
@@ -51,12 +55,16 @@ function progressVariant(written: number, target: number): BadgeProps['variant']
 
 /** Written against the section's own target — the same fact the editor shows while writing. */
 function SectionProgress({ row }: Readonly<{ row: AssignmentWithTest }>) {
-  const { writtenCount, sectionQuestionCount } = row;
+  const { writtenCount, releasedCount, sectionQuestionCount } = row;
+  const held = writtenCount - releasedCount;
 
   return (
-    <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
-      {`${writtenCount}/${sectionQuestionCount}`}
-    </Badge>
+    <span className="flex items-center gap-2">
+      <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
+        {`${writtenCount}/${sectionQuestionCount}`}
+      </Badge>
+      {held > 0 ? <Badge variant="warning">{`${held} not handed over`}</Badge> : null}
+    </span>
   );
 }
 
@@ -213,7 +221,9 @@ function promptFor(role: AssignmentRole, assignment: AssignmentWithTest, coverin
   if (isTypist(role)) {
     return {
       title: `Mark ${assignment.sectionName} written?`,
-      description: `You have written ${assignment.writtenCount} of ${assignment.sectionQuestionCount} questions for this section in ${test}. This tells the proof-reader it is ready to check.`,
+      description: heldBack(assignment)
+        ? `You have written ${assignment.writtenCount} of ${assignment.sectionQuestionCount} questions for this section in ${test}. The ${plural(heldBack(assignment), 'question')} you have not handed over yet will go to the proof-reader with this.`
+        : `You have written ${assignment.writtenCount} of ${assignment.sectionQuestionCount} questions for this section in ${test}. This tells the proof-reader it is ready to check.`,
       confirmLabel: 'Mark written',
       success: `${assignment.sectionName} marked written.`,
     };

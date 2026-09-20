@@ -1,10 +1,17 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, ErrorCodes, TEST_STATUS, type TestStatus } from '@iace/contracts';
+import {
+  AppException,
+  ASSIGNMENT_ROLES,
+  ErrorCodes,
+  TEST_STATUS,
+  type TestStatus,
+} from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { FakeEventBus } from '../test/support/fakes';
 import {
+  makeAdmin,
   makePaper,
   makeQuestion,
   resetDatabase,
@@ -51,6 +58,76 @@ const useCounts = async (paper: Paper) =>
       select: { fixedUseCount: true },
     })
   ).map((row) => row.fixedUseCount);
+
+/** A section read at a moment, so a paper question added after it is provably uncovered. */
+async function readAt(paper: Paper, sectionIndex: number, when: Date) {
+  const admin = await makeAdmin(prisma, { fullName: 'Priya' });
+  return prisma.questionAssignment.create({
+    data: {
+      id: uid(),
+      testId: paper.testId,
+      baseConfigId: paper.catalog.baseConfigId,
+      baseConfigSectionId: paper.sectionIds[sectionIndex] ?? '',
+      assigneeId: admin.id,
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+      finalizedAt: when,
+    },
+    select: { id: true },
+  });
+}
+
+describe('FinalizeService — a reading covers the paper, not just the section', () => {
+  /** The failure this prevents: a question nobody read reaching a student because the row said finalized. */
+  it('refuses a paper question added after its section was marked read', async () => {
+    const paper = await draft();
+    const yesterday = new Date(Date.now() - 86_400_000);
+    await readAt(paper, 0, yesterday);
+    await readAt(paper, 1, yesterday);
+    // Added now, so it joined the paper long after either reading said it was done.
+    await prisma.paperQuestion.updateMany({
+      where: { testId: paper.testId, baseConfigSectionId: paper.sectionIds[0] ?? '' },
+      data: { createdAt: new Date() },
+    });
+
+    const error = await service
+      .offer(paper.testId)
+      .then(() => null)
+      .catch((thrown: unknown) => thrown);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.message, /has not seen/);
+  });
+
+  it('offers a paper whose questions all predate the reading', async () => {
+    const paper = await draft();
+    await readAt(paper, 0, new Date());
+    await readAt(paper, 1, new Date());
+
+    await service.offer(paper.testId);
+
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+  });
+
+  /** A question handed over before the reading counts, even if it reached the paper afterwards. */
+  it('accepts one picked onto the paper later that was handed over before the reading', async () => {
+    const paper = await draft();
+    const readingAt = new Date();
+    await readAt(paper, 0, readingAt);
+    await readAt(paper, 1, readingAt);
+    await prisma.paperQuestion.updateMany({
+      where: { testId: paper.testId, baseConfigSectionId: paper.sectionIds[0] ?? '' },
+      data: { createdAt: new Date(readingAt.getTime() + 60_000) },
+    });
+    await prisma.question.updateMany({
+      where: { paperQuestions: { some: { testId: paper.testId } } },
+      data: { releasedAt: new Date(readingAt.getTime() - 60_000) },
+    });
+
+    await service.offer(paper.testId);
+
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+  });
+});
 
 describe('FinalizeService — the offer freezes the paper', () => {
   it('stamps the test, opens it, and bumps the optimistic version in one write', async () => {
