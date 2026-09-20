@@ -5,7 +5,8 @@ import {
   type QuestionDetail,
   type QuestionLanguage,
 } from '@iace/contracts';
-import { Badge, BadgeList, RichContent, Separator, StatRow } from '@iace/ui';
+import { Check } from 'lucide-react';
+import { BadgeList, RichContent, Separator, StatRow, cn } from '@iace/ui';
 import { ANSWER_MODE_LABELS } from '../lib/constants';
 
 /** One question in one language: `plainTextOf` returns the stored MARKUP, so images and math render. */
@@ -33,16 +34,29 @@ export function QuestionInLanguage({
           <h3 className="text-sm font-semibold tracking-tight text-foreground">Options</h3>
           <ol className="flex flex-col gap-2">
             {question.options.map((option, index) => (
-              <li key={option.id} className="flex items-start gap-3 text-sm">
-                <span className="w-5 shrink-0 font-medium text-muted-foreground">
+              <li
+                key={option.id}
+                className={cn(
+                  'flex items-start gap-3 rounded-md border p-3 text-sm',
+                  option.isCorrect ? 'border-success bg-success/10' : 'border-border',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex shrink-0 items-center gap-1.5 font-semibold tabular-nums',
+                    option.isCorrect ? 'text-success' : 'text-muted-foreground',
+                  )}
+                >
                   {String.fromCodePoint(65 + index)}
+                  {option.isCorrect ? (
+                    <Check className="size-4" aria-label="Correct answer" />
+                  ) : null}
                 </span>
                 <RichContent
                   lang={language}
                   className="min-w-0 flex-1 text-foreground"
                   html={plainTextOf(option.text[language])}
                 />
-                {option.isCorrect ? <Badge variant="success">Correct</Badge> : null}
               </li>
             ))}
           </ol>

@@ -5,15 +5,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
   ASSIGNMENT_ROLES,
+  DEFAULT_LANGUAGE,
   FEATURE_KEYS,
+  LANGUAGE_LABELS,
+  LANGUAGE_ORDER,
   PERMISSION_LEVELS,
   instituteDayLabel,
   type QuestionDetail,
   type QuestionDraftInput,
+  type QuestionLanguage,
   type QuestionOnOtherTest,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
@@ -22,6 +26,7 @@ import {
   FormDialog,
   PageFrame,
   PageHeader,
+  SegmentedControl,
   SkeletonParagraph,
   plural,
 } from '@iace/ui';
@@ -41,6 +46,17 @@ import {
 import { FinalizeAssignmentDialog } from './assignment-queue';
 
 /** One section of one test, read top to bottom, with the fix in the reader's own hands. */
+
+/** Reading is done one language at a time; all three at once is 150 blocks for a 50-question section. */
+const EVERY_LANGUAGE = 'all';
+const LANGUAGE_CHOICES = [
+  ...LANGUAGE_ORDER.map((code) => ({
+    value: code,
+    label: code.toUpperCase(),
+    name: LANGUAGE_LABELS[code],
+  })),
+  { value: EVERY_LANGUAGE, label: 'All', name: 'Every language' },
+];
 
 /** The two ways in: the assignment that handed the section over, or the section's own pair. */
 interface SectionKey {
@@ -117,6 +133,7 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
 
   const rows = questions.data ?? [];
   const canWrite = can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE);
+  const shown = useShownLanguages();
   const canEdit = byAssignment
     ? assignment !== null && assignment.finalizedAt === null && canWrite
     : scoped;
@@ -157,6 +174,17 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
       ) : null}
 
       <section data-print-document className="flex flex-col gap-8">
+        {rows.length > 0 ? (
+          <div data-print-hide className="flex justify-end">
+            <SegmentedControl
+              value={shown.choice}
+              onChange={shown.choose}
+              aria-label="Language"
+              items={LANGUAGE_CHOICES}
+            />
+          </div>
+        ) : null}
+
         {elsewhere ? (
           <Alert variant="warning">
             {`${elsewhere.fullName ?? 'Another admin'} is editing this section. Their changes have to land first.`}
@@ -195,6 +223,7 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
             question={question}
             index={index + 1}
             canWrite={canEdit}
+            languages={shown.languages}
             action={
               <Button size="sm" variant="outline" onClick={() => setEditing(question)}>
                 <Pencil aria-hidden />
@@ -223,6 +252,22 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
       />
     </PageFrame>
   );
+}
+
+/** Rides the URL, so opening a question and coming back reads in the language you were reading. */
+function useShownLanguages() {
+  const filters = useFilters<'lang'>();
+  const chosen = filters.get('lang');
+  const choice = LANGUAGE_CHOICES.some((item) => item.value === chosen)
+    ? (chosen as string)
+    : DEFAULT_LANGUAGE;
+
+  return {
+    choice,
+    choose: (value: string) => filters.set({ lang: value === DEFAULT_LANGUAGE ? '' : value }),
+    languages:
+      choice === EVERY_LANGUAGE ? LANGUAGE_ORDER : ([choice] as readonly QuestionLanguage[]),
+  };
 }
 
 function metaOf(testTitle: string | null, count: number | undefined) {
