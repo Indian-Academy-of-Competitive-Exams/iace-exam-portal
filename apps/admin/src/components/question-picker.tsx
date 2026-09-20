@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
+  PAPER_SOURCES,
   PICK_REFUSAL,
   WRITTEN_FOR,
   boundedPicks,
@@ -10,6 +11,7 @@ import {
   type BaseConfigSection,
   type DifficultyLevel,
   type OfferedQuestion,
+  type PaperSource,
   type PickRefusal,
   type QuestionSummary,
   type SectionDrawSpec,
@@ -156,6 +158,7 @@ function DifficultyChips({
 
 export function QuestionChooser({
   testId,
+  paperSource,
   section,
   spec,
   quota,
@@ -164,6 +167,8 @@ export function QuestionChooser({
 }: Readonly<{
   /** Whose authoring the pool is split against — its assignments wrote one side of it. */
   testId: string;
+  /** A framed paper is made of its own typists' work, so that is the pool it opens on. */
+  paperSource: PaperSource | null;
   section: BaseConfigSection;
   /** What the section draws from. The pool follows it, so narrowing the topics narrows this. */
   spec: SectionDrawSpec;
@@ -173,7 +178,9 @@ export function QuestionChooser({
   /** Rows are ticked and sent to the paper in one batch instead of one at a time. */
   picking: QuestionPicking;
 }>) {
-  const store = useLocalFilters();
+  const framed = paperSource === PAPER_SOURCES.FRAMED;
+  // A framed paper opens on its own authoring; the whole bank is one click away, not the default.
+  const store = useLocalFilters(framed ? { writtenFor: WRITTEN_FOR.TEST } : {});
   const viewport = useRef<HTMLDivElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const onListScroll = useCallback((element: HTMLDivElement) => {
@@ -213,11 +220,16 @@ export function QuestionChooser({
       primary: true,
       // It says which pool you are looking at, so it narrows whichever way Match is set.
       alwaysApplies: true,
-      items: [
-        { value: '', label: 'Any source' },
-        { value: WRITTEN_FOR.TEST, label: 'Written for this test' },
-        { value: WRITTEN_FOR.BANK, label: 'From the bank' },
-      ],
+      items: framed
+        ? [
+            { value: WRITTEN_FOR.TEST, label: 'Written for this test' },
+            { value: '', label: 'The whole bank' },
+          ]
+        : [
+            { value: '', label: 'Any source' },
+            { value: WRITTEN_FOR.TEST, label: 'Written for this test' },
+            { value: WRITTEN_FOR.BANK, label: 'From the bank' },
+          ],
     },
   ] as const;
 
@@ -276,7 +288,11 @@ export function QuestionChooser({
         columns={columns}
         rowKey={(question) => question.id}
         selection={selection}
-        empty="The bank holds no live question for this section yet"
+        empty={
+          framed
+            ? 'Nobody has written a question for this section yet'
+            : 'The bank holds no live question for this section yet'
+        }
         emptyFiltered="No question matches those filters"
       />
 

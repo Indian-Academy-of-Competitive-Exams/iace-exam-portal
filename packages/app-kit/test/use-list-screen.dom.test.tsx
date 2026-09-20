@@ -164,14 +164,18 @@ describe('useListScreen — matching all or any', () => {
 
 function LocalProbe({
   onReady,
-}: Readonly<{ onReady: (list: ReturnType<typeof useListScreen>) => void }>) {
+  opensOn,
+}: Readonly<{
+  onReady: (list: ReturnType<typeof useListScreen>) => void;
+  opensOn?: Readonly<Record<string, string>>;
+}>) {
   const [params] = useSearchParams();
   const list = useListScreen({
     queryKey: ['topics'],
     filters: FILTERS,
     toQuery: (values) => ({ q: values.q || undefined }),
     fetchPage: () => Promise.resolve(page),
-    store: useLocalFilters(),
+    store: useLocalFilters(opensOn),
   });
 
   onReady(list);
@@ -179,12 +183,12 @@ function LocalProbe({
 }
 
 describe('useListScreen — filters that are nobody\u2019s link', () => {
-  function mountLocal() {
+  function mountLocal(opensOn?: Readonly<Record<string, string>>) {
     let list: ReturnType<typeof useListScreen> | undefined;
     render(
       <MemoryRouter initialEntries={['/pick']}>
         <QueryClientProvider client={client}>
-          <LocalProbe onReady={(next) => (list = next)} />
+          <LocalProbe onReady={(next) => (list = next)} opensOn={opensOn} />
         </QueryClientProvider>
       </MemoryRouter>,
     );
@@ -205,6 +209,17 @@ describe('useListScreen — filters that are nobody\u2019s link', () => {
     act(() => list().clearFilters());
     assert.equal(list().values.q, '');
     assert.equal(url(), '');
+  });
+
+  /** The failure this prevents: a picker opening on the whole bank when it should open narrowed. */
+  it('opens on the values it was given, and still narrows from there', () => {
+    const list = mountLocal({ subjectId: 'quant' });
+
+    assert.equal(list().values.subjectId, 'quant');
+
+    act(() => list().setFilter('subjectId', 'reasoning'));
+
+    assert.equal(list().values.subjectId, 'reasoning');
   });
 
   it('reads a set back as a set, exactly as the URL one does', () => {

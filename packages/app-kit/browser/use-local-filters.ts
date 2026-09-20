@@ -8,8 +8,14 @@ export interface FilterStore<K extends string = string> {
   activeCount: (keys: readonly K[]) => number;
 }
 
-export function useLocalFilters<K extends string>(): FilterStore<K> {
-  const [values, setValues] = useState<Partial<Record<K, string>>>({});
+/** `initial` is what the list OPENS on; clearing a filter still clears it. */
+export function useLocalFilters<K extends string>(
+  // Deliberately not keyed on K: an argument of K would make it the only inference site.
+  initial: Readonly<Record<string, string>> = {},
+): FilterStore<K> {
+  const [values, setValues] = useState<Partial<Record<K, string>>>(
+    initial as Partial<Record<K, string>>,
+  );
 
   const get = useCallback((key: K) => values[key] ?? '', [values]);
 

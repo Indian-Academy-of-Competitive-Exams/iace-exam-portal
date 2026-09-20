@@ -495,6 +495,7 @@ function SectionWorkspace({
         {editable ? (
           <QuestionChooser
             testId={testId}
+            paperSource={paperSource}
             section={section}
             spec={spec}
             quota={quota}
