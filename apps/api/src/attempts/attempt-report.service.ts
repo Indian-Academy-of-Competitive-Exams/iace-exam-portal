@@ -162,6 +162,9 @@ export class AttemptReportService {
   ) {}
 
   async scoreCard(studentId: string, attemptId: string): Promise<ScoreCard> {
+    // A whole hall polls this until marking lands, so the refusal is answered before the wide read.
+    await this.requireMarked(studentId, attemptId);
+
     const attempt = await this.require(studentId, attemptId);
     if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
       throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
@@ -289,6 +292,18 @@ export class AttemptReportService {
       })),
       questions: questions.map((row) => signedQuestion(row, urls)),
     };
+  }
+
+  /** The poll's whole cost: the status off the primary key, with no sheet and no paper behind it. */
+  private async requireMarked(studentId: string, attemptId: string): Promise<void> {
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: { status: true },
+    });
+    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
+      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
+    }
   }
 
   /** The owner is part of the QUERY, so another student's sitting reads as missing, not refused. */
