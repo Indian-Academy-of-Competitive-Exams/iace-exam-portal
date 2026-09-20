@@ -82,7 +82,6 @@ export class SectionThreadService {
       where: { id: commentId },
       data: {
         body: input.body,
-        images: input.images,
         editedAt: new Date(),
         revisions: { push: replaced as unknown as Prisma.InputJsonValue },
       },

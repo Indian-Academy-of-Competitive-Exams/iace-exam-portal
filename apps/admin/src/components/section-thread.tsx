@@ -129,7 +129,7 @@ function Thread({
     mutationFn: ({ body, images, editingId }: Composing) =>
       editingId === null
         ? api.admin.assignments.comment(testId, sectionId, { body, images })
-        : api.admin.assignments.editComment(testId, sectionId, editingId, { body, images }),
+        : api.admin.assignments.editComment(testId, sectionId, editingId, { body }),
     onSuccess: settle,
   });
 
@@ -162,13 +162,7 @@ function Thread({
             key={comment.id}
             comment={comment}
             mine={comment.authorId === identity?.id}
-            onReword={() =>
-              setComposing({
-                body: comment.body,
-                images: [],
-                editingId: comment.id,
-              })
-            }
+            onReword={() => setComposing({ body: comment.body, images: [], editingId: comment.id })}
           />
         ))}
 
@@ -276,7 +270,7 @@ function Composer({
     <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
       {composing.editingId ? (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Rewording a comment</span>
+          <span>Rewording a comment. Its pictures stay as they are.</span>
           <Button variant="ghost" size="sm" onClick={() => onChange(BLANK)}>
             Cancel
           </Button>

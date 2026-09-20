@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Send, Upload, X } from 'lucide-react';
-import { type AssignmentWithTest, type QuestionSummary } from '@iace/contracts';
+import {
+  type AssignmentWithTest,
+  type AuthoringRelease,
+  type QuestionSummary,
+} from '@iace/contracts';
 import { useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
@@ -139,16 +143,14 @@ function SectionWork({ assignment }: Readonly<{ assignment: AssignmentWithTest }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),
     ]);
 
-  const waiting = written.rows.filter((question) => question.releasedAt === null).length;
-
   const columns = useMemo(() => columnsOf(setDeleting), []);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <Button type="button" size="sm" disabled={waiting === 0} onClick={() => setReleasing(true)}>
+        <Button type="button" size="sm" onClick={() => setReleasing(true)}>
           <Send aria-hidden />
-          {waiting > 0 ? `Hand over ${waiting}` : 'Nothing to hand over'}
+          Hand over
         </Button>
 
         <Button asChild type="button" size="sm" variant="outline">
@@ -168,7 +170,6 @@ function SectionWork({ assignment }: Readonly<{ assignment: AssignmentWithTest }
 
       <ReleaseDialog
         assignment={releasing ? assignment : null}
-        waiting={waiting}
         onClose={() => setReleasing(false)}
         onReleased={settle}
       />
@@ -184,17 +185,19 @@ function SectionWork({ assignment }: Readonly<{ assignment: AssignmentWithTest }
 
 function ReleaseDialog({
   assignment,
-  waiting,
   onClose,
   onReleased,
 }: Readonly<{
   assignment: AssignmentWithTest | null;
-  waiting: number;
   onClose: () => void;
   onReleased: () => Promise<unknown>;
 }>) {
+  // Counted by the server: the rows on screen are one page, and a long section has more.
   const release = useMutation({
-    meta: { success: `${plural(waiting, 'question')} handed over.` },
+    meta: {
+      success: (result: AuthoringRelease) =>
+        `${plural(result.handedOver, 'question')} handed over.`,
+    },
     mutationFn: (id: string) => api.admin.authoring.release(id),
     onSuccess: async () => {
       await onReleased();
@@ -207,7 +210,7 @@ function ReleaseDialog({
       open={assignment !== null}
       onOpenChange={(open) => !open && onClose()}
       title={PROMPTS.RELEASE.title}
-      description={`${plural(waiting, 'question')} moves to the proof-reader. You can keep editing them afterwards, and they will see your changes.`}
+      description="Everything you have written and not yet handed over moves to the proof-reader. You can keep editing it afterwards, and they will see your changes."
       confirmLabel={PROMPTS.RELEASE.confirmLabel}
       loading={release.isPending}
       onConfirm={() => assignment && release.mutate(assignment.id)}

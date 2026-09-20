@@ -109,7 +109,7 @@ describe('SectionThreadService', () => {
       testId,
       sectionId,
       said.id,
-      { body: 'Q7 option C is wrong', images: [] },
+      { body: 'Q7 option C is wrong' },
       READER,
     );
 
@@ -131,14 +131,7 @@ describe('SectionThreadService', () => {
     );
 
     await assert.rejects(
-      () =>
-        thread.editComment(
-          testId,
-          sectionId,
-          said.id,
-          { body: 'No it is not', images: [] },
-          TYPIST,
-        ),
+      () => thread.editComment(testId, sectionId, said.id, { body: 'No it is not' }, TYPIST),
       refusedWith(ErrorCodes.FORBIDDEN),
     );
   });

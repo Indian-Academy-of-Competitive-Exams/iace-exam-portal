@@ -221,8 +221,10 @@ export const createSectionCommentSchema = z
 export type CreateSectionCommentInput = z.input<typeof createSectionCommentSchema>;
 export type CreateSectionCommentBody = z.infer<typeof createSectionCommentSchema>;
 
-/** The same shape: rewording replaces both, and what it replaced moves into `revisions`. */
-export const editSectionCommentSchema = createSectionCommentSchema;
+/** Words only: a thread reads back signed URLs, never the keys, so its pictures cannot be resent. */
+export const editSectionCommentSchema = z.object({
+  body: z.string().trim().min(1, 'Write something first').max(2000),
+});
 export type EditSectionCommentInput = z.input<typeof editSectionCommentSchema>;
 export type EditSectionCommentBody = z.infer<typeof editSectionCommentSchema>;
 
