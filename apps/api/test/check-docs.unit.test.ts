@@ -11,6 +11,7 @@ import {
   ghostIdentifiers,
   isLiveCode,
   sourceSymbols,
+  sqlViews,
 } from '../../../scripts/check-docs.mjs';
 
 const ALLOWLIST = ['EventEmitter'];
@@ -93,6 +94,48 @@ describe('ghostIdentifiers — a doc may only name what the repo has', () => {
       allowlist: ALLOWLIST,
     });
     assert.deepEqual(offences, []);
+  });
+});
+
+describe('sqlViews — a name only a migration defines', () => {
+  const migration = (path: string, text: string) => ({ path, text });
+
+  it('takes a view a migration creates', () => {
+    const views = sqlViews([
+      migration(
+        'prisma/migrations/20260917100000_x/migration.sql',
+        'CREATE VIEW "AttemptSheetAnswer" AS SELECT 1;',
+      ),
+    ]);
+    assert.equal(views.has('AttemptSheetAnswer'), true);
+  });
+
+  it('forgets a view a later migration drops, because a DROP VIEW is not a view', () => {
+    const views = sqlViews([
+      migration(
+        'prisma/migrations/20260101000000_a/migration.sql',
+        'CREATE VIEW "OldAnswerRow" AS SELECT 1;',
+      ),
+      migration('prisma/migrations/20260202000000_b/migration.sql', 'DROP VIEW "OldAnswerRow";'),
+    ]);
+    assert.equal(views.has('OldAnswerRow'), false);
+  });
+
+  it('keeps a view a single migration drops and recreates, which is how a column type changes', () => {
+    const views = sqlViews([
+      migration(
+        'prisma/migrations/20260918120000_c/migration.sql',
+        'DROP VIEW "AttemptSheetAnswer";\nCREATE OR REPLACE VIEW "AttemptSheetAnswer" AS SELECT 2;',
+      ),
+    ]);
+    assert.equal(views.has('AttemptSheetAnswer'), true);
+  });
+
+  it('ignores a file that is not SQL, so prose about a view cannot mint one', () => {
+    const views = sqlViews([
+      migration('docs/02-domain-rules.md', 'CREATE VIEW "PaperRow" AS SELECT 1;'),
+    ]);
+    assert.equal(views.size, 0);
   });
 });
 

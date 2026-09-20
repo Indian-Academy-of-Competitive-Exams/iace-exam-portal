@@ -267,8 +267,7 @@ enum AssignmentRole {
   PROOFREADER
 }
 
-// What an admin is CALLED. Display only: FEATURE_KEYS remain the gate, and no
-// guard reads this.
+// What an admin is CALLED and the preset their grants start from; isSuperAdmin derives from it.
 enum AdminRole {
   TYPIST
   PROOFREADER
@@ -799,7 +798,7 @@ model Admin {
   id           String    @id @default(uuid(7)) @db.Uuid
   email        String    @unique
   fullName     String?
-  // Presets the permission checkboxes and labels the person; it grants nothing.
+  // Seeds the grants at create, labels the person, and decides isSuperAdmin on every write.
   role         AdminRole @default(ADMIN)
   isSuperAdmin Boolean   @default(false)
   isActive     Boolean   @default(true)

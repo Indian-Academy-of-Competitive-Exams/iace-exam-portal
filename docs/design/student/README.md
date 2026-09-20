@@ -37,10 +37,11 @@ Airy, task- and motivation-first, mobile-first. The opposite of admin density.
   admin's cell density on a student screen.
 - **Cards as-is.** The shared `Card` is already `rounded-xl border-border shadow-sm` — use
   it, do not restyle it. Larger surfaces may take `--radius-2xl`.
-- **Brick is a sparing accent.** `--red-600` for one primary call to action, the active nav
-  disc on `--red-100`, and at most one hero figure per screen — never a fill, never a
-  default. Everything structural is neutral: `--foreground`, `--muted-foreground`,
-  `--border`.
+- **Brick is a sparing accent.** `--primary` (`bg-primary`) for one primary call to action, the
+  active nav disc on `--primary-subtle`, and at most one hero figure per screen — never a fill,
+  never a default. Reach for the semantic pair, not the `--red-*` ramp behind it: the ramp is raw
+  palette and no component maps it. Everything structural is neutral: `--foreground`,
+  `--muted-foreground`, `--border`.
 - **Charts stay blue-led** (`#2563eb`, `#0d9488`, `#b45309`, `#7c3aed`), never brick.
 - **No new fonts.** Inter (`--font-sans`) and the ramp do all the work; Nunito is the brand
   mark only. A display face was tried in mock and rejected — it is not a token.

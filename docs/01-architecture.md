@@ -193,10 +193,12 @@ instead of thousands of synchronous transactions fighting each other.
 scored sittings, ordered by marks, then time taken, then id. The partial index `Attempt_ranking_idx`
 serves a sitting's standing, an index-only count per sitting, and "N sat": on 200 tests of 5,000
 sittings, counting 20 of them is an index-only scan of about 8 ms, while a table holding only the
-tests asked is read whole. A test board reads its cohort through `Attempt_testId_status_idx`, and
-the points boards through `Attempt_testId_score_idx`. A rank is counted each time it is read and
-saved nowhere, so it is always the standing now, and no count sits on the path that starts, saves
-or submits a sitting. **There is no regenerate step** — no batch that rebuilds results, and no
+tests asked is read whole. A test board reads its cohort through `Attempt_testId_status_idx`. The
+points boards have no index of their own — they scan every graded sitting in scope, which is why
+they are the first reads to cross a budget: `Attempt_testId_score_idx` was dropped as redundant
+against `Attempt_ranking_idx`, costing 6.5 MB per 105K sittings and an entry in every non-HOT
+update. A rank is counted each time it is read and saved nowhere, so it is always the standing now,
+and no count sits on the path that starts, saves or submits a sitting. **There is no regenerate step** — no batch that rebuilds results, and no
 state where a rank is stale until someone runs it.
 
 **What the counts cost, and what to do when a board outgrows its budget.** On 20 tests of 5,000

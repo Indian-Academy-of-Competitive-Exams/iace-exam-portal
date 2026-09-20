@@ -141,12 +141,13 @@ erodes.
 | branches      | `Branch`                                                                                                                                            |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                             |
 | events        | `Event`, `EventCandidate`                                                                                                                           |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `QuestionAssignment`                                                                             |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                                                                   |
+| assignments   | `QuestionAssignment`, `SectionComment`                                                                                                              |
 | configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                                          |
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                        |
 | attempts      | `Attempt`, `AttemptSheet`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
 | audit         | `RowActionLog`, `ImportLog`                                                                                                                         |
-| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `Announcement`                                                                          |
+| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                                                            |
 | saved         | `SavedQuestion`                                                                                                                                     |
 
 `auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
@@ -160,8 +161,12 @@ owns the sitting owns the derivation.
 - `imports` and `questions` create `ImportLog`; `audit` only reads it back for the log viewer.
 - `attempts` sets a `BaseConfig` locked on the first sitting. The lock is an attempt's effect and
   `configs` has no way to learn that a paper was sat.
-- `tests` moves a `Question` in-use counter on finalize and on thaw. Being depended on is what
-  freezes a question, and only the freeze knows.
+- `tests` moves a `Question` in-use counter on the offer, once per question served. Being depended
+  on is what freezes a question, and only the offer knows; `finalizedAt` is the watermark that keeps
+  a re-offer from counting twice.
+- `tests` deletes a section's unfinalized `QuestionAssignment` rows when a super admin moves a test
+  from FRAMED to PICKED. Only the source change knows the work has been stood down, and an
+  assignment nobody can finish is not a row `assignments` would delete on its own.
 - `attempts` writes the MISTAKE half of `SavedQuestion` in the rollup fold. Only the fold knows
   which answers the key called wrong, and it is the one path that is durable and runs exactly once
   per sitting; `saved` owns the table and writes every BOOKMARK.
@@ -315,7 +320,8 @@ Built and in use. Reach for these rather than adding a second of any of them.
   approved templates and a budget, not code.
 - **Rate limiting** is a Redis-backed throttler storage plus named limits carried by a decorator on
   the route, so moving a route cannot leave its limit behind — auth counted per address, the sitting
-  path per student, a public share link per address.
+  path per student, and everything else per signed-in caller. A student's mobile also carries a
+  daily OTP cap, which is a count per number rather than a window per route.
 - **Request context** is `AsyncLocalStorage` in the audit module, carrying the request id, the actor
   and the field diff into the audit record without threading them through every signature.
 - **Metrics and errors** — a token-gated Prometheus scrape, and Sentry initialised before anything

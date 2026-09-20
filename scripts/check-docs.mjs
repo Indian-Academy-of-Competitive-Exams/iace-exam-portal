@@ -1,6 +1,6 @@
 /**
  * Docs rot silently: a table is renamed, the prose keeps the old name, and no gate notices.
- * Check A — a backticked multi-word name in a doc must be a Prisma model/enum or a TS symbol.
+ * Check A — a backticked multi-word name must be a Prisma model/enum, a TS symbol or a SQL view.
  * Check B — a `docs/03 §N` citation must land on a heading that exists. Build output, tests and
  * comments are NOT source: each makes a dead name read as alive, which is the drift being caught.
  */
@@ -38,6 +38,9 @@ const CITING_PATHSPECS = [
 ];
 
 const PRISMA_MODEL = /^(?:model|enum) (\w+) \{/gm;
+const SQL_FILE = /\.sql$/;
+const SQL_VIEW =
+  /(CREATE(?:\s+OR\s+REPLACE)?(?:\s+MATERIALIZED)?\s+VIEW|DROP\s+VIEW(?:\s+IF\s+EXISTS)?)\s+"?(\w+)"?/gi;
 const SOURCE_SYMBOL = /\b([A-Z][A-Za-z0-9]*)\b/g;
 const DOC_IDENTIFIER = /`([A-Z][A-Za-z0-9]*)\b/g;
 const SECTION_HEADING = /^## (\d+)\./gm;
@@ -75,6 +78,20 @@ export function sourceSymbols(files) {
     for (const symbol of captured(codeOnly(text), SOURCE_SYMBOL)) symbols.add(symbol);
   }
   return symbols;
+}
+
+/** A view lives in a migration, so neither Prisma nor TypeScript defines it — and it is still real. */
+export function sqlViews(files) {
+  const views = new Set();
+  // Migration order is path order, and a file may drop then recreate, so statements apply in place.
+  for (const { path, text } of files) {
+    if (!SQL_FILE.test(path)) continue;
+    for (const [, verb, name] of text.matchAll(SQL_VIEW)) {
+      if (/^DROP/i.test(verb)) views.delete(name);
+      else views.add(name);
+    }
+  }
+  return views;
 }
 
 export function ghostIdentifiers({ docs, models, symbols, allowlist }) {
@@ -128,6 +145,7 @@ function main() {
   const schema = readFileSync(SCHEMA_PATH, 'utf8');
   const models = new Set(captured(schema, PRISMA_MODEL));
   const symbols = sourceSymbols(load(tracked('*.ts', '*.tsx')));
+  const views = sqlViews(load(tracked('prisma/migrations')));
   const docs = load(tracked('docs', ...ROOT_DOCS).filter((path) => path.endsWith(DOC_EXTENSION)));
 
   const headings = architectureHeadings(readFileSync(ARCHITECTURE_DOC, 'utf8'));
@@ -136,7 +154,12 @@ function main() {
     captured(text, SECTION_CITATION).map((section) => ({ path, section })),
   );
 
-  const ghosts = ghostIdentifiers({ docs, models, symbols, allowlist: ALLOWED });
+  const ghosts = ghostIdentifiers({
+    docs,
+    models: new Set([...models, ...views]),
+    symbols,
+    allowlist: ALLOWED,
+  });
   const broken = brokenSectionRefs({ headings, citations });
 
   if (ghosts.length > 0) {
@@ -144,7 +167,7 @@ function main() {
       `${ghosts.length} name(s) the docs use that the repo does not have.`,
       ghosts.map(({ name, paths }) => `${name}  cited in ${paths.join(', ')}`),
       [
-        `A doc may only name what ${SCHEMA_PATH} or the TypeScript source defines.`,
+        `A doc may only name what ${SCHEMA_PATH}, the TypeScript source or a migration defines.`,
         'Rename the prose, not the code.',
       ],
     );
