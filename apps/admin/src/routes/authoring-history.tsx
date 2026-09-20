@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ASSIGNMENT_ROLES,
   DIFFICULTY_LEVELS,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
@@ -14,6 +15,7 @@ import {
   type QuestionStatus,
   type QuestionSummary,
 } from '@iace/contracts';
+import { asText } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
@@ -27,6 +29,7 @@ import {
   TruncatedText,
   linkVariants,
   type DataTableColumn,
+  type ListFilterControl,
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -41,6 +44,10 @@ import {
 } from '../lib/constants';
 import { SubjectMultiPicker } from '../components/taxonomy-picker';
 import { AssignmentMultiPicker } from '../components/assignment-picker';
+import { AssignmentTestPicker } from '../components/assignment-scope-picker';
+
+/** Their own typing work, which is the only assignment a work record is about. */
+const TYPIST_SCOPE = { role: ASSIGNMENT_ROLES.TYPIST, mine: true } as const;
 
 function historyColumns(): DataTableColumn<QuestionSummary>[] {
   return [
@@ -70,6 +77,22 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
           {[question.subject.name, question.topic?.name].filter(Boolean).join(' / ')}
         </TruncatedText>
       ),
+    },
+    {
+      key: 'writtenFor',
+      header: 'Written for',
+      className: 'max-w-56',
+      cell: (question) =>
+        question.writtenFor ? (
+          <div>
+            <TruncatedText>{question.writtenFor.testTitle ?? 'Untitled test'}</TruncatedText>
+            <TruncatedText className="text-xs text-muted-foreground">
+              {question.writtenFor.sectionName}
+            </TruncatedText>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: 'difficulty',
@@ -157,6 +180,14 @@ export function AuthoringHistoryPage() {
       render: (control: ListFilterMultiControl) => <SubjectMultiPicker {...control} />,
     },
     {
+      key: 'testId',
+      kind: 'custom',
+      label: 'Test',
+      render: (control: ListFilterControl) => (
+        <AssignmentTestPicker {...control} scope={TYPIST_SCOPE} clearable />
+      ),
+    },
+    {
       key: 'assignmentId',
       kind: 'customMulti',
       label: 'Section',
@@ -188,6 +219,7 @@ export function AuthoringHistoryPage() {
       status: values.status as QuestionStatus[],
       subjectId: values.subjectId,
       assignmentId: values.assignmentId,
+      testId: asText(values.testId) || undefined,
       difficulty: values.difficulty as QuestionSummary['difficulty'][],
       type: values.type as QuestionSummary['type'][],
       from: values.from || undefined,

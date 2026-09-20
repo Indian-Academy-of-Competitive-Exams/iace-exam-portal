@@ -56,6 +56,14 @@ const QUESTION_INCLUDE = {
   topic: { select: { id: true, name: true } },
   // The relation, not a second lookup: a page of questions names its authors in one round trip.
   createdBy: { select: { id: true, fullName: true, email: true } },
+  // The assignment it was typed under, so a work record can name the test without a second query.
+  assignment: {
+    select: {
+      testId: true,
+      test: { select: { title: true } },
+      baseConfigSection: { select: { name: true } },
+    },
+  },
   currentVersion: true,
   // Counted in the row's own query, so a page of questions costs one round trip, not one each.
   _count: {
@@ -754,6 +762,13 @@ function toSummary(row: QuestionRow): QuestionSummary {
       ? { id: row.createdBy.id, name: row.createdBy.fullName ?? row.createdBy.email }
       : null,
     inUse: isReferenced(row),
+    writtenFor: row.assignment
+      ? {
+          testId: row.assignment.testId,
+          testTitle: row.assignment.test.title,
+          sectionName: row.assignment.baseConfigSection.name,
+        }
+      : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

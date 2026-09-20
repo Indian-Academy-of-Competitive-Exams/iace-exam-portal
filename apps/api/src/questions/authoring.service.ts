@@ -62,6 +62,7 @@ export class AuthoringService {
     return this.questions.list(asBankQuery(query), {
       createdById: adminId,
       ...(query.assignmentId?.length ? { assignmentId: { in: query.assignmentId } } : {}),
+      ...(query.testId ? { assignment: { testId: query.testId } } : {}),
       ...(query.from || query.to ? { createdAt: writtenBetween(query.from, query.to) } : {}),
     });
   }

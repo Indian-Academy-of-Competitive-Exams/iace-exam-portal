@@ -255,6 +255,49 @@ describe('AuthoringService.history', () => {
     );
   });
 
+  /** The work record names the test a question was typed for, not just the section. */
+  it('carries the test a question was written for', async () => {
+    const authoring = await build();
+    const mine = await makeAssignment(MINE);
+    await authoring.create(draft(), MINE, mine.id);
+
+    const [row] = (await authoring.history(query(), MINE)).items;
+
+    assert.equal(row?.writtenFor?.testId !== undefined, true);
+    assert.equal(typeof row?.writtenFor?.sectionName, 'string');
+  });
+
+  it('says nothing was written for when a question was typed outside a section', async () => {
+    const authoring = await build();
+    await authoring.create(draft(), MINE);
+
+    const [row] = (await authoring.history(query(), MINE)).items;
+
+    assert.equal(row?.writtenFor, null);
+  });
+
+  /** A test may hold several sections, so filtering by it is wider than filtering by one. */
+  it('narrows to every section of one test', async () => {
+    const authoring = await build();
+    const mine = await makeAssignment(MINE);
+    const elsewhere = await makeAssignment(MINE);
+    const { question } = await authoring.create(draft(), MINE, mine.id);
+    await authoring.create(
+      draft({ stem: { en: 'Written for another test entirely?' } }),
+      MINE,
+      elsewhere.id,
+    );
+
+    const testId = (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: mine.id } }))
+      .testId;
+    const page = await authoring.history(query({ testId }), MINE);
+
+    assert.deepEqual(
+      page.items.map((row) => row.id),
+      [question.id],
+    );
+  });
+
   it('reads no assignment asked for as every assignment', async () => {
     const authoring = await build();
     const one = await makeAssignment(MINE);
