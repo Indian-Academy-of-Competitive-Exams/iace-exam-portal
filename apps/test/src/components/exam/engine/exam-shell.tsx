@@ -9,6 +9,7 @@ import { type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
 import { useLockedZoom } from './lock-zoom';
 import { RailwayLayout } from '../templates/railway/layout';
+import { RailwayFullscreenNag } from '../templates/railway/fullscreen-nag';
 
 export function ExamShell({
   examTemplate,
@@ -20,6 +21,7 @@ export function ExamShell({
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
   const railway = template === EXAM_TEMPLATE.SSC_RAILWAYS;
   const Skin = railway ? RailwayLayout : Layout;
+  const Nag = railway ? RailwayFullscreenNag : FullscreenNag;
 
   return (
     <div
@@ -30,23 +32,7 @@ export function ExamShell({
     >
       <Skin view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
 
-      {fullscreen.nagging ? (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">
-          <div className="flex max-w-md flex-col gap-4">
-            <Alert variant="danger">
-              {`${leftFullScreen(fullscreen.exits)} Your paper is still running and the clock has not stopped.`}
-            </Alert>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={fullscreen.enter}>
-                Return to full screen
-              </Button>
-              <Button type="button" variant="ghost" onClick={fullscreen.ignore}>
-                Carry on without it
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
 
       {/* The railway skin asks over the paper, as its original does; every other skin gets this. */}
       <ConfirmDialog
@@ -63,7 +49,30 @@ export function ExamShell({
   );
 }
 
+/** The default skin's warning: the design system's own alert, over the paper it interrupts. */
+function FullscreenNag({
+  fullscreen,
+  says,
+}: Readonly<{ fullscreen: ExamView['fullscreen']; says: string }>) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">
+      <div className="flex max-w-md flex-col gap-4">
+        <Alert variant="danger">{says}</Alert>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={fullscreen.enter}>
+            Return to full screen
+          </Button>
+          <Button type="button" variant="ghost" onClick={fullscreen.ignore}>
+            Carry on without it
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Said once without a count, because "1 times" is how a screen tells a student it is a machine. */
-function leftFullScreen(exits: number): string {
-  return exits > 1 ? `You left full screen ${exits} times.` : 'You left full screen.';
+function nagSays(exits: number): string {
+  const left = exits > 1 ? `You left full screen ${exits} times.` : 'You left full screen.';
+  return `${left} Your paper is still running and the clock has not stopped.`;
 }
