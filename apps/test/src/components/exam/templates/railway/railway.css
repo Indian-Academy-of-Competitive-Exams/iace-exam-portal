@@ -103,6 +103,7 @@
   background: #fff;
   color: var(--rw-ink);
   padding: 10px 12px;
+  border-bottom: 1px solid var(--rw-rule);
 }
 
 [data-exam-template='ssc_railways'] .right-time {
@@ -113,6 +114,10 @@
 
 [data-exam-template='ssc_railways'] .right-time b {
   color: #0a0;
+}
+
+[data-exam-template='ssc_railways'] .rw-sectionbar {
+  border-bottom: 1px solid var(--rw-rule);
 }
 
 [data-exam-template='ssc_railways'] .subjcttab {
@@ -224,6 +229,7 @@
 [data-exam-template='ssc_railways'] .rw-buttons {
   background: var(--rw-tray);
   border: 1px solid #f0f0f0;
+  border-top: 1px solid var(--rw-rule);
   height: 59px;
   padding: 0 12px;
   flex-shrink: 0;
@@ -355,103 +361,91 @@
 }
 
 /* ---------- answer states ----------
-   Was a sprite addressed by background-position; redrawn in CSS with the gradients
-   sampled from that sprite, so the colours are the original's to the byte. */
+   The sprite, addressed by the offsets the original addresses it by. Drawing these
+   in CSS lost the edges and the shapes the image carries, so the image is back. */
 
 [data-exam-template='ssc_railways'] .rw-cell {
   position: relative;
   display: inline-block;
+  background-image: url('./assets/sprite_1.png');
+  background-repeat: no-repeat;
   width: 34px;
   height: 34px;
   border: none;
   padding: 0;
   color: #fff;
   font-size: 12px;
-  font-weight: 400;
+  font-weight: bold;
   text-align: center;
-  line-height: 32px;
+  /* 27px, not 34: the number sits above the pentagon's point, as the original sets it. */
+  line-height: 27px;
   cursor: pointer;
   flex-shrink: 0;
 }
 
-/* Answered and not-answered share the original's downward pentagon; only the colour differs. */
-[data-exam-template='ssc_railways'] .rw-cell.answered,
-[data-exam-template='ssc_railways'] .rw-cell.notanswered {
-  clip-path: polygon(0 0, 100% 0, 100% 64%, 50% 100%, 0 64%);
-  line-height: 28px;
-}
-
 [data-exam-template='ssc_railways'] .rw-cell.answered {
-  background: linear-gradient(to bottom, #a1d62a 0%, #4ca616 100%);
-  border: 1px solid #3d850f;
+  background-position: -73px -4px;
 }
 
 [data-exam-template='ssc_railways'] .rw-cell.notanswered {
-  background: linear-gradient(to bottom, #f44d07 0%, #ad2806 100%);
-  border: 1px solid #8a2005;
+  background-position: -33px -4px;
 }
 
 [data-exam-template='ssc_railways'] .rw-cell.markforreview,
 [data-exam-template='ssc_railways'] .rw-cell.answeredmarked {
-  background: linear-gradient(to bottom, #a276c9 0%, #7857b7 100%);
-  border: 1px solid #604693;
-  border-radius: 50%;
+  background-position: -33px -39px;
 }
 
 [data-exam-template='ssc_railways'] .rw-cell.notvisited {
-  background: linear-gradient(to bottom, #f2f2f2 0%, #dcdcdc 100%);
-  border: 1px solid #b5b5b5;
-  border-radius: 3px;
+  background-position: -33px -73px;
   color: #333;
-  line-height: 30px;
 }
 
 [data-exam-template='ssc_railways'] .rw-cell.answeredmarked::after {
   content: '';
   position: absolute;
   top: -2px;
-  right: -4px;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #5cb800;
+  right: -3px;
+  height: 10px;
+  width: 10px;
+  background-image: url('./assets/sprite-green-tick.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.answeredmarked::before {
-  content: '';
-  position: absolute;
-  top: 1px;
-  right: 0;
-  z-index: 1;
-  width: 3px;
-  height: 6px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-/* The legend draws the same five shapes a size down. */
+/* The legend draws from the sprite's own 24px-tall column. */
 [data-exam-template='ssc_railways'] .rw-cell.rw-swatch {
-  width: 30px;
-  height: 30px;
-  line-height: 28px;
+  height: 24px;
+  line-height: 22px;
   cursor: default;
-  font-size: 11px;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.answered,
+[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.answered {
+  background-position: 0 -2px;
+}
+
 [data-exam-template='ssc_railways'] .rw-cell.rw-swatch.notanswered {
-  line-height: 24px;
+  background-position: 0 -50px;
+}
+
+[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.markforreview,
+[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.answeredmarked {
+  background-position: 0 -25px;
 }
 
 [data-exam-template='ssc_railways'] .rw-cell.rw-swatch.notvisited {
-  line-height: 26px;
+  background-position: 0 -77px;
 }
 
 /* ---------- info popup ---------- */
 
 /* .subjectcntnt verbatim: the tally a section's (i) drops open. */
 [data-exam-template='ssc_railways'] .rw-testname,
+[data-exam-template='ssc_railways'] .rw-sectionbar {
+  border-bottom: 1px solid var(--rw-rule);
+}
+
 [data-exam-template='ssc_railways'] .subjcttab {
   position: relative;
 }

@@ -57,7 +57,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             <RailwayTimer clock={view.clock} onExpire={view.outOfTime} />
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 px-3 py-1">
+          <div className="rw-sectionbar flex shrink-0 items-center gap-1 px-3 py-1">
             {view.sections.map((section) => (
               <span
                 key={section.id}
