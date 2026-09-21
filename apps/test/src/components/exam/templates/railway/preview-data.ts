@@ -5,12 +5,14 @@
  */
 import {
   ANSWER_STATE,
+  EXAM_TEMPLATE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
   SUPPORTED_LANGUAGES,
   QUESTION_TYPE,
   TEST_UI,
   paletteCounts,
+  type ExamBrief,
   type ExamQuestion,
   type LiveAnswer,
 } from '@iace/contracts';
@@ -167,5 +169,18 @@ export function previewView(): ExamView {
       enter: noop,
       ignore: noop,
     },
+  };
+}
+
+export function previewBrief(): ExamBrief {
+  return {
+    testId: 'preview',
+    title: 'RRB JE CBT I 26TH MAY 2019 SHIFT - 3',
+    examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+    durationSec: PAPER_SEC,
+    totalQuestions: QUESTION_COUNT,
+    languageMode: LANGUAGE_MODE.SINGLE,
+    languages: [LANGUAGE_CODE.EN, LANGUAGE_CODE.HI],
+    sections: [{ ...SECTION, marksPerQuestion: 1, negativeMarks: 0.33 }],
   };
 }
