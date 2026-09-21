@@ -7,6 +7,7 @@ import { previewBrief, previewView } from '../components/exam/templates/railway/
 
 export function RailwayPreviewPage() {
   const [begun, setBegun] = useState(false);
+  const [asking, setAsking] = useState(false);
 
   if (!begun) {
     return (
@@ -18,5 +19,22 @@ export function RailwayPreviewPage() {
     );
   }
 
-  return <ExamShell examTemplate={EXAM_TEMPLATE.SSC_RAILWAYS} view={previewView()} />;
+  const view = previewView();
+
+  return (
+    <ExamShell
+      examTemplate={EXAM_TEMPLATE.SSC_RAILWAYS}
+      view={{
+        ...view,
+        // The only callbacks the preview wires: the submit screen is unreachable otherwise.
+        submit: {
+          ...view.submit,
+          asking,
+          ask: () => setAsking(true),
+          cancel: () => setAsking(false),
+          confirm: () => setAsking(false),
+        },
+      }}
+    />
+  );
 }

@@ -13,11 +13,14 @@ import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
 import { ScrollPane } from './scroll-pane';
+import { RailwaySubmitSummary } from './submit-summary';
 import './railway.css';
 
 export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
   const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(true);
+  // The original answers Submit by taking the question area over and folding the palette away.
+  const asking = view.submit.asking;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -95,30 +98,10 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           </div>
 
           <ScrollPane className="min-h-0 flex-1">
-            {view.question ? (
-              <>
-                {/* Siblings, as in the original: the stem's 26px leading must not reach the options. */}
-                <div className="questiondiv">
-                  <RailwayQuestion
-                    question={view.question}
-                    languages={view.languages}
-                    languageMode={view.languageMode}
-                  />
-                </div>
-                <RailwayOptions
-                  question={view.question}
-                  languages={view.languages}
-                  languageMode={view.languageMode}
-                  selectedOptionId={view.selectedOptionId}
-                  onSelect={view.chooseOption}
-                />
-              </>
-            ) : (
-              <p className="questiondiv">This section is closed.</p>
-            )}
+            {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
           </ScrollPane>
 
-          <div className="rw-buttons flex items-center gap-2">
+          <div className={cn('rw-buttons flex items-center gap-2', asking && 'hidden')}>
             <button type="button" className="btn" onClick={view.markAndNext}>
               Mark for Review &amp; Next
             </button>
@@ -131,7 +114,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           </div>
         </div>
 
-        <div className="relative w-0 shrink-0">
+        <div className={cn('relative w-0 shrink-0', asking && 'hidden')}>
           <button
             type="button"
             aria-label={paletteOpen ? 'Collapse question palette' : 'Expand question palette'}
@@ -143,7 +126,10 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
         </div>
 
         <aside
-          className={cn('rw-palette min-h-0 shrink-0 flex-col', paletteOpen ? 'flex' : 'hidden')}
+          className={cn(
+            'rw-palette min-h-0 shrink-0 flex-col',
+            paletteOpen && !asking ? 'flex' : 'hidden',
+          )}
         >
           <RailwayPalette
             questionIds={view.questions.map((row) => row.questionId)}
@@ -168,6 +154,31 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
         <InstructionsModal onClose={() => setOpenPanel(null)} />
       ) : null}
     </div>
+  );
+}
+
+/** The question area: the stem and its options, or a word where a closed section was. */
+function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {
+  if (!view.question) return <p className="questiondiv">This section is closed.</p>;
+
+  return (
+    <>
+      {/* Siblings, as in the original: the stem's 26px leading must not reach the options. */}
+      <div className="questiondiv">
+        <RailwayQuestion
+          question={view.question}
+          languages={view.languages}
+          languageMode={view.languageMode}
+        />
+      </div>
+      <RailwayOptions
+        question={view.question}
+        languages={view.languages}
+        languageMode={view.languageMode}
+        selectedOptionId={view.selectedOptionId}
+        onSelect={view.chooseOption}
+      />
+    </>
   );
 }
 

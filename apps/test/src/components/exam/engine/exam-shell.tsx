@@ -18,7 +18,8 @@ export function ExamShell({
   useLockedZoom();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
-  const Skin = template === EXAM_TEMPLATE.SSC_RAILWAYS ? RailwayLayout : Layout;
+  const railway = template === EXAM_TEMPLATE.SSC_RAILWAYS;
+  const Skin = railway ? RailwayLayout : Layout;
 
   return (
     <div
@@ -47,8 +48,9 @@ export function ExamShell({
         </div>
       ) : null}
 
+      {/* The railway skin asks over the paper, as its original does; every other skin gets this. */}
       <ConfirmDialog
-        open={submit.asking}
+        open={submit.asking && !railway}
         onOpenChange={(open) => !open && submit.cancel()}
         // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Submit this test?"

@@ -532,3 +532,48 @@
   cursor: pointer;
   z-index: 40;
 }
+
+/* ---------- the submit tally ---------- */
+
+[data-exam-template='ssc_railways'] .rw-summary {
+  padding: 40px 12px;
+  color: #000;
+  font-size: 13px;
+}
+
+[data-exam-template='ssc_railways'] .rw-summary table {
+  margin: 0 auto;
+  border-collapse: collapse;
+  border: 1px solid #333;
+}
+
+[data-exam-template='ssc_railways'] .rw-summary th,
+[data-exam-template='ssc_railways'] .rw-summary td {
+  border: 1px solid #333;
+  padding: 5px 14px;
+  text-align: center;
+  font-weight: normal;
+}
+
+[data-exam-template='ssc_railways'] .rw-summary th {
+  font-weight: bold;
+}
+
+[data-exam-template='ssc_railways'] .rw-ask {
+  margin: 28px 0 14px;
+  text-align: center;
+}
+
+[data-exam-template='ssc_railways'] .rw-ask-btn {
+  background: #c9c9c9;
+  border: 1px solid #bbb;
+  border-radius: 2px;
+  color: #1b2026;
+  padding: 4px 18px;
+  cursor: pointer;
+}
+
+[data-exam-template='ssc_railways'] .rw-ask-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
