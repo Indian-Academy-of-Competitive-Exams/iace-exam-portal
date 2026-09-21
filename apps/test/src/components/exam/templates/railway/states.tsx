@@ -1,5 +1,4 @@
 /** The five answer states, drawn in CSS. Shared by the grid, the legend and the (i) tallies. */
-import { useEffect, useRef } from 'react';
 import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
 import { cn } from '@iace/ui';
 
@@ -40,19 +39,4 @@ export const TALLY_ORDER: readonly AnswerState[] = [
 
 export function StateSwatch({ state, count }: Readonly<{ state: AnswerState; count: number }>) {
   return <span className={cn('rw-cell rw-swatch', STATE_CLASS[state])}>{count}</span>;
-}
-
-/** The original scrolls these panes by their scrollbar alone, so the wheel is refused. */
-export function useScrollbarOnly<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const refuse = (event: WheelEvent) => event.preventDefault();
-    node.addEventListener('wheel', refuse, { passive: false });
-    return () => node.removeEventListener('wheel', refuse);
-  }, []);
-
-  return ref;
 }

@@ -78,13 +78,14 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           <div className="new-tab-second flex shrink-0 items-center justify-between">
             <span className="rw-qtype">Question Type : Multiple Choice Question</span>
             <span className="rw-marks">
-              Marks For Correct Answer: <em>1</em> | Negative Mark: <em>0.33</em>
+              Marks For Correct Answer: <em>1</em> | Negative Mark:{' '}
+              <em className="rw-penalty">0.33</em>
             </span>
           </div>
 
           <div className="questn flex shrink-0 items-center justify-between">
             <span>{`Question No. ${view.questionIndex + 1}`}</span>
-            <button type="button" className="btn" onClick={view.fullscreen.enter}>
+            <button type="button" className="fulscrnbtn" onClick={view.fullscreen.enter}>
               View Full Screen
             </button>
           </div>

@@ -22,7 +22,8 @@ export function ExamShell({
     <div
       // Lowercased for CSS, where the skin's whole palette hangs off this one attribute.
       data-exam-template={template.toLowerCase()}
-      className="relative flex h-dvh flex-col bg-exam-surface text-exam-ink"
+      // A sitting is not a document to copy from: neither skin lets the paper be selected.
+      className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink"
     >
       <Skin view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
 

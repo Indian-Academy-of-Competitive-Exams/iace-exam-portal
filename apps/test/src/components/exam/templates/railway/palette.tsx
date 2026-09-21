@@ -1,7 +1,7 @@
 import { ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import profileImage from './assets/profile.png';
-import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateSwatch, useScrollbarOnly } from './states';
+import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateSwatch } from './states';
 
 export function RailwayPalette({
   questionIds,
@@ -18,8 +18,6 @@ export function RailwayPalette({
   candidate: string;
   onOpen: (questionId: string) => void;
 }>) {
-  const grid = useScrollbarOnly<HTMLDivElement>();
-
   return (
     <>
       <div className="rightmenuClass flex shrink-0 items-center gap-3">
@@ -44,7 +42,7 @@ export function RailwayPalette({
 
       <div className="question-choose shrink-0">Choose a Question</div>
 
-      <div ref={grid} className="quenmbrpalt min-h-0 flex-1">
+      <div className="quenmbrpalt min-h-0 flex-1">
         <div className="quenmbrgrid">
           {questionIds.map((id, index) => {
             const state = answers[id]?.state ?? ANSWER_STATE.NOT_VISITED;

@@ -2,15 +2,12 @@
 import { contentLanguageOf } from '@iace/contracts';
 import { htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
 import { RichContent } from '@iace/ui';
-import { useScrollbarOnly } from './states';
 
 function Panel({
   title,
   onClose,
   children,
 }: Readonly<{ title: string; onClose: () => void; children: React.ReactNode }>) {
-  const body = useScrollbarOnly<HTMLDivElement>();
-
   return (
     <div className="rw-panel absolute inset-x-8 bottom-16 top-16 flex flex-col border border-[#3272b9] bg-white shadow-lg">
       <div className="rw-modal-head flex items-center justify-between">
@@ -19,9 +16,7 @@ function Panel({
           Close X
         </button>
       </div>
-      <div ref={body} className="min-h-0 flex-1 overflow-y-scroll p-4">
-        {children}
-      </div>
+      <div className="min-h-0 flex-1 overflow-y-scroll p-4">{children}</div>
     </div>
   );
 }
