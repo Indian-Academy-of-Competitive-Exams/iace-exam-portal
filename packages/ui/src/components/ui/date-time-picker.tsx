@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { DatePicker } from './date-picker';
 import { Input } from './input';
@@ -37,7 +38,17 @@ export function DateTimePicker({
   className,
   ...aria
 }: Readonly<DateTimePickerProps>) {
-  const { date, time } = partsOf(value);
+  const { date: given, time } = partsOf(value);
+
+  // A time field reports '' the moment a segment is cleared; the day survives that edit here.
+  const [held, setHeld] = React.useState({ from: value, date: given });
+  if (held.from !== value) setHeld({ from: value, date: given });
+  const date = held.from === value ? held.date : given;
+
+  const emit = (next: string, day: string) => {
+    setHeld({ from: next, date: day });
+    onChange(next);
+  };
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -48,7 +59,7 @@ export function DateTimePicker({
         min={minDate}
         disabled={disabled}
         className="flex-1"
-        onChange={(next) => onChange(joined(next, next && !time ? MIDNIGHT : time))}
+        onChange={(next) => emit(joined(next, next && !time ? MIDNIGHT : time), next)}
       />
 
       {/* eslint-disable-next-line no-restricted-syntax -- the ONE sanctioned time field: a clock spinner has no calendar to differ, and this is what DateTimePicker exists to be. */}
@@ -58,7 +69,7 @@ export function DateTimePicker({
         disabled={disabled || !date}
         value={time}
         className="w-32"
-        onChange={(event) => onChange(joined(date, event.target.value))}
+        onChange={(event) => emit(joined(date, event.target.value), date)}
       />
     </div>
   );

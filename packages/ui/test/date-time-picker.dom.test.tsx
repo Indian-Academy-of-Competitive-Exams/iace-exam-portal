@@ -44,6 +44,20 @@ describe('DateTimePicker', () => {
     assert.equal(held(), '');
   });
 
+  /** The failure this prevents: clearing the time disabled the field and wiped the day with it. */
+  it('keeps the day on screen while the time is being retyped', () => {
+    render(<Harness initial="2026-09-01T10:00" />);
+
+    fireEvent.change(timeField(), { target: { value: '' } });
+
+    assert.equal((timeField() as HTMLInputElement).disabled, false);
+    assert.equal(screen.getByLabelText('Opens').textContent?.includes('2026'), true);
+
+    fireEvent.change(timeField(), { target: { value: '14:30' } });
+
+    assert.equal(held(), '2026-09-01T14:30');
+  });
+
   it('has no time to set before a day is chosen', () => {
     render(<Harness />);
 
