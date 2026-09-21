@@ -8,8 +8,12 @@ import {
   Combobox,
   Field,
   Metric,
+  PAGE_CONTENT_CLASS,
+  PageFrame,
+  PageHeader,
   STEPPER_STATES,
   Stepper,
+  cn,
   plural,
 } from '@iace/ui';
 import { PALETTE_LEGEND } from '../../../lib/constants';
@@ -44,44 +48,48 @@ export function DefaultInstructions({
   fullscreenSupported,
 }: Readonly<{ view: InstructionsView; fullscreenSupported: boolean }>) {
   return (
-    <PageBody className="pb-6">
-      <Stepper
-        label="Before you begin"
-        onValueChange={(value) => view.goTo(value as (typeof INSTRUCTION_STEPS)[number])}
-        steps={INSTRUCTION_STEPS.map((step, index) => ({
-          value: step,
-          label: STEP_LABELS[step],
-          state:
-            index === view.stepIndex
-              ? STEPPER_STATES.CURRENT
-              : index < view.stepIndex
-                ? STEPPER_STATES.DONE
-                : STEPPER_STATES.TODO,
-          // A step still ahead is not somewhere a candidate may skip to.
-          disabled: index > view.stepIndex,
-        }))}
-      />
+    <div className={cn('flex h-dvh flex-col', PAGE_CONTENT_CLASS)}>
+      <PageFrame header={<PageHeader title={view.brief.title ?? 'Instructions'} />}>
+        <PageBody className="pb-6">
+          <Stepper
+            label="Before you begin"
+            onValueChange={(value) => view.goTo(value as (typeof INSTRUCTION_STEPS)[number])}
+            steps={INSTRUCTION_STEPS.map((step, index) => ({
+              value: step,
+              label: STEP_LABELS[step],
+              state:
+                index === view.stepIndex
+                  ? STEPPER_STATES.CURRENT
+                  : index < view.stepIndex
+                    ? STEPPER_STATES.DONE
+                    : STEPPER_STATES.TODO,
+              // A step still ahead is not somewhere a candidate may skip to.
+              disabled: index > view.stepIndex,
+            }))}
+          />
 
-      {view.step === 'GENERAL' ? <GeneralStep /> : null}
-      {view.step === 'PAPER' ? (
-        <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
-      ) : null}
+          {view.step === 'GENERAL' ? <GeneralStep /> : null}
+          {view.step === 'PAPER' ? (
+            <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
+          ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={view.back}>
-          Back
-        </Button>
-        {view.step === 'GENERAL' ? (
-          <Button type="button" onClick={view.next}>
-            Next
-          </Button>
-        ) : (
-          <Button type="button" disabled={!view.ready} onClick={view.begin}>
-            I am ready to begin
-          </Button>
-        )}
-      </div>
-    </PageBody>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={view.back}>
+              Back
+            </Button>
+            {view.step === 'GENERAL' ? (
+              <Button type="button" onClick={view.next}>
+                Next
+              </Button>
+            ) : (
+              <Button type="button" disabled={!view.ready} onClick={view.begin}>
+                I am ready to begin
+              </Button>
+            )}
+          </div>
+        </PageBody>
+      </PageFrame>
+    </div>
   );
 }
 

@@ -44,6 +44,7 @@ import {
   StatBand,
   SurfaceCard,
 } from '../components/ui';
+import { StartSitting } from '../components/exam/start-sitting';
 import { api } from '../lib/api';
 import { catalogQuery, overviewQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, ROUTES, TEST_DAYS_QUERY_KEY } from '../lib/constants';
@@ -357,11 +358,9 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
   if (row.action === null) return null;
 
   return (
-    <Button asChild size={small ? 'sm' : 'default'}>
-      <Link to={ROUTES.TEST_INSTRUCTIONS(row.test.id)}>
-        {row.action === 'RESUME' ? 'Resume' : 'Start test'}
-      </Link>
-    </Button>
+    <StartSitting testId={row.test.id} size={small ? 'sm' : 'default'}>
+      {row.action === 'RESUME' ? 'Resume' : 'Start test'}
+    </StartSitting>
   );
 }
 

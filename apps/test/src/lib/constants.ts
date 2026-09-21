@@ -21,6 +21,7 @@ export const ROUTES = {
   SERIES_PATTERN: '/series/:seriesId',
   TEST_ABOUT: (testId: string) => `/tests/${testId}/about`,
   TEST_ABOUT_PATTERN: '/tests/:testId/about',
+  /** Outside the shell with the sitting it leads into: the walk up to a paper is not a page to browse. */
   TEST_INSTRUCTIONS: (testId: string) => `/tests/${testId}/instructions`,
   TEST_INSTRUCTIONS_PATTERN: '/tests/:testId/instructions',
   /** Full screen, outside the shell: an exam hall has no navigation out of it. */

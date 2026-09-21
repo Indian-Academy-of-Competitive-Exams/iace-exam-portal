@@ -32,6 +32,7 @@ import {
   type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
+import { StartSitting } from '../components/exam/start-sitting';
 import { catalogQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import {
@@ -190,11 +191,9 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
         const action = testAction(row);
         if (action) {
           return (
-            <Button asChild size="sm">
-              <Link to={ROUTES.TEST_INSTRUCTIONS(row.id)}>
-                {action === 'RESUME' ? 'Resume' : 'Start'}
-              </Link>
-            </Button>
+            <StartSitting testId={row.id} size="sm">
+              {action === 'RESUME' ? 'Resume' : 'Start'}
+            </StartSitting>
           );
         }
         return <span className="text-xs text-muted-foreground">{shutReason(row, now)}</span>;

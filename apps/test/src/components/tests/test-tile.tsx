@@ -8,6 +8,7 @@ import {
 } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
 import { type Sittable, type TestResult } from '@iace/app-kit';
+import { StartSitting } from '../exam/start-sitting';
 
 /** The wash is scanned across a shelf; the pill is read. Held under the pill so it stays legible. */
 const STATES = {
@@ -92,11 +93,9 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
 
   if (row.action) {
     return (
-      <Button asChild size="sm" className="w-full">
-        <Link to={ROUTES.TEST_INSTRUCTIONS(row.test.id)}>
-          {row.action === 'RESUME' ? 'Resume' : 'Start test'}
-        </Link>
-      </Button>
+      <StartSitting testId={row.test.id} size="sm" className="w-full">
+        {row.action === 'RESUME' ? 'Resume' : 'Start test'}
+      </StartSitting>
     );
   }
 

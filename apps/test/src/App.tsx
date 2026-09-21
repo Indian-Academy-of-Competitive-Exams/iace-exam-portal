@@ -82,6 +82,7 @@ export function App() {
           />
         }
       >
+        <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
         <Route
           path={ROUTES.EXAM_PATTERN}
           element={whileLoading(<ExamPage />, <LoadingState>Opening your paper</LoadingState>)}
@@ -99,7 +100,6 @@ export function App() {
           <Route path={ROUTES.SAVED} element={whileLoading(<SavedPage />, <PageSkeleton />)} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
-          <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
           <Route path={ROUTES.SUBMITTED_PATTERN} element={<SubmittedPage />} />
           <Route path={ROUTES.REPORT_PATTERN} element={<ReportShell />}>
             <Route index element={whileLoading(<ScoreCardPanel />, <ReportSkeleton />)} />

@@ -29,6 +29,7 @@ import {
   type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
+import { StartSitting } from '../components/exam/start-sitting';
 import { briefQuery, catalogQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import {
@@ -213,11 +214,9 @@ function Exits({
   return (
     <div className="flex flex-wrap items-center gap-3">
       {action ? (
-        <Button asChild>
-          <Link to={ROUTES.TEST_INSTRUCTIONS(testId)}>
-            {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}
-          </Link>
-        </Button>
+        <StartSitting testId={testId}>
+          {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}
+        </StartSitting>
       ) : (
         <Button disabled>{listed ? shutReason(listed, now) : 'Not open to you'}</Button>
       )}
