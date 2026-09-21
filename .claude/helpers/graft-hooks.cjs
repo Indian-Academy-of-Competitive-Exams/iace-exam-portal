@@ -64,4 +64,7 @@ function entry(name) {
   return path.join(dir, 'dist', 'claude', name); // last-ditch; import will no-op if absent
 }
 
+// post-edit's only child is the whole-tree `graft check`, worth 4s of blocking for a cosmetic count.
+if (process.argv[2] === 'post-edit') process.env.GRAFT_TEST_CLI = path.join(dir, '.claude', 'helpers', 'graft-check-stub.cjs');
+
 import(pathToFileURL(entry("hooks.js")).href).then((m) => m.main(process.argv[2])).catch(() => { /* graft unavailable — no-op */ });
