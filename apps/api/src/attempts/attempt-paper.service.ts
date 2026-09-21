@@ -84,6 +84,7 @@ export class AttemptPaperService {
       select: {
         id: true,
         title: true,
+        examTemplate: true,
         scope: true,
         scopeRef: true,
         baseConfig: {
@@ -121,6 +122,7 @@ export class AttemptPaperService {
     return {
       testId: test.id,
       title: test.title,
+      examTemplate: test.examTemplate,
       durationSec: scopedDurationSec(
         test.baseConfig.sections,
         test.baseConfig,

@@ -219,6 +219,8 @@ export type AttemptSaveAck = z.infer<typeof attemptSaveAckSchema>;
 export const examBriefSchema = z.object({
   testId: z.string(),
   title: z.string().nullable(),
+  /** The skin, needed here because the instructions are skinned too, not only the sitting. */
+  examTemplate: examTemplateSchema,
   durationSec: z.number().int(),
   totalQuestions: z.number().int(),
   languageMode: languageModeSchema,

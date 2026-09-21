@@ -1,0 +1,160 @@
+/* The SSC/Railway pre-test screens. Colours and geometry are read off the captured
+   screens rather than a stylesheet: testpage.css turns out to be an older green theme
+   the page no longer wears, and the styling that replaced it lives in an inline block
+   this session could not extract. Marked so the next capture can replace it.
+   Source of record: docs/superpowers/specs/railway-capture/ */
+
+[data-exam-template='ssc_railways'].ri-page {
+  background: #fff;
+  color: #000;
+  font-family: 'segoe ui', sans-serif;
+  font-size: 13px;
+  user-select: none;
+}
+
+[data-exam-template='ssc_railways'] .ri-logobar {
+  height: 54px;
+  flex-shrink: 0;
+}
+
+[data-exam-template='ssc_railways'] .ri-panel {
+  border: 1px solid #b7d4e8;
+  background: #fff;
+}
+
+[data-exam-template='ssc_railways'] .ri-panelhead {
+  background: #cfe7f5;
+  border-bottom: 1px solid #b7d4e8;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+
+[data-exam-template='ssc_railways'] .ri-body {
+  padding: 10px 12px;
+  line-height: 18px;
+}
+
+[data-exam-template='ssc_railways'] .ri-body p {
+  margin: 0 0 8px;
+}
+
+[data-exam-template='ssc_railways'] .ri-lead {
+  font-weight: bold;
+}
+
+[data-exam-template='ssc_railways'] .ri-underline {
+  text-decoration: underline;
+}
+
+[data-exam-template='ssc_railways'] .ri-legend {
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+[data-exam-template='ssc_railways'] .ri-legend li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+[data-exam-template='ssc_railways'] .ri-plain {
+  margin: 0 0 8px 24px;
+  padding: 0;
+  list-style: none;
+}
+
+[data-exam-template='ssc_railways'] .ri-plain li {
+  margin-bottom: 4px;
+}
+
+[data-exam-template='ssc_railways'] .ri-panelfoot {
+  border-top: 1px solid #d8d8d8;
+  padding: 8px 10px;
+  flex-shrink: 0;
+}
+
+[data-exam-template='ssc_railways'] .ri-btn {
+  background: #e8e8e8;
+  border: 1px solid #adadad;
+  border-radius: 2px;
+  color: #333;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+[data-exam-template='ssc_railways'] .ri-begin {
+  background: #2f8fd4;
+  border-color: #2f8fd4;
+  color: #fff;
+}
+
+[data-exam-template='ssc_railways'] .ri-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[data-exam-template='ssc_railways'] .ri-viewin {
+  font-size: 12px;
+  font-weight: normal;
+}
+
+[data-exam-template='ssc_railways'] .ri-viewin select {
+  border: 1px solid #a9a9a9;
+  background: #fff;
+  font-size: 12px;
+  margin-left: 6px;
+  padding: 1px 2px;
+}
+
+[data-exam-template='ssc_railways'] .ri-choose {
+  border-top: 1px solid #d8d8d8;
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+[data-exam-template='ssc_railways'] .ri-note {
+  color: #d0021b;
+  font-size: 11px;
+}
+
+[data-exam-template='ssc_railways'] .ri-declare {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+[data-exam-template='ssc_railways'] .ri-declare input {
+  appearance: auto;
+  border: initial;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+[data-exam-template='ssc_railways'] .ri-student {
+  width: 190px;
+  border: 1px solid #b7d4e8;
+  background: #fff;
+  padding: 12px;
+  text-align: center;
+}
+
+[data-exam-template='ssc_railways'] .ri-avatar {
+  width: 85px;
+  height: 100px;
+  margin: 0 auto 8px;
+  background: #8a95a3;
+}
+
+[data-exam-template='ssc_railways'] .ri-name {
+  color: #1a6bb5;
+  font-weight: bold;
+  font-size: 12px;
+}
