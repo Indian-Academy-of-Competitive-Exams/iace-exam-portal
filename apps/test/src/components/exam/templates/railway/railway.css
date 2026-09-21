@@ -414,28 +414,10 @@
   background-size: contain;
 }
 
-/* The legend draws from the sprite's own 24px-tall column. */
+/* The legend draws the same cells the grid does, so a shape and its number read
+   identically in both; it is only not a target. */
 [data-exam-template='ssc_railways'] .rw-cell.rw-swatch {
-  height: 24px;
-  line-height: 22px;
   cursor: default;
-}
-
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.answered {
-  background-position: 0 -2px;
-}
-
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.notanswered {
-  background-position: 0 -50px;
-}
-
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.markforreview,
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.answeredmarked {
-  background-position: 0 -25px;
-}
-
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch.notvisited {
-  background-position: 0 -77px;
 }
 
 /* ---------- info popup ---------- */

@@ -7,6 +7,7 @@ import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/co
 import { Alert, Button, ConfirmDialog, plural } from '@iace/ui';
 import { type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
+import { useLockedZoom } from './lock-zoom';
 import { RailwayLayout } from '../templates/railway/layout';
 
 export function ExamShell({
@@ -14,6 +15,7 @@ export function ExamShell({
   view,
 }: Readonly<{ examTemplate: ExamTemplate; view: ExamView }>) {
   const { submit, fullscreen } = view;
+  useLockedZoom();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
   const Skin = template === EXAM_TEMPLATE.SSC_RAILWAYS ? RailwayLayout : Layout;

@@ -146,7 +146,7 @@ export function Palette({ view }: Readonly<ExamSlotProps>) {
       questionIds={view.questions.map((row) => row.questionId)}
       answers={view.answers}
       currentId={view.question?.questionId ?? null}
-      counts={view.counts}
+      counts={view.sectionCounts[view.sectionId] ?? view.counts}
       onOpen={view.openQuestion}
     />
   );

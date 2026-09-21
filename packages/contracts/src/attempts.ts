@@ -319,6 +319,25 @@ export function sectionEffort(
   });
 }
 
+/** The same tally per section, because a palette only ever draws the section it stands in. */
+export function sectionPaletteCounts(
+  sections: readonly ExamSection[],
+  questions: readonly { questionId: string; baseConfigSectionId: string }[],
+  answers: Readonly<Record<string, { state: AnswerState }>>,
+): Record<string, PaletteCounts> {
+  return Object.fromEntries(
+    sections.map((section) => [
+      section.id,
+      paletteCounts(
+        questions
+          .filter((row) => row.baseConfigSectionId === section.id)
+          .map((row) => row.questionId),
+        answers,
+      ),
+    ]),
+  );
+}
+
 /** The seat after this one, wrapping to the first: "next" is never a dead end mid-paper. */
 export function nextQuestionId(
   questionIds: readonly string[],

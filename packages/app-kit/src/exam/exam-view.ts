@@ -59,7 +59,10 @@ export interface ExamView {
   selectedOptionId: string | null;
   marked: boolean;
   answers: Readonly<Record<string, LiveAnswer>>;
+  /** The whole paper, which is what submit counts against. */
   counts: PaletteCounts;
+  /** Per section, because a palette only ever draws the section it is standing in. */
+  sectionCounts: Readonly<Record<string, PaletteCounts>>;
 
   /** The server's deadline. A skin counts down to it and never computes one. */
   clock: ExamClock;

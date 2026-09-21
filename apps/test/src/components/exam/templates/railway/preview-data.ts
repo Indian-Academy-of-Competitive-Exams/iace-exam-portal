@@ -127,6 +127,7 @@ export function previewView(): ExamView {
     marked: false,
     answers: PREVIEW_ANSWERS,
     counts: paletteCounts(questionIds, PREVIEW_ANSWERS),
+    sectionCounts: { [SECTION_ID]: paletteCounts(questionIds, PREVIEW_ANSWERS) },
 
     clock: {
       endsAt: new Date(Date.now() + PAPER_SEC * 1000).toISOString(),

@@ -14,6 +14,7 @@ import {
   openSections,
   paletteCounts,
   sectionEffort,
+  sectionPaletteCounts,
   TIMER_TEMPLATE,
   type ExamClock,
   type ExamPaper,
@@ -81,6 +82,7 @@ export function useExamView(
   );
   // One tally, read live by the section bar and handed on unchanged when the paper goes in.
   const effort = sectionEffort(paper.sections, paper.questions, state.answers);
+  const sectionCounts = sectionPaletteCounts(paper.sections, paper.questions, state.answers);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -181,6 +183,7 @@ export function useExamView(
     marked: isMarked(current ? state.answers[current.questionId]?.state : undefined),
     answers: state.answers,
     counts,
+    sectionCounts,
 
     clock,
     sectionSec: sectional ? (section?.durationSec ?? null) : null,

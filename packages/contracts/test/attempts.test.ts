@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, QUESTION_TIME_MAX_SEC, answerChangeSchema } from '../src/index';
+import {
+  ANSWER_STATE,
+  ANSWER_STATES,
+  QUESTION_TIME_MAX_SEC,
+  answerChangeSchema,
+  paletteCounts,
+  sectionPaletteCounts,
+} from '../src/index';
 
 const change = (over: Record<string, unknown> = {}) => ({
   questionId: 'q1',
@@ -33,5 +40,60 @@ describe('answerChangeSchema', () => {
       answerChangeSchema.safeParse(change({ timeSpentSec: QUESTION_TIME_MAX_SEC })).success,
       true,
     );
+  });
+});
+
+describe('sectionPaletteCounts', () => {
+  const SECTIONS = [
+    { id: 's1', name: 'Maths', order: 0, questionCount: 3, durationSec: null },
+    { id: 's2', name: 'GK', order: 1, questionCount: 2, durationSec: null },
+  ];
+  const QUESTIONS = [
+    { questionId: 'a', baseConfigSectionId: 's1' },
+    { questionId: 'b', baseConfigSectionId: 's1' },
+    { questionId: 'c', baseConfigSectionId: 's1' },
+    { questionId: 'd', baseConfigSectionId: 's2' },
+    { questionId: 'e', baseConfigSectionId: 's2' },
+  ];
+
+  it('counts each section against its own questions, not the whole paper', () => {
+    const counts = sectionPaletteCounts(SECTIONS, QUESTIONS, {
+      a: { state: ANSWER_STATE.ANSWERED },
+      b: { state: ANSWER_STATE.MARKED_REVIEW },
+      d: { state: ANSWER_STATE.ANSWERED },
+    });
+
+    assert.equal(counts.s1?.[ANSWER_STATE.ANSWERED], 1);
+    assert.equal(counts.s1?.[ANSWER_STATE.MARKED_REVIEW], 1);
+    assert.equal(counts.s1?.[ANSWER_STATE.NOT_VISITED], 1);
+    assert.equal(counts.s2?.[ANSWER_STATE.ANSWERED], 1);
+    assert.equal(counts.s2?.[ANSWER_STATE.NOT_VISITED], 1);
+  });
+
+  it('gives a section with nothing answered its full count as not visited', () => {
+    const counts = sectionPaletteCounts(SECTIONS, QUESTIONS, {});
+
+    assert.equal(counts.s1?.[ANSWER_STATE.NOT_VISITED], 3);
+    assert.equal(counts.s2?.[ANSWER_STATE.NOT_VISITED], 2);
+  });
+
+  it('partitions the paper, so the sections sum to the whole', () => {
+    const answers = {
+      a: { state: ANSWER_STATE.ANSWERED },
+      d: { state: ANSWER_STATE.ANSWERED_MARKED },
+    };
+    const whole = paletteCounts(
+      QUESTIONS.map((row) => row.questionId),
+      answers,
+    );
+    const split = sectionPaletteCounts(SECTIONS, QUESTIONS, answers);
+
+    for (const state of ANSWER_STATES) {
+      assert.equal(
+        (split.s1?.[state] ?? 0) + (split.s2?.[state] ?? 0),
+        whole[state],
+        `${state} must not be double counted or lost`,
+      );
+    }
   });
 });

@@ -75,7 +75,7 @@ export function QuestionPalette({
                 <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
                 <Text className="flex-1 text-sm text-exam-ink">{PALETTE_LEGEND[state].label}</Text>
                 <Text className="text-sm font-semibold tabular-nums text-exam-ink">
-                  {view.counts[state]}
+                  {(view.sectionCounts[view.sectionId] ?? view.counts)[state]}
                 </Text>
               </View>
             ))}

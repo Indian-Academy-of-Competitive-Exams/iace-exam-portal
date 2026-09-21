@@ -70,7 +70,10 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
                 >
                   {section.name}
                 </button>
-                <InfoTally counts={view.counts} label={`Status for ${section.name}`} />
+                <InfoTally
+                  counts={view.sectionCounts[section.id] ?? view.counts}
+                  label={`Status for ${section.name}`}
+                />
               </span>
             ))}
           </div>
@@ -145,7 +148,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             questionIds={view.questions.map((row) => row.questionId)}
             answers={view.answers}
             currentId={view.question?.questionId ?? null}
-            counts={view.counts}
+            counts={view.sectionCounts[view.sectionId] ?? view.counts}
             candidate={view.watermark}
             onOpen={view.openQuestion}
           />
