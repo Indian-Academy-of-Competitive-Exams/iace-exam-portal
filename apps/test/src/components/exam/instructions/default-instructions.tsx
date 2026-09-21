@@ -1,4 +1,4 @@
-/** The default skin's read-before-you-begin: a stepper, the rules, then the paper. */
+/** The default skin's read-before-you-begin: the rules, then the paper, over two screens. */
 import { contentLanguageOf, LANGUAGE_LABELS, type LanguageCode } from '@iace/contracts';
 import {
   Alert,
@@ -11,15 +11,16 @@ import {
   PAGE_CONTENT_CLASS,
   PageFrame,
   PageHeader,
-  STEPPER_STATES,
-  Stepper,
   cn,
   plural,
 } from '@iace/ui';
 import { PALETTE_LEGEND } from '../../../lib/constants';
-import { DividedList, DividedRow, PageBody, Section, StatBand } from '../../ui';
+import { DividedList, DividedRow, PageBody, Section, StatBand, SurfaceCard } from '../../ui';
 import { SystemCheck } from '../../system-check';
-import { INSTRUCTION_STEPS, type InstructionsView } from './use-instructions';
+import { type InstructionsView } from './use-instructions';
+
+/** What the shell calls `narrow`: a page to read, not a grid to scan. */
+const NARROW = 'max-w-5xl';
 
 const RULES: readonly { term: string; says: string }[] = [
   {
@@ -38,57 +39,52 @@ const RULES: readonly { term: string; says: string }[] = [
   },
 ];
 
-const STEP_LABELS: Readonly<Record<(typeof INSTRUCTION_STEPS)[number], string>> = {
-  GENERAL: 'Instructions',
-  PAPER: 'This paper',
-};
-
 export function DefaultInstructions({
   view,
   fullscreenSupported,
 }: Readonly<{ view: InstructionsView; fullscreenSupported: boolean }>) {
+  const { brief } = view;
+
   return (
-    <div className={cn('flex h-dvh flex-col', PAGE_CONTENT_CLASS)}>
-      <PageFrame header={<PageHeader title={view.brief.title ?? 'Instructions'} />}>
-        <PageBody className="pb-6">
-          <Stepper
-            label="Before you begin"
-            onValueChange={(value) => view.goTo(value as (typeof INSTRUCTION_STEPS)[number])}
-            steps={INSTRUCTION_STEPS.map((step, index) => ({
-              value: step,
-              label: STEP_LABELS[step],
-              state:
-                index === view.stepIndex
-                  ? STEPPER_STATES.CURRENT
-                  : index < view.stepIndex
-                    ? STEPPER_STATES.DONE
-                    : STEPPER_STATES.TODO,
-              // A step still ahead is not somewhere a candidate may skip to.
-              disabled: index > view.stepIndex,
-            }))}
+    <div className={cn('flex h-dvh flex-col', PAGE_CONTENT_CLASS, NARROW)}>
+      <PageFrame
+        header={
+          <PageHeader
+            size="display"
+            title={brief.title ?? 'Instructions'}
+            meta={`${plural(brief.totalQuestions, 'question')} · ${Math.round(brief.durationSec / 60)} minutes`}
           />
-
-          {view.step === 'GENERAL' ? <GeneralStep /> : null}
-          {view.step === 'PAPER' ? (
+        }
+        footer={<Walk view={view} />}
+      >
+        <PageBody className="pb-6">
+          {view.step === 'GENERAL' ? (
+            <GeneralStep />
+          ) : (
             <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={view.back}>
-              Back
-            </Button>
-            {view.step === 'GENERAL' ? (
-              <Button type="button" onClick={view.next}>
-                Next
-              </Button>
-            ) : (
-              <Button type="button" disabled={!view.ready} onClick={view.begin}>
-                I am ready to begin
-              </Button>
-            )}
-          </div>
+          )}
         </PageBody>
       </PageFrame>
+    </div>
+  );
+}
+
+/** Back and on, held under the body the way the paper itself holds its own controls. */
+function Walk({ view }: Readonly<{ view: InstructionsView }>) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+      <Button type="button" variant="outline" onClick={view.back}>
+        Back
+      </Button>
+      {view.step === 'GENERAL' ? (
+        <Button type="button" onClick={view.next}>
+          Next
+        </Button>
+      ) : (
+        <Button type="button" disabled={!view.ready} onClick={view.begin}>
+          I am ready to begin
+        </Button>
+      )}
     </div>
   );
 }
@@ -96,7 +92,7 @@ export function DefaultInstructions({
 function GeneralStep() {
   return (
     <>
-      <Section title="How the paper works">
+      <SurfaceCard title="How the paper works">
         <dl className="flex flex-col gap-3 text-sm leading-relaxed">
           {RULES.map((rule) => (
             <div key={rule.term}>
@@ -105,9 +101,9 @@ function GeneralStep() {
             </div>
           ))}
         </dl>
-      </Section>
+      </SurfaceCard>
 
-      <Section title="Palette">
+      <SurfaceCard title="Palette">
         <div className="flex flex-wrap gap-2">
           {PALETTE_LEGEND.map((entry) => (
             <Badge key={entry.state} variant={entry.variant}>
@@ -115,9 +111,11 @@ function GeneralStep() {
             </Badge>
           ))}
         </div>
-      </Section>
+      </SurfaceCard>
 
-      <SystemCheck />
+      <SurfaceCard title="System check">
+        <SystemCheck />
+      </SurfaceCard>
     </>
   );
 }
@@ -150,41 +148,44 @@ function PaperStep({
         </DividedList>
       </Section>
 
-      {view.dual ? (
-        <Alert variant="info">
-          {`This paper is shown in ${brief.languages.map((code) => LANGUAGE_LABELS[contentLanguageOf(code)]).join(' and ')} together. There is nothing to choose.`}
-        </Alert>
-      ) : (
-        <Field htmlFor="exam-language" label="Language">
-          {(control) => (
-            <Combobox
-              {...control}
-              clearable={false}
-              placeholder="Choose a language"
-              value={view.language}
-              onChange={(next) => view.chooseLanguage(next as LanguageCode)}
-              items={brief.languages.map((code) => ({
-                value: code,
-                label: LANGUAGE_LABELS[contentLanguageOf(code)],
-              }))}
-            />
-          )}
-        </Field>
-      )}
+      <SurfaceCard>
+        {view.dual ? (
+          <Alert variant="info">
+            {`This paper is shown in ${brief.languages.map((code) => LANGUAGE_LABELS[contentLanguageOf(code)]).join(' and ')} together. There is nothing to choose.`}
+          </Alert>
+        ) : (
+          <Field htmlFor="exam-language" label="Language">
+            {(control) => (
+              <Combobox
+                {...control}
+                clearable={false}
+                placeholder="Choose a language"
+                value={view.language}
+                onChange={(next) => view.chooseLanguage(next as LanguageCode)}
+                items={brief.languages.map((code) => ({
+                  value: code,
+                  label: LANGUAGE_LABELS[contentLanguageOf(code)],
+                }))}
+              />
+            )}
+          </Field>
+        )}
 
-      {fullscreenSupported ? (
-        <Alert variant="info">
-          The paper opens full screen, and the clock keeps running if you leave it. Your mobile
-          number is printed faintly across every question, so a photograph of one leads back to you.
-        </Alert>
-      ) : null}
+        {fullscreenSupported ? (
+          <Alert variant="info">
+            The paper opens full screen, and the clock keeps running if you leave it. Your mobile
+            number is printed faintly across every question, so a photograph of one leads back to
+            you.
+          </Alert>
+        ) : null}
 
-      <Checkbox
-        checked={view.declared}
-        onChange={(event) => view.declare(event.target.checked)}
-        label="I have read the instructions and I am ready to begin"
-        /* ui-copy-ok: consequence */ hint="The clock starts the moment you begin, and the server keeps it."
-      />
+        <Checkbox
+          checked={view.declared}
+          onChange={(event) => view.declare(event.target.checked)}
+          label="I have read the instructions and I am ready to begin"
+          /* ui-copy-ok: consequence */ hint="The clock starts the moment you begin, and the server keeps it."
+        />
+      </SurfaceCard>
     </>
   );
 }

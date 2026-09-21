@@ -27,9 +27,7 @@ export function SystemCheck() {
   const failed = checks.filter((check) => !check.ok);
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold tracking-tight text-foreground">System check</h2>
-
+    <div className="flex flex-col gap-3">
       {reachable.isLoading ? (
         <Spinner label="Checking your system" />
       ) : (
@@ -55,6 +53,6 @@ export function SystemCheck() {
           answers, and the clock does not stop while you sort it out.
         </Alert>
       ) : null}
-    </section>
+    </div>
   );
 }
