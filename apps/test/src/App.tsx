@@ -21,6 +21,11 @@ import { NotificationsPage } from './routes/notifications';
 import { NotificationSettingsPage } from './routes/notification-settings';
 import { PageSkeleton, ReportSkeleton } from './components/ui';
 
+/** DEV only, and lazy so the standing paper never reaches a student's payload. */
+const RailwayPreviewPage = React.lazy(() =>
+  import('./routes/railway-preview').then((module) => ({ default: module.RailwayPreviewPage })),
+);
+
 /** Every screen that draws charts or equations, so the plotting and maths libraries stay off the first payload. */
 const DashboardPage = React.lazy(() =>
   import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
@@ -59,6 +64,15 @@ export function App() {
   return (
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+      {import.meta.env.DEV ? (
+        <Route
+          path="/railway-preview"
+          element={whileLoading(
+            <RailwayPreviewPage />,
+            <LoadingState>Opening your paper</LoadingState>,
+          )}
+        />
+      ) : null}
       <Route
         element={
           <ProtectedRoute

@@ -7,6 +7,7 @@ import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/co
 import { Alert, Button, ConfirmDialog, plural } from '@iace/ui';
 import { type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
+import { RailwayLayout } from '../templates/railway/layout';
 
 export function ExamShell({
   examTemplate,
@@ -15,6 +16,7 @@ export function ExamShell({
   const { submit, fullscreen } = view;
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
+  const Skin = template === EXAM_TEMPLATE.SSC_RAILWAYS ? RailwayLayout : Layout;
 
   return (
     <div
@@ -22,7 +24,7 @@ export function ExamShell({
       data-exam-template={template.toLowerCase()}
       className="relative flex h-dvh flex-col bg-exam-surface text-exam-ink"
     >
-      <Layout view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
+      <Skin view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
 
       {fullscreen.nagging ? (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">

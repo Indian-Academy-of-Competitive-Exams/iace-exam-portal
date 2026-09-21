@@ -4,6 +4,11 @@ import config from '@iace/config/eslint-react';
 export default [
   ...config,
   {
+    // This skin reproduces a third-party CBT exactly; a token here would be a deviation from it.
+    files: ['src/components/exam/templates/railway/**'],
+    rules: { 'no-restricted-syntax': 'off' },
+  },
+  {
     files: ['public/sw.js'],
     languageOptions: {
       ecmaVersion: 2022,

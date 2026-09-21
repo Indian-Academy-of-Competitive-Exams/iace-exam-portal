@@ -1,0 +1,409 @@
+/* Ported verbatim from the SSC/Railway CBT (bankingTest.css + its inline overrides).
+   Raw values are deliberate: this skin reproduces a third-party screen exactly, so a
+   token would be a deviation. Scoped to the skin attribute, and imported by this
+   template alone — never from index.css.
+   Source of record: docs/superpowers/specs/railway-capture/ */
+
+[data-exam-template='ssc_railways'] {
+  --rw-header-from: #3272b9;
+  --rw-header-to: #458dd5;
+  --rw-palette-bg: #e4edf7;
+  --rw-grid-bg: #e5f6fd;
+  --rw-rule: #333;
+  --rw-accent: #0063c6;
+  --rw-save: #3778bd;
+  --rw-save-edge: #a9d0f5;
+  --rw-submit: #38aae9;
+
+  font-family: 'segoe ui', sans-serif;
+  background: #fff;
+  color: #000;
+  /* The app may sit in a dark scheme; this screen is a light one, and native radios follow it. */
+  color-scheme: light;
+}
+
+[data-exam-template='ssc_railways'] .rw-header {
+  background: linear-gradient(to bottom, var(--rw-header-from) 0%, var(--rw-header-to) 100%);
+  border-bottom: 1px solid var(--rw-rule);
+  height: 54px;
+  flex-shrink: 0;
+}
+
+[data-exam-template='ssc_railways'] .logo-header {
+  padding: 0 20px;
+  width: 100%;
+  text-align: center;
+}
+
+[data-exam-template='ssc_railways'] .rw-utilitybar {
+  background: #000;
+  color: #fff;
+  height: 30px;
+  line-height: 30px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+[data-exam-template='ssc_railways'] .rw-utilitybar button {
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+[data-exam-template='ssc_railways'] .rw-testname {
+  background: #5bc0de;
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+[data-exam-template='ssc_railways'] .rw-sectionbar {
+  border-bottom: 1px solid #d8d8d8;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 6px 10px;
+}
+
+[data-exam-template='ssc_railways'] .rw-timeleft {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+[data-exam-template='ssc_railways'] .rw-timeleft b {
+  color: #0a0;
+}
+
+[data-exam-template='ssc_railways'] .questn {
+  color: #000;
+  font-size: 12px;
+  height: 40px;
+  line-height: 37px;
+  padding: 0 6px;
+  text-align: center;
+}
+
+[data-exam-template='ssc_railways'] .rw-sectiontab {
+  background: #4a90c4;
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  padding: 8px 22px;
+  cursor: pointer;
+}
+
+[data-exam-template='ssc_railways'] .rw-sectiontab[data-state='active'] {
+  background: #3272b9;
+}
+
+[data-exam-template='ssc_railways'] .questiontype {
+  border-bottom: 1px solid var(--rw-rule);
+  font-size: 19px;
+  font-weight: bold;
+  height: 40px;
+  line-height: 40px;
+  margin: 0 3px;
+}
+
+[data-exam-template='ssc_railways'] .rw-qtype {
+  color: #e8663d;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+[data-exam-template='ssc_railways'] .rw-marks {
+  font-size: 11px;
+  font-weight: bold;
+}
+
+[data-exam-template='ssc_railways'] .rw-marks em {
+  font-style: normal;
+  color: #e8663d;
+}
+
+[data-exam-template='ssc_railways'] .rw-qno {
+  border-bottom: 1px solid #d8d8d8;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 9px 10px;
+}
+
+/* .buttons in the original: a fixed 57px tray, not a border-top on the paper. */
+[data-exam-template='ssc_railways'] .rw-buttons {
+  background: #e8e9e9;
+  border: 1px solid #f0f0f0;
+  height: 57px;
+  padding: 0 10px;
+}
+
+[data-exam-template='ssc_railways'] .rw-palette {
+  width: 304px;
+}
+
+[data-exam-template='ssc_railways'] .questiondiv {
+  font-size: 14px;
+  line-height: 26px;
+  margin: 0 10px 15px 10px;
+}
+
+[data-exam-template='ssc_railways'] .questiondiv img,
+[data-exam-template='ssc_railways'] .optn img {
+  max-width: 500px !important;
+  vertical-align: middle;
+}
+
+[data-exam-template='ssc_railways'] .option {
+  margin: 0 10px;
+  line-height: normal;
+}
+
+[data-exam-template='ssc_railways'] .optn {
+  margin: 8px 0;
+  width: 100%;
+  display: inline-block;
+}
+
+[data-exam-template='ssc_railways'] .optn .rdobtn {
+  margin: 5px 10px;
+  float: left;
+  cursor: pointer;
+}
+
+[data-exam-template='ssc_railways'] .optn > span {
+  font-size: 14px;
+  font-weight: normal;
+  float: left;
+}
+
+[data-exam-template='ssc_railways'] .optn .rdobtn + span {
+  max-width: 80%;
+  display: inline-block;
+  cursor: pointer;
+}
+
+/* ---------- controls ---------- */
+
+[data-exam-template='ssc_railways'] .btn {
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  margin: 11px 0 0 0;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 2px;
+  font-size: 13px;
+}
+
+[data-exam-template='ssc_railways'] .btn:hover {
+  background: var(--rw-save);
+  color: #fff;
+}
+
+[data-exam-template='ssc_railways'] .savenext {
+  background-color: var(--rw-save);
+  border: 2px solid var(--rw-save-edge);
+  color: #ffffff;
+  margin-right: 10px;
+  margin-top: 14px;
+  padding: 5px 9px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+[data-exam-template='ssc_railways'] .rw-submit {
+  display: inline-block;
+  width: auto;
+  background: var(--rw-submit);
+  color: #fff;
+  height: 36px;
+  line-height: 36px;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  padding: 0 30px;
+  cursor: pointer;
+}
+
+/* ---------- palette ---------- */
+
+[data-exam-template='ssc_railways'] .quepalette {
+  width: 100%;
+  background: var(--rw-palette-bg);
+}
+
+[data-exam-template='ssc_railways'] .quenmbrpalt {
+  background: var(--rw-grid-bg);
+  overflow-y: auto;
+  padding: 7px 0;
+  width: 100%;
+  box-sizing: border-box;
+  height: 30vh;
+  min-height: 0;
+}
+
+/* Five across, as the original wraps: 5 x 34px cells with the sprite's own 12px gutter. */
+[data-exam-template='ssc_railways'] .quenmbrgrid {
+  display: grid;
+  grid-template-columns: repeat(5, 34px);
+  gap: 5px 16px;
+  padding-left: 15px;
+}
+
+[data-exam-template='ssc_railways'] .bottom-legend {
+  color: #fff;
+  font-size: 15px;
+  margin: 0;
+  padding: 6px 0;
+  font-weight: bold;
+  text-align: center;
+  width: 100%;
+  background: #4a90c4;
+}
+
+[data-exam-template='ssc_railways'] .legend td {
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 16px;
+}
+
+/* Tailwind preflight zeroes every border; a native radio needs its own back or it fills solid. */
+[data-exam-template='ssc_railways'] .optn .rdobtn {
+  appearance: auto;
+  border: initial;
+  width: 13px;
+  height: 13px;
+}
+
+[data-exam-template='ssc_railways'] .rw-viewin {
+  font-size: 12px;
+}
+
+[data-exam-template='ssc_railways'] .rw-viewin select {
+  border: 1px solid #a9a9a9;
+  font-size: 12px;
+  padding: 1px 2px;
+  margin-left: 6px;
+  background: #fff;
+}
+
+/* A tab on the palette's edge, not a full-height strip — it sits over the seam. */
+[data-exam-template='ssc_railways'] .rw-palette-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 46px;
+  background: #222;
+  color: #fff;
+  font-size: 13px;
+  line-height: 46px;
+  border: none;
+  cursor: pointer;
+  z-index: 999;
+}
+
+[data-exam-template='ssc_railways'] .rw-logo {
+  background: #e02b20;
+  color: #fff;
+  font-weight: bold;
+  font-size: 15px;
+  letter-spacing: 1px;
+  padding: 3px 9px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* The five states are one sprite, addressed by offset — the shapes are the original's. */
+[data-exam-template='ssc_railways'] .quetype {
+  background: url('./assets/sprite_1.png');
+  height: 24px;
+  width: 34px;
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+}
+
+[data-exam-template='ssc_railways'] .quetype.answered {
+  background-position: 0 -2px;
+}
+[data-exam-template='ssc_railways'] .quetype.notanswered {
+  background-position: 0 -50px;
+}
+[data-exam-template='ssc_railways'] .quetype.markforreview {
+  background-position: 0 -25px;
+}
+[data-exam-template='ssc_railways'] .quetype.notvisited {
+  background-position: 0 -77px;
+  color: #333;
+}
+[data-exam-template='ssc_railways'] .quetype.selectd-check {
+  background-position: 0 -101px;
+}
+
+[data-exam-template='ssc_railways'] .quetype1 {
+  background: url('./assets/sprite_1.png');
+  height: 34px;
+  width: 34px;
+  text-align: center;
+  color: #fff;
+  line-height: 27px;
+  font-size: 12px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+[data-exam-template='ssc_railways'] .answered1 {
+  background-position: -73px -4px;
+}
+[data-exam-template='ssc_railways'] .notanswered2 {
+  background-position: -33px -4px;
+}
+[data-exam-template='ssc_railways'] .markforreview3 {
+  background-position: -33px -39px;
+}
+[data-exam-template='ssc_railways'] .notvisited4 {
+  background-position: -33px -73px;
+  color: #333 !important;
+}
+
+[data-exam-template='ssc_railways'] .selectd {
+  background-position: -33px -39px;
+  position: relative;
+}
+
+[data-exam-template='ssc_railways'] .selectd::after {
+  content: '';
+  height: 10px;
+  width: 10px;
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  background-image: url('./assets/sprite-green-tick.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+/* ---------- modals (question paper / instructions) ---------- */
+
+[data-exam-template='ssc_railways'] .rw-modal-head {
+  background: #3272b9;
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 8px 12px;
+}
+
+[data-exam-template='ssc_railways'] .rw-modal-close {
+  font-size: 12px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: #fff;
+}
