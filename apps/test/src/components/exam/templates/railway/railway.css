@@ -430,26 +430,33 @@
 
 [data-exam-template='ssc_railways'] .subjectcntnt {
   background: #fff;
-  /* Preflight's border-box would eat the 17px gutters the original adds outside 167px. */
-  box-sizing: content-box;
-  min-width: 167px;
+  /* The original is 167px of content inside 17px gutters; preflight makes width the total. */
+  width: 201px;
   left: 1px;
   top: 40px;
   border: 1px solid #ccc;
   border-radius: 0 0 6px 6px;
   box-shadow: 0 5px 4px #dedede;
-  padding: 0 17px;
+  padding: 12px 17px;
   position: absolute;
-  width: 167px;
   z-index: 60;
   font-size: 12px;
   color: #000;
 }
 
 [data-exam-template='ssc_railways'] .subjectcntnt td {
-  padding: 6px 0;
+  padding: 7px 0;
   font-weight: 700;
+  line-height: 16px;
   vertical-align: middle;
+}
+
+/* The icon is a button here, so the sprite needs the box a span got for free. */
+[data-exam-template='ssc_railways'] button.rw-icon {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 
 /* ---------- overlays ---------- */

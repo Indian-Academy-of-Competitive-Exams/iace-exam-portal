@@ -25,19 +25,17 @@ export function InfoTally({
         type="button"
         aria-label={label}
         aria-expanded={open}
-        className="flex size-4 items-center justify-center rounded-full bg-white text-[10px] font-bold italic text-[#4787c2]"
+        className="rw-icon instruction_icon"
         onClick={() => setOpen((was) => !was)}
-      >
-        i
-      </button>
+      />
 
       {open ? (
         <table className="subjectcntnt">
           <tbody>
             {TALLY_ORDER.map((state) => (
               <tr key={state}>
-                <td>{`${STATE_LABEL[state]}:`}</td>
-                <td className="pl-2 text-right">
+                <td className="pr-4">{`${STATE_LABEL[state]}:`}</td>
+                <td className="text-right">
                   <StateSwatch state={state} count={counts[state]} />
                 </td>
               </tr>
