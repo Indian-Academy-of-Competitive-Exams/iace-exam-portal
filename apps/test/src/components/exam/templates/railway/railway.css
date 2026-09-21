@@ -83,7 +83,9 @@
   padding: 6px 12px;
 }
 
+/* Positioned because the (i) inside it drops its tally against whatever control holds it. */
 [data-exam-template='ssc_railways'] .rw-testname {
+  position: relative;
   background: #5bc0de;
   color: #fff;
   font-size: 12px;
@@ -468,7 +470,8 @@
   /* The original is 167px of content inside 17px gutters; preflight makes width the total. */
   width: 201px;
   left: 1px;
-  top: 40px;
+  /* The original says 40px, which is its tab's height — read as one so a shorter control fits too. */
+  top: 100%;
   border: 1px solid #ccc;
   border-radius: 0 0 6px 6px;
   box-shadow: 0 5px 4px #dedede;
