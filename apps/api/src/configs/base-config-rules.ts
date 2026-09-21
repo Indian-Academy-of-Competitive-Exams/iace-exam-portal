@@ -1,7 +1,11 @@
 import {
+  EXAM_TEMPLATE,
+  TEST_UI,
   TIMER_TEMPLATE,
   type BaseConfigModuleDraft,
   type BaseConfigSectionDraft,
+  type ExamTemplate,
+  type TestUi,
   type TimerTemplate,
   type UpdateBaseConfigBody,
 } from '@iace/contracts';
@@ -28,6 +32,15 @@ const NOT_A_FIELD = ['expectedUpdatedAt'] as const;
 export function locksOutEdit(input: UpdateBaseConfigBody): boolean {
   const unfrozen = new Set<string>([...UNFROZEN_FIELDS, ...NOT_A_FIELD]);
   return Object.keys(input).some((key) => !unfrozen.has(key));
+}
+
+export const OMR_IS_DEFAULT_ONLY_MESSAGE =
+  'An OMR sheet is only drawn by the default template. Set the template to Default, or answer on screen.';
+
+/** A bubble sheet is the default template's affordance; no other skin draws one. */
+export function renderModeIssue(examTemplate: ExamTemplate, defaultTestUi: TestUi): string | null {
+  const mismatched = defaultTestUi === TEST_UI.OMR && examTemplate !== EXAM_TEMPLATE.DEFAULT;
+  return mismatched ? OMR_IS_DEFAULT_ONLY_MESSAGE : null;
 }
 
 /**

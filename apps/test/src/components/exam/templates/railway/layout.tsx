@@ -3,9 +3,9 @@
  * value and callback off the view — only the markup and the class names differ, so
  * the two skins cannot drift into behaving differently.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { secondsLeft, type ExamClock } from '@iace/contracts';
-import { useCountdown } from '@iace/app-kit';
+import { useCountdown, type ExamView } from '@iace/app-kit';
 import { cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { type ExamSlotProps } from '../shared/slots';
@@ -55,7 +55,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
 
           <div className="time-left-sect flex shrink-0 items-center justify-between">
             <span>Section</span>
-            <RailwayTimer clock={view.clock} onExpire={view.outOfTime} />
+            <RailwayTimer view={view} />
           </div>
 
           <div className="rw-sectionbar flex shrink-0 items-center gap-1 px-3 py-1">
@@ -171,10 +171,50 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
   );
 }
 
+/** One clock: a sectional paper counts the section it stands in, a composite one the paper. */
+function RailwayTimer({ view }: Readonly<{ view: ExamView }>) {
+  const sectionSec = view.sectional ? view.sectionSec : null;
+
+  return sectionSec ? (
+    <RailwaySectionClock key={view.sectionId} allowedSec={sectionSec} onExpire={view.endSection} />
+  ) : (
+    <RailwayPaperClock clock={view.clock} onExpire={view.outOfTime} />
+  );
+}
+
 /** "Time Left : 89:58" — the original counts minutes past 59 rather than rolling into hours. */
-function RailwayTimer({ clock, onExpire }: Readonly<{ clock: ExamClock; onExpire: () => void }>) {
+function RailwayPaperClock({
+  clock,
+  onExpire,
+}: Readonly<{ clock: ExamClock; onExpire: () => void }>) {
   const left = useCountdown(
     useCallback(() => secondsLeft(clock, Date.now()), [clock]),
+    onExpire,
+  );
+
+  return (
+    <p aria-live="off" className="right-time">
+      Time Left : <b>{minuteClock(left)}</b>
+    </p>
+  );
+}
+
+/** A duration from the moment the section opened, not a server deadline the paper carries. */
+function RailwaySectionClock({
+  allowedSec,
+  onExpire,
+}: Readonly<{ allowedSec: number; onExpire: () => void }>) {
+  const openedAt = useRef(0);
+
+  useEffect(() => {
+    openedAt.current = Date.now();
+  }, []);
+
+  const left = useCountdown(
+    useCallback(() => {
+      const since = openedAt.current === 0 ? Date.now() : openedAt.current;
+      return Math.max(0, allowedSec - Math.round((Date.now() - since) / 1000));
+    }, [allowedSec]),
     onExpire,
   );
 

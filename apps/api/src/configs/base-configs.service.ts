@@ -3,13 +3,17 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  EXAM_TEMPLATE,
   FORM_LEVEL_FIELD,
+  TEST_UI,
   TIMER_TEMPLATE,
   configTotalsOf,
   fieldDiff,
   type BaseConfig,
   type BaseConfigDetail,
   type BaseConfigListQuery,
+  type ExamTemplate,
+  type TestUi,
   type BaseConfigModuleDraft,
   type BaseConfigSectionDraft,
   type CloneBaseConfigBody,
@@ -34,6 +38,7 @@ import { ExamStagesService } from './exam-stages.service';
 import {
   configDeletionBlocker,
   configShapeIssues,
+  renderModeIssue,
   INACTIVE_CONFIG_MESSAGE,
   locksOutEdit,
   LOCKED_CONFIG_MESSAGE,
@@ -118,6 +123,10 @@ export class BaseConfigsService {
     const timerTemplate = input.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE;
     const modules = input.modules ?? [];
     this.assertShape(timerTemplate, input.sections, modules, input.durationSec);
+    this.assertRenderMode(
+      input.examTemplate ?? EXAM_TEMPLATE.DEFAULT,
+      input.defaultTestUi ?? TEST_UI.CBT,
+    );
 
     const id = await this.prisma.$transaction(async (tx) => {
       if (input.isDefault) await clearDefault(tx, input.examStageId, null);
@@ -170,6 +179,10 @@ export class BaseConfigsService {
       sections ?? config.sections.map(toSectionDraft),
       modules ?? config.modules,
       input.durationSec ?? config.durationSec,
+    );
+    this.assertRenderMode(
+      input.examTemplate ?? (config.examTemplate as ExamTemplate),
+      input.defaultTestUi ?? (config.defaultTestUi as TestUi),
     );
 
     await this.claimEdit(id, editor);
@@ -328,6 +341,15 @@ export class BaseConfigsService {
 
   private editingBy(id: string) {
     return editLockHeldBy(this.redis, this.prisma, redisKeys.baseConfigEditLock(id));
+  }
+
+  private assertRenderMode(examTemplate: ExamTemplate, defaultTestUi: TestUi): void {
+    const issue = renderModeIssue(examTemplate, defaultTestUi);
+    if (issue === null) return;
+
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, issue, {
+      fieldErrors: { defaultTestUi: [issue] },
+    });
   }
 
   private assertShape(

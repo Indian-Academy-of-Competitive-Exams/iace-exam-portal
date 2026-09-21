@@ -437,6 +437,10 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   });
   // Only a config other than this one can lose the badge; re-saving the default takes nothing.
   const losingDefault = stageDefault.data?.items.find((row) => row.id !== detail?.id) ?? null;
+  const examTemplate = useWatch({ control: form.control, name: 'examTemplate' });
+  const defaultTestUi = useWatch({ control: form.control, name: 'defaultTestUi' });
+  // A bubble sheet is the default template's affordance; no other skin draws one.
+  const omrNeedsDefault = defaultTestUi === TEST_UI.OMR && examTemplate !== EXAM_TEMPLATE.DEFAULT;
   const timerTemplate = useWatch({ control: form.control, name: 'timerTemplate' });
   const watchedSections = useWatch({ control: form.control, name: 'sections' }) ?? [];
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
@@ -586,6 +590,13 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             label="Test interface"
             items={TEST_UIS.map((value) => ({ value, label: TEST_UI_LABELS[value] }))}
           />
+
+          {omrNeedsDefault ? (
+            <Alert variant="warning">
+              An OMR sheet is only drawn by the default template. Set the template to Default, or
+              answer on screen.
+            </Alert>
+          ) : null}
 
           <FormCombobox
             form={form}

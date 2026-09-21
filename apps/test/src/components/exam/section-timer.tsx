@@ -12,7 +12,8 @@ const URGENT_SEC = 60;
 export function SectionTimer({
   allowedSec,
   onExpire,
-}: Readonly<{ allowedSec: number; onExpire: () => void }>) {
+  labelled = false,
+}: Readonly<{ allowedSec: number; onExpire: () => void; labelled?: boolean }>) {
   // A timestamp, not a decrementing counter: a backgrounded tab must not buy a student time.
   const startedAt = useRef(0);
 
@@ -30,13 +31,16 @@ export function SectionTimer({
 
   return (
     <p
+      aria-live="off"
       className={cn(
-        'flex items-center gap-1.5 text-xs font-semibold tabular-nums',
-        left <= URGENT_SEC ? 'text-exam-timer-urgent-border' : 'text-exam-ink-muted',
+        'flex items-center gap-2 rounded-exam-option border px-3 py-1.5 text-sm font-semibold tabular-nums',
+        left <= URGENT_SEC
+          ? 'border-exam-timer-urgent-border bg-exam-timer-urgent text-exam-timer-urgent-ink'
+          : 'border-exam-timer-border bg-exam-timer-bg text-exam-timer-ink',
       )}
     >
-      <Hourglass aria-hidden className="size-3.5" />
-      <span className="sr-only">Time left in this section</span>
+      {labelled ? null : <Hourglass aria-hidden className="size-4" />}
+      <span className={labelled ? 'font-normal' : 'sr-only'}>Time left in this section</span>
       {clockText(left)}
     </p>
   );

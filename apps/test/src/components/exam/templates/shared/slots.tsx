@@ -53,7 +53,19 @@ export function Header({ view, config }: Readonly<ExamSlotProps>) {
   );
 }
 
+/** One clock a sitting: composite counts the paper, sectional counts the section it stands in. */
 export function Timer({ view, config }: Readonly<ExamSlotProps>) {
+  if (view.sectional && view.sectionSec) {
+    return (
+      <SectionTimer
+        key={view.sectionId}
+        allowedSec={view.sectionSec}
+        onExpire={view.endSection}
+        labelled={config.timerFormat === 'LABELLED'}
+      />
+    );
+  }
+
   return (
     <ExamTimer
       clock={view.clock}
@@ -97,13 +109,6 @@ export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
       </TabsList>
 
       <div className="flex items-center gap-3">
-        {view.sectionSec ? (
-          <SectionTimer
-            key={view.sectionId}
-            allowedSec={view.sectionSec}
-            onExpire={view.endSection}
-          />
-        ) : null}
         {config.timerPosition === 'SECTION_BAR' ? <Timer view={view} config={config} /> : null}
       </div>
     </div>

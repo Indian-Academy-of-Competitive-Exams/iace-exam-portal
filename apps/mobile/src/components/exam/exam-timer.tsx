@@ -74,14 +74,23 @@ export function SectionTimer({
   );
 
   return (
-    <Text
+    <View
       accessibilityLabel={`Time left in this section ${clockText(left)}`}
       className={cn(
-        'text-sm font-semibold tabular-nums',
-        left <= SECTION_URGENT_SEC ? 'text-exam-timer-urgent-border' : 'text-exam-ink-muted',
+        'h-11 justify-center rounded-exam-option border px-3',
+        left <= SECTION_URGENT_SEC
+          ? 'border-exam-timer-urgent-border bg-exam-timer-urgent'
+          : 'border-exam-timer-border bg-exam-timer-bg',
       )}
     >
-      {clockText(left)}
-    </Text>
+      <Text
+        className={cn(
+          'text-base font-semibold tabular-nums',
+          left <= SECTION_URGENT_SEC ? 'text-exam-timer-urgent-ink' : 'text-exam-timer-ink',
+        )}
+      >
+        {clockText(left)}
+      </Text>
+    </View>
   );
 }
