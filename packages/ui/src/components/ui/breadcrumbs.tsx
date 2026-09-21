@@ -38,7 +38,7 @@ export function Breadcrumbs({ items, renderLink, className }: Readonly<Breadcrum
   const parent = parentOf(items);
 
   return (
-    <nav aria-label="Breadcrumb" className={cn('mb-2 text-sm text-muted-foreground', className)}>
+    <nav aria-label="Breadcrumb" className={cn('text-sm text-muted-foreground', className)}>
       {parent ? (
         <span className="flex items-center gap-1.5 sm:hidden">
           <ArrowLeft className="size-4 shrink-0" aria-hidden />

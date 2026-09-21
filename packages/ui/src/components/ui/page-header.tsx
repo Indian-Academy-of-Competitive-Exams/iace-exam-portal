@@ -25,21 +25,46 @@ export function PageHeader({
   /** `display` is for a landing or a result; every other page stays at `default`. */
   size?: PageHeaderSize;
 }>) {
-  return (
-    <div>
-      {breadcrumbs}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-4">
-          {leading}
-          <div>
-            <h1 className={cn(TITLE_SIZE[size], 'font-semibold tracking-tight text-foreground')}>
-              {title}
-            </h1>
-            {meta ? <p className="mt-1 text-sm text-muted-foreground">{meta}</p> : null}
-          </div>
-        </div>
-        {action}
-      </div>
+  const heading = (
+    <h1 className={cn(TITLE_SIZE[size], 'font-semibold tracking-tight text-foreground')}>
+      {title}
+    </h1>
+  );
+
+  // Each wrapper below exists only where its reason does: a bare title is one <h1> and nothing else.
+  const titled = meta ? (
+    <div className="flex flex-col gap-1">
+      {heading}
+      <p className="text-sm text-muted-foreground">{meta}</p>
     </div>
+  ) : (
+    heading
+  );
+
+  const led = leading ? (
+    <div className="flex items-center gap-4">
+      {leading}
+      {titled}
+    </div>
+  ) : (
+    titled
+  );
+
+  const row = action ? (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      {led}
+      {action}
+    </div>
+  ) : (
+    led
+  );
+
+  return breadcrumbs ? (
+    <div className="flex flex-col gap-2">
+      {breadcrumbs}
+      {row}
+    </div>
+  ) : (
+    row
   );
 }
