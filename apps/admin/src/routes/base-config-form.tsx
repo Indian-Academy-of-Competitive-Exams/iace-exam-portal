@@ -389,6 +389,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
   const [isEditing, setIsEditing] = useState(!existing);
   const [asking, setAsking] = useState(false);
+  const [promoting, setPromoting] = useState<ConfigFormValues | null>(null);
 
   const clone = useMutation({
     meta: { success: 'Configuration cloned.' },
@@ -429,6 +430,13 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   });
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
+  const stageDefault = useQuery({
+    queryKey: [...QUERY_KEYS.BASE_CONFIGS, 'default', examStageId],
+    queryFn: () => api.admin.baseConfigs.list({ examStageId, defaultOnly: 'true', pageSize: 1 }),
+    enabled: Boolean(examStageId),
+  });
+  // Only a config other than this one can lose the badge; re-saving the default takes nothing.
+  const losingDefault = stageDefault.data?.items.find((row) => row.id !== detail?.id) ?? null;
   const timerTemplate = useWatch({ control: form.control, name: 'timerTemplate' });
   const watchedSections = useWatch({ control: form.control, name: 'sections' }) ?? [];
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
@@ -450,7 +458,10 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   return (
     <FormPanel
       disabled={!isEditing}
-      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      onSubmit={form.handleSubmit((values) => {
+        if (values.isDefault && losingDefault) return setPromoting(values);
+        save.mutate(values);
+      })}
       footer={
         isEditing ? (
           <>
@@ -720,6 +731,17 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
           onConfirm={() => clone.mutate()}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={promoting !== null}
+        onOpenChange={(open) => !open && setPromoting(null)}
+        loading={save.isPending}
+        title="The stage's default pattern"
+        // ui-copy-ok: consequence — a confirm names what it is about to take away
+        description={`${losingDefault?.name ?? 'The current default'} is the stage's default now and stops being it. Tests already built keep the configuration they were created from; only new ones start from this.`}
+        confirmLabel="Make it the default"
+        onConfirm={() => promoting && save.mutate(promoting)}
+      />
     </FormPanel>
   );
 }
