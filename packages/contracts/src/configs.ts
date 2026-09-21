@@ -75,7 +75,7 @@ export const EXAM_TEMPLATE_CONFIG: Readonly<Record<ExamTemplate, ExamTemplateCon
   [EXAM_TEMPLATE.SSC_RAILWAYS]: {
     timerPosition: 'SECTION_BAR',
     timerFormat: 'LABELLED',
-    palettePosition: 'LEFT',
+    palettePosition: 'RIGHT',
     sectionSwitch: 'BUTTONS',
     watermark: 'SCREEN',
   },
