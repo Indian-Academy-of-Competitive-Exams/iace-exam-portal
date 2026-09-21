@@ -105,8 +105,9 @@ export function FormPanel({
     ) : null;
 
   return (
-    <div data-page-frame className={FILLS}>
-      {header ? <div className="shrink-0">{header}</div> : null}
+    <div data-page-frame className={cn(FILLS, 'gap-4')}>
+      {/* A fragment here too, so what a screen stacks beside the heading is spaced by the frame. */}
+      {header ? <div className="flex shrink-0 flex-col gap-4">{header}</div> : null}
 
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {onSubmit ? (

@@ -16,7 +16,10 @@ export const PAGE_CONTENT_CLASS = [
 ].join(' ');
 
 /** `header` is a fragment, so the space between what a screen puts in it is the frame's to give. */
-const HEADER_BLOCK = 'mb-4 flex shrink-0 flex-col gap-4';
+const HEADER_BLOCK = 'flex shrink-0 flex-col gap-4';
+
+/** The frame declares the space between its regions; no child carries a margin to make it. */
+const FRAME_COLUMN = 'gap-4';
 
 /** Bled back out to the content region so the bar rides its edge, not the text it sits beside. */
 const REGION_BLEED = '-mx-5 px-5 xl:-mx-8 xl:px-8 2xl:-mx-10 2xl:px-10 [scrollbar-gutter:stable]';
@@ -65,14 +68,16 @@ export function PageFrame({
     : cn('relative min-h-0 flex-1 overflow-y-auto', REGION_BLEED, className);
 
   const frame = (
-    <div data-page-frame className={FILLS}>
+    <div data-page-frame className={cn(FILLS, FRAME_COLUMN)}>
       <FrameTop header={header} filters={filters} beside={filtersBesideTitle} stacksFilters />
-      {tabs ? (
-        <FrameTabs tabs={tabs} scroller={scroller} />
-      ) : (
-        <div className={scroller}>{children}</div>
-      )}
-      {footer ? <div className="shrink-0">{footer}</div> : null}
+      <div className={FILLS}>
+        {tabs ? (
+          <FrameTabs tabs={tabs} scroller={scroller} />
+        ) : (
+          <div className={scroller}>{children}</div>
+        )}
+        {footer ? <div className="shrink-0">{footer}</div> : null}
+      </div>
     </div>
   );
 
@@ -110,7 +115,7 @@ function FrameTabs({
     <>
       <div
         className={cn(
-          'mb-4 flex shrink-0 items-center gap-3 border-b border-border',
+          'flex shrink-0 items-center gap-3 border-b border-border',
           bleed && '-mx-4 px-4',
         )}
       >
@@ -149,7 +154,7 @@ function FrameTop({
 }>) {
   if (beside) {
     return (
-      <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
         <div className="flex min-w-0 flex-auto flex-col gap-4">{header}</div>
         <FrameFilterRow filters={filters} beside />
       </div>
@@ -217,14 +222,14 @@ export function PanelFrame({
     ) : null;
 
   const frame = (
-    <div data-page-frame className={FILLS}>
+    <div data-page-frame className={cn(FILLS, FRAME_COLUMN)}>
       <FrameTop
         header={header}
         filters={filters}
         beside={filtersBesideTitle}
         stacksFilters={false}
       />
-      <Card className={cn(FILLS, 'p-4')}>
+      <Card className={cn(FILLS, 'gap-4 p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {bar}
         {tabs ? (
@@ -271,9 +276,9 @@ export interface TableFrameProps {
 /** A list screen: header and filters held still, the table body the only scroller. */
 export function TableFrame({ header, toolbar, tabs, children }: Readonly<TableFrameProps>) {
   const frame = (
-    <div data-page-frame className={FILLS}>
+    <div data-page-frame className={cn(FILLS, FRAME_COLUMN)}>
       {header ? <div className={HEADER_BLOCK}>{header}</div> : null}
-      <Card className={cn(FILLS, 'p-4')}>
+      <Card className={cn(FILLS, 'gap-4 p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}
       </Card>
