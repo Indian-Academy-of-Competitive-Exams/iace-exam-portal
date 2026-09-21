@@ -3,8 +3,13 @@
  * handed — never by a fork, so neither can drift into behaving differently.
  * Nothing here holds state: every value and every callback comes off the view.
  */
-import { Flag, Eraser, Send } from 'lucide-react';
-import { TEST_UI, type ExamTemplateConfig, type SectionEffort } from '@iace/contracts';
+import { Eraser, FileText, Flag, Info, Maximize, Send } from 'lucide-react';
+import {
+  TEST_UI,
+  type ExamTemplateConfig,
+  type PaletteCounts,
+  type SectionEffort,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -24,6 +29,7 @@ import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
 import { QuestionStem } from '../../question-stem';
 import { SectionTimer } from '../../section-timer';
+import { PALETTE_LEGEND } from '../../../../lib/constants';
 
 /** Every slot is handed the same view, so a skin changes how the sitting LOOKS, never what it does. */
 export interface ExamSlotProps {
@@ -40,13 +46,37 @@ const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {
   ),
 };
 
-export function Header({ view, config }: Readonly<ExamSlotProps>) {
+export function Header({
+  view,
+  config,
+  onOpenPaper,
+  onOpenRules,
+}: Readonly<ExamSlotProps & { onOpenPaper?: () => void; onOpenRules?: () => void }>) {
   return (
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-exam-border px-exam py-3">
       <h1 className="min-w-0 truncate text-sm font-semibold text-exam-ink">{view.title}</h1>
       <div className="flex items-center gap-3">
         {view.hasUnsaved ? <Badge variant="warning">Not saved yet</Badge> : null}
         {view.isSaving ? <Spinner size="sm" label="Saving" /> : null}
+        {onOpenPaper ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onOpenPaper}>
+            <FileText aria-hidden />
+            Question paper
+          </Button>
+        ) : null}
+        {onOpenRules ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onOpenRules}>
+            <Info aria-hidden />
+            Instructions
+          </Button>
+        ) : null}
+        {/* The way IN: without it a candidate is only ever nagged for leaving a screen never offered. */}
+        {view.fullscreen.isSupported && !view.fullscreen.isFullscreen ? (
+          <Button type="button" variant="outline" size="sm" onClick={view.fullscreen.enter}>
+            <Maximize aria-hidden />
+            Full screen
+          </Button>
+        ) : null}
         {config.timerPosition === 'HEADER' ? <Timer view={view} config={config} /> : null}
       </div>
     </header>
@@ -76,9 +106,17 @@ export function Timer({ view, config }: Readonly<ExamSlotProps>) {
 }
 
 /** What a section costs so far, without opening it — the one thing its tab cannot show. */
-function sectionTally(effort: SectionEffort | undefined): string | null {
+function sectionTally(
+  effort: SectionEffort | undefined,
+  counts: PaletteCounts | undefined,
+): string | null {
   if (!effort) return null;
-  return `${effort.attempted} attempted · ${effort.unattempted} unattempted`;
+  if (!counts) return `${effort.attempted} attempted · ${effort.unattempted} unattempted`;
+
+  // The same five states the palette draws, so the tab and the grid never disagree.
+  return PALETTE_LEGEND.filter((entry) => counts[entry.state] > 0)
+    .map((entry) => `${counts[entry.state]} ${entry.label.toLowerCase()}`)
+    .join(' · ');
 }
 
 export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
@@ -86,7 +124,10 @@ export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-exam-border px-exam">
       <TabsList className="border-exam-border">
         {view.sections.map((section) => {
-          const tally = sectionTally(view.effort.find((row) => row.id === section.id));
+          const tally = sectionTally(
+            view.effort.find((row) => row.id === section.id),
+            view.sectionCounts[section.id],
+          );
           const trigger = (
             <TabsTrigger
               value={section.id}

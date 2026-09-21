@@ -48,6 +48,7 @@ export interface ExamSkinProps {
 export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
   const insets = useSafeAreaInsets();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   return (
     <View
@@ -55,12 +56,22 @@ export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
       className="exam-template-default flex-1 bg-exam-surface"
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
     >
-      {view ? <SittingHead view={view} onPalette={() => setPaletteOpen(true)} /> : <OpeningBar />}
+      {view ? (
+        <SittingHead
+          view={view}
+          onPalette={() => setPaletteOpen(true)}
+          onRules={() => setRulesOpen(true)}
+        />
+      ) : (
+        <OpeningBar />
+      )}
       <QuestionBody view={view} paperQuestions={paperQuestions} />
       {view ? (
         <SittingFoot
           view={view}
           paletteOpen={paletteOpen}
+          rulesOpen={rulesOpen}
+          onCloseRules={() => setRulesOpen(false)}
           onClosePalette={() => setPaletteOpen(false)}
         />
       ) : null}
@@ -92,7 +103,11 @@ function SittingClock({ view }: Readonly<{ view: ExamView }>) {
   );
 }
 
-function SittingHead({ view, onPalette }: Readonly<{ view: ExamView; onPalette: () => void }>) {
+function SittingHead({
+  view,
+  onPalette,
+  onRules,
+}: Readonly<{ view: ExamView; onPalette: () => void; onRules: () => void }>) {
   return (
     <Fragment>
       <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
@@ -100,6 +115,9 @@ function SittingHead({ view, onPalette }: Readonly<{ view: ExamView; onPalette: 
         <View className="flex-row gap-2">
           <Button variant="outline" onPress={onPalette}>
             Question palette
+          </Button>
+          <Button variant="ghost" onPress={onRules}>
+            Instructions
           </Button>
           <Button variant="outline" loading={view.submit.isPending} onPress={view.submit.ask}>
             Submit
@@ -229,7 +247,15 @@ function SittingFoot({
   view,
   paletteOpen,
   onClosePalette,
-}: Readonly<{ view: ExamView; paletteOpen: boolean; onClosePalette: () => void }>) {
+  rulesOpen,
+  onCloseRules,
+}: Readonly<{
+  view: ExamView;
+  paletteOpen: boolean;
+  onClosePalette: () => void;
+  rulesOpen: boolean;
+  onCloseRules: () => void;
+}>) {
   const { submit, fullscreen } = view;
 
   return (
@@ -272,6 +298,14 @@ function SittingFoot({
       />
 
       <Modal
+        visible={rulesOpen && !fullscreen.nagging}
+        animationType="slide"
+        onRequestClose={onCloseRules}
+      >
+        <SittingRules onClose={onCloseRules} />
+      </Modal>
+
+      <Modal
         transparent
         visible={fullscreen.nagging}
         animationType="fade"
@@ -285,6 +319,39 @@ function SittingFoot({
         </View>
       </Modal>
     </Fragment>
+  );
+}
+
+/** The rules a candidate may re-read mid-sitting; the palette already stands in for the paper. */
+function SittingRules({ onClose }: Readonly<{ onClose: () => void }>) {
+  return (
+    <View className="flex-1 bg-exam-surface">
+      <View className="flex-row items-center justify-between border-b border-exam-border px-4 py-3">
+        <Text className="text-base font-semibold text-exam-ink">Instructions</Text>
+        <Button variant="ghost" onPress={onClose}>
+          Close
+        </Button>
+      </View>
+
+      <ScrollView contentContainerClassName="gap-3 p-4">
+        <Text className="text-sm leading-relaxed text-exam-ink">
+          The clock is the server&apos;s. It keeps running if you leave the app, and the paper ends
+          by itself when it reaches zero — you do not have to submit for that to happen.
+        </Text>
+        <Text className="text-sm leading-relaxed text-exam-ink">
+          The palette marks every question as answered, not answered, not visited, marked for
+          review, or answered and marked. A marked answer is still marked for scoring.
+        </Text>
+        <Text className="text-sm leading-relaxed text-exam-ink">
+          Save &amp; next keeps your answer and moves on. Mark for review &amp; next keeps it and
+          flags the question. Clear response removes your answer entirely.
+        </Text>
+        <Text className="text-sm leading-relaxed text-exam-ink">
+          Opening another question from the palette does not save the one you are on. Save it first
+          if you want it kept.
+        </Text>
+      </ScrollView>
+    </View>
   );
 }
 

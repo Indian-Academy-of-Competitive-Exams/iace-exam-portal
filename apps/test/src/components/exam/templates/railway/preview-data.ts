@@ -159,6 +159,13 @@ export function previewView(): ExamView {
       cancel: noop,
       confirm: noop,
     },
-    fullscreen: { nagging: false, exits: 0, enter: noop, ignore: noop },
+    fullscreen: {
+      nagging: false,
+      isFullscreen: false,
+      isSupported: true,
+      exits: 0,
+      enter: noop,
+      ignore: noop,
+    },
   };
 }

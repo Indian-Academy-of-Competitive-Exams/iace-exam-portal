@@ -29,6 +29,9 @@ export interface ExamSubmitView {
 /** Leaving full screen is asked about; a skin cannot decide not to. */
 export interface ExamFullscreenView {
   nagging: boolean;
+  /** So a skin can offer the way IN, not only be nagged once the paper has been left. */
+  isFullscreen: boolean;
+  isSupported: boolean;
   exits: number;
   enter: () => void;
   ignore: () => void;

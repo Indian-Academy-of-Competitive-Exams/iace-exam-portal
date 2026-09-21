@@ -227,6 +227,8 @@ export function useExamView(
 
     fullscreen: {
       nagging,
+      isFullscreen: focus.isFullscreen,
+      isSupported: focus.isSupported,
       exits: focus.exits,
       enter: () => void focus.enter(),
       ignore: () => setIgnoringFullscreen(focus.exits),
