@@ -10,6 +10,7 @@ import { cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { type ExamSlotProps } from '../shared/slots';
 import { RailwayPalette } from './palette';
+import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
 import './railway.css';
 
@@ -20,56 +21,70 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="rw-header flex items-center justify-center">
-        <div className="logo-header">
-          <span className="rw-logo">IACE</span>
-        </div>
+        <span className="rw-logo">IACE</span>
       </div>
 
       <div className="rw-utilitybar flex items-center justify-end gap-6 px-4">
-        <button type="button" onClick={() => setOpenPanel('PAPER')}>
+        <button
+          type="button"
+          className="flex items-center gap-2"
+          onClick={() => setOpenPanel('PAPER')}
+        >
+          <span className="rw-icon questionpaper_icon" aria-hidden />
           Question paper
         </button>
-        <button type="button" onClick={() => setOpenPanel('INSTRUCTIONS')}>
+        <button
+          type="button"
+          className="flex items-center gap-2"
+          onClick={() => setOpenPanel('INSTRUCTIONS')}
+        >
+          <span className="rw-icon instruction_icon" aria-hidden />
           Instruction
         </button>
       </div>
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="bg-[#f5f5f5] px-3 py-2.5">
-            <span className="rw-testname">{view.title}</span>
+          <div className="fixedquehdr shrink-0">
+            <span className="rw-testname">
+              {view.title}
+              <InfoTally counts={view.counts} label="Status for this test" />
+            </span>
           </div>
 
-          <div className="rw-sectionbar flex items-center justify-between py-1.5">
+          <div className="time-left-sect flex shrink-0 items-center justify-between">
             <span>Section</span>
             <RailwayTimer clock={view.clock} onExpire={view.outOfTime} />
           </div>
 
-          <div className="flex items-center gap-1 border-b border-[#d8d8d8] px-2 py-1">
+          <div className="flex shrink-0 items-center gap-1 px-3 py-1">
             {view.sections.map((section) => (
-              <button
+              <span
                 key={section.id}
-                type="button"
-                className="rw-sectiontab"
-                data-state={section.id === view.sectionId ? 'active' : 'inactive'}
-                disabled={!view.reachable.includes(section.id)}
-                onClick={() => view.openSection(section.id)}
+                className={cn('subjcttab', section.id === view.sectionId && 'active')}
               >
-                {section.name}
-              </button>
+                <button
+                  type="button"
+                  disabled={!view.reachable.includes(section.id)}
+                  onClick={() => view.openSection(section.id)}
+                >
+                  {section.name}
+                </button>
+                <InfoTally counts={view.counts} label={`Status for ${section.name}`} />
+              </span>
             ))}
           </div>
 
-          <div className="flex items-center justify-between border-b border-[#d8d8d8] px-3 py-1.5">
+          <div className="new-tab-second flex shrink-0 items-center justify-between">
             <span className="rw-qtype">Question Type : Multiple Choice Question</span>
             <span className="rw-marks">
               Marks For Correct Answer: <em>1</em> | Negative Mark: <em>0.33</em>
             </span>
           </div>
 
-          <div className="rw-qno flex items-center justify-between">
+          <div className="questn flex shrink-0 items-center justify-between">
             <span>{`Question No. ${view.questionIndex + 1}`}</span>
-            <button type="button" className="btn !my-0" onClick={view.fullscreen.enter}>
+            <button type="button" className="btn" onClick={view.fullscreen.enter}>
               View Full Screen
             </button>
           </div>
@@ -98,7 +113,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             )}
           </div>
 
-          <div className="rw-buttons flex shrink-0 items-center gap-2">
+          <div className="rw-buttons flex items-center gap-2">
             <button type="button" className="btn" onClick={view.markAndNext}>
               Mark for Review &amp; Next
             </button>
@@ -122,7 +137,9 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           </button>
         </div>
 
-        <aside className={cn('rw-palette shrink-0', paletteOpen ? 'block' : 'hidden')}>
+        <aside
+          className={cn('rw-palette min-h-0 shrink-0 flex-col', paletteOpen ? 'flex' : 'hidden')}
+        >
           <RailwayPalette
             questionIds={view.questions.map((row) => row.questionId)}
             answers={view.answers}
@@ -130,8 +147,14 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             counts={view.counts}
             candidate={view.watermark}
             onOpen={view.openQuestion}
-            onSubmit={view.submit.ask}
           />
+
+          {/* Pinned, so it holds its place however far the grid above it scrolls. */}
+          <div className="palettebottom flex justify-center">
+            <button type="button" className="rw-submit" onClick={view.submit.ask}>
+              Submit
+            </button>
+          </div>
         </aside>
       </div>
 
@@ -151,7 +174,7 @@ function RailwayTimer({ clock, onExpire }: Readonly<{ clock: ExamClock; onExpire
   );
 
   return (
-    <p aria-live="off" className="rw-timeleft">
+    <p aria-live="off" className="right-time">
       Time Left : <b>{minuteClock(left)}</b>
     </p>
   );
