@@ -111,6 +111,7 @@ export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemP
           checked={group.value === undefined ? undefined : group.value === value}
           className={cn(
             'size-4 shrink-0 accent-primary focus-visible:shadow-focus focus-visible:outline-none',
+            // Centred on the label's first line: mt-0.5 is exactly (leading-5 - size-4) / 2.
             !group.inline && 'mt-0.5',
           )}
           onChange={(event) => {
@@ -119,7 +120,7 @@ export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemP
           }}
           {...props}
         />
-        <span className="text-sm leading-tight text-foreground">
+        <span className="text-sm leading-5 text-foreground">
           {label}
           {hint ? <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span> : null}
         </span>

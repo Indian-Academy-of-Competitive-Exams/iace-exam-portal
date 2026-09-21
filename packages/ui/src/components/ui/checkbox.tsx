@@ -24,11 +24,12 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         ref={ref}
         id={id}
         type="checkbox"
+        // Centred on the label's first line: mt-0.5 is exactly (leading-5 − size-4) / 2.
         className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:outline-none focus-visible:shadow-focus"
         {...props}
       />
       {label ? (
-        <span className="text-sm leading-tight text-foreground">
+        <span className="text-sm leading-5 text-foreground">
           {label}
           {hint ? <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span> : null}
         </span>
