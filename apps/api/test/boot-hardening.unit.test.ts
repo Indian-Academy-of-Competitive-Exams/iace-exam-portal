@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { corsOrigin, helmetOptions } from '../src/common/security-headers';
 import { NO_EVICTION, evictionRisk } from '../src/redis/eviction-policy';
 import { NODE_ENVS, validateEnv } from '../src/config/env.schema';
+import { AppConfigService } from '../src/config/app-config.service';
 
 const SECRET = 'x'.repeat(32);
 
@@ -31,6 +32,19 @@ const production = (over: Record<string, string> = {}): Record<string, string> =
   });
 
 const SIZED_POOL = 'postgresql://iace:iace@db:5432/iace?schema=public&connection_limit=25';
+
+describe('when the environment is read', () => {
+  /** The failure this prevents: a unit test importing a service and finding it needs a Redis URL. */
+  it('is checked as the service is built, which is boot and never an import', () => {
+    const held = process.env.JWT_ACCESS_SECRET;
+    delete process.env.JWT_ACCESS_SECRET;
+    try {
+      assert.throws(() => new AppConfigService(), /JWT_ACCESS_SECRET/);
+    } finally {
+      if (held !== undefined) process.env.JWT_ACCESS_SECRET = held;
+    }
+  });
+});
 
 describe('CORS allowlist', () => {
   /** `origin: true` reflects whatever origin asks and answers it with credentials. */

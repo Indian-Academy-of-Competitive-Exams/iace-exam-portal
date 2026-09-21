@@ -2,12 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { resolve } from 'node:path';
 import { AppConfigService } from './app-config.service';
-import { validateEnv } from './env.schema';
 
-/**
- * Env lives in a single `.env` at the repo root — one file for the API, the Prisma CLI and docker
- * compose, so they can never drift apart.
- */
+/** One `.env` at the repo root, LOADED here and checked in AppConfigService — a decorator runs at import. */
 @Global()
 @Module({
   imports: [
@@ -15,7 +11,6 @@ import { validateEnv } from './env.schema';
       isGlobal: true,
       cache: true,
       envFilePath: [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env')],
-      validate: validateEnv,
     }),
   ],
   providers: [AppConfigService],

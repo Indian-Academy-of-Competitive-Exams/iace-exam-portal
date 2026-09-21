@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { NODE_ENVS, type Env } from './env.schema';
+import { NODE_ENVS, validateEnv, type Env } from './env.schema';
 
 /**
  * Typed accessor over the zod-validated env. Inject this, not ConfigService — every key is checked
@@ -8,10 +7,11 @@ import { NODE_ENVS, type Env } from './env.schema';
  */
 @Injectable()
 export class AppConfigService {
-  constructor(private readonly config: ConfigService<Env, true>) {}
+  // Checked as this is CONSTRUCTED, which is boot — importing a service must not need an env.
+  private readonly env: Env = validateEnv(process.env);
 
   get<K extends keyof Env>(key: K): Env[K] {
-    return this.config.get(key, { infer: true });
+    return this.env[key];
   }
 
   get isProduction(): boolean {

@@ -80,14 +80,6 @@ jobs:
         if: '!cancelled()'
         run: pnpm typecheck
 
-      # Importing any API module evaluates ConfigModule.forRoot, which validates the
-      # WHOLE environment — so a unit test that imports a service needs a Redis URL
-      # and an S3 key present even though it touches neither. The placeholders are
-      # what a developer's own .env gives them; CI has to say it out loud.
-      - name: Test environment
-        if: '!cancelled()'
-        run: cp .env.example .env
-
       - name: Test
         if: '!cancelled()'
         run: pnpm test
@@ -160,13 +152,6 @@ jobs:
 
       - name: Build contracts
         run: pnpm --filter @iace/contracts build
-
-      # Importing any API module evaluates ConfigModule.forRoot, which validates the
-      # WHOLE environment — so a unit test that imports a service needs a Redis URL
-      # and an S3 key present even though it touches neither. The placeholders are
-      # what a developer's own .env gives them; CI has to say it out loud.
-      - name: Test environment
-        run: cp .env.example .env
 
       - name: Test the SQL against Postgres
         run: pnpm test:db
