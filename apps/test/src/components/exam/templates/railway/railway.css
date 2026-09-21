@@ -80,9 +80,7 @@
 
 [data-exam-template='ssc_railways'] .fixedquehdr {
   background: #f5f5f5;
-  padding: 24px 12px;
-  height: 75px;
-  box-sizing: border-box;
+  padding: 6px 12px;
 }
 
 [data-exam-template='ssc_railways'] .rw-testname {
@@ -319,7 +317,7 @@
 
 [data-exam-template='ssc_railways'] .bottom-legend {
   color: #fff;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: bold;
   text-align: center;
   padding: 5px 0;
@@ -334,15 +332,48 @@
   padding: 10px 19px 0;
 }
 
-/* The wheel scrolls this pane but never chains out of it to the page behind. */
-[data-exam-template='ssc_railways'] .quenmbrpalt,
-[data-exam-template='ssc_railways'] .rw-panel [class*='overflow-y'] {
+/* The scrollbar is drawn, not borrowed: the platform's own reserves no width here
+   and hides until the wheel moves, which these panes refuse. */
+[data-exam-template='ssc_railways'] .rw-scrollwrap {
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+
+[data-exam-template='ssc_railways'] .rw-scrollpane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: scroll;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding-right: 14px;
+}
+
+[data-exam-template='ssc_railways'] .rw-scrolltrack {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  background: #eef1f4;
+  border-left: 1px solid #d8d8d8;
+}
+
+[data-exam-template='ssc_railways'] .rw-scrollthumb {
+  width: 8px;
+  margin: 0 3px;
+  border-radius: 4px;
+  background: #9a9a9a;
+  cursor: grab;
+}
+
+[data-exam-template='ssc_railways'] .rw-scrollthumb:active {
+  background: #6f6f6f;
+  cursor: grabbing;
 }
 
 [data-exam-template='ssc_railways'] .quenmbrpalt {
   background: var(--rw-tint);
-  overflow-y: scroll;
   padding: 7px 0;
   box-sizing: border-box;
 }

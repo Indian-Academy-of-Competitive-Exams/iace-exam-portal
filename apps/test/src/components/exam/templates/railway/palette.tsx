@@ -2,6 +2,7 @@ import { ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts
 import { cn } from '@iace/ui';
 import profileImage from './assets/profile.png';
 import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateSwatch } from './states';
+import { ScrollPane } from './scroll-pane';
 
 export function RailwayPalette({
   questionIds,
@@ -42,7 +43,7 @@ export function RailwayPalette({
 
       <div className="question-choose shrink-0">Choose a Question</div>
 
-      <div className="quenmbrpalt min-h-0 flex-1">
+      <ScrollPane className="quenmbrpalt min-h-0 flex-1">
         <div className="quenmbrgrid">
           {questionIds.map((id, index) => {
             const state = answers[id]?.state ?? ANSWER_STATE.NOT_VISITED;
@@ -60,7 +61,7 @@ export function RailwayPalette({
             );
           })}
         </div>
-      </div>
+      </ScrollPane>
     </>
   );
 }

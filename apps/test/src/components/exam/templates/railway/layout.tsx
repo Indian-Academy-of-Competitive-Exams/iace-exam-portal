@@ -12,6 +12,7 @@ import { type ExamSlotProps } from '../shared/slots';
 import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
+import { ScrollPane } from './scroll-pane';
 import './railway.css';
 
 export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
@@ -93,7 +94,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <ScrollPane className="min-h-0 flex-1">
             {view.question ? (
               <>
                 {/* Siblings, as in the original: the stem's 26px leading must not reach the options. */}
@@ -115,7 +116,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             ) : (
               <p className="questiondiv">This section is closed.</p>
             )}
-          </div>
+          </ScrollPane>
 
           <div className="rw-buttons flex items-center gap-2">
             <button type="button" className="btn" onClick={view.markAndNext}>

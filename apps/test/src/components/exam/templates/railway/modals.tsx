@@ -2,6 +2,7 @@
 import { contentLanguageOf } from '@iace/contracts';
 import { htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
 import { RichContent } from '@iace/ui';
+import { ScrollPane } from './scroll-pane';
 
 function Panel({
   title,
@@ -16,7 +17,7 @@ function Panel({
           Close X
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-scroll p-4">{children}</div>
+      <ScrollPane className="min-h-0 flex-1 p-4">{children}</ScrollPane>
     </div>
   );
 }
