@@ -70,7 +70,8 @@ export function PageFrame({
   const frame = (
     <div data-page-frame className={cn(FILLS, FRAME_COLUMN)}>
       <FrameTop header={header} filters={filters} beside={filtersBesideTitle} stacksFilters />
-      <div className={FILLS}>
+      {/* The strip's gap to its pane, which a card gives for free and a page has to declare. */}
+      <div className={cn(FILLS, tabs && 'gap-4')}>
         {tabs ? (
           <FrameTabs tabs={tabs} scroller={scroller} />
         ) : (
