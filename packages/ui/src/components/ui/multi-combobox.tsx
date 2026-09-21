@@ -41,7 +41,7 @@ export function MultiCombobox({
   const triggerLabel = () => (value.length === 0 ? placeholder : chosenLabels.join(', '));
 
   return (
-    <div className="min-w-0">
+    <div className="flex min-w-0 flex-col gap-2">
       <ComboboxShell
         {...list}
         multiple
@@ -64,7 +64,7 @@ export function MultiCombobox({
       </ComboboxShell>
 
       {chips && value.length > 0 ? (
-        <div className="mt-2 flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {value.map((item) => (
             <Badge key={item} variant="neutral" className="gap-1 pr-1">
               <span className="truncate">{labelFor(item)}</span>

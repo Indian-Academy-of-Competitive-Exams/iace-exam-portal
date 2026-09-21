@@ -471,7 +471,7 @@ function Shortcut({
           <Kbd>{key}</Kbd>
         </span>
       ))}
-      <span className="ml-1">{children}</span>
+      <span>{children}</span>
     </span>
   );
 }

@@ -263,7 +263,7 @@ function AdminPanel({
           />
 
           {changes.length > 0 ? (
-            <Alert variant="warning" className="mt-3">
+            <Alert variant="warning">
               <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
                 <span>{plural(changes.length, 'unsaved change')}. Nothing has been sent yet.</span>
                 <div className="flex gap-2">

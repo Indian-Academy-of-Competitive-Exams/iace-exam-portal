@@ -35,7 +35,11 @@ export function SavedQuestionSheet({
           </Button>
         </View>
 
-        {held.isLoading ? <Skeleton className="m-5 flex-1 rounded-xl" /> : null}
+        {held.isLoading ? (
+          <View className="flex-1 p-5">
+            <Skeleton className="flex-1 rounded-xl" />
+          </View>
+        ) : null}
 
         {held.isError ? (
           <View className="flex-1 justify-center px-6">

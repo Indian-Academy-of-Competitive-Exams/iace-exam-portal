@@ -235,8 +235,8 @@ export function FilterRow({
   const open = showFolded || foldedCount > 0;
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {leading}
         {primary.map((filter) => (
           // Named from inside its top border, so a bar of controls stays one row high.
@@ -289,7 +289,7 @@ export function FilterRow({
       </div>
 
       {folded.length > 0 && open ? (
-        <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
           {folded.map((filter) => (
             <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
               {(described) => (
@@ -355,7 +355,7 @@ export function ListView<TRow>({
   );
 
   return fills ? (
-    <div className={FILLS}>
+    <div className={cn(FILLS, 'gap-4')}>
       {head}
       {table}
     </div>

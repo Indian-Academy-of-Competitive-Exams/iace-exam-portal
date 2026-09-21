@@ -278,9 +278,9 @@ export function DatePicker({
           align="start"
           sideOffset={4}
           onKeyDown={onKeyDown}
-          className="z-50 w-[17.5rem] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
+          className="z-50 flex w-[17.5rem] flex-col gap-2 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
             <NavButton label={labels.back} onClick={() => page(-1)}>
               <ChevronLeft className="size-4" aria-hidden />
             </NavButton>
@@ -365,7 +365,7 @@ export function DatePicker({
             <button
               type="button"
               onClick={() => choose('')}
-              className="mt-2 w-full rounded-sm py-1.5 text-center text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
+              className="w-full rounded-sm py-1.5 text-center text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
             >
               Clear
             </button>

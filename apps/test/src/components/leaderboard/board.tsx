@@ -48,7 +48,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
       <Avatar
         name={row.name}
         size={top ? 'md' : 'sm'}
-        className={cn('mb-1', top && 'bg-warning-subtle text-warning-ink')}
+        className={cn(top && 'bg-warning-subtle text-warning-ink')}
       />
       <span className="w-full text-sm font-semibold">
         <TruncatedText>{row.name}</TruncatedText>

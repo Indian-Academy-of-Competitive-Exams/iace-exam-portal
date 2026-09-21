@@ -34,7 +34,7 @@ export function Hero({ eyebrow, title, meta, figure, aside, className }: Readonl
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
         ) : null}
         {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
-        {figure ? <div className="mt-2">{figure}</div> : null}
+        {figure}
       </div>
       {aside ? <div className="flex shrink-0 flex-wrap items-end gap-8">{aside}</div> : null}
     </div>

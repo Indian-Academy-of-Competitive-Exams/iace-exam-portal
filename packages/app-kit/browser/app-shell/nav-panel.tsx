@@ -24,9 +24,9 @@ function SectionChildren({
   const loose = children.filter((child) => !isNavSection(child));
 
   return (
-    <>
+    <div className="flex flex-col gap-2">
       {loose.length > 0 ? (
-        <ul className="space-y-0.5">
+        <ul className="flex flex-col gap-0.5">
           {loose.map((child) => (
             <li key={child.label}>
               <NavLeaf
@@ -41,9 +41,9 @@ function SectionChildren({
       ) : null}
 
       {groups.map((group) => (
-        <div key={group.label} className="mt-2 first:mt-0">
+        <div key={group.label} className="flex flex-col gap-0.5">
           <p className="px-2 py-1 text-xs font-semibold text-foreground-secondary">{group.label}</p>
-          <ul className="space-y-0.5">
+          <ul className="flex flex-col gap-0.5">
             {(group.children ?? []).map((child) => (
               <li key={child.label}>
                 <NavLeaf
@@ -57,7 +57,7 @@ function SectionChildren({
           </ul>
         </div>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -166,12 +166,12 @@ function DrilldownNav({
 
   if (section) {
     return (
-      <div>
+      <div className="flex flex-col gap-2">
         <button
           type="button"
           onClick={() => setSection(null)}
           className={cn(
-            'mb-2 flex h-[--nav-item-h-touch] w-full items-center gap-2 rounded-md px-3',
+            'flex h-[--nav-item-h-touch] w-full items-center gap-2 rounded-md px-3',
             'text-sm font-semibold text-foreground',
             'hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
           )}
@@ -186,7 +186,7 @@ function DrilldownNav({
   }
 
   return (
-    <ul className="space-y-0.5">
+    <ul className="flex flex-col gap-0.5">
       {items.map((item) => (
         <li key={item.label}>
           {isNavSection(item) ? (
@@ -241,7 +241,7 @@ export function NavPanel({
   }
 
   return (
-    <ul className="space-y-0.5">
+    <ul className="flex flex-col gap-0.5">
       {items.map((item) => {
         if (!isNavSection(item)) {
           return (

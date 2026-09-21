@@ -17,7 +17,7 @@ function Panel({
           Close X
         </button>
       </div>
-      <ScrollPane className="min-h-0 flex-1 p-4">{children}</ScrollPane>
+      <ScrollPane className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</ScrollPane>
     </div>
   );
 }
@@ -28,7 +28,7 @@ export function PaperModal({ view, onClose }: Readonly<{ view: ExamView; onClose
 
   return (
     <Panel title="Question Paper" onClose={onClose}>
-      <h2 className="mb-4 text-xl font-bold">{view.title}</h2>
+      <h2 className="text-xl font-bold">{view.title}</h2>
       <ol className="flex flex-col">
         {view.questions.map((question, index) => (
           <li
@@ -52,7 +52,7 @@ export function PaperModal({ view, onClose }: Readonly<{ view: ExamView; onClose
 export function InstructionsModal({ onClose }: Readonly<{ onClose: () => void }>) {
   return (
     <Panel title="Instructions" onClose={onClose}>
-      <h2 className="mb-4 text-center text-base font-bold text-[#3272b9]">Instructions</h2>
+      <h2 className="text-center text-base font-bold text-[#3272b9]">Instructions</h2>
       <div className="flex flex-col gap-3 text-sm leading-relaxed">
         <p className="font-bold">General Instructions:</p>
         <p>

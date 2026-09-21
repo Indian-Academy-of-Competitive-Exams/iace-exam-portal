@@ -82,7 +82,7 @@ export function LiveOpsPage() {
     <TableFrame
       header={header}
       toolbar={
-        <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <LiveTestPicker
             value={testId}
             onChange={(value) => filters.set({ testId: value, panel: undefined })}

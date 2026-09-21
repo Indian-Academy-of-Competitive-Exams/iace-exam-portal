@@ -11,9 +11,9 @@ export function RailwayFullscreenNag({
 }: Readonly<{ fullscreen: ExamView['fullscreen']; says: string }>) {
   return (
     <div className="rw-nag-overlay absolute inset-0 z-50 grid place-items-center p-6">
-      <div className="rw-nag">
+      <div className="rw-nag flex flex-col gap-5">
         <p>{says}</p>
-        <div className="mt-5 flex justify-end">
+        <div className="flex justify-end">
           <button type="button" className="rw-nag-btn" onClick={fullscreen.enter}>
             Return to full screen
           </button>

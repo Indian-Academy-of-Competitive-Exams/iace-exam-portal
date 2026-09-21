@@ -137,7 +137,7 @@ function FeedRegion({
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-4">
       {/* The rule is on the WRAPPER and full width; the row inside keeps its radius and its hover,
           so a hovered row cannot bend the line it sits above. */}
       <div className="flex flex-col divide-y divide-border">
@@ -151,7 +151,7 @@ function FeedRegion({
       {list.hasMore ? (
         <Button
           variant="outline"
-          className="mt-4 self-center"
+          className="self-center"
           onClick={list.loadMore}
           disabled={list.isLoadingMore}
         >

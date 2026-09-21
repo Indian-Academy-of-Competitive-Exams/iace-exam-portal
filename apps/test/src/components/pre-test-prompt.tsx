@@ -11,7 +11,7 @@ export function PreTestPrompt({
   if (preTestReady) return null;
 
   return (
-    <Alert variant="warning" className="mb-6">
+    <Alert variant="warning">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="flex items-start gap-2">
           <ClipboardList className="mt-0.5 size-4 shrink-0" aria-hidden />

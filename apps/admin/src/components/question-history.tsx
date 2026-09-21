@@ -30,7 +30,7 @@ import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { AUDIT_ACTION_LABELS, AUDIT_ACTOR_TYPE_LABELS, QUERY_KEYS } from '../lib/constants';
 
 /** Wider than a nav drawer: a version beside its changes needs the room. */
-const PANEL = 'w-[--modal-w-lg]';
+const PANEL = 'w-[--modal-w-lg] gap-5';
 
 const NOTHING = <span className="text-muted-foreground">—</span>;
 
@@ -155,7 +155,7 @@ export function QuestionHistorySheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" aria-describedby={undefined} className={PANEL}>
-        <div className="mb-5 flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
+        <div className="flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
           <SheetTitle>History</SheetTitle>
           <span className="min-w-0 flex-1 text-sm text-muted-foreground">
             <TruncatedText>{question.questionCode ?? question.stemPreview}</TruncatedText>

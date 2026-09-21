@@ -59,15 +59,15 @@ export function ImportView({
   return (
     <PageFrame className="lg:overflow-hidden" header={header}>
       <div className="grid gap-5 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="relative order-2 p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto">
+        <Card className="relative order-2 flex flex-col gap-4 p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto">
           {fileErrors?.length ? (
-            <Alert variant="danger" className="mb-4">
+            <Alert variant="danger">
               <span>{fileErrors.join(' ')}</span>
             </Alert>
           ) : null}
 
           {outcome ? (
-            <Alert variant="success" className="mb-4">
+            <Alert variant="success">
               <span>{outcome}</span>
             </Alert>
           ) : null}

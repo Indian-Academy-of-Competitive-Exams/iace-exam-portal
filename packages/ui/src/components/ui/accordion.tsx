@@ -36,7 +36,7 @@ const Accordion = React.forwardRef<HTMLDetailsElement, AccordionProps>(
         <div className="min-w-0 flex-1">{title}</div>
         {meta}
       </summary>
-      <div className="border-t border-border px-4 py-3">{children}</div>
+      <div className="flex flex-col gap-3 border-t border-border px-4 py-3">{children}</div>
     </details>
   ),
 );

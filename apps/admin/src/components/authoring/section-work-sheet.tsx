@@ -35,7 +35,7 @@ const PROMPTS = {
   DELETE: { title: 'Delete this question?', confirmLabel: 'Delete' },
 } as const;
 
-const PANEL = 'w-[--modal-w-lg]';
+const PANEL = 'w-[--modal-w-lg] gap-5';
 
 const sectionWorkKey = (assignmentId: string) =>
   [...QUERY_KEYS.AUTHORING, 'section', assignmentId] as const;
@@ -106,7 +106,7 @@ export function SectionWorkButton({ assignment }: Readonly<{ assignment: Assignm
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" aria-describedby={undefined} className={PANEL}>
-          <div className="mb-5 flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
+          <div className="flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
             <SheetTitle>{assignment.sectionName}</SheetTitle>
             <span className="min-w-0 flex-1 text-sm text-muted-foreground">
               <TruncatedText>{assignment.testTitle ?? 'Untitled test'}</TruncatedText>

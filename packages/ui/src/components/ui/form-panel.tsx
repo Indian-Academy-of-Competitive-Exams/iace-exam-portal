@@ -138,9 +138,9 @@ export interface FormSectionProps {
 export function FormSection({ title, meta, children, className }: Readonly<FormSectionProps>) {
   return (
     <section className={cn('flex flex-col gap-4', className)}>
-      <div>
+      <div className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-        {meta ? <p className="mt-1 text-sm text-muted-foreground">{meta}</p> : null}
+        {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
       </div>
       {children}
     </section>

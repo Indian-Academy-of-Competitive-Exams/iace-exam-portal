@@ -101,13 +101,11 @@ function DefaultPinGate() {
  */
 function TestBlockedBanner() {
   return (
-    <div className="mb-5">
-      <Alert variant="warning">
-        <span>
-          Tests are on hold for you at the moment. Everything you have already sat, and your
-          results, stay here. Ask at your branch office to have it lifted.
-        </span>
-      </Alert>
-    </div>
+    <Alert variant="warning">
+      <span>
+        Tests are on hold for you at the moment. Everything you have already sat, and your results,
+        stay here. Ask at your branch office to have it lifted.
+      </span>
+    </Alert>
   );
 }

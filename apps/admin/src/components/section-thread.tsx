@@ -120,8 +120,8 @@ function Thread({
   }, [rows.length]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-4 flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-baseline gap-3 border-b border-border pb-3">
         <SheetTitle>Comments</SheetTitle>
         <span className="min-w-0 flex-1 text-sm text-muted-foreground">
           {thread.data ? plural(rows.length, 'comment') : ''}
