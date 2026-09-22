@@ -75,6 +75,9 @@ export const UNREAD_QUERY_KEY = ['me', 'notifications', 'unread'] as const;
 export const notificationsQueryKey = (unreadOnly: boolean) =>
   ['me', 'notifications', { unreadOnly }] as const;
 
+/** No push yet and nothing polls a score card, so the bell is how a queued result reaches a phone. */
+export const UNREAD_POLL_MS = 60_000;
+
 /** The whole career off the two rollup tables — what Performance opens on. */
 export const OVERVIEW_QUERY_KEY = ['me', 'overview'] as const;
 

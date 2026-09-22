@@ -1,7 +1,7 @@
 /// <reference types="nativewind/types" />
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { minutes } from '@iace/app-kit';
+import { isMarkingPending, minutes } from '@iace/app-kit';
 import { type MarkComposition, type ScoreCard } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { attemptReportQuery, scoreCardQuery } from '../../lib/queries';
@@ -25,7 +25,16 @@ export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   return (
     <RefreshScroll refreshing={card.isRefetching} onRefresh={refresh}>
       {card.isLoading ? <CardSkeleton /> : null}
-      {card.isError ? (
+      {isMarkingPending(card.error) ? (
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.EMPTY}
+          title="No marks yet"
+          // ui-copy-ok: consequence
+          hint="Your paper is handed in and safe."
+          onRetry={refresh}
+        />
+      ) : null}
+      {card.isError && !isMarkingPending(card.error) ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="Your score card did not load"

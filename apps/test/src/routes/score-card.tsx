@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Metric, cn } from '@iace/ui';
+import { EmptyState, EMPTY_STATE_KINDS, Metric, cn } from '@iace/ui';
 import {
   CohortFigure,
   MarksFigure,
@@ -8,7 +8,7 @@ import {
   TrajectoryFigure,
   type Benchmark,
 } from '@iace/app-kit/browser';
-import { minutes } from '@iace/app-kit';
+import { isMarkingPending, minutes } from '@iace/app-kit';
 import {
   paperCounts,
   type CohortCurve,
@@ -24,8 +24,30 @@ export function ScoreCardPanel() {
   const card = useQuery(scoreCardQuery(attemptId));
   const report = useQuery(attemptReportQuery(attemptId));
 
+  const again = () => void card.refetch();
+
   if (card.isLoading) return <ReportSkeleton />;
-  if (!card.data) return null;
+  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
+  if (isMarkingPending(card.error)) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.EMPTY}
+        title="No marks yet"
+        // ui-copy-ok: consequence
+        hint="Your paper is handed in and safe."
+        onRetry={again}
+      />
+    );
+  }
+  if (!card.data) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your score card did not load"
+        onRetry={again}
+      />
+    );
+  }
 
   return <Result card={card.data} report={report.data ?? null} />;
 }

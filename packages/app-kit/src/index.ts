@@ -38,7 +38,7 @@ export {
 export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
 export { useCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
-export { pollDelayMs, shouldKeepPolling } from './poll-policy';
+export { isMarkingPending } from './marking';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';
 export {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AppException, ErrorCodes, LANGUAGE_CODE } from '@iace/contracts';
-import { examLanguagesFrom, isBriefRefused, isMarkingPending } from '../src/lib/exam-routes';
+import { examLanguagesFrom, isBriefRefused } from '../src/lib/exam-routes';
 
 test('a valid language list parses in the order it was given', () => {
   assert.deepEqual(examLanguagesFrom('HI,EN'), [LANGUAGE_CODE.HI, LANGUAGE_CODE.EN]);
@@ -33,17 +33,6 @@ test('a repeated code counts once, where it first appears', () => {
 
 test('a param repeated in the URL is read as one list', () => {
   assert.deepEqual(examLanguagesFrom(['EN', 'HI,EN']), [LANGUAGE_CODE.EN, LANGUAGE_CODE.HI]);
-});
-
-test('a CONFLICT from the score card means marking is still queued', () => {
-  assert.equal(isMarkingPending(new AppException(ErrorCodes.CONFLICT)), true);
-});
-
-test('any other failure of the score card is a real one', () => {
-  assert.equal(isMarkingPending(new AppException(ErrorCodes.NOT_FOUND)), false);
-  assert.equal(isMarkingPending(new AppException(ErrorCodes.INTERNAL)), false);
-  assert.equal(isMarkingPending(new Error('network down')), false);
-  assert.equal(isMarkingPending({ code: ErrorCodes.CONFLICT }), false, 'a look-alike is not one');
 });
 
 test('a brief the server will not show this student is a refusal', () => {

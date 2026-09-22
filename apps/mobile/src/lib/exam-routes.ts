@@ -11,10 +11,6 @@ export function examLanguagesFrom(param: string | readonly string[] | undefined)
   return [...new Set(codes)];
 }
 
-/** A queued marking job is the only reason the card 409s; anything else is a real failure. */
-export const isMarkingPending = (error: unknown): boolean =>
-  AppException.is(error) && error.code === ErrorCodes.CONFLICT;
-
 /** NOT_FOUND or FORBIDDEN is the server refusing this student; offline or a 5xx can be retried. */
 export const isBriefRefused = (error: unknown): boolean =>
   AppException.is(error) &&

@@ -1,48 +1,17 @@
 /**
- * The moment after a paper is handed in. Marking is a queued job, so the score
- * card does not exist yet — this shows what the sitting knows about ITSELF, and
- * moves on to the score card as soon as the marking lands.
+ * The moment after a paper is handed in. Marking is a queued job, so this shows what the
+ * sitting knows about ITSELF and hands the student the way to their result when they want it.
  */
-import { useEffect } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { AppException, ErrorCodes } from '@iace/contracts';
-import {
-  EmptyState,
-  EMPTY_STATE_KINDS,
-  LoadingState,
-  PageFrame,
-  PageHeader,
-  plural,
-} from '@iace/ui';
-import { pollDelayMs, shouldKeepPolling, type EndedSitting } from '@iace/app-kit';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { Alert, Button, PageFrame, PageHeader, plural } from '@iace/ui';
+import { type EndedSitting } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import { scoreCardQuery } from '../lib/queries';
 import { DividedList, DividedRow, PageBody, Section } from '../components/ui';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 
-/** A queued marking job is the only reason the card 409s; anything else is a real failure. */
-const isPending = (error: unknown): boolean =>
-  AppException.is(error) && error.code === ErrorCodes.CONFLICT;
-
 export function SubmittedPage() {
   const { attemptId = '' } = useParams();
-  const navigate = useNavigate();
   const handedIn = useLocation().state as EndedSitting | null;
-
-  const card = useQuery({
-    ...scoreCardQuery(attemptId),
-    enabled: attemptId !== '',
-    retry: (count, error) => isPending(error) && shouldKeepPolling(count),
-    retryDelay: (count) => pollDelayMs(count),
-  });
-
-  const marked = card.data !== undefined;
-  useEffect(() => {
-    if (marked) navigate(ROUTES.REPORT(attemptId), { replace: true });
-  }, [marked, attemptId, navigate]);
-
-  const failed = card.isError;
 
   return (
     <PageFrame
@@ -53,18 +22,14 @@ export function SubmittedPage() {
       <PageBody>
         {handedIn ? <OwnEffort sitting={handedIn} /> : null}
 
-        <Section title="Marking">
-          {failed ? (
-            <EmptyState
-              kind={EMPTY_STATE_KINDS.FAILURE}
-              title="Your score card did not load"
-              hint="It is safe. Open it from your performance."
-              onRetry={card.refetch}
-            />
-          ) : (
-            <LoadingState>Marking your paper</LoadingState>
-          )}
-        </Section>
+        <Alert variant="info">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>Your paper is safe. Marking is queued, so your result may take a moment.</span>
+            <Button size="sm" asChild>
+              <Link to={ROUTES.REPORT(attemptId)}>See your result</Link>
+            </Button>
+          </div>
+        </Alert>
       </PageBody>
     </PageFrame>
   );

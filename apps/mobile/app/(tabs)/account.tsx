@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../../src/components/ui/confirm-dialog';
 import { api } from '../../src/lib/api';
 import { ACCOUNT_ROUTES } from '../../src/lib/nav';
 import { dropPushDevice } from '../../src/lib/push-device';
-import { UNREAD_QUERY_KEY } from '../../src/lib/constants';
+import { UNREAD_POLL_MS, UNREAD_QUERY_KEY } from '../../src/lib/constants';
 import { useTokenColor } from '../../src/lib/use-token-color';
 import { cn } from '../../src/lib/cn';
 import { useAuth } from '../../src/providers/auth';
@@ -28,6 +28,7 @@ export default function AccountScreen() {
   const unread = useQuery({
     queryKey: UNREAD_QUERY_KEY,
     queryFn: () => api.me.notifications({ unreadOnly: 'true', pageSize: 1 }),
+    refetchInterval: UNREAD_POLL_MS,
   });
   const waiting = unread.data?.total ?? 0;
 
