@@ -77,8 +77,8 @@ export const UNREAD_QUERY_KEY = ['me', 'notifications', 'unread'] as const;
 export const notificationsQueryKey = (unreadOnly: boolean) =>
   ['me', 'notifications', { unreadOnly }] as const;
 
-/** No WebSockets in this stack, so the bell asks. Slow enough to be invisible on the API. */
-export const UNREAD_POLL_MS = 60_000;
+/** What the worker posts on a push; its twin is PUSH_RECEIVED in public/sw.js, which cannot import. */
+export const PUSH_RECEIVED = 'push-received';
 
 /** One page of the bell, and the page size the header count is asked for. */
 export const NOTIFICATIONS_PAGE_SIZE = 20;

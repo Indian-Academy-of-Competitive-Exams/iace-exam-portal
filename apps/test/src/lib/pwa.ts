@@ -5,6 +5,7 @@
  * for good, and the notification-preferences screen is where the student asks for it.
  */
 import { type PushSubscriptionInput } from '@iace/contracts';
+import { PUSH_RECEIVED } from './constants';
 
 /** Root scope, so the worker controls every route including the one a push deep-links to. */
 const SERVICE_WORKER = { url: '/sw.js', scope: '/' } as const;
@@ -68,6 +69,17 @@ export async function promptInstall(): Promise<boolean> {
   const { outcome } = await held.userChoice;
 
   return outcome === 'accepted';
+}
+
+/** A push landing while a tab is open, so the bell moves on the event rather than on a timer. */
+export function onPushReceived(handler: () => void): () => void {
+  if (!('serviceWorker' in navigator)) return () => undefined;
+
+  const listener = (event: MessageEvent<{ type?: string } | null>) => {
+    if (event.data?.type === PUSH_RECEIVED) handler();
+  };
+  navigator.serviceWorker.addEventListener('message', listener);
+  return () => navigator.serviceWorker.removeEventListener('message', listener);
 }
 
 export function pushIsSupported(): boolean {

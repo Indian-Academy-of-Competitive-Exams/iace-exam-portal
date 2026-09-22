@@ -9,10 +9,10 @@ import {
   notificationsQueryKey,
   PROFILE_QUERY_KEY,
   ROUTES,
-  UNREAD_POLL_MS,
   UNREAD_QUERY_KEY,
   USER_MENU_ITEMS,
 } from '../lib/constants';
+import { onPushReceived } from '../lib/pwa';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
@@ -27,8 +27,14 @@ export function AppShell() {
   const unread = useQuery({
     queryKey: UNREAD_QUERY_KEY,
     queryFn: () => api.me.notifications({ unreadOnly: 'true', page: 1, pageSize: 1 }),
-    refetchInterval: UNREAD_POLL_MS,
+    // Nothing polls this: a push moves it, and coming back to the tab catches whatever was missed.
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(
+    () => onPushReceived(() => void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY })),
+    [queryClient],
+  );
 
   // The poll only ever refreshed the COUNT, so the bell climbed while the list behind it did not.
   const total = unread.data?.total ?? null;

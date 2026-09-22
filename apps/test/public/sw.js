@@ -15,6 +15,9 @@ const ASSET_PREFIX = '/assets/';
 /** An exam is never served from cache: offline, it must fail rather than look like it opened. */
 const EXAM_PATH = /^\/tests\/[^/]+\/exam$/;
 
+/** Its twin is PUSH_RECEIVED in apps/test/src/lib/constants.ts; this file is served, never bundled. */
+const PUSH_RECEIVED = 'push-received';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.add(SHELL)));
 });
@@ -48,12 +51,15 @@ self.addEventListener('push', (event) => {
   const message = readPush(event.data);
 
   event.waitUntil(
-    self.registration.showNotification(message.title, {
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: message.notificationId,
-      data: { url: message.url },
-    }),
+    Promise.all([
+      self.registration.showNotification(message.title, {
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: message.notificationId,
+        data: { url: message.url },
+      }),
+      tellOpenTabs(),
+    ]),
   );
 });
 
@@ -63,6 +69,12 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(openInApp(target));
 });
+
+/** A tab that is already open has a stale count until something says otherwise, and nothing polls. */
+async function tellOpenTabs() {
+  const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const tab of tabs) tab.postMessage({ type: PUSH_RECEIVED });
+}
 
 /** The document, from the network first — a cached shell is the fallback, never the default. */
 async function shellFor(request, url) {
