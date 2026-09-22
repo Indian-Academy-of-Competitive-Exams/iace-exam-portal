@@ -7,8 +7,10 @@
 
 FROM node:22.23.2-alpine AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
-# Prisma's engines link against OpenSSL, which alpine does not ship.
-RUN apk add --no-cache openssl && corepack enable
+# Prisma's engines link against OpenSSL, which alpine does not ship. tini is PID 1 because Nest
+# closes gracefully and then re-raises the signal to itself, which PID 1 ignores: without an init
+# the container shuts down cleanly and then sits there until the orchestrator kills it.
+RUN apk add --no-cache openssl tini && corepack enable
 WORKDIR /repo
 
 FROM base AS deps
@@ -51,6 +53,7 @@ WORKDIR /app
 COPY --from=build --chown=node:node /out ./
 USER node
 EXPOSE 3000
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/main.js"]
 
 # The one-off task a release runs before the new containers start.
@@ -60,4 +63,5 @@ WORKDIR /app
 COPY --from=build /repo/prisma prisma
 # npm rather than the workspace copy: pnpm's store layout is symlinks, which do not survive a COPY.
 RUN npm install -g --no-audit --no-fund prisma@6.19.3
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["prisma", "migrate", "deploy", "--schema=prisma/schema.prisma"]
