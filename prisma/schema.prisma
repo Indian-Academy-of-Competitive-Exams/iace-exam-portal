@@ -1057,8 +1057,7 @@ model Notification {
   announcement Announcement?          @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   deliveries   NotificationDelivery[]
 
-  @@index([studentId, createdAt])
-  @@index([studentId, isRead])
+  @@index([studentId, createdAt, isRead])
   @@index([testId])
   @@index([testSeriesId])
   @@index([announcementId])
@@ -1109,8 +1108,6 @@ model NotificationDelivery {
 
   // A retry UPDATES its row rather than appending, so this stays O(notifications x channels).
   @@unique([notificationId, channel])
-  @@index([status, queuedAt])
-  @@index([providerMessageId])
 }
 
 // ============================================================================
@@ -1153,7 +1150,6 @@ model StudentSubjectStat {
   subject Subject @relation(fields: [subjectId], references: [id])
 
   @@id([studentId, subjectId, scope])
-  @@index([subjectId])
 }
 
 model TestStat {
