@@ -12,7 +12,7 @@ name: iace
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: iace-postgres
     restart: unless-stopped
     environment:

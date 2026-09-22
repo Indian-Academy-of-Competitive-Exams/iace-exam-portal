@@ -88,7 +88,7 @@ Brings up:
 
 | Service     | Port                        | Notes                                                 |
 | ----------- | --------------------------- | ----------------------------------------------------- |
-| Postgres 16 | 5432                        | user/pass/db = `iace` / `iace_dev_password` / `iace`  |
+| Postgres 17 | 5432                        | user/pass/db = `iace` / `iace_dev_password` / `iace`  |
 | Redis 7     | 6379                        |                                                       |
 | MinIO       | 9000 (API) / 9001 (console) | login = `iace_minio_user` / `iace_minio_password`     |
 | minio‑init  | —                           | one‑shot: creates the `iace-local` bucket, then exits |
@@ -118,6 +118,19 @@ pnpm db:seed          # the static rows (§6)
 Optional GUI: `pnpm db:studio` (Prisma Studio, opens in the browser).
 
 > `db:seed` stays a separate command, not prisma's seed hook, so a `migrate reset` never quietly recreates rows you meant to be rid of. (`db:check` compares the migrations against the schema and needs `SHADOW_DATABASE_URL` — see `.env.example`.)
+
+### Coming from a Postgres 16 volume
+
+A data directory written by 16 will not open under 17, so the container exits at start with
+`database files are incompatible with server`. Nothing here is precious — rebuild it, with no
+other session mid-`test:db`:
+
+```bash
+docker compose down && docker volume rm iace_postgres-data && docker compose up -d && pnpm db:setup
+```
+
+Keep first what you cannot re-seed: `docker exec iace-postgres pg_dumpall -U iace > ~/iace-16.sql`
+before the `down`, and replay it with `psql` afterwards instead of `db:setup`.
 
 ## 6. Seed the first super admin, the branches and the exam catalog
 
