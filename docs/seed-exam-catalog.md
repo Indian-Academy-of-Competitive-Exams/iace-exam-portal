@@ -2,17 +2,20 @@
 
 `prisma/seed.catalog.sql` seeds the full exam catalog from
 `Exam_Pattern_Base_Configurations.xlsx`: **4 courses, 43 exams, 122 stages, 7 subjects,
-30 default base-configs, 91 section-configs**. It runs after `prisma/seed.sql` via
-`pnpm db:seed`, is **idempotent** (`ON CONFLICT DO NOTHING`), and uses **stable
-readable ids** (`exam_ssc_cgl`, `stage_ssc_cgl_t1`, `config_ssc_cgl_t1`,
-`section_<stagekey>_<n>`, `subject_*`) — the same convention as the hand-written seed.
-Regenerate it from the workbook if the workbook changes.
+29 default base-configs, 87 section-configs**. It runs after `prisma/seed.sql` via
+`pnpm db:seed`, which brings the SSC CGL Tier 1 config and its four sections of its own — so a
+seeded database holds **30 configs and 91 sections**, and only this file's share is above.
+It is **idempotent** (`ON CONFLICT DO NOTHING`) and uses **fixed UUID literals** for every id,
+the same convention as the hand-written seed; the readable name lives in `name`, `code` and
+`stageKey`, which is what a query looks a row up by. Regenerate it from the workbook if the
+workbook changes.
 
 ## What gets a config
 
 All 122 stages are seeded as `ExamStage` catalog rows (with `mode` + `disposition`).
 A `BaseConfig` + sections is created **only** for a stage that (a) has section rows in the
-workbook **and** (b) is CONDUCTED or PARTIAL by mode → **30 stages**. Every one reconciles
+workbook **and** (b) is CONDUCTED or PARTIAL by mode → **30 stages**, of which this file writes
+29: SSC CGL Tier 1 is the one `prisma/seed.sql` already holds. Every one reconciles
 (section-question sum == declared total). Stages that are physical/interview/skill/
 psychometric/descriptive are catalog-only (no config), including `IBPS_PO_MAIN_DESC`
 (descriptive, has section rows but not auto-scorable).
@@ -44,9 +47,9 @@ Awareness — imperfect but the section keeps its real name; refine later if nee
 
 ## Field mapping
 
-- **Ids:** readable strings (per your instruction — the schema default is cuid, but the
-  established seed convention is stable readable ids; workbook Stage Keys go into
-  `stageKey`/`code` columns, not the PK).
+- **Ids:** fixed UUID literals, written into the file rather than generated, so re-running it
+  conflicts with the rows it wrote last time instead of duplicating them. Workbook Stage Keys go
+  into the `stageKey`/`code` columns, never the primary key.
 - **Languages / languageMode:** course-aware — SSC → `[EN,HI]` **DUAL** (bilingual render);
   RRB → `[EN,HI]` (+`TE` for regional) SINGLE; Banking → `[EN,HI]` SINGLE; AP&TS Police →
   `[EN,TE]` SINGLE. **Urdu is dropped** (not in `SupportedLanguage`); regional languages

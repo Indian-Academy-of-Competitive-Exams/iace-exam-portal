@@ -65,6 +65,11 @@ Both frames are already in `packages/ui`; content shape chooses between them.
 shell around it. The rail is nav icons only — the "i" square in the mockups is a
 placeholder to ignore.
 
+**Two screens have no shell at all: the instructions and the sitting.** An exam hall has no
+navigation out of it, so both sit outside `AppShell` and take the window. The sitting follows
+neither language (below); the instructions still follow this one — a `PageFrame` capped at the
+shell's own narrow width, with the walk in its `footer` so the controls do not scroll away.
+
 ## The component vocabulary
 
 The student pattern layer belongs in `apps/test/src/components/ui/` — with the web app

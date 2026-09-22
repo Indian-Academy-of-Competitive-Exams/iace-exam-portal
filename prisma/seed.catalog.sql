@@ -1,6 +1,6 @@
 
 -- ===========================================================================
--- Full exam catalog — 4 courses, 43 exams, 122 stages, 30 default configs.
+-- Full exam catalog — 4 courses, 43 exams, 122 stages, 29 default configs (seed.sql seeds the 30th).
 -- Generated from Exam_Pattern_Base_Configurations.xlsx. Idempotent (ON CONFLICT DO NOTHING).
 -- Ids are fixed UUID literals (same convention as seed.sql); the readable name lives in name/code/stageKey.
 -- Mode->disposition & section->subject mappings documented in docs/seed-exam-catalog.md.

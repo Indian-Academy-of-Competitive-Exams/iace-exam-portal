@@ -184,6 +184,14 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
   **The clock does not stop**: a paper left to sit another runs to the deadline it was given at
   start.
+- **`NavigationPolicy` decides what the palette is for.** Under `FREE` it opens any question in the
+  section. Under `FORWARD_ONLY` a question left is closed for good: a seat already passed cannot be
+  reopened, Save & Next stops wrapping from the last seat back to the first — a wrap is a move
+  backwards — and **marking for review is gone**, because a flag asks for a second look the paper
+  will never grant. Two of the five answer states are therefore unreachable, and every legend, tally
+  and summary column on such a paper shows three. This is a rule the SCREEN keeps, like the clock:
+  the engine holds it once so no skin can forget it, and the server takes answers the same way
+  either side of it.
 - `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
   Sections keep the config's order; questions shuffle within a section. **The order a seed produces
   must never change**: every past sitting's review is derived from it, so a new shuffle or PRNG
@@ -287,8 +295,8 @@ presentation.
   sat paper must not re-skin because the config moved. A skin nothing is registered for falls back
   rather than leaving a candidate on a blank page.
 - Every IACE format shares the CBT screen. Their differences are **config, not template**: sectional
-  timing on or off and locked versus free switching, an optional on-screen calculator, section and
-  question counts, and marking.
+  timing on or off and locked versus free switching, free or forward-only navigation (§7), an
+  optional on-screen calculator, section and question counts, and marking.
 
 ## 11. The question bank
 
