@@ -31,7 +31,7 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v11';
+const CATALOG_SHAPE = 'v12';
 
 const catalogInclude = (programs: string[]) =>
   ({
@@ -49,14 +49,12 @@ const catalogInclude = (programs: string[]) =>
           select: {
             durationSec: true,
             totalQuestions: true,
-            totalMarks: true,
             // A scoped test is its own sections' worth, and the catalog is what a student reads first.
             sections: {
               select: {
                 id: true,
                 moduleId: true,
                 questionCount: true,
-                marksPerQuestion: true,
                 durationSec: true,
                 perQuestionSec: true,
               },
@@ -78,7 +76,6 @@ interface ResolvedTest {
   durationSec: number;
   sectionCount: number;
   totalQuestions: number;
-  totalMarks: number;
   order: number | null;
   /** The opening, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
   opensAt: string | null;
@@ -91,7 +88,6 @@ interface ResolvedSeries {
   id: string;
   name: string;
   examStage: { id: string; name: string; examCode: string; course: ExamCourse } | null;
-  programCode: string | null;
   kind: TestSeriesKind;
   sequentialTests: boolean;
   tests: ResolvedTest[];
@@ -338,7 +334,6 @@ function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus
           course: row.examStage.exam.course,
         }
       : null,
-    programCode: row.programCode,
     kind: row.kind,
     sequentialTests: row.sequentialTests,
     tests: row.tests.map((test) => toResolvedTest(test, sittings)).sort(byOrderThenId),
@@ -378,10 +373,6 @@ function toResolvedTest(
     ),
     sectionCount: scoped.length,
     totalQuestions: scoped.reduce((total, section) => total + section.questionCount, 0),
-    totalMarks: scoped.reduce(
-      (total, section) => total + section.questionCount * Number(section.marksPerQuestion),
-      0,
-    ),
     order: test.seriesOrder,
     opensAt: opensFor(test)?.toISOString() ?? null,
     attemptStatus: sittings.get(test.id) ?? null,

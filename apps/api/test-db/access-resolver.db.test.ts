@@ -379,10 +379,7 @@ describe('AccessResolverService — what the paper is', () => {
     const test = (await resolverOn().catalog(await studentAt(at), NOW)).series[0]?.tests[0];
 
     assert.equal(test?.canStart, false);
-    assert.deepEqual(
-      [test?.durationSec, test?.sectionCount, test?.totalQuestions, test?.totalMarks],
-      [5400, 1, 90, 180],
-    );
+    assert.deepEqual([test?.durationSec, test?.sectionCount, test?.totalQuestions], [5400, 1, 90]);
   });
 });
 

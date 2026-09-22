@@ -18,7 +18,6 @@ const SERIES = {
   name: 'SSC CGL Tier 1 mocks',
   description: null,
   examStage: { id: 'stage_1', name: 'Tier 1', examCode: 'SSC CGL', course: 'SSC' },
-  programCode: null,
   kind: TEST_SERIES_KIND.STANDARD,
   sequentialTests: false,
   tests: [
@@ -28,7 +27,6 @@ const SERIES = {
       durationSec: 3600,
       sectionCount: 2,
       totalQuestions: 100,
-      totalMarks: 200,
       order: 1,
       opensAt: null,
       closesAt: null,
@@ -100,7 +98,6 @@ describe('testBucket', () => {
     durationSec: 3600,
     sectionCount: 2,
     totalQuestions: 100,
-    totalMarks: 200,
     order: 1,
     opensAt: null,
     attemptStatus: null,

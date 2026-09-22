@@ -381,7 +381,6 @@ const studentCatalogTestSchema = z.object({
   durationSec: z.number().int(),
   sectionCount: z.number().int(),
   totalQuestions: z.number().int(),
-  totalMarks: z.number(),
   /** Position in the series. Ordering only — sequential gating is the series' own flag. */
   order: z.number().int().nullable(),
   /** When this test opens inside its series. Null is open from the moment the series is reached. */
@@ -404,7 +403,6 @@ export const studentCatalogSeriesSchema = z.object({
       course: examCourseSchema,
     })
     .nullable(),
-  programCode: z.string().nullable(),
   kind: testSeriesKindSchema,
   sequentialTests: z.boolean(),
   tests: z.array(studentCatalogTestSchema),
