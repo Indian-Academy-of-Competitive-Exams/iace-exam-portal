@@ -8,14 +8,18 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 - **`docs/01-architecture.md`** — architecture, live-test scaling design, deployment topology.
 - **`docs/02-domain-rules.md`** — the mock-test rules the schema cannot state.
 - **`docs/03-conventions.md`** — where code goes, table ownership, the event catalog.
-- **`docs/design/design-system.html`** — the living design-system style guide (open in a browser).
+- **`docs/design/design-system.html`** — the living style guide, and the **admin** composition language (open in a browser).
+- **`docs/design/student/README.md`** — the **student** composition language, binding for every `apps/test` screen.
+- **`docs/local-setup.md`** — the same run-through as below, at a new machine's pace.
 - **`prisma/schema.prisma`** — the data model (source of truth).
 
 ## Stack
 
-TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
+TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP). No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
 
 `apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
+
+`apps/mobile` is the student client in Expo + React Native (Android first). It is **in progress and not yet shipped**: the screens are built, push is dark until Firebase is wired, and nothing is device-verified. It shares `@iace/contracts` and `@iace/app-kit` with the SPAs and nothing else — `@iace/ui` is web, so the mobile app has its own components.
 
 Both SPAs are thin by construction: the bootstrap, the session, the route guard and the chrome all come from `@iace/app-kit`, and the form and table kits from `@iace/ui`. What an app owns is its routes, its nav, its storage keys, its login screen and its dashboard — the things that genuinely differ. See `docs/03-conventions.md` §2–§3.
 
@@ -35,6 +39,7 @@ docker compose up -d       # postgres + redis + minio (+ one-shot bucket create)
 pnpm install
 pnpm db:migrate            # applies prisma/migrations
 pnpm dev                   # api + test + admin, together
+pnpm dev:mobile            # the Expo client, against the same API
 ```
 
 Then create the first super admin — see [Bootstrapping the first admin](#bootstrapping-the-first-admin).
@@ -46,6 +51,7 @@ Then create the first super admin — see [Bootstrapping the first admin](#boots
 | Test app      | http://localhost:5173        |
 | Admin app     | http://localhost:5174        |
 | MinIO console | http://localhost:9001        |
+| Expo (mobile) | http://localhost:8081        |
 
 ### Signing in
 
@@ -98,12 +104,12 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 
 ### CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs:
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs (a third, **Docs**, runs weekly and on demand — it judges the whole doc set against the whole schema, so it gates nothing):
 
-| Job          | What it proves                                                                                                                                   | Needs                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| **Verify**   | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                                                          | nothing — no Postgres, Redis or S3 |
-| **Database** | every migration applies to an **empty** database, `prisma/migrations` still produces `schema.prisma`, and `pnpm test:db` passes against Postgres | a Postgres service container       |
+| Job          | What it proves                                                                                                                                   | Needs                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| **Verify**   | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                                                          | nothing — no Postgres, Redis, S3 or `.env` |
+| **Database** | every migration applies to an **empty** database, `prisma/migrations` still produces `schema.prisma`, and `pnpm test:db` passes against Postgres | a Postgres service container               |
 
 The split is the point: the test suite is deliberately infrastructure-free, so the job that gates every PR stays fast, and the one database that CI does start exists only for what genuinely cannot be verified without one: the migrations and the hand-written SQL.
 
@@ -143,9 +149,9 @@ Both are env vars: change them without touching code.
 
 ### Other scripts
 
-`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm deps:check` · `pnpm deps:fix` · `pnpm db:generate` · `pnpm db:check` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
+`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm test:db` · `pnpm format` · `pnpm deps:check` · `pnpm deps:fix` · `pnpm db:generate` · `pnpm db:check` · `pnpm db:studio` · `pnpm docs:check` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
 
-`pnpm test` runs the Node test runner (no Jest). **Nothing in the suite needs Postgres, Redis or S3** — `apps/api/test/support/fakes.ts` provides an in-memory Redis with a clock the test advances, so TTLs, OTP expiry and lockout escalation are asserted without sleeping. That is what makes the suite safe as a CI gate.
+**Two test tiers, and where a test lives follows what it touches.** `pnpm test` runs the Node test runner (no Jest) over everything that needs no infrastructure: **not Postgres, not Redis, not S3, and not even a `.env`** — `apps/api/test/support/fakes.ts` provides an in-memory Redis with a clock the test advances, so TTLs, OTP expiry and lockout escalation are asserted without sleeping. Anything that reads or writes Postgres is a `*.db.test.ts` under `apps/api/test-db` and runs on the real database through `pnpm test:db`, which migrates a guarded `*_test` database first and refuses to touch the one in `DATABASE_URL`.
 
 Every backend feature ships with its tests in the same commit (see the guardrail in `CLAUDE.md`): the happy path, plus the failure the feature exists to prevent.
 
