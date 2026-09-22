@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
   EmptyState,
@@ -117,8 +118,12 @@ export function DashboardPage() {
           <Section
             title="Also waiting"
             action={
-              <Link className={linkVariants()} to={ROUTES.TESTS}>
+              <Link
+                className={cn(linkVariants(), 'inline-flex items-center gap-1 [&_svg]:size-4')}
+                to={ROUTES.TESTS}
+              >
                 See all tests
+                <ChevronRight aria-hidden />
               </Link>
             }
           >
@@ -313,8 +318,12 @@ function RecentResults({
     <Section
       title="Recent results"
       action={
-        <Link className={linkVariants()} to={ROUTES.PERFORMANCE}>
+        <Link
+          className={cn(linkVariants(), 'inline-flex items-center gap-1 [&_svg]:size-4')}
+          to={ROUTES.PERFORMANCE}
+        >
           See your performance
+          <ChevronRight aria-hidden />
         </Link>
       }
     >

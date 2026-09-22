@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import {
   DIFFICULTY_LEVEL,
   QUESTION_STATUSES,
@@ -27,6 +28,7 @@ import {
   SectionHeading,
   Skeleton,
   TruncatedText,
+  cn,
   linkVariants,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -231,8 +233,12 @@ function ActivityCard({ feed }: Readonly<{ feed: readonly RowAction[] }>) {
       <SectionHeading
         title="Activity"
         action={
-          <Link to={ROUTES.AUDIT} className={linkVariants()}>
+          <Link
+            to={ROUTES.AUDIT}
+            className={cn(linkVariants(), 'inline-flex items-center gap-1 [&_svg]:size-4')}
+          >
             All
+            <ChevronRight aria-hidden />
           </Link>
         }
       />

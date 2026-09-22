@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { Button, Card, StatRow, TruncatedText, cn, linkVariants } from '@iace/ui';
 import {
   instituteDayLabel,
@@ -82,10 +83,14 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
           <span className="text-xs font-medium text-muted-foreground">/{result.maxMarks}</span>
         </span>
         <Link
-          className={cn(linkVariants(), 'text-xs font-semibold')}
+          className={cn(
+            linkVariants(),
+            'inline-flex items-center gap-0.5 text-xs font-semibold [&_svg]:size-3.5',
+          )}
           to={ROUTES.REPORT(result.attemptId)}
         >
           Report
+          <ChevronRight aria-hidden />
         </Link>
       </div>
     );
