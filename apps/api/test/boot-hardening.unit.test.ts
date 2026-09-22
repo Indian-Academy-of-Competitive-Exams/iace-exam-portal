@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { corsOrigin, helmetOptions } from '../src/common/security-headers';
 import { NO_EVICTION, evictionRisk } from '../src/redis/eviction-policy';
+import { THREADPOOL_FLOOR, threadpoolRisk } from '../src/common/threadpool';
 import { NODE_ENVS, validateEnv } from '../src/config/env.schema';
 import { AppConfigService } from '../src/config/app-config.service';
 
@@ -101,6 +102,26 @@ describe('the database pool', () => {
 
   it('leaves development alone, where one process serves everything', () => {
     assert.ok(validateEnv(env()).DATABASE_URL);
+  });
+});
+
+describe('the libuv thread pool', () => {
+  /** The bug this prevents: a login burst holding all four threads while gzip waits behind it. */
+  it('names the risk when nothing sized the pool', () => {
+    assert.match(threadpoolRisk(undefined) ?? '', /unset.*4/s);
+    assert.match(threadpoolRisk('4') ?? '', /UV_THREADPOOL_SIZE is "4"/);
+  });
+
+  it('is satisfied at the floor and above it', () => {
+    assert.equal(threadpoolRisk(String(THREADPOOL_FLOOR)), null);
+    assert.equal(threadpoolRisk(String(THREADPOOL_FLOOR * 2)), null);
+  });
+
+  /** A value libuv itself would ignore must read as unsized, not as somebody's deliberate choice. */
+  it('treats a value that is not a whole number as no answer at all', () => {
+    for (const raw of ['', 'sixteen', '16.5', '-16']) {
+      assert.notEqual(threadpoolRisk(raw), null, `"${raw}" passed as a pool size`);
+    }
   });
 });
 
