@@ -13,6 +13,9 @@ import { decodeAnswer, encodeAnswer, type AnswerSlot } from './answer-sheet';
 /** A request in flight as the clock expires is not cheating, so a save is taken this long after. */
 export const SAVE_GRACE_SEC = 30;
 
+/** How long a paper waits for a candidate who walked away. Past it, the key goes and the sitting ends. */
+export const PAUSE_LIMIT_SEC = 48 * 60 * 60;
+
 /** What Redis holds, plus the facts a save is judged against so judging one never reads Postgres. */
 export interface HeldState {
   attemptId: string;
@@ -23,6 +26,8 @@ export interface HeldState {
   startedAt: string;
   /** ISO, the server's own deadline — the client's clock never decides whether a save is late. */
   endsAt: string;
+  /** ISO of the last save the SERVER took. The gap since it is time the candidate was not sitting. */
+  lastSeenAt?: string;
   revision: number;
   answers: Record<string, LiveAnswer>;
   /** Questions changed since the last flush. Absent on a key written before this shipped. */
@@ -141,6 +146,7 @@ export function applyBatch(
   return {
     ...held,
     revision: batch.revision,
+    lastSeenAt: now.toISOString(),
     answers,
     pending: [...new Set([...(held.pending ?? []), ...batch.answers.map((c) => c.questionId)])],
     sections: batch.sections ? { ...held.sections, ...batch.sections } : held.sections,
@@ -172,6 +178,22 @@ export function pendingAfter(
 /** Whether a save arriving now is still in time. Past the deadline and its grace, it is not. */
 export function isInTime(held: HeldState, now: Date): boolean {
   return now.getTime() <= Date.parse(held.endsAt) + SAVE_GRACE_SEC * MILLISECONDS_PER_SECOND;
+}
+
+/** Away time, in ms: what a candidate who closed the paper did not spend sitting it. */
+export function awayMs(held: HeldState, now: Date): number {
+  const seen = held.lastSeenAt ?? held.startedAt;
+  return Math.max(0, now.getTime() - Date.parse(seen));
+}
+
+/** The deadline a resume gets: the one it had, pushed by the time the paper was not on screen. */
+export function creditedEndsAt(held: HeldState, now: Date): Date {
+  return new Date(Date.parse(held.endsAt) + awayMs(held, now));
+}
+
+/** Too long away to come back to. The key is gone by now anyway; this is what Postgres judges by. */
+export function isAbandoned(held: HeldState, now: Date): boolean {
+  return awayMs(held, now) > PAUSE_LIMIT_SEC * MILLISECONDS_PER_SECOND;
 }
 
 const MILLISECONDS_PER_SECOND = 1000;

@@ -9,7 +9,8 @@ import {
 } from '../src/attempts/attempt-sweeper.processor';
 import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
 import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import { makeCatalog, makeTest, resetDatabase, testPrisma, uid } from './support/database';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -55,17 +56,45 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
     },
   } as never;
   const rollupQueue = new FakeQueue();
+  const redis = new FakeRedis();
+  const state = new AttemptStateService(prisma, redis.asService());
   const sweeper = new AttemptSweeperProcessor(
     prisma,
+    state,
     submit,
     NO_MORE_WORK,
     new RollupOutbox(rollupQueue.asQueue()),
     fakeQueueFailures(),
   );
-  return { asked, sweeper, rollupQueue };
+  return { asked, sweeper, rollupQueue, state };
 }
 
 const ended = () => prisma.attempt.count({ where: { status: ATTEMPT_STATUS.SUBMITTED } });
+
+describe('AttemptSweeperProcessor — a paper put down is not a paper abandoned', () => {
+  /** The failure this prevents: closing the laptop for an hour ending the sitting at its old deadline. */
+  it('leaves a sitting whose live key is still there', async () => {
+    const [attemptId = ''] = await stranded(1);
+    const { sweeper, state, asked } = build();
+    const attempt = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+    await state.open(attempt, 'tab-1');
+
+    await sweeper.process();
+
+    assert.deepEqual(asked, [], 'nothing was asked to expire');
+    assert.equal(await ended(), 0);
+  });
+
+  it('ends one whose key has gone, which is what past the limit looks like', async () => {
+    const [attemptId = ''] = await stranded(1);
+    const { sweeper, asked } = build();
+
+    await sweeper.process();
+
+    assert.deepEqual(asked, [attemptId]);
+    assert.equal(await ended(), 1);
+  });
+});
 
 describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => {
   /** The bug this prevents: a batching loop that only ever touches its first lane. */

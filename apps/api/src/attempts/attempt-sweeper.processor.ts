@@ -4,7 +4,8 @@ import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, SCORING_RETRY_AFTER_MS } from '../queue/queues';
-import { SAVE_GRACE_SEC } from './attempt-state';
+import { isAbandoned, SAVE_GRACE_SEC } from './attempt-state';
+import { AttemptStateService } from './attempt-state.service';
 import { RollupOutbox } from './rollup-outbox';
 import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
@@ -19,6 +20,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly state: AttemptStateService,
     private readonly submit: SubmitService,
     private readonly outbox: ScoringOutbox,
     private readonly rollup: RollupOutbox,
@@ -49,7 +51,10 @@ export class AttemptSweeperProcessor extends WorkerHost {
   /** Drains the backlog in one run: the cap bounds what a read holds, not what a sweep ends. */
   private async endStranded(): Promise<void> {
     for (;;) {
-      const stranded = await this.expired();
+      const candidates = await this.expired();
+      if (candidates.length === 0) return;
+
+      const stranded = await this.abandoned(candidates);
       if (stranded.length === 0) return;
 
       let ended = 0;
@@ -60,8 +65,17 @@ export class AttemptSweeperProcessor extends WorkerHost {
         ended += lane.filter(Boolean).length;
       }
       // Stops on a batch nothing could end, which the next read would hand back unchanged forever.
-      if (stranded.length < SWEEP_BATCH || ended === 0) return;
+      if (candidates.length < SWEEP_BATCH || ended === 0) return;
     }
+  }
+
+  /** A live key is a paper put down, and its TTL is the limit: having no key is the whole decision. */
+  private async abandoned(candidates: readonly { id: string }[], now: Date = new Date()) {
+    const held = await this.state.readMany(candidates.map((row) => row.id));
+    return candidates.filter((row) => {
+      const paused = held.get(row.id);
+      return paused === undefined || isAbandoned(paused, now);
+    });
   }
 
   /** Through the same gate the student uses, so a race resolves to one submission. */

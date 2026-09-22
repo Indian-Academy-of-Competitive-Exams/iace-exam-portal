@@ -24,14 +24,18 @@ import {
   applyBatch,
   heldIn,
   holdsSitting,
+  creditedEndsAt,
+  isAbandoned,
   isInTime,
+  PAUSE_LIMIT_SEC,
   packHeld,
   pendingAfter,
   type HeldState,
 } from './attempt-state';
 
 /** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
-const STATE_TTL_SEC = 12 * 60 * 60;
+/** The key IS the pause: while it lives a sitting can be come back to, and past it there is nothing to read. */
+const STATE_TTL_SEC = PAUSE_LIMIT_SEC;
 
 /** How many times a patch of the live key gives way before it refuses rather than writes over. */
 const PATCH_TRIES = 5;
@@ -52,6 +56,7 @@ export class AttemptStateService {
   async open(
     attempt: { id: string; studentId: string; testId: string; startedAt: Date; endsAt: Date },
     tab?: string,
+    now: Date = new Date(),
   ): Promise<void> {
     await this.patch(
       attempt.id,
@@ -59,6 +64,8 @@ export class AttemptStateService {
         ...held,
         testId: attempt.testId,
         startedAt: attempt.startedAt.toISOString(),
+        // Picked up again: the clock starts counting from here, not from where it was put down.
+        lastSeenAt: now.toISOString(),
         tab: tab ?? held.tab,
       }),
       () => ({
@@ -68,6 +75,7 @@ export class AttemptStateService {
         startedAt: attempt.startedAt.toISOString(),
         endsAt: attempt.endsAt.toISOString(),
         revision: 0,
+        lastSeenAt: now.toISOString(),
         answers: {},
         pending: [],
         sections: {},
@@ -78,13 +86,19 @@ export class AttemptStateService {
     if (tab !== undefined) await this.takeClaim(attempt.studentId, attempt.id);
   }
 
-  /** A resume after the key was lost puts back what Postgres holds, never an empty sheet over it. */
+  /** Puts back what Postgres holds, and gives back the time the paper was not on screen. */
   async resume(
     attempt: { id: string; studentId: string; testId: string; startedAt: Date; endsAt: Date },
     tab?: string,
-  ): Promise<void> {
-    await this.require(attempt.studentId, attempt.id);
-    await this.open(attempt, tab);
+    now: Date = new Date(),
+  ): Promise<Date> {
+    const held = await this.require(attempt.studentId, attempt.id);
+    if (isAbandoned(held, now)) return attempt.endsAt;
+
+    const endsAt = creditedEndsAt({ ...held, endsAt: attempt.endsAt.toISOString() }, now);
+    await this.open({ ...attempt, endsAt }, tab, now);
+    // The row is the caller's to move: this file never writes Postgres on the answer path.
+    return endsAt;
   }
 
   /** One sitting at a time per student: opening this one stands down whatever tab held the last. */

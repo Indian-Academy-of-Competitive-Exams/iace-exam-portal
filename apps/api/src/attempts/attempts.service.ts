@@ -80,8 +80,12 @@ export class AttemptsService {
     const live = await this.liveAttempt(studentId, testId);
     if (live && (input.resume === undefined || live.id === input.resume)) {
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
-      await this.state.resume(live, input.tab);
-      return toLiveAttempt(live, await this.requireTest(testId), false);
+      const endsAt = await this.state.resume(live, input.tab);
+      // Durable too, or the sweeper would judge a resumed sitting by the deadline it walked away from.
+      if (endsAt.getTime() !== live.endsAt.getTime()) {
+        await this.prisma.attempt.update({ where: { id: live.id }, data: { endsAt } });
+      }
+      return toLiveAttempt({ ...live, endsAt }, await this.requireTest(testId), false);
     }
     // A reclaim of a sitting handed in elsewhere must land on its result, not on a fresh paper.
     if (input.resume !== undefined) throw new AppException(ErrorCodes.SITTING_ENDED);

@@ -143,6 +143,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     live: { id: attempt.id, studentId: student, testId: paper.testId, startedAt, endsAt },
     sweeper: new AttemptSweeperProcessor(
       prisma,
+      state,
       submit,
       outbox,
       new RollupOutbox(new FakeQueue().asQueue()),
@@ -282,9 +283,10 @@ describe('SubmitService', () => {
 });
 
 describe('AttemptSweeperProcessor', () => {
-  it('ends a sitting whose clock ran out, and has nothing to do twice over', async () => {
+  it('ends a sitting nobody came back to, and has nothing to do twice over', async () => {
     const built = await build({ endsAt: LATE });
-    await built.state.open(built.live);
+    // Last seen past the limit: a paper still within it is put down, not abandoned.
+    await built.state.open(built.live, undefined, new Date(Date.now() - 49 * HOUR_MS));
 
     await built.sweeper.process();
     await built.sweeper.process();

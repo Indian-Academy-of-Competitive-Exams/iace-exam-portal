@@ -7,9 +7,13 @@ import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from './support/fakes';
 import {
   applyBatch,
+  awayMs,
+  creditedEndsAt,
   heldIn,
+  isAbandoned,
   isInTime,
   isStale,
+  PAUSE_LIMIT_SEC,
   packHeld,
   pendingAfter,
   SAVE_GRACE_SEC,
@@ -207,6 +211,38 @@ describe('isInTime', () => {
 
   it('refuses one past the grace', () => {
     assert.equal(isInTime(held(), at('2026-09-01T05:30:31.000Z')), false);
+  });
+});
+
+describe('a paper put down, and one abandoned', () => {
+  const at = (iso: string) => new Date(iso);
+  /** Left the paper at 05:10 with twenty minutes still on it. */
+  const putDown = held({ lastSeenAt: '2026-09-01T05:10:00.000Z' });
+
+  it('gives back every second the paper was off screen', () => {
+    // Back a day later: the twenty minutes left are still twenty minutes.
+    const resumed = creditedEndsAt(putDown, at('2026-09-02T05:10:00.000Z'));
+    assert.equal(resumed.toISOString(), '2026-09-02T05:30:00.000Z');
+  });
+
+  it('gives back nothing to a sitting still being written to', () => {
+    assert.equal(
+      creditedEndsAt(putDown, at('2026-09-01T05:10:00.000Z')).toISOString(),
+      ENDS_AT,
+      'no gap, no credit',
+    );
+  });
+
+  /** The failure this prevents: a sitting nobody came back to, resumable for ever. */
+  it('is abandoned once nobody has come back inside the limit', () => {
+    assert.equal(isAbandoned(putDown, at('2026-09-03T05:09:00.000Z')), false);
+    assert.equal(isAbandoned(putDown, at('2026-09-03T05:11:00.000Z')), true);
+    assert.equal(PAUSE_LIMIT_SEC, 48 * 60 * 60);
+  });
+
+  /** A key written before this shipped has no last save, so the start is the only instant it has. */
+  it('counts from the start when nothing has been saved yet', () => {
+    assert.equal(awayMs(held(), at('2026-09-01T05:01:00.000Z')), 60_000);
   });
 });
 
