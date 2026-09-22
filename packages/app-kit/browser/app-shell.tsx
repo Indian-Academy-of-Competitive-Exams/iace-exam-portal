@@ -2,7 +2,7 @@ import { type FeatureKey } from '@iace/contracts';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { WorkspaceContext } from './app-shell/use-workspace';
-import { ChevronRight, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import {
   Brandmark,
   Button,
@@ -79,6 +79,7 @@ export function AppShell({
 }: Readonly<AppShellProps>) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
   // null: no workspace on screen. false: one, with the chrome. true: one that has taken the window.
   const [workspace, setWorkspace] = useState<boolean | null>(null);
   const { pathname } = useLocation();
@@ -153,36 +154,34 @@ export function AppShell({
           {/* A div, not an aside: the nav inside is the landmark, and wrapping it in
             a complementary one announces the same region twice. */}
           {/* The rail is the only nav IN the flow, and its width never changes — which is what
-            keeps the content region a constant. Expanding opens the panel over the top. */}
+            keeps the content region a constant. Pointing at it opens the panel over the top. */}
           {isDesktop && hasNav ? (
-            <div
-              className={cn(
-                // `relative` positions the expand toggle that hangs off the edge.
-                'relative flex h-full w-[--sidebar-w-rail] shrink-0 flex-col',
-                'border-r border-border bg-surface p-[--sidebar-rail-pad]',
-              )}
-            >
-              {/* mt-8 clears the toggle below, which hangs off the right edge at top-3 and is
-                24px tall: without it the first nav row reads as attached to that button. */}
-              <nav aria-label="Sections" className="mt-8 min-h-0 flex-1 overflow-y-auto">
-                <SidebarNav items={items} pathname={pathname} collapsed />
-              </nav>
-
-              <button
-                type="button"
-                aria-label="Open navigation"
-                aria-expanded={panelOpen}
-                onClick={() => setPanelOpen(true)}
+            // The spacer is the rail's width and never moves: what the page sees is a constant.
+            <div className="relative w-[--sidebar-w-rail] shrink-0">
+              <div
+                // Pointer only: focus would swap the rows out from under the row that has focus.
+                onPointerEnter={() => setRailOpen(true)}
+                onPointerLeave={() => setRailOpen(false)}
                 className={cn(
-                  'absolute -right-3 top-3 grid size-6 place-items-center rounded-full',
-                  'border border-border bg-surface text-muted-foreground shadow-sm',
-                  'hover:bg-muted hover:text-foreground',
-                  'focus-visible:shadow-focus focus-visible:outline-none',
-                  'z-[--z-sticky]',
+                  // Out of the flow and over the page: widening a flex sibling would reflow the content.
+                  'absolute inset-y-0 left-0 z-[--z-drawer] flex flex-col',
+                  'border-r border-border bg-surface p-[--sidebar-rail-pad]',
+                  railOpen ? 'w-[--sidebar-w] shadow-[--shadow-overlay]' : 'w-[--sidebar-w-rail]',
                 )}
               >
-                <ChevronRight className="size-3.5" aria-hidden />
-              </button>
+                <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
+                  {railOpen ? (
+                    <NavPanel
+                      items={items}
+                      pathname={pathname}
+                      drilldown={false}
+                      onNavigate={() => setRailOpen(false)}
+                    />
+                  ) : (
+                    <SidebarNav items={items} pathname={pathname} collapsed />
+                  )}
+                </nav>
+              </div>
             </div>
           ) : null}
 
@@ -200,10 +199,9 @@ export function AppShell({
           </main>
         </div>
 
-        {/* Every breakpoint, not just the small one. A Sheet rather than a hand-rolled panel: it
-          owns the focus trap, Escape, the scroll lock and the return of focus to whatever
-          opened it, and being portalled is what keeps the content region from ever reflowing. */}
-        {hasNav ? (
+        {/* Below the rail there is no nav in the page, so the drawer IS the nav: a Sheet, because
+          it owns the focus trap, Escape and the return of focus to whatever opened it. */}
+        {hasNav && !isDesktop ? (
           <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
             {/* aria-describedby={undefined}: the panel is a list of links and has
               nothing to describe. Radix otherwise warns in dev that a dialog
@@ -225,12 +223,7 @@ export function AppShell({
               </div>
 
               <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
-                <NavPanel
-                  items={items}
-                  pathname={pathname}
-                  drilldown={!isDesktop}
-                  onNavigate={closePanel}
-                />
+                <NavPanel items={items} pathname={pathname} drilldown onNavigate={closePanel} />
               </nav>
             </SheetContent>
           </Sheet>

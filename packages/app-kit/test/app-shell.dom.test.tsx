@@ -191,51 +191,53 @@ const BIG: readonly NavItem[] = [
 
 const openPanel = () => fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
 
+/** The desktop rail opens by being pointed at; the layer that widens is the nav's own parent. */
+const railLayer = () => screen.getByRole('navigation', { name: 'Sections' }).parentElement;
+const hoverRail = () => fireEvent.pointerEnter(railLayer() as HTMLElement);
+
 describe('AppShell — the nav panel overlays, it never reflows the page', () => {
   /** It used to widen a flex sibling of <main>, so opening the menu moved every screen. */
-  it('leaves the rail the same width whether the panel is open or shut', async () => {
+  it('leaves the rail the same width whether the panel is open or shut', () => {
     setDesktop(true);
     renderShell({ nav: SECTIONED });
 
-    const rail = screen.getByRole('navigation', { name: 'Sections' }).parentElement;
-    const shut = rail?.className;
+    const spacer = railLayer()?.parentElement;
+    const shut = spacer?.className;
 
-    openPanel();
-    await screen.findByRole('dialog');
+    hoverRail();
 
-    assert.equal(rail?.className, shut);
+    assert.equal(spacer?.className, shut);
     assert.match(shut ?? '', /w-\[--sidebar-w-rail\]/);
   });
 
-  /** Portalled out of the layout row, so nothing it covers is asked to make space for it. */
-  it('renders the panel outside the row that holds the page', async () => {
+  /** Out of the flow and over the page, so nothing it covers is asked to make space for it. */
+  it('widens a layer that is not in the layout, never the rail itself', () => {
     setDesktop(true);
     renderShell({ nav: SECTIONED });
-    openPanel();
 
-    const dialog = await screen.findByRole('dialog');
-    const pageRow = screen.getByText('Page').closest('main')?.parentElement;
+    assert.match(railLayer()?.className ?? '', /absolute/);
 
-    assert.ok(pageRow);
-    assert.equal(pageRow?.contains(dialog), false);
+    hoverRail();
+
+    assert.match(railLayer()?.className ?? '', /w-\[--sidebar-w\]/);
   });
 
   it('closes itself when a destination is chosen', async () => {
     setDesktop(true);
     renderShell({ nav: SECTIONED });
-    openPanel();
+    hoverRail();
 
     fireEvent.click(await screen.findByRole('button', { name: /Students/ }));
     fireEvent.click(await screen.findByRole('link', { name: 'All students' }));
 
-    await waitFor(() => assert.equal(screen.queryByRole('dialog'), null));
+    await waitFor(() => assert.match(railLayer()?.className ?? '', /w-\[--sidebar-w-rail\]/));
   });
 
   /** Two open at once would grow the list past the panel and hand it a scrollbar. */
   it('keeps one section open at a time', async () => {
     setDesktop(true);
     renderShell({ nav: SECTIONED });
-    openPanel();
+    hoverRail();
 
     const students = await screen.findByRole('button', { name: /Students/ });
     fireEvent.click(students);
@@ -252,7 +254,7 @@ describe('AppShell — the nav panel overlays, it never reflows the page', () =>
   it('gives an oversized section a popover rather than an accordion', async () => {
     setDesktop(true);
     renderShell({ nav: BIG });
-    openPanel();
+    hoverRail();
 
     // A popover trigger also carries aria-expanded, so haspopup is what tells the two apart.
     const section = await screen.findByRole('button', { name: /Everything/ });
