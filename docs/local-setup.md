@@ -12,15 +12,18 @@ apps/
   api/      NestJS API            → http://localhost:3000   (health: /health)
   test/     Vite + React (student/test portal) → http://localhost:5173
   admin/    Vite + React (admin panel)         → http://localhost:5174
+  mobile/   Expo + React Native (student client, Android first) → Metro on :8081
 packages/
   contracts/  shared types + zod schemas + typed API client
   app-kit/    DOM-free shared logic (auth, api client, query client, hooks)
-  ui/         design tokens + shadcn components
+  ui/         design tokens + shadcn components (web only — mobile has its own)
   config/     shared tsconfig / eslint / tailwind presets
 prisma/       schema.prisma + migrations
 docker-compose.yml   Postgres + Redis + MinIO (local infra)
-docs/         architecture & design docs (read 01–04 + CLAUDE.md)
+docs/         architecture & design docs (read 01–03 + design/ + CLAUDE.md)
 ```
+
+`apps/mobile` is **in progress and not yet shipped**, and it runs in its own terminal (§7).
 
 Local infra runs in Docker: **PostgreSQL** (data), **Redis** (OTP, sessions,
 device binding, rate limiting, BullMQ), **MinIO** (S3‑compatible object storage).
@@ -68,7 +71,7 @@ cp .env.example .env
 The defaults in `.env.example` are wired to the docker‑compose services, so **it runs as‑is locally** — you don't have to change anything to start. Worth knowing:
 
 - **Database / Redis / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
-- **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs every test that touches Postgres against — and so does `pnpm test:coverage`, which the pre-commit hook runs, so Postgres has to be up to commit. The script refuses the one `DATABASE_URL` names and any whose name does not end in `_test`. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db`. That script runs outside turbo, so generate the Prisma client and build `@iace/contracts` first: `pnpm db:generate && pnpm --filter @iace/contracts build`, or any `pnpm build`. The database keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
+- **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs every test that touches Postgres against, and the one `pnpm test:coverage` uses for the same tier. Committing needs neither: the pre-commit hook does not run either of them (§8). The script refuses the one `DATABASE_URL` names and any whose name does not end in `_test`. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db`. That script runs outside turbo, so generate the Prisma client and build `@iace/contracts` first: `pnpm db:generate && pnpm --filter @iace/contracts build`, or any `pnpm build`. The database keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
 - **JWT secrets & `PIN_PEPPER`** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
 - **OTP delivery is `console`** — in dev, OTP codes are **printed to the API log**, not sent by SMS/email. That's how you log in locally (see §6).
 - **`SMS_PROVIDER_*` / `MAIL_*`** are blank (the real SMS and Gmail credentials — leave empty locally).
@@ -225,7 +228,9 @@ Expo hands back an APNs token there, which FCM cannot address without the Fireba
 | `pnpm db:seed:questions` / `:golden` / `:cohort`  | dev-only fixtures, local database only      |
 | `pnpm docker:up` / `docker:down` / `docker:reset` | infra up / stop / stop+wipe volumes         |
 
-Before committing, the Husky pre‑commit hook runs format + lint + typecheck (and the Sonar scan if configured). Commits follow the conventional‑commit style.
+Before committing, the Husky pre‑commit hook runs prettier on the staged files, then lint and typecheck across the workspace, then two checks on what the commit ADDS: one line per comment, and no screen explaining what it already says. **No test runs**, so nothing has to be up to commit.
+
+The SonarQube scan is the exception and is **opt-in**: it regenerates coverage by running every test in the repo, which is minutes per commit. Run it before handing work over with `RUN_SONAR=1 git commit …`. Commits follow the conventional‑commit style.
 
 ## 9. Troubleshooting
 
@@ -236,7 +241,7 @@ Before committing, the Husky pre‑commit hook runs format + lint + typecheck (a
 - **`pnpm install` stalls on a new dependency** → pnpm 11's minimum‑release‑age hold; add the exact version to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`.
 - **MinIO bucket missing / S3 upload fails** → re‑run `pnpm docker:up` (the `minio-init` one‑shot recreates the `iace-local` bucket); check the console at :9001.
 - **Port already in use** (3000 / 5173 / 5174 / 5432 / 6379 / 9000 / 9001) → free the process or change the port in `.env`.
-- **Pre‑commit hook fails** → run `pnpm format && pnpm lint && pnpm typecheck` and fix what it reports; leave `SONAR_*` unset to skip the Sonar scan.
+- **Pre‑commit hook fails** → run `pnpm format && pnpm lint && pnpm typecheck` and fix what it reports. If it names a comment or a screen's copy, the script that failed says which rule and where. The Sonar scan does not run unless you ask for it with `RUN_SONAR=1`.
 - **Admin OTP never arrives** → it doesn't; read it from the **API log** (dev uses the console OTP sender).
 - **Start completely fresh** → `pnpm docker:reset` (wipes DB/Redis/MinIO volumes), then `pnpm docker:up && pnpm db:setup` (§5).
 
@@ -246,4 +251,6 @@ Before committing, the Husky pre‑commit hook runs format + lint + typecheck (a
 - `docs/01-architecture.md` — architecture, live-test scaling, deployment topology.
 - `docs/02-domain-rules.md` — the mock‑test rules the schema cannot state.
 - `docs/03-conventions.md` — what's shared, module boundaries, table ownership, events.
+- `docs/design/design-system.html` — the living style guide, and the admin composition language.
+- `docs/design/student/README.md` — the student composition language, binding for every `apps/test` screen.
 - `prisma/schema.prisma` — the data model (source of truth).
