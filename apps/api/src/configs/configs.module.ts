@@ -7,6 +7,7 @@ import { ExamStagesController } from './exam-stages.controller';
 import { ExamStagesService } from './exam-stages.service';
 import { BaseConfigsController } from './base-configs.controller';
 import { BaseConfigsService } from './base-configs.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 /** Owns the catalog — `Exam`, `ExamStage` — and the blueprints built on it. forwardRef: students
  *  validate enrolments against the catalog, and the catalog counts enrolments back. */
@@ -20,7 +21,10 @@ import { BaseConfigsService } from './base-configs.service';
         (module.require('../students') as { StudentsModule: typeof StudentsModule }).StudentsModule,
     ),
   ],
-  controllers: [ExamsController, ExamStagesController, BaseConfigsController],
+  controllers: onRole(
+    [API_ROLES.CORE],
+    [ExamsController, ExamStagesController, BaseConfigsController],
+  ),
   providers: [ExamsService, ExamStagesService, BaseConfigsService],
   exports: [ExamsService, ExamStagesService, BaseConfigsService],
 })

@@ -14,16 +14,15 @@ import { TestSeriesService } from './test-series.service';
 import { StudentGrantsService } from './student-grants.service';
 import { AccessResolverService } from './access-resolver.service';
 import { AccessCacheListener } from './access-cache.listener';
+import { API_ROLES, onRole } from '../config/api-role';
 
 /** Owns `Program`, `TestSeries` and `StudentGrant` — how a test is reached. */
 @Module({
   imports: [PrismaModule, RedisModule, ConfigsModule, NotificationsModule],
-  controllers: [
-    ProgramsController,
-    TestSeriesController,
-    StudentGrantsController,
-    StudentSeriesController,
-  ],
+  controllers: onRole(
+    [API_ROLES.CORE],
+    [ProgramsController, TestSeriesController, StudentGrantsController, StudentSeriesController],
+  ),
   providers: [
     ProgramsService,
     TestSeriesService,

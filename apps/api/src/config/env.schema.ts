@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { API_ROLES } from './api-role';
 
 /** `"true"`/`"1"` → true. `z.coerce.boolean()` is wrong here: it makes the
  *  string "false" truthy. */
@@ -75,6 +76,8 @@ const byteSize = (fallback: string) =>
 export const envSchema = z.object({
   NODE_ENV: z.enum(NODE_ENVS).default(NODE_ENVS.DEVELOPMENT),
   API_PORT: z.coerce.number().int().positive().default(3000),
+  // Which half a container is; here so a typo is refused at boot rather than serving nothing.
+  API_ROLE: z.enum(API_ROLES).default(API_ROLES.ALL),
   CORS_ORIGINS: csv,
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),

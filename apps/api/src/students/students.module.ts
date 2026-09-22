@@ -12,6 +12,7 @@ import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
 import { StudentConsentListener } from './student-consent.listener';
+import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
   // Identity documents are stored as keys; every read signs them. ConfigsModule is a cycle:
@@ -41,7 +42,7 @@ import { StudentConsentListener } from './student-consent.listener';
         (module.require('../attempts') as { AttemptsModule: typeof AttemptsModule }).AttemptsModule,
     ),
   ],
-  controllers: [StudentsController],
+  controllers: onRole([API_ROLES.CORE], [StudentsController]),
   providers: [StudentsService, StudentPrivacyService, StudentConsentListener],
   exports: [StudentsService, StudentPrivacyService],
 })

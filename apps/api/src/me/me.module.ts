@@ -8,6 +8,7 @@ import { AccessModule } from '../access';
 import { NotificationsModule } from '../notifications';
 import { MeController } from './me.controller';
 import { MeService } from './me.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
   // StudentsModule for the read/update path — the flags it recomputes are the
@@ -22,7 +23,7 @@ import { MeService } from './me.service';
     // buffered the whole thing — see imports.module.ts for why that matters.
     MulterModule.register({ limits: { fileSize: DOCUMENT_MAX_BYTES, files: 1 } }),
   ],
-  controllers: [MeController],
+  controllers: onRole([API_ROLES.CORE], [MeController]),
   providers: [MeService],
 })
 export class MeModule {}

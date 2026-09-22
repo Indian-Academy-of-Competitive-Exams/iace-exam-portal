@@ -2,6 +2,7 @@ import { Module, type OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { ATTEMPT_FLUSH_EVERY_MS, ATTEMPT_SWEEP_EVERY_MS, QUEUE_NAMES } from '../queue/queues';
+import { API_ROLES, onRole, servesRole } from '../config/api-role';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { QueueModule } from '../queue/queue.module';
@@ -44,16 +45,22 @@ import { SubmitService } from './submit.service';
 @Module({
   imports: [PrismaModule, RedisModule, QueueModule, AccessModule, NotificationsModule],
   controllers: [
-    AttemptsController,
-    AdminLiveOpsController,
-    MePerformanceController,
-    AdminPerformanceController,
-    MeOverviewController,
-    AdminOverviewController,
-    MeLeaderboardController,
-    MeQuestionReportController,
-    AdminQuestionReportController,
-    AdminTestAnalyticsController,
+    // The hall: starting, autosaving, submitting, and the board a candidate refreshes.
+    ...onRole([API_ROLES.EXAM], [AttemptsController, MeLeaderboardController]),
+    // Read after the paper is handed in, at a pace the sitting never sees.
+    ...onRole(
+      [API_ROLES.CORE],
+      [
+        AdminLiveOpsController,
+        MePerformanceController,
+        AdminPerformanceController,
+        MeOverviewController,
+        AdminOverviewController,
+        MeQuestionReportController,
+        AdminQuestionReportController,
+        AdminTestAnalyticsController,
+      ],
+    ),
   ],
   providers: [
     AttemptsService,
@@ -71,13 +78,13 @@ import { SubmitService } from './submit.service';
     QuestionReportService,
     TestAnalyticsService,
     RollupOutbox,
-    RollupProcessor,
     RollupService,
     ScoringOutbox,
-    ScoringProcessor,
     SubmitService,
-    AttemptFlushProcessor,
-    AttemptSweeperProcessor,
+    ...onRole(
+      [API_ROLES.WORKER],
+      [ScoringProcessor, RollupProcessor, AttemptFlushProcessor, AttemptSweeperProcessor],
+    ),
   ],
   // Neither processor is here on purpose: an export is how a worker reaches a request path.
   exports: [LeaderboardService, ScoringOutbox],
@@ -90,6 +97,9 @@ export class AttemptsModule implements OnModuleInit {
 
   /** Fixed scheduler ids: what stops a redeploy from stacking a second one on the same queue. */
   async onModuleInit(): Promise<void> {
+    // The container that runs the jobs is the one that schedules them.
+    if (!servesRole(API_ROLES.WORKER)) return;
+
     await this.flushQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_FLUSH, {
       every: ATTEMPT_FLUSH_EVERY_MS,
     });

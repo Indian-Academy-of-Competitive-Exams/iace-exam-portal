@@ -21,6 +21,7 @@ import { PushService } from './push.service';
 import { TestOpeningService } from './test-opening.service';
 import { NotificationListener } from './notification.listener';
 import { WebPushSender } from './web-push.sender';
+import { API_ROLES, onRole, servesRole } from '../config/api-role';
 
 /** Owns the ledger and the push endpoints. No controller of its own: both hang off `me`. */
 @Module({
@@ -32,13 +33,12 @@ import { WebPushSender } from './web-push.sender';
       () => (module.require('../access') as { AccessModule: typeof AccessModule }).AccessModule,
     ),
   ],
-  controllers: [AnnouncementsController],
+  controllers: onRole([API_ROLES.CORE], [AnnouncementsController]),
   providers: [
     AnnouncementsService,
     NotificationsService,
     NotificationOutbox,
-    NotificationsProcessor,
-    NotificationDeliveryProcessor,
+    ...onRole([API_ROLES.WORKER], [NotificationsProcessor, NotificationDeliveryProcessor]),
     PushService,
     FcmSender,
     TestOpeningService,
@@ -52,6 +52,9 @@ export class NotificationsModule implements OnModuleInit {
 
   /** Fixed scheduler ids: what stops a redeploy from stacking a second sweep of either kind. */
   async onModuleInit(): Promise<void> {
+    // The container that runs the jobs is the one that schedules them.
+    if (!servesRole(API_ROLES.WORKER)) return;
+
     await this.notifications.upsertJobScheduler(
       NOTIFICATION_JOBS.SWEEP,
       { every: NOTIFICATION_SWEEP_EVERY_MS },

@@ -5,11 +5,12 @@ import { StorageModule } from '../storage/storage.module';
 import { AssignmentsController } from './assignments.controller';
 import { AssignmentsService } from './assignments.service';
 import { SectionThreadService } from './section-thread.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 /** One person's job on one section of one test — assigning it, the queue, and finalising it (docs/03 §4.1). */
 @Module({
   imports: [PrismaModule, AdminsModule, StorageModule],
-  controllers: [AssignmentsController],
+  controllers: onRole([API_ROLES.CORE], [AssignmentsController]),
   providers: [AssignmentsService, SectionThreadService],
   exports: [AssignmentsService],
 })

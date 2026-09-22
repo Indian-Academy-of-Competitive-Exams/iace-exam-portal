@@ -8,6 +8,7 @@ import { StorageModule } from '../storage/storage.module';
 import { uploadLimit } from '../common/importing/upload';
 import { ImportsController } from './imports.controller';
 import { ImportsService } from './imports.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
   // AuthModule for the starting PIN, EventsModule for the roster, AccessModule for the program catalog.
@@ -20,7 +21,7 @@ import { ImportsService } from './imports.service';
     AccessModule,
     uploadLimit,
   ],
-  controllers: [ImportsController],
+  controllers: onRole([API_ROLES.CORE], [ImportsController]),
   providers: [ImportsService],
 })
 export class ImportsModule {}

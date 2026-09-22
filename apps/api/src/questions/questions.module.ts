@@ -13,6 +13,7 @@ import { QuestionsController } from './questions.controller';
 import { QuestionsService } from './questions.service';
 import { TaxonomyController } from './taxonomy.controller';
 import { TaxonomyService } from './taxonomy.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 /** Declares its own infra rather than assuming `app.module` provides it (docs/03 §4.5). */
 @Module({
@@ -23,13 +24,16 @@ import { TaxonomyService } from './taxonomy.service';
     AppConfigModule,
     uploadLimit,
   ],
-  controllers: [
-    QuestionsController,
-    TaxonomyController,
-    QuestionImportController,
-    AuthoringController,
-    ProofreadingController,
-  ],
+  controllers: onRole(
+    [API_ROLES.CORE],
+    [
+      QuestionsController,
+      TaxonomyController,
+      QuestionImportController,
+      AuthoringController,
+      ProofreadingController,
+    ],
+  ),
   providers: [
     QuestionsService,
     TaxonomyService,

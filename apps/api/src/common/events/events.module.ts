@@ -7,6 +7,7 @@ import { QueueModule } from '../../queue/queue.module';
 import { OUTBOX_PRUNE_CRON, QUEUE_NAMES } from '../../queue/queues';
 import { DomainEventBus } from './domain-event-bus';
 import { OutboxPruneProcessor } from './outbox-prune.processor';
+import { API_ROLES, onRole, servesRole } from '../../config/api-role';
 
 /**
  * Infrastructure, not a bounded context — like `prisma` and `redis`, every service links it and
@@ -25,7 +26,7 @@ import { OutboxPruneProcessor } from './outbox-prune.processor';
     PrismaModule,
     QueueModule,
   ],
-  providers: [DomainEventBus, OutboxPruneProcessor],
+  providers: [DomainEventBus, ...onRole([API_ROLES.WORKER], [OutboxPruneProcessor])],
   exports: [DomainEventBus],
 })
 export class EventsModule implements OnModuleInit {
@@ -33,6 +34,9 @@ export class EventsModule implements OnModuleInit {
 
   /** Fixed scheduler id: what stops a redeploy from stacking a second nightly prune. */
   async onModuleInit(): Promise<void> {
+    // The container that runs the jobs is the one that schedules them.
+    if (!servesRole(API_ROLES.WORKER)) return;
+
     await this.pruneQueue.upsertJobScheduler(QUEUE_NAMES.OUTBOX_PRUNE, {
       pattern: OUTBOX_PRUNE_CRON,
       tz: 'UTC',

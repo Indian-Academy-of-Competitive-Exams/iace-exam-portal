@@ -8,11 +8,12 @@ import { TestsService } from './tests.service';
 import { PaperService } from './paper.service';
 import { FinalizeService } from './finalize.service';
 import { OfferingService } from './offering.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 /** Owns `Test`. Its shape is the config's, read through `BaseConfigsService` rather than copied. */
 @Module({
   imports: [PrismaModule, ConfigsModule, EventsModule, AttemptsModule],
-  controllers: [TestsController, SeriesTestsController],
+  controllers: onRole([API_ROLES.CORE], [TestsController, SeriesTestsController]),
   providers: [TestsService, PaperService, FinalizeService, OfferingService],
 })
 export class TestsModule {}

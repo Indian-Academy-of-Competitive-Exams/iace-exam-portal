@@ -13,6 +13,7 @@ import { TokenService } from './token.service';
 import { OtpService } from './otp/otp.service';
 import { PinService } from './pin/pin.service';
 import { StartingPinService } from './pin/starting-pin.service';
+import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
   // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not optional here: OTP,
@@ -29,7 +30,7 @@ import { StartingPinService } from './pin/starting-pin.service';
     MessagingModule,
     JwtModule.register({}),
   ],
-  controllers: [AuthController],
+  controllers: onRole([API_ROLES.CORE], [AuthController]),
   providers: [
     AuthService,
     TokenService,
