@@ -625,3 +625,68 @@ describe('AccessResolverService — a series that unlocks in order', () => {
     await refused(resolver.assertCanStart(student, tests[1] ?? '', NOW), ErrorCodes.FORBIDDEN);
   });
 });
+
+describe('reading about a test', () => {
+  it('opens a test in a series the student reaches', async () => {
+    const { student, testId } = await reachable();
+
+    await resolverOn().assertReachable(student, testId);
+  });
+
+  /** Reachable is not startable: the brief is what a student reads BEFORE a test opens. */
+  it('opens one that has not opened yet, which the start guard still refuses', async () => {
+    const at = await place();
+    const seriesId = await series(at);
+    const later = await testIn(at, seriesId, 1, { opensAt: new Date(NOW.getTime() + HOUR_MS) });
+    const student = await studentAt(at);
+
+    await resolverOn().assertReachable(student, later);
+    await refused(resolverOn().assertCanStart(student, later, NOW), ErrorCodes.FORBIDDEN);
+  });
+
+  it('reads a test in a series the student does not reach as missing', async () => {
+    const at = await place();
+    const elsewhere = await series(at, { branchIds: [uid()] });
+    const testId = await testIn(at, elsewhere, 1);
+    const student = await studentAt(at);
+
+    await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
+  });
+
+  /** The bug this prevents: a drafted paper readable because only the catalog filtered on status. */
+  it('reads a test that is not ACTIVE as missing, however reachable its series', async () => {
+    const at = await place();
+    const seriesId = await series(at);
+    const drafted = await testIn(at, seriesId, 1, { status: TEST_STATUS.DRAFT });
+    const student = await studentAt(at);
+
+    await refused(resolverOn().assertReachable(student, drafted), ErrorCodes.NOT_FOUND);
+  });
+
+  it('reads everything in a switched-off series as missing', async () => {
+    const at = await place();
+    const off = await series(at, { isEnabled: false });
+    const testId = await testIn(at, off, 1);
+    const student = await studentAt(at);
+
+    await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
+  });
+
+  /** A grant overrides the kind, reading about a test exactly as it does sitting one. */
+  it('opens a granted series the student reaches no other way', async () => {
+    const at = await place();
+    const elsewhere = await series(at, { branchIds: [uid()] });
+    const testId = await testIn(at, elsewhere, 1);
+    const student = await studentAt(at);
+    await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: elsewhere } });
+
+    await resolverOn().assertReachable(student, testId);
+  });
+
+  it('reads everything as missing for a student who is no longer active', async () => {
+    const { student, testId } = await reachable();
+    await prisma.student.update({ where: { id: student }, data: { isActive: false } });
+
+    await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
+  });
+});

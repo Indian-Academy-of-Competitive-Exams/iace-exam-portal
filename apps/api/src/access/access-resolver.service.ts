@@ -148,11 +148,22 @@ export class AccessResolverService {
 
   /** Reachable is not startable: a test they cannot sit YET is still one they may read about. */
   async assertReachable(studentId: string, testId: string): Promise<void> {
-    const resolved = await this.resolved(studentId);
-    const reaches = resolved.series.some((series) =>
-      series.tests.some((test) => test.id === testId),
-    );
-    if (!reaches) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null, isActive: true },
+      select: { currentBranchId: true, programs: true, enrolledCourses: true },
+    });
+    // ACTIVE only, as the catalog's own include is: a drafted test is not one to read about either.
+    const reached = student
+      ? await this.prisma.testSeries.findFirst({
+          where: {
+            ...reachableBy(studentId, student),
+            tests: { some: { id: testId, status: TEST_STATUS.ACTIVE } },
+          },
+          select: { id: true },
+        })
+      : null;
+
+    if (!reached) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
   }
 
   /** Everyone one series reaches, which is the catalog read backwards. Ids only: the caller fans out. */
