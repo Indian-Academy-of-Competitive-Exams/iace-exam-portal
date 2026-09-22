@@ -120,7 +120,9 @@
   border-bottom: 1px solid var(--rw-rule);
 }
 
+/* Positioned because the (i) inside it drops its tally against the tab that holds it. */
 [data-exam-template='ssc_railways'] .subjcttab {
+  position: relative;
   background: var(--rw-blue);
   color: #fff;
   border: none;
@@ -459,10 +461,6 @@
 [data-exam-template='ssc_railways'] .rw-testname,
 [data-exam-template='ssc_railways'] .rw-sectionbar {
   border-bottom: 1px solid var(--rw-rule);
-}
-
-[data-exam-template='ssc_railways'] .subjcttab {
-  position: relative;
 }
 
 [data-exam-template='ssc_railways'] .subjectcntnt {

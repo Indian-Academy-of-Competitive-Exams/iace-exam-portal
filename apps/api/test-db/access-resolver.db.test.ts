@@ -630,7 +630,7 @@ describe('reading about a test', () => {
   it('opens a test in a series the student reaches', async () => {
     const { student, testId } = await reachable();
 
-    await resolverOn().assertReachable(student, testId);
+    await assert.doesNotReject(resolverOn().assertReachable(student, testId));
   });
 
   /** Reachable is not startable: the brief is what a student reads BEFORE a test opens. */
@@ -680,7 +680,7 @@ describe('reading about a test', () => {
     const student = await studentAt(at);
     await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: elsewhere } });
 
-    await resolverOn().assertReachable(student, testId);
+    await assert.doesNotReject(resolverOn().assertReachable(student, testId));
   });
 
   it('reads everything as missing for a student who is no longer active', async () => {

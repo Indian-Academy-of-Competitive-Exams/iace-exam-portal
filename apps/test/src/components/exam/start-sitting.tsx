@@ -11,7 +11,7 @@ export function StartSitting({
   children,
 }: Readonly<{
   testId: string;
-  size?: React.ComponentProps<typeof Button>['size'];
+  size?: NonNullable<React.ComponentProps<typeof Button>['size']>;
   className?: string;
   children: React.ReactNode;
 }>) {

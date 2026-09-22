@@ -15,19 +15,15 @@ import {
   cn,
 } from '@iace/ui';
 import { collapseLoneSections, filterNavByPermission, type NavItem } from '../src';
-import { SidebarNav } from './app-shell/sidebar-nav';
 import { NavBadgeProvider, type NavBadges } from './app-shell/nav-badges';
 import { NavPanel } from './app-shell/nav-panel';
 import { UserMenu } from './app-shell/user-menu';
 import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
-import { useHoverOpen } from './app-shell/use-hover-open';
+import { DesktopRail } from './app-shell/desktop-rail';
 
 /** How wide the content runs beside the sidebar. `wide` caps sprawl, it does not create a margin. */
 /** The skip link's target. One id, so the anchor and the landmark cannot drift apart. */
 const MAIN_CONTENT_ID = 'main-content';
-
-/** Long enough to cross the gap to a row's popover, short enough not to feel stuck open. */
-const RAIL_CLOSE_MS = 250;
 
 const WIDTHS = {
   narrow: 'max-w-5xl',
@@ -83,7 +79,6 @@ export function AppShell({
 }: Readonly<AppShellProps>) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [panelOpen, setPanelOpen] = useState(false);
-  const rail = useHoverOpen(RAIL_CLOSE_MS);
   // null: no workspace on screen. false: one, with the chrome. true: one that has taken the window.
   const [workspace, setWorkspace] = useState<boolean | null>(null);
   const { pathname } = useLocation();
@@ -159,43 +154,7 @@ export function AppShell({
             a complementary one announces the same region twice. */}
           {/* The rail is the only nav IN the flow, and its width never changes — which is what
             keeps the content region a constant. Pointing at it opens the panel over the top. */}
-          {isDesktop && hasNav ? (
-            // The spacer is the rail's width and never moves: what the page sees is a constant.
-            <div className="relative w-[--sidebar-w-rail] shrink-0">
-              <div
-                // Pointer only: focus would swap the rows out from under the row that has focus.
-                onPointerEnter={rail.onPointerEnter}
-                onPointerLeave={rail.onPointerLeave}
-                className={cn(
-                  // Out of the flow and over the page: widening a flex sibling would reflow the content.
-                  'absolute inset-y-0 left-0 z-[--z-drawer] flex flex-col overflow-hidden',
-                  'border-r border-border bg-surface py-[--sidebar-rail-pad]',
-                  'transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none',
-                  rail.open ? 'w-[--sidebar-w] shadow-[--shadow-overlay]' : 'w-[--sidebar-w-rail]',
-                )}
-              >
-                {/* Held at the width it is FOR, so widening reveals the rows rather than reflowing them. */}
-                <nav
-                  aria-label="Sections"
-                  className={cn(
-                    'min-h-0 flex-1 shrink-0 overflow-y-auto px-[--sidebar-rail-pad]',
-                    rail.open ? 'w-[--sidebar-w]' : 'w-[--sidebar-w-rail]',
-                  )}
-                >
-                  {rail.open ? (
-                    <NavPanel
-                      items={items}
-                      pathname={pathname}
-                      drilldown={false}
-                      onNavigate={rail.close}
-                    />
-                  ) : (
-                    <SidebarNav items={items} pathname={pathname} collapsed />
-                  )}
-                </nav>
-              </div>
-            </div>
-          ) : null}
+          {isDesktop && hasNav ? <DesktopRail items={items} pathname={pathname} /> : null}
 
           <main id={MAIN_CONTENT_ID} className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* No padding and no cap while immersive: the page asked for the window, not a column in it. */}

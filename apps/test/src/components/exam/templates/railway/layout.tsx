@@ -36,7 +36,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           onClick={() => setOpenPanel('PAPER')}
         >
           <span className="rw-icon questionpaper_icon" aria-hidden />
-          Question paper
+          <span>Question paper</span>
         </button>
         <button
           type="button"
@@ -44,7 +44,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           onClick={() => setOpenPanel('INSTRUCTIONS')}
         >
           <span className="rw-icon instruction_icon" aria-hidden />
-          Instruction
+          <span>Instruction</span>
         </button>
       </div>
 

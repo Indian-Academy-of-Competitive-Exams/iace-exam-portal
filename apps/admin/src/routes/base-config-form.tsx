@@ -378,6 +378,35 @@ function HeaderAction({
   );
 }
 
+/** What stands between an admin and this form: somebody else in it, or a paper already sat. */
+function EditorBanners({
+  elsewhere,
+  locked,
+}: Readonly<{ elsewhere: { fullName: string | null } | null; locked: boolean }>) {
+  return (
+    <>
+      {elsewhere ? (
+        <Alert variant="warning">
+          {elsewhere.fullName ?? 'Another admin'} is editing this configuration. Their changes have
+          to land first.
+        </Alert>
+      ) : null}
+
+      {locked ? (
+        <Alert variant="warning">
+          <span>
+            This configuration is locked. A test built from it has already been finalized, and a
+            paper somebody has sat cannot change shape underneath them. Every field below is fixed
+            for good. Clone it to carry all of this into a copy you can edit: the copy starts
+            unlocked and is not the stage&apos;s default until you promote it. The name, and whether
+            this one is still offered, can be changed from the configurations list.
+          </span>
+        </Alert>
+      ) : null}
+    </>
+  );
+}
+
 function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -459,13 +488,16 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
     ...BANNER_HANDLED_ELSEWHERE,
   ]);
 
+  /** Taking the stage's default off another configuration is confirmed before anything is saved. */
+  const submit = form.handleSubmit((values) => {
+    if (values.isDefault && losingDefault) return setPromoting(values);
+    save.mutate(values);
+  });
+
   return (
     <FormPanel
       disabled={!isEditing}
-      onSubmit={form.handleSubmit((values) => {
-        if (values.isDefault && losingDefault) return setPromoting(values);
-        save.mutate(values);
-      })}
+      onSubmit={submit}
       footer={
         isEditing ? (
           <>
@@ -498,24 +530,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </>
       }
     >
-      {elsewhere ? (
-        <Alert variant="warning">
-          {elsewhere.fullName ?? 'Another admin'} is editing this configuration. Their changes have
-          to land first.
-        </Alert>
-      ) : null}
-
-      {locked ? (
-        <Alert variant="warning">
-          <span>
-            This configuration is locked. A test built from it has already been finalized, and a
-            paper somebody has sat cannot change shape underneath them. Every field below is fixed
-            for good. Clone it to carry all of this into a copy you can edit: the copy starts
-            unlocked and is not the stage&apos;s default until you promote it. The name, and whether
-            this one is still offered, can be changed from the configurations list.
-          </span>
-        </Alert>
-      ) : null}
+      <EditorBanners elsewhere={elsewhere} locked={locked} />
 
       <FormSection title="Stage">
         <FieldRow>

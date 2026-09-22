@@ -86,7 +86,7 @@ function ViewIn({ view }: Readonly<{ view: InstructionsView }>) {
 
   return (
     <label className="ri-viewin">
-      View in
+      <span>View in</span>
       <select
         value={view.language}
         onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}
@@ -213,7 +213,7 @@ function PaperScreen({ view }: Readonly<{ view: InstructionsView }>) {
 
       <div className="ri-choose">
         <label className="ri-viewin">
-          Choose your default language:
+          <span>Choose your default language:</span>
           <select
             value={view.language}
             onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}

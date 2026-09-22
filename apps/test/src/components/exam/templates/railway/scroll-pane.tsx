@@ -83,11 +83,9 @@ export function ScrollPane({
       </div>
       {thumb.shown ? (
         <div className="rw-scrolltrack">
+          {/* A picture of the scrollport beside it, not a control: the pane itself is what scrolls. */}
           <div
-            role="scrollbar"
-            aria-orientation="vertical"
-            aria-controls="rw-pane"
-            tabIndex={-1}
+            aria-hidden
             className="rw-scrollthumb"
             style={{ height: `${thumb.height}px`, transform: `translateY(${thumb.top}px)` }}
             onPointerDown={dragThumb}
