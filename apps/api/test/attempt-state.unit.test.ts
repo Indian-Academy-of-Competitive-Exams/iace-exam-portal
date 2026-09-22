@@ -15,6 +15,7 @@ import {
   isInTime,
   isStale,
   PAUSE_LIMIT_SEC,
+  PRESENT_GRACE_SEC,
   packHeld,
   pendingAfter,
   SAVE_GRACE_SEC,
@@ -220,10 +221,10 @@ describe('a paper put down, and one abandoned', () => {
   /** Left the paper at 05:10 with twenty minutes still on it. */
   const putDown = held({ lastSeenAt: '2026-09-01T05:10:00.000Z' });
 
-  it('gives back every second the paper was off screen', () => {
-    // Back a day later: the twenty minutes left are still twenty minutes.
+  it('gives back every second the paper was off screen, bar the grace', () => {
+    // Back a day later: the twenty minutes left are twenty minutes, less the minute of grace.
     const resumed = creditedEndsAt(putDown, at('2026-09-02T05:10:00.000Z'));
-    assert.equal(resumed.toISOString(), '2026-09-02T05:30:00.000Z');
+    assert.equal(resumed.toISOString(), '2026-09-02T05:29:00.000Z');
   });
 
   it('gives back nothing to a sitting still being written to', () => {
@@ -231,6 +232,24 @@ describe('a paper put down, and one abandoned', () => {
       creditedEndsAt(putDown, at('2026-09-01T05:10:00.000Z')).toISOString(),
       ENDS_AT,
       'no gap, no credit',
+    );
+  });
+
+  /** The failure this prevents: reloading on a loop, banking the autosave interval every time. */
+  it('gives back nothing for a gap short enough to have been sat through', () => {
+    assert.equal(
+      creditedEndsAt(putDown, at('2026-09-01T05:10:59.000Z')).toISOString(),
+      ENDS_AT,
+      'a minute of quiet is reading, not leaving',
+    );
+    assert.equal(PRESENT_GRACE_SEC, 60);
+  });
+
+  it('takes that grace off the whole gap, so the cliff cannot be farmed', () => {
+    // Two minutes away credits one: the grace is subtracted, never a threshold to clear.
+    assert.equal(
+      creditedEndsAt(putDown, at('2026-09-01T05:12:00.000Z')).toISOString(),
+      '2026-09-01T05:31:00.000Z',
     );
   });
 
@@ -287,7 +306,7 @@ describe('a section clock the server stamps', () => {
       },
     });
     const credited = creditedSections(put, at('2026-09-02T05:10:00.000Z'));
-    assert.equal(credited.sec_1?.openedAt, '2026-09-02T05:00:00.000Z');
+    assert.equal(credited.sec_1?.openedAt, '2026-09-02T04:59:00.000Z');
   });
 
   it('leaves a closed section where it stands', () => {

@@ -16,6 +16,9 @@ export const SAVE_GRACE_SEC = 30;
 /** How long a paper waits for a candidate who walked away. Past it, the key goes and the sitting ends. */
 export const PAUSE_LIMIT_SEC = 48 * 60 * 60;
 
+/** A gap this short is a reload or a quiet minute of reading, not an absence — it is spent, not given back. */
+export const PRESENT_GRACE_SEC = 60;
+
 /** What Redis holds, plus the facts a save is judged against so judging one never reads Postgres. */
 export interface HeldState {
   attemptId: string;
@@ -198,20 +201,25 @@ export function isInTime(held: HeldState, now: Date): boolean {
   return now.getTime() <= Date.parse(held.endsAt) + SAVE_GRACE_SEC * MILLISECONDS_PER_SECOND;
 }
 
-/** Away time, in ms: what a candidate who closed the paper did not spend sitting it. */
+/** Away time, in ms: how long since the server last heard from this sitting. */
 export function awayMs(held: HeldState, now: Date): number {
   const seen = held.lastSeenAt ?? held.startedAt;
   return Math.max(0, now.getTime() - Date.parse(seen));
 }
 
+/** What a resume gives back: the grace comes off the WHOLE gap, so a reload loop credits seconds. */
+export function creditMs(held: HeldState, now: Date): number {
+  return Math.max(0, awayMs(held, now) - PRESENT_GRACE_SEC * MILLISECONDS_PER_SECOND);
+}
+
 /** The deadline a resume gets: the one it had, pushed by the time the paper was not on screen. */
 export function creditedEndsAt(held: HeldState, now: Date): Date {
-  return new Date(Date.parse(held.endsAt) + awayMs(held, now));
+  return new Date(Date.parse(held.endsAt) + creditMs(held, now));
 }
 
 /** A section's clock is put down with the paper: the open one is pushed by the same away time. */
 export function creditedSections(held: HeldState, now: Date): Record<string, SectionProgress> {
-  const away = awayMs(held, now);
+  const away = creditMs(held, now);
   if (away === 0) return held.sections;
 
   return Object.fromEntries(
