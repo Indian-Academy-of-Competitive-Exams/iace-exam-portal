@@ -25,6 +25,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { uploadQuestionImage } from '../lib/upload-question-image';
 import { useAuth } from '../providers/auth';
 import { ADMIN_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
 
@@ -267,7 +268,7 @@ function Composer({
     if (!file) return;
     setUploading(true);
     try {
-      const image = await api.admin.questions.uploadImage(file);
+      const image = await uploadQuestionImage(file);
       onChange({ ...composing, images: [...composing.images, image] });
     } finally {
       setUploading(false);

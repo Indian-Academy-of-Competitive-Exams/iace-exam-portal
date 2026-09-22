@@ -27,7 +27,7 @@ import {
   type FieldControl,
 } from '@iace/ui';
 import { RichText } from '@iace/ui/rich-text';
-import { api } from '../lib/api';
+import { uploadQuestionImage } from '../lib/upload-question-image';
 import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../lib/constants';
 import { SubjectPicker, TopicPicker } from './taxonomy-picker';
 import type { QuestionFormValues } from './question-draft';
@@ -223,7 +223,7 @@ function Rich({
       aria-invalid={control['aria-invalid']}
       lang={lang}
       singleLine={singleLine}
-      onUploadImage={(file) => api.admin.questions.uploadImage(file)}
+      onUploadImage={uploadQuestionImage}
       imageLimits={IMAGE_LIMITS}
       value={value ?? ''}
       onChange={(html) => form.setValue(name, html as never, { shouldDirty: true })}

@@ -38,6 +38,7 @@ import {
 } from '@iace/ui';
 import { ScaffoldEditor, type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { api } from '../lib/api';
+import { uploadQuestionImage } from '../lib/upload-question-image';
 import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
@@ -73,8 +74,6 @@ const DUPLICATE_DEBOUNCE_MS = 900;
 
 /** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
 const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
-
-const uploadImage = async (file: File) => api.admin.questions.uploadImage(file);
 
 const startingHeader = (): AuthoringHeader => ({
   subjectId: '',
@@ -303,7 +302,7 @@ function EditorPanes({
               if (canSave) onSave();
             }}
             onCycleLanguage={onCycleLanguage}
-            onUploadImage={uploadImage}
+            onUploadImage={uploadQuestionImage}
             imageLimits={IMAGE_LIMITS}
             lang={language}
             script={script}
