@@ -4,6 +4,7 @@ import { corsOrigin, helmetOptions } from '../src/common/security-headers';
 import { NO_EVICTION, evictionRisk } from '../src/redis/eviction-policy';
 import { THREADPOOL_FLOOR, threadpoolRisk } from '../src/common/threadpool';
 import { NODE_ENVS, validateEnv } from '../src/config/env.schema';
+import { signedWith } from '../src/storage/storage.service';
 import { AppConfigService } from '../src/config/app-config.service';
 
 const SECRET = 'x'.repeat(32);
@@ -16,6 +17,7 @@ function env(over: Record<string, string> = {}): Record<string, string> {
     JWT_REFRESH_SECRET: SECRET,
     PIN_PEPPER: SECRET,
     S3_BUCKET: 'iace-local',
+    S3_ENDPOINT: 'http://localhost:9000',
     S3_ACCESS_KEY_ID: 'key',
     S3_SECRET_ACCESS_KEY: 'secret',
     ...over,
@@ -157,5 +159,38 @@ describe('evictionRisk', () => {
 
     assert.equal(risk?.fatal, false);
     assert.match(risk.message, /noeviction/);
+  });
+});
+
+describe('object storage credentials', () => {
+  /** On Fargate the task role signs, so a key pair is one fewer secret to store and rotate. */
+  it('boots against AWS with no keys at all', () => {
+    const parsed = validateEnv(
+      env({ S3_ENDPOINT: '', S3_ACCESS_KEY_ID: '', S3_SECRET_ACCESS_KEY: '' }),
+    );
+
+    assert.equal(parsed.S3_ACCESS_KEY_ID, undefined);
+    assert.equal(signedWith(parsed.S3_ACCESS_KEY_ID, parsed.S3_SECRET_ACCESS_KEY), undefined);
+  });
+
+  it('hands MinIO the pair it has no role to borrow instead', () => {
+    const parsed = validateEnv(env());
+
+    assert.deepEqual(signedWith(parsed.S3_ACCESS_KEY_ID, parsed.S3_SECRET_ACCESS_KEY), {
+      accessKeyId: 'key',
+      secretAccessKey: 'secret',
+    });
+  });
+
+  /** Half a pair signs nothing: the SDK would fall back to a role that is not there. */
+  it('refuses one key without the other', () => {
+    assert.throws(() => validateEnv(env({ S3_SECRET_ACCESS_KEY: '' })), /S3_ACCESS_KEY_ID/);
+  });
+
+  it('refuses an endpoint of our own with no key to reach it', () => {
+    assert.throws(
+      () => validateEnv(env({ S3_ACCESS_KEY_ID: '', S3_SECRET_ACCESS_KEY: '' })),
+      /S3_ACCESS_KEY_ID/,
+    );
   });
 });

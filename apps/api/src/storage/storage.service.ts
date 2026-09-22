@@ -10,6 +10,15 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AppConfigService } from '../config/app-config.service';
 
+/** Undefined hands the SDK its own chain, which on Fargate is the task role. */
+export function signedWith(
+  accessKeyId: string | undefined,
+  secretAccessKey: string | undefined,
+): { accessKeyId: string; secretAccessKey: string } | undefined {
+  if (accessKeyId === undefined || secretAccessKey === undefined) return undefined;
+  return { accessKeyId, secretAccessKey };
+}
+
 /** THE upload path — there is exactly one, and it is never branched by environment. */
 @Injectable()
 export class StorageService implements OnModuleDestroy {
@@ -26,10 +35,7 @@ export class StorageService implements OnModuleDestroy {
       // Undefined endpoint = the real AWS S3 endpoint for the region.
       endpoint,
       forcePathStyle: config.get('S3_FORCE_PATH_STYLE'),
-      credentials: {
-        accessKeyId: config.get('S3_ACCESS_KEY_ID'),
-        secretAccessKey: config.get('S3_SECRET_ACCESS_KEY'),
-      },
+      credentials: signedWith(config.get('S3_ACCESS_KEY_ID'), config.get('S3_SECRET_ACCESS_KEY')),
     });
 
     this.logger.log(`Storage ready: bucket "${this.bucket}" at ${endpoint ?? 'aws s3'}`);

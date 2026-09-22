@@ -135,8 +135,9 @@ export const envSchema = z.object({
     .transform((v) => (v === '' ? undefined : v)),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().min(1, 'S3_BUCKET is required'),
-  S3_ACCESS_KEY_ID: z.string().min(1, 'S3_ACCESS_KEY_ID is required'),
-  S3_SECRET_ACCESS_KEY: z.string().min(1, 'S3_SECRET_ACCESS_KEY is required'),
+  // Unset on AWS: the task's own role signs, so there is no key to store, leak or rotate.
+  S3_ACCESS_KEY_ID: optional,
+  S3_SECRET_ACCESS_KEY: optional,
   S3_FORCE_PATH_STYLE: boolFromEnv(false),
 
   // The SMS aggregator, named nowhere: a swap is these three values, not a code change.
@@ -187,6 +188,15 @@ export const envSchema = z.object({
   WHATSAPP_TEMPLATE_ANNOUNCEMENT: optional,
 });
 
+/** MinIO has no roles to borrow, so an endpoint of our own must bring a key with it. */
+const storageCanSign = (env: z.infer<typeof envSchema>): boolean => {
+  const pair = [env.S3_ACCESS_KEY_ID, env.S3_SECRET_ACCESS_KEY];
+  if (pair.some((half) => half !== undefined) && pair.some((half) => half === undefined)) {
+    return false;
+  }
+  return env.S3_ENDPOINT === undefined || pair.every((half) => half !== undefined);
+};
+
 /** An empty allowlist reflects whatever origin asks, which is no allowlist at all. */
 const corsIsClosed = (env: z.infer<typeof envSchema>): boolean =>
   env.NODE_ENV !== NODE_ENVS.PRODUCTION || env.CORS_ORIGINS.length > 0;
@@ -204,6 +214,11 @@ export const envSchemaChecked = envSchema
     path: ['DATABASE_URL'],
     message:
       'needs connection_limit in production — the default pool is smaller than the 20 worker slots one container runs',
+  })
+  .refine(storageCanSign, {
+    path: ['S3_ACCESS_KEY_ID'],
+    message:
+      'and S3_SECRET_ACCESS_KEY go together, and both are required alongside S3_ENDPOINT — only AWS S3 can be reached by the task role alone',
   })
   .refine(corsIsClosed, {
     path: ['CORS_ORIGINS'],
