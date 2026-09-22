@@ -3,7 +3,7 @@
  * drawn over the question area with the palette folded away. The counts are the same
  * ones the palette reads, so the summary cannot disagree with the grid behind it.
  */
-import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
+import { ANSWER_STATE, isReviewState, type AnswerState } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { LEGEND_ORDER, STATE_LABEL } from './states';
 
@@ -16,6 +16,7 @@ const HEADER: Readonly<Record<AnswerState, string>> = {
 export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
   const { submit } = view;
   const total = view.sections.reduce((sum, section) => sum + section.questionCount, 0);
+  const states = LEGEND_ORDER.filter((state) => !view.forwardOnly || !isReviewState(state));
 
   return (
     <div className="rw-summary">
@@ -24,7 +25,7 @@ export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
           <tr>
             <th>Section Name</th>
             <th>Total Questions</th>
-            {LEGEND_ORDER.map((state) => (
+            {states.map((state) => (
               <th key={state}>{HEADER[state]}</th>
             ))}
           </tr>
@@ -34,7 +35,7 @@ export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
             <tr key={section.id}>
               <td>{section.name}</td>
               <td>{section.questionCount}</td>
-              {LEGEND_ORDER.map((state) => (
+              {states.map((state) => (
                 <td key={state}>{view.sectionCounts[section.id]?.[state] ?? 0}</td>
               ))}
             </tr>
@@ -44,7 +45,7 @@ export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
               <b>Total</b>
             </td>
             <td>{total}</td>
-            {LEGEND_ORDER.map((state) => (
+            {states.map((state) => (
               <td key={state}>{view.counts[state]}</td>
             ))}
           </tr>

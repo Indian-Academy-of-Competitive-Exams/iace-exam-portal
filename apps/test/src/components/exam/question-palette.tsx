@@ -1,4 +1,4 @@
-import { ANSWER_STATES, type AnswerState, type LiveAnswer } from '@iace/contracts';
+import { ANSWER_STATES, isReviewState, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import { PALETTE_LEGEND } from '../../lib/constants';
 
@@ -17,18 +17,25 @@ export function QuestionPalette({
   answers,
   currentId,
   counts,
+  forwardOnly = false,
+  canOpen,
   onOpen,
 }: Readonly<{
   questionIds: readonly string[];
   answers: Readonly<Record<string, LiveAnswer>>;
   currentId: string | null;
   counts: Readonly<Record<AnswerState, number>>;
+  /** A forward-only paper reaches three of the five states; the other two never earn a row. */
+  forwardOnly?: boolean;
+  canOpen?: (questionId: string) => boolean;
   onOpen: (questionId: string) => void;
 }>) {
+  const states = ANSWER_STATES.filter((state) => !forwardOnly || !isReviewState(state));
+
   return (
     <div className="flex flex-col gap-exam-gap">
       <ul className="flex flex-col gap-1.5">
-        {ANSWER_STATES.map((state) => (
+        {states.map((state) => (
           <li key={state} className="flex items-center gap-2 text-xs">
             <span className={cn('size-4 shrink-0 rounded-exam-cell', SWATCH[state])} />
             <span className="text-exam-ink-muted">
@@ -49,6 +56,7 @@ export function QuestionPalette({
               key={id}
               type="button"
               aria-current={id === currentId ? 'true' : undefined}
+              disabled={canOpen ? !canOpen(id) : false}
               onClick={() => onOpen(id)}
               className={cn(
                 'flex size-exam-cell items-center justify-center rounded-exam-cell text-xs font-semibold tabular-nums',

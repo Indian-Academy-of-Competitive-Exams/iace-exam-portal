@@ -1,7 +1,7 @@
 import { ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import profileImage from './assets/profile.png';
-import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateSwatch } from './states';
+import { STATE_CLASS, STATE_LABEL, StateSwatch } from './states';
 import { ScrollPane } from './scroll-pane';
 
 export function RailwayPalette({
@@ -10,6 +10,8 @@ export function RailwayPalette({
   currentId,
   counts,
   candidate,
+  states,
+  canOpen,
   onOpen,
 }: Readonly<{
   questionIds: readonly string[];
@@ -17,6 +19,9 @@ export function RailwayPalette({
   currentId: string | null;
   counts: Readonly<Record<AnswerState, number>>;
   candidate: string;
+  /** The states this paper can reach, in the order the legend reads them. */
+  states: readonly AnswerState[];
+  canOpen: (questionId: string) => boolean;
   onOpen: (questionId: string) => void;
 }>) {
   return (
@@ -28,7 +33,7 @@ export function RailwayPalette({
 
       <table className="paleet-data legend w-full shrink-0">
         <tbody>
-          {pairs(LEGEND_ORDER).map(([left, right]) => (
+          {pairs(states).map(([left, right]) => (
             <tr key={left}>
               <LegendCell state={left} count={counts[left]} wide={!right} />
               {right ? <LegendCell state={right} count={counts[right]} /> : null}
@@ -52,6 +57,7 @@ export function RailwayPalette({
                 key={id}
                 type="button"
                 aria-current={id === currentId}
+                disabled={!canOpen(id)}
                 aria-label={`Question ${index + 1}, ${STATE_LABEL[state]}`}
                 className={cn('rw-cell', STATE_CLASS[state])}
                 onClick={() => onOpen(id)}

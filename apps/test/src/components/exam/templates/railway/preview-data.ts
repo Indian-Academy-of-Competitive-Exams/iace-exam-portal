@@ -8,6 +8,7 @@ import {
   EXAM_TEMPLATE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
+  NAVIGATION_POLICY,
   SUPPORTED_LANGUAGES,
   QUESTION_TYPE,
   TEST_UI,
@@ -121,6 +122,7 @@ export function previewView(): ExamView {
     section: SECTION,
     reachable: [SECTION_ID],
     sectional: false,
+    forwardOnly: false,
 
     questions: PREVIEW_QUESTIONS,
     question: PREVIEW_QUESTIONS[3],
@@ -143,6 +145,7 @@ export function previewView(): ExamView {
     takenOver: false,
 
     openQuestion: noop,
+    canOpen: () => true,
     nextQuestion: noop,
     chooseOption: noop,
     bubbleAnswer: noop,
@@ -177,6 +180,7 @@ export function previewBrief(): ExamBrief {
     testId: 'preview',
     title: 'RRB JE CBT I 26TH MAY 2019 SHIFT - 3',
     examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+    navigation: NAVIGATION_POLICY.FREE,
     durationSec: PAPER_SEC,
     totalQuestions: QUESTION_COUNT,
     languageMode: LANGUAGE_MODE.SINGLE,

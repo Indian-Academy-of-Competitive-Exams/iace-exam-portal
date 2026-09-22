@@ -5,7 +5,7 @@
  */
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ANSWER_STATE, ANSWER_STATES, type AnswerState } from '@iace/contracts';
+import { ANSWER_STATE, ANSWER_STATES, isReviewState, type AnswerState } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
@@ -70,15 +70,19 @@ export function QuestionPalette({
           </View>
 
           <View className="gap-2 px-4">
-            {ANSWER_STATES.map((state) => (
-              <View key={state} className="flex-row items-center gap-3">
-                <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
-                <Text className="flex-1 text-sm text-exam-ink">{PALETTE_LEGEND[state].label}</Text>
-                <Text className="text-sm font-semibold tabular-nums text-exam-ink">
-                  {(view.sectionCounts[view.sectionId] ?? view.counts)[state]}
-                </Text>
-              </View>
-            ))}
+            {ANSWER_STATES.filter((state) => !view.forwardOnly || !isReviewState(state)).map(
+              (state) => (
+                <View key={state} className="flex-row items-center gap-3">
+                  <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
+                  <Text className="flex-1 text-sm text-exam-ink">
+                    {PALETTE_LEGEND[state].label}
+                  </Text>
+                  <Text className="text-sm font-semibold tabular-nums text-exam-ink">
+                    {(view.sectionCounts[view.sectionId] ?? view.counts)[state]}
+                  </Text>
+                </View>
+              ),
+            )}
           </View>
 
           <ScrollView
@@ -91,6 +95,7 @@ export function QuestionPalette({
                 number={index + 1}
                 state={view.answers[row.questionId]?.state ?? ANSWER_STATE.NOT_VISITED}
                 current={row.questionId === currentId}
+                closed={!view.canOpen(row.questionId)}
                 onPress={() => {
                   view.openQuestion(row.questionId);
                   onClose();
@@ -108,19 +113,29 @@ function PaletteCell({
   number,
   state,
   current,
+  closed,
   onPress,
-}: Readonly<{ number: number; state: AnswerState; current: boolean; onPress: () => void }>) {
+}: Readonly<{
+  number: number;
+  state: AnswerState;
+  current: boolean;
+  /** Left behind on a forward-only paper, so it is shown and not offered. */
+  closed: boolean;
+  onPress: () => void;
+}>) {
   const { label, fill, ink } = PALETTE_LEGEND[state];
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Question ${number}, ${label}`}
-      accessibilityState={{ selected: current }}
+      accessibilityState={{ selected: current, disabled: closed }}
+      disabled={closed}
       onPress={onPress}
       className={cn(
         'h-11 w-11 items-center justify-center rounded-exam-cell border-2',
         fill,
+        closed && 'opacity-50',
         // Positional only: a ring, never a fill, so it cannot read as a state.
         current ? 'border-exam-current' : 'border-transparent',
       )}

@@ -8,6 +8,9 @@ import { useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  isReviewState,
+  mayOpenQuestion,
+  NAVIGATION_POLICY,
   omrStateFor,
   nextOpenSectionId,
   nextQuestionId,
@@ -55,9 +58,6 @@ export interface ExamSitting {
   onEnded: (sitting: EndedSitting) => void;
 }
 
-const isMarked = (state: string | undefined): boolean =>
-  state === ANSWER_STATE.MARKED_REVIEW || state === ANSWER_STATE.ANSWERED_MARKED;
-
 export function useExamView(
   { paper, arrivedAt, title, watermark, onEnded }: Readonly<ExamSitting>,
   deps: Readonly<ExamEngineDeps>,
@@ -72,6 +72,7 @@ export function useExamView(
   const clock: ExamClock = { endsAt: paper.endsAt, serverNow: paper.serverNow, arrivedAt };
 
   const sectional = paper.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
+  const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;
   const reachable = openSections(paper.sections, sectional, state.sections);
   const section = paper.sections.find((row) => row.id === sectionId);
   const inSection = paper.questions.filter((row) => row.baseConfigSectionId === sectionId);
@@ -121,6 +122,10 @@ export function useExamView(
     setQuestionId(to);
   };
 
+  const order = inSection.map((row) => row.questionId);
+  const canOpen = (id: string): boolean =>
+    !forwardOnly || mayOpenQuestion(order, current?.questionId ?? null, id);
+
   // Moving between sections is a save point: a batch left behind is a section's worth of answers.
   const openSection = (next: string) => {
     state.bankOpen();
@@ -137,16 +142,12 @@ export function useExamView(
   };
 
   const nextQuestion = () => {
-    move(
-      nextQuestionId(
-        inSection.map((row) => row.questionId),
-        current?.questionId ?? null,
-      ),
-    );
+    move(nextQuestionId(order, current?.questionId ?? null, !forwardOnly));
   };
 
+  // A flag asks for a second look, which a forward-only paper cannot grant — so it never takes one.
   const record = (next: AnswerIntent): void => {
-    if (current) state.answer(current.questionId, next);
+    if (current) state.answer(current.questionId, forwardOnly ? { ...next, marked: false } : next);
   };
 
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
@@ -173,6 +174,7 @@ export function useExamView(
     section,
     reachable,
     sectional,
+    forwardOnly,
 
     questions: inSection,
     question: current,
@@ -180,7 +182,7 @@ export function useExamView(
     selectedOptionId: current
       ? (state.answers[current.questionId]?.selectedOptionId ?? null)
       : null,
-    marked: isMarked(current ? state.answers[current.questionId]?.state : undefined),
+    marked: isReviewState(current ? state.answers[current.questionId]?.state : undefined),
     answers: state.answers,
     counts,
     sectionCounts,
@@ -192,7 +194,10 @@ export function useExamView(
     hasUnsaved: state.hasUnsaved,
     takenOver: state.takenOver,
 
-    openQuestion: move,
+    openQuestion: (id) => {
+      if (canOpen(id)) move(id);
+    },
+    canOpen,
     nextQuestion,
     chooseOption: (optionId) => record({ selectedOptionId: optionId }),
     bubbleAnswer: (optionId, fill) => {

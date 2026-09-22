@@ -1,12 +1,17 @@
 /** The tally an (i) drops open, on the test header and on every section tab. */
 import { useEffect, useRef, useState } from 'react';
 import { type AnswerState, type PaletteCounts } from '@iace/contracts';
-import { STATE_LABEL, StateSwatch, TALLY_ORDER } from './states';
+import { STATE_LABEL, StateSwatch } from './states';
 
 export function InfoTally({
   counts,
+  states,
   label,
-}: Readonly<{ counts: Readonly<Record<AnswerState, number>>; label: string }>) {
+}: Readonly<{
+  counts: Readonly<Record<AnswerState, number>>;
+  states: readonly AnswerState[];
+  label: string;
+}>) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
 
@@ -32,7 +37,7 @@ export function InfoTally({
       {open ? (
         <table className="subjectcntnt">
           <tbody>
-            {TALLY_ORDER.map((state) => (
+            {states.map((state) => (
               <tr key={state}>
                 <td className="pr-4">{`${STATE_LABEL[state]}:`}</td>
                 <td className="text-right">

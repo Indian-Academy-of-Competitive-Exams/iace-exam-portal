@@ -267,9 +267,11 @@ function SittingFoot({
         ) : (
           <Fragment>
             <View className="flex-row gap-2">
-              <Button variant="outline" className="flex-1" onPress={view.markAndNext}>
-                Mark for review & next
-              </Button>
+              {view.forwardOnly ? null : (
+                <Button variant="outline" className="flex-1" onPress={view.markAndNext}>
+                  Mark for review & next
+                </Button>
+              )}
               <Button variant="ghost" onPress={view.clearResponse}>
                 Clear response
               </Button>

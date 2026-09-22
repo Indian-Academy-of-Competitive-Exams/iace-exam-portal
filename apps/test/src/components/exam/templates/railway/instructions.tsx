@@ -6,6 +6,7 @@
  */
 import {
   contentLanguageOf,
+  isReviewState,
   LANGUAGE_LABELS,
   type ExamBrief,
   type LanguageCode,
@@ -39,7 +40,11 @@ export function RailwayInstructions({ view }: Readonly<{ view: InstructionsView 
           </div>
 
           <div className="ri-body min-h-0 flex-1 overflow-y-auto">
-            {view.step === 'GENERAL' ? <GeneralScreen /> : <PaperScreen view={view} />}
+            {view.step === 'GENERAL' ? (
+              <GeneralScreen forwardOnly={view.forwardOnly} />
+            ) : (
+              <PaperScreen view={view} />
+            )}
           </div>
 
           <div className="ri-panelfoot flex items-center justify-between">
@@ -96,7 +101,7 @@ function ViewIn({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
-function GeneralScreen() {
+function GeneralScreen({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
   return (
     <>
       <p className="ri-lead">General Instructions:</p>
@@ -112,7 +117,7 @@ function GeneralScreen() {
       </p>
 
       <ul className="ri-legend">
-        {LEGEND_ORDER.map((state) => (
+        {LEGEND_ORDER.filter((state) => !forwardOnly || !isReviewState(state)).map((state) => (
           <li key={state}>
             <span className={`rw-cell ${STATE_CLASS[state]}`} aria-hidden />
             <span>{LEGEND_SAYS[state]}</span>
@@ -120,33 +125,57 @@ function GeneralScreen() {
         ))}
       </ul>
 
-      <p>
-        The <b>Marked for Review</b> status for a question simply indicates that you would like to
-        look at that question again. If a question is answered, but marked for review, then the
-        answer will be considered for evaluation unless the status is modified by the candidate.
-      </p>
+      {forwardOnly ? null : (
+        <p>
+          The <b>Marked for Review</b> status for a question simply indicates that you would like to
+          look at that question again. If a question is answered, but marked for review, then the
+          answer will be considered for evaluation unless the status is modified by the candidate.
+        </p>
+      )}
 
       <p className="ri-lead ri-underline">Navigating to a Question:</p>
       <p>To answer a question, do the following:</p>
-      <ul className="ri-plain">
-        <li>
-          Click on the question number in the Question Palette at the right of your screen to go to
-          that numbered question directly.
-        </li>
-        <li>
-          Click on <b>Save &amp; Next</b> to save your answer for the current question and then go
-          to the next question.
-        </li>
-        <li>
-          Click on <b>Mark for Review &amp; Next</b> to save your answer for the current question,
-          mark it for review, and then go to the next question.
-        </li>
-      </ul>
-      <p>
-        Note: note that your answer for the current question will not be saved, if you navigate to
-        another question directly by clicking on a question number without saving the answer to the
-        previous question.
-      </p>
+
+      {forwardOnly ? (
+        <>
+          <ul className="ri-plain">
+            <li>
+              Click on <b>Save &amp; Next</b> to save your answer for the current question and then
+              go to the next question.
+            </li>
+            <li>
+              This examination moves in one direction only. A question you have left cannot be
+              opened again, and there is no marking a question for review.
+            </li>
+          </ul>
+          <p>
+            Note: note that a question you move away from is closed for the rest of the examination,
+            whether or not you answered it.
+          </p>
+        </>
+      ) : (
+        <>
+          <ul className="ri-plain">
+            <li>
+              Click on the question number in the Question Palette at the right of your screen to go
+              to that numbered question directly.
+            </li>
+            <li>
+              Click on <b>Save &amp; Next</b> to save your answer for the current question and then
+              go to the next question.
+            </li>
+            <li>
+              Click on <b>Mark for Review &amp; Next</b> to save your answer for the current
+              question, mark it for review, and then go to the next question.
+            </li>
+          </ul>
+          <p>
+            Note: note that your answer for the current question will not be saved, if you navigate
+            to another question directly by clicking on a question number without saving the answer
+            to the previous question.
+          </p>
+        </>
+      )}
     </>
   );
 }

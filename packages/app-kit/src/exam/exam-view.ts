@@ -54,6 +54,8 @@ export interface ExamView {
   /** The sections a candidate may open now — under a sectional clock, exactly one. */
   reachable: readonly string[];
   sectional: boolean;
+  /** A seat left is closed for good: no palette jump back, and nothing to mark for review. */
+  forwardOnly: boolean;
 
   /** This section's questions in the candidate's own order, and the one on screen. */
   questions: readonly ExamQuestion[];
@@ -78,6 +80,8 @@ export interface ExamView {
   takenOver: boolean;
 
   openQuestion: (questionId: string) => void;
+  /** Whether that seat still opens — a screen draws the refusal rather than finding out by click. */
+  canOpen: (questionId: string) => boolean;
   nextQuestion: () => void;
   chooseOption: (optionId: string) => void;
   /** OMR's one write: the option and the flag together, because two records are two saves. */

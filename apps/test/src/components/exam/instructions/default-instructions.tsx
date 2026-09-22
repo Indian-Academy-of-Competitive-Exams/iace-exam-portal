@@ -1,5 +1,10 @@
 /** The default skin's read-before-you-begin: the rules, then the paper, over two screens. */
-import { contentLanguageOf, LANGUAGE_LABELS, type LanguageCode } from '@iace/contracts';
+import {
+  contentLanguageOf,
+  isReviewState,
+  LANGUAGE_LABELS,
+  type LanguageCode,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -22,20 +27,33 @@ import { type InstructionsView } from './use-instructions';
 /** What the shell calls `narrow`: a page to read, not a grid to scan. */
 const NARROW = 'max-w-5xl';
 
-const RULES: readonly { term: string; says: string }[] = [
-  {
-    term: 'The clock',
-    says: 'Set by the server, and it keeps running if you leave this screen. The paper ends by itself when it reaches zero.',
-  },
+const CLOCK = {
+  term: 'The clock',
+  says: 'Set by the server, and it keeps running if you leave this screen. The paper ends by itself when it reaches zero.',
+};
+const CLEAR = { term: 'Clear response', says: 'Removes your answer entirely.' };
+
+const FREE_RULES: readonly { term: string; says: string }[] = [
+  CLOCK,
   { term: 'Save & next', says: 'Keeps your answer and moves on.' },
   {
     term: 'Mark for review & next',
     says: 'Keeps your answer and flags the question. A flagged answer is still marked.',
   },
-  { term: 'Clear response', says: 'Removes your answer entirely.' },
+  CLEAR,
   {
     term: 'The palette',
     says: 'Opens any question directly. Moving there does NOT save the question you are on.',
+  },
+];
+
+const FORWARD_RULES: readonly { term: string; says: string }[] = [
+  CLOCK,
+  { term: 'Save & next', says: 'Keeps your answer and moves on. It is the only way forward.' },
+  CLEAR,
+  {
+    term: 'The palette',
+    says: 'Shows where you are. A question you have left cannot be opened again, and there is no marking one for review.',
   },
 ];
 
@@ -59,7 +77,7 @@ export function DefaultInstructions({
       >
         <PageBody className="pb-6">
           {view.step === 'GENERAL' ? (
-            <GeneralStep />
+            <GeneralStep forwardOnly={view.forwardOnly} />
           ) : (
             <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
           )}
@@ -89,12 +107,19 @@ function Walk({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
-function GeneralStep() {
+function GeneralStep({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
   return (
     <>
+      {forwardOnly ? (
+        <Alert variant="warning">
+          This paper runs one way. Once you leave a question you cannot return to it, so answer
+          before you move on.
+        </Alert>
+      ) : null}
+
       <SurfaceCard title="How the paper works">
         <dl className="flex flex-col gap-3 text-sm leading-relaxed">
-          {RULES.map((rule) => (
+          {(forwardOnly ? FORWARD_RULES : FREE_RULES).map((rule) => (
             <div key={rule.term}>
               <dt className="font-medium text-foreground">{rule.term}</dt>
               <dd className="text-muted-foreground">{rule.says}</dd>
@@ -105,11 +130,13 @@ function GeneralStep() {
 
       <SurfaceCard title="Palette">
         <div className="flex flex-wrap gap-2">
-          {PALETTE_LEGEND.map((entry) => (
-            <Badge key={entry.state} variant={entry.variant}>
-              {entry.label}
-            </Badge>
-          ))}
+          {PALETTE_LEGEND.filter((entry) => !forwardOnly || !isReviewState(entry.state)).map(
+            (entry) => (
+              <Badge key={entry.state} variant={entry.variant}>
+                {entry.label}
+              </Badge>
+            ),
+          )}
         </div>
       </SurfaceCard>
 

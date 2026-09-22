@@ -5,7 +5,12 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LANGUAGE_MODE, type ExamBrief, type LanguageCode } from '@iace/contracts';
+import {
+  LANGUAGE_MODE,
+  NAVIGATION_POLICY,
+  type ExamBrief,
+  type LanguageCode,
+} from '@iace/contracts';
 import { ROUTES } from '../../../lib/constants';
 
 export const INSTRUCTION_STEPS = ['GENERAL', 'PAPER'] as const;
@@ -20,6 +25,8 @@ export interface InstructionsView {
   goTo: (step: InstructionStep) => void;
   /** A DUAL paper shows both languages, so there is nothing to choose and nothing to gate on. */
   dual: boolean;
+  /** A seat left is closed for good, so the rules a candidate is taught here are different ones. */
+  forwardOnly: boolean;
   language: LanguageCode | '';
   chooseLanguage: (code: LanguageCode) => void;
   declared: boolean;
@@ -44,6 +51,7 @@ export function useInstructions(
 
   return {
     brief,
+    forwardOnly: brief.navigation === NAVIGATION_POLICY.FORWARD_ONLY,
     step: INSTRUCTION_STEPS[stepIndex] ?? 'GENERAL',
     stepIndex,
     next: () => setStepIndex((at) => Math.min(at + 1, INSTRUCTION_STEPS.length - 1)),

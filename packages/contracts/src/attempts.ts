@@ -221,6 +221,8 @@ export const examBriefSchema = z.object({
   title: z.string().nullable(),
   /** The skin, needed here because the instructions are skinned too, not only the sitting. */
   examTemplate: examTemplateSchema,
+  /** Read before the clock starts: a forward-only paper is a different set of rules to teach. */
+  navigation: navigationPolicySchema,
   durationSec: z.number().int(),
   totalQuestions: z.number().int(),
   languageMode: languageModeSchema,
@@ -340,13 +342,30 @@ export function sectionPaletteCounts(
   );
 }
 
+/** Flagged for another look. Impossible under FORWARD_ONLY, which is why a screen asks. */
+export function isReviewState(state: AnswerState | undefined): boolean {
+  return state === ANSWER_STATE.MARKED_REVIEW || state === ANSWER_STATE.ANSWERED_MARKED;
+}
+
+/** FORWARD_ONLY: a seat already left is closed for good, so only this one or a later one opens. */
+export function mayOpenQuestion(
+  questionIds: readonly string[],
+  currentId: string | null,
+  targetId: string,
+): boolean {
+  const seat = currentId === null ? -1 : questionIds.indexOf(currentId);
+  return questionIds.indexOf(targetId) >= seat;
+}
+
 /** The seat after this one, wrapping to the first: "next" is never a dead end mid-paper. */
 export function nextQuestionId(
   questionIds: readonly string[],
   currentId: string | null,
+  wrap = true,
 ): string | null {
   const seat = currentId === null ? -1 : questionIds.indexOf(currentId);
-  return questionIds[seat + 1] ?? questionIds[0] ?? null;
+  // Wrapping is a move BACKWARDS, which is the one thing a forward-only paper does not allow.
+  return questionIds[seat + 1] ?? (wrap ? (questionIds[0] ?? null) : (currentId ?? null));
 }
 
 /** Where a closed section hands over. Null means every other section has closed too. */

@@ -93,6 +93,7 @@ export class AttemptPaperService {
             totalQuestions: true,
             languageMode: true,
             languages: true,
+            navigation: true,
             sections: {
               select: {
                 id: true,
@@ -123,6 +124,7 @@ export class AttemptPaperService {
       testId: test.id,
       title: test.title,
       examTemplate: test.examTemplate,
+      navigation: test.baseConfig.navigation,
       durationSec: scopedDurationSec(
         test.baseConfig.sections,
         test.baseConfig,

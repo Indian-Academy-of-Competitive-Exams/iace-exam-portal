@@ -193,6 +193,8 @@ export function Palette({ view }: Readonly<ExamSlotProps>) {
       answers={view.answers}
       currentId={view.question?.questionId ?? null}
       counts={view.sectionCounts[view.sectionId] ?? view.counts}
+      forwardOnly={view.forwardOnly}
+      canOpen={view.canOpen}
       onOpen={view.openQuestion}
     />
   );
@@ -208,10 +210,12 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
         </Button>
       ) : (
         <>
-          <Button type="button" variant="outline" size="sm" onClick={view.markAndNext}>
-            <Flag aria-hidden />
-            Mark for review &amp; next
-          </Button>
+          {view.forwardOnly ? null : (
+            <Button type="button" variant="outline" size="sm" onClick={view.markAndNext}>
+              <Flag aria-hidden />
+              Mark for review &amp; next
+            </Button>
+          )}
           <Button type="button" variant="ghost" size="sm" onClick={view.clearResponse}>
             <Eraser aria-hidden />
             Clear response

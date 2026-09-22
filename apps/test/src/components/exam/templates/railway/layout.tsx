@@ -4,10 +4,11 @@
  * the two skins cannot drift into behaving differently.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { secondsLeft, type ExamClock } from '@iace/contracts';
+import { isReviewState, secondsLeft, type ExamClock } from '@iace/contracts';
 import { useCountdown, type ExamView } from '@iace/app-kit';
 import { cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
+import { LEGEND_ORDER, TALLY_ORDER } from './states';
 import { type ExamSlotProps } from '../shared/slots';
 import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
@@ -52,7 +53,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           <div className="fixedquehdr shrink-0">
             <span className="rw-testname">
               {view.title}
-              <InfoTally counts={view.counts} label="Status for this test" />
+              <InfoTally counts={view.counts} states={tallyOf(view)} label="Status for this test" />
             </span>
           </div>
 
@@ -76,6 +77,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
                 </button>
                 <InfoTally
                   counts={view.sectionCounts[section.id] ?? view.counts}
+                  states={tallyOf(view)}
                   label={`Status for ${section.name}`}
                 />
               </span>
@@ -102,9 +104,11 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           </ScrollPane>
 
           <div className={cn('rw-buttons flex items-center gap-2', asking && 'hidden')}>
-            <button type="button" className="btn" onClick={view.markAndNext}>
-              Mark for Review &amp; Next
-            </button>
+            {view.forwardOnly ? null : (
+              <button type="button" className="btn" onClick={view.markAndNext}>
+                Mark for Review &amp; Next
+              </button>
+            )}
             <button type="button" className="btn" onClick={view.clearResponse}>
               Clear Response
             </button>
@@ -137,6 +141,8 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
             currentId={view.question?.questionId ?? null}
             counts={view.sectionCounts[view.sectionId] ?? view.counts}
             candidate={view.watermark}
+            states={statesOf(view)}
+            canOpen={view.canOpen}
             onOpen={view.openQuestion}
           />
 
@@ -156,6 +162,12 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
     </div>
   );
 }
+
+/** A forward-only paper reaches three of the five states, so it is taught and tallied in three. */
+const statesOf = (view: ExamView) =>
+  LEGEND_ORDER.filter((state) => !view.forwardOnly || !isReviewState(state));
+const tallyOf = (view: ExamView) =>
+  TALLY_ORDER.filter((state) => !view.forwardOnly || !isReviewState(state));
 
 /** The question area: the stem and its options, or a word where a closed section was. */
 function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {

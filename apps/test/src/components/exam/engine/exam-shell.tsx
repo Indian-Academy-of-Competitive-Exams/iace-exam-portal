@@ -40,13 +40,20 @@ export function ExamShell({
         onOpenChange={(open) => !open && submit.cancel()}
         // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Submit this test?"
-        description={`${plural(submit.unanswered, 'question')} unanswered and ${submit.markedForReview} marked for review. Once submitted the paper closes and nothing more can be changed.`}
+        description={submittingSays(view)}
         confirmLabel="Submit"
         loading={submit.isPending}
         onConfirm={submit.confirm}
       />
     </div>
   );
+}
+
+/** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
+function submittingSays(view: ExamView): string {
+  const { submit } = view;
+  const marked = view.forwardOnly ? '' : ` and ${submit.markedForReview} marked for review`;
+  return `${plural(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
 }
 
 /** The default skin's warning: the design system's own alert, over the paper it interrupts. */

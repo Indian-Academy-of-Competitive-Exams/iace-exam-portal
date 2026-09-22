@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   ANSWER_STATE,
+  ANSWER_STATES,
   clockText,
+  isReviewState,
+  mayOpenQuestion,
   nextOpenSectionId,
   nextQuestionId,
   openSections,
@@ -113,6 +116,41 @@ describe('nextQuestionId', () => {
 
   it('has nowhere to go in an empty section', () => {
     assert.equal(nextQuestionId([], 'q1'), null);
+  });
+
+  /** The failure this prevents: Next on the last seat wrapping a forward-only paper back to the first. */
+  it('stays where it is at the end of a paper that cannot go back', () => {
+    assert.equal(nextQuestionId(paper, 'q3', false), 'q3');
+  });
+});
+
+describe('mayOpenQuestion', () => {
+  const paper = ['q1', 'q2', 'q3'];
+
+  it('opens a seat still ahead', () => {
+    assert.equal(mayOpenQuestion(paper, 'q2', 'q3'), true);
+  });
+
+  /** The failure this prevents: a palette jump undoing the one rule a forward-only paper has. */
+  it('refuses a seat already left', () => {
+    assert.equal(mayOpenQuestion(paper, 'q2', 'q1'), false);
+  });
+
+  it('lets the open one be opened again, which is where a click on it lands', () => {
+    assert.equal(mayOpenQuestion(paper, 'q2', 'q2'), true);
+  });
+
+  it('opens anything when nothing is open yet', () => {
+    assert.equal(mayOpenQuestion(paper, null, 'q1'), true);
+  });
+});
+
+describe('isReviewState', () => {
+  it('names the two states a forward-only paper can never reach', () => {
+    assert.deepEqual(ANSWER_STATES.filter(isReviewState), [
+      ANSWER_STATE.MARKED_REVIEW,
+      ANSWER_STATE.ANSWERED_MARKED,
+    ]);
   });
 });
 
