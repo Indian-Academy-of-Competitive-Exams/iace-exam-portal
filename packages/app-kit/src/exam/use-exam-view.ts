@@ -69,7 +69,12 @@ export function useExamView(
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
-  const clock: ExamClock = { endsAt: paper.endsAt, serverNow: paper.serverNow, arrivedAt };
+  // The paper's clock until a save answers with a newer one — that is how an extension lands.
+  const clock: ExamClock = state.clock ?? {
+    endsAt: paper.endsAt,
+    serverNow: paper.serverNow,
+    arrivedAt,
+  };
 
   const sectional = paper.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
   const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;

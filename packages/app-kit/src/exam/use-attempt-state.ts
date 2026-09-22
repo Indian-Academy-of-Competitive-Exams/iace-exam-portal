@@ -10,6 +10,7 @@ import {
   ErrorCodes,
   type AnswerChange,
   type AnswerState,
+  type ExamClock,
   type LiveAnswer,
   type SectionProgress,
 } from '@iace/contracts';
@@ -56,6 +57,8 @@ const answersFrom = (queued: readonly AnswerChange[]): Record<string, LiveAnswer
 export interface AttemptStateHandle {
   answers: Readonly<Record<string, LiveAnswer>>;
   sections: Readonly<Record<string, SectionProgress>>;
+  /** The clock as the last save left it, so an extension reaches the screen without a reload. */
+  clock: ExamClock | null;
   /** True while a save is in flight; the screen says "Saving…" and never blocks on it. */
   isSaving: boolean;
   /** True once a save has failed and not yet succeeded — the one thing a student must see. */
@@ -101,6 +104,7 @@ export function useAttemptState(
   const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
+  const [clock, setClock] = useState<ExamClock | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
@@ -183,6 +187,8 @@ export function useAttemptState(
       // A server already past what we sent dropped this batch as stale and answered 200 anyway.
       const dropped = saved.revision > sent;
       revision.current = seedRevision(revision.current, saved.revision);
+      // Answering is also a clock check: the deadline it answers with is the one that counts.
+      setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
       if (dropped) requeue();
       setHasUnsaved(dropped);
     } catch (error: unknown) {
@@ -263,6 +269,7 @@ export function useAttemptState(
   return {
     answers,
     sections,
+    clock,
     isSaving,
     hasUnsaved,
     takenOver,

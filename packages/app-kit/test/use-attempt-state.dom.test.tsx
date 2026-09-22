@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
-import { ANSWER_STATE, AppException, ErrorCodes } from '@iace/contracts';
+import { ANSWER_STATE, AppException, ErrorCodes, type ExamClock } from '@iace/contracts';
 import { useAttemptState } from '../src/exam/use-attempt-state';
 import type { AppApiClient, KeyValueStorage } from '../src';
 import { fakeStorage } from './support/fake-storage';
@@ -58,6 +58,33 @@ test('a flush that succeeds clears pending and advances the revision', async (t)
 
   await act(async () => void (await result.current.flush()));
   assert.equal(sent.length, 1, 'an empty flush sends nothing');
+});
+
+/** The failure this prevents: an admin grants ten minutes and the running screen never hears of it. */
+test('takes the deadline a save answers with, so an extension needs no reload', async (t) => {
+  const EXTENDED = '2099-01-01T10:10:00.000Z';
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number }) => ({
+        revision: body.revision,
+        endsAt: EXTENDED,
+        serverNow: '2099-01-01T10:00:00.000Z',
+      }),
+    },
+  } as unknown as AppApiClient;
+
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  const before: ExamClock | null = result.current.clock;
+  assert.equal(before, null, 'the paper is the only clock until a save answers');
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  await act(async () => void (await result.current.flush()));
+
+  assert.equal(result.current.clock?.endsAt, EXTENDED);
 });
 
 test('a failed flush requeues its changes and reports unsaved work', async (t) => {
