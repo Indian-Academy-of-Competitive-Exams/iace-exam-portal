@@ -1,6 +1,6 @@
 # Local development services for the IACE platform.
 #   postgres  — durable data (Prisma)
-#   redis     — OTP, sessions, device binding, BullMQ queues, live leaderboards
+#   valkey    — OTP, sessions, device binding, BullMQ queues, live leaderboards
 #   minio     — S3-compatible object storage; prod swaps the endpoint/creds only
 #   minio-init— one-shot: creates the bucket, then exits
 #
@@ -29,20 +29,21 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: iace-redis
+  valkey:
+    # Valkey is the BSD fork of Redis 7.2 and what production runs, so dev speaks the same server.
+    image: valkey/valkey:8-alpine
+    container_name: iace-valkey
     restart: unless-stopped
     # noeviction matches production: live attempt state, leaderboards, OTP and sessions are all
     # here, so a key dropped under memory pressure is a lost sitting, not a cache miss. AOF is what
     # survives a restart mid-test.
-    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    command: ['valkey-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
     ports:
       - '${REDIS_PORT:-6379}:6379'
     volumes:
-      - redis-data:/data
+      - valkey-data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ['CMD', 'valkey-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -113,7 +114,7 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
+  valkey-data:
   minio-data:
   # Created before SonarQube was in this file; external so the analysis history,
   # the project and its token survive being adopted by compose.

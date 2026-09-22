@@ -19,13 +19,13 @@ packages/
   ui/         design tokens + shadcn components (web only — mobile has its own)
   config/     shared tsconfig / eslint / tailwind presets
 prisma/       schema.prisma + migrations
-docker-compose.yml   Postgres + Redis + MinIO (local infra)
+docker-compose.yml   Postgres + Valkey + MinIO (local infra)
 docs/         architecture & design docs (read 01–03 + design/ + CLAUDE.md)
 ```
 
 `apps/mobile` is **in progress and not yet shipped**, and it runs in its own terminal (§7).
 
-Local infra runs in Docker: **PostgreSQL** (data), **Redis** (OTP, sessions,
+Local infra runs in Docker: **PostgreSQL** (data), **Valkey** (OTP, sessions,
 device binding, rate limiting, BullMQ), **MinIO** (S3‑compatible object storage).
 
 ---
@@ -36,7 +36,7 @@ device binding, rate limiting, BullMQ), **MinIO** (S3‑compatible object storag
 | ----------------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
 | Node.js                 | **22.23.2** (see `.nvmrc`; engine floor is 22.13)         | `nvm install && nvm use`                                       |
 | pnpm                    | **11.21.0** (pinned in `package.json` → `packageManager`) | Get it via Corepack — see below                                |
-| Docker + Docker Compose | any recent                                                | for Postgres/Redis/MinIO                                       |
+| Docker + Docker Compose | any recent                                                | for Postgres/Valkey/MinIO                                      |
 | Git                     | any                                                       |                                                                |
 | SonarQube               | optional                                                  | only if you want the pre‑commit scan; it skips itself if unset |
 
@@ -70,7 +70,7 @@ cp .env.example .env
 
 The defaults in `.env.example` are wired to the docker‑compose services, so **it runs as‑is locally** — you don't have to change anything to start. Worth knowing:
 
-- **Database / Redis / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
+- **Database / Valkey / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
 - **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs every test that touches Postgres against, and the one `pnpm test:coverage` uses for the same tier. Committing needs neither: the pre-commit hook does not run either of them (§8). The script refuses the one `DATABASE_URL` names and any whose name does not end in `_test`. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db`. That script runs outside turbo, so generate the Prisma client and build `@iace/contracts` first: `pnpm db:generate && pnpm --filter @iace/contracts build`, or any `pnpm build`. The database keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
 - **JWT secrets & `PIN_PEPPER`** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
 - **OTP delivery is `console`** — in dev, OTP codes are **printed to the API log**, not sent by SMS/email. That's how you log in locally (see §6).
@@ -89,11 +89,11 @@ Brings up:
 | Service     | Port                        | Notes                                                 |
 | ----------- | --------------------------- | ----------------------------------------------------- |
 | Postgres 17 | 5432                        | user/pass/db = `iace` / `iace_dev_password` / `iace`  |
-| Redis 7     | 6379                        |                                                       |
+| Valkey 8    | 6379                        | the BSD fork of Redis that production runs            |
 | MinIO       | 9000 (API) / 9001 (console) | login = `iace_minio_user` / `iace_minio_password`     |
 | minio‑init  | —                           | one‑shot: creates the `iace-local` bucket, then exits |
 
-Check: `docker ps` shows `iace-postgres`, `iace-redis`, `iace-minio` healthy. The MinIO console is at http://localhost:9001.
+Check: `docker ps` shows `iace-postgres`, `iace-valkey`, `iace-minio` healthy. The MinIO console is at http://localhost:9001.
 
 ## 5. Set up the database
 
@@ -118,6 +118,12 @@ pnpm db:seed          # the static rows (§6)
 Optional GUI: `pnpm db:studio` (Prisma Studio, opens in the browser).
 
 > `db:seed` stays a separate command, not prisma's seed hook, so a `migrate reset` never quietly recreates rows you meant to be rid of. (`db:check` compares the migrations against the schema and needs `SHADOW_DATABASE_URL` — see `.env.example`.)
+
+### Coming from a Redis container or a Postgres 16 volume
+
+The cache service is now Valkey, so the old `iace-redis` container is left behind by
+`docker compose up`: remove it with `docker rm -f iace-redis`. Nothing in it is worth keeping —
+sessions and OTP codes are short-lived, and a live sitting is rebuilt from Postgres.
 
 ### Coming from a Postgres 16 volume
 
@@ -190,7 +196,7 @@ machine Metro served it from. Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` on
 elsewhere (see `.env.example`), and restart Metro after changing it, because the value is baked in
 at start.
 
-**How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 4‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Redis, never Postgres.
+**How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 4‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Valkey, never Postgres.
 
 ## 7b. Mobile push (optional, Android)
 
@@ -256,7 +262,7 @@ The SonarQube scan is the exception and is **opt-in**: it regenerates coverage b
 - **Port already in use** (3000 / 5173 / 5174 / 5432 / 6379 / 9000 / 9001) → free the process or change the port in `.env`.
 - **Pre‑commit hook fails** → run `pnpm format && pnpm lint && pnpm typecheck` and fix what it reports. If it names a comment or a screen's copy, the script that failed says which rule and where. The Sonar scan does not run unless you ask for it with `RUN_SONAR=1`.
 - **Admin OTP never arrives** → it doesn't; read it from the **API log** (dev uses the console OTP sender).
-- **Start completely fresh** → `pnpm docker:reset` (wipes DB/Redis/MinIO volumes), then `pnpm docker:up && pnpm db:setup` (§5).
+- **Start completely fresh** → `pnpm docker:reset` (wipes DB/Valkey/MinIO volumes), then `pnpm docker:up && pnpm db:setup` (§5).
 
 ## 10. Where to read next
 
