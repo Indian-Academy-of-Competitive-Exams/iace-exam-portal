@@ -158,6 +158,8 @@ export type AnswerChange = z.infer<typeof answerChangeSchema>;
 const sectionProgressSchema = z.object({
   remainingSec: z.number().int().min(0),
   closed: z.boolean(),
+  /** When the SERVER saw this section opened. What is left is counted from it, so a reload cannot reset it. */
+  openedAt: z.iso.datetime().optional(),
 });
 export type SectionProgress = z.infer<typeof sectionProgressSchema>;
 
@@ -259,6 +261,21 @@ export function secondsLeft(clock: ExamClock, deviceNow: number): number {
   const grantedMs = Date.parse(clock.endsAt) - Date.parse(clock.serverNow);
   const elapsedMs = deviceNow - clock.arrivedAt;
   return Math.max(0, Math.round((grantedMs - elapsedMs) / MILLISECONDS_PER_SECOND));
+}
+
+/** What a section's clock has left, from two SERVER instants: a wrong device clock reads the same. */
+export function sectionLeftSec(
+  allowedSec: number | null | undefined,
+  openedAt: string | undefined,
+  serverNow: string,
+): number | null {
+  if (allowedSec === null || allowedSec === undefined) return null;
+  if (openedAt === undefined) return allowedSec;
+
+  const spent = Math.round(
+    (Date.parse(serverNow) - Date.parse(openedAt)) / MILLISECONDS_PER_SECOND,
+  );
+  return Math.max(0, allowedSec - Math.max(0, spent));
 }
 
 /** `1:59:03`, and `09:58` under an hour — a clock nobody has to parse. */

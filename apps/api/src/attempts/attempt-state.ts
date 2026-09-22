@@ -149,8 +149,26 @@ export function applyBatch(
     lastSeenAt: now.toISOString(),
     answers,
     pending: [...new Set([...(held.pending ?? []), ...batch.answers.map((c) => c.questionId)])],
-    sections: batch.sections ? { ...held.sections, ...batch.sections } : held.sections,
+    sections: sectionsAfter(held.sections, batch.sections, now),
   };
+}
+
+/** The server stamps when a section opened; a screen reporting its own would decide its own clock. */
+function sectionsAfter(
+  held: Record<string, SectionProgress>,
+  batch: Record<string, SectionProgress> | undefined,
+  now: Date,
+): Record<string, SectionProgress> {
+  if (!batch) return held;
+
+  const next = { ...held };
+  for (const [sectionId, progress] of Object.entries(batch)) {
+    next[sectionId] = {
+      ...progress,
+      openedAt: progress.closed ? undefined : (held[sectionId]?.openedAt ?? now.toISOString()),
+    };
+  }
+  return next;
 }
 
 function sameAnswer(a: LiveAnswer | undefined, b: LiveAnswer | undefined): boolean {
@@ -189,6 +207,21 @@ export function awayMs(held: HeldState, now: Date): number {
 /** The deadline a resume gets: the one it had, pushed by the time the paper was not on screen. */
 export function creditedEndsAt(held: HeldState, now: Date): Date {
   return new Date(Date.parse(held.endsAt) + awayMs(held, now));
+}
+
+/** A section's clock is put down with the paper: the open one is pushed by the same away time. */
+export function creditedSections(held: HeldState, now: Date): Record<string, SectionProgress> {
+  const away = awayMs(held, now);
+  if (away === 0) return held.sections;
+
+  return Object.fromEntries(
+    Object.entries(held.sections).map(([sectionId, progress]) => [
+      sectionId,
+      progress.closed || progress.openedAt === undefined
+        ? progress
+        : { ...progress, openedAt: new Date(Date.parse(progress.openedAt) + away).toISOString() },
+    ]),
+  );
 }
 
 /** Too long away to come back to. The key is gone by now anyway; this is what Postgres judges by. */

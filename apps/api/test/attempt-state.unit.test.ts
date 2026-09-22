@@ -9,6 +9,7 @@ import {
   applyBatch,
   awayMs,
   creditedEndsAt,
+  creditedSections,
   heldIn,
   isAbandoned,
   isInTime,
@@ -243,6 +244,61 @@ describe('a paper put down, and one abandoned', () => {
   /** A key written before this shipped has no last save, so the start is the only instant it has. */
   it('counts from the start when nothing has been saved yet', () => {
     assert.equal(awayMs(held(), at('2026-09-01T05:01:00.000Z')), 60_000);
+  });
+});
+
+describe('a section clock the server stamps', () => {
+  const at = (iso: string) => new Date(iso);
+  const batch = (sections: Record<string, { remainingSec: number; closed: boolean }>) => ({
+    revision: 1,
+    answers: [],
+    sections,
+  });
+
+  /** The failure this prevents: a reload restarting a section at its full allowance. */
+  it('stamps an opened section with the instant the SERVER saw it', () => {
+    const next = applyBatch(
+      held(),
+      batch({ sec_1: { remainingSec: 1800, closed: false } }),
+      at('2026-09-01T05:05:00.000Z'),
+    );
+    assert.equal(next.sections.sec_1?.openedAt, '2026-09-01T05:05:00.000Z');
+  });
+
+  it('keeps the first stamp, so reporting again does not restart the clock', () => {
+    const opened = applyBatch(
+      held(),
+      batch({ sec_1: { remainingSec: 1800, closed: false } }),
+      at('2026-09-01T05:05:00.000Z'),
+    );
+    const again = applyBatch(
+      { ...opened, revision: 1 },
+      batch({ sec_1: { remainingSec: 900, closed: false } }),
+      at('2026-09-01T05:20:00.000Z'),
+    );
+    assert.equal(again.sections.sec_1?.openedAt, '2026-09-01T05:05:00.000Z');
+  });
+
+  it('gives back the away time to a section still open', () => {
+    const put = held({
+      lastSeenAt: '2026-09-01T05:10:00.000Z',
+      sections: {
+        sec_1: { remainingSec: 1200, closed: false, openedAt: '2026-09-01T05:00:00.000Z' },
+      },
+    });
+    const credited = creditedSections(put, at('2026-09-02T05:10:00.000Z'));
+    assert.equal(credited.sec_1?.openedAt, '2026-09-02T05:00:00.000Z');
+  });
+
+  it('leaves a closed section where it stands', () => {
+    const put = held({
+      lastSeenAt: '2026-09-01T05:10:00.000Z',
+      sections: { sec_1: { remainingSec: 0, closed: true, openedAt: '2026-09-01T05:00:00.000Z' } },
+    });
+    assert.equal(
+      creditedSections(put, at('2026-09-02T05:10:00.000Z')).sec_1?.openedAt,
+      '2026-09-01T05:00:00.000Z',
+    );
   });
 });
 

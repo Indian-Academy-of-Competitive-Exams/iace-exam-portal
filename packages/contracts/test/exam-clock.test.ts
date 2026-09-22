@@ -10,6 +10,7 @@ import {
   nextQuestionId,
   openSections,
   paletteCounts,
+  sectionLeftSec,
   sectionEffort,
   type AnswerState,
   secondsLeft,
@@ -121,6 +122,27 @@ describe('nextQuestionId', () => {
   /** The failure this prevents: Next on the last seat wrapping a forward-only paper back to the first. */
   it('stays where it is at the end of a paper that cannot go back', () => {
     assert.equal(nextQuestionId(paper, 'q3', false), 'q3');
+  });
+});
+
+describe('sectionLeftSec', () => {
+  const OPENED = '2026-09-01T05:00:00.000Z';
+
+  /** The failure this prevents: a reload handing a section its full clock back, every time. */
+  it('takes off what the section has already been open for', () => {
+    assert.equal(sectionLeftSec(1800, OPENED, '2026-09-01T05:10:00.000Z'), 1200);
+  });
+
+  it('gives the whole allowance to a section nobody has opened yet', () => {
+    assert.equal(sectionLeftSec(1800, undefined, '2026-09-01T05:10:00.000Z'), 1800);
+  });
+
+  it('never goes below zero, however long ago it was opened', () => {
+    assert.equal(sectionLeftSec(1800, OPENED, '2026-09-02T05:00:00.000Z'), 0);
+  });
+
+  it('has no clock to read on a paper whose sections are not timed', () => {
+    assert.equal(sectionLeftSec(null, OPENED, '2026-09-01T05:10:00.000Z'), null);
   });
 });
 

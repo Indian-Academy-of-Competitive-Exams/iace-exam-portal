@@ -73,6 +73,8 @@ export interface AttemptStateHandle {
   open: (questionId: string | null) => void;
   /** Banks the open question's seconds without moving off it — before a flush that must be whole. */
   bankOpen: () => void;
+  /** Entering a section tells the server, which stamps when its clock started. */
+  enterSection: (sectionId: string, remainingSec: number) => void;
   closeSection: (sectionId: string, remainingSec: number) => void;
   /** Pushes whatever is pending now — on a section change, and before submitting. */
   flush: () => Promise<void>;
@@ -260,11 +262,22 @@ export function useAttemptState(
     [flush, keepQueue],
   );
 
-  const closeSection = useCallback((sectionId: string, remainingSec: number) => {
-    const progress: SectionProgress = { remainingSec, closed: true };
-    setSections((held) => ({ ...held, [sectionId]: progress }));
+  const markSection = useCallback((sectionId: string, progress: SectionProgress) => {
+    setSections((held) => ({ ...held, [sectionId]: { ...held[sectionId], ...progress } }));
     pendingSections.current = { ...pendingSections.current, [sectionId]: progress };
   }, []);
+
+  const enterSection = useCallback(
+    (sectionId: string, remainingSec: number) =>
+      markSection(sectionId, { remainingSec, closed: false }),
+    [markSection],
+  );
+
+  const closeSection = useCallback(
+    (sectionId: string, remainingSec: number) =>
+      markSection(sectionId, { remainingSec, closed: true }),
+    [markSection],
+  );
 
   return {
     answers,
@@ -277,6 +290,7 @@ export function useAttemptState(
     answer,
     open,
     bankOpen,
+    enterSection,
     closeSection,
     flush,
   };

@@ -25,6 +25,7 @@ import {
   heldIn,
   holdsSitting,
   creditedEndsAt,
+  creditedSections,
   isAbandoned,
   isInTime,
   PAUSE_LIMIT_SEC,
@@ -96,7 +97,9 @@ export class AttemptStateService {
     if (isAbandoned(held, now)) return attempt.endsAt;
 
     const endsAt = creditedEndsAt({ ...held, endsAt: attempt.endsAt.toISOString() }, now);
+    const sections = creditedSections(held, now);
     await this.open({ ...attempt, endsAt }, tab, now);
+    await this.patch(attempt.id, (put) => ({ ...put, sections }));
     // The row is the caller's to move: this file never writes Postgres on the answer path.
     return endsAt;
   }

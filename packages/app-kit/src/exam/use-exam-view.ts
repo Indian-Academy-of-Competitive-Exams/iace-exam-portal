@@ -17,6 +17,7 @@ import {
   openSections,
   paletteCounts,
   sectionEffort,
+  sectionLeftSec,
   sectionPaletteCounts,
   TIMER_TEMPLATE,
   type ExamClock,
@@ -134,6 +135,9 @@ export function useExamView(
   // Moving between sections is a save point: a batch left behind is a section's worth of answers.
   const openSection = (next: string) => {
     state.bankOpen();
+    const allowed = paper.sections.find((row) => row.id === next)?.durationSec;
+    // Told, not asked: the server stamps when this clock started, so a reload cannot restart it.
+    if (sectional && allowed !== null && allowed !== undefined) state.enterSection(next, allowed);
     void state.flush();
     setSectionId(next);
     move(null);
@@ -193,7 +197,9 @@ export function useExamView(
     sectionCounts,
 
     clock,
-    sectionSec: sectional ? (section?.durationSec ?? null) : null,
+    sectionSec: sectional
+      ? sectionLeftSec(section?.durationSec, state.sections[sectionId]?.openedAt, clock.serverNow)
+      : null,
 
     isSaving: state.isSaving,
     hasUnsaved: state.hasUnsaved,
