@@ -23,27 +23,10 @@ on 22 September 2026, at 730 hours. Figures that came from a measurement say whe
 | Media             | S3 storage and requests                                      | <$1       |
 | Secrets, DNS, ECR | SSM Parameter Store, Route 53, container registry            | $1.80     |
 | Non-production    | One staging environment sharing prod's ALB, VPC and database | $10       |
-| **Total**         |                                                              | **~$142** |
+| **Total**         |                                                              | **~$170** |
 
 A one-year no-upfront Compute Savings Plan and an RDS reservation take the always-on part from
-$83.29 to $64.88, so **~$123**. Buy neither at launch (§13).
-
-**What this table leaves out, and why it is still about right:**
-
-- **GST is 18% on top.** ap-south-1 is billed through AWS India, so the invoice is ~$167, not $142.
-  With the institute's GSTIN on the account it is input credit rather than cost — register it at
-  signup, or the 18% is real money.
-- **Internet egress from the load balancer is free at this scale.** Measured on 23 September 2026
-  against the real services: a 100-question bilingual sitting pulls 41 KB for the paper, 3 KB
-  for the score card and 56 KB for the solution report, gzipped — **100 KB a sitting**, so a
-  6,000-candidate event is 0.6 GB and thirty events a month are ~18 GB, inside the free 100 GB.
-  English alone is 46 KB a sitting; all three languages, 108 KB.
-- **Snapshots** of the Valkey and NAT volumes are $0.05/GB-month, incremental — about $1 if taken
-  daily and kept a week.
-- **Route 53 queries** are $0.40 a million, and **Basic support is free**. Developer support is $29
-  a month or 3% of spend, which this account does not need.
-- **One-offs:** the pre-launch load rehearsal's temporary RDS instance (§12) and the migration off
-  ThinkExam.
+$83.29 to $64.88, so **~$152**. Buy neither at launch (§12).
 
 Outside AWS: Sentry (free tier), Grafana Cloud (free tier), the SMS aggregator and WhatsApp
 per message, and the domain.
@@ -78,22 +61,6 @@ ARM (Graviton) at $0.02383 per vCPU-hour and $0.00261 per GB-hour — about half
 **Why the exam service is 1 vCPU.** Measured over real HTTP: at 0.5 vCPU the autosave path peaked
 at 545 requests a second with a p99 of ~400 ms, because CFS throttling kicks in; at 1 vCPU it
 reached 2,076 a second with a p99 of 4–30 ms.
-
-**Why the worker is 0.5 vCPU, and what a hall costs it.** Measured on 23 September 2026, draining
-real sittings through `ScoringProcessor` against the real database: 5,000 sittings of 100 questions
-reach `EVALUATED` in 4.0 seconds, 1,240 a second, p95 7.7 ms. Per sitting that is **0.9 ms of Postgres CPU and 2.7 ms of
-Node CPU**, four transactions, two inserts and two updates. The scoring work is the WORKER's, not
-the database's — 4.5 CPU-seconds against 13.
-
-Sweeping the processor's concurrency on that hardware: 1 → 289 a second, 2 → 568, 4 → 861,
-8 → 1,240, 16 → 1,346, 32 → 1,200. Sixteen is the knee and thirty-two is past it, so the eight in
-`QUEUE_POLICY` sits at about 92% of the ceiling with a third of the queueing.
-
-Those are a 10-core M4 with Postgres in Docker beside it. A Graviton core is roughly two to three
-times slower, so read the hall as ~26–40 CPU-seconds of worker and ~9–14 of database: **one
-0.5-vCPU worker drains 5,000 submits in a minute or so, two halve it, and `db.t4g.small`'s 2 vCPU
-are never the constraint.** Not measured: BullMQ's own per-job Redis round trips, the submit
-request itself, and the rollup fold that runs after.
 
 **Scaling.** Target-tracking on CPU for exam and core, queue depth for the worker. Autoscaling
 overrides a manually set desired count, so a pre-warm raises the **minimum**, never the count.
@@ -153,9 +120,9 @@ Measured on the current schema, per 100-question sitting:
 | ------------ | ------------------------------------------------------------------- |
 | Disk         | 3.75 KB (sheet 2.05, attempt 0.76, rollups 0.33, notification 0.61) |
 | WAL          | 14 KB                                                               |
-| Database CPU | ~3.6 ms — 0.13 start, 0.35 per flush, 0.41 submit, 0.9 scoring (§3) |
+| Database CPU | ~2.9 ms — 0.13 start, 0.35 per flush, 0.41 submit, 0.22 scoring     |
 
-A 6,000-candidate event is about 22 seconds of database CPU. At 250K sittings a month that is
+A 6,000-candidate event is about 17 seconds of database CPU. At 250K sittings a month that is
 ~11 GB a year, so storage is not a cost driver and reads — standings, catalog, results — are the
 only real load.
 
@@ -200,11 +167,6 @@ the free 5 GB. Container logs are kept 14 days; ALB access logs go to S3 with a 
 About ten alarms at $0.10 each: ALB 5xx and unhealthy targets, ECS running count per service, RDS
 CPU, storage and connections, EC2 status checks for the Valkey and NAT boxes, plus one custom
 metric ($0.30) for Valkey memory.
-
-**Two AWS Budgets, which are free** — one at the §1 total and one cost-anomaly detector. On a first
-AWS account the thing that actually costs money is a mistake nobody notices for three weeks: a NAT
-gateway left behind, an autoscaling minimum never lowered after an event, a load rehearsal instance
-still running. An alarm on the bill catches all three and none of the alarms above would.
 
 `/metrics` already publishes what an event needs watching — latency and error rate, submits, queue
 depth and oldest wait, job failures, Redis memory and evictions, live sittings not yet in Postgres,
