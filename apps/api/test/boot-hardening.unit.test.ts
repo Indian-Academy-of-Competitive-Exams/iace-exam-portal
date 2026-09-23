@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { corsOrigin, helmetOptions } from '../src/common/security-headers';
 import { NO_EVICTION, evictionRisk } from '../src/redis/eviction-policy';
 import { THREADPOOL_FLOOR, threadpoolRisk } from '../src/common/threadpool';
+import { HEAP_SHARE_OF_MEMORY, containerMemoryLimit, heapRisk } from '../src/common/heap';
 import { NODE_ENVS, validateEnv } from '../src/config/env.schema';
 import { signedWith } from '../src/storage/storage.service';
 import { AppConfigService } from '../src/config/app-config.service';
@@ -164,6 +165,47 @@ describe('the libuv thread pool', () => {
     for (const raw of ['', 'sixteen', '16.5', '-16']) {
       assert.notEqual(threadpoolRisk(raw), null, `"${raw}" passed as a pool size`);
     }
+  });
+});
+
+describe("V8's heap against the container's limit", () => {
+  const MB = 1024 * 1024;
+  const CONTAINER = 1024 * MB;
+
+  /** The bug this prevents: exit 137 with no stack, because the kernel kills before V8 collects. */
+  it('names both numbers and the flag when the heap can outgrow the container', () => {
+    const risk = heapRisk(1800 * MB, CONTAINER);
+
+    assert.match(risk ?? '', /1800 MB/);
+    assert.match(risk ?? '', /1024 MB/);
+    assert.match(risk ?? '', /max-old-space-size=819/);
+  });
+
+  it('is satisfied at the share it recommends, and under it', () => {
+    assert.equal(heapRisk(CONTAINER * HEAP_SHARE_OF_MEMORY, CONTAINER), null);
+    assert.equal(heapRisk(512 * MB, CONTAINER), null);
+  });
+
+  /** A laptop and an unlimited container are the same case: nothing to compare against. */
+  it('says nothing when no limit constrains the process', () => {
+    assert.equal(heapRisk(4096 * MB, null), null);
+  });
+
+  it('reads the cgroup limit, and treats an unreadable or unlimited one as no limit', () => {
+    assert.equal(
+      containerMemoryLimit(() => String(CONTAINER)),
+      CONTAINER,
+    );
+    assert.equal(
+      containerMemoryLimit(() => 'max'),
+      null,
+    );
+    assert.equal(
+      containerMemoryLimit(() => {
+        throw new Error('no such file');
+      }),
+      null,
+    );
   });
 });
 

@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 import { PREFLIGHT_CACHE_SEC, corsOrigin, helmetOptions } from './common/security-headers';
 import { threadpoolRisk } from './common/threadpool';
+import { containerMemoryLimit, heapLimitNow, heapRisk } from './common/heap';
 
 /** Longer than any load balancer's idle timeout, or it hangs up on a connection still being reused. */
 const KEEP_ALIVE_MS = 65_000;
@@ -25,6 +26,9 @@ async function bootstrap(): Promise<void> {
   // Read, never set: by the time this runs libuv has already sized the pool from the environment.
   const threadpool = threadpoolRisk(process.env.UV_THREADPOOL_SIZE);
   if (threadpool && config.isProduction) Logger.warn(threadpool, 'Bootstrap');
+
+  const heap = heapRisk(heapLimitNow(), containerMemoryLimit());
+  if (heap && config.isProduction) Logger.warn(heap, 'Bootstrap');
 
   app.use(helmet(helmetOptions));
   // A paper is a few hundred kilobytes of JSON; the autosave ack is under the default threshold.
