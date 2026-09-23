@@ -4,43 +4,25 @@
     {
       "name": "admin",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@iace/admin",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@iace/admin", "dev"],
       "port": 5174
     },
     {
       "name": "test",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@iace/test",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@iace/test", "dev"],
       "port": 5173
     },
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@iace/api",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@iace/api", "dev"],
       "port": 3000
     },
     {
       "name": "screens",
       "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8782",
-        "--directory",
-        "docs/superpowers/plans"
-      ],
+      "runtimeArgs": ["-m", "http.server", "8782", "--directory", "docs/superpowers/plans"],
       "port": 8782
     }
   ]
