@@ -4,6 +4,7 @@ import { corsOrigin, helmetOptions } from '../src/common/security-headers';
 import { NO_EVICTION, evictionRisk } from '../src/redis/eviction-policy';
 import { THREADPOOL_FLOOR, threadpoolRisk } from '../src/common/threadpool';
 import { HEAP_SHARE_OF_MEMORY, containerMemoryLimit, heapRisk } from '../src/common/heap';
+import { API_ROLES } from '../src/config/api-role';
 import { NODE_ENVS, validateEnv } from '../src/config/env.schema';
 import { signedWith } from '../src/storage/storage.service';
 import { AppConfigService } from '../src/config/app-config.service';
@@ -174,21 +175,37 @@ describe("V8's heap against the container's limit", () => {
 
   /** The bug this prevents: exit 137 with no stack, because the kernel kills before V8 collects. */
   it('names both numbers and the flag when the heap can outgrow the container', () => {
-    const risk = heapRisk(1800 * MB, CONTAINER);
+    const risk = heapRisk(1800 * MB, CONTAINER, API_ROLES.EXAM);
 
     assert.match(risk ?? '', /1800 MB/);
     assert.match(risk ?? '', /1024 MB/);
     assert.match(risk ?? '', /max-old-space-size=819/);
   });
 
-  it('is satisfied at the share it recommends, and under it', () => {
-    assert.equal(heapRisk(CONTAINER * HEAP_SHARE_OF_MEMORY, CONTAINER), null);
-    assert.equal(heapRisk(512 * MB, CONTAINER), null);
+  /** Measured: Node picks ~50% when nothing sets it, so an unset service pays for memory it never uses. */
+  it('also speaks up when the heap is far under what the container allows', () => {
+    const risk = heapRisk(259 * MB, CONTAINER, API_ROLES.CORE);
+
+    assert.match(risk ?? '', /259 MB/);
+    assert.match(risk ?? '', /max-old-space-size=819/);
+  });
+
+  /** Three roles, three sizes: the line has to say which task definition is wrong. */
+  it('names the role in both directions, so a shared log stream is readable', () => {
+    for (const role of [API_ROLES.EXAM, API_ROLES.CORE, API_ROLES.WORKER]) {
+      assert.match(heapRisk(1800 * MB, CONTAINER, role) ?? '', new RegExp(`${role} service`));
+      assert.match(heapRisk(259 * MB, CONTAINER, role) ?? '', new RegExp(`${role} service`));
+    }
+  });
+
+  it('is quiet across the band it recommends', () => {
+    assert.equal(heapRisk(CONTAINER * HEAP_SHARE_OF_MEMORY, CONTAINER, API_ROLES.CORE), null);
+    assert.equal(heapRisk(700 * MB, CONTAINER, API_ROLES.CORE), null);
   });
 
   /** A laptop and an unlimited container are the same case: nothing to compare against. */
   it('says nothing when no limit constrains the process', () => {
-    assert.equal(heapRisk(4096 * MB, null), null);
+    assert.equal(heapRisk(4096 * MB, null, API_ROLES.EXAM), null);
   });
 
   it('reads the cgroup limit, and treats an unreadable or unlimited one as no limit', () => {
