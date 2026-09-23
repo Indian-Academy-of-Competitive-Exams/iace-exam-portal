@@ -247,6 +247,13 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - **The answer key is a second read past one gate, never a join,** so a refusal never held it. The
   gate is the student's own sitting: its solutions open as soon as it is evaluated. A test never
   shuts, so there is no moment when everyone has sat it to wait for.
+- **An early submitter holding the key while the hall still sits is accepted, not a gap to close.**
+  On a batch mock the first student marked can pass the key to somebody on question 34, and no
+  waiting gate is coming back to stop it — the one that existed went with the scheduling chain in
+  `08d9d51`. This platform exists to put as many papers in front of a student as possible so the
+  habit of working under a clock forms; it is not proctoring software, and a student who copies has
+  thrown away the only thing he came for. Weigh a proposal to gate the key against that, not against
+  the leak on its own.
 - Answer-level detail is captured from day one — option chosen, verdict, marked-for-review state, and
   time per question and per section — so analytics derive later without re-instrumenting.
 - **A void is an archive, never a delete.** The support console stands a sitting down — `VOIDED`,
