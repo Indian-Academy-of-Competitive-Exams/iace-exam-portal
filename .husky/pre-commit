@@ -8,11 +8,8 @@ export NVM_DIR="$HOME/.nvm"
 
 pnpm exec lint-staged
 
-# One line per comment, on what this commit ADDS. See the script.
-node scripts/check-comments.mjs
-
-# No screen explaining what it already says. See the script.
-node scripts/check-ui-copy.mjs
+# One line per comment, and no hint repeating its label, on what this commit ADDS.
+node scripts/check-source.mjs
 
 # A real SonarQube scan + quality gate, OPT-IN: it regenerates coverage first by
 # running every test in the repo, which costs minutes on each commit. Run it with

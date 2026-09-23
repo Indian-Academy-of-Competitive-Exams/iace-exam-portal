@@ -160,7 +160,7 @@ Default to no comment — only an external constraint, a genuinely surprising li
 the types cannot carry. **ONE line. Never two.** If it does not fit on one line, the code needs a
 better name, not a longer comment. Never "what changed".
 
-`scripts/check-comments.mjs` runs in `pre-commit` and fails the commit on any multi-line comment in
+`scripts/check-source.mjs` runs in `pre-commit` and fails the commit on any multi-line comment in
 the lines you add; `-----`/`=====` section banners are exempt, and a file's top block only up to 6
 lines — it is a map, not somewhere to move the essay the one-line rule just refused. Comments
 already in the repo are grandfathered until you touch one.
@@ -181,7 +181,7 @@ Per-SPA: `apps/<app>/src/lib/constants.ts`. Exempt: user-facing copy and log mes
 **A screen names things; it does not explain itself.** `PageHeader` and `FormSection` have NO
 `description` prop — they take `meta`, for a value the record carries. Prose there is a type error
 as you write it, not a gate you meet later. A `hint` is a real string, so
-`scripts/check-ui-copy.mjs` in `pre-commit` is the backstop for the one case types cannot see: a
+`scripts/check-source.mjs` in `pre-commit` is the backstop for the one case types cannot see: a
 hint whose words are already in its label.
 
 <ui-work>
