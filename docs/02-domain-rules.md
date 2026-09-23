@@ -380,7 +380,7 @@ manual editor for anything carrying an image or an equation.
 
 ## 13. A worked blueprint — SSC CGL Tier 1
 
-The official patterns are seeded (`prisma/seed.sql` and `prisma/seed.catalog.sql`); IACE validates
+The official patterns are seeded (`prisma/seed.sql`); IACE validates
 them as the domain expert. SSC CGL Tier 1 is the reference shape: four sections of 25 single-answer
 MCQs, +2 correct and −0.5 wrong, 100 questions for 200 marks in one 60-minute sitting, one composite
 clock with free movement between sections, no calculator, order and options shuffled per student,

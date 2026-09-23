@@ -1,8 +1,8 @@
 # Seed — exam catalog (mapping decisions)
 
-`prisma/seed.catalog.sql` seeds the full exam catalog from
+The second half of `prisma/seed.sql` seeds the full exam catalog from
 `Exam_Pattern_Base_Configurations.xlsx`: **4 courses, 43 exams, 122 stages, 7 subjects,
-29 default base-configs, 87 section-configs**. It runs after `prisma/seed.sql` via
+29 default base-configs, 87 section-configs**. It runs after the hand-curated rows in the same file via
 `pnpm db:seed`, which brings the SSC CGL Tier 1 config and its four sections of its own — so a
 seeded database holds **30 configs and 91 sections**, and only this file's share is above.
 It is **idempotent** (`ON CONFLICT DO NOTHING`) and uses **fixed UUID literals** for every id,
@@ -15,7 +15,7 @@ workbook changes.
 All 122 stages are seeded as `ExamStage` catalog rows (with `mode` + `disposition`).
 A `BaseConfig` + sections is created **only** for a stage that (a) has section rows in the
 workbook **and** (b) is CONDUCTED or PARTIAL by mode → **30 stages**, of which this file writes
-29: SSC CGL Tier 1 is the one `prisma/seed.sql` already holds. Every one reconciles
+29: SSC CGL Tier 1 is the one the first half of `prisma/seed.sql` already holds. Every one reconciles
 (section-question sum == declared total). Stages that are physical/interview/skill/
 psychometric/descriptive are catalog-only (no config), including `IBPS_PO_MAIN_DESC`
 (descriptive, has section rows but not auto-scorable).
