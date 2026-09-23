@@ -107,6 +107,46 @@ describe('the database pool', () => {
   });
 });
 
+describe('the secrets .env.example publishes', () => {
+  const PUBLISHED = {
+    JWT_ACCESS_SECRET: 'dev_only_access_secret_change_me_before_any_deploy',
+    JWT_REFRESH_SECRET: 'dev_only_refresh_secret_change_me_before_any_deploy',
+    PIN_PEPPER: 'dev_only_pin_pepper_change_me_before_any_deploy',
+  };
+
+  /** The bug this prevents: a deploy that never edited .env, on secrets anybody can read off GitHub. */
+  it('refuses each of them in production, even though all three clear the length floor', () => {
+    for (const [key, published] of Object.entries(PUBLISHED)) {
+      assert.ok(published.length > 24, `${key}'s placeholder is short enough for min(24) to catch`);
+      assert.throws(
+        () => validateEnv(production({ [key]: published })),
+        new RegExp(`${key}.*dev_only_`, 's'),
+        `production booted on the published ${key}`,
+      );
+    }
+  });
+
+  it('names every one of them at once, so a deploy is fixed in one pass', () => {
+    assert.throws(
+      () => validateEnv(production(PUBLISHED)),
+      (error: unknown) => {
+        const message = (error as Error).message;
+        for (const key of Object.keys(PUBLISHED)) assert.match(message, new RegExp(key));
+        return true;
+      },
+    );
+  });
+
+  it('boots production on real ones', () => {
+    assert.equal(validateEnv(production()).JWT_ACCESS_SECRET, SECRET);
+  });
+
+  /** Local development IS the placeholder: refusing it there would break every fresh clone. */
+  it('leaves development on them, which is what .env.example is for', () => {
+    assert.equal(validateEnv(env(PUBLISHED)).PIN_PEPPER, PUBLISHED.PIN_PEPPER);
+  });
+});
+
 describe('the libuv thread pool', () => {
   /** The bug this prevents: a login burst holding all four threads while gzip waits behind it. */
   it('names the risk when nothing sized the pool', () => {

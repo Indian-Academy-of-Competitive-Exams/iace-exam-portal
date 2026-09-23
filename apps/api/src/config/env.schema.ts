@@ -83,8 +83,7 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
-  // Auth. Secrets are checked for length so a placeholder can't reach prod
-  // unnoticed; the production values come from AWS Secrets Manager.
+  // Auth. Length here, and the dev_only_ refusal below, are what keep a placeholder out of production.
   JWT_ACCESS_SECRET: z.string().min(24, 'JWT_ACCESS_SECRET must be at least 24 characters'),
   JWT_REFRESH_SECRET: z.string().min(24, 'JWT_REFRESH_SECRET must be at least 24 characters'),
   JWT_ACCESS_TTL: z.string().default('15m'),
@@ -209,6 +208,19 @@ const metricsAreGuarded = (env: z.infer<typeof envSchema>): boolean =>
 const poolIsSized = (env: z.infer<typeof envSchema>): boolean =>
   env.NODE_ENV !== NODE_ENVS.PRODUCTION || /[?&]connection_limit=\d/.test(env.DATABASE_URL);
 
+/** Every secret `.env.example` publishes is prefixed with this, so the prefix IS the marker. */
+const DEV_ONLY_SECRET = /^dev_only_/;
+
+/** The 24-character floor passes these: the published placeholders are 49 characters long. */
+const secretIsReal =
+  (key: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET' | 'PIN_PEPPER') =>
+  (env: z.infer<typeof envSchema>): boolean =>
+    env.NODE_ENV !== NODE_ENVS.PRODUCTION || !DEV_ONLY_SECRET.test(env[key]);
+
+/** Named once so the three messages cannot drift apart. */
+const stillPublished = (forges: string): string =>
+  `is still the dev_only_ placeholder .env.example publishes — anybody with the repo could ${forges}`;
+
 export const envSchemaChecked = envSchema
   .refine(poolIsSized, {
     path: ['DATABASE_URL'],
@@ -227,6 +239,18 @@ export const envSchemaChecked = envSchema
   .refine(metricsAreGuarded, {
     path: ['METRICS_TOKEN'],
     message: 'is required in production — /metrics would otherwise answer anybody who asked',
+  })
+  .refine(secretIsReal('JWT_ACCESS_SECRET'), {
+    path: ['JWT_ACCESS_SECRET'],
+    message: stillPublished('sign an access token for any student or admin'),
+  })
+  .refine(secretIsReal('JWT_REFRESH_SECRET'), {
+    path: ['JWT_REFRESH_SECRET'],
+    message: stillPublished('mint a session that never expires'),
+  })
+  .refine(secretIsReal('PIN_PEPPER'), {
+    path: ['PIN_PEPPER'],
+    message: stillPublished('test a stolen PIN hash offline'),
   });
 
 export type Env = z.infer<typeof envSchema>;
