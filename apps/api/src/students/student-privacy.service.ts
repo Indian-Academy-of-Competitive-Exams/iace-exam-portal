@@ -1,22 +1,15 @@
 /**
- * The three DPDP rights the platform answers: what was agreed to, a copy of
- * what is held, and erasure. All three are about ONE student, and the id is
- * always the caller's or one an admin's branch scope already reaches.
+ * The two DPDP rights the platform answers: a copy of what is held, and erasure. Both are about
+ * ONE student, and the id is always the caller's or one an admin's branch scope already reaches.
  */
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import {
   AppException,
-  CONSENT_PURPOSE,
   ErrorCodes,
-  type ConsentPurpose,
-  type ConsentState,
-  type ConsentStatus,
   type ErasureReceipt,
-  type RecordConsentBody,
   type StudentDataExport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AppConfigService } from '../config/app-config.service';
 import { fromDateColumn } from '../common/time/institute-day';
 import { type LeaderboardService } from '../attempts';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
@@ -27,11 +20,8 @@ const iso = (at: Date | null): string | null => at?.toISOString() ?? null;
 
 @Injectable()
 export class StudentPrivacyService {
-  private readonly logger = new Logger(StudentPrivacyService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: AppConfigService,
     // `require`, not a static import: `attempts` reaches `configs`, which imports this barrel back.
     @Inject(
       forwardRef(
@@ -42,67 +32,6 @@ export class StudentPrivacyService {
     )
     private readonly leaderboard: LeaderboardService,
   ) {}
-
-  /** The version of the notice in force. A record older than this is a student worth asking again. */
-  get currentVersion(): string {
-    return this.config.get('CONSENT_VERSION');
-  }
-
-  /** Called where consent is actually given, so a failure there never blocks a signup. */
-  async record(studentId: string, body: RecordConsentBody): Promise<ConsentState> {
-    const row = await this.prisma.studentConsent.create({
-      data: {
-        studentId,
-        purpose: body.purpose,
-        version: body.version,
-        granted: body.granted,
-      },
-    });
-
-    return {
-      purpose: row.purpose,
-      version: row.version,
-      granted: row.granted,
-      recordedAt: row.recordedAt.toISOString(),
-    };
-  }
-
-  /** Signup IS the consent event, and a record that failed to write must not cost the account. */
-  async recordAtSignup(studentId: string): Promise<void> {
-    try {
-      await this.record(studentId, {
-        purpose: CONSENT_PURPOSE.PLATFORM,
-        version: this.currentVersion,
-        granted: true,
-      });
-    } catch (error) {
-      this.logger.error(`Consent not recorded for student ${studentId}`, error);
-    }
-  }
-
-  async status(studentId: string): Promise<ConsentStatus> {
-    return { current: this.currentVersion, records: await this.latestPerPurpose(studentId) };
-  }
-
-  /** One row per purpose — the newest, because a purpose is answered again whenever it changes. */
-  private async latestPerPurpose(studentId: string): Promise<ConsentState[]> {
-    const rows = await this.prisma.studentConsent.findMany({
-      where: { studentId },
-      orderBy: { recordedAt: 'desc' },
-    });
-
-    const newest = new Map<ConsentPurpose, ConsentState>();
-    for (const row of rows) {
-      if (newest.has(row.purpose)) continue;
-      newest.set(row.purpose, {
-        purpose: row.purpose,
-        version: row.version,
-        granted: row.granted,
-        recordedAt: row.recordedAt.toISOString(),
-      });
-    }
-    return [...newest.values()];
-  }
 
   /** Everything held about them, in one read they can keep. Their own sittings, never the papers. */
   async export(studentId: string): Promise<StudentDataExport> {
@@ -155,7 +84,6 @@ export class StudentPrivacyService {
         educationDetails: student.profile.educationDetails ?? null,
         pastExamHistory: student.profile.pastExamHistory ?? null,
       },
-      consents: await this.latestPerPurpose(studentId),
       attempts: attempts.map((attempt) => ({
         id: attempt.id,
         testId: attempt.testId,

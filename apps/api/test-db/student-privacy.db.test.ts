@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, CONSENT_PURPOSE, ErrorCodes } from '@iace/contracts';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE } from '../src/students/anonymize';
-import { FakeConfig, FakeLeaderboard, makeStanding } from '../test/support/fakes';
+import { FakeLeaderboard, makeStanding } from '../test/support/fakes';
 import {
   makeBranch,
   makeCatalog,
@@ -15,106 +15,13 @@ import {
   uid,
 } from './support/database';
 
-const NOTICE = '2026-09-01';
-
 const prisma = testPrisma();
 
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 const build = (leaderboard = new FakeLeaderboard()) =>
-  new StudentPrivacyService(
-    prisma,
-    new FakeConfig({ CONSENT_VERSION: NOTICE }).asService(),
-    leaderboard.asService(),
-  );
-
-/** `recordedAt` is millisecond precision, so two answers written back to back can otherwise tie. */
-const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
-
-const consentsOf = (studentId: string) =>
-  prisma.studentConsent.findMany({ where: { studentId }, orderBy: { recordedAt: 'asc' } });
-
-describe('consent, as a record rather than a flag', () => {
-  it('writes a row rather than editing the one before it', async () => {
-    const service = build();
-    const student = await makeStudent(prisma);
-
-    await service.record(student.id, {
-      purpose: CONSENT_PURPOSE.PLATFORM,
-      version: NOTICE,
-      granted: true,
-    });
-    await tick();
-    await service.record(student.id, {
-      purpose: CONSENT_PURPOSE.PLATFORM,
-      version: NOTICE,
-      granted: false,
-    });
-
-    assert.deepEqual(
-      (await consentsOf(student.id)).map((row) => row.granted),
-      [true, false],
-    );
-  });
-
-  /** The current state is the newest answer per purpose — a withdrawal, if that is the last word. */
-  it('reports the newest answer, not the first one', async () => {
-    const service = build();
-    const student = await makeStudent(prisma);
-
-    await service.record(student.id, {
-      purpose: CONSENT_PURPOSE.PLATFORM,
-      version: NOTICE,
-      granted: true,
-    });
-    await tick();
-    await service.record(student.id, {
-      purpose: CONSENT_PURPOSE.PLATFORM,
-      version: NOTICE,
-      granted: false,
-    });
-
-    const status = await service.status(student.id);
-    assert.equal(status.records.length, 1);
-    assert.equal(status.records[0]?.granted, false);
-  });
-
-  /** How the SPA knows to ask again: the notice moved on and the newest record did not. */
-  it('says which notice is in force, so a stale record shows as stale', async () => {
-    const service = build();
-    const student = await makeStudent(prisma);
-
-    await service.record(student.id, {
-      purpose: CONSENT_PURPOSE.PLATFORM,
-      version: '2025-01-01',
-      granted: true,
-    });
-
-    const status = await service.status(student.id);
-    assert.equal(status.current, NOTICE);
-    assert.notEqual(status.records[0]?.version, status.current);
-  });
-
-  it('records the notice in force when a student signs up', async () => {
-    const service = build();
-    const student = await makeStudent(prisma);
-
-    await service.recordAtSignup(student.id);
-
-    const [row] = await consentsOf(student.id);
-    assert.equal(row?.version, NOTICE);
-    assert.equal(row?.granted, true);
-  });
-
-  /** A signup must never fail because a consent row would not write — here, refused by its foreign key. */
-  it('swallows a failed record rather than costing the account', async () => {
-    const service = build();
-
-    await assert.doesNotReject(() => service.recordAtSignup(uid()));
-    assert.equal(await prisma.studentConsent.count(), 0);
-  });
-});
+  new StudentPrivacyService(prisma, leaderboard.asService());
 
 describe('the copy a student may take away', () => {
   it('carries the profile fields nothing else on the platform shows them', async () => {

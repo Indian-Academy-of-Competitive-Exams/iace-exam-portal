@@ -22,8 +22,6 @@ import {
   ActorTypes,
   type AuthSessionResponse,
   type ChangePinBody,
-  type ConsentState,
-  type ConsentStatus,
   DOCUMENT_FILE_FIELD,
   DOCUMENT_MAX_BYTES,
   type DeviceSession,
@@ -38,7 +36,6 @@ import {
   type Paginated,
   type PushDeviceBody,
   type PushSubscriptionBody,
-  type RecordConsentBody,
   type StudentCatalog,
   type StudentDataExport,
   type UpdateMeBody,
@@ -49,7 +46,6 @@ import {
   notificationListQuerySchema,
   pushDeviceSchema,
   pushSubscriptionSchema,
-  recordConsentSchema,
   updateMeSchema,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
@@ -81,22 +77,6 @@ export class MeController {
     private readonly push: PushService,
     private readonly privacy: StudentPrivacyService,
   ) {}
-
-  /** What they have agreed to, beside what the notice says today — the SPA compares the two. */
-  @Get('consent')
-  consent(@CurrentUser() user: AuthenticatedUser): Promise<ConsentStatus> {
-    return this.privacy.status(user.id);
-  }
-
-  /** Answering the notice again. Append-only: this never edits what was agreed to before. */
-  @Post('consent')
-  @HttpCode(HttpStatus.OK)
-  recordConsent(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodBody(recordConsentSchema)) body: RecordConsentBody,
-  ): Promise<ConsentState> {
-    return this.privacy.record(user.id, body);
-  }
 
   /** Everything held about them, in one read. */
   @Get('data-export')

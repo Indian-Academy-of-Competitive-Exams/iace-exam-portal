@@ -107,36 +107,8 @@ export const DOCUMENT_FILE_FIELD = 'file';
 export type UploadFile = File | { uri: string; name: string; type: string };
 
 // ============================================================================
-// DPDP — consent, the copy a student may take away, and erasure
+// DPDP — the copy a student may take away, and erasure
 // ============================================================================
-
-/** One purpose in V1: running the platform for them. A second is a value here, never a column. */
-export const CONSENT_PURPOSE = { PLATFORM: 'PLATFORM' } as const;
-const consentPurposeSchema = z.enum(CONSENT_PURPOSE);
-export type ConsentPurpose = z.infer<typeof consentPurposeSchema>;
-
-/** The newest answer for one purpose. Absent means never asked, which is not the same as refused. */
-const consentStateSchema = z.object({
-  purpose: consentPurposeSchema,
-  version: z.string(),
-  granted: z.boolean(),
-  recordedAt: z.string(),
-});
-export type ConsentState = z.infer<typeof consentStateSchema>;
-
-export const consentStatusSchema = z.object({
-  /** What the notice says today. A `current` newer than every record means it wants asking again. */
-  current: z.string(),
-  records: z.array(consentStateSchema),
-});
-export type ConsentStatus = z.infer<typeof consentStatusSchema>;
-
-export const recordConsentSchema = z.object({
-  purpose: consentPurposeSchema.default(CONSENT_PURPOSE.PLATFORM),
-  version: z.string().min(1, 'Say which notice this answers'),
-  granted: z.boolean(),
-});
-export type RecordConsentBody = z.infer<typeof recordConsentSchema>;
 
 /** One sitting, as it appears in a student's own copy of their data — marks, never the paper. */
 const exportedAttemptSchema = z.object({
@@ -179,7 +151,6 @@ export const studentDataExportSchema = z.object({
       pastExamHistory: z.unknown().nullable(),
     })
     .nullable(),
-  consents: z.array(consentStateSchema),
   attempts: z.array(exportedAttemptSchema),
 });
 export type StudentDataExport = z.infer<typeof studentDataExportSchema>;

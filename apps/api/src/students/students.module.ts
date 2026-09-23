@@ -11,7 +11,6 @@ import { type NotificationsModule } from '../notifications';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
-import { StudentConsentListener } from './student-consent.listener';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
@@ -43,7 +42,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     ),
   ],
   controllers: onRole([API_ROLES.CORE], [StudentsController]),
-  providers: [StudentsService, StudentPrivacyService, StudentConsentListener],
+  providers: [StudentsService, StudentPrivacyService],
   exports: [StudentsService, StudentPrivacyService],
 })
 export class StudentsModule {}
