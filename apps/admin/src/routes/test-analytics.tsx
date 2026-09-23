@@ -154,7 +154,7 @@ export function TestAnalyticsPage() {
               {`${plural(report.summary.evaluatedCount, 'ranked sitting')} of ${plural(
                 report.summary.attemptCount,
                 'sitting',
-              )}`}
+              )} · ${plural(report.summary.reachedCount, 'student')} reached`}
               {report.summary.computedAt === null ? null : (
                 <>
                   {' · as of '}

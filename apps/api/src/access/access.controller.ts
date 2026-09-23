@@ -35,6 +35,7 @@ import {
   type StudentGrantRow,
   type StudentSeriesAccess,
   type TestSeriesListQuery,
+  type TestSeriesDetail,
   type TestSeriesSummary,
   type UpdateSeriesBranchesBody,
   type UpdateProgramBody,
@@ -109,7 +110,7 @@ export class TestSeriesController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id')
-  detail(@Param('id') id: string): Promise<TestSeriesSummary> {
+  detail(@Param('id') id: string): Promise<TestSeriesDetail> {
     return this.series.detail(id);
   }
 
@@ -119,7 +120,7 @@ export class TestSeriesController {
   @Post()
   create(
     @Body(new ZodBody(createTestSeriesSchema)) body: CreateTestSeriesBody,
-  ): Promise<TestSeriesSummary> {
+  ): Promise<TestSeriesDetail> {
     return this.series.create(body);
   }
 
@@ -129,7 +130,7 @@ export class TestSeriesController {
   update(
     @Param('id') id: string,
     @Body(new ZodBody(updateTestSeriesSchema)) body: UpdateTestSeriesBody,
-  ): Promise<TestSeriesSummary> {
+  ): Promise<TestSeriesDetail> {
     return this.series.update(id, body);
   }
 

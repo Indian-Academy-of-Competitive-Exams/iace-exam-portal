@@ -7,6 +7,7 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   type SeriesTestRow,
+  type TestSeriesDetail,
   type TestSeriesSummary,
 } from '@iace/contracts';
 import {
@@ -34,7 +35,7 @@ import { testsKey } from './test-series-detail';
 interface MoveFormValues {
   testSeriesId: string;
 }
-export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
+export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) {
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [moving, setMoving] = useState<SeriesTestRow | null>(null);
@@ -64,7 +65,7 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
       ) : null}
 
       <DataTable
-        columns={testColumns({ canWrite, onMoving: setMoving })}
+        columns={testColumns({ canWrite, reached: series.reachedCount, onMoving: setMoving })}
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
@@ -92,10 +93,11 @@ const UNTITLED = 'Untitled test';
 function testColumns(
   options: Readonly<{
     canWrite: boolean;
+    reached: number;
     onMoving: (row: SeriesTestRow) => void;
   }>,
 ): DataTableColumn<SeriesTestRow>[] {
-  const { canWrite, onMoving } = options;
+  const { canWrite, reached, onMoving } = options;
 
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
@@ -127,7 +129,14 @@ function testColumns(
       header: 'Status',
       cell: (row) => <TestStatusBadges status={row.status} finalizedAt={row.finalizedAt} />,
     },
-    { key: 'sat', header: 'Sat', numeric: true, cell: (row) => row.attemptCount },
+    {
+      key: 'sat',
+      header: 'Sat',
+      numeric: true,
+      className: 'whitespace-nowrap',
+      cell: (row) =>
+        `${row.attemptCount.toLocaleString('en-IN')} / ${reached.toLocaleString('en-IN')}`,
+    },
     {
       key: 'actions',
       className: 'text-right',

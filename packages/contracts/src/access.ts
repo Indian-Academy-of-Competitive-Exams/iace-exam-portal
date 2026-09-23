@@ -172,6 +172,15 @@ export const testSeriesSummarySchema = testSeriesSchema.extend({
 });
 export type TestSeriesSummary = z.infer<typeof testSeriesSummarySchema>;
 
+/** The series on its own screen: who it reaches, and how many of them have sat anything in it. */
+export const testSeriesDetailSchema = testSeriesSummarySchema.extend({
+  /** Everyone the access rules reach, counted whether or not the series is switched on. */
+  reachedCount: z.number().int(),
+  /** Distinct students holding a sitting on any test in it, voided ones left out. */
+  satCount: z.number().int(),
+});
+export type TestSeriesDetail = z.infer<typeof testSeriesDetailSchema>;
+
 const SERIES_NAME_MAX = 120;
 const seriesNameSchema = displayNameSchema('series', SERIES_NAME_MAX);
 

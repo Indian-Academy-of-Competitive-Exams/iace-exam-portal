@@ -1,19 +1,27 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, ErrorCodes, TEST_SERIES_KIND, type TestSeriesKind } from '@iace/contracts';
+import {
+  AppException,
+  DEFAULT_EXAM_COURSE,
+  ErrorCodes,
+  TEST_SERIES_KIND,
+  type TestSeriesKind,
+} from '@iace/contracts';
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
+import { AccessResolverService } from '../src/access/access-resolver.service';
 import { ExamStagesService } from '../src/configs';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
-import { FakeEventBus, FakeQueue } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis } from '../test/support/fakes';
 import {
   makeBranch,
   makeCatalog,
   makeStage,
+  makeSitting,
   makeStudent,
   makeTest,
   resetDatabase,
@@ -43,6 +51,7 @@ async function build(stageActive = true) {
       prisma,
       new ExamStagesService(prisma, auditContext),
       programs,
+      new AccessResolverService(prisma, new FakeRedis().asService()),
       auditContext,
       events.asService(),
     ),
@@ -749,5 +758,49 @@ describe('the access writes that bust the catalog cache', () => {
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
     ]);
+  });
+});
+
+/** The turnout the series screen shows: the cohort it reaches, and how much of it has sat anything. */
+describe('TestSeriesService.detail turnout', () => {
+  it('counts a student once however many tests they sat', async () => {
+    const { series } = await build();
+    const catalog = await makeCatalog(prisma);
+    const branch = await makeBranch(prisma);
+    const [first, second] = await Promise.all([
+      makeTest(prisma, catalog),
+      makeTest(prisma, catalog),
+    ]);
+    const sitter = await makeStudent(prisma, {
+      currentBranchId: branch.id,
+      enrolledCourses: [DEFAULT_EXAM_COURSE],
+    });
+    await makeStudent(prisma, {
+      currentBranchId: branch.id,
+      enrolledCourses: [DEFAULT_EXAM_COURSE],
+    });
+    await series.setBranches(catalog.testSeriesId, { branchIds: [branch.id] });
+    await makeSitting(prisma, { testId: first.id, studentId: sitter.id, score: 10 });
+    await makeSitting(prisma, { testId: second.id, studentId: sitter.id, score: 20 });
+
+    const detail = await series.detail(catalog.testSeriesId);
+
+    assert.equal(detail.reachedCount, 2);
+    assert.equal(detail.satCount, 1);
+  });
+
+  it('leaves a voided sitting out of the turnout', async () => {
+    const { series } = await build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog);
+    const student = await makeStudent(prisma);
+    const sitting = await makeSitting(prisma, {
+      testId: test.id,
+      studentId: student.id,
+      score: 10,
+    });
+    await prisma.attempt.update({ where: { id: sitting.id }, data: { voidedAt: new Date() } });
+
+    assert.equal((await series.detail(catalog.testSeriesId)).satCount, 0);
   });
 });

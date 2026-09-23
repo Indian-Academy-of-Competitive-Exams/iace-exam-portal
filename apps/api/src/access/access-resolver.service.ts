@@ -181,6 +181,17 @@ export class AccessResolverService {
     return students.map((student) => student.id);
   }
 
+  /** The same cohort as a number. Counted on a switched-off series too: the switch is not the cohort. */
+  async audienceCount(testSeriesId: string): Promise<number> {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: AUDIENCE_SELECT,
+    });
+    if (series === null) return 0;
+
+    return this.prisma.student.count({ where: audienceOf(series) });
+  }
+
   async invalidateStudent(studentId: string): Promise<void> {
     await this.redis.client.incr(redisKeys.catalogStudentEpoch(studentId));
   }
@@ -298,16 +309,18 @@ function audienceOf(
     examStage: { exam: { course: ExamCourse } } | null;
   }>,
 ): Prisma.StudentWhereInput {
+  const live = { deletedAt: null, isActive: true };
+  // No OR at all: Prisma reads an empty member as matching NOBODY, so `{}` would empty the cohort.
+  if (series.kind === TEST_SERIES_KIND.FREE) return live;
+
   return {
-    deletedAt: null,
-    isActive: true,
+    ...live,
     // A grant overrides every kind, exactly as it does reading the other way.
     OR: [{ grants: { some: { testSeriesId: series.id } } }, ...automaticAudience(series)],
   };
 }
 
 function automaticAudience(series: Parameters<typeof audienceOf>[0]): Prisma.StudentWhereInput[] {
-  if (series.kind === TEST_SERIES_KIND.FREE) return [{}];
   if (series.kind === TEST_SERIES_KIND.EVENT) {
     return series.eventId === null
       ? []

@@ -88,7 +88,7 @@ function item(overrides: Partial<ItemTotals> = {}): ItemTotals {
 
 describe('summaryOf', () => {
   it('derives the averages off the sums the fold already wrote', () => {
-    const summary = summaryOf(stat(), TOPPER, 100);
+    const summary = summaryOf(stat(), TOPPER, 100, 150);
 
     assert.equal(summary.meanScore, 54);
     assert.equal(summary.averageTimeSec, 3300);
@@ -104,7 +104,7 @@ describe('summaryOf', () => {
   });
 
   it('reads an unfolded paper as unmeasured, never as a cohort that scored zero', () => {
-    const summary = summaryOf(null, null, 0);
+    const summary = summaryOf(null, null, 0, 0);
 
     assert.equal(summary.meanScore, null);
     assert.equal(summary.medianScore, null);
@@ -120,6 +120,7 @@ describe('summaryOf', () => {
       stat({ evaluatedCount: 0, sumScore: 0, sumTimeSec: 0, maxScore: null, minScore: null }),
       null,
       0,
+      0,
     );
 
     assert.equal(summary.meanScore, null);
@@ -128,17 +129,17 @@ describe('summaryOf', () => {
 
   /** The fold is debounced, so a close burst or a re-sync leaves the rows behind the sittings for a while. */
   it('reads a fold behind the live sittings as settling, and a caught-up one as not', () => {
-    assert.equal(summaryOf(stat(), TOPPER, 100).isSettling, false);
+    assert.equal(summaryOf(stat(), TOPPER, 100, 150).isSettling, false);
 
-    const behind = summaryOf(stat(), TOPPER, 104);
+    const behind = summaryOf(stat(), TOPPER, 104, 150);
     assert.equal(behind.isSettling, true);
     assert.equal(behind.liveEvaluatedCount, 104);
     assert.equal(behind.evaluatedCount, 100);
 
-    const unfolded = summaryOf(null, null, 3);
+    const unfolded = summaryOf(null, null, 3, 0);
     assert.equal(unfolded.isSettling, true);
     assert.equal(unfolded.evaluatedCount, 0);
-    assert.equal(summaryOf(null, null, 0).isSettling, false);
+    assert.equal(summaryOf(null, null, 0, 0).isSettling, false);
   });
 });
 

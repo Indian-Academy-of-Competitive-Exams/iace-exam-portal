@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, AppException, ErrorCodes } from '@iace/contracts';
+import { AccessResolverService } from '../src/access/access-resolver.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { RollupService } from '../src/attempts/rollup.service';
@@ -9,7 +10,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeEventBus, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -32,7 +33,11 @@ function build() {
   return {
     queue,
     rollup,
-    analytics: new TestAnalyticsService(prisma, outbox),
+    analytics: new TestAnalyticsService(
+      prisma,
+      outbox,
+      new AccessResolverService(prisma, new FakeRedis().asService()),
+    ),
     scoring: new ScoringProcessor(
       prisma,
       outbox,

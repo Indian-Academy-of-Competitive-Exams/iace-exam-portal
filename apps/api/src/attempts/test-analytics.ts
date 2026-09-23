@@ -56,6 +56,7 @@ export interface ItemTotals {
 }
 
 const EMPTY_SUMMARY: TestAnalyticsSummary = {
+  reachedCount: 0,
   attemptCount: 0,
   evaluatedCount: 0,
   meanScore: null,
@@ -74,8 +75,10 @@ export function summaryOf(
   stat: StatTotals | null,
   topper: TestTopper | null,
   liveEvaluatedCount: number,
+  reachedCount: number,
 ): TestAnalyticsSummary {
   const freshness = {
+    reachedCount,
     liveEvaluatedCount,
     isSettling: liveEvaluatedCount !== (stat?.evaluatedCount ?? 0),
   };

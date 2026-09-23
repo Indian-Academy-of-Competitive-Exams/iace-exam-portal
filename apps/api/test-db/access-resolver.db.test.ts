@@ -690,3 +690,79 @@ describe('reading about a test', () => {
     await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
   });
 });
+
+/** The mirror of `reachableBy`: everyone counted here reaches the series reading the other way. */
+describe('AccessResolverService.audienceCount', () => {
+  const counted = (seriesId: string) => resolverOn().audienceCount(seriesId);
+
+  it('counts the students a standard series reaches and nobody else', async () => {
+    const at = await place();
+    const seriesId = await series(at);
+    const inside = await studentAt(at);
+    await studentAt(at, { currentBranchId: (await makeBranch(prisma)).id });
+    await studentAt(at, { enrolledCourses: [] });
+
+    assert.equal(await counted(seriesId), 1);
+    assert.deepEqual(await reached(inside), [seriesId]);
+  });
+
+  it('counts every student for a free series', async () => {
+    const at = await place();
+    const seriesId = await series(at, { kind: TEST_SERIES_KIND.FREE, branchIds: [] });
+    await studentAt(at);
+    await studentAt(at, { currentBranchId: null, enrolledCourses: [] });
+
+    assert.equal(await counted(seriesId), 2);
+    // The fan-out reads the same mirror: an empty OR member once emptied every free series' roster.
+    assert.equal((await resolverOn().studentsReaching(seriesId)).length, 2);
+  });
+
+  it('counts only the students carrying a program series program', async () => {
+    const at = await place();
+    const seriesId = await series(at, { kind: TEST_SERIES_KIND.PROGRAM });
+    const carrying = await studentAt(at, { programs: [PROGRAM] });
+    await studentAt(at, { programs: [OTHER_PROGRAM] });
+
+    assert.equal(await counted(seriesId), 1);
+    assert.deepEqual(await reached(carrying), [seriesId]);
+  });
+
+  it('counts an event series roster and nobody off it', async () => {
+    const at = await place();
+    const seriesId = await series(at, { kind: TEST_SERIES_KIND.EVENT });
+    const candidate = await studentAt(at);
+    await studentAt(at);
+    await prisma.eventCandidate.create({ data: { eventId: at.event, studentId: candidate } });
+
+    assert.equal(await counted(seriesId), 1);
+    assert.deepEqual(await reached(candidate), [seriesId]);
+  });
+
+  it('counts a granted student a series reaches no other way', async () => {
+    const at = await place();
+    const elsewhere = await series(at, { branchIds: [uid()] });
+    const student = await studentAt(at);
+    await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: elsewhere } });
+
+    assert.equal(await counted(elsewhere), 1);
+  });
+
+  /** The switch is not the cohort: a series switched off has the same students waiting behind it. */
+  it('counts the cohort of a series nobody switched on', async () => {
+    const at = await place();
+    const off = await series(at, { isEnabled: false });
+    await studentAt(at);
+
+    assert.equal(await counted(off), 1);
+    assert.equal((await resolverOn().studentsReaching(off)).length, 0);
+  });
+
+  it('leaves out a soft-deleted student and a deactivated one', async () => {
+    const at = await place();
+    const seriesId = await series(at);
+    await studentAt(at, { deletedAt: new Date() });
+    await studentAt(at, { isActive: false });
+
+    assert.equal(await counted(seriesId), 0);
+  });
+});

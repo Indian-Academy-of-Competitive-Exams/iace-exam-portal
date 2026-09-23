@@ -14,6 +14,7 @@ import {
   type TestAnalytics,
   type TestTopper,
 } from '@iace/contracts';
+import { AccessResolverService } from '../access';
 import { PrismaService } from '../prisma/prisma.service';
 import { stemPreviewOf } from '../questions';
 import { timeSpentIn } from './answer-sheet';
@@ -61,17 +62,19 @@ export class TestAnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rollups: RollupOutbox,
+    private readonly access: AccessResolverService,
   ) {}
 
   async forTest(testId: string): Promise<TestAnalytics> {
     const test = await this.requireTest(testId);
 
-    const [stat, sections, items, liveEvaluatedCount] = await Promise.all([
+    const [stat, sections, items, liveEvaluatedCount, reachedCount] = await Promise.all([
       this.statOf(testId),
       this.sectionsOf(testId),
       this.itemsOf(testId),
       // The one live read here: a count on [testId, status], so settling costs no attempt scan.
       this.prisma.attempt.count({ where: cohortSittingsOf(testId) }),
+      this.access.audienceCount(test.testSeriesId),
     ]);
 
     return {
@@ -81,6 +84,7 @@ export class TestAnalyticsService {
         stat,
         await this.topperOf(stat?.topperAttemptId ?? null),
         liveEvaluatedCount,
+        reachedCount,
       ),
       sections: sectionsOf(sections),
       items: itemsOf(items),
@@ -93,10 +97,12 @@ export class TestAnalyticsService {
     await this.rollups.rebuildNow(testId);
   }
 
-  private async requireTest(testId: string): Promise<{ id: string; title: string | null }> {
+  private async requireTest(
+    testId: string,
+  ): Promise<{ id: string; title: string | null; testSeriesId: string }> {
     const test = await this.prisma.test.findUnique({
       where: { id: testId },
-      select: { id: true, title: true },
+      select: { id: true, title: true, testSeriesId: true },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NO_TEST);
     return test;

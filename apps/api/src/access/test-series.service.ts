@@ -9,6 +9,7 @@ import {
   type Paginated,
   type SeriesBranch,
   type TestSeriesListQuery,
+  type TestSeriesDetail,
   type TestSeriesKind,
   type TestSeriesSummary,
   type UpdateSeriesBranchesBody,
@@ -17,7 +18,7 @@ import {
 import { matchFilters } from '../common/match-filters';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
-import { reachableBy } from './access-resolver.service';
+import { AccessResolverService, reachableBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
@@ -70,6 +71,7 @@ export class TestSeriesService {
     private readonly prisma: PrismaService,
     private readonly stages: ExamStagesService,
     private readonly programs: ProgramsService,
+    private readonly access: AccessResolverService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
   ) {}
@@ -129,13 +131,30 @@ export class TestSeriesService {
     );
   }
 
-  async detail(id: string): Promise<TestSeriesSummary> {
+  async detail(id: string): Promise<TestSeriesDetail> {
     const row = await this.requireSeries(id);
-    return toSummary(row, await this.liveBranchCount());
+    const [branchCount, reachedCount, satCount] = await Promise.all([
+      this.liveBranchCount(),
+      this.access.audienceCount(id),
+      this.satCount(id),
+    ]);
+
+    return { ...toSummary(row, branchCount), reachedCount, satCount };
+  }
+
+  /** Raw because a headcount is one row: Prisma's `distinct` would pull every sitting back to count it. */
+  private async satCount(testSeriesId: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ sat: bigint }[]>`
+      SELECT COUNT(DISTINCT a."studentId") AS sat
+      FROM "Attempt" a
+      JOIN "Test" t ON t."id" = a."testId"
+      WHERE t."testSeriesId" = ${testSeriesId}::uuid AND a."voidedAt" IS NULL
+    `;
+    return Number(rows[0]?.sat ?? 0);
   }
 
   /** A new series reaches no branch until an admin names one — `branchIds` starts empty. */
-  async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
+  async create(input: CreateTestSeriesBody): Promise<TestSeriesDetail> {
     await this.assertTargetsUsable(input);
     await this.assertNameFree(input.name);
     const kind = input.kind ?? TEST_SERIES_KIND.STANDARD;
@@ -164,7 +183,7 @@ export class TestSeriesService {
     return this.detail(series.id);
   }
 
-  async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesSummary> {
+  async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesDetail> {
     const series = await this.requireSeries(id);
     await this.assertTargetsUsable(input);
     if (input.name !== undefined) await this.assertNameFree(input.name, id);

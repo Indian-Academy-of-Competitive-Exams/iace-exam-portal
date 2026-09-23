@@ -3,7 +3,7 @@ import { Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { AppException, type TestSeriesSummary } from '@iace/contracts';
+import { AppException, type TestSeriesDetail } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
@@ -91,7 +91,13 @@ function SeriesEditActions({
   );
 }
 
-function seriesTitle(detail: TestSeriesSummary | null, isEditing: boolean): string {
+/** Both halves of the turnout in one value: the cohort, and how much of it has sat anything. */
+function turnoutOf(detail: TestSeriesDetail): string {
+  const reached = detail.reachedCount.toLocaleString('en-IN');
+  return `${detail.satCount.toLocaleString('en-IN')} of ${reached} students have sat a test`;
+}
+
+function seriesTitle(detail: TestSeriesDetail | null, isEditing: boolean): string {
   if (!detail) return 'New test series';
   return isEditing ? `Edit ${detail.name}` : detail.name;
 }
@@ -102,7 +108,7 @@ function refusesTheForm(error: unknown): boolean {
   return fieldErrors !== undefined && SERVER_FIELDS.some((field) => fieldErrors[field]);
 }
 
-function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>) {
+function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const existing = detail !== null;
@@ -193,6 +199,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={existing ? [{ label: title }] : []} />}
             title={title}
+            meta={detail ? turnoutOf(detail) : undefined}
             action={
               // The switch saves itself, so it belongs to the record and not to the form's Edit.
               <div className="flex items-center gap-3">

@@ -113,6 +113,7 @@ import {
   programCatalogSchema,
   studentGrantRowSchema,
   studentSeriesAccessSchema,
+  testSeriesDetailSchema,
   testSeriesSummarySchema,
   type SeriesBranch,
   type AddEventCandidatesInput,
@@ -139,6 +140,7 @@ import {
   type StudentGrantRow,
   type StudentSeriesAccess,
   type TestSeriesListQueryInput,
+  type TestSeriesDetail,
   type TestSeriesSummary,
   type UpdateSeriesBranchesInput,
   type UpdateEventInput,
@@ -1017,14 +1019,14 @@ export function createApiClient(options: ApiClientOptions) {
         list: (query: TestSeriesListQueryInput = {}): Promise<Paginated<TestSeriesSummary>> =>
           list(ADMIN_SERIES_ROUTES.list, query, testSeriesSummarySchema),
 
-        detail: (id: string): Promise<TestSeriesSummary> =>
-          get(ADMIN_SERIES_ROUTES.detail(id), testSeriesSummarySchema),
+        detail: (id: string): Promise<TestSeriesDetail> =>
+          get(ADMIN_SERIES_ROUTES.detail(id), testSeriesDetailSchema),
 
-        create: (input: CreateTestSeriesInput): Promise<TestSeriesSummary> =>
-          write('POST', ADMIN_SERIES_ROUTES.create, testSeriesSummarySchema, input),
+        create: (input: CreateTestSeriesInput): Promise<TestSeriesDetail> =>
+          write('POST', ADMIN_SERIES_ROUTES.create, testSeriesDetailSchema, input),
 
-        update: (id: string, input: UpdateTestSeriesInput): Promise<TestSeriesSummary> =>
-          write('PATCH', ADMIN_SERIES_ROUTES.update(id), testSeriesSummarySchema, input),
+        update: (id: string, input: UpdateTestSeriesInput): Promise<TestSeriesDetail> =>
+          write('PATCH', ADMIN_SERIES_ROUTES.update(id), testSeriesDetailSchema, input),
 
         remove: (id: string): Promise<NoContent> =>
           write('DELETE', ADMIN_SERIES_ROUTES.remove(id), noContentSchema),
