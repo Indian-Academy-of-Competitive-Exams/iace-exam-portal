@@ -137,7 +137,7 @@ erodes.
 | Module        | Owns (Prisma models)                                                                                                                                |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | admins        | `Admin`, `AdminFeaturePermission`                                                                                                                   |
-| students      | `Student`, `StudentProfile`, `StudentConsent`                                                                                                       |
+| students      | `Student`, `StudentProfile`                                                                                                                         |
 | branches      | `Branch`                                                                                                                                            |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                             |
 | events        | `Event`, `EventCandidate`                                                                                                                           |

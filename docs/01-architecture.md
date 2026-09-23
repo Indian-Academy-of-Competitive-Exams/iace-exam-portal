@@ -215,21 +215,22 @@ small Postgres plus one Redis plus a few API containers carrying the load.
 
 ## 6. Deployment topology
 
-A handful of managed services, containerised so nothing is tied to a single host.
+A handful of managed services, containerised so nothing is tied to a single host. Sizes, costs and
+the release runbook are `docs/04-infrastructure.md`; this table is what each piece is for.
 
-| Service                      | Role                                      | Notes                                                                          |
-| ---------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| App Runner _or_ ECS Fargate  | Runs the API container                    | App Runner first for simplicity; Fargate when finer control is needed.         |
-| RDS (PostgreSQL)             | Durable data                              | Single instance. A read replica only when reads actually strain it.            |
-| ElastiCache (Redis)          | Live sitting state, queues, sessions      | Single node. Losing it loses in-flight sittings, not scored results.           |
-| S3                           | Question images, content, import files    | Private buckets, presigned URLs. Same SDK path as MinIO locally.               |
-| CloudFront                   | CDN for static assets and question images | In front of S3 and the SPAs.                                                   |
-| Amplify _or_ S3 + CloudFront | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                    |
-| Route 53 + ACM               | DNS and TLS                               | HTTPS everywhere.                                                              |
-| Secrets Manager / SSM        | DB, Redis, S3 and SMS credentials         | No secrets in code or in a committed env file — `.env.example` only.           |
-| SMS provider (external)      | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                     |
-| Web push (external)          | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost. |
-| FCM (external)               | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.  |
+| Service                 | Role                                      | Notes                                                                                       |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ECS Fargate (ARM)       | Runs the API container                    | Three services from one image, chosen by `API_ROLE`: exam, core, worker.                    |
+| RDS (PostgreSQL)        | Durable data                              | Single instance. A read replica only when reads actually strain it.                         |
+| Valkey on EC2           | Live sitting state, queues, sessions      | One node, saving to disk. Losing it loses in-flight sittings, not scored ones.              |
+| S3                      | Question images, content, import files    | Private buckets, presigned URLs. Same SDK path as MinIO locally.                            |
+| CloudFront              | CDN for static assets and question images | In front of S3 and the SPAs.                                                                |
+| S3 + CloudFront         | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                                 |
+| Route 53 + ACM          | DNS and TLS                               | HTTPS everywhere.                                                                           |
+| SSM Parameter Store     | DB, Valkey and SMS credentials            | No secrets in code or in a committed env file — `.env.example` only. S3 uses the task role. |
+| SMS provider (external) | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                  |
+| Web push (external)     | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.              |
+| FCM (external)          | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.               |
 
 **Anything in front of the API must pass `x-client` and `x-device-name` through.** A load balancer or
 CDN that strips them makes every sign-in kind-less, so each new sign-in replaces all of a student's

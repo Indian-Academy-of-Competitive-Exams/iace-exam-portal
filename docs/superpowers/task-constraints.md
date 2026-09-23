@@ -59,6 +59,7 @@ keeping is worth putting where it will be found: `CLAUDE.md`, `docs/0*.md`, `doc
 file. "It is written down in the plan" is not written down.
 
 Tracked under `docs/` and staying that way: `01-architecture`, `02-domain-rules`, `03-conventions`,
+`04-infrastructure`,
 `design/design-system.html`, `local-setup`, `seed-exam-catalog`, `WORKFLOW.md` and this file. Adding
 a document beside them is a deliberate change, not a side effect of finishing a task — ask first.
 

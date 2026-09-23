@@ -59,6 +59,8 @@ Do not break these — they are why the live test holds at 4–5K:
 - `docs/03-conventions.md` — where code goes: packaging, module boundaries, the table-ownership map,
   the event catalog, service tiers, and what CI mechanically enforces. Its section numbers are an
   interface that source comments cite, so renumbering is a breaking change.
+- `docs/04-infrastructure.md` — what it runs on: the AWS sizing, what each piece costs and why,
+  the release runbook, and what was deliberately deferred.
 - `docs/design/design-system.html` — living style guide, and the **admin** composition language.
 - `docs/design/student/README.md` — the **student** composition language for `apps/test`.
   One token set, two compositions; `ui-conventions` marks the bullets that differ.
