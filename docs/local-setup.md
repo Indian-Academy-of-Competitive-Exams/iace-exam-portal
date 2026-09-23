@@ -244,10 +244,9 @@ Expo hands back an APNs token there, which FCM cannot address without the Fireba
 | `pnpm db:setup`                                   | new device: generate + migrate + seed       |
 | `pnpm db:migrate` / `db:generate` / `db:studio`   | Prisma workflows                            |
 | `pnpm db:dbml`                                    | redraw `docs/schema.dbml` from the schema   |
-| `pnpm db:seed:questions` / `:golden` / `:cohort`  | dev-only fixtures, local database only      |
 | `pnpm docker:up` / `docker:down` / `docker:reset` | infra up / stop / stop+wipe volumes         |
 
-Before committing, the Husky pre‑commit hook runs prettier on the staged files, then lint and typecheck across the workspace, then two checks on what the commit ADDS: one line per comment, and no screen explaining what it already says. **No test runs**, so nothing has to be up to commit.
+Before committing, the Husky pre‑commit hook runs prettier on the staged files, then lint and typecheck across the workspace, then one check on what the commit ADDS: one line per comment, and no screen explaining what it already says. **No test runs**, so nothing has to be up to commit.
 
 The SonarQube scan is the exception and is **opt-in**: it regenerates coverage by running every test in the repo, which is minutes per commit. Run it before handing work over with `RUN_SONAR=1 git commit …`. Commits follow the conventional‑commit style.
 

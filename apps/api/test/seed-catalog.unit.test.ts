@@ -1,5 +1,5 @@
 /**
- * prisma/seed.catalog.sql carries 30 exam patterns nobody recomputes by hand. A config caches what
+ * prisma/seed.sql carries 30 exam patterns nobody recomputes by hand. A config caches what
  * its sections add up to, so one edited without its cache describes a paper that cannot be sat:
  * marks a student can never reach, or a clock that ends before the sections do.
  */
@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-const CATALOG = readFileSync(join(__dirname, '../../../prisma/seed.catalog.sql'), 'utf8');
+const CATALOG = readFileSync(join(__dirname, '../../../prisma/seed.sql'), 'utf8');
 
 /** Splits one VALUES row on its top-level commas — a jsonb literal and an ARRAY[] hold their own. */
 function cells(row: string): string[] {
@@ -32,14 +32,20 @@ function cells(row: string): string[] {
   return out;
 }
 
+/** Every block that inserts into the table: the generated catalog, and the hand-written rows above it. */
 function rowsOf(table: string): string[][] {
-  const start = CATALOG.indexOf(`INSERT INTO "${table}"`);
-  assert.notEqual(start, -1, `the catalog inserts nothing into ${table}`);
+  const rows: string[][] = [];
+  let at = CATALOG.indexOf(`INSERT INTO "${table}"`);
+  assert.notEqual(at, -1, `the seed inserts nothing into ${table}`);
 
-  const body = CATALOG.slice(CATALOG.indexOf('VALUES', start) + 'VALUES'.length);
-  return [...body.slice(0, body.indexOf(';\n')).matchAll(/^\s*\((.*)\),?$/gm)].map((match) =>
-    cells(match[1] ?? ''),
-  );
+  while (at !== -1) {
+    const body = CATALOG.slice(CATALOG.indexOf('VALUES', at) + 'VALUES'.length);
+    for (const match of body.slice(0, body.indexOf(';\n')).matchAll(/^\s*\((.*)\),?$/gm)) {
+      rows.push(cells(match[1] ?? ''));
+    }
+    at = CATALOG.indexOf(`INSERT INTO "${table}"`, at + 1);
+  }
+  return rows;
 }
 
 const unquote = (value: string) => value.replace(/^'|'$/g, '');
@@ -76,10 +82,9 @@ for (const row of rowsOf('BaseConfigSection')) {
 const round = (value: number) => Math.round(value * 100) / 100;
 
 describe('the exam catalog seed', () => {
-  /** SSC CGL Tier 1 is seed.sql's; a config declared in both files loses to the first one in. */
+  /** The thirtieth, SSC CGL Tier 1, is written long-hand above the generated block. */
   it('describes twenty-nine configurations, each with sections', () => {
     assert.equal(configs.length, 29);
-    assert.ok(!configs.some((config) => config.id === 'config_ssc_cgl_t1'));
     for (const config of configs) {
       assert.ok(sectionsByConfig.get(config.id)?.length, `${config.id} has no sections`);
     }

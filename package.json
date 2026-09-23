@@ -31,9 +31,6 @@
     "db:dbml": "node scripts/schema-to-dbml.mjs prisma/schema.prisma docs/schema.dbml",
     "db:seed": "prisma db execute --file prisma/seed.sql --schema prisma/schema.prisma",
     "db:setup": "pnpm db:generate && pnpm db:migrate:deploy && pnpm db:seed",
-    "db:seed:questions": "node scripts/dev-seed-questions.mjs",
-    "db:seed:golden": "node scripts/dev-seed-golden-questions.mjs",
-    "db:seed:cohort": "node scripts/dev-seed-cohort.mjs",
     "db:studio": "prisma studio --schema prisma/schema.prisma",
     "test:coverage": "node scripts/coverage.mjs",
     "prepare": "husky"

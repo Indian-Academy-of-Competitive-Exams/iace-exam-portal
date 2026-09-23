@@ -6,7 +6,6 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "backfill:stem-hashes": "node --env-file-if-exists=../../.env --import tsx src/backfill-stem-hashes.ts",
     "rollup:rebuild-all": "node --env-file-if-exists=../../.env --import tsx src/enqueue-rollup-rebuild-all.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json",
     "lint": "eslint .",
