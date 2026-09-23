@@ -22,9 +22,9 @@ A learning platform for **IACE**, a government-exam coaching institute (SSC, Ban
 SI/Constable), replacing ThinkExam.
 
 - **V1 = the mock-test feature.** One developer + AI pair, ~45 days.
-- **Scale:** ~2K concurrent normal, handle 4K, 5K with minor infra additions. Not 10K.
+- **Scale:** ~3K concurrent normal, handle 6K, 8K with minor infra additions. Should be easily able to handle 10K as well - within current infra limits.
 - **Portals:** **Test** (`apps/test`, V1) and **Admin** (`apps/admin`, V1); a broad Student portal later.
-  A **mobile** student client (`apps/mobile`, Expo, Android first) is in progress and not yet shipped.
+  A **mobile** student client (`apps/mobile`, Expo, Android first) - not launched, development done mostly.
 - **Rollout:** internal IACE students first, by branch and enrolment; public later.
 
 ## Tech stack (locked)
