@@ -207,6 +207,26 @@ describe('RollupService — folding one sitting in', () => {
 });
 
 describe('RollupService — folding a pending batch', () => {
+  /** The failure this prevents: a hall's page re-reading one paper once per sitting that sat it. */
+  it('reads the page of sittings, and each paper behind them, once', async () => {
+    const scorer = build();
+    const paper = await paperOf();
+    for (const chosen of [
+      [RIGHT, RIGHT, WRONG, null],
+      [RIGHT, WRONG, WRONG, null],
+      [WRONG, WRONG, null, null],
+    ]) {
+      await scorer.scoring.score((await sat(paper, chosen)).attemptId);
+    }
+    const reads: Record<string, number> = {};
+    const built = build(countingFindMany(prisma, reads));
+
+    assert.equal(await built.rollup.foldPending(), 3);
+
+    assert.equal(reads['attempt'], 1);
+    assert.equal(reads['paperQuestion'], 1);
+  });
+
   it('lands on the same aggregates a rebuild would compute', async () => {
     const built = build();
     const paper = await paperOf();
@@ -608,6 +628,27 @@ describe('RollupService — rebuilding a student who sits more than one kind of 
     assert.deepEqual(await rows(), folded);
   });
 });
+
+/** The real client, counting the top-level `findMany` calls a fold page makes on each table. */
+function countingFindMany(client: PrismaService, counts: Record<string, number>): PrismaService {
+  const COUNTED = ['attempt', 'paperQuestion'];
+  return new Proxy(client, {
+    get(target, key) {
+      const held = Reflect.get(target, key) as unknown;
+      if (typeof key !== 'string' || !COUNTED.includes(key)) return held;
+      return new Proxy(held as object, {
+        get(delegate, method) {
+          const call = Reflect.get(delegate, method) as unknown;
+          if (method !== 'findMany') return call;
+          return (...args: unknown[]) => {
+            counts[key] = (counts[key] ?? 0) + 1;
+            return (call as (...a: unknown[]) => unknown)(...args);
+          };
+        },
+      });
+    },
+  });
+}
 
 /** The real client, with the first `testStat.upsert` inside any transaction refused. */
 function failingOnceOnTestStatUpsert(client: PrismaService): PrismaService {

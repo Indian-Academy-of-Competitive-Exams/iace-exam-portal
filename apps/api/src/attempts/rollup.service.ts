@@ -87,6 +87,22 @@ async function papersOf(
   return papers;
 }
 
+/** A batch of sittings in one read, and each test's paper once however many of them sat it. */
+async function foldablesOf(
+  client: Pick<Prisma.TransactionClient, 'attempt' | 'paperQuestion'>,
+  attemptIds: readonly string[],
+): Promise<FoldableAttempt[]> {
+  const rows = await client.attempt.findMany({
+    where: { id: { in: [...attemptIds] }, status: ATTEMPT_STATUS.EVALUATED },
+    select: FOLD_SELECT,
+  });
+  const papers = await papersOf(
+    client,
+    rows.map((row) => row.testId),
+  );
+  return rows.map((row) => toFoldable(row, papers.get(row.testId) ?? []));
+}
+
 /** Sittings replayed per round trip, so a rebuild of a 5K cohort never holds it all in memory. */
 const REBUILD_PAGE = 200;
 
@@ -127,17 +143,15 @@ export class RollupService {
     });
     if (rows.length === 0) return 0;
 
-    const attempts: FoldableAttempt[] = [];
-    const retired: string[] = [];
-    for (const row of rows) {
-      const attempt = await this.foldable(row.aggregateId);
-      if (attempt === null) retired.push(row.aggregateId);
-      else attempts.push(attempt);
-    }
+    // Deduped: two requests for one sitting are one fold, which `guarded` would have made of them anyway.
+    const requested = [...new Set(rows.map((row) => row.aggregateId))];
+    const attempts = await foldablesOf(this.prisma, requested);
+    const folded = new Set(attempts.map((attempt) => attempt.id));
+    const retired = requested.filter((id) => !folded.has(id));
     // Marked all the same below: a request for a sitting nobody evaluated must not jam the page.
     if (retired.length > 0) {
       this.logger.warn(
-        `${retired.length} of ${rows.length} folds are not evaluated, and are retired: ${named(retired)}`,
+        `${retired.length} of ${requested.length} folds are not evaluated, and are retired: ${named(retired)}`,
       );
     }
 
@@ -281,16 +295,6 @@ export class RollupService {
     for (const row of students) await this.rebuildStudent(row.studentId);
 
     this.logger.log(`Rebuilt ${tests.length} tests and ${students.length} students`);
-  }
-
-  private async foldable(attemptId: string): Promise<FoldableAttempt | null> {
-    const row = await this.prisma.attempt.findUnique({
-      where: { id: attemptId },
-      select: FOLD_SELECT,
-    });
-    if (row === null || row.status !== ATTEMPT_STATUS.EVALUATED) return null;
-    const papers = await papersOf(this.prisma, [row.testId]);
-    return toFoldable(row, papers.get(row.testId) ?? []);
   }
 
   /** The cohort is one row per student: the earliest evaluated graded sitting, and no other. */
@@ -613,15 +617,7 @@ export class RollupService {
     fold: (attempt: FoldableAttempt) => void,
   ): Promise<void> {
     for (let at = 0; at < ids.length; at += REBUILD_PAGE) {
-      const rows = await tx.attempt.findMany({
-        where: { id: { in: ids.slice(at, at + REBUILD_PAGE) } },
-        select: FOLD_SELECT,
-      });
-      const papers = await papersOf(
-        tx,
-        rows.map((row) => row.testId),
-      );
-      for (const row of rows) fold(toFoldable(row, papers.get(row.testId) ?? []));
+      for (const attempt of await foldablesOf(tx, ids.slice(at, at + REBUILD_PAGE))) fold(attempt);
     }
   }
 }
