@@ -115,13 +115,9 @@ export class ScoringProcessor extends WorkerHost {
   ): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
-      const first = await this.mark(tx, attempt, scored, now);
+      const first = await this.mark(tx, attempt, scored, terms, now);
       if (first === null) return { applied: false, first: false };
 
-      await tx.attemptSheet.update({
-        where: { attemptId: attempt.id },
-        data: { verdicts: verdictsOf(scored.questions, terms) },
-      });
       if (first) {
         await this.rollups.foldStudentSitting(
           tx,
@@ -137,32 +133,47 @@ export class ScoringProcessor extends WorkerHost {
     });
   }
 
-  /** Marks and claim in ONE write: true on a first evaluation, false on a re-score, null when the status moved. */
+  /** Claim, marks and verdicts in ONE statement. Null when the status moved under it. */
   private async mark(
     tx: Prisma.TransactionClient,
     attempt: ScoringRow,
     scored: PaperScore,
+    terms: readonly PaperTerm[],
     now: Date,
   ): Promise<boolean | null> {
-    // Locked by the CTE, so the status this statement checks cannot move under it.
-    const rows = await tx.$queryRaw<{ first: boolean }[]>`
+    // `sheet` runs to completion whether or not it is read, and reads `marked` so it cannot run alone.
+    const rows = await tx.$queryRaw<{ first: boolean; sheets: number }[]>`
       WITH held AS (
         SELECT "id", "evaluatedAt" IS NULL AS first FROM "Attempt" WHERE "id" = ${attempt.id}::uuid FOR UPDATE
+      ), marked AS (
+        UPDATE "Attempt" a SET
+          "status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus",
+          "evaluatedAt" = COALESCE(a."evaluatedAt", ${now}),
+          "score" = ${scored.score},
+          "correctCount" = ${scored.correctCount},
+          "wrongCount" = ${scored.wrongCount},
+          "unattemptedCount" = ${scored.unattemptedCount},
+          "sectionScores" = ${JSON.stringify(packedSections(scored.sections))}::jsonb,
+          "timeTakenSec" = ${timeTakenSec(attempt.startedAt, attempt.submittedAt)},
+          "updatedAt" = ${now}
+        FROM held h
+        WHERE a."id" = h."id" AND a."status" = ANY(${[...SCORABLE]}::"AttemptStatus"[])
+        RETURNING h.first
+      ), sheet AS (
+        UPDATE "AttemptSheet" SET
+          "verdicts" = ${JSON.stringify(verdictsOf(scored.questions, terms))}::jsonb,
+          "updatedAt" = ${now}
+        WHERE "attemptId" = ${attempt.id}::uuid AND EXISTS (SELECT 1 FROM marked)
+        RETURNING 1 AS written
       )
-      UPDATE "Attempt" a SET
-        "status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus",
-        "evaluatedAt" = COALESCE(a."evaluatedAt", ${now}),
-        "score" = ${scored.score},
-        "correctCount" = ${scored.correctCount},
-        "wrongCount" = ${scored.wrongCount},
-        "unattemptedCount" = ${scored.unattemptedCount},
-        "sectionScores" = ${JSON.stringify(packedSections(scored.sections))}::jsonb,
-        "timeTakenSec" = ${timeTakenSec(attempt.startedAt, attempt.submittedAt)},
-        "updatedAt" = ${now}
-      FROM held h
-      WHERE a."id" = h."id" AND a."status" = ANY(${[...SCORABLE]}::"AttemptStatus"[])
-      RETURNING h.first`;
-    return rows[0]?.first ?? null;
+      SELECT m.first, (SELECT count(*)::int FROM sheet) AS sheets FROM marked m`;
+
+    const row = rows[0];
+    if (row === undefined) return null;
+    // Marked without its verdicts is the one state worse than neither, so it fails the transaction.
+    if (row.sheets !== 1)
+      throw new Error(`Attempt ${attempt.id} was marked with no sheet to score`);
+    return row.first;
   }
 
   private async announce(tx: Prisma.TransactionClient, attempt: ScoringRow): Promise<void> {

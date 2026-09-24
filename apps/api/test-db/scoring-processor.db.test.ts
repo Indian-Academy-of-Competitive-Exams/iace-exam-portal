@@ -7,6 +7,7 @@ import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
@@ -197,6 +198,29 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(attempt.status, ATTEMPT_STATUS.IN_PROGRESS);
   });
 
+  /** The race the statement's own status check exists for: a void landing after the scorer read it. */
+  it('writes neither marks nor verdicts for a sitting stood down while it was scored', async () => {
+    const { attemptId } = await sitting();
+    const voided = new ScoringProcessor(
+      voidingAfterTheRead(prisma, attemptId),
+      new RollupQueue(new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
+      fakeQueueFailures(),
+      new PaperSheetService(prisma),
+      new RollupService(prisma),
+    );
+
+    assert.equal(await voided.score(attemptId), null);
+
+    const row = await attemptRow(attemptId);
+    assert.equal(row.status, ATTEMPT_STATUS.VOIDED);
+    assert.equal(row.score, null, 'the marks did not land');
+    assert.equal(row.evaluatedAt, null);
+    const sheet = await prisma.attemptSheet.findUniqueOrThrow({ where: { attemptId } });
+    assert.equal(sheet.verdicts, null, 'the verdicts went with them, in the same statement');
+    assert.equal(await prisma.studentStat.count(), 0);
+  });
+
   it('reports an attempt that does not exist rather than throwing at the worker', async () => {
     assert.equal(await processor.score(uid()), null);
   });
@@ -216,3 +240,33 @@ describe('ScoringProcessor — what it writes', () => {
     );
   });
 });
+
+/** The real client, standing the sitting down between the scorer's read and its write. */
+function voidingAfterTheRead(client: PrismaService, attemptId: string): PrismaService {
+  let armed = true;
+  return new Proxy(client, {
+    get(target, key) {
+      const held = Reflect.get(target, key) as unknown;
+      if (key !== 'attempt' || !armed) return held;
+      return new Proxy(held as object, {
+        get(delegate, method) {
+          const call = Reflect.get(delegate, method) as unknown;
+          if (method !== 'findUnique' || !armed) return call;
+          return async (...args: unknown[]) => {
+            armed = false;
+            const read = await Reflect.apply(
+              call as (...a: unknown[]) => Promise<unknown>,
+              delegate,
+              args,
+            );
+            await client.attempt.update({
+              where: { id: attemptId },
+              data: { status: ATTEMPT_STATUS.VOIDED, voidedAt: new Date() },
+            });
+            return read;
+          };
+        },
+      });
+    },
+  });
+}
