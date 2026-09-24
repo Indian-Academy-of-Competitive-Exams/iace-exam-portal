@@ -10,7 +10,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeEventBus, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -41,7 +41,6 @@ function build() {
     scoring: new ScoringProcessor(
       prisma,
       outbox,
-      new FakeEventBus().asService(),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
       new PaperSheetService(prisma),

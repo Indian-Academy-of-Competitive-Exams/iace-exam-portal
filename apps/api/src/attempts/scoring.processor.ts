@@ -14,7 +14,6 @@ import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues'
 import { timeTakenSec } from './leaderboard-score';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { NotificationOutbox } from '../notifications';
-import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
@@ -53,7 +52,6 @@ export class ScoringProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rollup: RollupOutbox,
-    private readonly events: DomainEventBus,
     private readonly notifications: NotificationOutbox,
     private readonly failures: QueueFailures,
     private readonly papers: PaperSheetService,
@@ -88,17 +86,7 @@ export class ScoringProcessor extends WorkerHost {
     // Stood down while this ran: counting it now would fold a void sitting back in.
     if (!written.applied) return null;
 
-    const evaluation = written.evaluation;
-    await this.count(attempt.testId, evaluation);
-    // Only a FIRST evaluation: a dropped question re-scores every sitting, and nobody wants that twice.
-    if (evaluation !== null) {
-      this.events.emit(DOMAIN_EVENTS.SCORING_COMPLETED, {
-        attemptId: attempt.id,
-        testId: attempt.testId,
-        studentId: attempt.studentId,
-        isGraded: attempt.isGraded,
-      });
-    }
+    await this.count(attempt.testId, written.evaluation);
     return scored;
   }
 

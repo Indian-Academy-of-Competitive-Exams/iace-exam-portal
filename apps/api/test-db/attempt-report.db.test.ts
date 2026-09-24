@@ -13,7 +13,7 @@ import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import type { PrismaService } from '../src/prisma/prisma.service';
-import { FakeEventBus, FakeQueue, FakeStorage, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, FakeStorage, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   disposeQuestion,
@@ -39,7 +39,6 @@ after(() => prisma.$disconnect());
 const processor = new ScoringProcessor(
   prisma,
   new RollupOutbox(new FakeQueue().asQueue()),
-  new FakeEventBus().asService(),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),

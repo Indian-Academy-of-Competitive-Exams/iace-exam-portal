@@ -7,7 +7,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeEventBus, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -36,7 +36,6 @@ async function world(chosen: readonly (string | null)[]) {
   const scoring = new ScoringProcessor(
     prisma,
     new RollupOutbox(queue.asQueue()),
-    new FakeEventBus().asService(),
     new NotificationOutbox(new FakeQueue().asQueue()),
     fakeQueueFailures(),
     new PaperSheetService(prisma),

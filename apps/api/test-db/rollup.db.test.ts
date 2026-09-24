@@ -10,7 +10,7 @@ import { cohortShapeOf, curveBandsOf, flagYours } from '../src/attempts/performa
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { FOLD_PENDING_JOB_ID, RELAY_BATCH, ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeEventBus, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   disposeQuestion,
@@ -42,7 +42,6 @@ function build(rollupClient: PrismaService = prisma) {
     scoring: new ScoringProcessor(
       prisma,
       outbox,
-      new FakeEventBus().asService(),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
