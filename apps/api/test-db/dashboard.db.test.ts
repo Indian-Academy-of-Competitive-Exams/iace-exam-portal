@@ -245,7 +245,7 @@ describe('the sittings series and the windows', () => {
       opensAt: opened,
     });
     await prisma.testStat.create({
-      data: { testId: old.id, attemptCount: 40, evaluatedCount: 38, computedAt: new Date() },
+      data: { testId: old.id, evaluatedCount: 38, computedAt: new Date() },
     });
     const soon = await makeTest(prisma, catalog, {
       title: null,
@@ -261,21 +261,21 @@ describe('the sittings series and the windows', () => {
     return { old, soon, draft, hidden, opened };
   }
 
-  it('reads each point off the folded rollup, oldest first', async () => {
+  it('reads each point off the counted cohort, oldest first', async () => {
     const { old, soon, hidden } = await schedule();
     const { service, touched } = build();
 
     const payload = await service.overview(holding(FEATURE_KEYS.STUDENT_PERFORMANCE));
 
     assert.deepEqual(
-      payload.activity?.sittings?.map((sitting) => [sitting.testId, sitting.attempts]),
+      payload.activity?.sittings?.map((sitting) => [sitting.testId, sitting.evaluated]),
       [
         [hidden.id, 0],
-        [old.id, 40],
+        [old.id, 38],
         [soon.id, 0],
       ],
     );
-    // Folded, never walked: the series must not reach for the sittings themselves.
+    // Counted, never walked: the series must not reach for the sittings themselves.
     assert.equal(touched.has('attempt'), false);
   });
 

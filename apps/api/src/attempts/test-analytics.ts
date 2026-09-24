@@ -17,7 +17,6 @@ import { perSitting } from './attempt-report';
 import { sharesOf } from './question-report';
 
 export interface StatTotals {
-  attemptCount: number;
   evaluatedCount: number;
   sumScore: number;
   maxScore: number | null;
@@ -50,7 +49,6 @@ export interface ItemTotals {
   skippedCount: number;
   sumTimeSec: number;
   pValue: number | null;
-  discrimination: number | null;
   options: readonly QuestionOption[];
   optionCounts: Record<string, number>;
 }
@@ -74,18 +72,19 @@ const EMPTY_SUMMARY: TestAnalyticsSummary = {
 export function summaryOf(
   stat: StatTotals | null,
   topper: TestTopper | null,
-  liveEvaluatedCount: number,
+  live: { evaluatedCount: number; attemptCount: number },
   reachedCount: number,
 ): TestAnalyticsSummary {
   const freshness = {
     reachedCount,
-    liveEvaluatedCount,
-    isSettling: liveEvaluatedCount !== (stat?.evaluatedCount ?? 0),
+    // Every sitting, ranked or not: counted live, because the rollup holds only the ranked cohort.
+    attemptCount: live.attemptCount,
+    liveEvaluatedCount: live.evaluatedCount,
+    isSettling: live.evaluatedCount !== (stat?.evaluatedCount ?? 0),
   };
   if (stat === null) return { ...EMPTY_SUMMARY, ...freshness };
   return {
     ...freshness,
-    attemptCount: stat.attemptCount,
     evaluatedCount: stat.evaluatedCount,
     meanScore: perSitting(stat.sumScore, stat.evaluatedCount),
     medianScore: medianInBands(stat.bands),

@@ -60,12 +60,11 @@ const dashboardBankSchema = z.object({
 });
 export type DashboardBank = z.infer<typeof dashboardBankSchema>;
 
-/** One recent test's folded rollup — the sittings series, read never scanned. */
+/** One recent test's counted cohort — the sittings series, read never scanned. */
 const dashboardSittingSchema = z.object({
   testId: z.string(),
   title: z.string().nullable(),
   opensAt: z.string().nullable(),
-  attempts: z.number().int(),
   evaluated: z.number().int(),
 });
 export type DashboardSitting = z.infer<typeof dashboardSittingSchema>;

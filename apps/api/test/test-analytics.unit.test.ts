@@ -29,7 +29,6 @@ const TOPPER: TestTopper = {
 
 function stat(overrides: Partial<StatTotals> = {}): StatTotals {
   return {
-    attemptCount: 120,
     evaluatedCount: 100,
     sumScore: 5400,
     maxScore: 96,
@@ -79,7 +78,6 @@ function item(overrides: Partial<ItemTotals> = {}): ItemTotals {
     skippedCount: 20,
     sumTimeSec: 3200,
     pValue: 0.75,
-    discrimination: null,
     options: OPTIONS,
     optionCounts: { opt_1: 60, opt_2: 12, opt_3: 5, opt_4: 3 },
     ...overrides,
@@ -87,8 +85,8 @@ function item(overrides: Partial<ItemTotals> = {}): ItemTotals {
 }
 
 describe('summaryOf', () => {
-  it('derives the averages off the sums the fold already wrote', () => {
-    const summary = summaryOf(stat(), TOPPER, 100, 150);
+  it('derives the averages off the sums the recount already wrote', () => {
+    const summary = summaryOf(stat(), TOPPER, { evaluatedCount: 100, attemptCount: 120 }, 150);
 
     assert.equal(summary.meanScore, 54);
     assert.equal(summary.averageTimeSec, 3300);
@@ -103,8 +101,8 @@ describe('summaryOf', () => {
     testAnalyticsSummarySchema.parse(summary);
   });
 
-  it('reads an unfolded paper as unmeasured, never as a cohort that scored zero', () => {
-    const summary = summaryOf(null, null, 0, 0);
+  it('reads an uncounted paper as unmeasured, never as a cohort that scored zero', () => {
+    const summary = summaryOf(null, null, { evaluatedCount: 0, attemptCount: 0 }, 0);
 
     assert.equal(summary.meanScore, null);
     assert.equal(summary.medianScore, null);
@@ -115,11 +113,11 @@ describe('summaryOf', () => {
     testAnalyticsSummarySchema.parse(summary);
   });
 
-  it('holds the same line on a row folded before any sitting was evaluated', () => {
+  it('holds the same line on a row counted before any sitting was evaluated', () => {
     const summary = summaryOf(
       stat({ evaluatedCount: 0, sumScore: 0, sumTimeSec: 0, maxScore: null, minScore: null }),
       null,
-      0,
+      { evaluatedCount: 0, attemptCount: 0 },
       0,
     );
 
@@ -127,19 +125,20 @@ describe('summaryOf', () => {
     assert.equal(summary.averageTimeSec, null);
   });
 
-  /** The fold is debounced, so a close burst or a re-sync leaves the rows behind the sittings for a while. */
-  it('reads a fold behind the live sittings as settling, and a caught-up one as not', () => {
-    assert.equal(summaryOf(stat(), TOPPER, 100, 150).isSettling, false);
+  /** The pass runs on a clock, so a close burst or a re-sync leaves the rows behind the sittings. */
+  it('reads a count behind the live sittings as settling, and a caught-up one as not', () => {
+    const live = (evaluatedCount: number) => ({ evaluatedCount, attemptCount: 120 });
+    assert.equal(summaryOf(stat(), TOPPER, live(100), 150).isSettling, false);
 
-    const behind = summaryOf(stat(), TOPPER, 104, 150);
+    const behind = summaryOf(stat(), TOPPER, live(104), 150);
     assert.equal(behind.isSettling, true);
     assert.equal(behind.liveEvaluatedCount, 104);
     assert.equal(behind.evaluatedCount, 100);
 
-    const unfolded = summaryOf(null, null, 3, 0);
-    assert.equal(unfolded.isSettling, true);
-    assert.equal(unfolded.evaluatedCount, 0);
-    assert.equal(summaryOf(null, null, 0, 0).isSettling, false);
+    const uncounted = summaryOf(null, null, live(3), 0);
+    assert.equal(uncounted.isSettling, true);
+    assert.equal(uncounted.evaluatedCount, 0);
+    assert.equal(summaryOf(null, null, live(0), 0).isSettling, false);
   });
 });
 

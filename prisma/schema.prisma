@@ -1118,17 +1118,15 @@ model StudentSubjectStat {
 }
 
 model TestStat {
-  testId           String   @id @db.Uuid
-  attemptCount     Int      @default(0)
-  evaluatedCount   Int      @default(0)
-  sumScore         Decimal  @default(0) @db.Decimal(18, 2)
-  maxScore         Decimal? @db.Decimal(8, 2)
-  minScore         Decimal? @db.Decimal(8, 2)
-  sumTimeSec       BigInt   @default(0)
-  topperAttemptId  String?  @db.Uuid
-  // Watermark: rows already folded in, so a rebuild cannot double-count.
-  attemptsIncluded Int      @default(0)
-  computedAt       DateTime @db.Timestamptz(3)
+  testId          String   @id @db.Uuid
+  // The ranked cohort: one sitting a student, and every figure below is over exactly these.
+  evaluatedCount  Int      @default(0)
+  sumScore        Decimal  @default(0) @db.Decimal(18, 2)
+  maxScore        Decimal? @db.Decimal(8, 2)
+  minScore        Decimal? @db.Decimal(8, 2)
+  sumTimeSec      BigInt   @default(0)
+  topperAttemptId String?  @db.Uuid
+  computedAt      DateTime @db.Timestamptz(3)
 
   test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
   topperAttempt Attempt? @relation(fields: [topperAttemptId], references: [id])
@@ -1163,7 +1161,6 @@ model TestQuestionStat {
   sumTimeSec      BigInt   @default(0)
   optionCounts    Json?
   pValue          Decimal? @db.Decimal(5, 4)
-  discrimination  Decimal? @db.Decimal(6, 4)
   computedAt      DateTime @db.Timestamptz(3)
 
   test          Test          @relation(fields: [testId], references: [id], onDelete: Cascade)

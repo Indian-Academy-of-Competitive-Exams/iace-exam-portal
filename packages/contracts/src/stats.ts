@@ -855,7 +855,6 @@ export const ITEM_SIGNALS = {
   LOW_ACCURACY: 'LOW_ACCURACY',
   HIGH_SKIP: 'HIGH_SKIP',
   SLOW: 'SLOW',
-  NEGATIVE_DISCRIMINATION: 'NEGATIVE_DISCRIMINATION',
 } as const;
 const itemSignalSchema = z.enum(ITEM_SIGNALS);
 export type ItemSignal = z.infer<typeof itemSignalSchema>;
@@ -874,7 +873,6 @@ export const testItemAnalyticsSchema = z.object({
   averageTimeSec: z.number().nullable(),
   pValue: z.number().nullable(),
   /** Null wherever the fold has not written it; the item signals stand without it. */
-  discrimination: z.number().nullable(),
   optionCounts: z.array(optionShareSchema),
   signals: z.array(itemSignalSchema),
 });
@@ -906,7 +904,7 @@ const INSPECT_AT_LEAST = 2;
 
 export type ItemCounts = Pick<
   TestItemAnalytics,
-  'attemptedCount' | 'skippedCount' | 'pValue' | 'discrimination' | 'averageTimeSec'
+  'attemptedCount' | 'skippedCount' | 'pValue' | 'averageTimeSec'
 >;
 
 /** Every signal an item trips, off the columns the fold already wrote. */
@@ -920,9 +918,6 @@ export function itemSignalsOf(item: ItemCounts, paperAverageTimeSec: number | nu
     item.skippedCount / sat > HIGH_SKIP_ABOVE ? ITEM_SIGNALS.HIGH_SKIP : null,
     slowerThan !== null && item.averageTimeSec !== null && item.averageTimeSec > slowerThan
       ? ITEM_SIGNALS.SLOW
-      : null,
-    item.discrimination !== null && item.discrimination <= 0
-      ? ITEM_SIGNALS.NEGATIVE_DISCRIMINATION
       : null,
   ];
   return tripped.filter((signal): signal is ItemSignal => signal !== null);

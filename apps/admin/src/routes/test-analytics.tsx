@@ -60,7 +60,6 @@ const ITEM_SIGNAL_LABELS = {
   [ITEM_SIGNALS.LOW_ACCURACY]: 'Below chance',
   [ITEM_SIGNALS.HIGH_SKIP]: 'Mostly left blank',
   [ITEM_SIGNALS.SLOW]: 'Twice the paper average',
-  [ITEM_SIGNALS.NEGATIVE_DISCRIMINATION]: 'Negative discrimination',
 } as const satisfies Record<ItemSignal, string>;
 
 /** Where the figures stood when a re-sync was asked for, so the screen can tell it has landed. */
@@ -225,7 +224,7 @@ function Freshness({
     <div className="flex items-center gap-2">
       {summary.isSettling ? (
         <Badge variant="neutral">
-          {`Updating: ${summary.evaluatedCount} of ${summary.liveEvaluatedCount} folded`}
+          {`Updating: ${summary.evaluatedCount} of ${summary.liveEvaluatedCount} counted`}
         </Badge>
       ) : null}
       {canSync ? (
@@ -247,7 +246,7 @@ function Body({ report }: Readonly<{ report: TestAnalytics }>) {
   const { summary, sections, items } = report;
   const flagged = items.filter((item) => worthInspecting(item)).length;
 
-  if (summary.evaluatedCount === 0) return <EmptyState title="No ranked results folded yet" />;
+  if (summary.evaluatedCount === 0) return <EmptyState title="No ranked results yet" />;
 
   return (
     <div className="flex flex-col gap-8">
@@ -335,7 +334,7 @@ function Items({
   items,
   flagged,
 }: Readonly<{ items: readonly TestItemAnalytics[]; flagged: number }>) {
-  const columns = useMemo(() => itemColumns(items), [items]);
+  const columns = useMemo(() => itemColumns(), []);
 
   return (
     <section className="flex flex-col gap-3">
@@ -361,7 +360,7 @@ function Items({
   );
 }
 
-function itemColumns(items: readonly TestItemAnalytics[]): DataTableColumn<TestItemAnalytics>[] {
+function itemColumns(): DataTableColumn<TestItemAnalytics>[] {
   const columns: DataTableColumn<TestItemAnalytics>[] = [
     { key: 'order', header: '#', numeric: true, cell: (item) => item.order },
     {
@@ -393,15 +392,6 @@ function itemColumns(items: readonly TestItemAnalytics[]): DataTableColumn<TestI
       cell: (item) => percentLabel(asPercent(item.pValue), DASH),
     },
   ];
-
-  if (items.some((item) => item.discrimination !== null)) {
-    columns.push({
-      key: 'discrimination',
-      header: 'Discrimination',
-      numeric: true,
-      cell: (item) => item.discrimination ?? DASH,
-    });
-  }
 
   columns.push({
     key: 'inspect',

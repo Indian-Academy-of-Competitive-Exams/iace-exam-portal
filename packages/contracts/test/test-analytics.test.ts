@@ -16,7 +16,6 @@ function item(overrides: Partial<ItemCounts> = {}): ItemCounts {
     attemptedCount: SAT,
     skippedCount: 0,
     pValue: 0.8,
-    discrimination: null,
     averageTimeSec: 40,
     ...overrides,
   };
@@ -65,11 +64,6 @@ describe('itemSignalsOf', () => {
     const slow = item({ averageTimeSec: 90 });
     assert.deepEqual(itemSignalsOf(slow, 30), [ITEM_SIGNALS.SLOW]);
     assert.deepEqual(itemSignalsOf(slow, 120), []);
-  });
-
-  it('flags a negative discrimination where the fold has written one', () => {
-    const inverted = item({ discrimination: -0.2 });
-    assert.deepEqual(itemSignalsOf(inverted, 30), [ITEM_SIGNALS.NEGATIVE_DISCRIMINATION]);
   });
 
   it('says nothing where the paper has no average to read time against', () => {

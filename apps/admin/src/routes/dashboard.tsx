@@ -198,17 +198,17 @@ function coverageBar(subject: DashboardCoverage) {
 // ---------------------------------------------------------------------------
 
 function SittingsFigure({ sittings }: Readonly<{ sittings: readonly DashboardSitting[] }>) {
-  const attempts = sittings.reduce((sum, sitting) => sum + sitting.attempts, 0);
-  const ceiling = Math.max(...sittings.map((sitting) => sitting.attempts), 1);
+  const ranked = sittings.reduce((sum, sitting) => sum + sitting.evaluated, 0);
+  const ceiling = Math.max(...sittings.map((sitting) => sitting.evaluated), 1);
 
   return (
     <ChartFigure
       className="lg:col-span-2"
       title="Sittings"
       meta={`${sittings.length} tests`}
-      figure={<Metric size="md" label="Attempts" value={attempts} />}
+      figure={<Metric size="md" label="Ranked sittings" value={ranked} />}
     >
-      {attempts === 0 ? (
+      {ranked === 0 ? (
         <EmptyState level={3} title="Nothing sat yet" />
       ) : (
         <LinePlot
@@ -216,11 +216,11 @@ function SittingsFigure({ sittings }: Readonly<{ sittings: readonly DashboardSit
           points={sittings.map((sitting) => ({
             key: sitting.testId,
             label: sitting.title ?? UNTITLED,
-            value: sitting.attempts,
+            value: sitting.evaluated,
             caption: opensLabel(sitting.opensAt),
           }))}
           max={ceiling}
-          aria-label="Attempts per live test, oldest first"
+          aria-label="Ranked sittings per live test, oldest first"
         />
       )}
     </ChartFigure>

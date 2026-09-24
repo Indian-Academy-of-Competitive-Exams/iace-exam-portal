@@ -282,8 +282,12 @@ landed on since they were last counted and writes the answer outright. A recount
 running it twice writes the same numbers — which is why there is no `ProcessedRollup` table and no
 delta to reverse. `TestStat` and `TestSectionStat` come from `Attempt` alone, off the marks and the
 packed `sectionScores`, and run on the short clock; `TestQuestionStat` needs every sheet and runs
-on a slower one. `discrimination` is **batch-only**: it compares a top group against a bottom group
-and cannot be maintained one attempt at a time.
+on a slower one.
+
+**Item discrimination is not computed.** It compares a top scoring group against a bottom one, which
+an incremental fold could not do an attempt at a time, and the column sat unwritten from the day it
+was added; it was dropped with the fold. The item pass now replays the whole cohort in one go, so
+nothing stands in the way of computing it — that is a feature to ask for, not a gap left behind.
 
 The pass's watermark is `Attempt.updatedAt`, not `evaluatedAt`. The two things that move marks
 already counted — a dropped question re-scoring every sitting, and a void — both leave `evaluatedAt`
@@ -300,8 +304,8 @@ sum of its scopes, taken on read.
 
 What each is for: `StudentStat` backs the dashboard header; `StudentSubjectStat` the subject report,
 which is where a student is weak; `TestStat` the cohort comparison; `TestSectionStat` section-level
-comparison and time utilisation; `TestQuestionStat` classical item analysis — difficulty index,
-discrimination and distractor counts.
+comparison and time utilisation; `TestQuestionStat` item analysis — the difficulty index and
+the distractor counts.
 
 ## 10. Render modes and skins
 

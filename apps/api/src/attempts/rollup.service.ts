@@ -156,7 +156,7 @@ export class RollupService {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT s."testId" AS id
       FROM "TestStat" s
-      WHERE s."attemptCount" > 0
+      WHERE s."evaluatedCount" > 0
         AND NOT EXISTS (
           SELECT 1 FROM "TestQuestionStat" q
           WHERE q."testId" = s."testId" AND q."computedAt" >= s."computedAt")
@@ -198,22 +198,20 @@ export class RollupService {
           AND a."isGraded"
       )
       INSERT INTO "TestStat" (
-        "testId", "attemptCount", "evaluatedCount", "sumScore", "maxScore", "minScore",
-        "sumTimeSec", "attemptsIncluded", "topperAttemptId", "computedAt")
-      SELECT ${testId}::uuid, count(*)::int, count(*)::int, COALESCE(sum("score"), 0),
-             max("score"), min("score"), COALESCE(sum("timeSec"), 0)::bigint, count(*)::int,
+        "testId", "evaluatedCount", "sumScore", "maxScore", "minScore",
+        "sumTimeSec", "topperAttemptId", "computedAt")
+      SELECT ${testId}::uuid, count(*)::int, COALESCE(sum("score"), 0),
+             max("score"), min("score"), COALESCE(sum("timeSec"), 0)::bigint,
              -- The fold kept the first sitting to reach the maximum, and a replay has to agree.
              (SELECT "id" FROM sat ORDER BY "score" DESC, "evaluatedAt", "attemptNo" LIMIT 1),
              ${now}
       FROM sat
       ON CONFLICT ("testId") DO UPDATE SET
-        "attemptCount" = EXCLUDED."attemptCount",
         "evaluatedCount" = EXCLUDED."evaluatedCount",
         "sumScore" = EXCLUDED."sumScore",
         "maxScore" = EXCLUDED."maxScore",
         "minScore" = EXCLUDED."minScore",
         "sumTimeSec" = EXCLUDED."sumTimeSec",
-        "attemptsIncluded" = EXCLUDED."attemptsIncluded",
         "topperAttemptId" = EXCLUDED."topperAttemptId",
         "computedAt" = EXCLUDED."computedAt"`;
   }

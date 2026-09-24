@@ -44,7 +44,6 @@ const ITEM_SELECT = {
   sumTimeSec: true,
   optionCounts: true,
   pValue: true,
-  discrimination: true,
   paperQuestion: {
     select: {
       order: true,
@@ -68,12 +67,13 @@ export class TestAnalyticsService {
   async forTest(testId: string): Promise<TestAnalytics> {
     const test = await this.requireTest(testId);
 
-    const [stat, sections, items, liveEvaluatedCount, reachedCount] = await Promise.all([
+    const [stat, sections, items, evaluatedCount, attemptCount, reachedCount] = await Promise.all([
       this.statOf(testId),
       this.sectionsOf(testId),
       this.itemsOf(testId),
-      // The one live read here: a count on [testId, status], so settling costs no attempt scan.
+      // The live reads here: both counts on [testId, status], so neither costs an attempt scan.
       this.prisma.attempt.count({ where: cohortSittingsOf(testId) }),
+      this.prisma.attempt.count({ where: { testId } }),
       this.access.audienceCount(test.testSeriesId),
     ]);
 
@@ -83,7 +83,7 @@ export class TestAnalyticsService {
       summary: summaryOf(
         stat,
         await this.topperOf(stat?.topperAttemptId ?? null),
-        liveEvaluatedCount,
+        { evaluatedCount, attemptCount },
         reachedCount,
       ),
       sections: sectionsOf(sections),
@@ -115,7 +115,6 @@ export class TestAnalyticsService {
     if (row === null) return null;
     const curve = await cohortCurveOf(this.prisma, testId);
     return {
-      attemptCount: row.attemptCount,
       evaluatedCount: row.evaluatedCount,
       sumScore: Number(row.sumScore),
       maxScore: numberOrNull(row.maxScore),
@@ -200,7 +199,6 @@ function toItemTotals(row: ItemRow): ItemTotals {
     skippedCount: row.skippedCount,
     sumTimeSec: Number(row.sumTimeSec),
     pValue: numberOrNull(row.pValue),
-    discrimination: numberOrNull(row.discrimination),
     options,
     optionCounts: optionCountsIn(row.optionCounts),
   };

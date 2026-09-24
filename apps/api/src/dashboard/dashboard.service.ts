@@ -170,7 +170,7 @@ export class DashboardService {
       where: { status: TEST_STATUS.ACTIVE },
       orderBy: { opensAt: WINDOW_ORDER },
       take: DASHBOARD_RECENT_TESTS,
-      select: { ...TEST_CARD, stat: { select: { attemptCount: true, evaluatedCount: true } } },
+      select: { ...TEST_CARD, stat: { select: { evaluatedCount: true } } },
     });
 
     // Oldest first: the series is read left to right, and the query had to sort the other way.
@@ -178,7 +178,6 @@ export class DashboardService {
       testId: row.id,
       title: row.title,
       opensAt: row.opensAt?.toISOString() ?? null,
-      attempts: row.stat?.attemptCount ?? 0,
       evaluated: row.stat?.evaluatedCount ?? 0,
     }));
   }
