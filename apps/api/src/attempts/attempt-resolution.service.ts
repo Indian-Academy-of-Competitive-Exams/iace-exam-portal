@@ -20,7 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
-import { RollupOutbox } from './rollup-outbox';
+import { RollupQueue } from './rollup-queue';
 import { SubmitService } from './submit.service';
 import {
   SUPPORT_ACTIONS,
@@ -53,7 +53,7 @@ export class AttemptResolutionService {
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
     private readonly submit: SubmitService,
-    private readonly rollup: RollupOutbox,
+    private readonly rollup: RollupQueue,
     private readonly access: AccessResolverService,
     private readonly audit: AuditContext,
   ) {}

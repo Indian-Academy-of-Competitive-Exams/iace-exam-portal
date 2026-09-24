@@ -3,10 +3,10 @@ import { describe, it } from 'node:test';
 import {
   COMPLETED_JOB_RETENTION,
   FAILED_JOB_RETENTION,
-  FOLD_PENDING_JOB_ID,
+  COHORT_SWEEP_JOB_ID,
   QUEUE_NAMES,
   QUEUE_POLICY,
-  ROLLUP_FOLD_DELAY_MS,
+  ROLLUP_SWEEP_DELAY_MS,
   jobOptionsFor,
   keyedJob,
   notificationDeliveryJobId,
@@ -68,10 +68,10 @@ describe('queue policy', () => {
     }
   });
 
-  /** The fold pass has ONE id, so a burst of evaluations asks for one pass and not five thousand. */
-  it('gives the fold pass a fixed id with no colon in it', () => {
-    assert.equal(typeof FOLD_PENDING_JOB_ID, 'string');
-    assert.doesNotMatch(FOLD_PENDING_JOB_ID, /:/);
-    assert.ok(ROLLUP_FOLD_DELAY_MS > 0);
+  /** The cohort sweep has ONE id, so a burst of evaluations asks for one pass and not five thousand. */
+  it('gives the cohort sweep a fixed id with no colon in it', () => {
+    assert.equal(typeof COHORT_SWEEP_JOB_ID, 'string');
+    assert.doesNotMatch(COHORT_SWEEP_JOB_ID, /:/);
+    assert.ok(ROLLUP_SWEEP_DELAY_MS > 0);
   });
 });

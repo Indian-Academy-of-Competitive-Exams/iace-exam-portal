@@ -4,12 +4,12 @@ import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS, TEST_SCOPE, type TestScope } fro
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
-import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { cohortShapeOf, flagYours } from '../src/attempts/performance-analytics';
 import { cohortCurveOf } from '../src/attempts/cohort-curve';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { type PrismaService } from '../src/prisma/prisma.service';
-import { FOLD_PENDING_JOB_ID, RELAY_BATCH, ROLLUP_JOBS } from '../src/queue/queues';
+import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
@@ -35,7 +35,7 @@ after(() => prisma.$disconnect());
 
 function build(rollupClient: PrismaService = prisma) {
   const queue = new FakeQueue();
-  const outbox = new RollupOutbox(queue.asQueue());
+  const outbox = new RollupQueue(queue.asQueue());
   return {
     queue,
     outbox,
@@ -72,7 +72,7 @@ async function drain(built: World): Promise<number> {
   const jobs = built.queue.jobs.splice(0);
   for (const job of jobs) {
     const data = job.data as { testId?: string; studentId?: string };
-    if (job.name === ROLLUP_JOBS.FOLD_PENDING) await built.rollup.foldPending();
+    if (job.name === ROLLUP_JOBS.SWEEP_COHORTS) await built.rollup.sweepCohorts();
     if (job.name === ROLLUP_JOBS.REBUILD_TEST && data.testId !== undefined) {
       await built.rollup.rebuildForTest(data.testId);
     }
@@ -83,10 +83,11 @@ async function drain(built: World): Promise<number> {
   return jobs.length;
 }
 
-/** Everything one submitted sitting goes through: scored, handed on, and folded by the worker. */
+/** Everything one submitted sitting goes through: scored, then counted by the periodic sweep. */
 async function counted(built: World, attemptId: string): Promise<void> {
   await built.scoring.score(attemptId);
   await drain(built);
+  await built.rollup.sweepCohorts();
 }
 
 /** Decimals and BigInts as JSON reads them, so two snapshots compare by value. */
@@ -102,6 +103,19 @@ const withoutStamps = <T extends { computedAt: Date }>(rows: readonly T[]) =>
   plain(rows.map(({ computedAt: _computedAt, ...row }) => ({ ...row, computedThrough: null })));
 
 const testStat = (testId: string) => prisma.testStat.findUnique({ where: { testId } });
+
+/** How many answers the item rows have counted, which is what a pass they skipped leaves behind. */
+async function attemptedOn(testId: string): Promise<number> {
+  const rows = await prisma.testQuestionStat.findMany({
+    where: { testId },
+    select: { attemptedCount: true },
+  });
+  return rows.reduce((total, row) => total + row.attemptedCount, 0);
+}
+
+/** The 15 minutes, without waiting them out: the pass reads the stamp and nothing else. */
+const ageTheItems = (testId: string) =>
+  prisma.testQuestionStat.updateMany({ where: { testId }, data: { computedAt: new Date(0) } });
 const studentStat = (studentId: string) => prisma.studentStat.findUnique({ where: { studentId } });
 const num = (value: unknown) => (value === null || value === undefined ? value : Number(value));
 
@@ -123,11 +137,8 @@ async function cohortRows(testId: string) {
   };
 }
 
-const rollupRequests = () =>
-  prisma.outboxEvent.findMany({ where: { eventType: ROLLUP_REQUEST.EVENT_TYPE } });
-
-describe('RollupService — folding one sitting in', () => {
-  it('counts one sitting into every aggregate it belongs to, and guards the cohort’s three', async () => {
+describe('RollupService — counting one sitting in', () => {
+  it('counts one sitting into every aggregate it belongs to', async () => {
     const built = build();
     const paper = await paperOf();
     const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
@@ -138,7 +149,6 @@ describe('RollupService — folding one sitting in', () => {
     assert.equal(rolled?.evaluatedCount, 1);
     assert.equal(num(rolled?.sumScore), 3.5);
     assert.equal((await studentStat(studentId))?.testsAttempted, 1);
-    assert.equal(await prisma.processedRollup.count(), 3);
   });
 
   it('writes the marks the scorer worked out, not a second opinion of them', async () => {
@@ -209,9 +219,9 @@ describe('RollupService — folding one sitting in', () => {
   });
 });
 
-describe('RollupService — folding a pending batch', () => {
-  /** The failure this prevents: a hall's page reading the paper, or the cohort, once per sitting. */
-  it('reads a page of one test in a fixed number of queries, whatever sat it', async () => {
+describe('RollupService — sweeping the cohorts that changed', () => {
+  /** The failure this prevents: a hall's recount reading the paper, or a sheet, once per sitting. */
+  it('counts a test’s totals without reading a sitting or a paper', async () => {
     const scorer = build();
     const paper = await paperOf();
     for (const chosen of [
@@ -222,20 +232,18 @@ describe('RollupService — folding a pending batch', () => {
       await scorer.scoring.score((await sat(paper, chosen)).attemptId);
     }
     const reads: Record<string, number> = {};
-    const built = build(countingFindMany(prisma, reads));
 
-    assert.equal(await built.rollup.foldPending(), 3);
+    await new RollupService(countingFindMany(prisma, reads)).recountTest(paper.testId);
 
-    // The page itself, and the first-sitting check for the one test on it.
-    assert.equal(reads['attempt'], 2);
-    assert.equal(reads['paperQuestion'], 1);
+    assert.deepEqual(reads, {});
+    assert.equal((await testStat(paper.testId))?.evaluatedCount, 3);
   });
 
   /** The failure this prevents: a student's totals moved, and the marks behind them rolled back. */
   it('writes none of a sitting when its own tables fail partway', async () => {
     const scoring = new ScoringProcessor(
       failingOnceOnMistakes(prisma),
-      new RollupOutbox(new FakeQueue().asQueue()),
+      new RollupQueue(new FakeQueue().asQueue()),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
@@ -252,134 +260,37 @@ describe('RollupService — folding a pending batch', () => {
     assert.equal(held?.evaluatedAt, null);
   });
 
-  it('lands on the same aggregates a rebuild would compute', async () => {
+  /** What replaces the guard ledger: the pass writes an answer, so running it twice writes the same one. */
+  it('lands on the same numbers however many times the sweep runs', async () => {
     const built = build();
     const paper = await paperOf();
-    const first = await sat(paper, [RIGHT, RIGHT, WRONG, null]);
-    const second = await sat(paper, [RIGHT, WRONG, WRONG, null]);
-    await built.scoring.score(first.attemptId);
-    await built.scoring.score(second.attemptId);
-
-    assert.equal(await built.rollup.foldPending(), 2);
-    const batched = await cohortRows(paper.testId);
-
-    await built.rollup.rebuildTest(paper.testId);
-
-    assert.deepEqual(await cohortRows(paper.testId), batched);
-
-    // A second page lands on a populated TestStat, where the batched curve is really moved.
-    const third = await sat(paper, [RIGHT, WRONG, null, null]);
-    const fourth = await sat(paper, [RIGHT, RIGHT, WRONG, WRONG]);
-    await built.scoring.score(third.attemptId);
-    await built.scoring.score(fourth.attemptId);
-
-    await built.rollup.foldPending();
-    const moved = await cohortRows(paper.testId);
-
-    await built.rollup.rebuildTest(paper.testId);
-
-    assert.deepEqual((await cohortRows(paper.testId)).test, moved.test);
-  });
-
-  /** Stamped only once counted, and a stamped row is never claimed again: the second pass idles. */
-  it('claims nothing from a page it has already stamped', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const { attemptId, studentId } = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT]);
-    await built.scoring.score(attemptId);
-
-    assert.equal(await built.rollup.foldPending(), 1);
-    const once = await cohortRows(paper.testId);
-
-    assert.equal(await built.rollup.foldPending(), 0);
-
-    assert.deepEqual(await cohortRows(paper.testId), once);
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1);
-    assert.equal(await prisma.processedRollup.count(), 3);
-  });
-
-  /** Two passes run at once at concurrency 2, so a later page can hold a sitting already counted. */
-  it('counts a sitting once when a redelivered request lands in a later page', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const first = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT]);
-    const second = await sat(paper, [RIGHT, WRONG, null, null]);
-    await built.scoring.score(first.attemptId);
-    assert.equal(await built.rollup.foldPending(), 1);
-
-    await prisma.outboxEvent.create({
-      data: {
-        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
-        aggregateId: first.attemptId,
-        eventType: ROLLUP_REQUEST.EVENT_TYPE,
-        payload: {},
-      },
-    });
-    await built.scoring.score(second.attemptId);
-
-    assert.equal(await built.rollup.foldPending(), 2);
-
-    const rolled = await testStat(paper.testId);
-    assert.equal(rolled?.evaluatedCount, 2);
-    assert.equal(num(rolled?.sumScore), 9.5);
-    assert.equal((await studentStat(first.studentId))?.testsAttempted, 1);
-    assert.equal(await prisma.processedRollup.count(), 6);
-  });
-
-  /** Asking for another pass from inside one is a no-op, so the backlog is drained here or not at all. */
-  it('drains a backlog wider than one page without waiting for the next sweep', async () => {
-    const built = build();
-    const paper = await paperOf();
-    for (let at = 1; at <= RELAY_BATCH + 1; at += 1) {
-      const { attemptId } = await sat(paper, [at % 2 === 0 ? RIGHT : WRONG, null, null, null]);
-      await built.scoring.score(attemptId);
+    for (const chosen of [
+      [RIGHT, RIGHT, WRONG, null],
+      [RIGHT, WRONG, WRONG, null],
+    ]) {
+      await built.scoring.score((await sat(paper, chosen)).attemptId);
     }
 
-    assert.equal(await built.rollup.foldPending(), RELAY_BATCH + 1);
+    await built.rollup.sweepCohorts();
+    const once = await cohortRows(paper.testId);
 
-    assert.equal((await testStat(paper.testId))?.evaluatedCount, RELAY_BATCH + 1);
-    assert.equal(await built.rollup.foldPending(), 0);
+    await built.rollup.sweepCohorts();
+    await built.rollup.sweepCohorts();
+
+    assert.deepEqual(await cohortRows(paper.testId), once);
   });
 
-  it('folds a retake in the page into the student and never into the cohort', async () => {
-    const built = build();
+  it('counts a test the sweep could not write on the pass after it', async () => {
     const paper = await paperOf();
-    const first = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT]);
-    const retake = await sat(paper, [RIGHT, WRONG, null, null], {
-      studentId: first.studentId,
-      attemptNo: 2,
-      isGraded: false,
-    });
-    await built.scoring.score(first.attemptId);
-    await built.scoring.score(retake.attemptId);
+    const { attemptId } = await sat(paper, [RIGHT, null, null, null]);
+    await build().scoring.score(attemptId);
+    const rollup = new RollupService(failingOnceOnStatWrite(prisma));
 
-    assert.equal(await built.rollup.foldPending(), 2);
-
-    const rolled = await testStat(paper.testId);
-    assert.equal(rolled?.evaluatedCount, 1);
-    assert.equal(num(rolled?.sumScore), 8);
-    const student = await studentStat(first.studentId);
-    assert.equal(student?.testsAttempted, 2);
-    assert.equal(student?.retakeCount, 1);
-  });
-
-  /** The hole this closes: a row marked when the job was QUEUED left a sitting nobody ever counted. */
-  it('leaves the outbox row pending when the fold throws, and counts it on the next pass', async () => {
-    const built = build(failingOnceOnStatWrite(prisma));
-    const paper = await paperOf();
-    const { attemptId, studentId } = await sat(paper, [RIGHT, null, null, null]);
-    await built.scoring.score(attemptId);
-
-    await assert.rejects(() => built.rollup.foldPending());
-
-    assert.equal((await rollupRequests())[0]?.processedAt, null);
+    assert.equal(await rollup.sweepCohorts(), 0);
     assert.equal(await prisma.testStat.count(), 0);
 
-    assert.equal(await built.rollup.foldPending(), 1);
-
+    assert.equal(await rollup.sweepCohorts(), 1);
     assert.equal((await testStat(paper.testId))?.evaluatedCount, 1);
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1);
-    assert.notEqual((await rollupRequests())[0]?.processedAt, null);
   });
 });
 
@@ -391,13 +302,13 @@ describe('RollupService — who the cohort is', () => {
 
     await counted(built, retake.attemptId);
 
-    assert.equal(await prisma.testStat.count(), 0);
+    // A pass counts every test something landed on, so the row exists and says nobody is in it.
+    assert.equal((await testStat(paper.testId))?.evaluatedCount, 0);
     assert.equal(await prisma.testSectionStat.count(), 0);
     assert.equal(await prisma.testQuestionStat.count(), 0);
     const student = await studentStat(retake.studentId);
     assert.equal(student?.retakeCount, 1);
     assert.equal(student?.testsEvaluated, 0);
-    assert.equal(await prisma.processedRollup.count(), 0);
   });
 
   /** One subject tally per scope, so a retake's answers land beside the first sitting's. */
@@ -522,12 +433,10 @@ describe('RollupService — rebuilding a scope', () => {
         [ROLLUP_JOBS.REBUILD_STUDENT, `rollup-rebuild-student-${second.studentId}`],
       ],
     );
-    // By type: scoring writes a notification request into the same table, and that is not a fold.
-    assert.equal((await rollupRequests()).length, 2, 'a re-score writes no fold event of its own');
   });
 
   /** Sittings scored before the worker existed are evaluated and never counted, which rebuildAll owns. */
-  it('backfills to exactly what folding each sitting as it landed would have written', async () => {
+  it('backfills a cohort nothing counted, and a student the deltas never reached', async () => {
     const built = build();
     const paper = await paperOf();
     const sittings = [
@@ -538,7 +447,7 @@ describe('RollupService — rebuilding a scope', () => {
     for (const { attemptId } of sittings) await counted(built, attemptId);
     const studentRows = async () =>
       withoutStamps(await prisma.studentStat.findMany({ orderBy: { studentId: 'asc' } }));
-    const folded = { cohort: await cohortRows(paper.testId), students: await studentRows() };
+    const counting = await studentRows();
 
     await prisma.$transaction([
       prisma.testQuestionStat.deleteMany(),
@@ -546,59 +455,76 @@ describe('RollupService — rebuilding a scope', () => {
       prisma.testStat.deleteMany(),
       prisma.studentSubjectStat.deleteMany(),
       prisma.studentStat.deleteMany(),
-      prisma.processedRollup.deleteMany(),
     ]);
     await built.rollup.rebuildAll();
 
-    assert.deepEqual(await cohortRows(paper.testId), folded.cohort);
-    assert.deepEqual(await studentRows(), folded.students);
-    assert.equal(await prisma.processedRollup.count(), 9);
+    // The student side is the one still counted as a delta, so a replay of it has to agree.
+    assert.deepEqual(await studentRows(), counting);
+    const rolled = await testStat(paper.testId);
+    const scored = await prisma.attempt.findMany({ where: { testId: paper.testId } });
+    assert.equal(rolled?.evaluatedCount, 3);
+    assert.equal(
+      num(rolled?.sumScore),
+      scored.reduce((total, row) => total + Number(row.score ?? 0), 0),
+    );
+    assert.equal(await prisma.testQuestionStat.count(), 4);
   });
 });
 
-describe('RollupOutbox — getting the fold asked for', () => {
-  it('asks for one fold pass however many sittings are evaluated', async () => {
+describe('RollupService — the slower clock the item analysis runs on', () => {
+  /** The hole this closes: a test goes quiet two minutes in, and its items stay at the first pass. */
+  it('counts the items of a test that stopped changing before they were due', async () => {
     const built = build();
     const paper = await paperOf();
-    const first = await sat(paper, [RIGHT, null, null, null]);
-    const second = await sat(paper, [RIGHT, null, null, null]);
+    const first = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT]);
+    const second = await sat(paper, [WRONG, null, null, null]);
+    await counted(built, first.attemptId);
+    await counted(built, second.attemptId);
+    // Counted on the first pass and not since: the second sitting is in the totals, not the items.
+    assert.equal((await testStat(paper.testId))?.evaluatedCount, 2);
+    assert.equal(await attemptedOn(paper.testId), 4);
 
-    await built.scoring.score(first.attemptId);
-    await built.scoring.score(second.attemptId);
+    await ageTheItems(paper.testId);
+    await built.rollup.sweepCohorts();
 
-    const folds = built.queue.jobs.filter((job) => job.name === ROLLUP_JOBS.FOLD_PENDING);
-    assert.equal(folds.length, 1);
-    assert.equal(folds[0]?.jobId, FOLD_PENDING_JOB_ID);
+    assert.equal(await attemptedOn(paper.testId), 5);
   });
 
-  /** A queue that refuses the hand-off leaves the sitting pending, not lost: the next ask still counts it. */
-  it('folds the sitting once a later ask succeeds, after the first was refused', async () => {
+  it('leaves the items alone on a pass that is not yet due', async () => {
+    const built = build();
+    const paper = await paperOf();
+    await counted(built, (await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT])).attemptId);
+    await counted(built, (await sat(paper, [WRONG, null, null, null])).attemptId);
+
+    await built.rollup.sweepCohorts();
+
+    assert.equal(await attemptedOn(paper.testId), 4);
+  });
+});
+
+describe('RollupQueue — asking for the counting nobody else will', () => {
+  it('collapses every ask for a pass onto the one job the sweep runs as', async () => {
+    const built = build();
+
+    await built.outbox.sweep();
+    await built.outbox.sweep();
+
+    assert.deepEqual(
+      built.queue.jobs.map((job) => [job.name, job.jobId]),
+      [[ROLLUP_JOBS.SWEEP_COHORTS, COHORT_SWEEP_JOB_ID]],
+    );
+  });
+
+  /** A queue that refuses must not fail a score that committed: the sweep counts it either way. */
+  it('leaves a re-scored sitting counted when the queue refuses the rebuild', async () => {
     const built = build();
     const paper = await paperOf();
     const { attemptId, studentId } = await sat(paper, [RIGHT, RIGHT, null, null]);
+    await counted(built, attemptId);
     built.queue.failNext = true;
 
     await built.scoring.score(attemptId);
-    assert.equal(built.queue.jobs.length, 0);
 
-    await built.outbox.relay();
-    await drain(built);
-
-    assert.equal((await testStat(paper.testId))?.evaluatedCount, 1);
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1);
-  });
-
-  /** The scorer's hand-off and a sweep's re-ask share the pass's id, so they collapse onto one job. */
-  it('folds a sitting once, whether the scorer or a sweep asked for the pass', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const { attemptId, studentId } = await sat(paper, [RIGHT, RIGHT, null, null]);
-
-    await built.scoring.score(attemptId);
-    await built.outbox.relay();
-    const delivered = await drain(built);
-
-    assert.equal(delivered, 1);
     assert.equal((await testStat(paper.testId))?.evaluatedCount, 1);
     assert.equal((await studentStat(studentId))?.testsAttempted, 1);
   });

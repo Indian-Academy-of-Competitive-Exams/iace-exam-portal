@@ -268,11 +268,27 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 
 ## 9. Rollups
 
-Every aggregate stores **sums and counts, never averages**, so a fold is incremental and a retry is
-cheap; averages are derived on read. `ProcessedRollup` is not analytics — it is the exactly-once
-guard, so a redelivered evaluation cannot double-count an attempt into any of the others.
-`discrimination` is **batch-only**: it compares a top group against a bottom group and cannot be
-maintained one attempt at a time.
+Every aggregate stores **sums and counts, never averages**; averages are derived on read.
+
+**The two halves are counted differently, because their writes land differently.** A student's own
+aggregates touch one row per student, so five thousand concurrent scorers contend on none of them:
+`StudentStat`, `StudentSubjectStat` and the mistake rows are written **inside the scoring
+transaction**, gated on the same claim that marks the sitting evaluated. They commit with the
+marks, and a retry cannot count them twice because the claim has already been taken.
+
+The cohort's aggregates all land on one row per test, so writing them per submit would serialise a
+hall on it. They are **recounted, never folded**: a periodic pass finds the tests something has
+landed on since they were last counted and writes the answer outright. A recount needs no ledger —
+running it twice writes the same numbers — which is why there is no `ProcessedRollup` table and no
+delta to reverse. `TestStat` and `TestSectionStat` come from `Attempt` alone, off the marks and the
+packed `sectionScores`, and run on the short clock; `TestQuestionStat` needs every sheet and runs
+on a slower one. `discrimination` is **batch-only**: it compares a top group against a bottom group
+and cannot be maintained one attempt at a time.
+
+The pass's watermark is `Attempt.updatedAt`, not `evaluatedAt`. The two things that move marks
+already counted — a dropped question re-scoring every sitting, and a void — both leave `evaluatedAt`
+exactly where it was, so a pass keyed on it would see neither. It also looks back past its own
+watermark by a short lag, because a sitting can commit after a pass has read.
 
 Every evaluated sitting feeds `StudentStat` and `StudentSubjectStat`, retakes included, because a
 retake is still work a student did; `StudentStat.retakeCount` counts them, and its score sum leaves

@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, SCORING_RETRY_AFTER_MS } from '../queue/queues';
 import { isAbandoned, SAVE_GRACE_SEC } from './attempt-state';
 import { AttemptStateService } from './attempt-state.service';
-import { RollupOutbox } from './rollup-outbox';
+import { RollupQueue } from './rollup-queue';
 import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
@@ -23,7 +23,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
     private readonly state: AttemptStateService,
     private readonly submit: SubmitService,
     private readonly outbox: ScoringOutbox,
-    private readonly rollup: RollupOutbox,
+    private readonly rollup: RollupQueue,
     private readonly failures: QueueFailures,
   ) {
     super();
@@ -40,8 +40,8 @@ export class AttemptSweeperProcessor extends WorkerHost {
     await this.outbox.relay().catch((error: unknown) => {
       this.logger.error('Relaying the scoring requests nobody handed on failed', error);
     });
-    await this.rollup.relay().catch((error: unknown) => {
-      this.logger.error('Asking for the counting pass nobody asked for failed', error);
+    await this.rollup.sweep().catch((error: unknown) => {
+      this.logger.error('Asking for the cohort counting pass failed', error);
     });
     await this.askAgainForUnscored().catch((error: unknown) => {
       this.logger.error('Asking again for the sittings nobody scored failed', error);

@@ -15,7 +15,7 @@ import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { SCORING_REQUEST, ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -146,7 +146,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
       state,
       submit,
       outbox,
-      new RollupOutbox(new FakeQueue().asQueue()),
+      new RollupQueue(new FakeQueue().asQueue()),
       fakeQueueFailures(),
     ),
   };

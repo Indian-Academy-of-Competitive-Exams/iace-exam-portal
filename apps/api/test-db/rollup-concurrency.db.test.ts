@@ -1,6 +1,6 @@
 /**
- * The rollup's two writers, driven so they overlap. The rest of the tier runs one thing at a
- * time, which is why a lock-order inversion between the fold and the rebuild hides from it.
+ * The rollup's writers, driven so they overlap. The rest of the tier runs one thing at a time,
+ * which is why a lock-order inversion between two of them hides from it.
  */
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
-import { RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -35,7 +35,7 @@ after(() => prisma.$disconnect());
 
 const scorer = new ScoringProcessor(
   prisma,
-  new RollupOutbox(new FakeQueue().asQueue()),
+  new RollupQueue(new FakeQueue().asQueue()),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
@@ -104,23 +104,26 @@ function pausingBefore(
 const testStat = (testId: string) => prisma.testStat.findUnique({ where: { testId } });
 const studentStat = (studentId: string) => prisma.studentStat.findUnique({ where: { studentId } });
 
-describe('RollupService — a fold and a rebuild that overlap', () => {
-  /** TODO until the fold and the rebuild claim the outbox rows first: they cross on the guard today. */
-  it('lets a test rebuild overlap a fold without either being killed', { todo: true }, async () => {
+describe('RollupService — a sweep and a rebuild that overlap', () => {
+  /** The inversion this closes: two writers of one test taking its three tables in opposite orders. */
+  it('lets a test rebuild overlap a sweep without either being killed', async () => {
     const { paper } = await cohort();
     const arrived = barrier();
     const release = barrier();
+    // Held after `TestStat` and before the sections, so the rebuild meets a lock the sweep owns.
     const paused = new RollupService(
-      pausingBefore(prisma, 'TestStat', arrived.open, release.opened),
+      pausingBefore(prisma, 'TestSectionStat', arrived.open, release.opened),
     );
 
-    const folding = paused.foldPending();
+    const sweeping = paused.sweepCohorts();
     await arrived.opened;
     const rebuilding = new RollupService(prisma).rebuildTest(paper.testId);
     await delay(OVERLAP_MS);
     release.open();
 
-    await Promise.all([folding, rebuilding]);
+    const [swept] = await Promise.all([sweeping, rebuilding]);
+    assert.equal(swept, 1, 'the sweep counted its test rather than dying on the rebuild');
+    assert.equal((await testStat(paper.testId))?.evaluatedCount, 3);
   });
 
   /** The student's side left the fold: the overlap that remains is a rebuild inside an evaluation. */
@@ -144,7 +147,7 @@ describe('RollupService — a fold and a rebuild that overlap', () => {
     const release = barrier();
     const paused = new ScoringProcessor(
       pausingBefore(prisma, 'StudentStat', arrived.open, release.opened),
-      new RollupOutbox(new FakeQueue().asQueue()),
+      new RollupQueue(new FakeQueue().asQueue()),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
@@ -170,7 +173,7 @@ describe('RollupService — a rebuild that lands before the fold it overtakes', 
 
     await rollup.rebuildTest(paper.testId);
     const rebuilt = await testStat(paper.testId);
-    await rollup.foldPending();
+    await rollup.sweepCohorts();
 
     const after = await testStat(paper.testId);
     assert.equal(after?.evaluatedCount, 3);
@@ -183,7 +186,7 @@ describe('RollupService — a rebuild that lands before the fold it overtakes', 
     const studentId = studentIds[0] ?? '';
 
     await rollup.rebuildStudent(studentId);
-    await rollup.foldPending();
+    await rollup.sweepCohorts();
 
     assert.equal((await studentStat(studentId))?.testsAttempted, 1);
   });

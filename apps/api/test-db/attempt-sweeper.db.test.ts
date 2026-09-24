@@ -7,8 +7,8 @@ import {
   SWEEP_BATCH,
   SWEEP_LANES,
 } from '../src/attempts/attempt-sweeper.processor';
-import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
-import { FOLD_PENDING_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
+import { RollupQueue } from '../src/attempts/rollup-queue';
+import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import { makeCatalog, makeTest, resetDatabase, testPrisma, uid } from './support/database';
@@ -63,7 +63,7 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
     state,
     submit,
     NO_MORE_WORK,
-    new RollupOutbox(rollupQueue.asQueue()),
+    new RollupQueue(rollupQueue.asQueue()),
     fakeQueueFailures(),
   );
   return { asked, sweeper, rollupQueue, state };
@@ -142,26 +142,15 @@ describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => 
   });
 });
 
-describe('AttemptSweeperProcessor — backstop for a died counting pass', () => {
-  /** A pass that died leaves its rows pending, and the sweep is what asks for another one. */
-  it('asks for another counting pass while a row is still pending', async () => {
-    const pending = await prisma.outboxEvent.create({
-      data: {
-        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
-        aggregateId: uid(),
-        eventType: ROLLUP_REQUEST.EVENT_TYPE,
-        payload: { testId: 'test_1' },
-        createdAt: new Date(1),
-      },
-    });
+describe('AttemptSweeperProcessor — the clock the cohort counting runs on', () => {
+  /** Nothing else asks any more: a first evaluation counts its own student and waits for this. */
+  it('asks for a cohort counting pass on every sweep', async () => {
     const { sweeper, rollupQueue } = build();
 
     await sweeper.process();
 
-    const job = rollupQueue.jobs.find((queued) => queued.name === ROLLUP_JOBS.FOLD_PENDING);
-    assert.ok(job, 'the sweep asks for a fold pass');
-    assert.equal(job?.jobId, FOLD_PENDING_JOB_ID);
-    const row = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: pending.id } });
-    assert.equal(row.processedAt, null, 'asking for the pass is not the same as counting the row');
+    const job = rollupQueue.jobs.find((queued) => queued.name === ROLLUP_JOBS.SWEEP_COHORTS);
+    assert.ok(job, 'the sweep asks for a cohort pass');
+    assert.equal(job?.jobId, COHORT_SWEEP_JOB_ID);
   });
 });

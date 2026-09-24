@@ -669,15 +669,16 @@ model Attempt {
   voidReason       String?
   voidedById       String?             @db.Uuid
 
-  test             Test              @relation(fields: [testId], references: [id])
-  student          Student           @relation(fields: [studentId], references: [id])
-  sheet            AttemptSheet?
-  processedRollups ProcessedRollup[]
-  topperOf         TestStat[]
+  test     Test          @relation(fields: [testId], references: [id])
+  student  Student       @relation(fields: [studentId], references: [id])
+  sheet    AttemptSheet?
+  topperOf TestStat[]
 
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
   @@index([testId, status])
+  // The cohort sweep's watermark: which tests something has landed on since they were counted.
+  @@index([testId, updatedAt])
 }
 
 // One sitting's answers in one row: `answers` holds a slot per paper row in paper order, `verdicts` the scorer's marks for each.
@@ -984,17 +985,6 @@ model OutboxEvent {
 
   @@index([processedAt, createdAt])
   @@index([aggregateType, aggregateId, createdAt])
-}
-
-// Makes each attempt count exactly once per rollup, across worker retries.
-model ProcessedRollup {
-  attemptId   String   @db.Uuid
-  rollupType  String
-  processedAt DateTime @default(now()) @db.Timestamptz(3)
-
-  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-
-  @@id([attemptId, rollupType])
 }
 
 // ============================================================================

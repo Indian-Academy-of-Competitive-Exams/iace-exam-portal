@@ -1,17 +1,16 @@
 /**
- * Evaluated implies counted. The `scoring.completed` row is INSERTED in the same transaction that
- * claims the first evaluation, so the two commit together and no crash can strand a sitting the
- * aggregates never saw. Handing it to the queue is a separate, repeatable step.
+ * Asking for counting, never doing it. A student's own totals commit with their marks, so nothing
+ * here is on the path of a first evaluation; what this queues is the cohort's periodic recount and
+ * the bounded rebuilds a re-score or a void needs.
  */
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
-import { DOMAIN_EVENTS } from '../common/events';
 import {
-  FOLD_PENDING_JOB_ID,
+  COHORT_SWEEP_JOB_ID,
   QUEUE_NAMES,
-  ROLLUP_FOLD_DELAY_MS,
   ROLLUP_JOBS,
+  ROLLUP_SWEEP_DELAY_MS,
   ROLLUP_REBUILD_DELAY_MS,
   keyedJob,
   rollupRebuildJobId,
@@ -20,22 +19,16 @@ import {
   type RollupJobData,
 } from '../queue/queues';
 
-/** What one evaluation's fold request is called in `OutboxEvent`. */
-export const ROLLUP_REQUEST = {
-  AGGREGATE_TYPE: 'Attempt',
-  EVENT_TYPE: DOMAIN_EVENTS.SCORING_COMPLETED,
-} as const;
-
 @Injectable()
-export class RollupOutbox {
+export class RollupQueue {
   constructor(@InjectQueue(QUEUE_NAMES.ROLLUP) private readonly rollup: Queue<RollupJobData>) {}
 
-  /** Asks for a pass. The pass claims its own rows, so a burst of evaluations is one job. */
-  async relay(): Promise<void> {
+  /** Asks for a pass. The pass finds its own tests, so a burst of evaluations is one job. */
+  async sweep(): Promise<void> {
     await this.rollup.add(
-      ROLLUP_JOBS.FOLD_PENDING,
+      ROLLUP_JOBS.SWEEP_COHORTS,
       {},
-      { ...keyedJob(FOLD_PENDING_JOB_ID), delay: ROLLUP_FOLD_DELAY_MS, removeOnComplete: true },
+      { ...keyedJob(COHORT_SWEEP_JOB_ID), delay: ROLLUP_SWEEP_DELAY_MS, removeOnComplete: true },
     );
   }
 

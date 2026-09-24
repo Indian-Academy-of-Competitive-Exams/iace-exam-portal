@@ -4,7 +4,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, AppException, ErrorCodes } from '@iace/contracts';
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
@@ -28,7 +28,7 @@ after(() => prisma.$disconnect());
 
 function build() {
   const queue = new FakeQueue();
-  const outbox = new RollupOutbox(queue.asQueue());
+  const outbox = new RollupQueue(queue.asQueue());
   const rollup = new RollupService(prisma);
   return {
     queue,
@@ -66,17 +66,16 @@ async function sat(
   return { attemptId: attempt.id, studentId };
 }
 
-/** Scored, handed on, and folded by the worker — the whole road a submitted sitting takes. */
+/** Scored, then counted by the periodic sweep — the whole road a submitted sitting takes. */
 async function counted(world: World, attemptId: string): Promise<void> {
   await world.scoring.score(attemptId);
-  for (const job of world.queue.jobs.splice(0)) {
-    if (job.name === ROLLUP_JOBS.FOLD_PENDING) await world.rollup.foldPending();
-  }
+  world.queue.jobs.splice(0);
+  await world.rollup.sweepCohorts();
 }
 
-describe('TestAnalyticsService — how fresh the folded figures are', () => {
-  /** A retake, a voided sitting and an unscored one are left out of the fold, so the live count leaves them out too. */
-  it('counts only the sittings the fold folds, and settles once a rebuild catches up', async () => {
+describe('TestAnalyticsService — how fresh the counted figures are', () => {
+  /** A retake, a voided sitting and an unscored one are left out of the count, so the live read leaves them out too. */
+  it('counts only the sittings the cohort holds, and settles once a rebuild catches up', async () => {
     const world = build();
     const paper = await makePaper(prisma, { questions: ['Reasoning', 'Maths'] });
 

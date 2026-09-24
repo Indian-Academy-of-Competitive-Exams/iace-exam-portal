@@ -10,7 +10,7 @@ import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupService } from '../src/attempts/rollup.service';
-import { RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -39,7 +39,7 @@ after(() => prisma.$disconnect());
 
 const processor = new ScoringProcessor(
   prisma,
-  new RollupOutbox(new FakeQueue().asQueue()),
+  new RollupQueue(new FakeQueue().asQueue()),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),

@@ -2,7 +2,6 @@
 
 export const DOMAIN_EVENTS = {
   /** A first evaluation landed. DURABLE — the scorer writes it to `OutboxEvent`, never to the bus. */
-  SCORING_COMPLETED: 'scoring.completed',
   /** A student's PIN changed; auth revoked the sessions before emitting. ANNOUNCED — no handler. */
   STUDENT_PIN_RESET: 'student.pin_reset',
   /** One student's access moved. WIRED — see the access module's cache listener. */

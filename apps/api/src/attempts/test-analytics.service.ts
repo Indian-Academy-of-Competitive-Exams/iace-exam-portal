@@ -22,7 +22,7 @@ import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
 import { cohortCurveOf } from './cohort-curve';
 import { cohortSittingsOf, optionCountsIn, optionsIn } from './rollup-fold';
-import { RollupOutbox } from './rollup-outbox';
+import { RollupQueue } from './rollup-queue';
 import {
   itemsOf,
   sectionsOf,
@@ -61,7 +61,7 @@ type ItemRow = Prisma.TestQuestionStatGetPayload<{ select: typeof ITEM_SELECT }>
 export class TestAnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly rollups: RollupOutbox,
+    private readonly rollups: RollupQueue,
     private readonly access: AccessResolverService,
   ) {}
 

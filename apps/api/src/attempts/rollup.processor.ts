@@ -1,8 +1,14 @@
-/** Counting, off every request path: one sitting folded in, one test rebuilt, or every table. */
+/** Counting, off every request path: the cohort sweep, one bounded rebuild, or every table. */
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
-import { QUEUE_NAMES, QUEUE_POLICY, ROLLUP_JOBS, type RollupJobData } from '../queue/queues';
+import {
+  DRAINED_ROLLUP_JOBS,
+  QUEUE_NAMES,
+  QUEUE_POLICY,
+  ROLLUP_JOBS,
+  type RollupJobData,
+} from '../queue/queues';
 import { RollupService } from './rollup.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
@@ -23,11 +29,14 @@ export class RollupProcessor extends WorkerHost {
   }
 
   async process(job: Job<RollupJobData>): Promise<void> {
+    // A fold queued before this deploy asks for the same thing the sweep does: count what changed.
+    if (isDrained(job.name)) {
+      await this.rollup.sweepCohorts();
+      return;
+    }
     switch (job.name) {
-      // FOLD is a job queued before this deploy: still drained, but as a pass, not a lone attempt.
-      case ROLLUP_JOBS.FOLD:
-      case ROLLUP_JOBS.FOLD_PENDING:
-        await this.rollup.foldPending();
+      case ROLLUP_JOBS.SWEEP_COHORTS:
+        await this.rollup.sweepCohorts();
         return;
       case ROLLUP_JOBS.REBUILD_TEST:
         return this.rebuildOne(job.data.testId);
@@ -56,3 +65,5 @@ export class RollupProcessor extends WorkerHost {
     await this.rollup.rebuildStudent(studentId);
   }
 }
+
+const isDrained = (name: string): boolean => DRAINED_ROLLUP_JOBS.some((held) => held === name);

@@ -5,7 +5,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { sectionScoresIn } from '../src/attempts/score-paper';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupService } from '../src/attempts/rollup.service';
-import { RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
@@ -32,7 +32,7 @@ after(() => prisma.$disconnect());
 
 const processor = new ScoringProcessor(
   prisma,
-  new RollupOutbox(new FakeQueue().asQueue()),
+  new RollupQueue(new FakeQueue().asQueue()),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),

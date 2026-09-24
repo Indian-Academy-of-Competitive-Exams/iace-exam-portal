@@ -134,21 +134,21 @@ Only the owning module writes these tables. Every model in `prisma/schema.prisma
 model with no owner is a model any module may quietly start writing, which is how the boundary
 erodes.
 
-| Module        | Owns (Prisma models)                                                                                                                                |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| admins        | `Admin`, `AdminFeaturePermission`                                                                                                                   |
-| students      | `Student`, `StudentProfile`                                                                                                                         |
-| branches      | `Branch`                                                                                                                                            |
-| access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                             |
-| events        | `Event`, `EventCandidate`                                                                                                                           |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                                                                   |
-| assignments   | `QuestionAssignment`, `SectionComment`                                                                                                              |
-| configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                                          |
-| tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                        |
-| attempts      | `Attempt`, `AttemptSheet`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
-| audit         | `RowActionLog`, `ImportLog`                                                                                                                         |
-| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                                                            |
-| saved         | `SavedQuestion`                                                                                                                                     |
+| Module        | Owns (Prisma models)                                                                                                             |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| admins        | `Admin`, `AdminFeaturePermission`                                                                                                |
+| students      | `Student`, `StudentProfile`                                                                                                      |
+| branches      | `Branch`                                                                                                                         |
+| access        | `Program`, `TestSeries`, `StudentGrant`                                                                                          |
+| events        | `Event`, `EventCandidate`                                                                                                        |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                                                |
+| assignments   | `QuestionAssignment`, `SectionComment`                                                                                           |
+| configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                       |
+| tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                     |
+| attempts      | `Attempt`, `AttemptSheet`, `OutboxEvent`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
+| audit         | `RowActionLog`, `ImportLog`                                                                                                      |
+| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                                         |
+| saved         | `SavedQuestion`                                                                                                                  |
 
 `auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
@@ -203,19 +203,17 @@ does not run.
 | `student.pin_reset`      | auth, both reset paths                                                                                        | —                                            | announced |
 | `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired     |
 | `access.catalog_changed` | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired     |
-| `scoring.completed`      | the scoring worker                                                                                            | —                                            | announced |
 
 Submit and scoring do not go through the bus: they go through `OutboxEvent` and the BullMQ scoring
-queue, which is the durable path and the right one for a write that must not be lost. The rollup
-fold rides one of those outbox rows, and the row's type string reuses the `scoring.completed` name —
-same words, different mechanism, and the bus never sees it.
+queue, which is the durable path and the right one for a write that must not be lost. Counting does
+not ride an outbox row at all — a student's aggregates commit with their marks, and the cohort's are
+recounted by a periodic pass that finds its own work (`docs/02` §9).
 
 **Notifications left the bus for the same reason.** They used to be `@OnEvent` handlers that
 swallowed their own failure, so a result-ready could be lost between the scoring that produced it
 and the row a student reads, with nothing to retry it and nothing to say it had gone. Each producer
 now writes a `notification.requested` outbox row inside its OWN transaction — the fact and the
-intent to tell somebody commit together — and `NotificationOutbox` relays it. `scoring.completed` is
-still emitted and is now **announced**: the work it describes is done by the producer inline.
+intent to tell somebody commit together — and `NotificationOutbox` relays it.
 
 This inverts one guarantee deliberately. A notification that cannot be written now FAILS the write
 that caused it, where before it was swallowed. That is the point: rolling the grant back is

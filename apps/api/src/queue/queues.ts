@@ -78,18 +78,20 @@ export const RELAY_GRACE_SEC = 30;
 
 /** What a rollup job is: one sitting to fold in, one test or student to rebuild, or every table. */
 export const ROLLUP_JOBS = {
-  FOLD: 'fold-attempt',
-  FOLD_PENDING: 'fold-pending',
+  SWEEP_COHORTS: 'sweep-cohorts',
   REBUILD_TEST: 'rebuild-test',
   REBUILD_STUDENT: 'rebuild-student',
   REBUILD_ALL: 'rebuild-all',
 } as const;
 
-/** One id for the whole pass: a burst of evaluations asks for one fold, not one each. */
-export const FOLD_PENDING_JOB_ID = `${QUEUE_NAMES.ROLLUP}-fold-pending`;
+/** The names this queue enqueued before the cohort sweep replaced the fold, drained and not written. */
+export const DRAINED_ROLLUP_JOBS = ['fold-attempt', 'fold-pending'] as const;
 
-/** Long enough to collect a burst, short enough that a result is counted while it is news. */
-export const ROLLUP_FOLD_DELAY_MS = 5 * 1000;
+/** One id for the whole pass: every test that changed is counted by one job, never one each. */
+export const COHORT_SWEEP_JOB_ID = `${QUEUE_NAMES.ROLLUP}-sweep-cohorts`;
+
+/** Long enough to collect a burst, short enough that a cohort figure settles while it is news. */
+export const ROLLUP_SWEEP_DELAY_MS = 5 * 1000;
 
 /** Ids only, like every other job: the worker re-reads whatever it is about to fold. */
 export interface RollupJobData {

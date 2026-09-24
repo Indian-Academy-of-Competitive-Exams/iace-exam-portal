@@ -7,14 +7,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { RELAY_BATCH } from '../queue/queues';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { ROLLUP_REQUEST } from './rollup-outbox';
 import { sectionScoresIn } from './score-paper';
 import {
-  COHORT_ROLLUP_TYPES,
-  ROLLUP_TYPE,
   addToCohortTotals,
   addToStudentTotals,
   cohortSittingsOf,
@@ -24,7 +20,6 @@ import {
   type CohortTotals,
   type FoldableAttempt,
   type QuestionTotals,
-  type RollupType,
   type StudentTotals,
 } from './rollup-fold';
 
@@ -97,15 +92,18 @@ async function foldablesOf(
 /** Sittings replayed per round trip, so a rebuild of a 5K cohort never holds it all in memory. */
 const REBUILD_PAGE = 200;
 
-/** A hall of 5K at a page each, and then the pass lets go: no one job may run for ever. */
-const FOLD_PAGES_PER_PASS = 25;
-
-/** Enough ids to go looking with, and few enough that one bad page cannot fill the log. */
-const WARNED_IDS = 20;
-
-/** A fold is a handful of statements; a rebuild is a page at a time and may take a while. */
-const FOLD_TIMEOUT_MS = 15_000;
+/** The cheap pair is four statements; the item pass is a page at a time and may take a while. */
+const RECOUNT_TIMEOUT_MS = 15_000;
 const REBUILD_TIMEOUT_MS = 120_000;
+
+/** How far back a pass looks past its own watermark, for a sitting that committed after it read. */
+const SWEEP_LAG = '2 minutes';
+
+/** Bounded so one pass cannot run for ever; the next sweep takes whatever is left. */
+const SWEEP_TESTS_PER_PASS = 50;
+
+/** Item analysis is admin-only and reads every sheet, so it runs on its own slower clock. */
+const ITEM_SWEEP_EVERY_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class RollupService {
@@ -113,127 +111,159 @@ export class RollupService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** A full page means more is waiting, and this job holds the id a re-ask would collapse onto. */
-  async foldPending(): Promise<number> {
+  /** Every test something has landed on since it was last counted. One job id, so one pass runs. */
+  async sweepCohorts(): Promise<number> {
+    const tests = await this.changedTests();
     let counted = 0;
-    for (let page = 0; page < FOLD_PAGES_PER_PASS; page += 1) {
-      const claimed = await this.foldPage();
-      counted += claimed;
-      if (claimed < RELAY_BATCH) break;
+    for (const testId of tests) {
+      if (await this.tried(testId, () => this.recountTest(testId))) counted += 1;
+    }
+    // Its own selection, not this pass's tests: a test goes quiet long before its items are due.
+    for (const testId of await this.staleItems()) {
+      await this.tried(testId, () => this.recountTestItems(testId));
     }
     return counted;
   }
 
-  /** One page: claim a page of counting requests, fold them, and mark them only once counted. */
-  private async foldPage(): Promise<number> {
-    const rows = await this.prisma.outboxEvent.findMany({
-      where: { eventType: ROLLUP_REQUEST.EVENT_TYPE, processedAt: null },
-      orderBy: { createdAt: 'asc' },
-      take: RELAY_BATCH,
-      select: { id: true, aggregateId: true },
-    });
-    if (rows.length === 0) return 0;
-
-    // Deduped: two requests for one sitting are one fold, which `guarded` would have made of them anyway.
-    const requested = [...new Set(rows.map((row) => row.aggregateId))];
-    const attempts = await foldablesOf(this.prisma, requested);
-    const folded = new Set(attempts.map((attempt) => attempt.id));
-    const retired = requested.filter((id) => !folded.has(id));
-    // Marked all the same below: a request for a sitting nobody evaluated must not jam the page.
-    if (retired.length > 0) {
-      this.logger.warn(
-        `${retired.length} of ${requested.length} folds are not evaluated, and are retired: ${named(retired)}`,
-      );
-    }
-
-    await this.foldCohorts(attempts);
-
-    await this.prisma.outboxEvent.updateMany({
-      where: { id: { in: rows.map((row) => row.id) } },
-      data: { processedAt: new Date() },
-    });
-    return rows.length;
-  }
-
-  /** The cohort's side of a page: one transaction per test, whatever the page's sittings sat. */
-  private async foldCohorts(attempts: readonly FoldableAttempt[]): Promise<void> {
-    const byTest = new Map<string, FoldableAttempt[]>();
-    for (const attempt of attempts) {
-      if (!attempt.isGraded || attempt.evaluatedAt === null) continue;
-      const sittings = byTest.get(attempt.testId) ?? [];
-      sittings.push(attempt);
-      byTest.set(attempt.testId, sittings);
-    }
-    for (const [testId, sittings] of byTest) {
-      const first = await this.firstAmong(testId, sittings);
-      if (first.length > 0) await this.foldCohortBatch(testId, first);
+  /** One test that will not count must not hold up the rest of the pass; the next one takes it again. */
+  private async tried(testId: string, work: () => Promise<void>): Promise<boolean> {
+    try {
+      await work();
+      return true;
+    } catch (error: unknown) {
+      this.logger.error(`Counting the cohort of test ${testId} failed`, error);
+      return false;
     }
   }
 
-  /** One read a test, not one a sitting: which of these are the earliest their student has on it. */
-  private async firstAmong(
-    testId: string,
-    sittings: readonly FoldableAttempt[],
-  ): Promise<FoldableAttempt[]> {
-    const rows = await this.prisma.attempt.findMany({
-      where: {
-        ...cohortSittingsOf(testId),
-        studentId: { in: [...new Set(sittings.map((attempt) => attempt.studentId))] },
-      },
-      // The order `firstSittings` reads in, so a fold and a rebuild pick the same sitting.
-      orderBy: [{ evaluatedAt: 'asc' }, { attemptNo: 'asc' }],
-      select: { id: true, studentId: true },
-    });
-    const earliest = new Map<string, string>();
-    for (const row of rows) if (!earliest.has(row.studentId)) earliest.set(row.studentId, row.id);
-    return sittings.filter((attempt) => earliest.get(attempt.studentId) === attempt.id);
+  /** The lag is the whole guard: a sitting committed after a pass read must be swept again. */
+  private async changedTests(): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT t."id"
+      FROM "Test" t
+      LEFT JOIN "TestStat" s ON s."testId" = t."id"
+      WHERE EXISTS (
+        SELECT 1 FROM "Attempt" a
+        WHERE a."testId" = t."id"
+          AND a."updatedAt" > COALESCE(s."computedAt" - ${SWEEP_LAG}::interval, '-infinity'::timestamptz))
+      LIMIT ${SWEEP_TESTS_PER_PASS}`;
+    return rows.map((row) => row.id);
   }
 
-  /** Every fresh sitting as ONE delta. No row lock: each write below is atomic on its own row. */
-  private async foldCohortBatch(
-    testId: string,
-    sittings: readonly FoldableAttempt[],
-  ): Promise<void> {
+  /** Item analysis reads every sheet, so it waits for BOTH: newer totals to describe, and its own clock. */
+  private async staleItems(): Promise<string[]> {
+    const fresh = new Date(Date.now() - ITEM_SWEEP_EVERY_MS);
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT s."testId" AS id
+      FROM "TestStat" s
+      WHERE s."attemptCount" > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM "TestQuestionStat" q
+          WHERE q."testId" = s."testId" AND q."computedAt" >= s."computedAt")
+        AND NOT EXISTS (
+          SELECT 1 FROM "TestQuestionStat" q
+          WHERE q."testId" = s."testId" AND q."computedAt" >= ${fresh})
+      LIMIT ${SWEEP_TESTS_PER_PASS}`;
+    return rows.map((row) => row.id);
+  }
+
+  /** The cheap pair, off `Attempt` alone: the marks and the packed sections carry all of it. */
+  async recountTest(testId: string): Promise<void> {
     await this.prisma.$transaction(
       async (tx) => {
-        const fresh = await this.claimCohortFolds(tx, sittings);
-        if (fresh.length === 0) return;
-
-        const totals = emptyCohortTotals();
-        for (const attempt of fresh) addToCohortTotals(totals, attempt);
-
         const now = new Date();
-        await this.writeCohortDelta(tx, testId, totals, now);
-        await this.writeSectionDelta(tx, testId, totals, now);
-        await this.writeQuestionDelta(tx, testId, totals, now);
+        await this.writeTestTotals(tx, testId, now);
+        await this.writeSectionTotals(tx, testId, now);
       },
-      { timeout: FOLD_TIMEOUT_MS },
+      { timeout: RECOUNT_TIMEOUT_MS },
     );
   }
 
-  /** The claim replaces the lock the guard read needed: whatever comes back is this worker's to count. */
-  private async claimCohortFolds(
+  /** One statement, so the counts and the topper describe one snapshot of the cohort. */
+  private async writeTestTotals(
     tx: Prisma.TransactionClient,
-    sittings: readonly FoldableAttempt[],
-  ): Promise<FoldableAttempt[]> {
-    // Sorted, so two workers on one test take the same rows in the same order and cannot deadlock.
-    const ids = sittings.map((attempt) => attempt.id).sort();
-    const claimed = await tx.$queryRaw<{ attemptId: string }[]>`
-      INSERT INTO "ProcessedRollup" ("attemptId", "rollupType")
-      SELECT id, ${ROLLUP_TYPE.TEST} FROM unnest(${ids}::uuid[]) AS id
-      ON CONFLICT DO NOTHING
-      RETURNING "attemptId"`;
+    testId: string,
+    now: Date,
+  ): Promise<void> {
+    await tx.$executeRaw`
+      WITH sat AS (
+        SELECT a."id", a."score", a."evaluatedAt", a."attemptNo",
+               COALESCE((
+                 SELECT sum((part->>5)::bigint)
+                 FROM jsonb_array_elements(COALESCE(a."sectionScores", '[]'::jsonb)) part
+               ), 0) AS "timeSec"
+        FROM "Attempt" a
+        WHERE a."testId" = ${testId}::uuid
+          AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
+          AND a."isGraded"
+      )
+      INSERT INTO "TestStat" (
+        "testId", "attemptCount", "evaluatedCount", "sumScore", "maxScore", "minScore",
+        "sumTimeSec", "attemptsIncluded", "topperAttemptId", "computedAt")
+      SELECT ${testId}::uuid, count(*)::int, count(*)::int, COALESCE(sum("score"), 0),
+             max("score"), min("score"), COALESCE(sum("timeSec"), 0)::bigint, count(*)::int,
+             -- The fold kept the first sitting to reach the maximum, and a replay has to agree.
+             (SELECT "id" FROM sat ORDER BY "score" DESC, "evaluatedAt", "attemptNo" LIMIT 1),
+             ${now}
+      FROM sat
+      ON CONFLICT ("testId") DO UPDATE SET
+        "attemptCount" = EXCLUDED."attemptCount",
+        "evaluatedCount" = EXCLUDED."evaluatedCount",
+        "sumScore" = EXCLUDED."sumScore",
+        "maxScore" = EXCLUDED."maxScore",
+        "minScore" = EXCLUDED."minScore",
+        "sumTimeSec" = EXCLUDED."sumTimeSec",
+        "attemptsIncluded" = EXCLUDED."attemptsIncluded",
+        "topperAttemptId" = EXCLUDED."topperAttemptId",
+        "computedAt" = EXCLUDED."computedAt"`;
+  }
 
-    const won = new Set(claimed.map((row) => row.attemptId));
-    const fresh = sittings.filter((attempt) => won.has(attempt.id));
-    // The cohort's other two ride on the TEST row, which is the one every reader of the guard asks.
-    await tx.processedRollup.createMany({
-      data: fresh.flatMap((attempt) =>
-        COHORT_TAGALONG_TYPES.map((rollupType) => ({ attemptId: attempt.id, rollupType })),
-      ),
-      skipDuplicates: true,
+  /** `sectionScores` is `[sectionId, score, correct, wrong, unattempted, timeSpentSec]` per section. */
+  private async writeSectionTotals(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    now: Date,
+  ): Promise<void> {
+    await tx.testSectionStat.deleteMany({ where: { testId } });
+    await tx.$executeRaw`
+      INSERT INTO "TestSectionStat" (
+        "testId", "baseConfigSectionId", "attempted", "sumScore", "sumTimeSec", "computedAt")
+      SELECT ${testId}::uuid, (part->>0)::uuid, count(*)::int,
+             sum((part->>1)::numeric), sum((part->>5)::bigint), ${now}
+      FROM "Attempt" a, jsonb_array_elements(COALESCE(a."sectionScores", '[]'::jsonb)) part
+      WHERE a."testId" = ${testId}::uuid
+        AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
+        AND a."isGraded"
+      GROUP BY (part->>0)`;
+  }
+
+  /** The expensive one: every sheet of the cohort, against the paper it was served from. */
+  async recountTestItems(testId: string): Promise<void> {
+    await this.prisma.$transaction(
+      async (tx) => {
+        const now = new Date();
+        const ids = (await this.firstSittings(tx, testId)).map((row) => row.id);
+        const totals = emptyCohortTotals();
+        await this.replay(tx, ids, (attempt) => addToCohortTotals(totals, attempt));
+        await this.writeItemTotals(tx, testId, totals, now);
+      },
+      { timeout: REBUILD_TIMEOUT_MS },
+    );
+  }
+
+  private async writeItemTotals(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    totals: CohortTotals,
+    now: Date,
+  ): Promise<void> {
+    await tx.testQuestionStat.deleteMany({ where: { testId } });
+    await tx.testQuestionStat.createMany({
+      data: [...totals.questions.values()].map((question) => ({
+        testId,
+        ...questionColumns(question, now),
+      })),
     });
-    return fresh;
   }
 
   /** A drop or a bonus moved marks already counted: the test's curve and every sitter go again. */
@@ -244,26 +274,10 @@ export class RollupService {
     }
   }
 
-  /** The test's three cohort tables, worked out again from the sittings themselves. */
+  /** Both halves at once: what an admin's re-sync asks for, and what a backfill writes. */
   async rebuildTest(testId: string): Promise<void> {
-    await this.prisma.$transaction(
-      async (tx) => {
-        const now = new Date();
-        // The lock first: a concurrent fold of this test queues behind the row it has to update.
-        await tx.testStat.upsert({
-          where: { testId },
-          create: { testId, computedAt: now },
-          update: { computedAt: now },
-        });
-
-        const ids = (await this.firstSittings(tx, testId)).map((row) => row.id);
-        const totals = emptyCohortTotals();
-        await this.replay(tx, ids, (attempt) => addToCohortTotals(totals, attempt));
-        await this.writeCohort(tx, testId, totals, now);
-        await this.reguard(tx, ids, COHORT_ROLLUP_TYPES, { attempt: { testId } });
-      },
-      { timeout: REBUILD_TIMEOUT_MS },
-    );
+    await this.recountTest(testId);
+    await this.recountTestItems(testId);
   }
 
   /** One student's two tables, over every evaluated sitting of theirs — retakes included. */
@@ -403,150 +417,6 @@ export class RollupService {
     await tx.savedQuestion.createMany({ data: wrong, skipDuplicates: true });
   }
 
-  /** One statement: counts add, the extremes take GREATEST, and the topper follows a raised maximum. */
-  private async writeCohortDelta(
-    tx: Prisma.TransactionClient,
-    testId: string,
-    totals: CohortTotals,
-    now: Date,
-  ): Promise<void> {
-    const counts = cohortCounts(totals);
-    await tx.$executeRaw`
-      INSERT INTO "TestStat" (
-        "testId", "attemptCount", "evaluatedCount", "sumScore", "sumTimeSec",
-        "attemptsIncluded", "maxScore", "minScore", "topperAttemptId", "computedAt")
-      VALUES (
-        ${testId}::uuid, ${counts.attemptCount}, ${counts.evaluatedCount}, ${counts.sumScore},
-        ${counts.sumTimeSec}, ${counts.attemptsIncluded}, ${totals.maxScore}, ${totals.minScore},
-        ${totals.topperAttemptId}::uuid, ${now})
-      ON CONFLICT ("testId") DO UPDATE SET
-        "attemptCount" = "TestStat"."attemptCount" + EXCLUDED."attemptCount",
-        "evaluatedCount" = "TestStat"."evaluatedCount" + EXCLUDED."evaluatedCount",
-        "sumScore" = "TestStat"."sumScore" + EXCLUDED."sumScore",
-        "sumTimeSec" = "TestStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
-        "attemptsIncluded" = "TestStat"."attemptsIncluded" + EXCLUDED."attemptsIncluded",
-        "maxScore" = GREATEST("TestStat"."maxScore", EXCLUDED."maxScore"),
-        "minScore" = LEAST("TestStat"."minScore", EXCLUDED."minScore"),
-        -- The topper travels with the maximum, so a delta that did not raise it changes nothing.
-        "topperAttemptId" = CASE
-          WHEN EXCLUDED."maxScore" IS NOT NULL
-           AND ("TestStat"."maxScore" IS NULL OR EXCLUDED."maxScore" > "TestStat"."maxScore")
-          THEN EXCLUDED."topperAttemptId" ELSE "TestStat"."topperAttemptId" END,
-        "computedAt" = EXCLUDED."computedAt"`;
-  }
-
-  /** Every section the page touched, in one statement. */
-  private async writeSectionDelta(
-    tx: Prisma.TransactionClient,
-    testId: string,
-    totals: CohortTotals,
-    now: Date,
-  ): Promise<void> {
-    const rows = [...totals.sections.values()].sort((left, right) =>
-      left.baseConfigSectionId.localeCompare(right.baseConfigSectionId),
-    );
-    if (rows.length === 0) return;
-
-    await tx.$executeRaw`
-      INSERT INTO "TestSectionStat" (
-        "testId", "baseConfigSectionId", "attempted", "sumScore", "sumTimeSec", "computedAt")
-      SELECT ${testId}::uuid, * FROM unnest(
-        ${rows.map((row) => row.baseConfigSectionId)}::uuid[],
-        ${rows.map((row) => row.attempted)}::int[],
-        ${rows.map((row) => row.sumScore)}::numeric[],
-        ${rows.map((row) => BigInt(row.sumTimeSec))}::bigint[],
-        ${rows.map(() => now)}::timestamptz[])
-      ON CONFLICT ("testId", "baseConfigSectionId") DO UPDATE SET
-        "attempted" = "TestSectionStat"."attempted" + EXCLUDED."attempted",
-        "sumScore" = "TestSectionStat"."sumScore" + EXCLUDED."sumScore",
-        "sumTimeSec" = "TestSectionStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
-        "computedAt" = EXCLUDED."computedAt"`;
-  }
-
-  /** Every paper row the page touched, in one statement — the option tallies merged by Postgres. */
-  private async writeQuestionDelta(
-    tx: Prisma.TransactionClient,
-    testId: string,
-    totals: CohortTotals,
-    now: Date,
-  ): Promise<void> {
-    const rows = [...totals.questions.values()].sort((left, right) =>
-      left.paperQuestionId.localeCompare(right.paperQuestionId),
-    );
-    if (rows.length === 0) return;
-
-    await tx.$executeRaw`
-      INSERT INTO "TestQuestionStat" (
-        "testId", "paperQuestionId", "questionId", "attemptedCount", "correctCount", "wrongCount",
-        "skippedCount", "sumTimeSec", "optionCounts", "pValue", "computedAt")
-      SELECT ${testId}::uuid, t.*,
-             t."correctCount"::numeric / NULLIF(t."attemptedCount", 0), ${now}
-      FROM unnest(
-        ${rows.map((row) => row.paperQuestionId)}::uuid[],
-        ${rows.map((row) => row.questionId)}::uuid[],
-        ${rows.map((row) => row.attemptedCount)}::int[],
-        ${rows.map((row) => row.correctCount)}::int[],
-        ${rows.map((row) => row.wrongCount)}::int[],
-        ${rows.map((row) => row.skippedCount)}::int[],
-        ${rows.map((row) => BigInt(row.sumTimeSec))}::bigint[],
-        ${rows.map((row) => JSON.stringify(row.optionCounts))}::jsonb[])
-        AS t("paperQuestionId", "questionId", "attemptedCount", "correctCount", "wrongCount",
-             "skippedCount", "sumTimeSec", "optionCounts")
-      ON CONFLICT ("testId", "paperQuestionId") DO UPDATE SET
-        "attemptedCount" = "TestQuestionStat"."attemptedCount" + EXCLUDED."attemptedCount",
-        "correctCount" = "TestQuestionStat"."correctCount" + EXCLUDED."correctCount",
-        "wrongCount" = "TestQuestionStat"."wrongCount" + EXCLUDED."wrongCount",
-        "skippedCount" = "TestQuestionStat"."skippedCount" + EXCLUDED."skippedCount",
-        "sumTimeSec" = "TestQuestionStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
-        "optionCounts" = (
-          SELECT jsonb_object_agg(option, tally) FROM (
-            SELECT key AS option, SUM(value::numeric) AS tally FROM (
-              SELECT * FROM jsonb_each_text(COALESCE("TestQuestionStat"."optionCounts", '{}'::jsonb))
-              UNION ALL SELECT * FROM jsonb_each_text(EXCLUDED."optionCounts")
-            ) both_sides GROUP BY key
-          ) merged),
-        "pValue" = ("TestQuestionStat"."correctCount" + EXCLUDED."correctCount")::numeric
-                   / NULLIF("TestQuestionStat"."attemptedCount" + EXCLUDED."attemptedCount", 0),
-        "computedAt" = EXCLUDED."computedAt"`;
-  }
-
-  /** The guard insert IS the fold: a redelivery collides on the PK and skips the write, as it should. */
-  private async writeCohort(
-    tx: Prisma.TransactionClient,
-    testId: string,
-    totals: CohortTotals,
-    now: Date,
-  ): Promise<void> {
-    await tx.testStat.update({
-      where: { testId },
-      data: {
-        ...cohortCounts(totals),
-        maxScore: totals.maxScore,
-        minScore: totals.minScore,
-        topperAttemptId: totals.topperAttemptId,
-        computedAt: now,
-      },
-    });
-
-    await tx.testSectionStat.deleteMany({ where: { testId } });
-    await tx.testSectionStat.createMany({
-      data: [...totals.sections.values()].map((section) => ({
-        testId,
-        baseConfigSectionId: section.baseConfigSectionId,
-        ...sectionCounts(section),
-        computedAt: now,
-      })),
-    });
-
-    await tx.testQuestionStat.deleteMany({ where: { testId } });
-    await tx.testQuestionStat.createMany({
-      data: [...totals.questions.values()].map((question) => ({
-        testId,
-        ...questionColumns(question, now),
-      })),
-    });
-  }
-
   private async writeStudent(
     tx: Prisma.TransactionClient,
     studentId: string,
@@ -575,21 +445,7 @@ export class RollupService {
     });
   }
 
-  /** What a rebuild just counted is marked folded, so a job still in flight adds nothing twice. */
-  private async reguard(
-    tx: Prisma.TransactionClient,
-    ids: readonly string[],
-    types: readonly RollupType[],
-    scope: Prisma.ProcessedRollupWhereInput,
-  ): Promise<void> {
-    await tx.processedRollup.deleteMany({ where: { rollupType: { in: [...types] }, ...scope } });
-    await tx.processedRollup.createMany({
-      data: ids.flatMap((attemptId) => types.map((rollupType) => ({ attemptId, rollupType }))),
-      skipDuplicates: true,
-    });
-  }
-
-  /** Ordered as the fold's own first-sitting test orders them, so the two pick the same sitting. */
+  /** The cohort's sittings: one per student by `Attempt_graded_per_test_key`, oldest first. */
   private async firstSittings(
     tx: Prisma.TransactionClient,
     testId: string,
@@ -638,9 +494,6 @@ export class RollupService {
   }
 }
 
-/** The two cohort guards written beside the TEST row, which is the one every reader of them asks. */
-const COHORT_TAGALONG_TYPES = COHORT_ROLLUP_TYPES.filter((type) => type !== ROLLUP_TYPE.TEST);
-
 function studentCounts(totals: StudentTotals) {
   return {
     testsAttempted: totals.testsAttempted,
@@ -666,24 +519,6 @@ function subjectCounts(subject: {
     correct: subject.correct,
     wrong: subject.wrong,
     sumTimeSec: BigInt(subject.sumTimeSec),
-  };
-}
-
-function sectionCounts(section: { attempted: number; sumScore: number; sumTimeSec: number }) {
-  return {
-    attempted: section.attempted,
-    sumScore: section.sumScore,
-    sumTimeSec: BigInt(section.sumTimeSec),
-  };
-}
-
-function cohortCounts(totals: CohortTotals) {
-  return {
-    attemptCount: totals.attempts,
-    evaluatedCount: totals.attempts,
-    sumScore: totals.sumScore,
-    sumTimeSec: BigInt(totals.sumTimeSec),
-    attemptsIncluded: totals.attempts,
   };
 }
 
@@ -721,11 +556,6 @@ function questionColumns(question: QuestionTotals, now: Date) {
     pValue: pValueOf(question.correctCount, question.attemptedCount),
     computedAt: now,
   };
-}
-
-function named(ids: readonly string[]): string {
-  const shown = ids.slice(0, WARNED_IDS).join(', ');
-  return ids.length > WARNED_IDS ? `${shown}, and ${ids.length - WARNED_IDS} more` : shown;
 }
 
 const asJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;

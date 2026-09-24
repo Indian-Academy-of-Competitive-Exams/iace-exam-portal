@@ -4,7 +4,7 @@ import { SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
-import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -35,7 +35,7 @@ async function world(chosen: readonly (string | null)[]) {
   const queue = new FakeQueue();
   const scoring = new ScoringProcessor(
     prisma,
-    new RollupOutbox(queue.asQueue()),
+    new RollupQueue(queue.asQueue()),
     new NotificationOutbox(new FakeQueue().asQueue()),
     fakeQueueFailures(),
     new PaperSheetService(prisma),
@@ -57,7 +57,7 @@ type World = Awaited<ReturnType<typeof world>>;
 async function counted(built: World): Promise<void> {
   await built.scoring.score(built.attemptId);
   for (const job of built.queue.jobs.splice(0)) {
-    if (job.name === ROLLUP_JOBS.FOLD_PENDING) await built.rollup.foldPending();
+    if (job.name === ROLLUP_JOBS.SWEEP_COHORTS) await built.rollup.sweepCohorts();
   }
 }
 
@@ -108,20 +108,12 @@ describe('the fold collects a sitting’s mistakes', () => {
     assert.equal((await mistakes(built)).length, 0);
   });
 
-  /** A redelivered request replays the fold; the unique guard is what stops a second row. */
-  it('counts a question once however many times the fold runs', async () => {
+  /** A re-score writes the mistakes again; the unique guard is what stops a second row. */
+  it('counts a question once however many times the sitting is scored', async () => {
     const built = await world([RIGHT, WRONG, WRONG, RIGHT]);
 
     await counted(built);
-    await prisma.outboxEvent.create({
-      data: {
-        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
-        aggregateId: built.attemptId,
-        eventType: ROLLUP_REQUEST.EVENT_TYPE,
-        payload: {},
-      },
-    });
-    assert.equal(await built.rollup.foldPending(), 1);
+    await built.scoring.score(built.attemptId);
     await built.rollup.rebuildStudent(built.studentId);
 
     assert.equal((await mistakes(built)).length, 2);

@@ -12,7 +12,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { timeTakenSec } from './leaderboard-score';
-import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
+import { RollupQueue } from './rollup-queue';
 import { NotificationOutbox } from '../notifications';
 import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
@@ -39,10 +39,10 @@ const SCORING_SELECT = {
 
 type ScoringRow = Prisma.AttemptGetPayload<{ select: typeof SCORING_SELECT }>;
 
-/** What the write did: whether the marks landed at all, and the event a FIRST evaluation raised. */
+/** What the write did: whether the marks landed at all, and whether this was the first evaluation. */
 interface Written {
   applied: boolean;
-  evaluation: string | null;
+  first: boolean;
 }
 
 /** Ended, however it ended. Re-scoring an EVALUATED sitting is how a dropped question is applied. */
@@ -54,7 +54,7 @@ export class ScoringProcessor extends WorkerHost {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly rollup: RollupOutbox,
+    private readonly rollup: RollupQueue,
     private readonly notifications: NotificationOutbox,
     private readonly failures: QueueFailures,
     private readonly papers: PaperSheetService,
@@ -91,22 +91,18 @@ export class ScoringProcessor extends WorkerHost {
     // Stood down while this ran: counting it now would fold a void sitting back in.
     if (!written.applied) return null;
 
-    await this.count(attempt, written.evaluation);
+    if (!written.first) await this.recount(attempt);
     return scored;
   }
 
-  /** A first evaluation counted itself; a re-score moved marks already counted, on both sides. */
-  private async count(attempt: ScoringRow, evaluation: string | null): Promise<void> {
-    const asked =
-      evaluation === null
-        ? Promise.all([
-            this.rollup.rebuild(attempt.testId),
-            this.rollup.rebuildStudent(attempt.studentId),
-          ])
-        : this.rollup.relay();
-    // A queue nobody can reach must not fail a score that committed — the sweeper asks again.
-    await asked.catch((error: unknown) => {
-      this.logger.error(`Attempt on test ${attempt.testId} was scored but not counted`, error);
+  /** Only a re-score gets here, and it moved marks already counted on both sides: both go again. */
+  private async recount(attempt: ScoringRow): Promise<void> {
+    await Promise.all([
+      this.rollup.rebuild(attempt.testId),
+      this.rollup.rebuildStudent(attempt.studentId),
+      // A queue nobody can reach must not fail a score that committed — the sweeper asks again.
+    ]).catch((error: unknown) => {
+      this.logger.error(`Attempt on test ${attempt.testId} was re-scored but not counted`, error);
     });
   }
 
@@ -120,7 +116,7 @@ export class ScoringProcessor extends WorkerHost {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const first = await this.mark(tx, attempt, scored, now);
-      if (first === null) return { applied: false, evaluation: null };
+      if (first === null) return { applied: false, first: false };
 
       await tx.attemptSheet.update({
         where: { attemptId: attempt.id },
@@ -132,11 +128,12 @@ export class ScoringProcessor extends WorkerHost {
           foldableOf(attempt, scored, terms, served, now),
           now,
         );
-        return { applied: true, evaluation: await this.announce(tx, attempt) };
+        await this.announce(tx, attempt);
+        return { applied: true, first: true };
       }
 
       await this.announceCorrection(tx, attempt, scored.score);
-      return { applied: true, evaluation: null };
+      return { applied: true, first: false };
     });
   }
 
@@ -168,22 +165,7 @@ export class ScoringProcessor extends WorkerHost {
     return rows[0]?.first ?? null;
   }
 
-  /** Written with the score's own transaction: an evaluated sitting always carries one of these. */
-  private async announce(tx: Prisma.TransactionClient, attempt: ScoringRow): Promise<string> {
-    const row = await tx.outboxEvent.create({
-      data: {
-        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
-        aggregateId: attempt.id,
-        eventType: ROLLUP_REQUEST.EVENT_TYPE,
-        payload: {
-          testId: attempt.testId,
-          studentId: attempt.studentId,
-          isGraded: attempt.isGraded,
-        },
-      },
-      select: { id: true },
-    });
-
+  private async announce(tx: Prisma.TransactionClient, attempt: ScoringRow): Promise<void> {
     // Same transaction as the marks: a student whose result committed is always one we owe a word to.
     await this.notifications.request(tx, {
       studentId: attempt.studentId,
@@ -193,8 +175,6 @@ export class ScoringProcessor extends WorkerHost {
       dedupeKey: `result:${attempt.id}`,
       testId: attempt.testId,
     });
-
-    return row.id;
   }
 
   /** A re-score, which only a drop or a bonus causes. Silent where the marks did not actually move. */

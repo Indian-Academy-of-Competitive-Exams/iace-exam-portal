@@ -4,7 +4,7 @@ import { DIFFICULTY_LEVEL, QUESTION_TYPE, questionReportSchema } from '@iace/con
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { QuestionReportService } from '../src/attempts/question-report.service';
 import { RollupService } from '../src/attempts/rollup.service';
-import { RollupOutbox } from '../src/attempts/rollup-outbox';
+import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -29,7 +29,7 @@ after(() => prisma.$disconnect());
 
 const processor = new ScoringProcessor(
   prisma,
-  new RollupOutbox(new FakeQueue().asQueue()),
+  new RollupQueue(new FakeQueue().asQueue()),
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
