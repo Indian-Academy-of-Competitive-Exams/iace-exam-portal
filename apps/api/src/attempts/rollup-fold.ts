@@ -1,7 +1,7 @@
 /**
- * What one sitting adds to the five aggregates, worked out without a database. The incremental
- * fold applies these as deltas; a rebuild sums the same function over every sitting and writes
- * the result outright, so a backfilled table and an accumulated one cannot disagree.
+ * What one sitting adds to the five aggregates, worked out without a database. The scorer applies
+ * the student's two as a delta with the marks; the cohort's three are summed over every sitting by
+ * the pass that recounts them, so an accumulated table and a recounted one cannot disagree.
  */
 import { type Prisma } from '@prisma/client';
 import {
@@ -13,30 +13,9 @@ import {
 } from '@iace/contracts';
 import { bandIndexOf, type ScoreCount } from './performance-analytics';
 
-/** What `ProcessedRollup.rollupType` stores: one row per aggregate a sitting lands in. */
-export const ROLLUP_TYPE = {
-  STUDENT: 'student',
-  STUDENT_SUBJECT: 'student_subject',
-  TEST: 'test',
-  TEST_SECTION: 'test_section',
-  TEST_QUESTION: 'test_question',
-} as const;
-
-export type RollupType = (typeof ROLLUP_TYPE)[keyof typeof ROLLUP_TYPE];
-
-/** The cohort's three, folded in one write: a sitting is in the distribution or in none of it. */
-export const COHORT_ROLLUP_TYPES = [
-  ROLLUP_TYPE.TEST,
-  ROLLUP_TYPE.TEST_SECTION,
-  ROLLUP_TYPE.TEST_QUESTION,
-] as const;
-
 /** The sittings a test's cohort rollups describe: `Attempt_graded_per_test_key` makes these one per student. */
 export const cohortSittingsOf = (testId: string) =>
   ({ testId, status: ATTEMPT_STATUS.EVALUATED, isGraded: true }) satisfies Prisma.AttemptWhereInput;
-
-/** The student's two, which a retake feeds and the cohort's three never see. */
-export const STUDENT_ROLLUP_TYPES = [ROLLUP_TYPE.STUDENT, ROLLUP_TYPE.STUDENT_SUBJECT] as const;
 
 /** One served question, already scored. `isCorrect` is the scorer's verdict: null means untouched. */
 export interface FoldableQuestion {
