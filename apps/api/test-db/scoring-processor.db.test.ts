@@ -9,6 +9,7 @@ import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/n
 import { FakeEventBus, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
+  disposeQuestion,
   makePaper,
   makeStudent,
   resetDatabase,
@@ -169,14 +170,12 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(await snapshot(), first);
   });
 
+  /** The first score warms the terms cache, so the drop only lands if the revision unkeys it. */
   it('re-scores an evaluated sitting, which is how a dropped question reaches it', async () => {
     const { paper, attemptId } = await sitting();
     await processor.score(attemptId);
 
-    await prisma.paperQuestion.update({
-      where: { id: paper.items[1]?.paperQuestionId ?? '' },
-      data: { status: PAPER_QUESTION_STATUS.DROPPED },
-    });
+    await disposeQuestion(prisma, paper, 1, PAPER_QUESTION_STATUS.DROPPED);
     await processor.score(attemptId);
 
     // The wrong answer is paid rather than penalised: 2 + 2 + 0, not 2 − 0.5 + 0.

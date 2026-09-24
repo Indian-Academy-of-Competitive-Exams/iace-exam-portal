@@ -16,6 +16,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { FakeEventBus, FakeQueue, FakeStorage, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
+  disposeQuestion,
   makePaper,
   makeStudent,
   resetDatabase,
@@ -219,10 +220,7 @@ describe('the Score Card', () => {
       [-1, 3],
     ]);
 
-    await prisma.paperQuestion.update({
-      where: { id: onPaper.items[0]?.paperQuestionId ?? '' },
-      data: { status: PAPER_QUESTION_STATUS.DROPPED },
-    });
+    await disposeQuestion(prisma, onPaper, 0, PAPER_QUESTION_STATUS.DROPPED);
     for (const one of [ace, middle, last]) await processor.score(one.attemptId);
 
     assert.deepEqual(await cards(), [

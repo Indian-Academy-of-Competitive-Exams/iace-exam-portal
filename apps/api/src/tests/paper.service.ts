@@ -358,12 +358,16 @@ export class PaperService {
     const row = await this.requireRow(testId, rowId);
 
     const asked = await this.prisma.$transaction(async (tx) => {
+      // Test before Question: the guard's status-only fast path skips the lock this needs below.
+      await beginPaperEdit(tx, testId);
       // The gate is the WRITE, not a read before it: two admins clicking cannot both win.
       const moved = await tx.paperQuestion.updateMany({
         where: { testId, questionId: row.questionId, status: { not: status } },
         data: { status },
       });
       if (moved.count === 0) return null;
+      // With the fan-out, so a scorer reading the counter after this sees the statuses it names.
+      await tx.test.update({ where: { id: testId }, data: { paperRevision: { increment: 1 } } });
       return {
         rows: moved.count,
         sittings: await this.outbox.rescore(tx, testId),

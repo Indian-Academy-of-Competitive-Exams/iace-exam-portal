@@ -523,6 +523,8 @@ model Test {
   status             TestStatus   @default(DRAFT)
   // Optimistic lock — offer is a conditional UPDATE ... WHERE version = $n.
   version            Int          @default(0)
+  // Bumped whenever a paper row's status moves; the cache key for a sat paper's scoring terms.
+  paperRevision      Int          @default(0)
   // Set by the first offer and never cleared: the paper is frozen iff this is set.
   finalizedAt        DateTime?    @db.Timestamptz(3)
   createdById        String?      @db.Uuid

@@ -13,6 +13,7 @@ import { FOLD_PENDING_JOB_ID, RELAY_BATCH, ROLLUP_JOBS } from '../src/queue/queu
 import { FakeEventBus, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
+  disposeQuestion,
   makePaper,
   makeStudent,
   resetDatabase,
@@ -438,10 +439,7 @@ describe('RollupService — rebuilding a scope', () => {
     assert.equal(num((await testStat(paper.testId))?.sumScore), 4.5);
 
     // What a drop does: the question pays everyone who attempted it, and every sitting is re-scored.
-    await prisma.paperQuestion.update({
-      where: { id: paper.items[0]?.paperQuestionId ?? '' },
-      data: { status: PAPER_QUESTION_STATUS.DROPPED },
-    });
+    await disposeQuestion(prisma, paper, 0, PAPER_QUESTION_STATUS.DROPPED);
     for (const { attemptId } of [first, second]) await built.scoring.score(attemptId);
     await drain(built);
 

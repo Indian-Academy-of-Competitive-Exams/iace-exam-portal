@@ -6,7 +6,6 @@ import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   NOTIFICATION_TYPE,
-  PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
   type AttemptStatus,
 } from '@iace/contracts';
@@ -19,7 +18,7 @@ import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
-import { PaperSheetService, type LiveTerm, type PaperTerm } from './paper-sheet.service';
+import { PaperSheetService, type PaperTerm } from './paper-sheet.service';
 
 const SCORING_SELECT = {
   id: true,
@@ -31,6 +30,8 @@ const SCORING_SELECT = {
   isGraded: true,
   startedAt: true,
   submittedAt: true,
+  // The scoring terms' cache key: a disposition bumps it, so a warm copy cannot hide a drop.
+  test: { select: { paperRevision: true } },
   sheet: { select: { answers: true } },
 } as const satisfies Prisma.AttemptSelect;
 
@@ -81,11 +82,8 @@ export class ScoringProcessor extends WorkerHost {
     }
     if (!SCORABLE.has(attempt.status)) return null;
 
-    const [terms, live] = await Promise.all([
-      this.papers.termsOf(attempt.testId),
-      this.papers.liveTermsOf(attempt.testId),
-    ]);
-    const scored = scorePaper(scorableOf(attempt, terms, live));
+    const terms = await this.papers.termsOf(attempt.testId, attempt.test.paperRevision);
+    const scored = scorePaper(scorableOf(attempt, terms));
     const written = await this.persist(attempt, scored, terms);
     // Stood down while this ran: counting it now would fold a void sitting back in.
     if (!written.applied) return null;
@@ -211,15 +209,8 @@ export class ScoringProcessor extends WorkerHost {
   }
 }
 
-/** The sheet's answers against the paper's terms; both lists are the one frozen paper, in paper order. */
-function scorableOf(
-  attempt: ScoringRow,
-  terms: readonly PaperTerm[],
-  live: readonly LiveTerm[],
-): ScorableQuestion[] {
-  if (terms.length !== live.length) {
-    throw new Error(`Paper for test ${attempt.testId} changed under a sat sitting`);
-  }
+/** The sheet's answers against the paper's terms, which are the one paper in paper order. */
+function scorableOf(attempt: ScoringRow, terms: readonly PaperTerm[]): ScorableQuestion[] {
   const sheet = sheetIn(attempt.sheet?.answers);
   return terms.map((term, slot) => {
     const answer = decodeAnswer(sheet[slot], term.optionIds, attempt.startedAt);
@@ -229,7 +220,7 @@ function scorableOf(
       type: term.type,
       marks: term.marks,
       negativeMarks: term.negativeMarks,
-      status: live[slot]?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
+      status: term.status,
       correctOptionIds: term.correctOptionIds,
       answerKey: term.type === QUESTION_TYPE.TEXT_FIELD ? term.answerKey : null,
       selectedOptionId: answer?.selectedOptionId ?? null,

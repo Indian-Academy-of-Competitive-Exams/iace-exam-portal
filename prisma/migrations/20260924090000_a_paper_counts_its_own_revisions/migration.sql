@@ -1,0 +1,15 @@
+-- A sat paper's scoring terms are cached per process, keyed by the test. Everything in them is
+-- frozen by paper_question_sat_guard and question_version_sat_guard EXCEPT "status", which that
+-- first guard deliberately lets through: it is how a drop or a bonus is applied. So the terms were
+-- split, and the one mutable column re-read from Postgres on every scoring job and every paper
+-- serve -- a hundred rows to learn what had not changed.
+--
+-- This counter is the cache key instead. setQuestionStatus bumps it in the same transaction that
+-- moves the status and fans out the re-scores, so a job reading the counter afterwards misses its
+-- cached copy and reads the new statuses. It is NOT "version", which is the offer's optimistic
+-- lock: bumping that here would make a disposition collide with an offer.
+--
+-- Monotonic, so a stale key is never asked for again and needs no eviction of its own.
+--
+-- Existing rows start at 0, which is correct: every cache is cold at deploy.
+ALTER TABLE "Test" ADD COLUMN "paperRevision" INTEGER NOT NULL DEFAULT 0;

@@ -34,21 +34,19 @@ const TERMS_SELECT = {
   ...SHEET_ROW_SELECT,
   marks: true,
   negativeMarks: true,
+  status: true,
   question: { select: { type: true } },
   questionVersion: { select: { options: true, answerKey: true } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
-/** What a sat paper pays per row, all frozen: only `status` still moves, and `liveTermsOf` reads it fresh. */
+/** What a sat paper pays per row. Every column but `status` is frozen, and `Test.paperRevision` keys that one. */
 export interface PaperTerm extends SheetPaperRow {
   type: QuestionType;
+  status: PaperQuestionStatus;
   marks: number;
   negativeMarks: number;
   correctOptionIds: string[];
   answerKey: AnswerKey | null;
-}
-
-export interface LiveTerm {
-  status: PaperQuestionStatus;
 }
 
 function correctOptionIdsIn(options: Prisma.JsonValue): string[] {
@@ -108,9 +106,10 @@ export class PaperSheetService {
     return read;
   }
 
-  /** The answer key rides here: scoring is the only caller. */
-  async termsOf(testId: string): Promise<PaperTerm[]> {
-    const held = this.terms.get(testId);
+  /** The answer key rides here: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
+  async termsOf(testId: string, paperRevision: number): Promise<PaperTerm[]> {
+    const key = `${testId}:${paperRevision}`;
+    const held = this.terms.get(key);
     if (held) return held;
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -125,16 +124,7 @@ export class PaperSheetService {
       correctOptionIds: correctOptionIdsIn(questionVersion.options),
       answerKey: answerKeyIn(questionVersion.answerKey),
     }));
-    remember(this.terms, testId, read);
+    remember(this.terms, key, read);
     return read;
-  }
-
-  /** Read every job: `status` is the one column `paper_question_sat_guard` lets move after a sitting. */
-  async liveTermsOf(testId: string): Promise<LiveTerm[]> {
-    return this.prisma.paperQuestion.findMany({
-      where: { testId },
-      orderBy: { order: 'asc' },
-      select: { status: true },
-    });
   }
 }

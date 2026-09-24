@@ -16,6 +16,7 @@ import {
   DIFFICULTY_LEVEL,
   NOTIFICATION_TYPE,
   QUESTION_STATUS,
+  type PaperQuestionStatus,
   STUDENT_TYPE,
   TEST_SCOPE,
   type AnswerState,
@@ -460,6 +461,22 @@ export interface SitInput {
 const SAT_ON = new Date('2026-08-24T05:00:00.000Z');
 
 /** A sitting served the whole paper — submitted and unscored unless told otherwise. */
+/** What `setQuestionStatus` writes in one transaction: the status, and the counter that unkeys a cached paper. */
+export function disposeQuestion(
+  prisma: PrismaService,
+  paper: Paper,
+  at: number,
+  status: PaperQuestionStatus,
+): Promise<unknown> {
+  return prisma.$transaction([
+    prisma.paperQuestion.update({
+      where: { id: paper.items[at]?.paperQuestionId ?? '' },
+      data: { status },
+    }),
+    prisma.test.update({ where: { id: paper.testId }, data: { paperRevision: { increment: 1 } } }),
+  ]);
+}
+
 export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<{ id: string }> {
   const submittedAt = input.submittedAt === undefined ? SAT_ON : input.submittedAt;
   const startedAt =

@@ -76,6 +76,9 @@ const scoringRequests = () =>
 const statusOf = async (id: string) =>
   (await prisma.paperQuestion.findUniqueOrThrow({ where: { id } })).status;
 
+const revisionOf = async (testId: string) =>
+  (await prisma.test.findUniqueOrThrow({ where: { id: testId } })).paperRevision;
+
 describe('dropping a question on a paper somebody has already sat', () => {
   it('marks the row and asks for every ended sitting that served it to be scored again', async () => {
     const { set, dropped, ended, queue } = await bench();
@@ -100,6 +103,27 @@ describe('dropping a question on a paper somebody has already sat', () => {
     await set(PAPER_QUESTION_STATUS.DROPPED);
 
     assert.equal((await scoringRequests()).length, asked);
+  });
+
+  /** The failure this prevents: a worker's warm scoring terms marking the drop as though it never happened. */
+  it('counts the change on the test, so a cached copy of the paper is unreachable', async () => {
+    const { set, paper } = await bench();
+    const before = await revisionOf(paper.testId);
+
+    await set(PAPER_QUESTION_STATUS.DROPPED);
+    await set(PAPER_QUESTION_STATUS.BONUS);
+
+    assert.equal(await revisionOf(paper.testId), before + 2);
+  });
+
+  it('leaves the count alone where nothing moved', async () => {
+    const { set, paper } = await bench();
+    await set(PAPER_QUESTION_STATUS.DROPPED);
+    const counted = await revisionOf(paper.testId);
+
+    await set(PAPER_QUESTION_STATUS.DROPPED);
+
+    assert.equal(await revisionOf(paper.testId), counted);
   });
 
   it('leaves every other question on the paper where it was', async () => {
