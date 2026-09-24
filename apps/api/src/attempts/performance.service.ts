@@ -23,6 +23,7 @@ import {
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
+import { cohortCurveOf } from './cohort-curve';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { requireStudent } from './require-student';
@@ -33,12 +34,9 @@ import { timeUseOf } from './attempt-analytics';
 import { NO_TOPPER, topperOf } from './topper';
 import { paceIndexOf } from './question-report';
 import {
-  cohortShapeOf,
   compositionOf,
-  curveBandsOf,
   flagYours,
   sectionalStandingOf,
-  type CohortShape,
   type ReportedQuestion,
   type SectionCohort,
 } from './performance-analytics';
@@ -176,35 +174,20 @@ export class PerformanceAnalyticsService {
 
     const rolled = testStats.get(anchor.testId) ?? null;
     const score = Number(anchor.score ?? 0);
-    const rolledBands = curveBandsOf(rolled?.scoreHistogram, score);
-    // The rollup wins field by field, bar a live rank's n; the live count fills what no job wrote.
-    const live = rolledBands.length === 0 ? await this.liveCohort(anchor.testId) : null;
+    // The curve is counted, never stored: `TestStat` keeps the totals, the distribution is derived.
+    const live = await cohortCurveOf(this.prisma, anchor.testId);
     const counted = rolled?.evaluatedCount ?? 0;
 
     return {
       testId: anchor.testId,
       score,
-      topperScore: numberOrNull(rolled?.maxScore ?? null) ?? live?.topperScore ?? null,
-      averageScore: averageOf(rolled) ?? live?.averageScore ?? null,
+      topperScore: numberOrNull(rolled?.maxScore ?? null) ?? live.topperScore,
+      averageScore: averageOf(rolled) ?? live.averageScore,
       rank: standing?.rank ?? null,
       percentile: standing?.percentile ?? null,
-      cohortSize: standing?.cohortSize ?? (counted === 0 ? (live?.size ?? 0) : counted),
-      bands: rolledBands.length > 0 ? rolledBands : flagYours(live?.bands ?? [], score),
+      cohortSize: standing?.cohortSize ?? (counted === 0 ? live.size : counted),
+      bands: flagYours(live.bands, score),
     };
-  }
-
-  /** The distribution counted off the sittings themselves — a cold path, so one grouped read. */
-  private async liveCohort(testId: string): Promise<CohortShape> {
-    const grouped = await this.prisma.attempt.groupBy({
-      by: ['score'],
-      where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED, score: { not: null } },
-      _count: true,
-    });
-    return cohortShapeOf(
-      grouped.flatMap((row) =>
-        row.score === null ? [] : [{ score: Number(row.score), count: row._count }],
-      ),
-    );
   }
 
   private async testStats(testIds: readonly string[]): Promise<Map<string, TestStatRow>> {
@@ -292,7 +275,6 @@ const TEST_STAT_SELECT = {
   sumScore: true,
   sumTimeSec: true,
   maxScore: true,
-  scoreHistogram: true,
 } as const satisfies Prisma.TestStatSelect;
 
 type TestStatRow = Prisma.TestStatGetPayload<{ select: typeof TEST_STAT_SELECT }>;

@@ -1,0 +1,14 @@
+-- TestStat."scoreHistogram" held the cohort's curve as computed BANDS, which is the one thing in
+-- that row a fold could not simply increment: the band boundaries move when the range moves. So
+-- writeCohortDelta read the row back, tried bandsAfterBatch, and where a new score fell outside the
+-- range it called rebandOf, which re-read every graded sitting of the test -- all while holding the
+-- TestStat row lock that every other fold of that test has to queue behind.
+--
+-- The bands were always derivable. cohortShapeOf takes score -> count pairs and returns exactly
+-- what this column stored, and performance.service already had liveCohort doing precisely that as
+-- the fallback for a test no rollup had reached yet, off Attempt_testId_score_idx. Promoting that
+-- cold path to the only path drops the column, the read-back, the reband, and the lock with them.
+--
+-- The trade is deliberate: one grouped read per curve shown, instead of one banding per fold. Rank
+-- and percentile were already counted live on every read, so this is the same bargain, not a new one.
+ALTER TABLE "TestStat" DROP COLUMN "scoreHistogram";

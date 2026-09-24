@@ -9,8 +9,6 @@ import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RELAY_BATCH } from '../queue/queues';
 import { servedSheet } from './answer-sheet';
-import { numberOrNull } from './attempt-report';
-import { bandsIn, cohortShapeOf } from './performance-analytics';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { ROLLUP_REQUEST } from './rollup-outbox';
 import { sectionScoresIn } from './score-paper';
@@ -20,15 +18,10 @@ import {
   STUDENT_ROLLUP_TYPES,
   addToCohortTotals,
   addToStudentTotals,
-  bandsAfterBatch,
   cohortSittingsOf,
   emptyCohortTotals,
   emptyStudentTotals,
-  maxOf,
-  mergedQuestion,
-  optionCountsIn,
   pValueOf,
-  scoreCountsOf,
   type CohortTotals,
   type FoldableAttempt,
   type QuestionTotals,
@@ -198,54 +191,51 @@ export class RollupService {
     return sittings.filter((attempt) => earliest.get(attempt.studentId) === attempt.id);
   }
 
-  /** Every fresh sitting as ONE delta, so a 5K cohort takes the test's row lock once, not 5K times. */
+  /** Every fresh sitting as ONE delta. No row lock: each write below is atomic on its own row. */
   private async foldCohortBatch(
     testId: string,
     sittings: readonly FoldableAttempt[],
   ): Promise<void> {
     await this.prisma.$transaction(
       async (tx) => {
-        const now = new Date();
-        // A REAL update: Prisma's empty-update findOrCreate cannot be relied on to lock the row.
-        await tx.testStat.upsert({
-          where: { testId },
-          create: { testId, computedAt: now },
-          update: { computedAt: now },
-        });
-
-        // Guards only under the lock above; every cohort-guard writer must take it first.
-        const fresh = await this.uncounted(tx, sittings);
+        const fresh = await this.claimCohortFolds(tx, sittings);
         if (fresh.length === 0) return;
 
         const totals = emptyCohortTotals();
         for (const attempt of fresh) addToCohortTotals(totals, attempt);
-        await tx.processedRollup.createMany({
-          data: fresh.flatMap((attempt) =>
-            COHORT_ROLLUP_TYPES.map((rollupType) => ({ attemptId: attempt.id, rollupType })),
-          ),
-          skipDuplicates: true,
-        });
+
+        const now = new Date();
         await this.writeCohortDelta(tx, testId, totals, now);
+        await this.writeSectionDelta(tx, testId, totals, now);
+        await this.writeQuestionDelta(tx, testId, totals, now);
       },
       { timeout: FOLD_TIMEOUT_MS },
     );
   }
 
-  /** The cohort's three guard rows are written and dropped together, so the test's one answers for all. */
-  private async uncounted(
+  /** The claim replaces the lock the guard read needed: whatever comes back is this worker's to count. */
+  private async claimCohortFolds(
     tx: Prisma.TransactionClient,
     sittings: readonly FoldableAttempt[],
   ): Promise<FoldableAttempt[]> {
-    // READ COMMITTED only: a REPEATABLE READ snapshot predates the lock, and would count twice.
-    const held = await tx.processedRollup.findMany({
-      where: {
-        rollupType: ROLLUP_TYPE.TEST,
-        attemptId: { in: sittings.map((attempt) => attempt.id) },
-      },
-      select: { attemptId: true },
+    // Sorted, so two workers on one test take the same rows in the same order and cannot deadlock.
+    const ids = sittings.map((attempt) => attempt.id).sort();
+    const claimed = await tx.$queryRaw<{ attemptId: string }[]>`
+      INSERT INTO "ProcessedRollup" ("attemptId", "rollupType")
+      SELECT id, ${ROLLUP_TYPE.TEST} FROM unnest(${ids}::uuid[]) AS id
+      ON CONFLICT DO NOTHING
+      RETURNING "attemptId"`;
+
+    const won = new Set(claimed.map((row) => row.attemptId));
+    const fresh = sittings.filter((attempt) => won.has(attempt.id));
+    // The cohort's other two ride on the TEST row, which is the one every reader of the guard asks.
+    await tx.processedRollup.createMany({
+      data: fresh.flatMap((attempt) =>
+        COHORT_TAGALONG_TYPES.map((rollupType) => ({ attemptId: attempt.id, rollupType })),
+      ),
+      skipDuplicates: true,
     });
-    const counted = new Set(held.map((row) => row.attemptId));
-    return sittings.filter((attempt) => !counted.has(attempt.id));
+    return fresh;
   }
 
   /** A drop or a bonus moved marks already counted: the test's curve and every sitter go again. */
@@ -466,7 +456,7 @@ export class RollupService {
     await tx.savedQuestion.createMany({ data: wrong, skipDuplicates: true });
   }
 
-  /** Counts move by increment; the curve, the extremes and the topper are read back and set. */
+  /** One statement: counts add, the extremes take GREATEST, and the topper follows a raised maximum. */
   private async writeCohortDelta(
     tx: Prisma.TransactionClient,
     testId: string,
@@ -474,91 +464,103 @@ export class RollupService {
     now: Date,
   ): Promise<void> {
     const counts = cohortCounts(totals);
-    await tx.testStat.upsert({
-      where: { testId },
-      create: { testId, ...counts, computedAt: now },
-      update: { ...increments(counts), computedAt: now },
-    });
-
-    const held = await tx.testStat.findUniqueOrThrow({
-      where: { testId },
-      select: { maxScore: true, minScore: true, scoreHistogram: true, topperAttemptId: true },
-    });
-    const maxScore = numberOrNull(held.maxScore);
-    const minScore = numberOrNull(held.minScore);
-    const scores = scoreCountsOf(totals).flatMap((row) =>
-      new Array<number>(row.count).fill(row.score),
-    );
-    const moved = bandsAfterBatch(bandsIn(held.scoreHistogram), minScore, maxScore, scores);
-    const raised = totals.maxScore !== null && (maxScore === null || totals.maxScore > maxScore);
-
-    await tx.testStat.update({
-      where: { testId },
-      data: {
-        maxScore: maxOf(maxScore, totals.maxScore),
-        minScore: lowerOf(minScore, totals.minScore),
-        topperAttemptId: raised ? totals.topperAttemptId : held.topperAttemptId,
-        scoreHistogram: asJson(moved ?? (await this.rebandOf(tx, testId))),
-      },
-    });
-
-    for (const section of totals.sections.values()) {
-      const key = { testId, baseConfigSectionId: section.baseConfigSectionId };
-      const sectionTotals = sectionCounts(section);
-      await tx.testSectionStat.upsert({
-        where: { testId_baseConfigSectionId: key },
-        create: { ...key, ...sectionTotals, computedAt: now },
-        update: { ...increments(sectionTotals), computedAt: now },
-      });
-    }
-
-    await this.foldQuestionStats(tx, testId, totals, now);
+    await tx.$executeRaw`
+      INSERT INTO "TestStat" (
+        "testId", "attemptCount", "evaluatedCount", "sumScore", "sumTimeSec",
+        "attemptsIncluded", "maxScore", "minScore", "topperAttemptId", "computedAt")
+      VALUES (
+        ${testId}::uuid, ${counts.attemptCount}, ${counts.evaluatedCount}, ${counts.sumScore},
+        ${counts.sumTimeSec}, ${counts.attemptsIncluded}, ${totals.maxScore}, ${totals.minScore},
+        ${totals.topperAttemptId}::uuid, ${now})
+      ON CONFLICT ("testId") DO UPDATE SET
+        "attemptCount" = "TestStat"."attemptCount" + EXCLUDED."attemptCount",
+        "evaluatedCount" = "TestStat"."evaluatedCount" + EXCLUDED."evaluatedCount",
+        "sumScore" = "TestStat"."sumScore" + EXCLUDED."sumScore",
+        "sumTimeSec" = "TestStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
+        "attemptsIncluded" = "TestStat"."attemptsIncluded" + EXCLUDED."attemptsIncluded",
+        "maxScore" = GREATEST("TestStat"."maxScore", EXCLUDED."maxScore"),
+        "minScore" = LEAST("TestStat"."minScore", EXCLUDED."minScore"),
+        -- The topper travels with the maximum, so a delta that did not raise it changes nothing.
+        "topperAttemptId" = CASE
+          WHEN EXCLUDED."maxScore" IS NOT NULL
+           AND ("TestStat"."maxScore" IS NULL OR EXCLUDED."maxScore" > "TestStat"."maxScore")
+          THEN EXCLUDED."topperAttemptId" ELSE "TestStat"."topperAttemptId" END,
+        "computedAt" = EXCLUDED."computedAt"`;
   }
 
-  /** The edges moved, so the curve is cut again over the cohort's SCORES — no paper is re-read. */
-  private async rebandOf(tx: Prisma.TransactionClient, testId: string) {
-    const counted = new Map<number, number>();
-    for (const row of await this.firstSittings(tx, testId)) {
-      counted.set(row.score, (counted.get(row.score) ?? 0) + 1);
-    }
-    return cohortShapeOf([...counted].map(([score, count]) => ({ score, count }))).bands;
-  }
-
-  /** Read then written whole: the test's own row is locked above, so no fold can interleave. */
-  private async foldQuestionStats(
+  /** Every section the page touched, in one statement. */
+  private async writeSectionDelta(
     tx: Prisma.TransactionClient,
     testId: string,
     totals: CohortTotals,
     now: Date,
   ): Promise<void> {
-    const deltas = [...totals.questions.values()];
-    if (deltas.length === 0) return;
+    const rows = [...totals.sections.values()].sort((left, right) =>
+      left.baseConfigSectionId.localeCompare(right.baseConfigSectionId),
+    );
+    if (rows.length === 0) return;
 
-    const held = await tx.testQuestionStat.findMany({
-      where: { testId, paperQuestionId: { in: deltas.map((row) => row.paperQuestionId) } },
-      select: {
-        paperQuestionId: true,
-        questionId: true,
-        attemptedCount: true,
-        correctCount: true,
-        wrongCount: true,
-        skippedCount: true,
-        sumTimeSec: true,
-        optionCounts: true,
-      },
-    });
-    const stored = new Map(held.map((row) => [row.paperQuestionId, toQuestionTotals(row)]));
+    await tx.$executeRaw`
+      INSERT INTO "TestSectionStat" (
+        "testId", "baseConfigSectionId", "attempted", "sumScore", "sumTimeSec", "computedAt")
+      SELECT ${testId}::uuid, * FROM unnest(
+        ${rows.map((row) => row.baseConfigSectionId)}::uuid[],
+        ${rows.map((row) => row.attempted)}::int[],
+        ${rows.map((row) => row.sumScore)}::numeric[],
+        ${rows.map((row) => BigInt(row.sumTimeSec))}::bigint[],
+        ${rows.map(() => now)}::timestamptz[])
+      ON CONFLICT ("testId", "baseConfigSectionId") DO UPDATE SET
+        "attempted" = "TestSectionStat"."attempted" + EXCLUDED."attempted",
+        "sumScore" = "TestSectionStat"."sumScore" + EXCLUDED."sumScore",
+        "sumTimeSec" = "TestSectionStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
+        "computedAt" = EXCLUDED."computedAt"`;
+  }
 
-    for (const delta of deltas) {
-      const merged = mergedQuestion(stored.get(delta.paperQuestionId) ?? null, delta);
-      await tx.testQuestionStat.upsert({
-        where: {
-          testId_paperQuestionId: { testId, paperQuestionId: delta.paperQuestionId },
-        },
-        create: { testId, ...questionColumns(merged, now) },
-        update: questionColumns(merged, now),
-      });
-    }
+  /** Every paper row the page touched, in one statement — the option tallies merged by Postgres. */
+  private async writeQuestionDelta(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    totals: CohortTotals,
+    now: Date,
+  ): Promise<void> {
+    const rows = [...totals.questions.values()].sort((left, right) =>
+      left.paperQuestionId.localeCompare(right.paperQuestionId),
+    );
+    if (rows.length === 0) return;
+
+    await tx.$executeRaw`
+      INSERT INTO "TestQuestionStat" (
+        "testId", "paperQuestionId", "questionId", "attemptedCount", "correctCount", "wrongCount",
+        "skippedCount", "sumTimeSec", "optionCounts", "pValue", "computedAt")
+      SELECT ${testId}::uuid, t.*,
+             t."correctCount"::numeric / NULLIF(t."attemptedCount", 0), ${now}
+      FROM unnest(
+        ${rows.map((row) => row.paperQuestionId)}::uuid[],
+        ${rows.map((row) => row.questionId)}::uuid[],
+        ${rows.map((row) => row.attemptedCount)}::int[],
+        ${rows.map((row) => row.correctCount)}::int[],
+        ${rows.map((row) => row.wrongCount)}::int[],
+        ${rows.map((row) => row.skippedCount)}::int[],
+        ${rows.map((row) => BigInt(row.sumTimeSec))}::bigint[],
+        ${rows.map((row) => JSON.stringify(row.optionCounts))}::jsonb[])
+        AS t("paperQuestionId", "questionId", "attemptedCount", "correctCount", "wrongCount",
+             "skippedCount", "sumTimeSec", "optionCounts")
+      ON CONFLICT ("testId", "paperQuestionId") DO UPDATE SET
+        "attemptedCount" = "TestQuestionStat"."attemptedCount" + EXCLUDED."attemptedCount",
+        "correctCount" = "TestQuestionStat"."correctCount" + EXCLUDED."correctCount",
+        "wrongCount" = "TestQuestionStat"."wrongCount" + EXCLUDED."wrongCount",
+        "skippedCount" = "TestQuestionStat"."skippedCount" + EXCLUDED."skippedCount",
+        "sumTimeSec" = "TestQuestionStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
+        "optionCounts" = (
+          SELECT jsonb_object_agg(option, tally) FROM (
+            SELECT key AS option, SUM(value::numeric) AS tally FROM (
+              SELECT * FROM jsonb_each_text(COALESCE("TestQuestionStat"."optionCounts", '{}'::jsonb))
+              UNION ALL SELECT * FROM jsonb_each_text(EXCLUDED."optionCounts")
+            ) both_sides GROUP BY key
+          ) merged),
+        "pValue" = ("TestQuestionStat"."correctCount" + EXCLUDED."correctCount")::numeric
+                   / NULLIF("TestQuestionStat"."attemptedCount" + EXCLUDED."attemptedCount", 0),
+        "computedAt" = EXCLUDED."computedAt"`;
   }
 
   /** The guard insert IS the fold: a redelivery collides on the PK and skips the write, as it should. */
@@ -574,7 +576,6 @@ export class RollupService {
         ...cohortCounts(totals),
         maxScore: totals.maxScore,
         minScore: totals.minScore,
-        scoreHistogram: asJson(cohortShapeOf(scoreCountsOf(totals)).bands),
         topperAttemptId: totals.topperAttemptId,
         computedAt: now,
       },
@@ -690,16 +691,12 @@ export class RollupService {
   }
 }
 
+/** The two cohort guards written beside the TEST row, which is the one every reader of them asks. */
+const COHORT_TAGALONG_TYPES = COHORT_ROLLUP_TYPES.filter((type) => type !== ROLLUP_TYPE.TEST);
+
 /** One order for the subject rows, so two workers on one page cannot take them the other way round. */
 const keyOfSubject = (row: { studentId: string; subject: { subjectId: string; scope: string } }) =>
   `${row.studentId}:${row.subject.subjectId}:${row.subject.scope}`;
-
-/** Each count as an increment, so a folded delta and a rebuild write one column list. */
-function increments<T extends Record<string, number | bigint>>(counts: T) {
-  return Object.fromEntries(
-    Object.entries(counts).map(([column, value]) => [column, { increment: value }]),
-  ) as { [K in keyof T]: { increment: T[K] } };
-}
 
 function studentCounts(totals: StudentTotals) {
   return {
@@ -773,23 +770,6 @@ function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttem
   };
 }
 
-function toQuestionTotals(row: {
-  paperQuestionId: string;
-  questionId: string;
-  attemptedCount: number;
-  correctCount: number;
-  wrongCount: number;
-  skippedCount: number;
-  sumTimeSec: bigint;
-  optionCounts: Prisma.JsonValue;
-}): QuestionTotals {
-  return {
-    ...row,
-    sumTimeSec: Number(row.sumTimeSec),
-    optionCounts: optionCountsIn(row.optionCounts),
-  };
-}
-
 function questionColumns(question: QuestionTotals, now: Date) {
   return {
     ...question,
@@ -803,11 +783,6 @@ function questionColumns(question: QuestionTotals, now: Date) {
 function named(ids: readonly string[]): string {
   const shown = ids.slice(0, WARNED_IDS).join(', ');
   return ids.length > WARNED_IDS ? `${shown}, and ${ids.length - WARNED_IDS} more` : shown;
-}
-
-function lowerOf(held: number | null, found: number | null): number | null {
-  if (held === null) return found;
-  return found === null ? held : Math.min(held, found);
 }
 
 const asJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;

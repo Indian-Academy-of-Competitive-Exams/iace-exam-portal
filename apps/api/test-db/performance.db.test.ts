@@ -8,7 +8,6 @@ import {
   performanceReportQuerySchema,
   performanceReportSchema,
 } from '@iace/contracts';
-import type { Prisma } from '@prisma/client';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
@@ -118,7 +117,6 @@ const rolled = (
     evaluatedCount: number;
     sumScore: number;
     maxScore: number;
-    scoreHistogram?: Prisma.InputJsonValue;
   },
 ) => prisma.testStat.create({ data: { testId, computedAt: new Date(), ...stat } });
 
@@ -168,52 +166,26 @@ describe('the performance report — one sitting', () => {
     assert.equal(cohort?.bands.filter((band) => band.isYours).length, 1);
   });
 
-  it('prefers the rollup once one exists, and draws its curve', async () => {
+  /** The split this pins: the rollup owns the totals, and the curve is counted off the sittings. */
+  it('takes the totals from the rollup and counts the curve itself', async () => {
     const { first, student, older } = await world();
-    await rolled(first.testId, {
-      evaluatedCount: 40,
-      sumScore: 120,
-      maxScore: 5.5,
-      scoreHistogram: [
-        { from: 0, to: 3, count: 25 },
-        { from: 3, to: 6, count: 15 },
-      ],
-    });
+    await rolled(first.testId, { evaluatedCount: 40, sumScore: 120, maxScore: 5.5 });
 
     const report = await ofAttempt(student, older);
 
     assert.equal(performanceReportSchema.safeParse(report).success, true);
     assert.equal(report.cohort?.topperScore, 5.5);
     assert.equal(report.cohort?.averageScore, 3);
-    assert.deepEqual(
-      report.cohort?.bands.map((band) => band.isYours),
-      [true, false],
-    );
-  });
-
-  /** The rollup wins field by field, so a row without a histogram still keeps its counts. */
-  it('counts the curve off the sittings when the rollup carries no histogram', async () => {
-    const { first, student, older } = await world();
-    await rolled(first.testId, { evaluatedCount: 40, sumScore: 120, maxScore: 5.5 });
-
-    const { cohort } = await ofAttempt(student, older);
-
-    assert.equal(cohort?.topperScore, 5.5);
     assert.equal(
-      cohort?.bands.reduce((sum, band) => sum + band.count, 0),
+      report.cohort?.bands.reduce((sum, band) => sum + band.count, 0),
       2,
     );
-    assert.equal(cohort?.bands.filter((band) => band.isYours).length, 1);
+    assert.equal(report.cohort?.bands.filter((band) => band.isYours).length, 1);
   });
 
   it('names the cohort the live rank was counted in, however far behind the rollup is', async () => {
     const { first, student, older } = await world();
-    await rolled(first.testId, {
-      evaluatedCount: 1,
-      sumScore: 6,
-      maxScore: 6,
-      scoreHistogram: [{ from: 0, to: 6, count: 1 }],
-    });
+    await rolled(first.testId, { evaluatedCount: 1, sumScore: 6, maxScore: 6 });
 
     const { cohort } = await ofAttempt(student, older);
 

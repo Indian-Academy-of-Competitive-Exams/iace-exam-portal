@@ -6,7 +6,8 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
 import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
-import { cohortShapeOf, curveBandsOf, flagYours } from '../src/attempts/performance-analytics';
+import { cohortShapeOf, flagYours } from '../src/attempts/performance-analytics';
+import { cohortCurveOf } from '../src/attempts/cohort-curve';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { FOLD_PENDING_JOB_ID, RELAY_BATCH, ROLLUP_JOBS } from '../src/queue/queues';
@@ -358,7 +359,7 @@ describe('RollupService — folding a pending batch', () => {
 
   /** The hole this closes: a row marked when the job was QUEUED left a sitting nobody ever counted. */
   it('leaves the outbox row pending when the fold throws, and counts it on the next pass', async () => {
-    const built = build(failingOnceOnTestStatUpsert(prisma));
+    const built = build(failingOnceOnStatWrite(prisma));
     const paper = await paperOf();
     const { attemptId, studentId } = await sat(paper, [RIGHT, null, null, null]);
     await built.scoring.score(attemptId);
@@ -439,13 +440,12 @@ describe('RollupService — the curve it draws', () => {
     return { paper, top };
   }
 
-  it('writes the bands the report reads, and the same ones counting the sittings would', async () => {
+  it('counts the bands the report reads off the same sittings the fold counted', async () => {
     const { paper } = await cohort();
-    const rolled = await testStat(paper.testId);
     const sittings = await prisma.attempt.findMany({ where: { testId: paper.testId } });
     const scores = sittings.map((row) => ({ score: Number(row.score ?? 0), count: 1 }));
 
-    const bands = curveBandsOf(rolled?.scoreHistogram, 8);
+    const bands = flagYours((await cohortCurveOf(prisma, paper.testId)).bands, 8);
 
     assert.notEqual(bands.length, 0);
     assert.deepEqual(bands, flagYours(cohortShapeOf(scores).bands, 8));
@@ -696,30 +696,24 @@ function failingOnceOnMistakes(client: PrismaService): PrismaService {
   });
 }
 
-/** The real client, with the first `testStat.upsert` inside any transaction refused. */
-function failingOnceOnTestStatUpsert(client: PrismaService): PrismaService {
+/** The real client, with the first stat write inside any transaction refused. */
+function failingOnceOnStatWrite(client: PrismaService): PrismaService {
   let armed = true;
-  const refuseUpsert = (tx: object) =>
+  const refuseWrite = (tx: object) =>
     new Proxy(tx, {
       get(target, key) {
-        const held = Reflect.get(target, key) as unknown;
-        if (key !== 'testStat' || !armed) return held;
-        return new Proxy(held as object, {
-          get(delegate, method) {
-            if (method !== 'upsert' || !armed) return Reflect.get(delegate, method) as unknown;
-            return () => {
-              armed = false;
-              return Promise.reject(new Error('testStat is unavailable'));
-            };
-          },
-        });
+        if (key !== '$executeRaw' || !armed) return Reflect.get(target, key) as unknown;
+        return () => {
+          armed = false;
+          return Promise.reject(new Error('the stat tables are unavailable'));
+        };
       },
     });
   return new Proxy(client, {
     get(target, key) {
       if (key !== '$transaction') return Reflect.get(target, key) as unknown;
       return (work: (tx: object) => Promise<unknown>, options?: object) =>
-        target.$transaction((tx) => work(refuseUpsert(tx)), options);
+        target.$transaction((tx) => work(refuseWrite(tx)), options);
     },
   });
 }

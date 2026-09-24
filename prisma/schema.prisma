@@ -1135,7 +1135,6 @@ model TestStat {
   maxScore         Decimal? @db.Decimal(8, 2)
   minScore         Decimal? @db.Decimal(8, 2)
   sumTimeSec       BigInt   @default(0)
-  scoreHistogram   Json?
   topperAttemptId  String?  @db.Uuid
   // Watermark: rows already folded in, so a rebuild cannot double-count.
   attemptsIncluded Int      @default(0)

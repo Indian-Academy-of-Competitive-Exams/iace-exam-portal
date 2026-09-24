@@ -20,7 +20,7 @@ import { stemPreviewOf } from '../questions';
 import { timeSpentIn } from './answer-sheet';
 import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
-import { bandsIn } from './performance-analytics';
+import { cohortCurveOf } from './cohort-curve';
 import { cohortSittingsOf, optionCountsIn, optionsIn } from './rollup-fold';
 import { RollupOutbox } from './rollup-outbox';
 import {
@@ -113,6 +113,7 @@ export class TestAnalyticsService {
   ): Promise<(StatTotals & { topperAttemptId: string | null }) | null> {
     const row = await this.prisma.testStat.findUnique({ where: { testId } });
     if (row === null) return null;
+    const curve = await cohortCurveOf(this.prisma, testId);
     return {
       attemptCount: row.attemptCount,
       evaluatedCount: row.evaluatedCount,
@@ -120,7 +121,7 @@ export class TestAnalyticsService {
       maxScore: numberOrNull(row.maxScore),
       minScore: numberOrNull(row.minScore),
       sumTimeSec: Number(row.sumTimeSec),
-      bands: bandsIn(row.scoreHistogram),
+      bands: curve.bands,
       computedAt: row.computedAt,
       topperAttemptId: row.topperAttemptId,
     };
