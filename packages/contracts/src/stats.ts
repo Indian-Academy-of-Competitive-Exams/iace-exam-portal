@@ -768,11 +768,17 @@ export function distractorThatWon(
   return top === null || top.count === 0 ? null : top;
 }
 
+/** Below this the cohort IS the reader: "100% got it right" beside their own right answer. */
+export const COHORT_COMPARISON_FLOOR = 10;
+
+/** How often the per-question cohort columns are counted. Read by the pass AND by what it tells them. */
+export const COHORT_COUNT_EVERY_MIN = 15;
+
 export const questionReportSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
   testTitle: z.string().nullable(),
-  /** Sittings behind the cohort columns. Zero means no rollup has run, not an empty cohort. */
+  /** Ranked sittings on the paper, whether or not they are enough to compare against. */
   cohortSize: z.number().int(),
   /** This paper's time against the cohort's average: above 1 is slower, below 1 is faster. */
   paceIndex: z.number().nullable(),

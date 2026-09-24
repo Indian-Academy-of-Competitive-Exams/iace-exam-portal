@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   AppException,
+  COHORT_COMPARISON_FLOOR,
   ErrorCodes,
   QUESTION_TYPE,
   type AnswerKey,
@@ -122,11 +123,13 @@ export class QuestionReportService {
       keyed: ReadonlyMap<string, KeyedQuestion>;
     },
   ): QuestionReport {
+    // The first sitter is their own cohort, and a pace index of exactly 1.00 against themselves.
+    const compared = held.paper.evaluatedCount >= COHORT_COMPARISON_FLOOR;
     const questions = served.map((row) =>
       questionReportRow(
         toSat(row),
-        held.cohort.get(row.id) ?? null,
-        held.topper.byPaperQuestion.get(row.id) ?? null,
+        compared ? (held.cohort.get(row.id) ?? null) : null,
+        compared ? (held.topper.byPaperQuestion.get(row.id) ?? null) : null,
         held.keyed.get(row.questionId) ?? null,
       ),
     );
@@ -137,7 +140,9 @@ export class QuestionReportService {
       testId: attempt.testId,
       testTitle: attempt.test.title,
       cohortSize: held.paper.evaluatedCount,
-      paceIndex: paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount),
+      paceIndex: compared
+        ? paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount)
+        : null,
       sections: attempt.test.baseConfig.sections,
       questions,
     };

@@ -15,6 +15,8 @@ import {
   type MeasureBar,
 } from '@iace/ui';
 import {
+  COHORT_COMPARISON_FLOOR,
+  COHORT_COUNT_EVERY_MIN,
   QUESTION_FILTERS,
   distractorThatWon,
   percentLabel,
@@ -86,6 +88,7 @@ function Body({
   return (
     // Every ancestor between the frame and the table has to shrink, or the page takes the scroll.
     <div className="flex min-h-0 flex-1 flex-col gap-6">
+      <CohortNote cohortSize={report.cohortSize} />
       <StatBand>
         <Metric
           label="Pace"
@@ -123,6 +126,22 @@ function Body({
         />
       </Card>
     </div>
+  );
+}
+
+/** Why a cohort column is a dash: too few have sat it, or the pass that counts it has not run. */
+function CohortNote({ cohortSize }: Readonly<{ cohortSize: number }>) {
+  if (cohortSize < COHORT_COMPARISON_FLOOR) {
+    return (
+      <Alert variant="info">
+        {`Comparison against other students opens once ${COHORT_COMPARISON_FLOOR} have sat this paper.`}
+      </Alert>
+    );
+  }
+  return (
+    <Alert variant="info">
+      {`The comparison against other students is counted every ${COHORT_COUNT_EVERY_MIN} minutes.`}
+    </Alert>
   );
 }
 

@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
+  COHORT_COMPARISON_FLOOR,
+  COHORT_COUNT_EVERY_MIN,
   distractorThatWon,
   percentLabel,
   QUESTION_FILTERS,
@@ -93,6 +95,7 @@ function Header({
 
   return (
     <View className="gap-4 pb-1">
+      <CohortNote cohortSize={report.cohortSize} />
       <StatTileRow>
         <StatTile label="Pace" value={paceOf(report.paceIndex)} />
         <StatTile label="Sittings" value={report.cohortSize} />
@@ -183,6 +186,22 @@ function Distribution({ row }: Readonly<{ row: QuestionReportRow }>) {
         </Alert>
       )}
     </View>
+  );
+}
+
+/** Why a cohort column is a dash: too few have sat it, or the pass that counts it has not run. */
+function CohortNote({ cohortSize }: Readonly<{ cohortSize: number }>) {
+  if (cohortSize < COHORT_COMPARISON_FLOOR) {
+    return (
+      <Alert variant="info">
+        {`Comparison against other students opens once ${COHORT_COMPARISON_FLOOR} have sat this paper.`}
+      </Alert>
+    );
+  }
+  return (
+    <Alert variant="info">
+      {`The comparison against other students is counted every ${COHORT_COUNT_EVERY_MIN} minutes.`}
+    </Alert>
   );
 }
 

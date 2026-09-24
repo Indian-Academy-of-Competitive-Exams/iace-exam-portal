@@ -5,7 +5,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS, SAVED_QUESTION_KIND } from '@iace/contracts';
+import { ATTEMPT_STATUS, COHORT_COUNT_EVERY_MIN, SAVED_QUESTION_KIND } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
@@ -102,8 +102,8 @@ const SWEEP_LAG = '2 minutes';
 /** Bounded so one pass cannot run for ever; the next sweep takes whatever is left. */
 const SWEEP_TESTS_PER_PASS = 50;
 
-/** Item analysis is admin-only and reads every sheet, so it runs on its own slower clock. */
-const ITEM_SWEEP_EVERY_MS = 15 * 60 * 1000;
+/** Item analysis reads every sheet, so it runs on the slower clock the report tells students about. */
+const ITEM_SWEEP_EVERY_MS = COHORT_COUNT_EVERY_MIN * 60 * 1000;
 
 @Injectable()
 export class RollupService {

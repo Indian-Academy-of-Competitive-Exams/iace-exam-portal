@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { DIFFICULTY_LEVEL, QUESTION_TYPE, questionReportSchema } from '@iace/contracts';
+import {
+  COHORT_COMPARISON_FLOOR,
+  DIFFICULTY_LEVEL,
+  QUESTION_TYPE,
+  questionReportSchema,
+} from '@iace/contracts';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { QuestionReportService } from '../src/attempts/question-report.service';
 import { RollupService } from '../src/attempts/rollup.service';
@@ -73,10 +78,11 @@ async function sittings() {
   await prisma.testStat.create({
     data: {
       testId: paper.testId,
-      evaluatedCount: 2,
+      // The item rows below describe ten sittings, so the cohort is open to compare against.
+      evaluatedCount: 10,
       sumScore: 7.5,
       maxScore: 6,
-      sumTimeSec: 250,
+      sumTimeSec: 1250,
       topperAttemptId: topper.attemptId,
       computedAt,
     },
@@ -109,7 +115,7 @@ async function sittings() {
       },
     ],
   });
-  return { mine, topper };
+  return { mine, topper, testId: paper.testId };
 }
 
 describe('QuestionReportService — the cohort half, which needs no gate', () => {
@@ -161,7 +167,7 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     const report = await service.forAttempt(mine.studentId, mine.attemptId);
 
     assert.equal(questionReportSchema.safeParse(report).success, true);
-    assert.equal(report.cohortSize, 2);
+    assert.equal(report.cohortSize, 10);
     // 105 seconds against a cohort averaging 125 of them.
     assert.equal(report.paceIndex, 0.84);
     const first = report.questions[0];
@@ -194,6 +200,37 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     assert.equal(tail?.accuracy, null);
     assert.equal(tail?.attemptRate, null);
     assert.equal(tail?.cohortAverageTimeSec, null);
+  });
+});
+
+describe('QuestionReportService — the floor the comparison waits for', () => {
+  /** The failure this prevents: "100% got it right" beside the first sitter's own right answer. */
+  it('holds every cohort column back until enough students have sat the paper', async () => {
+    const { mine, testId } = await sittings();
+    await prisma.testStat.update({
+      where: { testId },
+      data: { evaluatedCount: COHORT_COMPARISON_FLOOR - 1 },
+    });
+
+    const report = await service.forAttempt(mine.studentId, mine.attemptId);
+
+    assert.equal(report.cohortSize, COHORT_COMPARISON_FLOOR - 1);
+    assert.equal(report.paceIndex, null, 'a pace of 1.00 against yourself is not a comparison');
+    assert.deepEqual(
+      report.questions.map((row) => [row.accuracy, row.attemptRate, row.topperTimeSec]),
+      report.questions.map(() => [null, null, null]),
+    );
+    // The option split goes with them: one vote is not a distribution.
+    assert.equal(
+      report.questions.every((row) => row.optionCounts.every((option) => option.count === 0)),
+      true,
+    );
+    // Their own answers are untouched: a missing cohort costs the column, never the row.
+    assert.deepEqual(
+      report.questions.map((row) => row.isCorrect),
+      [true, false, null, false],
+    );
+    questionReportSchema.parse(report);
   });
 });
 
