@@ -3,13 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SAVED_FILTER_FIELDS, useInfinitePages } from '@iace/app-kit';
-import {
-  instituteDayLabel,
-  SAVED_QUESTION_KIND,
-  type SavedQuestion,
-  type SavedQuestionKind,
-} from '@iace/contracts';
-import CircleCheck from 'lucide-react-native/icons/circle-check';
+import { instituteDayLabel, type SavedQuestion } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { savedFacetsQueryKey, savedQueryKey } from '../../lib/constants';
@@ -23,20 +17,15 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { SavedQuestionSheet } from './saved-question-sheet';
 
-/** What each list is for, said once at the top rather than on every row. */
-const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
-  [SAVED_QUESTION_KIND.BOOKMARK]: 'Starred from a solution review, and yours to drop.',
-  [SAVED_QUESTION_KIND.MISTAKE]:
-    'Added when a marked answer was wrong. Clearing one brings it back only if you miss it again.',
-};
+/** What the list is for, said once at the top rather than on every row. */
+const LIST_NOTE = 'Starred from a solution review, and yours to drop.';
 
 export interface SavedListProps {
-  kind: SavedQuestionKind;
   /** The screen's title row owns the filters; the list only reads what was chosen in them. */
   state: FilterState;
 }
 
-export function SavedList({ kind, state }: Readonly<SavedListProps>) {
+export function SavedList({ state }: Readonly<SavedListProps>) {
   const queryClient = useQueryClient();
   const [reading, setReading] = useState<SavedQuestion | null>(null);
   const [dropping, setDropping] = useState<SavedQuestion | null>(null);
@@ -46,10 +35,9 @@ export function SavedList({ kind, state }: Readonly<SavedListProps>) {
   const testId = asSet(state.values[SAVED_FILTER_FIELDS.TEST.key]);
 
   const list = useInfinitePages({
-    queryKey: [...savedQueryKey(kind), { subjectId, testId }],
+    queryKey: [...savedQueryKey(), { subjectId, testId }],
     fetchPage: (page) =>
       api.me.savedQuestions({
-        kind,
         page,
         // A set-valued filter choosing nothing means EVERY one of them, never none.
         subjectId: subjectId.length > 0 ? [...subjectId] : undefined,
@@ -61,8 +49,8 @@ export function SavedList({ kind, state }: Readonly<SavedListProps>) {
     mutationFn: (id: string) => api.me.removeSavedQuestion(id),
     onSettled: () => {
       setDropping(null);
-      void queryClient.invalidateQueries({ queryKey: savedQueryKey(kind) });
-      void queryClient.invalidateQueries({ queryKey: savedFacetsQueryKey(kind) });
+      void queryClient.invalidateQueries({ queryKey: savedQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: savedFacetsQueryKey() });
     },
   });
 
@@ -82,10 +70,10 @@ export function SavedList({ kind, state }: Readonly<SavedListProps>) {
         )}
         ListHeaderComponent={
           <Alert variant="info" className="mb-1">
-            {KIND_NOTE[kind]}
+            {LIST_NOTE}
           </Alert>
         }
-        ListEmptyComponent={<ListBody kind={kind} list={list} filtered={filtered} />}
+        ListEmptyComponent={<ListBody list={list} filtered={filtered} />}
         ListFooterComponent={
           list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null
         }
@@ -97,7 +85,7 @@ export function SavedList({ kind, state }: Readonly<SavedListProps>) {
         open={dropping !== null}
         // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Remove this question?"
-        description={removalOf(kind)}
+        description="It leaves your saved questions. Star it again from the solution review to bring it back."
         confirmLabel="Remove"
         loading={drop.isPending}
         onConfirm={() => {
@@ -112,11 +100,9 @@ export function SavedList({ kind, state }: Readonly<SavedListProps>) {
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40, gap: 12 };
 
 function ListBody({
-  kind,
   list,
   filtered,
 }: Readonly<{
-  kind: SavedQuestionKind;
   list: { isLoading: boolean; isError: boolean; retry: () => void };
   filtered: boolean;
 }>) {
@@ -140,12 +126,7 @@ function ListBody({
   if (filtered) {
     return <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing matches" />;
   }
-  return kind === SAVED_QUESTION_KIND.BOOKMARK ? (
-    <EmptyState title="No bookmarks yet" />
-  ) : (
-    // A mistake list with nothing on it is a good outcome, which the kind's own glyph would deny.
-    <EmptyState title="No mistakes recorded" icon={CircleCheck} />
-  );
+  return <EmptyState title="No saved questions yet" />;
 }
 
 function SavedRow({
@@ -183,8 +164,3 @@ function footOf(row: SavedQuestion): string {
   if (row.timeSpentSec !== null) parts.push(`${row.timeSpentSec}s`);
   return parts.filter(Boolean).join(' · ');
 }
-
-const removalOf = (kind: SavedQuestionKind) =>
-  kind === SAVED_QUESTION_KIND.BOOKMARK
-    ? 'It leaves your bookmarks. Star it again from the solution review to bring it back.'
-    : 'It leaves your mistakes. It comes back only if you get it wrong again.';

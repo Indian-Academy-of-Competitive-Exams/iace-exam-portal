@@ -242,7 +242,7 @@ describe('RollupService — sweeping the cohorts that changed', () => {
   /** The failure this prevents: a student's totals moved, and the marks behind them rolled back. */
   it('writes none of a sitting when its own tables fail partway', async () => {
     const scoring = new ScoringProcessor(
-      failingOnceOnMistakes(prisma),
+      failingOnceOnStatWrite(prisma),
       new RollupQueue(new FakeQueue().asQueue()),
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
@@ -602,34 +602,6 @@ function countingFindMany(client: PrismaService, counts: Record<string, number>)
           };
         },
       });
-    },
-  });
-}
-
-/** The real client, with the first `savedQuestion.createMany` inside any transaction refused. */
-function failingOnceOnMistakes(client: PrismaService): PrismaService {
-  let armed = true;
-  const refuseMistakes = (tx: object) =>
-    new Proxy(tx, {
-      get(target, key) {
-        const held = Reflect.get(target, key) as unknown;
-        if (key !== 'savedQuestion' || !armed) return held;
-        return new Proxy(held as object, {
-          get(delegate, method) {
-            if (method !== 'createMany' || !armed) return Reflect.get(delegate, method) as unknown;
-            return () => {
-              armed = false;
-              return Promise.reject(new Error('savedQuestion is unavailable'));
-            };
-          },
-        });
-      },
-    });
-  return new Proxy(client, {
-    get(target, key) {
-      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
-      return (work: (tx: object) => Promise<unknown>, options?: object) =>
-        target.$transaction((tx) => work(refuseMistakes(tx)), options);
     },
   });
 }

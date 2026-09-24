@@ -8,7 +8,6 @@ import {
   type LeaderboardMeasure,
   type LeaderboardScope,
   type PerformanceScope,
-  type SavedQuestionKind,
 } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
@@ -85,12 +84,11 @@ export const NOTIFICATIONS_PAGE_SIZE = 20;
 
 /** The VAPID key this browser subscribes with, which is all the settings screen reads. */
 export const PUSH_CONFIG_QUERY_KEY = ['me', 'push-subscription'] as const;
-/** One page of either saved list. The same feed shape as the bell, so the same page. */
-export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
+/** One page of the saved list. The same feed shape as the bell, so the same page. */
+export const savedQueryKey = () => ['me', 'saved'] as const;
 
 /** Both filters' options, which span the whole set and so do not move when a page does. */
-export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
-  ['me', 'saved', kind, 'facets'] as const;
+export const savedFacetsQueryKey = () => ['me', 'saved', 'facets'] as const;
 
 /** What the review reads to draw its stars — one read per sitting, not one per question. */
 export const bookmarksInAttemptQueryKey = (attemptId: string) =>

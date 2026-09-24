@@ -1,7 +1,6 @@
 /**
- * Owns `SavedQuestion` (docs/03 §5) — the two lists a student keeps of the bank. It READS the
- * sitting and the bank to gate a star and to draw a row; only the rollup fold writes beside it,
- * and that crossing is named in §5.
+ * Owns `SavedQuestion` (docs/03 §5) — the questions a student starred in a review. It READS the
+ * sitting and the bank to gate a star and to draw a row, and nothing else writes the table.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -9,7 +8,6 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  SAVED_QUESTION_KIND,
   type BookmarkQuestionBody,
   type BookmarkedInAttempt,
   type LiveAnswer,
@@ -17,7 +15,6 @@ import {
   type Paginated,
   type SavedListQuery,
   type SavedQuestion,
-  type SavedQuestionKind,
   type SavedFacets,
 } from '@iace/contracts';
 import { answersOf } from '../attempts';
@@ -35,7 +32,6 @@ const NOT_REVIEWABLE = 'This sitting has not been marked yet';
 const ROW_SELECT = {
   id: true,
   questionId: true,
-  kind: true,
   attemptId: true,
   createdAt: true,
   question: {
@@ -53,11 +49,10 @@ type SavedRow = Prisma.SavedQuestionGetPayload<{ select: typeof ROW_SELECT }>;
 export class SavedQuestionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** One list, newest first — the `(studentId, kind, createdAt)` index read straight through. */
+  /** Newest first — the `(studentId, createdAt)` index read straight through. */
   async list(studentId: string, query: SavedListQuery): Promise<Paginated<SavedQuestion>> {
     const where: Prisma.SavedQuestionWhereInput = {
       studentId,
-      kind: query.kind,
       // Undefined, never `in: []`: an empty choice means every subject, which Prisma reads as none.
       ...(query.subjectId?.length ? { question: { subjectId: { in: query.subjectId } } } : {}),
       // `attemptId` is a scalar, so a test narrows by the sittings it holds rather than by a join.
@@ -145,9 +140,9 @@ export class SavedQuestionsService {
   }
 
   /** Read across the WHOLE saved set, not a page: a filter that shifts as you page is a trap. */
-  async facets(studentId: string, kind: SavedQuestionKind): Promise<SavedFacets> {
+  async facets(studentId: string): Promise<SavedFacets> {
     const rows = await this.prisma.savedQuestion.findMany({
-      where: { studentId, kind },
+      where: { studentId },
       select: {
         attemptId: true,
         question: { select: { subject: { select: { id: true, name: true } } } },
@@ -180,7 +175,6 @@ export class SavedQuestionsService {
         data: {
           studentId,
           questionId: input.questionId,
-          kind: SAVED_QUESTION_KIND.BOOKMARK,
           attemptId: input.attemptId,
           paperQuestionId: served.paperQuestionId,
         },
@@ -190,19 +184,13 @@ export class SavedQuestionsService {
     }
 
     const row = await this.prisma.savedQuestion.findUniqueOrThrow({
-      where: {
-        studentId_questionId_kind: {
-          studentId,
-          questionId: input.questionId,
-          kind: SAVED_QUESTION_KIND.BOOKMARK,
-        },
-      },
+      where: { studentId_questionId: { studentId, questionId: input.questionId } },
       select: ROW_SELECT,
     });
     return toSavedQuestion(row);
   }
 
-  /** Either list. The owner is part of the DELETE, so another student's row reads as missing. */
+  /** The owner is part of the DELETE, so another student's row reads as missing. */
   async remove(studentId: string, id: string): Promise<void> {
     const dropped = await this.prisma.savedQuestion.deleteMany({ where: { id, studentId } });
     if (dropped.count === 0) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
@@ -224,11 +212,7 @@ export class SavedQuestionsService {
     if (served.length === 0) return { attemptId, bookmarks: [] };
 
     const rows = await this.prisma.savedQuestion.findMany({
-      where: {
-        studentId,
-        kind: SAVED_QUESTION_KIND.BOOKMARK,
-        questionId: { in: served.map((row) => row.questionId) },
-      },
+      where: { studentId, questionId: { in: served.map((row) => row.questionId) } },
       select: { id: true, questionId: true },
     });
     return {
@@ -285,7 +269,6 @@ function toSavedQuestion(row: SavedRow, sat?: SatContext): SavedQuestion {
   return {
     id: row.id,
     questionId: row.questionId,
-    kind: row.kind,
     stemPreview: stemPreviewOf((row.question.currentVersion?.content ?? {}) as LocalizedContent),
     subject: row.question.subject.name,
     topic: row.question.topic?.name ?? null,

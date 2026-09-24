@@ -5,7 +5,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS, COHORT_COUNT_EVERY_MIN, SAVED_QUESTION_KIND } from '@iace/contracts';
+import { ATTEMPT_STATUS, COHORT_COUNT_EVERY_MIN } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
@@ -327,7 +327,6 @@ export class RollupService {
     // StudentStat first, as `rebuildStudent` locks it first: a rebuild mid-evaluation must queue, not race.
     await this.addToStudent(tx, attempt.studentId, totals, now);
     await this.addToSubjects(tx, attempt.studentId, totals, now);
-    await this.foldMistakes(tx, [attempt]);
   }
 
   /** Prisma cannot increment and take a GREATEST in one upsert, so the statement is written out. */
@@ -392,27 +391,6 @@ export class RollupService {
         "wrong" = "StudentSubjectStat"."wrong" + EXCLUDED."wrong",
         "sumTimeSec" = "StudentSubjectStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
         "computedAt" = EXCLUDED."computedAt"`;
-  }
-
-  /** `isCorrect` is false only for a CHOSEN wrong answer; `skipDuplicates` makes a re-fold write once. */
-  private async foldMistakes(
-    tx: Prisma.TransactionClient,
-    attempts: readonly FoldableAttempt[],
-  ): Promise<void> {
-    const wrong = attempts.flatMap((attempt) =>
-      attempt.questions
-        .filter((question) => question.isCorrect === false)
-        .map((question) => ({
-          studentId: attempt.studentId,
-          questionId: question.questionId,
-          kind: SAVED_QUESTION_KIND.MISTAKE,
-          attemptId: attempt.id,
-          paperQuestionId: question.paperQuestionId,
-        })),
-    );
-    if (wrong.length === 0) return;
-
-    await tx.savedQuestion.createMany({ data: wrong, skipDuplicates: true });
   }
 
   private async writeStudent(

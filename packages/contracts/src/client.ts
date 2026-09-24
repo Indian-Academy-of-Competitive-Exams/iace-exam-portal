@@ -91,7 +91,6 @@ import {
   type SavedListQueryInput,
   type SavedQuestion,
   type SavedFacets,
-  type SavedFacetsQueryInput,
 } from './saved';
 import {
   ADMIN_BRANCH_ROUTES,
@@ -802,7 +801,7 @@ export function createApiClient(options: ApiClientOptions) {
       leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
         get(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, leaderboardSchema),
 
-      /** One of the two lists, newest first. The kind is required — there is no combined list. */
+      /** Everything they starred, newest first. */
       savedQuestions: (query: SavedListQueryInput): Promise<Paginated<SavedQuestion>> =>
         list(SAVED_ROUTES.list, query, savedQuestionSchema),
 
@@ -810,10 +809,8 @@ export function createApiClient(options: ApiClientOptions) {
       bookmarkQuestion: (input: BookmarkQuestionInput): Promise<SavedQuestion> =>
         write('POST', SAVED_ROUTES.bookmark, savedQuestionSchema, input),
 
-      /** Drops one saved row. A dismissed mistake comes back only if they get it wrong again. */
       /** Every choice both saved-list filters can offer, off their own set — never the whole catalog. */
-      savedFacets: (query: SavedFacetsQueryInput): Promise<SavedFacets> =>
-        get(`${SAVED_ROUTES.facets}${queryString({ ...query })}`, savedFacetsSchema),
+      savedFacets: (): Promise<SavedFacets> => get(SAVED_ROUTES.facets, savedFacetsSchema),
 
       removeSavedQuestion: (id: string): Promise<NoContent> =>
         write('DELETE', SAVED_ROUTES.remove(id), noContentSchema),

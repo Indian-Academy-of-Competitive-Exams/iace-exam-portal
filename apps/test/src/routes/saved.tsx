@@ -1,13 +1,13 @@
 /**
- * The two lists a student keeps of the bank: BOOKMARKS they starred in a review, and MISTAKES the
- * fold wrote for them. A LIST screen rather than the feed the rest of this portal uses — these are
- * long, filtered and paged, which is the one job `TableFrame` and `ListView` already do.
+ * The questions a student starred in a solution review. A LIST screen rather than the feed the rest
+ * of this portal uses — this one is long, filtered and paged, which is the one job `TableFrame` and
+ * `ListView` already do.
  */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpenText, CircleCheck, Trash2 } from 'lucide-react';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
-import { SAVED_FILTER_FIELDS, type SavedFilterKey } from '@iace/app-kit';
+import { BookOpenText, Trash2 } from 'lucide-react';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { SAVED_FILTER_FIELDS } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -24,72 +24,37 @@ import {
   type ListFilter,
   type ListFilterMultiControl,
 } from '@iace/ui';
-import {
-  instituteDayLabel,
-  SAVED_QUESTION_KIND,
-  SAVED_QUESTION_KINDS,
-  SAVED_QUESTION_KIND_LABELS,
-  type SavedQuestion,
-  type SavedQuestionKind,
-} from '@iace/contracts';
+import { instituteDayLabel, type SavedQuestion } from '@iace/contracts';
 import { api } from '../lib/api';
 import { SavedQuestionDialog } from '../components/review/saved-question-dialog';
 import { NAV_ITEMS, savedFacetsQueryKey, savedQueryKey } from '../lib/constants';
 
-const KIND_KEY = 'list';
-
-/** What each list is for, said once at the top rather than on every row. */
-const KIND_NOTE: Readonly<Record<SavedQuestionKind, string>> = {
-  [SAVED_QUESTION_KIND.BOOKMARK]: 'Starred from a solution review, and yours to drop.',
-  [SAVED_QUESTION_KIND.MISTAKE]:
-    'Added when a marked answer was wrong. Clearing one brings it back only if you miss it again.',
-};
+/** What the list is for, said once at the top rather than on every row. */
+const LIST_NOTE = 'Starred from a solution review, and yours to drop.';
 
 export function SavedPage() {
-  const filters = useFilters<typeof KIND_KEY | SavedFilterKey>();
-  const chosen = filters.get(KIND_KEY);
-  const kind: SavedQuestionKind = isKind(chosen) ? chosen : SAVED_QUESTION_KIND.BOOKMARK;
-
   return (
     <TableFrame
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Saved questions" />}
-      tabs={{
-        value: kind,
-        // Each list spans its own subjects, so the other's choice would filter this one to nothing.
-        onValueChange: (next) =>
-          filters.set({
-            [KIND_KEY]: next,
-            [SAVED_FILTER_FIELDS.SUBJECT.key]: '',
-            [SAVED_FILTER_FIELDS.TEST.key]: '',
-          }),
-        items: SAVED_QUESTION_KINDS.map((value) => ({
-          value,
-          label: SAVED_QUESTION_KIND_LABELS[value],
-          content: <SavedList kind={value} />,
-        })),
-      }}
-    />
+    >
+      <SavedList />
+    </TableFrame>
   );
 }
 
-const isKind = (value: string): value is SavedQuestionKind =>
-  (SAVED_QUESTION_KINDS as readonly string[]).includes(value);
-
 /** Only what their own set spans: a filter must offer no choice that finds nothing. */
 function FacetPicker({
-  kind,
   facet,
   placeholder,
   control,
 }: Readonly<{
-  kind: SavedQuestionKind;
   facet: 'subjects' | 'tests';
   placeholder: string;
   control: ListFilterMultiControl;
 }>) {
   const facets = useQuery({
-    queryKey: savedFacetsQueryKey(kind),
-    queryFn: () => api.me.savedFacets({ kind }),
+    queryKey: savedFacetsQueryKey(),
+    queryFn: () => api.me.savedFacets(),
   });
 
   return (
@@ -103,14 +68,14 @@ function FacetPicker({
   );
 }
 
-function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
+function SavedList() {
   const queryClient = useQueryClient();
   const [reading, setReading] = useState<SavedQuestion | null>(null);
 
   const drop = useMutation({
     meta: { success: 'Removed from your list.' },
     mutationFn: (id: string) => api.me.removeSavedQuestion(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueryKey(kind) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueryKey() }),
   });
 
   const filterSpec = [
@@ -121,7 +86,6 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
       primary: true,
       render: (control: ListFilterMultiControl) => (
         <FacetPicker
-          kind={kind}
           facet="subjects"
           placeholder={SAVED_FILTER_FIELDS.SUBJECT.placeholder}
           control={control}
@@ -135,7 +99,6 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
       primary: true,
       render: (control: ListFilterMultiControl) => (
         <FacetPicker
-          kind={kind}
           facet="tests"
           placeholder={SAVED_FILTER_FIELDS.TEST.placeholder}
           control={control}
@@ -145,9 +108,9 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
   ] as const satisfies readonly ListFilter[];
 
   const list = useListScreen({
-    queryKey: savedQueryKey(kind),
+    queryKey: savedQueryKey(),
     filters: filterSpec,
-    toQuery: (values) => ({ kind, subjectId: values.subjectId, testId: values.testId }),
+    toQuery: (values) => ({ subjectId: values.subjectId, testId: values.testId }),
     fetchPage: (params) => api.me.savedQuestions(params),
   });
 
@@ -157,12 +120,12 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
       filters={filterSpec}
       columns={savedColumns(drop.isPending, (id) => drop.mutate(id), setReading)}
       rowKey={(row) => row.id}
-      empty={emptyFor(kind)}
+      empty="No saved questions yet"
       emptyFiltered="Nothing matches"
       banner={
         <>
           {/* ui-copy-ok: rule */}
-          <Alert variant="info">{KIND_NOTE[kind]}</Alert>
+          <Alert variant="info">{LIST_NOTE}</Alert>
           {reading ? (
             <SavedQuestionDialog saved={reading} onClose={() => setReading(null)} />
           ) : null}
@@ -171,12 +134,6 @@ function SavedList({ kind }: Readonly<{ kind: SavedQuestionKind }>) {
     />
   );
 }
-
-/** Nothing starred and nothing missed are different facts, and only one of them is good news. */
-const emptyFor = (kind: SavedQuestionKind) =>
-  kind === SAVED_QUESTION_KIND.BOOKMARK
-    ? { title: 'No bookmarks yet' }
-    : { title: 'No mistakes recorded', icon: CircleCheck };
 
 function savedColumns(
   busy: boolean,
@@ -248,7 +205,7 @@ function savedColumns(
           </DropdownMenuItem>
           <DropdownMenuItem destructive disabled={busy} onSelect={() => onDrop(row.id)}>
             <Trash2 aria-hidden />
-            Remove from this list
+            Remove it
           </DropdownMenuItem>
         </RowActions>
       ),

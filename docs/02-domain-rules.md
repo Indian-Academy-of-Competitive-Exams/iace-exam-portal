@@ -272,8 +272,8 @@ Every aggregate stores **sums and counts, never averages**; averages are derived
 
 **The two halves are counted differently, because their writes land differently.** A student's own
 aggregates touch one row per student, so five thousand concurrent scorers contend on none of them:
-`StudentStat`, `StudentSubjectStat` and the mistake rows are written **inside the scoring
-transaction**, gated on the same claim that marks the sitting evaluated. They commit with the
+`StudentStat` and `StudentSubjectStat` are written **inside the scoring transaction**, gated on the
+same claim that marks the sitting evaluated. They commit with the
 marks, and a retry cannot count them twice because the claim has already been taken.
 
 The cohort's aggregates all land on one row per test, so writing them per submit would serialise a

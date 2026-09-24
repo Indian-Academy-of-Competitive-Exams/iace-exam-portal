@@ -167,9 +167,6 @@ owns the sitting owns the derivation.
 - `tests` deletes a section's unfinalized `QuestionAssignment` rows when a super admin moves a test
   from FRAMED to PICKED. Only the source change knows the work has been stood down, and an
   assignment nobody can finish is not a row `assignments` would delete on its own.
-- `attempts` writes the MISTAKE half of `SavedQuestion` in the rollup fold. Only the fold knows
-  which answers the key called wrong, and it is the one path that is durable and runs exactly once
-  per sitting; `saved` owns the table and writes every BOOKMARK.
 - the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
   the one crossing that is infra rather than domain: retention is a property of the buffer, not of
   the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.

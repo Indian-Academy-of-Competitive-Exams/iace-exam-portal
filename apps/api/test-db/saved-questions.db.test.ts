@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import {
-  ATTEMPT_STATUS,
-  AppException,
-  ErrorCodes,
-  SAVED_QUESTION_KIND,
-  type AttemptStatus,
-  type SavedQuestionKind,
-} from '@iace/contracts';
+import { ATTEMPT_STATUS, AppException, ErrorCodes, type AttemptStatus } from '@iace/contracts';
 import { SavedQuestionsService } from '../src/saved/saved-questions.service';
 import {
   makePaper,
@@ -62,14 +55,9 @@ async function world(status: AttemptStatus = ATTEMPT_STATUS.EVALUATED) {
   };
 }
 
-function star(
-  studentId: string,
-  questionId: string,
-  attemptId: string | null,
-  kind: SavedQuestionKind = SAVED_QUESTION_KIND.BOOKMARK,
-) {
+function star(studentId: string, questionId: string, attemptId: string | null) {
   return prisma.savedQuestion.create({
-    data: { studentId, questionId, kind, attemptId },
+    data: { studentId, questionId, attemptId },
     select: { id: true },
   });
 }
@@ -80,7 +68,6 @@ describe('SavedQuestionsService — starring a question', () => {
 
     const row = await saved.bookmark(student.id, { attemptId: sitting.id, questionId: first.id });
 
-    assert.equal(row.kind, SAVED_QUESTION_KIND.BOOKMARK);
     assert.equal(row.attemptId, sitting.id);
     assert.equal(row.subject, 'Reasoning');
     assert.equal(row.stemPreview, 'Stem for q_1');
@@ -119,18 +106,13 @@ describe('SavedQuestionsService — starring a question', () => {
   });
 });
 
-describe('SavedQuestionsService — the two lists', () => {
-  it('returns only the kind asked for, and only this student’s', async () => {
-    const { student, other, sitting, first, second } = await world();
+describe('SavedQuestionsService — the list', () => {
+  it('returns only this student’s', async () => {
+    const { student, other, sitting, first } = await world();
     await star(student.id, first.id, sitting.id);
-    await star(student.id, second.id, sitting.id, SAVED_QUESTION_KIND.MISTAKE);
-    await star(other.id, second.id, sitting.id);
+    await star(other.id, first.id, sitting.id);
 
-    const page = await saved.list(student.id, {
-      kind: SAVED_QUESTION_KIND.BOOKMARK,
-      page: 1,
-      pageSize: 20,
-    });
+    const page = await saved.list(student.id, { page: 1, pageSize: 20 });
 
     assert.equal(page.total, 1);
     assert.deepEqual(
@@ -180,7 +162,6 @@ describe('SavedQuestionsService — what a revision list is filtered and read by
     await star(student.id, paper.items[0]?.questionId ?? '', sitting.id);
 
     const page = await saved.list(student.id, {
-      kind: SAVED_QUESTION_KIND.BOOKMARK,
       page: 1,
       pageSize: 20,
     });
@@ -195,7 +176,6 @@ describe('SavedQuestionsService — what a revision list is filtered and read by
     await star(student.id, first.id, null);
 
     const page = await saved.list(student.id, {
-      kind: SAVED_QUESTION_KIND.BOOKMARK,
       page: 1,
       pageSize: 20,
     });
@@ -209,7 +189,7 @@ describe('SavedQuestionsService — what a revision list is filtered and read by
     await star(student.id, first.id, sitting.id);
     await star(other.id, second.id, sitting.id);
 
-    const facets = await saved.facets(student.id, SAVED_QUESTION_KIND.BOOKMARK);
+    const facets = await saved.facets(student.id);
 
     assert.deepEqual(facets.tests, [{ id: test.id, name: 'Mock 1' }]);
     assert.equal(facets.subjects.length, 1);

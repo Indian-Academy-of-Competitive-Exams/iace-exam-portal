@@ -17,16 +17,14 @@ import {
   type SavedListQuery,
   type SavedQuestion,
   type SavedFacets,
-  type SavedFacetsQuery,
   bookmarkQuestionSchema,
   savedListQuerySchema,
-  savedFacetsQuerySchema,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { SavedQuestionsService } from './saved-questions.service';
 
-/** The student's two lists. No id names a student here — the token is the subject, as under `me`. */
+/** The questions they starred. No id names a student here — the token is the subject, as under `me`. */
 @Controller('me/saved')
 @Actors(ActorTypes.STUDENT)
 export class SavedController {
@@ -42,11 +40,8 @@ export class SavedController {
 
   /** What both filters offer. A separate read: the options must span every page, not one. */
   @Get('facets')
-  facets(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query(new ZodQuery(savedFacetsQuerySchema)) query: SavedFacetsQuery,
-  ): Promise<SavedFacets> {
-    return this.saved.facets(user.id, query.kind);
+  facets(@CurrentUser() user: AuthenticatedUser): Promise<SavedFacets> {
+    return this.saved.facets(user.id);
   }
 
   /** Offered only on the review surface, and refused until that sitting's solutions have opened. */

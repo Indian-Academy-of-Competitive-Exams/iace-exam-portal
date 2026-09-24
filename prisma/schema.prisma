@@ -1172,11 +1172,6 @@ model TestQuestionStat {
   @@index([questionId])
 }
 
-enum SavedQuestionKind {
-  BOOKMARK // the student saved it deliberately
-  MISTAKE // auto-added because they answered it wrong
-}
-
 //A browser push endpoint. Pruned when a send returns 404/410 (dead subscription).
 model PushSubscription {
   id         String   @id @default(uuid(7)) @db.Uuid
@@ -1218,17 +1213,16 @@ model PushDevice {
 // Two lists in one table: manual BOOKMARK and auto-collected MISTAKE.
 // Saved by bank `questionId` so the list survives across papers; attempt/paperQuestion are provenance.
 model SavedQuestion {
-  id              String            @id @default(uuid(7)) @db.Uuid
-  studentId       String            @db.Uuid
-  questionId      String            @db.Uuid
-  kind            SavedQuestionKind
-  attemptId       String?           @db.Uuid
-  paperQuestionId String?           @db.Uuid
-  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  id              String   @id @default(uuid(7)) @db.Uuid
+  studentId       String   @db.Uuid
+  questionId      String   @db.Uuid
+  attemptId       String?  @db.Uuid
+  paperQuestionId String?  @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
 
   student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   question Question @relation(fields: [questionId], references: [id])
 
-  @@unique([studentId, questionId, kind])
-  @@index([studentId, kind, createdAt])
+  @@unique([studentId, questionId])
+  @@index([studentId, createdAt])
 }

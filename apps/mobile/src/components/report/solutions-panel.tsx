@@ -6,7 +6,6 @@ import {
   AppException,
   ErrorCodes,
   LANGUAGE_MODE,
-  SAVED_QUESTION_KIND,
   type ExamSection,
   type ScoreCard,
   type SolutionReport,
@@ -183,7 +182,7 @@ function useBookmarks(attemptId: string) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookmarksInAttemptQueryKey(attemptId) });
-      void queryClient.invalidateQueries({ queryKey: savedQueryKey(SAVED_QUESTION_KIND.BOOKMARK) });
+      void queryClient.invalidateQueries({ queryKey: savedQueryKey() });
     },
   });
 

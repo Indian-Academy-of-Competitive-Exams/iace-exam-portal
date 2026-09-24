@@ -1,8 +1,4 @@
-import {
-  type LeaderboardScope,
-  type PerformanceScope,
-  type SavedQuestionKind,
-} from '@iace/contracts';
+import { type LeaderboardScope, type PerformanceScope } from '@iace/contracts';
 
 /** Storage keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
@@ -56,12 +52,10 @@ export const questionReportQueryKey = (attemptId: string) =>
 export const bookmarksInAttemptQueryKey = (attemptId: string) =>
   ['me', 'saved', 'attempts', attemptId] as const;
 
-/** One page of either saved list, keyed by which of the two it is. */
-export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
+export const savedQueryKey = () => ['me', 'saved'] as const;
 
 /** Both filters' options, which span the whole set and so do not move when a page does. */
-export const savedFacetsQueryKey = (kind: SavedQuestionKind) =>
-  ['me', 'saved', kind, 'facets'] as const;
+export const savedFacetsQueryKey = () => ['me', 'saved', 'facets'] as const;
 
 /** The window is the server's to choose, so the key has nothing to vary on. */
 export const TEST_DAYS_QUERY_KEY = ['me', 'test-days'] as const;
