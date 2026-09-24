@@ -18,11 +18,14 @@ import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } fr
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
 import { PaperSheetService, type PaperTerm } from './paper-sheet.service';
+import { RollupService } from './rollup.service';
+import { type FoldableAttempt } from './rollup-fold';
 
 const SCORING_SELECT = {
   id: true,
   testId: true,
   studentId: true,
+  attemptNo: true,
   status: true,
   // What they were shown last. A re-score that lands on the same number is not news.
   score: true,
@@ -30,7 +33,7 @@ const SCORING_SELECT = {
   startedAt: true,
   submittedAt: true,
   // The scoring terms' cache key: a disposition bumps it, so a warm copy cannot hide a drop.
-  test: { select: { paperRevision: true } },
+  test: { select: { paperRevision: true, scope: true } },
   sheet: { select: { answers: true } },
 } as const satisfies Prisma.AttemptSelect;
 
@@ -55,6 +58,7 @@ export class ScoringProcessor extends WorkerHost {
     private readonly notifications: NotificationOutbox,
     private readonly failures: QueueFailures,
     private readonly papers: PaperSheetService,
+    private readonly rollups: RollupService,
   ) {
     super();
   }
@@ -81,21 +85,28 @@ export class ScoringProcessor extends WorkerHost {
     if (!SCORABLE.has(attempt.status)) return null;
 
     const terms = await this.papers.termsOf(attempt.testId, attempt.test.paperRevision);
-    const scored = scorePaper(scorableOf(attempt, terms));
-    const written = await this.persist(attempt, scored, terms);
+    const served = scorableOf(attempt, terms);
+    const scored = scorePaper(served);
+    const written = await this.persist(attempt, scored, terms, served);
     // Stood down while this ran: counting it now would fold a void sitting back in.
     if (!written.applied) return null;
 
-    await this.count(attempt.testId, written.evaluation);
+    await this.count(attempt, written.evaluation);
     return scored;
   }
 
-  /** A first evaluation is folded in; a re-score moved marks already counted, so it asks for a rebuild. */
-  private async count(testId: string, evaluation: string | null): Promise<void> {
-    const asked = evaluation === null ? this.rollup.rebuild(testId) : this.rollup.relay();
+  /** A first evaluation counted itself; a re-score moved marks already counted, on both sides. */
+  private async count(attempt: ScoringRow, evaluation: string | null): Promise<void> {
+    const asked =
+      evaluation === null
+        ? Promise.all([
+            this.rollup.rebuild(attempt.testId),
+            this.rollup.rebuildStudent(attempt.studentId),
+          ])
+        : this.rollup.relay();
     // A queue nobody can reach must not fail a score that committed — the sweeper asks again.
     await asked.catch((error: unknown) => {
-      this.logger.error(`Attempt on test ${testId} was scored but not counted`, error);
+      this.logger.error(`Attempt on test ${attempt.testId} was scored but not counted`, error);
     });
   }
 
@@ -104,16 +115,25 @@ export class ScoringProcessor extends WorkerHost {
     attempt: ScoringRow,
     scored: PaperScore,
     terms: readonly PaperTerm[],
+    served: readonly ScorableQuestion[],
   ): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
-      const first = await this.mark(tx, attempt, scored);
+      const now = new Date();
+      const first = await this.mark(tx, attempt, scored, now);
       if (first === null) return { applied: false, evaluation: null };
 
       await tx.attemptSheet.update({
         where: { attemptId: attempt.id },
         data: { verdicts: verdictsOf(scored.questions, terms) },
       });
-      if (first) return { applied: true, evaluation: await this.announce(tx, attempt) };
+      if (first) {
+        await this.rollups.foldStudentSitting(
+          tx,
+          foldableOf(attempt, scored, terms, served, now),
+          now,
+        );
+        return { applied: true, evaluation: await this.announce(tx, attempt) };
+      }
 
       await this.announceCorrection(tx, attempt, scored.score);
       return { applied: true, evaluation: null };
@@ -125,8 +145,8 @@ export class ScoringProcessor extends WorkerHost {
     tx: Prisma.TransactionClient,
     attempt: ScoringRow,
     scored: PaperScore,
+    now: Date,
   ): Promise<boolean | null> {
-    const now = new Date();
     // Locked by the CTE, so the status this statement checks cannot move under it.
     const rows = await tx.$queryRaw<{ first: boolean }[]>`
       WITH held AS (
@@ -216,4 +236,38 @@ function scorableOf(attempt: ScoringRow, terms: readonly PaperTerm[]): ScorableQ
       timeSpentSec: answer?.timeSpentSec ?? 0,
     };
   });
+}
+
+/** The student's own two tables read this sitting, and the scorer already holds every field they need. */
+function foldableOf(
+  attempt: ScoringRow,
+  scored: PaperScore,
+  terms: readonly PaperTerm[],
+  served: readonly ScorableQuestion[],
+  now: Date,
+): FoldableAttempt {
+  return {
+    id: attempt.id,
+    testId: attempt.testId,
+    studentId: attempt.studentId,
+    attemptNo: attempt.attemptNo,
+    isGraded: attempt.isGraded,
+    score: scored.score,
+    correctCount: scored.correctCount,
+    wrongCount: scored.wrongCount,
+    unattemptedCount: scored.unattemptedCount,
+    submittedAt: attempt.submittedAt,
+    evaluatedAt: now,
+    scope: attempt.test.scope,
+    sections: scored.sections,
+    // `scorePaper` pushes one verdict per row it was handed, so all three lists are the paper's order.
+    questions: terms.map((term, slot) => ({
+      paperQuestionId: term.id,
+      questionId: term.questionId,
+      subjectId: term.subjectId,
+      isCorrect: scored.questions[slot]?.isCorrect ?? null,
+      timeSpentSec: served[slot]?.timeSpentSec ?? 0,
+      selectedOptionId: served[slot]?.selectedOptionId ?? null,
+    })),
+  };
 }

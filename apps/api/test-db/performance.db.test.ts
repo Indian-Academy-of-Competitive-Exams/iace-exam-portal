@@ -11,6 +11,7 @@ import {
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
+import { RollupService } from '../src/attempts/rollup.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
@@ -41,6 +42,7 @@ const processor = new ScoringProcessor(
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
+  new RollupService(prisma),
 );
 
 const service = new PerformanceAnalyticsService(prisma, new LeaderboardService(prisma));

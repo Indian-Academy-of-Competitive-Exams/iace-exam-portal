@@ -35,13 +35,14 @@ const TERMS_SELECT = {
   marks: true,
   negativeMarks: true,
   status: true,
-  question: { select: { type: true } },
+  question: { select: { type: true, subjectId: true } },
   questionVersion: { select: { options: true, answerKey: true } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
 /** What a sat paper pays per row. Every column but `status` is frozen, and `Test.paperRevision` keys that one. */
 export interface PaperTerm extends SheetPaperRow {
   type: QuestionType;
+  subjectId: string | null;
   status: PaperQuestionStatus;
   marks: number;
   negativeMarks: number;
@@ -119,6 +120,7 @@ export class PaperSheetService {
     const read = rows.map(({ question, questionVersion, marks, negativeMarks, ...row }) => ({
       ...row,
       type: question.type,
+      subjectId: question.subjectId,
       marks: Number(marks),
       negativeMarks: Number(negativeMarks),
       correctOptionIds: correctOptionIdsIn(questionVersion.options),

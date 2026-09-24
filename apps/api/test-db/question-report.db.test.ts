@@ -3,6 +3,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { DIFFICULTY_LEVEL, QUESTION_TYPE, questionReportSchema } from '@iace/contracts';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { QuestionReportService } from '../src/attempts/question-report.service';
+import { RollupService } from '../src/attempts/rollup.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
@@ -32,6 +33,7 @@ const processor = new ScoringProcessor(
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
+  new RollupService(prisma),
 );
 
 const service = new QuestionReportService(prisma);

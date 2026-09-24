@@ -15,7 +15,6 @@ import { sectionScoresIn } from './score-paper';
 import {
   COHORT_ROLLUP_TYPES,
   ROLLUP_TYPE,
-  STUDENT_ROLLUP_TYPES,
   addToCohortTotals,
   addToStudentTotals,
   cohortSittingsOf,
@@ -147,7 +146,6 @@ export class RollupService {
       );
     }
 
-    await this.foldStudents(attempts);
     await this.foldCohorts(attempts);
 
     await this.prisma.outboxEvent.updateMany({
@@ -283,7 +281,6 @@ export class RollupService {
         const totals = emptyStudentTotals();
         await this.replay(tx, ids, (attempt) => addToStudentTotals(totals, attempt));
         await this.writeStudent(tx, studentId, totals, now);
-        await this.reguard(tx, ids, STUDENT_ROLLUP_TYPES, { attempt: { studentId } });
       },
       { timeout: REBUILD_TIMEOUT_MS },
     );
@@ -308,84 +305,36 @@ export class RollupService {
     this.logger.log(`Rebuilt ${tests.length} tests and ${students.length} students`);
   }
 
-  /** The student's side of a page: ONE transaction, claimed before any of it is counted. */
-  private async foldStudents(attempts: readonly FoldableAttempt[]): Promise<void> {
-    if (attempts.length === 0) return;
-    await this.prisma.$transaction(
-      async (tx) => {
-        const fresh = await this.claimStudentFolds(tx, attempts);
-        if (fresh.length === 0) return;
-
-        const byStudent = new Map<string, StudentTotals>();
-        for (const attempt of fresh) {
-          const held = byStudent.get(attempt.studentId) ?? emptyStudentTotals();
-          byStudent.set(attempt.studentId, addToStudentTotals(held, attempt));
-        }
-
-        const now = new Date();
-        await this.writeStudents(tx, byStudent, now);
-        await this.writeSubjects(tx, byStudent, now);
-        await this.foldMistakes(tx, fresh);
-      },
-      { timeout: FOLD_TIMEOUT_MS },
-    );
-  }
-
-  /** The whole guard: `createMany` cannot say what it wrote, and a second worker has to be told. */
-  private async claimStudentFolds(
+  /** One sitting's own two tables, inside the scorer's transaction: marks and totals commit together. */
+  async foldStudentSitting(
     tx: Prisma.TransactionClient,
-    attempts: readonly FoldableAttempt[],
-  ): Promise<FoldableAttempt[]> {
-    // Sorted, so two workers on one page take the same rows in the same order and cannot deadlock.
-    const ids = attempts.map((attempt) => attempt.id).sort();
-    const claimed = await tx.$queryRaw<{ attemptId: string }[]>`
-      INSERT INTO "ProcessedRollup" ("attemptId", "rollupType")
-      SELECT id, ${ROLLUP_TYPE.STUDENT} FROM unnest(${ids}::uuid[]) AS id
-      ON CONFLICT DO NOTHING
-      RETURNING "attemptId"`;
-
-    const won = new Set(claimed.map((row) => row.attemptId));
-    const fresh = attempts.filter((attempt) => won.has(attempt.id));
-    // The student's other guard rides with it, as the cohort's three ride on the test's one.
-    await tx.processedRollup.createMany({
-      data: fresh.map((attempt) => ({
-        attemptId: attempt.id,
-        rollupType: ROLLUP_TYPE.STUDENT_SUBJECT,
-      })),
-      skipDuplicates: true,
-    });
-    return fresh;
-  }
-
-  /** One statement: Prisma cannot increment many rows by many different numbers. */
-  private async writeStudents(
-    tx: Prisma.TransactionClient,
-    byStudent: ReadonlyMap<string, StudentTotals>,
+    attempt: FoldableAttempt,
     now: Date,
   ): Promise<void> {
-    const rows = [...byStudent].sort(([left], [right]) => left.localeCompare(right));
-    const column = <T>(read: (totals: StudentTotals) => T): T[] =>
-      rows.map(([, totals]) => read(totals));
+    const totals = addToStudentTotals(emptyStudentTotals(), attempt);
+    // StudentStat first, as `rebuildStudent` locks it first: a rebuild mid-evaluation must queue, not race.
+    await this.addToStudent(tx, attempt.studentId, totals, now);
+    await this.addToSubjects(tx, attempt.studentId, totals, now);
+    await this.foldMistakes(tx, [attempt]);
+  }
 
+  /** Prisma cannot increment and take a GREATEST in one upsert, so the statement is written out. */
+  private async addToStudent(
+    tx: Prisma.TransactionClient,
+    studentId: string,
+    totals: StudentTotals,
+    now: Date,
+  ): Promise<void> {
     await tx.$executeRaw`
       INSERT INTO "StudentStat" (
         "studentId", "testsAttempted", "testsEvaluated", "sumScore", "totalAnswered",
         "totalCorrect", "totalWrong", "totalUnattempted", "sumTimeSec", "retakeCount",
         "lastAttemptAt", "computedThrough", "computedAt")
-      SELECT * FROM unnest(
-        ${rows.map(([studentId]) => studentId)}::uuid[],
-        ${column((totals) => totals.testsAttempted)}::int[],
-        ${column((totals) => totals.testsEvaluated)}::int[],
-        ${column((totals) => totals.sumScore)}::numeric[],
-        ${column((totals) => totals.totalAnswered)}::int[],
-        ${column((totals) => totals.totalCorrect)}::int[],
-        ${column((totals) => totals.totalWrong)}::int[],
-        ${column((totals) => totals.totalUnattempted)}::int[],
-        ${column((totals) => BigInt(totals.sumTimeSec))}::bigint[],
-        ${column((totals) => totals.retakeCount)}::int[],
-        ${column((totals) => totals.lastAttemptAt)}::timestamptz[],
-        ${column((totals) => totals.computedThrough)}::timestamptz[],
-        ${rows.map(() => now)}::timestamptz[])
+      VALUES (
+        ${studentId}::uuid, ${totals.testsAttempted}, ${totals.testsEvaluated},
+        ${totals.sumScore}, ${totals.totalAnswered}, ${totals.totalCorrect}, ${totals.totalWrong},
+        ${totals.totalUnattempted}, ${BigInt(totals.sumTimeSec)}, ${totals.retakeCount},
+        ${totals.lastAttemptAt}::timestamptz, ${totals.computedThrough}::timestamptz, ${now})
       ON CONFLICT ("studentId") DO UPDATE SET
         "testsAttempted" = "StudentStat"."testsAttempted" + EXCLUDED."testsAttempted",
         "testsEvaluated" = "StudentStat"."testsEvaluated" + EXCLUDED."testsEvaluated",
@@ -402,30 +351,28 @@ export class RollupService {
         "computedAt" = EXCLUDED."computedAt"`;
   }
 
-  /** Every subject of every student on the page, in the same one statement. */
-  private async writeSubjects(
+  /** Every subject the sitting served, in one statement and in subject order for the lock. */
+  private async addToSubjects(
     tx: Prisma.TransactionClient,
-    byStudent: ReadonlyMap<string, StudentTotals>,
+    studentId: string,
+    totals: StudentTotals,
     now: Date,
   ): Promise<void> {
-    const rows = [...byStudent]
-      .flatMap(([studentId, totals]) =>
-        [...totals.subjects.values()].map((subject) => ({ studentId, subject })),
-      )
-      .sort((left, right) => keyOfSubject(left).localeCompare(keyOfSubject(right)));
+    const rows = [...totals.subjects.values()].sort((left, right) =>
+      left.subjectId.localeCompare(right.subjectId),
+    );
     if (rows.length === 0) return;
 
     await tx.$executeRaw`
       INSERT INTO "StudentSubjectStat" (
         "studentId", "subjectId", "scope", "attempted", "correct", "wrong", "sumTimeSec", "computedAt")
-      SELECT * FROM unnest(
-        ${rows.map((row) => row.studentId)}::uuid[],
-        ${rows.map((row) => row.subject.subjectId)}::uuid[],
-        ${rows.map((row) => row.subject.scope)}::"TestScope"[],
-        ${rows.map((row) => row.subject.attempted)}::int[],
-        ${rows.map((row) => row.subject.correct)}::int[],
-        ${rows.map((row) => row.subject.wrong)}::int[],
-        ${rows.map((row) => BigInt(row.subject.sumTimeSec))}::bigint[],
+      SELECT ${studentId}::uuid, * FROM unnest(
+        ${rows.map((row) => row.subjectId)}::uuid[],
+        ${rows.map((row) => row.scope)}::"TestScope"[],
+        ${rows.map((row) => row.attempted)}::int[],
+        ${rows.map((row) => row.correct)}::int[],
+        ${rows.map((row) => row.wrong)}::int[],
+        ${rows.map((row) => BigInt(row.sumTimeSec))}::bigint[],
         ${rows.map(() => now)}::timestamptz[])
       ON CONFLICT ("studentId", "subjectId", "scope") DO UPDATE SET
         "attempted" = "StudentSubjectStat"."attempted" + EXCLUDED."attempted",
@@ -693,10 +640,6 @@ export class RollupService {
 
 /** The two cohort guards written beside the TEST row, which is the one every reader of them asks. */
 const COHORT_TAGALONG_TYPES = COHORT_ROLLUP_TYPES.filter((type) => type !== ROLLUP_TYPE.TEST);
-
-/** One order for the subject rows, so two workers on one page cannot take them the other way round. */
-const keyOfSubject = (row: { studentId: string; subject: { subjectId: string; scope: string } }) =>
-  `${row.studentId}:${row.subject.subjectId}:${row.subject.scope}`;
 
 function studentCounts(totals: StudentTotals) {
   return {

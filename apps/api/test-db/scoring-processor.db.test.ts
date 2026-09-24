@@ -4,6 +4,7 @@ import { ATTEMPT_STATUS, NOTIFICATION_TYPE, PAPER_QUESTION_STATUS } from '@iace/
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { sectionScoresIn } from '../src/attempts/score-paper';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
+import { RollupService } from '../src/attempts/rollup.service';
 import { RollupOutbox } from '../src/attempts/rollup-outbox';
 import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -35,6 +36,7 @@ const processor = new ScoringProcessor(
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
+  new RollupService(prisma),
 );
 
 type Sat = Omit<SitInput, 'paper' | 'studentId' | 'chosen'>;

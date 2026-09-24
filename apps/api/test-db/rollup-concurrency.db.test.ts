@@ -39,6 +39,7 @@ const scorer = new ScoringProcessor(
   new NotificationOutbox(new FakeQueue().asQueue()),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
+  new RollupService(prisma),
 );
 
 /** Three sittings on one paper, scored, so three counting requests are pending. */
@@ -122,26 +123,43 @@ describe('RollupService — a fold and a rebuild that overlap', () => {
     await Promise.all([folding, rebuilding]);
   });
 
-  it(
-    'lets a student rebuild overlap a fold without either being killed',
-    { todo: true },
-    async () => {
-      const { studentIds } = await cohort();
-      const arrived = barrier();
-      const release = barrier();
-      const paused = new RollupService(
-        pausingBefore(prisma, 'StudentStat', arrived.open, release.opened),
-      );
+  /** The student's side left the fold: the overlap that remains is a rebuild inside an evaluation. */
+  it('counts a sitting whose evaluation a student rebuild runs inside', async () => {
+    const paper = await makePaper(prisma, { questions: SUBJECTS });
+    const other = await makePaper(prisma, { questions: SUBJECTS });
+    const studentId = (await makeStudent(prisma)).id;
+    const sat = await sitPaper(prisma, {
+      paper,
+      studentId,
+      chosen: [RIGHT_OPTION, RIGHT_OPTION, WRONG, null],
+    });
+    await scorer.score(sat.id);
+    const second = await sitPaper(prisma, {
+      paper: other,
+      studentId,
+      chosen: [RIGHT_OPTION, WRONG, null, null],
+    });
 
-      const folding = paused.foldPending();
-      await arrived.opened;
-      const rebuilding = new RollupService(prisma).rebuildStudent(studentIds[0] ?? '');
-      await delay(OVERLAP_MS);
-      release.open();
+    const arrived = barrier();
+    const release = barrier();
+    const paused = new ScoringProcessor(
+      pausingBefore(prisma, 'StudentStat', arrived.open, release.opened),
+      new RollupOutbox(new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
+      fakeQueueFailures(),
+      new PaperSheetService(prisma),
+      new RollupService(prisma),
+    );
 
-      await Promise.all([folding, rebuilding]);
-    },
-  );
+    const scoring = paused.score(second.id);
+    await arrived.opened;
+    // Reads the student's sittings without seeing the one still being marked, then writes outright.
+    await new RollupService(prisma).rebuildStudent(studentId);
+    release.open();
+    await scoring;
+
+    assert.equal((await studentStat(studentId))?.testsAttempted, 2);
+  });
 });
 
 describe('RollupService — a rebuild that lands before the fold it overtakes', () => {

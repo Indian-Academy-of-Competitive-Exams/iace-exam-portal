@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { PAPER_QUESTION_STATUS, TEST_SCOPE, type TestScope } from '@iace/contracts';
+import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS, TEST_SCOPE, type TestScope } from '@iace/contracts';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
-import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
 import { ROLLUP_REQUEST, RollupOutbox } from '../src/attempts/rollup-outbox';
 import { cohortShapeOf, flagYours } from '../src/attempts/performance-analytics';
 import { cohortCurveOf } from '../src/attempts/cohort-curve';
@@ -46,6 +45,7 @@ function build(rollupClient: PrismaService = prisma) {
       new NotificationOutbox(new FakeQueue().asQueue()),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
+      new RollupService(prisma),
     ),
     rollup: new RollupService(rollupClient),
   };
@@ -71,10 +71,13 @@ async function sat(
 async function drain(built: World): Promise<number> {
   const jobs = built.queue.jobs.splice(0);
   for (const job of jobs) {
-    const data = job.data as { testId?: string };
+    const data = job.data as { testId?: string; studentId?: string };
     if (job.name === ROLLUP_JOBS.FOLD_PENDING) await built.rollup.foldPending();
     if (job.name === ROLLUP_JOBS.REBUILD_TEST && data.testId !== undefined) {
       await built.rollup.rebuildForTest(data.testId);
+    }
+    if (job.name === ROLLUP_JOBS.REBUILD_STUDENT && data.studentId !== undefined) {
+      await built.rollup.rebuildStudent(data.studentId);
     }
   }
   return jobs.length;
@@ -124,7 +127,7 @@ const rollupRequests = () =>
   prisma.outboxEvent.findMany({ where: { eventType: ROLLUP_REQUEST.EVENT_TYPE } });
 
 describe('RollupService — folding one sitting in', () => {
-  it('counts one sitting into every aggregate it belongs to, and guards each', async () => {
+  it('counts one sitting into every aggregate it belongs to, and guards the cohort’s three', async () => {
     const built = build();
     const paper = await paperOf();
     const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
@@ -135,7 +138,7 @@ describe('RollupService — folding one sitting in', () => {
     assert.equal(rolled?.evaluatedCount, 1);
     assert.equal(num(rolled?.sumScore), 3.5);
     assert.equal((await studentStat(studentId))?.testsAttempted, 1);
-    assert.equal(await prisma.processedRollup.count(), 5);
+    assert.equal(await prisma.processedRollup.count(), 3);
   });
 
   it('writes the marks the scorer worked out, not a second opinion of them', async () => {
@@ -228,22 +231,25 @@ describe('RollupService — folding a pending batch', () => {
     assert.equal(reads['paperQuestion'], 1);
   });
 
-  /** The failure this prevents: half a page counted, and a retry with no way to tell which half. */
-  it('counts none of a page when the student side fails partway', async () => {
-    const scorer = build();
+  /** The failure this prevents: a student's totals moved, and the marks behind them rolled back. */
+  it('writes none of a sitting when its own tables fail partway', async () => {
+    const scoring = new ScoringProcessor(
+      failingOnceOnMistakes(prisma),
+      new RollupOutbox(new FakeQueue().asQueue()),
+      new NotificationOutbox(new FakeQueue().asQueue()),
+      fakeQueueFailures(),
+      new PaperSheetService(prisma),
+      new RollupService(prisma),
+    );
     const paper = await paperOf();
-    for (const chosen of [
-      [RIGHT, WRONG, null, RIGHT],
-      [WRONG, WRONG, null, null],
-    ]) {
-      await scorer.scoring.score((await sat(paper, chosen)).attemptId);
-    }
-    const built = build(failingOnceOnMistakes(prisma));
+    const { attemptId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
 
-    await assert.rejects(() => built.rollup.foldPending());
+    await assert.rejects(() => scoring.score(attemptId));
 
     assert.equal(await prisma.studentStat.count(), 0);
-    assert.equal(await prisma.processedRollup.count(), 0);
+    const held = await prisma.attempt.findUnique({ where: { id: attemptId } });
+    assert.equal(held?.status, ATTEMPT_STATUS.SUBMITTED);
+    assert.equal(held?.evaluatedAt, null);
   });
 
   it('lands on the same aggregates a rebuild would compute', async () => {
@@ -289,7 +295,7 @@ describe('RollupService — folding a pending batch', () => {
 
     assert.deepEqual(await cohortRows(paper.testId), once);
     assert.equal((await studentStat(studentId))?.testsAttempted, 1);
-    assert.equal(await prisma.processedRollup.count(), 5);
+    assert.equal(await prisma.processedRollup.count(), 3);
   });
 
   /** Two passes run at once at concurrency 2, so a later page can hold a sitting already counted. */
@@ -317,7 +323,7 @@ describe('RollupService — folding a pending batch', () => {
     assert.equal(rolled?.evaluatedCount, 2);
     assert.equal(num(rolled?.sumScore), 9.5);
     assert.equal((await studentStat(first.studentId))?.testsAttempted, 1);
-    assert.equal(await prisma.processedRollup.count(), 10);
+    assert.equal(await prisma.processedRollup.count(), 6);
   });
 
   /** Asking for another pass from inside one is a no-op, so the backlog is drained here or not at all. */
@@ -391,11 +397,7 @@ describe('RollupService — who the cohort is', () => {
     const student = await studentStat(retake.studentId);
     assert.equal(student?.retakeCount, 1);
     assert.equal(student?.testsEvaluated, 0);
-    const guards = await prisma.processedRollup.findMany();
-    assert.deepEqual(
-      guards.map((row) => row.rollupType).sort(),
-      [ROLLUP_TYPE.STUDENT, ROLLUP_TYPE.STUDENT_SUBJECT].sort(),
-    );
+    assert.equal(await prisma.processedRollup.count(), 0);
   });
 
   /** One subject tally per scope, so a retake's answers land beside the first sitting's. */
@@ -489,15 +491,21 @@ describe('RollupService — rebuilding a scope', () => {
       num(rolled?.sumScore),
       sittings.reduce((total, row) => total + Number(row.score ?? 0), 0),
     );
+    const scored = new Map(sittings.map((row) => [row.studentId, Number(row.score ?? 0)]));
     const students = await prisma.studentStat.findMany();
     assert.equal(
       students.every((row) => row.testsAttempted === 1),
       true,
     );
+    // The drop moved every student's marks too, so their own totals must have followed.
+    assert.deepEqual(
+      students.map((row) => Number(row.sumScore)).sort(),
+      [...scored.values()].sort(),
+    );
     assert.equal(await prisma.testQuestionStat.count(), 4);
   });
 
-  it('asks for one rebuild of the test rather than one per sitting re-scored', async () => {
+  it('asks for one rebuild of the test, and one of each student whose marks moved', async () => {
     const built = build();
     const paper = await paperOf();
     const first = await sat(paper, [RIGHT, RIGHT, null, null]);
@@ -508,7 +516,11 @@ describe('RollupService — rebuilding a scope', () => {
 
     assert.deepEqual(
       built.queue.jobs.map((job) => [job.name, job.jobId]),
-      [[ROLLUP_JOBS.REBUILD_TEST, `rollup-rebuild-${paper.testId}`]],
+      [
+        [ROLLUP_JOBS.REBUILD_TEST, `rollup-rebuild-${paper.testId}`],
+        [ROLLUP_JOBS.REBUILD_STUDENT, `rollup-rebuild-student-${first.studentId}`],
+        [ROLLUP_JOBS.REBUILD_STUDENT, `rollup-rebuild-student-${second.studentId}`],
+      ],
     );
     // By type: scoring writes a notification request into the same table, and that is not a fold.
     assert.equal((await rollupRequests()).length, 2, 'a re-score writes no fold event of its own');
@@ -540,7 +552,7 @@ describe('RollupService — rebuilding a scope', () => {
 
     assert.deepEqual(await cohortRows(paper.testId), folded.cohort);
     assert.deepEqual(await studentRows(), folded.students);
-    assert.equal(await prisma.processedRollup.count(), 15);
+    assert.equal(await prisma.processedRollup.count(), 9);
   });
 });
 

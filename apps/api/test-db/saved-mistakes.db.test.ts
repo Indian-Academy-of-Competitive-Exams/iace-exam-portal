@@ -39,6 +39,7 @@ async function world(chosen: readonly (string | null)[]) {
     new NotificationOutbox(new FakeQueue().asQueue()),
     fakeQueueFailures(),
     new PaperSheetService(prisma),
+    new RollupService(prisma),
   );
   return {
     paper,
