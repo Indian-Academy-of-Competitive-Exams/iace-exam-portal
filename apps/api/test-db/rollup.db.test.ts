@@ -207,8 +207,8 @@ describe('RollupService — folding one sitting in', () => {
 });
 
 describe('RollupService — folding a pending batch', () => {
-  /** The failure this prevents: a hall's page re-reading one paper once per sitting that sat it. */
-  it('reads the page of sittings, and each paper behind them, once', async () => {
+  /** The failure this prevents: a hall's page reading the paper, or the cohort, once per sitting. */
+  it('reads a page of one test in a fixed number of queries, whatever sat it', async () => {
     const scorer = build();
     const paper = await paperOf();
     for (const chosen of [
@@ -223,8 +223,27 @@ describe('RollupService — folding a pending batch', () => {
 
     assert.equal(await built.rollup.foldPending(), 3);
 
-    assert.equal(reads['attempt'], 1);
+    // The page itself, and the first-sitting check for the one test on it.
+    assert.equal(reads['attempt'], 2);
     assert.equal(reads['paperQuestion'], 1);
+  });
+
+  /** The failure this prevents: half a page counted, and a retry with no way to tell which half. */
+  it('counts none of a page when the student side fails partway', async () => {
+    const scorer = build();
+    const paper = await paperOf();
+    for (const chosen of [
+      [RIGHT, WRONG, null, RIGHT],
+      [WRONG, WRONG, null, null],
+    ]) {
+      await scorer.scoring.score((await sat(paper, chosen)).attemptId);
+    }
+    const built = build(failingOnceOnMistakes(prisma));
+
+    await assert.rejects(() => built.rollup.foldPending());
+
+    assert.equal(await prisma.studentStat.count(), 0);
+    assert.equal(await prisma.processedRollup.count(), 0);
   });
 
   it('lands on the same aggregates a rebuild would compute', async () => {
@@ -646,6 +665,34 @@ function countingFindMany(client: PrismaService, counts: Record<string, number>)
           };
         },
       });
+    },
+  });
+}
+
+/** The real client, with the first `savedQuestion.createMany` inside any transaction refused. */
+function failingOnceOnMistakes(client: PrismaService): PrismaService {
+  let armed = true;
+  const refuseMistakes = (tx: object) =>
+    new Proxy(tx, {
+      get(target, key) {
+        const held = Reflect.get(target, key) as unknown;
+        if (key !== 'savedQuestion' || !armed) return held;
+        return new Proxy(held as object, {
+          get(delegate, method) {
+            if (method !== 'createMany' || !armed) return Reflect.get(delegate, method) as unknown;
+            return () => {
+              armed = false;
+              return Promise.reject(new Error('savedQuestion is unavailable'));
+            };
+          },
+        });
+      },
+    });
+  return new Proxy(client, {
+    get(target, key) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: object) => Promise<unknown>, options?: object) =>
+        target.$transaction((tx) => work(refuseMistakes(tx)), options);
     },
   });
 }
