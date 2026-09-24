@@ -190,9 +190,8 @@ export const envSchema = z.object({
 /** MinIO has no roles to borrow, so an endpoint of our own must bring a key with it. */
 const storageCanSign = (env: z.infer<typeof envSchema>): boolean => {
   const pair = [env.S3_ACCESS_KEY_ID, env.S3_SECRET_ACCESS_KEY];
-  if (pair.some((half) => half !== undefined) && pair.some((half) => half === undefined)) {
-    return false;
-  }
+  // Exactly one half given is a key nobody can sign with, which is worse than neither.
+  if (pair.filter((half) => half !== undefined).length === 1) return false;
   return env.S3_ENDPOINT === undefined || pair.every((half) => half !== undefined);
 };
 
@@ -209,13 +208,13 @@ const poolIsSized = (env: z.infer<typeof envSchema>): boolean =>
   env.NODE_ENV !== NODE_ENVS.PRODUCTION || /[?&]connection_limit=\d/.test(env.DATABASE_URL);
 
 /** Every secret `.env.example` publishes is prefixed with this, so the prefix IS the marker. */
-const DEV_ONLY_SECRET = /^dev_only_/;
+const DEV_ONLY_SECRET = 'dev_only_';
 
 /** The 24-character floor passes these: the published placeholders are 49 characters long. */
 const secretIsReal =
   (key: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET' | 'PIN_PEPPER') =>
   (env: z.infer<typeof envSchema>): boolean =>
-    env.NODE_ENV !== NODE_ENVS.PRODUCTION || !DEV_ONLY_SECRET.test(env[key]);
+    env.NODE_ENV !== NODE_ENVS.PRODUCTION || !env[key].startsWith(DEV_ONLY_SECRET);
 
 /** Named once so the three messages cannot drift apart. */
 const stillPublished = (forges: string): string =>

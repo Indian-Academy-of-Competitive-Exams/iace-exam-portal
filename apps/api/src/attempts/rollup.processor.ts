@@ -66,4 +66,5 @@ export class RollupProcessor extends WorkerHost {
   }
 }
 
-const isDrained = (name: string): boolean => DRAINED_ROLLUP_JOBS.some((held) => held === name);
+const isDrained = (name: string): boolean =>
+  (DRAINED_ROLLUP_JOBS as readonly string[]).includes(name);

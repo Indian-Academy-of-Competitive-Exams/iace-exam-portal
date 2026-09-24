@@ -44,7 +44,7 @@ async function encoded(file: File): Promise<File | null> {
   bitmap.close();
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, WEBP, QUALITY));
-  if (!blob || blob.type !== WEBP || blob.size >= file.size) return null;
+  if (blob?.type !== WEBP || blob.size >= file.size) return null;
   return new File([blob], webpName(file.name), { type: WEBP, lastModified: file.lastModified });
 }
 
