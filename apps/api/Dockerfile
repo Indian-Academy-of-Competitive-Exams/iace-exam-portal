@@ -60,8 +60,9 @@ CMD ["node", "dist/main.js"]
 FROM base AS migrate
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /repo/prisma prisma
+COPY --from=build --chown=node:node /repo/prisma prisma
 # npm rather than the workspace copy: pnpm's store layout is symlinks, which do not survive a COPY.
 RUN npm install -g --no-audit --no-fund prisma@6.19.3
+USER node
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["prisma", "migrate", "deploy", "--schema=prisma/schema.prisma"]
