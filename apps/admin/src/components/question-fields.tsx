@@ -50,8 +50,8 @@ export function QuestionFields({
   // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
   const type = useWatch({ control: form.control, name: 'type' });
   const subjectId = useWatch({ control: form.control, name: 'subjectId' });
-  // Being drawn settles taxonomy, not being published: a drawn question would move under its section.
-  const taxonomySettled = saved?.inUse === true;
+  // Being drawn settles what a question is, not being published: a drawn one would move under its section.
+  const settled = saved?.inUse === true;
   const topicId = useWatch({ control: form.control, name: 'topicId' });
   // However many it has: a form that always drew four would drop a fifth on the next save.
   const optionCount = useWatch({ control: form.control, name: 'options' }).length;
@@ -59,12 +59,12 @@ export function QuestionFields({
 
   return (
     <>
-      {/* Being drawn settles taxonomy: a paper records no subject, so a move would misfile it. */}
+      {/* A paper records no subject and no type, so a question it drew keeps both. */}
       <FormSection title="Subject and topic">
-        {taxonomySettled ? (
+        {settled ? (
           <Alert variant="info">
-            A paper or a result already uses this question, so its subject and topic stay as they
-            are. Take it off every paper to move it.
+            A paper or a result already uses this question, so its subject, topic and type stay as
+            they are. Take it off every paper to change them.
           </Alert>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -73,7 +73,7 @@ export function QuestionFields({
               <SubjectPicker
                 id={control.id}
                 value={subjectId}
-                disabled={taxonomySettled}
+                disabled={settled}
                 placeholder="Choose a subject"
                 onChange={(value) => {
                   form.setValue('subjectId', value, { shouldValidate: true });
@@ -96,7 +96,7 @@ export function QuestionFields({
                 id={control.id}
                 subjectId={subjectId}
                 value={topicId}
-                disabled={taxonomySettled}
+                disabled={settled}
                 clearable
                 placeholder="Choose a topic"
                 onChange={(value) => form.setValue('topicId', value)}
@@ -108,6 +108,7 @@ export function QuestionFields({
             form={form}
             name="type"
             label="Type"
+            disabled={settled}
             items={QUESTION_TYPES.map((value) => ({ value, label: QUESTION_TYPE_LABELS[value] }))}
           />
 

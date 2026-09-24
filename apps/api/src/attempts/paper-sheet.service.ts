@@ -24,6 +24,7 @@ const SERVED_ROW_SELECT = {
   baseConfigSectionId: true,
   marks: true,
   negativeMarks: true,
+  question: { select: { type: true } },
   questionVersion: { select: { content: true, options: true } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
@@ -33,11 +34,13 @@ const TERMS_SELECT = {
   ...SHEET_ROW_SELECT,
   marks: true,
   negativeMarks: true,
+  question: { select: { type: true } },
   questionVersion: { select: { options: true, answerKey: true } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
-/** What a sat paper pays per row, all frozen: status and type still move, so `liveTermsOf` reads them fresh. */
+/** What a sat paper pays per row, all frozen: only `status` still moves, and `liveTermsOf` reads it fresh. */
 export interface PaperTerm extends SheetPaperRow {
+  type: QuestionType;
   marks: number;
   negativeMarks: number;
   correctOptionIds: string[];
@@ -46,7 +49,6 @@ export interface PaperTerm extends SheetPaperRow {
 
 export interface LiveTerm {
   status: PaperQuestionStatus;
-  type: QuestionType;
 }
 
 function correctOptionIdsIn(options: Prisma.JsonValue): string[] {
@@ -93,7 +95,7 @@ export class PaperSheetService {
     return read;
   }
 
-  /** The same paper for every candidate, so it is read once. `type` is NOT frozen — `liveTermsOf` carries it. */
+  /** The same paper for every candidate, so it is read once. */
   async servedOf(testId: string): Promise<ServedPaperRow[]> {
     const held = this.served.get(testId);
     if (held) return held;
@@ -115,8 +117,9 @@ export class PaperSheetService {
       orderBy: { order: 'asc' },
       select: TERMS_SELECT,
     });
-    const read = rows.map(({ questionVersion, marks, negativeMarks, ...row }) => ({
+    const read = rows.map(({ question, questionVersion, marks, negativeMarks, ...row }) => ({
       ...row,
+      type: question.type,
       marks: Number(marks),
       negativeMarks: Number(negativeMarks),
       correctOptionIds: correctOptionIdsIn(questionVersion.options),
@@ -126,13 +129,12 @@ export class PaperSheetService {
     return read;
   }
 
-  /** Read every job: a drop moves a status, and a question's type is still editable after it is served. */
+  /** Read every job: `status` is the one column `paper_question_sat_guard` lets move after a sitting. */
   async liveTermsOf(testId: string): Promise<LiveTerm[]> {
-    const rows = await this.prisma.paperQuestion.findMany({
+    return this.prisma.paperQuestion.findMany({
       where: { testId },
       orderBy: { order: 'asc' },
-      select: { status: true, question: { select: { type: true } } },
+      select: { status: true },
     });
-    return rows.map((row) => ({ status: row.status, type: row.question.type }));
   }
 }

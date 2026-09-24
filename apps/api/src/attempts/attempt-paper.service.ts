@@ -12,8 +12,6 @@ import {
   type LanguageCode,
   type LocalizedContent,
   type QuestionOption,
-  type QuestionType,
-  QUESTION_TYPE,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -63,7 +61,7 @@ const PAPER_SELECT = {
   },
 } as const satisfies Prisma.AttemptSelect;
 
-type ServedQuestion = ServedPaperRow & { type: QuestionType; order: number };
+type ServedQuestion = ServedPaperRow & { order: number };
 
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
 @Injectable()
@@ -158,18 +156,11 @@ export class AttemptPaperService {
     const languages = attempt.languages;
     const random = seededRandom(attempt.shuffleSeed);
 
-    const [frozen, live] = await Promise.all([
-      this.papers.servedOf(attempt.testId),
-      this.papers.liveTermsOf(attempt.testId),
-    ]);
-    if (frozen.length !== live.length) {
-      throw new Error(`Paper for test ${attempt.testId} changed under a sat sitting`);
-    }
-    const rows = frozen.map((row, slot) => ({
-      ...row,
-      type: live[slot]?.type ?? QUESTION_TYPE.SINGLE_MCQ,
-    }));
-    const served = displayOrder(rows, attempt.shuffleSeed, config.shuffleQuestions);
+    const served = displayOrder(
+      await this.papers.servedOf(attempt.testId),
+      attempt.shuffleSeed,
+      config.shuffleQuestions,
+    );
 
     return {
       attemptId: attempt.id,
@@ -221,7 +212,7 @@ function toExamQuestion(
     questionId: row.questionId,
     order: row.order,
     baseConfigSectionId: row.baseConfigSectionId,
-    type: row.type,
+    type: row.question.type,
     marks: Number(row.marks),
     negativeMarks: Number(row.negativeMarks),
     // The STEM only: `solution` explains the answer, so it stays behind.

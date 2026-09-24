@@ -223,19 +223,15 @@ function scorableOf(
   const sheet = sheetIn(attempt.sheet?.answers);
   return terms.map((term, slot) => {
     const answer = decodeAnswer(sheet[slot], term.optionIds, attempt.startedAt);
-    const { status, type } = live[slot] ?? {
-      status: PAPER_QUESTION_STATUS.ACTIVE,
-      type: QUESTION_TYPE.SINGLE_MCQ,
-    };
     return {
       questionId: term.questionId,
       baseConfigSectionId: term.baseConfigSectionId,
-      type,
+      type: term.type,
       marks: term.marks,
       negativeMarks: term.negativeMarks,
-      status,
+      status: live[slot]?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
       correctOptionIds: term.correctOptionIds,
-      answerKey: type === QUESTION_TYPE.TEXT_FIELD ? term.answerKey : null,
+      answerKey: term.type === QUESTION_TYPE.TEXT_FIELD ? term.answerKey : null,
       selectedOptionId: answer?.selectedOptionId ?? null,
       typedAnswer: answer?.typedAnswer ?? null,
       timeSpentSec: answer?.timeSpentSec ?? 0,

@@ -4,6 +4,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
+  ANSWER_MODE,
   ASSIGNMENT_ROLES,
   DIFFICULTY_LEVEL,
   ErrorCodes,
@@ -114,6 +115,13 @@ const THREE_OPTIONS = [
 ];
 
 const ELSEWHERE = { subjectId: BANK.GENERAL_AWARENESS, topicId: BANK.HISTORY };
+
+/** The same question asked the other way: no options, and a key to type against. */
+const TYPED = {
+  type: QUESTION_TYPE.TEXT_FIELD,
+  options: [],
+  answerKey: { mode: ANSWER_MODE.EXACT, answers: { en: '30' } },
+};
 
 const live = (over: Partial<QuestionDraftInput> = {}) =>
   draft({ status: QUESTION_STATUS.ACTIVE, ...over });
@@ -762,7 +770,7 @@ describe('QuestionsService.versions — the chain, and who sat which wording', (
   });
 });
 
-describe('QuestionsService — being depended on is what settles taxonomy', () => {
+describe('QuestionsService — being depended on settles what a question is', () => {
   /** The failure this prevents: a Quant question served inside the Reasoning section that drew it. */
   it('refuses to move a question a paper has drawn to another subject', async () => {
     const { questions } = await build();
@@ -780,6 +788,25 @@ describe('QuestionsService — being depended on is what settles taxonomy', () =
     const moved = await questions.update(created.id, live(ELSEWHERE), ADMIN);
 
     assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
+  });
+
+  /** The failure this prevents: the scorer reads a typed answer off a paper that pinned four options. */
+  it('refuses to retype a question a paper has drawn', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
+
+    await assert.rejects(() => questions.update(created.id, live(TYPED), ADMIN), conflict);
+    assert.equal((await questionRow(created.id)).type, QUESTION_TYPE.SINGLE_MCQ);
+  });
+
+  it('lets a question nothing has drawn be retyped', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+
+    const retyped = await questions.update(created.id, live(TYPED), ADMIN);
+
+    assert.equal(retyped.type, QUESTION_TYPE.TEXT_FIELD);
   });
 });
 

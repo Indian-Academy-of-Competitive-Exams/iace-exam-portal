@@ -295,7 +295,7 @@ export class QuestionsService {
   ): Promise<QuestionDetail> {
     const question = await this.require(id);
     assertScreenIsCurrent(question, draft);
-    await this.assertTaxonomySettled(this.prisma, question, draft);
+    await this.assertIdentitySettled(this.prisma, question, draft);
     const built = await this.validated(draft);
     if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, id);
 
@@ -318,7 +318,7 @@ export class QuestionsService {
   ): Promise<QuestionRow> {
     const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-    await this.assertTaxonomySettled(tx, question, draft);
+    await this.assertIdentitySettled(tx, question, draft);
 
     // One order everywhere, Test before Question: finalize and thaw take the test first too.
     await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" IN (SELECT "testId" FROM "PaperQuestion" WHERE "questionId" = ${id}::uuid) ORDER BY "id" FOR UPDATE`;
@@ -464,19 +464,23 @@ export class QuestionsService {
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
 
-  /** Being depended on is what settles taxonomy, not being published — a drawn row carries no subject. */
-  private async assertTaxonomySettled(
+  /** Being depended on settles what a question IS, not being published — a drawn row carries none of it. */
+  private async assertIdentitySettled(
     tx: Prisma.TransactionClient,
     before: QuestionRow,
     draft: QuestionDraft,
   ): Promise<void> {
-    if (draft.subjectId === before.subjectId && (draft.topicId ?? null) === before.topicId) return;
+    // A typed answer and a set of options are different questions, so a retype replaces rather than edits.
+    const retyped = draft.type !== before.type;
+    const moved =
+      draft.subjectId !== before.subjectId || (draft.topicId ?? null) !== before.topicId;
+    if (!retyped && !moved) return;
     if (!(await this.isUsed(tx, before.id))) return;
 
     throw refused(
-      'A paper or an attempt already uses this question, so it keeps its subject and topic.',
+      'A paper or an attempt already uses this question, so it keeps its subject, topic and type.',
       'Something already uses this question',
-      'subjectId',
+      retyped ? 'type' : 'subjectId',
     );
   }
 
