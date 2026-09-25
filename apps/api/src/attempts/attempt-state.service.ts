@@ -66,6 +66,8 @@ export class AttemptStateService {
         ...held,
         testId: attempt.testId,
         startedAt: attempt.startedAt.toISOString(),
+        // Postgres is the deadline of record, so a resume's credit reaches the key that admits saves.
+        endsAt: attempt.endsAt.toISOString(),
         // Picked up again: the clock starts counting from here, not from where it was put down.
         lastSeenAt: now.toISOString(),
         tab: tab ?? held.tab,

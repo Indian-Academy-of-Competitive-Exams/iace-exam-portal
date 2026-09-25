@@ -220,6 +220,27 @@ describe('AttemptStateService', () => {
     assert.equal(held?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
   });
 
+  /** The bug this prevents: the key keeping the old deadline, so every save after a resume is refused. */
+  it('admits saves against the deadline a resume credited, not the one it walked away from', async () => {
+    const { service, student, attemptId, live, q1, change } = await build();
+    await service.open(live);
+    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
+
+    const backAt = new Date('2026-09-01T07:00:00.000Z');
+    const credited = await service.resume(live, undefined, backAt);
+
+    assert.ok(credited.getTime() > ENDS_AT.getTime());
+    assert.equal((await service.read(attemptId))?.endsAt, credited.toISOString());
+    const ack = await service.save(
+      student,
+      attemptId,
+      { revision: 2, answers: [change({ questionId: q1, selectedOptionId: 'o3' })] },
+      backAt,
+    );
+    assert.equal(ack.applied, true);
+    assert.equal(ack.endsAt, credited.toISOString());
+  });
+
   it('leaves what a live key already holds alone when resuming', async () => {
     const { service, student, attemptId, live, q1, change } = await build();
     await service.open(live);
