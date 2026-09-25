@@ -158,10 +158,22 @@ this file forecloses it: the Dockerfile, the env and the three roles are identic
 hostname by itself over the ACME HTTP challenge, which needs each name resolving to the box and
 ports 80 and 443 open. No ALB, no ACM, no target groups.
 
+`deploy/Caddyfile` is the real one and the source of record for the route list; its shape:
+
 ```
-api.iace.co.in { reverse_proxy /attempts/* exam:3000
-                 reverse_proxy core:3000 }
+api.iace.co.in {
+	@exam path <the exam role's leaf paths>
+	reverse_proxy @exam exam:3000
+	reverse_proxy core:3000
+}
 ```
+
+**The split is not prefix-clean, so the matcher cannot be either.** `GET /me/performance` is exam,
+but `/me/performance/report`, `/me/performance/days` and `/me/performance/series` are core, so the
+matcher names that exact path, never a `/me/performance*` wildcard. `GET
+/me/attempts/:id/question-report` is core too, under the same `/me/attempts` prefix the exam routes
+use, so the matcher lists leaf suffixes like `/me/attempts/*/state` rather than a blanket
+`/me/attempts/*`.
 
 **What this gives up, stated plainly:** an ALB is multi-node and self-healing; one Caddy on one box
 is not. A reboot is an outage, and at 10–30 events a month that has to be scheduled around. The

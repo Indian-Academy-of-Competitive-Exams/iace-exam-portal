@@ -1,0 +1,8 @@
+# Real front door for api.iace.co.in — see docs/04-infrastructure.md §4 for why and the traps.
+# @exam lists every leaf path the exam role actually registers; everything else falls to core.
+
+api.iace.co.in {
+	@exam path /me/tests/*/attempt /me/tests/*/brief /me/attempts/*/paper /me/attempts/*/submit /me/attempts/*/scorecard /me/attempts/*/solutions /me/attempts/*/state /me/performance /me/leaderboard
+	reverse_proxy @exam exam:3000
+	reverse_proxy core:3000
+}
