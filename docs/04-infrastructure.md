@@ -8,6 +8,15 @@ Every price is US dollars per month in **ap-south-1 (Mumbai)**, pulled from the 
 on 22 September 2026, at 730 hours, and **not re-pulled since** — check the Pricing Calculator
 before committing money. Figures that came from a measurement say where it was taken.
 
+**The load this is sized for is `CLAUDE.md`'s, and nowhere else's: ~3K concurrent normally, 6K
+handled, 8K with minor additions, 10K inside these limits.** Every derived figure below is worked
+against **8,000 candidates an event, 30 events a month**. When that line in `CLAUDE.md` moves, the
+arithmetic here moves with it.
+
+**How to read a number here.** A figure carries the date it was taken and the command that took it,
+or it is an estimate rather than evidence. §16 lists the ones that have not been re-measured
+against current code — do not build on those without running them again first.
+
 **The front door changed on 25 September 2026.** This file described an Application Load Balancer
 in front of ECS Fargate. It now describes **Caddy on EC2**, because an ALB is what makes Fargate
 practical — tasks register themselves in a target group as they scale — and without one the pair
@@ -57,7 +66,7 @@ alarms catch.
 
 **Internet egress is inside the free tier.** Measured 25 September 2026: a 100-question bilingual
 sitting pulls 41 KB of paper, 3 KB of score card and 56 KB of solution report gzipped — 100 KB, so
-a 6,000-candidate event is 0.6 GB and thirty events a month are ~18 GB against the free 100 GB.
+an 8,000-candidate event is 0.8 GB and thirty events a month are ~24 GB against the free 100 GB.
 That margin is what `compression()` in `main.ts` buys; without it the same traffic is ~125 GB and
 billable.
 
@@ -108,12 +117,15 @@ not a second worker.
 container on a 2-vCPU box uses half of it, permanently. Three is the minimum that both uses the
 machine and keeps the schedulers in one place.
 
-**Why exam gets the largest share.** Measured over real HTTP: at 0.5 vCPU the autosave path peaked
-at 545 requests a second with a p99 of ~400 ms, because CFS throttling kicks in; at 1 vCPU it
-reached 2,076 a second with a p99 of 4–30 ms. An event peaks around 250–350 requests a second, so
-that is roughly six times the headroom.
+**Why exam gets the largest share.** CFS throttling: below a whole core the quota is spent early in
+each 100 ms window and the process is frozen for the rest, which shows as a low CPU average beside
+a terrible p99. The throughput figures that used to sit here are unverified and now in §16.
 
-**Scoring drains a hall in about a minute.** Measured 25 September 2026 against the real database
+An 8,000-candidate event peaks around **350–500 requests a second** — autosaves at 320, plus the
+paper loads at the opening and the submit spike at the end. What one vCPU actually serves against
+that is the first thing to measure on the staging box.
+
+**Scoring drains a hall in a minute or two.** Measured 25 September 2026 against the real database
 with `scripts/bench-scoring.mjs`: 5,000 sittings of 100 questions reach `EVALUATED` in 4.75 seconds
 at the processor's own concurrency of 8, p95 9.4 ms — **1.99 ms of Postgres CPU and 2.46 ms of Node
 CPU each**, over 3.4 transactions, 61 tuples read and 28.5 written. The concurrency sweep on that
@@ -121,7 +133,8 @@ hardware: 2 → 488 a second, 4 → 798, 8 → 1,052, 16 → 1,254, 24 → 1,301
 4.7 ms to 26.6 ms across it. Eight sits at 81% of the ceiling with a quarter of the queueing.
 
 Those are a 10-core M4 with Postgres in Docker beside it. A Graviton2 core is roughly three to four
-times slower, so read the hall as **15–20 s of RDS time and 75–125 s of worker time at 0.4 vCPU** —
+times slower, and an 8,000-candidate hall is 1.6× the measured run, so read it as **25–32 s of RDS
+time and 2–3.5 minutes of worker time at 0.4 vCPU**, or under a minute on a whole core —
 worker-bound, and the database is not the constraint. Nobody is blocked while it drains.
 
 **Scaling.** More containers, up to what the box's vCPUs allow; a bigger event means a bigger box,
@@ -133,7 +146,7 @@ resizing the box before `opensAt` rather than raising an autoscaling minimum —
 automatic, and it must be on the release calendar.
 
 **Open: whether production returns to Fargate.** The staging box (§12) is where that gets decided,
-with one number. Simulate a 6,000-candidate event at the intended production size and read the CPU:
+with one number. Simulate an 8,000-candidate event at the intended production size and read the CPU:
 under 50% and one box is plenty, so Fargate's autoscaling solves a problem that does not exist;
 50–80% and you need headroom; over 80%, or more than one box, and two boxes need something in front
 of them — which is an ALB, and once there is an ALB, Fargate is nearly free to adopt. Nothing in
@@ -184,8 +197,8 @@ Rules that make it work:
   genuinely missing file is still a 404 rather than HTML pretending to be JavaScript.
 - Compression and HTTP/3 are CloudFront's; the build ships neither.
 
-Measured: the student app's first load is 817 KB raw, **238 KB brotli**, after the exam hall,
-solutions and saved questions moved behind `React.lazy` (`3fca444`).
+At `3fca444` the student app's first load was 817 KB raw, 238 KB brotli, after the exam hall,
+solutions and saved questions moved behind `React.lazy`. The SPAs have moved since — §16.
 
 ## 6. Database
 
@@ -200,17 +213,22 @@ leaves standard support — more than this instance. 16 leaves on 28 February 20
 budget is exam 8 × 5, core 25 × 3, worker 25 × 3 = 190 of the ~225 a 2 GB instance allows, plus 10
 for staging and 3 reserved. It is written in `.env.example` beside the pool guidance.
 
-Measured on the current schema, per 100-question sitting:
+**What a sitting costs, measured 25 September 2026** with `scripts/bench-scoring.mjs` — the scoring
+pass only, which is the half that was re-measured after the rollup refactor:
 
-|              |                                                                      |
-| ------------ | -------------------------------------------------------------------- |
-| Disk         | 3.75 KB (sheet 2.05, attempt 0.76, rollups 0.33, notification 0.61)  |
-| WAL          | 14 KB                                                                |
-| Database CPU | ~4.7 ms — 0.13 start, 0.35 per flush, 0.41 submit, 1.99 scoring (§3) |
+|                       |                                                                    |
+| --------------------- | ------------------------------------------------------------------ |
+| Database CPU, scoring | 1.99 ms at concurrency 8; 1.16 ms at concurrency 2                 |
+| Statements            | 9 round trips, 3.4 transactions                                    |
+| Rows written          | 28.5 inserted, 1.7 updated — the inserts are `SavedQuestion` (§15) |
 
-A 6,000-candidate event is about 28 seconds of database CPU. At 250K sittings a month that is
-~11 GB a year, so storage is not a cost driver and reads — standings, catalog, results — are the
-only real load.
+An 8,000-candidate event is about **16 seconds of database CPU for scoring**. Start, autosave flush
+and submit have not been re-measured since the answer sheet and rollup changes; the per-sitting
+disk and WAL figures that used to sit here were taken before `SavedQuestion` moved onto the scoring
+transaction and are void — 28 rows a sitting cannot fit the 3.75 KB they claimed. §16.
+
+Storage is still not expected to be a cost driver, but **nobody has a current number for growth**,
+and the `SavedQuestion` volume is what would change it.
 
 ## 7. Cache and queues
 
@@ -226,11 +244,12 @@ against anything else.
 - A node-based `cache.t4g.small` is $23.94 and comes back **empty** after a node failure; no
   current ElastiCache engine writes to disk.
 
-Measured: a 100-question sitting holds 10.2 KB of JSON, 12.1 KB in Redis. A save moves about three
-times the state (read, then compare-and-set with both values), so an event runs at 48–90 Mbps and
-~43 GB. Peak memory is 0.5–0.8 GB, dominated by the 15-minute catalog cache at ~23 KB per 100
-visible tests per student. **Same-zone placement, not a code change, is what keeps that traffic
-free.**
+A 100-question sitting was measured at 10.2 KB of JSON, 12.1 KB in Redis, and a save moves about
+three times the state (read, then compare-and-set with both values). Those per-sitting figures
+predate the recent work and are unverified (§16); scaled to 8,000 candidates they would put an
+event at roughly 64–120 Mbps and ~57 GB, with peak memory 0.7–1.1 GB, dominated by the 15-minute
+catalog cache. **Same-zone placement, not a code change, is what keeps that traffic free** — and
+on the one-box shape it is the same host, so it is free by construction.
 
 ## 8. Networking
 
@@ -269,7 +288,7 @@ served on a **stable unsigned URL** — `MEDIA_BASE_URL` plus the key. Not a pre
 not a CloudFront signed one either.
 
 The reason is caching, not privacy. A signature is per-request, so the URL differs per student,
-and 6,000 students download the same diagram 6,000 times from S3 at $0.1093/GB — $28–48 a month at
+and 8,000 students download the same diagram 8,000 times from S3 at $0.1093/GB — $37–64 a month at
 event scale, plus a browser cache that never hits. Unsigned, the edge fetches once and the transfer
 is inside the free tier.
 
@@ -391,8 +410,8 @@ Never during an event window, and never a migration that moves data without the 
 - **CloudFront signed URLs for question images.** Until then media is presigned S3, so each student
   fetches the same diagram from the origin. **This is also the only line that can move the invoice
   by an order of magnitude**: the free tier is 1 TB, which is ~5.8 MB of images per sitting across
-  thirty 6,000-candidate events. Above that it is $0.109/GB — 23 MB a sitting would be ~$340 a
-  month. Nobody has measured what a real paper carries; `MAX_WIDTH` and `QUALITY` in
+  thirty 8,000-candidate events, so **4.4 MB of images per sitting**. Above that it is $0.109/GB —
+  23 MB a sitting would be ~$450 a month. Nobody has measured what a real paper carries; `MAX_WIDTH` and `QUALITY` in
   `shrink-image.ts` are the knobs if it comes back high.
 - **Batching the scoring job.** Measured 25 September 2026: nine round trips per attempt, whose
   statements total ~0.7 ms against 1.99 ms of database CPU — so most of the database's work is
@@ -402,6 +421,25 @@ Never during an event window, and never a migration that moves data without the 
   per event, and it scales with how hard the paper is. `AttemptSheet.verdicts` already records
   which questions were wrong, so the list is derivable; materialising it is a hot-path write and
   permanent growth.
-- **Redis as a hash per sitting** instead of one JSON document — measured 7.2 KB against 20.5 KB
-  under the old shape, and roughly 10× less traffic. Revisit above ~100 Mbps sustained.
+- **Redis as a hash per sitting** instead of one JSON document, which would cut both the memory and
+  the traffic a save moves. The figures that used to sit here were taken under the answer shape
+  before `AttemptSheet` and are gone. Revisit above ~100 Mbps sustained.
 - **Archiving old answer sheets** and pruning read notifications, when the database passes ~200 GB.
+
+## 16. Figures that have not been re-measured
+
+**Nothing in this section is evidence.** It is here so a reader knows the number exists and knows
+not to build on it. Each line says what to run to replace it with something real.
+
+| Figure                                                                               | Where it came from                                                                          | To replace it                                                                  |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Exam HTTP throughput — 545 req/s at 0.5 vCPU, 2,076 at 1 vCPU, p99 400 ms vs 4–30 ms | Undated, over real HTTP, on a revision before the answer sheet and the rollup refactor      | A load generator against the staging box's exam container, at its `cpus` limit |
+| Start, autosave flush and submit database CPU — 0.13, 0.35, 0.41 ms                  | Same era, and submit has changed twice since                                                | Extend `scripts/bench-scoring.mjs` past scoring                                |
+| Per-sitting disk and WAL — 3.75 KB and 14 KB                                         | Taken before `SavedQuestion` moved onto the scoring transaction, which alone writes 28 rows | `pg_total_relation_size` deltas across a seeded event                          |
+| Redis per sitting — 10.2 KB JSON, 12.1 KB stored                                     | Undated                                                                                     | `MEMORY USAGE` on a live sitting key                                           |
+| SPA first load — 817 KB raw, 238 KB brotli                                           | True at `3fca444`; the SPAs have moved                                                      | `pnpm --filter @iace/test build` and read the output                           |
+| Graviton is 3–4× slower than the measuring machine                                   | An assertion, never benchmarked — and every "on AWS" figure here rests on it                | Run `scripts/bench-scoring.mjs` on the staging box once                        |
+| Every AWS price                                                                      | Price List API, 22 September 2026, not re-pulled                                            | The Pricing Calculator, before committing money                                |
+
+**The last two matter most.** The Graviton multiplier sits underneath every projection in this
+file, and it is replaced by one command on the first box that exists.

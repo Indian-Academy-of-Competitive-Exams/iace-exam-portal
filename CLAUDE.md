@@ -39,7 +39,7 @@ platform at 10,000 students.
 
 <scaling-rules>
 
-Do not break these — they are why the live test holds at 4–5K:
+Do not break these — they are why the live test holds at 6–8K:
 
 - Timer is client-side; the server owns `startedAt`/`endsAt`.
 - Autosave answers to Redis every ~20–30s. Never write Postgres per keystroke.
