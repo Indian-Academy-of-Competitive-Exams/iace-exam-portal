@@ -237,15 +237,6 @@ Enum AdminRole {
   SUPER_ADMIN
 }
 
-Enum ConsentPurpose {
-  PLATFORM
-}
-
-Enum SavedQuestionKind {
-  BOOKMARK
-  MISTAKE
-}
-
 Enum DevicePlatform {
   ANDROID
   IOS
@@ -382,6 +373,7 @@ Table Question {
   stemHash text
   fixedUseCount integer [not null, default: 0]
   assignmentId uuid
+  releasedAt timestamptz(3)
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
@@ -393,6 +385,7 @@ Table Question {
     (createdById)
     (assignmentId)
     (tags)
+    (questionCode)
   }
 }
 
@@ -423,6 +416,7 @@ Table Test {
   examTemplate ExamTemplate [not null, default: 'DEFAULT']
   status TestStatus [not null, default: 'DRAFT']
   version integer [not null, default: 0]
+  paperRevision integer [not null, default: 0]
   finalizedAt timestamptz(3)
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
@@ -437,6 +431,7 @@ Table Test {
     (examStageId)
     (status)
     (testSeriesId)
+    (title)
   }
 }
 
@@ -452,6 +447,7 @@ Table PaperQuestion {
   negativeMarks decimal(6, 2) [not null]
   status PaperQuestionStatus [not null, default: 'ACTIVE']
   optionIds text [not null, note: 'array']
+  createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (testId, questionId) [unique]
     (testId, order) [unique]
@@ -486,6 +482,9 @@ Table SectionComment {
   baseConfigSectionId uuid [not null]
   authorId uuid [not null]
   body text [not null]
+  images text [not null, note: 'array']
+  revisions jsonb [not null, note: 'array']
+  editedAt timestamptz(3)
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (testId, baseConfigSectionId, createdAt)
@@ -521,6 +520,7 @@ Table Attempt {
     (testId, studentId, attemptNo) [unique]
     (studentId, createdAt)
     (testId, status)
+    (testId, updatedAt)
   }
 }
 
@@ -560,6 +560,10 @@ Table Student {
     (programs)
     (currentBranchId)
     (anonymizedAt)
+    (fullName)
+    (mobile)
+    (fullName, id)
+    (createdAt, id)
   }
 }
 
@@ -580,18 +584,6 @@ Table StudentProfile {
   pastExamHistory jsonb
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
-}
-
-Table StudentConsent {
-  id uuid [pk, default: `uuid(7)`]
-  studentId uuid [not null]
-  purpose ConsentPurpose [not null]
-  version text [not null]
-  granted boolean [not null]
-  recordedAt timestamptz(3) [not null, default: `now()`]
-  indexes {
-    (studentId, purpose, recordedAt)
-  }
 }
 
 Table Admin {
@@ -753,15 +745,6 @@ Table OutboxEvent {
   }
 }
 
-Table ProcessedRollup {
-  attemptId uuid [not null]
-  rollupType text [not null]
-  processedAt timestamptz(3) [not null, default: `now()`]
-  indexes {
-    (attemptId, rollupType) [pk]
-  }
-}
-
 Table Notification {
   id uuid [pk, default: `uuid(7)`]
   studentId uuid
@@ -779,8 +762,7 @@ Table Notification {
   openedVia DeliveryChannel
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
-    (studentId, createdAt)
-    (studentId, isRead)
+    (studentId, createdAt, isRead)
     (testId)
     (testSeriesId)
     (announcementId)
@@ -819,8 +801,6 @@ Table NotificationDelivery {
   failedAt timestamptz(3)
   indexes {
     (notificationId, channel) [unique]
-    (status, queuedAt)
-    (providerMessageId)
   }
 }
 
@@ -851,21 +831,17 @@ Table StudentSubjectStat {
   computedAt timestamptz(3) [not null]
   indexes {
     (studentId, subjectId, scope) [pk]
-    (subjectId)
   }
 }
 
 Table TestStat {
   testId uuid [pk]
-  attemptCount integer [not null, default: 0]
   evaluatedCount integer [not null, default: 0]
   sumScore decimal(18, 2) [not null, default: 0]
   maxScore decimal(8, 2)
   minScore decimal(8, 2)
   sumTimeSec bigint [not null, default: 0]
-  scoreHistogram jsonb
   topperAttemptId uuid
-  attemptsIncluded integer [not null, default: 0]
   computedAt timestamptz(3) [not null]
   indexes {
     (topperAttemptId)
@@ -896,7 +872,6 @@ Table TestQuestionStat {
   sumTimeSec bigint [not null, default: 0]
   optionCounts jsonb
   pValue decimal(5, 4)
-  discrimination decimal(6, 4)
   computedAt timestamptz(3) [not null]
   indexes {
     (testId, paperQuestionId) [pk]
@@ -936,13 +911,12 @@ Table SavedQuestion {
   id uuid [pk, default: `uuid(7)`]
   studentId uuid [not null]
   questionId uuid [not null]
-  kind SavedQuestionKind [not null]
   attemptId uuid
   paperQuestionId uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
-    (studentId, questionId, kind) [unique]
-    (studentId, kind, createdAt)
+    (studentId, questionId) [unique]
+    (studentId, createdAt)
   }
 }
 
@@ -977,7 +951,6 @@ Ref: Attempt.studentId > Student.id
 Ref: AttemptSheet.attemptId > Attempt.id [delete: cascade]
 Ref: Student.currentBranchId > Branch.id [delete: restrict]
 Ref: StudentProfile.studentId > Student.id [delete: cascade]
-Ref: StudentConsent.studentId > Student.id [delete: cascade]
 Ref: AdminFeaturePermission.adminId > Admin.id [delete: cascade]
 Ref: TestSeries.examStageId > ExamStage.id [delete: restrict]
 Ref: TestSeries.programCode > Program.code [delete: restrict]
@@ -989,7 +962,6 @@ Ref: EventCandidate.studentId > Student.id [delete: cascade]
 Ref: TestProgramUnlock.testId > Test.id [delete: cascade]
 Ref: TestProgramUnlock.programCode > Program.code [delete: restrict]
 Ref: RowActionLog.importLogId > ImportLog.id [delete: restrict]
-Ref: ProcessedRollup.attemptId > Attempt.id [delete: cascade]
 Ref: Notification.studentId > Student.id [delete: cascade]
 Ref: Notification.adminId > Admin.id [delete: cascade]
 Ref: Notification.testId > Test.id
@@ -1052,7 +1024,6 @@ TableGroup "People & Identity" { // color: #6D4AA8
   Student
   StudentProfile
   Admin
-  StudentConsent
 }
 
 TableGroup "Admin Permissions" { // color: #8A4A8F
@@ -1084,7 +1055,6 @@ TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   PushSubscription
   PushDevice
   OutboxEvent
-  ProcessedRollup
 }
 
 TableGroup "Events" { // color: #A85A2E

@@ -11,7 +11,7 @@ const GROUPS = [
   ],
   ['Tests & Papers', '#2E7D5B', ['Test', 'PaperQuestion', 'QuestionAssignment', 'SectionComment']],
   ['Attempts', '#2563A8', ['Attempt', 'AttemptSheet']],
-  ['People & Identity', '#6D4AA8', ['Student', 'StudentProfile', 'Admin', 'StudentConsent']],
+  ['People & Identity', '#6D4AA8', ['Student', 'StudentProfile', 'Admin']],
   ['Admin Permissions', '#8A4A8F', ['AdminFeaturePermission']],
   [
     'Access: Programs / Branches / Series',
@@ -35,7 +35,6 @@ const GROUPS = [
       'PushSubscription',
       'PushDevice',
       'OutboxEvent',
-      'ProcessedRollup',
     ],
   ],
   ['Events', '#A85A2E', ['Event', 'EventCandidate']],
