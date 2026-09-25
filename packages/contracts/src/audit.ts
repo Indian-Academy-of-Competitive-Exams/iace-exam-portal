@@ -47,11 +47,7 @@ export const AUDIT_ACTION = {
 export const auditActionSchema = z.enum(AUDIT_ACTION);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 
-/**
- * Who did it. The Prisma enum of the same shape is called `ActorType`; the name is taken in
- * contracts by the NARROWER `ActorTypes`, which decides a token's identity table and must never
- * admit SCRIPT or SYSTEM — nothing signs in as either. Two vocabularies, two names, on purpose.
- */
+/** Who did it; Prisma's enum is `ActorType`, contracts' narrower `ActorTypes` decides a token's identity table and must never admit SCRIPT or SYSTEM. */
 export const AUDIT_ACTOR_TYPE = {
   ADMIN: 'ADMIN',
   STUDENT: 'STUDENT',
@@ -63,10 +59,7 @@ export type AuditActorType = z.infer<typeof auditActorTypeSchema>;
 
 export type FieldDiff = Record<string, { from: unknown; to: unknown }>;
 
-/**
- * `JSON.stringify` only sees a value after its own `toJSON` already ran, so it
- * can't be steered with a replacer — this walks the value itself instead.
- */
+/** `JSON.stringify` only sees a value after its own `toJSON` already ran, so it can't be steered with a replacer — this walks the value itself instead. */
 function normalize(value: unknown): unknown {
   if (value === null || value === undefined) return null;
   if (Array.isArray(value)) return value.map(normalize);
@@ -87,10 +80,7 @@ function normalize(value: unknown): unknown {
   );
 }
 
-/**
- * UTF-16 code-unit order, not `localeCompare`: this exists to make the serialized form
- * stable, and locale-sensitive ordering would let two machines sort the same keys differently.
- */
+/** UTF-16 code-unit order, not `localeCompare`: keeps the serialized form stable — locale-sensitive ordering would let two machines sort the same keys differently. */
 function byKey([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number {
   if (a < b) return -1;
   return a > b ? 1 : 0;

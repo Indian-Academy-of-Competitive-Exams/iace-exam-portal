@@ -10,11 +10,7 @@ export function secondsToHuman(seconds: number): string {
   return plural(Math.round(seconds / 86400), 'day');
 }
 
-/**
- * Turns a JWT-style duration ("15m", "30d", "900") into seconds. We need the numeric value
- * alongside the string: jsonwebtoken takes the string, while clients and Redis TTLs need the
- * number.
- */
+/** Turns a JWT-style duration ("15m", "30d", "900") into seconds. We need the numeric value alongside the string: jsonwebtoken takes the string, while clients and Redis TTLs need the number. */
 export function durationToSeconds(value: string): number {
   const match = /^(\d+)\s*([smhd])?$/.exec(value.trim());
   if (!match) throw new Error(`Invalid duration: "${value}" (expected e.g. 15m, 24h, 30d)`);

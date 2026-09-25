@@ -56,12 +56,7 @@ export const STAGE_DISPOSITIONS = stageDispositionSchema.options;
 
 export const DEFAULT_STAGE_DISPOSITION = STAGE_DISPOSITION.CONDUCTED;
 
-/**
- * The language values a config, an attempt and a student's preference are STORED as.
- * Not `SUPPORTED_LANGUAGES` in ./questions, which is the lowercase key set used inside
- * question content JSON — same three languages, different spelling, and mixing them
- * writes a value no column will match. The two are reconciled when versioning lands.
- */
+/** The language values a config, attempt and student preference are STORED as — not `SUPPORTED_LANGUAGES` in ./questions (lowercase, used inside question JSON); mixing them writes a value no column matches. */
 export const LANGUAGE_CODE = {
   EN: 'EN',
   HI: 'HI',
@@ -154,10 +149,7 @@ const STAGE_KEY_MAX = 60;
 
 const stageNameSchema = displayNameSchema('stage', STAGE_NAME_MAX);
 
-/**
- * Human-stable and unique across every exam — "SSC_CGL_T1". Underscores, not spaces: this is
- * what the exam-pattern workbook and every seed script address a stage by.
- */
+/** Human-stable and unique across every exam — "SSC_CGL_T1", underscores not spaces; what the exam-pattern workbook and every seed script address a stage by. */
 const stageKeySchema = z
   .string()
   .transform((value) =>

@@ -2,10 +2,7 @@ import * as React from 'react';
 import { AlertTriangle, Check, Info, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-/**
- * Transient messages. A module-level store, so it works from a QueryClient callback.
- * Never a field error — those stay on the field (see applyFieldErrors).
- */
+/** Transient messages, a module-level store so it works from a QueryClient callback; never a field error — those stay on the field (see applyFieldErrors). */
 export const TOAST_VARIANTS = {
   SUCCESS: 'success',
   DANGER: 'danger',

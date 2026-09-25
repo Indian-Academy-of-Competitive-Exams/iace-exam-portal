@@ -35,8 +35,7 @@ export const AUDITED_EXAM_FIELDS = ['course', 'name', 'code', 'description', 'is
 export class ExamsService {
   constructor(
     private readonly prisma: PrismaService,
-    // `require`, not a static import: a top-level import here re-enters the still-loading `students`
-    // barrel and throws; a CommonJS `require` tolerates the partial circular load instead.
+    // `require`, not a static import: a top-level import here re-enters the still-loading `students` barrel and throws; a CommonJS `require` tolerates the partial circular load instead.
     @Inject(
       forwardRef(
         () =>
@@ -92,8 +91,7 @@ export class ExamsService {
 
     const changes = changedFields(exam, input);
 
-    // Only a code change can be refused, and only an enrolment count answers that — so an
-    // ordinary rename or retire does not pay for it.
+    // Only a code change can be refused, and only an enrolment count answers that — so an ordinary rename or retire does not pay for it.
     if (changes.code !== undefined) {
       const blocker = examEditBlocker(
         { studentCount: await this.students.countEnrolledIn(exam.code) },
@@ -131,10 +129,7 @@ export class ExamsService {
     await this.prisma.exam.delete({ where: { id } });
   }
 
-  /**
-   * Whether these codes may be attached to. The field key is a PARAMETER: the student form's
-   * field is `enrolledExams`, and `applyFieldErrors` drops the wrong one.
-   */
+  /** Whether these codes may be attached to. The field key is a PARAMETER: the student form's field is `enrolledExams`, and `applyFieldErrors` drops the wrong one. */
   async assertUsable(codes: string[], fieldKey: string): Promise<void> {
     if (codes.length === 0) return;
 

@@ -15,15 +15,7 @@ import {
 } from '@iace/contracts';
 import { type TaxonomyCatalog } from './taxonomy-context';
 
-/**
- * The template an admin fills in. Generated from `QUESTION_IMPORT_COLUMNS`, so
- * it cannot document a format the parser will not accept, and from the LIVE
- * taxonomy, so its dropdowns offer the subjects the bank actually holds.
- *
- * The two taxonomy columns cascade: topic offers the topics of the subject on that row.
- * Excel does this with a named range per list and INDIRECT() over the cell beside it —
- * there is no other way to make one dropdown depend on another in a plain .xlsx.
- */
+/** The template an admin fills in, generated from `QUESTION_IMPORT_COLUMNS` (so it cannot document a format the parser will not accept) and from the LIVE taxonomy (so its dropdowns offer the subjects the bank actually holds); the two taxonomy columns cascade — topic offers the topics of the subject on that row, via a named range per list and INDIRECT() over the cell beside it, the only way to make one dropdown depend on another in a plain .xlsx. */
 
 /** Rows the dropdowns are wired for. Beyond this a row still imports, unvalidated. */
 const VALIDATED_ROWS = 300;
@@ -120,10 +112,7 @@ function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void
   }
 }
 
-/**
- * Every list a dropdown reads, each as a named range. One range per subject holds its
- * topics, keyed by the subject's name because a topic name repeats across subjects.
- */
+/** Every list a dropdown reads, each as a named range. One range per subject holds its topics, keyed by the subject's name because a topic name repeats across subjects. */
 function writeLists(
   workbook: ExcelJS.Workbook,
   lists: ExcelJS.Worksheet,
@@ -177,11 +166,7 @@ const rangeToken = (name: string) => name.replace(/\s+/g, '_');
 
 const topicRangeName = (subject: string) => `${TOPIC_RANGE_PREFIX}${rangeToken(subject)}`;
 
-/**
- * The cascade. INDIRECT builds the range NAME from the cell beside it, so the topic list
- * follows the subject on that row. A row whose subject is not in the bank simply offers
- * nothing, which is the right answer — the importer reports it by name either way.
- */
+/** The cascade. INDIRECT builds the range NAME from the cell beside it, so the topic list follows the subject on that row. A row whose subject is not in the bank simply offers nothing, which is the right answer — the importer reports it by name either way. */
 function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void {
   const letterOf = (key: QuestionImportColumnKey) => sheet.getColumn(key).letter;
   const subject = letterOf('subject');

@@ -6,10 +6,7 @@ import {
   type TokenStore,
 } from '../src';
 
-/**
- * The web half of app-kit — the only place here that may touch the DOM.
- * Outside `src` because the DOM ban in `@iace/config/eslint-no-dom` is scoped to `src/**`.
- */
+/** The web half of app-kit — the only place here that may touch the DOM; outside `src` because the DOM ban in `@iace/config/eslint-no-dom` is scoped to `src/**`. */
 
 /** `localStorage`, narrowed to the three methods a token store uses. */
 export const browserStorage: KeyValueStorage = {
@@ -44,8 +41,7 @@ export function createBrowserTokenStore(storageKey: string): TokenStore {
   return createTokenStore(storageKey, browserStorage);
 }
 
-// --- the web app scaffolding ------------------------------------------------
-// These compose @iace/ui and react-router-dom, which is why they are not in `src/`.
+// --- the web app scaffolding: composes @iace/ui and react-router-dom, hence not in `src/` ------
 export { AppProviders } from './app-providers';
 export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
 export { useWorkspace } from './app-shell/use-workspace';

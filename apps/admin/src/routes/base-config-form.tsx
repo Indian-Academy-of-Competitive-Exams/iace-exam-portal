@@ -76,11 +76,7 @@ import { useAuth } from '../providers/auth';
 import { ExamStagePicker } from '../components/exam-picker';
 import { SubjectPicker } from '../components/taxonomy-picker';
 
-/**
- * One stage blueprint: the shape a test inherits, and the sections it is made of. `totalQuestions`
- * and `totalMarks` are never typed — the server sums them from the sections, and `configTotalsOf`
- * shows the same sums here while they are still being edited.
- */
+// One stage blueprint; totalQuestions/totalMarks are never typed — the server sums them, and configTotalsOf mirrors that while editing.
 
 interface SectionValues {
   name: string;

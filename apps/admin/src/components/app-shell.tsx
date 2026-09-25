@@ -5,11 +5,7 @@ import { AppShell as Shell } from '@iace/app-kit/browser';
 import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
-/**
- * The admin shell. `can` goes to the shell, which reads `featureKey`;
- * `superAdminOnly` is stripped here because it is not a feature key.
- * A deactivated admin loses the nav, and with it the sidebar.
- */
+// can goes to the shell, which reads featureKey; superAdminOnly is stripped here since it isn't one.
 export function AppShell() {
   const { identity: admin, signOut, can } = useAuth();
 
@@ -40,10 +36,7 @@ export function AppShell() {
   );
 }
 
-/**
- * What a deactivated admin sees instead of the app. They are let in on purpose —
- * refusing the login would answer a real account with "invalid credentials".
- */
+// Deactivated admins are let in on purpose — refusing login would answer a real account as invalid.
 function DeactivatedNotice() {
   return (
     <div className="flex flex-col gap-4">

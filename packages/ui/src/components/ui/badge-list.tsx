@@ -16,10 +16,7 @@ export interface BadgeListProps<T> {
   className?: string;
 }
 
-/**
- * The first `max` chips, then a focusable `+N` whose tooltip lists the rest.
- * Never a value's only home — a tooltip does not survive touch or print.
- */
+/** The first `max` chips, then a focusable `+N` whose tooltip lists the rest; never a value's only home, since a tooltip doesn't survive touch or print. */
 export function BadgeList<T>({
   items,
   label,

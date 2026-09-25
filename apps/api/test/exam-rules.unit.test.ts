@@ -15,10 +15,7 @@ describe('examDeletionBlocker', () => {
     assert.equal(examDeletionBlocker(unused), null);
   });
 
-  /**
-   * The failure this exists to prevent: a stage carries the base configs, series and tests built
-   * on it, so one delete would take far more than the row the admin is looking at.
-   */
+  /** The failure this exists to prevent: a stage carries the base configs, series and tests built on it, so one delete would take far more than the row the admin is looking at. */
   it('refuses one that still has stages, and says how many', () => {
     assert.match(examDeletionBlocker({ ...unused, stageCount: 2 }) ?? '', /2 stages/);
   });

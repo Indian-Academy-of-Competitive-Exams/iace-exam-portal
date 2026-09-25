@@ -1,14 +1,6 @@
 import { JSDOM } from 'jsdom';
 
-/**
- * A DOM for the component tests, installed by `--import` before any test loads.
- *
- * jsdom's classes must WIN over Node's own `Event`/`CustomEvent`, or a library
- * that constructs one and dispatches it on an element gets "parameter 1 is not
- * of type 'Event'" — jsdom checks the brand, and Node's global is a different
- * implementation. So the window is copied over the top, minus the Node globals
- * below that the test runner itself depends on.
- */
+/** A DOM for the component tests, installed by `--import` before any test loads; jsdom's classes must WIN over Node's own Event/CustomEvent (jsdom checks the brand), so the window is copied over the top, minus the Node globals below. */
 const dom = new JSDOM('<!doctype html><html><body></body></html>', {
   url: 'http://localhost/',
   pretendToBeVisual: true,
@@ -50,10 +42,7 @@ for (const key of Object.getOwnPropertyNames(win)) {
 define('window', win);
 define('document', win.document);
 
-/**
- * Radix measures and observes; jsdom has neither. Nothing under test reads a
- * size, so the stub records the calls rather than being three empty bodies.
- */
+/** Radix measures and observes; jsdom has neither. Nothing under test reads a size, so the stub records the calls rather than being three empty bodies. */
 class StubResizeObserver {
   readonly observed = new Set<Element>();
 

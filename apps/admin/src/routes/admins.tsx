@@ -41,10 +41,7 @@ const ROLE_ITEMS = ADMIN_ROLE_VALUES.map((role) => ({
   label: ADMIN_ROLE_LABELS[role],
 }));
 
-/**
- * Who can get into the admin app. Super admin only — this screen decides who decides.
- * No delete: `createdById` references the row, so deactivating is what stops a sign-in.
- */
+// Super admin only — this screen decides who decides; no delete since createdById references the row, so deactivating stops sign-in.
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
   return [
@@ -152,8 +149,7 @@ export function AdminsPage() {
 
 // ---------------------------------------------------------------------------
 
-/** A super admin holds everything by bypass, which is a different fact from
- *  holding grants — saying "all" avoids implying they were granted. */
+/** A super admin holds everything by bypass, not by grant — "all" avoids implying it was granted. */
 function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   if (admin.isSuperAdmin) {
     return <span className="text-sm text-muted-foreground">Everything (bypass)</span>;
@@ -260,8 +256,7 @@ function NewAdminDialog({
       setPending(null);
       onDone();
     },
-    // Back to the form on a refusal — the message belongs on the field that
-    // caused it, and a dialog sitting over that field hides it.
+    // Back to the form on a refusal — the message belongs on the field that caused it.
     onError: (error) => {
       setPending(null);
       applyFieldErrors(error, form.setError, NEW_ADMIN_FIELDS);

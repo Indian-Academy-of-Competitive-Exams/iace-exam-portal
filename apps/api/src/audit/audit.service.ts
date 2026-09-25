@@ -39,8 +39,7 @@ export interface AuditViewer {
   isActive: boolean;
 }
 
-/** A calendar-day bound. `rowActionListQuerySchema` already rejects anything else; this is what
- *  keeps a direct caller from reaching Prisma with an Invalid Date. */
+/** A calendar-day bound. `rowActionListQuerySchema` already rejects anything else; this is what keeps a direct caller from reaching Prisma with an Invalid Date. */
 function parseDateOnlyBound(value: string, field: 'from' | 'to'): Date {
   const bound = field === 'from' ? startOfInstituteDay : endOfInstituteDay;
   const parsed = dateOnlySchema.safeParse(value).success ? bound(value) : null;

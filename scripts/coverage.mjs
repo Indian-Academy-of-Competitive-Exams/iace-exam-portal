@@ -1,19 +1,5 @@
 #!/usr/bin/env node
-/**
- * Runs every workspace's tests with coverage and merges the reports.
- *
- * Two things this exists to handle:
- *
- * 1. Node writes `SF:` paths relative to the package that ran the tests
- *    (`src/auth/auth.service.ts`), while Sonar resolves them from the repo
- *    root. Unrewritten, every path misses and the whole report is silently
- *    discarded — which looks exactly like 0% coverage, and was.
- *
- * 2. Node's coverage only includes files a test actually LOADED. A file no test
- *    imports is absent from the report rather than present at 0%, so a package
- *    can report 94% while two thirds of it has never been executed. The summary
- *    printed at the end counts the files on disk, not the ones in the report.
- */
+/** Runs every workspace's coverage and merges reports, rewriting `SF:` paths repo-root relative — Sonar silently drops a report it cannot resolve — and counting a file no test loaded apart from a true 0%, which Node's report omits. */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -85,8 +71,7 @@ for (const pkg of PACKAGES) {
       { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] },
     );
   } catch (error) {
-    // A failing test still writes what it managed to cover. Reporting a merged
-    // number from a red suite would be a lie, so this stops.
+    // A failing test still writes partial coverage; reporting a merged number from a red suite would lie.
     process.stderr.write(String(error.stdout ?? '') + String(error.stderr ?? ''));
     console.error(`\n✗ tests failed in ${pkg.label ?? pkg.dir} — coverage not written`);
     process.exit(1);

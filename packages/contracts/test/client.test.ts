@@ -194,8 +194,7 @@ describe('typed client — 401 handling', () => {
       assert.equal(error.code, 'PIN_INVALID');
       return true;
     });
-    // One call only: refreshing here would hide the real code, and could sign
-    // a perfectly good session out.
+    // One call only: refreshing here would hide the real code and could sign a perfectly good session out.
     assert.equal(calls.length, 1);
   });
 

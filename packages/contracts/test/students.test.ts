@@ -37,11 +37,7 @@ const detail = {
 };
 
 describe('createStudentSchema — what a student is here for', () => {
-  /**
-   * The failure this prevents: a student created with no type at all, which is what the ONLINE
-   * hardcode did to every student the admin screen and the sync path ever made. Type decides which
-   * branch and which groups they may hold, so nothing may guess it.
-   */
+  /** Regression guard: a student created with no type at all — what the ONLINE hardcode did to every student the admin screen and sync path made; type decides which branch and groups they may hold. */
   it('refuses a student with no type', () => {
     const parsed = createStudentSchema.safeParse({ mobile: '9876543210' });
 
@@ -63,11 +59,7 @@ describe('createStudentSchema — what a student is here for', () => {
     assert.equal(parsed.currentBranchId, 'br_1');
   });
 
-  /**
-   * The failure this prevents: the add-student form seeds its branch picker with '', so an admin who
-   * leaves it alone would post an empty id. The service reads that as falsy, skips `assertUsable`,
-   * and writes '' straight into the branch FK.
-   */
+  /** Regression guard: the add-student form seeds its branch picker with '', so an untouched pick would post an empty id, skip `assertUsable`, and write '' into the branch FK. */
   it('reads an untouched branch picker as absent, not as an empty branch id', () => {
     const parsed = createStudentSchema.parse({
       mobile: '9876543210',

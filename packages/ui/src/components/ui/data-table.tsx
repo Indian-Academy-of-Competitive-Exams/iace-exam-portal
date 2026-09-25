@@ -71,10 +71,7 @@ export interface DataTableSelection {
   selectable?: (key: string) => boolean;
 }
 
-/**
- * Header, three-state body and pagination in one; `colSpan` follows `columns.length`.
- * The `empty` message stays the caller's — only they know whether a filter is set.
- */
+/** Header, three-state body and pagination in one; `colSpan` follows `columns.length`. The `empty` message stays the caller's — only they know whether a filter is set. */
 export function DataTable<TRow>({
   columns,
   rows,

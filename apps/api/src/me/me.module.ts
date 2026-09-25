@@ -11,16 +11,14 @@ import { MeService } from './me.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
-  // StudentsModule for the read/update path — the flags it recomputes are the
-  // reason this does not have its own. AuthModule for the PIN and sessions.
+  // StudentsModule for the read/update path — the flags it recomputes are the reason this does not have its own. AuthModule for the PIN and sessions.
   imports: [
     AuthModule,
     StudentsModule,
     AccessModule,
     NotificationsModule,
     StorageModule,
-    // The ceiling is applied while the body arrives, not after multer has
-    // buffered the whole thing — see imports.module.ts for why that matters.
+    // The ceiling is applied while the body arrives, not after multer has buffered the whole thing — see imports.module.ts for why that matters.
     MulterModule.register({ limits: { fileSize: DOCUMENT_MAX_BYTES, files: 1 } }),
   ],
   controllers: onRole([API_ROLES.CORE], [MeController]),

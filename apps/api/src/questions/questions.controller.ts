@@ -115,8 +115,7 @@ export class QuestionsController {
     @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionDetail> {
-    // The author comes from the token, never the body: a client that can name
-    // who wrote a question can put anyone's name on it.
+    // The author comes from the token, never the body: a client that can name who wrote a question can put anyone's name on it.
     return this.questions.create(body, user.id);
   }
 

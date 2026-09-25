@@ -10,10 +10,7 @@ describe('the student profile audit diff', () => {
     }
   });
 
-  /**
-   * The three pre-test fields are what a student is asked for before an exam, so a change to
-   * one after the fact is exactly the edit somebody will want to see.
-   */
+  /** The three pre-test fields are what a student is asked for before an exam, so a change to one after the fact is exactly the edit somebody will want to see. */
   it('reports a change to a pre-test field', () => {
     const before = {
       motherName: 'Lakshmi',

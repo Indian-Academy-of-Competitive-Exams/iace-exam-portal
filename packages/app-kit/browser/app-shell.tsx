@@ -57,11 +57,7 @@ export interface AppShellProps {
   width?: ShellWidth;
 }
 
-/**
- * The signed-in chrome: top bar, sidebar, page. Desktop and mobile are different
- * components, not one markup styled twice — rendering both would give two tab orders.
- * A fixed-height frame: the document never scrolls, the content region does.
- */
+/** Desktop and mobile are separate components — rendering both would give two tab orders; fixed-height frame, only the content region scrolls. */
 export function AppShell({
   nav,
   children,

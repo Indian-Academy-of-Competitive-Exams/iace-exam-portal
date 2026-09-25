@@ -30,10 +30,7 @@ export interface FormFieldProps<TValues extends FieldValues> {
   children: (control: FieldControl & UseFormRegisterReturn<Path<TValues>>) => React.ReactNode;
 }
 
-/**
- * A `Field` bound to one react-hook-form field: `htmlFor`, `register(name)` and the error.
- * Reads the error with the library's `get`, so nested names (`profile.dob`) resolve.
- */
+/** A `Field` bound to one react-hook-form field: `htmlFor`, `register(name)` and the error; reads it with the library's `get`, so nested names (`profile.dob`) resolve. */
 export function FormField<TValues extends FieldValues>({
   form,
   name,

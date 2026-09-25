@@ -10,10 +10,7 @@ import {
 import { SessionService } from '../src/auth/session.service';
 import { FakeRedis, NO_DEVICE } from './support/fakes';
 
-/**
- * Sessions live only in Redis. Two properties earn that: logout takes effect at once, and a
- * replayed refresh token is detectable because tokens rotate.
- */
+/** Sessions live only in Redis. Two properties earn that: logout takes effect at once, and a replayed refresh token is detectable because tokens rotate. */
 
 const SUBJECT = 'stu_1';
 const TTL = 3600;
@@ -92,8 +89,7 @@ describe('SessionService', () => {
       TTL,
     );
 
-    // Someone presenting the pre-rotation token either stole it or is a stale
-    // client; either way the safe reading is that it leaked.
+    // Someone presenting the pre-rotation token either stole it or is a stale client; either way the safe reading is that it leaked.
     await assert.rejects(
       () =>
         sessions.rotate(
@@ -108,8 +104,7 @@ describe('SessionService', () => {
       (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
     );
 
-    // And the whole session goes, not just that one request — the thief and the
-    // victim are both signed out, which is the point.
+    // And the whole session goes, not just that one request — the thief and the victim are both signed out, which is the point.
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
   });
 

@@ -38,8 +38,7 @@ export class QuestionImportController {
   @Get('template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${QUESTION_IMPORT_TEMPLATE_FILENAME}"`)
-  // Never cached: it carries the taxonomy as it stands, and a stale copy offers
-  // dropdowns of subjects that have since been renamed.
+  // Never cached: it carries the taxonomy as it stands, and a stale copy offers dropdowns of subjects that have since been renamed.
   @Header('Cache-Control', 'no-store')
   async template(@Res() response: Response): Promise<void> {
     response.send(await this.imports.template());

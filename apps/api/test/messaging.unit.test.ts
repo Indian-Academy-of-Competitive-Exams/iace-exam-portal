@@ -55,8 +55,7 @@ describe('OTP as one caller of the message sender', () => {
 
     await service.request(ActorTypes.STUDENT, '9876543210');
 
-    // MSG91 fills a DLT-registered template from `data`; it never sends our `body`. A code that only
-    // existed in the prose would arrive as an empty template — a message with no code in it.
+    // MSG91 fills a DLT-registered template from `data`; it never sends our `body`. A code that only existed in the prose would arrive as an empty template — a message with no code in it.
     const { data, body } = sender.lastMessage;
     assert.match(String(data?.code), /^\d{6}$/);
     assert.equal(data?.ttlSec, 300);
@@ -74,9 +73,7 @@ describe('OTP as one caller of the message sender', () => {
 });
 
 describe('Provider selection', () => {
-  // The factory the module's useFactory calls, exercised directly — the guard is the subject, and
-  // standing a Nest container up around it would only add a dependency and a way for the test to
-  // pass for the wrong reason.
+  // The factory the module's useFactory calls, exercised directly — the guard is the subject, and standing a Nest container up around it would only add a dependency and a way for the test to pass for the wrong reason.
   const senderFor = (env: Record<string, unknown>) => {
     const config = new FakeConfig(env).asService();
     return createMessageSender(

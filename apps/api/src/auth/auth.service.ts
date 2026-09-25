@@ -72,10 +72,7 @@ export class AuthService {
     };
   }
 
-  /**
-   * Redeems the ticket. One code path for both cases — signup creates the student, a reset
-   * overwrites the hash — because they differ only in whether the row already exists.
-   */
+  /** Redeems the ticket. One code path for both cases — signup creates the student, a reset overwrites the hash — because they differ only in whether the row already exists. */
   async setStudentPin(
     mobile: string,
     setupToken: string,
@@ -85,14 +82,12 @@ export class AuthService {
     await this.pin.consumeSetupToken(mobile, setupToken);
 
     const pinHash = await this.pin.hash(pin);
-    // Not an upsert: `mobile` is unique only among live rows, which is a partial index Prisma
-    // cannot address. The same index still refuses a second row if two signups race here.
+    // Not an upsert: `mobile` is unique only among live rows, which is a partial index Prisma cannot address. The same index still refuses a second row if two signups race here.
     const existing = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
       select: { id: true },
     });
-    // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or
-    // replacing the one an import gave them.
+    // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or replacing the one an import gave them.
     const student = existing
       ? await this.prisma.student.update({
           where: { id: existing.id },
@@ -110,8 +105,7 @@ export class AuthService {
     if (!student.isActive)
       throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
 
-    // A new PIN ends every session opened with the old one — that is most of
-    // the point of a reset — and clears any lockout the student hit first.
+    // A new PIN ends every session opened with the old one — that is most of the point of a reset — and clears any lockout the student hit first.
     await this.sessions.revokeAll(ActorTypes.STUDENT, student.id);
     await this.pin.clearFailures(mobile);
     if (!existing) this.events.emit(DOMAIN_EVENTS.STUDENT_SIGNED_UP, { studentId: student.id });
@@ -121,11 +115,7 @@ export class AuthService {
     return { tokens: await this.issue(identity, device), identity };
   }
 
-  /**
-   * Replacing a PIN the student already knows. The current one is checked despite the
-   * session: one left open on a shared machine would otherwise lock the owner out.
-   * Wrong attempts climb the same ladder, and the response is a FRESH session.
-   */
+  /** Replacing a PIN the student already knows. The current one is checked despite the session: one left open on a shared machine would otherwise lock the owner out. Wrong attempts climb the same ladder, and the response is a FRESH session. */
   async changeStudentPin(
     studentId: string,
     currentPin: string,
@@ -137,8 +127,7 @@ export class AuthService {
 
     await this.pin.assertNotLocked(student.mobile);
 
-    // Burns the same time when there is no PIN to check against, so the clock
-    // never says whether one is set.
+    // Burns the same time when there is no PIN to check against, so the clock never says whether one is set.
     const ok = student.pinHash
       ? await this.pin.verify(student.pinHash, currentPin)
       : await this.pin.burnVerifyTime().then(() => false);
@@ -154,8 +143,7 @@ export class AuthService {
       where: { id: studentId },
       data: {
         pinHash: await this.pin.hash(newPin),
-        // Theirs now, whatever it was before. This is what stops an imported
-        // student being asked to change a PIN they have just chosen.
+        // Theirs now, whatever it was before. This is what stops an imported student being asked to change a PIN they have just chosen.
         pinIsDefault: false,
       },
     });
@@ -168,10 +156,7 @@ export class AuthService {
     return { tokens: await this.issue(identity, device), identity };
   }
 
-  /**
-   * The everyday login. Unknown number, no PIN set and wrong PIN are one answer and one duration, so
-   * neither the message nor the clock says whether the number is registered.
-   */
+  /** The everyday login. Unknown number, no PIN set and wrong PIN are one answer and one duration, so neither the message nor the clock says whether the number is registered. */
   async loginStudent(
     mobile: string,
     pin: string,
@@ -201,10 +186,7 @@ export class AuthService {
   // Admins — email + OTP
   // ==========================================================================
 
-  /**
-   * No self-signup, so an unknown email is told so rather than answered with a success: a silent
-   * "sent" left somebody waiting for a code that was never going to arrive.
-   */
+  /** No self-signup, so an unknown email is told so rather than answered with a success: a silent "sent" left somebody waiting for a code that was never going to arrive. */
   async requestAdminOtp(email: string): Promise<OtpRequestResponse> {
     const admin = await this.prisma.admin.findUnique({ where: { email } });
     if (!admin) {

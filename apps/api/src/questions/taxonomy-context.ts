@@ -2,10 +2,7 @@ import { canonicalName } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { emptyTaxonomy, type TaxonomyContext } from './question-core';
 
-/**
- * Reading the taxonomy the way each entry path needs it: by id for one question,
- * and whole, keyed by name, for a sheet and for the template's dropdowns.
- */
+/** Reading the taxonomy the way each entry path needs it: by id for one question, and whole, keyed by name, for a sheet and for the template's dropdowns. */
 
 export interface TaxonomyIds {
   subjectIds: string[];
@@ -51,11 +48,7 @@ export interface CatalogSubject {
   topics: CatalogTopic[];
 }
 
-/**
- * The whole taxonomy, once. A sheet names its rows rather than pointing at ids,
- * so every row is resolved against these maps instead of querying per line — and
- * the template's dropdowns are generated from the same read.
- */
+/** The whole taxonomy, once. A sheet names its rows rather than pointing at ids, so every row is resolved against these maps instead of querying per line — and the template's dropdowns are generated from the same read. */
 export interface TaxonomyCatalog {
   context: TaxonomyContext;
   subjects: CatalogSubject[];

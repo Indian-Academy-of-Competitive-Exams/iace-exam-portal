@@ -1,10 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-/**
- * Filters in the URL, so a link into a screen and its own controls are the same state.
- * The PAGE is not here: every filter change has to reset it, and that belongs with the page state.
- */
+/** Filters live in the URL so a link into a screen and its own controls share state; PAGE is excluded since a filter change must reset it, which belongs with page state. */
 export function useFilters<K extends string>(): {
   get: (key: K) => string;
   set: (changes: Partial<Record<K, string | undefined>>) => void;

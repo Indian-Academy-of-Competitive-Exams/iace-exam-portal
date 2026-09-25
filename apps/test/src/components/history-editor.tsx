@@ -3,10 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
 import { Button, EmptyState, FormSection, Input, Label } from '@iace/ui';
 
-/**
- * Rows a student adds to: schooling, or exams sat elsewhere. Every field but the first
- * is optional. A GRID, not flex, or one long name pushes that row's columns out of line.
- */
+/** Rows for schooling or exams sat elsewhere; only the first field is required. A GRID, not flex, or one long name pushes a row's columns out of line. */
 export function HistoryEditor<T extends FieldValues>({
   control,
   name,
@@ -28,8 +25,7 @@ export function HistoryEditor<T extends FieldValues>({
 }>) {
   const { fields, append, remove } = useFieldArray({ control, name: name as never });
 
-  // The delete button gets a fixed column of its own, so it lands under itself
-  // on every row instead of wherever the last input left it.
+  // The delete button gets a fixed column of its own, so it lands under itself on every row.
   const track = (span: number) => `minmax(0, ${span}fr)`;
   const template = `${columns.map((c) => track(c.span ?? 1)).join(' ')} auto`;
 
@@ -41,8 +37,7 @@ export function HistoryEditor<T extends FieldValues>({
         {fields.map((field, index) => (
           <div
             key={field.id}
-            // items-end so the controls sit on one baseline whatever their
-            // labels wrapped to, and the delete button lines up with them.
+            // items-end so controls share one baseline however their labels wrapped.
             className="grid items-end gap-2"
             style={{ gridTemplateColumns: template }}
           >
@@ -84,8 +79,7 @@ export function HistoryEditor<T extends FieldValues>({
             type="button"
             variant="secondary"
             size="sm"
-            // Capped so a profile cannot become a CV, and so a mistyped paste
-            // cannot add a thousand rows to somebody's record.
+            // Capped so a profile cannot become a CV, or a mistyped paste add a thousand rows.
             disabled={fields.length >= PROFILE_LIST_MAX}
             onClick={() => append(emptyRow as never)}
           >

@@ -15,10 +15,7 @@ export function archiveKeyFor(day: Date): string {
   return `${AUDIT_ARCHIVE_PREFIX}/${year}/${month}/${date}.ndjson.gz`;
 }
 
-/**
- * The trailing newline is load-bearing: the processor concatenates one gzip member per page, and
- * it is what keeps a page boundary from landing mid-record. `JSON.stringify` escapes newlines.
- */
+/** The trailing newline is load-bearing: the processor concatenates one gzip member per page, and it is what keeps a page boundary from landing mid-record. `JSON.stringify` escapes newlines. */
 export function toNdjson(rows: readonly object[]): Buffer {
   if (rows.length === 0) return gzipSync('');
   return gzipSync(rows.map((row) => JSON.stringify(row)).join('\n') + '\n');

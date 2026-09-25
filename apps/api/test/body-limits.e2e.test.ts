@@ -74,8 +74,7 @@ describe('request body limits (e2e)', () => {
   });
 
   it('answers a rejected body in the envelope, with a request id to trace it', async () => {
-    // body-parser throws before Nest's middleware runs, so this is the case
-    // where the filter has to mint the id itself.
+    // body-parser throws before Nest's middleware runs, so this is the case where the filter has to mint the id itself.
     const { body } = await post('/ordinary', 8 * 1024);
 
     assert.ok((body.meta as { requestId: string }).requestId);

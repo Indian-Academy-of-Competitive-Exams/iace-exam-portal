@@ -64,8 +64,7 @@ export function DocumentCard({
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          // Cleared so choosing the SAME file again still fires — someone who
-          // just rotated the photo and saved over it expects it to re-upload.
+          // Cleared so choosing the SAME file again still fires — a re-saved photo re-uploads.
           event.target.value = '';
           if (file) upload.mutate(file);
         }}
@@ -111,8 +110,7 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
     <a
       href={url}
       target="_blank"
-      // noreferrer as well as noopener: the signed URL is in the address, and a
-      // Referer header would hand it to whatever the new tab loads next.
+      // noreferrer too: the signed URL is in the address, and a Referer header would leak it.
       rel="noopener noreferrer"
       aria-label={`Open ${label} in a new tab`}
       className={cn(
@@ -133,10 +131,7 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
   );
 }
 
-/**
- * From the key's extension, which we built from the verified content type on upload.
- * The query string is dropped first: its signature characters would eventually match.
- */
+/** From the key's extension (built from the verified content type); the query string is dropped first, or its signature characters would eventually match. */
 function isPdf(url: string): boolean {
   const path = url.split('?')[0] ?? '';
   return path.toLowerCase().endsWith('.pdf');

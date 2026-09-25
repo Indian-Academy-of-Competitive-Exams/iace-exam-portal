@@ -2,10 +2,7 @@ import * as React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '../../lib/utils';
 
-/**
- * Radix tabs: tablist role, arrow keys, only the active tab in the page's tab order.
- * Not for wizard steps that must be done in order.
- */
+/** Radix tabs: tablist role, arrow keys, only the active tab in the page's tab order; not for wizard steps that must be done in order. */
 const Tabs = TabsPrimitive.Root;
 
 const TabsList = React.forwardRef<

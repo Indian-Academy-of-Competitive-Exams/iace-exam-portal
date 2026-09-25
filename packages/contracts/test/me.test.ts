@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { updateMeSchema } from '../src/me';
 
-/**
- * A student patches their own record with no id in the path, so this schema is the only thing
- * standing between them and the fields that decide what they can reach.
- */
+/** A student patches their own record with no id in the path, so this schema is the only thing standing between them and the fields that decide what they can reach. */
 describe('updateMeSchema', () => {
   it('keeps the fields a student owns', () => {
     const parsed = updateMeSchema.parse({
@@ -17,10 +14,7 @@ describe('updateMeSchema', () => {
     assert.equal(parsed.profile?.motherName, 'Lakshmi');
   });
 
-  /**
-   * The failure this prevents: an enrolment reaches every EXAM and PROGRAM group for that code,
-   * so a student who could set their own would grant themselves the whole test series.
-   */
+  /** Regression guard: an enrolment reaches every EXAM and PROGRAM group for that code, so a student who could set their own would grant themselves the whole series. */
   it('strips every field that decides what the student can reach', () => {
     const parsed = updateMeSchema.parse({
       fullName: 'Asha Rao',

@@ -9,17 +9,12 @@ import { DomainEventBus } from './domain-event-bus';
 import { OutboxPruneProcessor } from './outbox-prune.processor';
 import { API_ROLES, onRole, servesRole } from '../../config/api-role';
 
-/**
- * Infrastructure, not a bounded context — like `prisma` and `redis`, every service links it and
- * none of them become it (docs/03 §4.4).
- */
+/** Infrastructure, not a bounded context — like `prisma` and `redis`, every service links it and none of them become it (docs/03 §4.4). */
 @Global()
 @Module({
   imports: [
     EventEmitterModule.forRoot({
-      // The catalog uses dotted names (`student.pin_reset`), and without this EventEmitter2 reads the
-      // dot as a namespace separator — `attempt.*` would then match, which is not a subscription anyone
-      // here wants by accident.
+      // The catalog uses dotted names (`student.pin_reset`), and without this EventEmitter2 reads the dot as a namespace separator — `attempt.*` would then match, which is not a subscription anyone here wants by accident.
       wildcard: false,
       delimiter: '.',
     }),

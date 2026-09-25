@@ -1,10 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-/**
- * Placeholders shaped like the content coming. Use above ~300ms only; below that it flashes.
- * Match the real shape, or the layout jumps when the data lands.
- */
+/** Placeholders shaped like the content coming; use above ~300ms only, below that it flashes. Match the real shape, or the layout jumps when the data lands. */
 const VARIANTS = {
   /** A line of body copy. */
   text: 'h-[1em] rounded-sm',

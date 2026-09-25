@@ -1,10 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@iace/ui';
 
-/**
- * The gate in front of every authed route. Waits rather than deciding while the
- * identity loads, or a reload bounces to login for a frame. `state.from` is the way back.
- */
+/** The gate in front of every authed route; waits rather than deciding while identity loads, and `state.from` is the way back after login. */
 export function ProtectedRoute({
   isAuthenticated,
   isLoading,

@@ -138,11 +138,7 @@ describe('AuditInterceptor', () => {
     assert.equal(entries[0]?.actorId, 'stu_9');
   });
 
-  /**
-   * The failure this prevents: with no token, `actorTypeOf` fell through to ADMIN and filed a row
-   * with a null actorId under it — the log naming an admin for something no admin did. "Unreachable"
-   * was a claim about a guard registered in another file, not about this function.
-   */
+  /** The failure this prevents: with no token, `actorTypeOf` fell through to ADMIN and filed a row with a null actorId under it — the log naming an admin for something no admin did. "Unreachable" was a claim about a guard registered in another file, not about this function. */
   it('records a request with no authenticated user as SCRIPT, never ADMIN', async () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.UPDATE };
     const { entries, interceptor, execution } = harness(route, {

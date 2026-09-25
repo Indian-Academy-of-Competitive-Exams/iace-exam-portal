@@ -9,7 +9,6 @@ export interface AuthenticatedUser {
   isSuperAdmin: boolean;
   /** False for a deactivated admin, who may sign in but may do nothing. */
   isActive: boolean;
-  /** Feature -> level. Empty for a student, and for a super admin, who
-   *  bypasses the check entirely — the two are only read together. */
+  /** Feature -> level. Empty for a student, and for a super admin, who bypasses the check entirely — the two are only read together. */
   permissions: AdminPermissions;
 }

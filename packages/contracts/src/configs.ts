@@ -200,8 +200,7 @@ const sectionNameSchema = displayNameSchema('section', SECTION_NAME_MAX, 1);
 const baseConfigSectionDraftSchema = z.object({
   name: sectionNameSchema,
   order: z.coerce.number().int().min(0).max(99),
-  /** Which module this sits in, BY ORDER — a session paper's only. The modules are new rows on
-   *  every save, so there is no id for a draft to point at. */
+  /** Which module this sits in, BY ORDER — a session paper's only; modules are new rows on every save, so there is no id for a draft to point at. */
   moduleOrder: z.coerce.number().int().min(0).max(99).nullish(),
   subjectId: z.string().nullish(),
   questionCount: z.coerce.number().int().min(1).max(500),
@@ -250,11 +249,7 @@ export const createBaseConfigSchema = configShapeSchema.extend({
 export type CreateBaseConfigInput = z.input<typeof createBaseConfigSchema>;
 export type CreateBaseConfigBody = z.infer<typeof createBaseConfigSchema>;
 
-/**
- * `sections` and `modules` REPLACE what is there — the editor holds the whole paper, not a delta.
- * Every field here is refused once the config is locked, `name`/`isDefault`/`isActive` excepted:
- * those three are what makes promoting a clone over a locked original possible.
- */
+/** `sections` and `modules` REPLACE what's there — the editor holds the whole paper, not a delta; every field is refused once locked except `name`/`isDefault`/`isActive`, which is what makes promoting a clone possible. */
 export const updateBaseConfigSchema = configShapeSchema.partial().extend({
   name: configNameSchema.optional(),
   isDefault: z.boolean().optional(),

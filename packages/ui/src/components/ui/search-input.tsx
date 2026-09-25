@@ -69,9 +69,7 @@ export function useDebouncedSearch(
   debouncer.current ??= createDebouncer(delay);
 
   React.useEffect(() => {
-    // Gated on the PARENT having moved, not on `value` differing from our own
-    // commit: a parent that has not applied the commit yet still holds the old
-    // term, and reading that as an outside change puts the old text back.
+    // Gated on the PARENT having moved, not on `value` differing from our own commit — a parent that hasn't applied it yet still holds the old term.
     if (value === seen.current) return;
     seen.current = value;
     if (value !== committed.current) setDraft(value);

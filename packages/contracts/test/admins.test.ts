@@ -30,8 +30,7 @@ describe('satisfiesLevel', () => {
   });
 
   it('refuses everything when nothing is granted', () => {
-    // The failure this exists to prevent: an ungranted admin must not fall
-    // through to allowed. Absent is not empty-and-therefore-permissive.
+    // Regression guard: an ungranted admin must not fall through to allowed — absent is not empty-and-therefore-permissive.
     assert.equal(satisfiesLevel(undefined, PERMISSION_LEVELS.READ), false);
     assert.equal(satisfiesLevel(undefined, PERMISSION_LEVELS.WRITE), false);
   });
@@ -39,8 +38,7 @@ describe('satisfiesLevel', () => {
 
 describe('shared vocabularies', () => {
   it('keeps every key and level SCREAMING_SNAKE_CASE and self-valued', () => {
-    // Prisma mirrors these values exactly, so a lowercase slip here is a
-    // migration that does not match the enum it is supposed to mirror.
+    // Prisma mirrors these values exactly, so a lowercase slip here is a migration that doesn't match the enum it mirrors.
     for (const [name, value] of Object.entries({ ...FEATURE_KEYS, ...PERMISSION_LEVELS })) {
       assert.match(value, /^[A-Z][A-Z_]*$/, `${name} must be SCREAMING_SNAKE_CASE`);
       assert.equal(name, value, `${name} must equal its own value`);
@@ -64,10 +62,7 @@ describe('shared vocabularies', () => {
     );
   });
 
-  /**
-   * The failure a closed key set exists to prevent: a key nothing in the code checks could be
-   * granted, and would read as access to a feature no guard will ever consult.
-   */
+  /** Regression guard: a closed key set prevents granting a key nothing in the code checks, which would read as access to a feature no guard ever consults. */
   it('accepts only the keys the code defines', () => {
     assert.equal(featureKeySchema.parse('STUDENT_MANAGEMENT'), 'STUDENT_MANAGEMENT');
     assert.equal(featureKeySchema.safeParse('REPORTING_DASHBOARD').success, false);
@@ -123,8 +118,7 @@ describe('admin input schemas', () => {
 
 describe('routes', () => {
   it('puts the revoke tuple in the path, never a DELETE body', () => {
-    // A dropped DELETE body would make revoke a silent no-op, which is the one
-    // failure mode this endpoint must not have.
+    // A dropped DELETE body would make revoke a silent no-op, the one failure mode this endpoint must not have.
     assert.equal(
       ADMIN_FEATURE_ROUTES.revoke(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE, 'adm_1'),
       '/admin/features/TEST_MANAGEMENT/permissions/WRITE/adm_1',

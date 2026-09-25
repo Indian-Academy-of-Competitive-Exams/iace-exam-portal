@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { NODE_ENVS, validateEnv, type Env } from './env.schema';
 
-/**
- * Typed accessor over the zod-validated env. Inject this, not ConfigService — every key is checked
- * against `Env`, so a typo is a compile error.
- */
+/** Typed accessor over the zod-validated env. Inject this, not ConfigService — every key is checked against `Env`, so a typo is a compile error. */
 @Injectable()
 export class AppConfigService {
   // Checked as this is CONSTRUCTED, which is boot — importing a service must not need an env.

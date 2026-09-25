@@ -38,10 +38,7 @@ describe('the question audit diff', () => {
     );
   });
 
-  /**
-   * The failure this prevents: changing which option is correct after a paper has been attempted
-   * changes who passed, and nothing else in the system records that it happened.
-   */
+  /** The failure this prevents: changing which option is correct after a paper has been attempted changes who passed, and nothing else in the system records that it happened. */
   it('reports a change to the correct answer', () => {
     const before = { correctOptionPositions: [1] };
 
@@ -52,10 +49,7 @@ describe('the question audit diff', () => {
     );
   });
 
-  /**
-   * `position` is what survives a version: an option carries its id over only while its slot is
-   * unchanged, so two sets with different ids and the same correct position(s) must diff to null.
-   */
+  /** `position` is what survives a version: an option carries its id over only while its slot is unchanged, so two sets with different ids and the same correct position(s) must diff to null. */
   it('reports no diff when the option ids differ but the correct position does not', () => {
     const positionsOf = (options: { position: number; isCorrect: boolean }[]) =>
       options

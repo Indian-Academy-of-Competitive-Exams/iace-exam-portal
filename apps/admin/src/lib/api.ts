@@ -3,10 +3,7 @@ import { browserSignOutSignal, createBrowserTokenStore } from '@iace/app-kit/bro
 import { CLIENT_KINDS } from '@iace/contracts';
 import { STORAGE_KEYS } from './constants';
 
-/**
- * This app's session and API client. The storage key keeps the two SPAs' sessions apart.
- * The browser adapters are passed in here because the client itself is DOM-free.
- */
+// The storage key keeps the two SPAs' sessions apart; browser adapters are passed in since the client is DOM-free.
 export const tokenStore = createBrowserTokenStore(STORAGE_KEYS.AUTH);
 
 export const signOutSignal = browserSignOutSignal;

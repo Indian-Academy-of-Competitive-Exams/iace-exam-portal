@@ -18,10 +18,7 @@ import {
   type StoredSession,
 } from './auth.types';
 
-/**
- * Sessions and device binding — Redis only, never Postgres. A session's TTL is the refresh-token
- * lifetime, so expiry is automatic and there is no sweeper.
- */
+/** Sessions and device binding — Redis only, never Postgres. A session's TTL is the refresh-token lifetime, so expiry is automatic and there is no sweeper. */
 @Injectable()
 export class SessionService {
   private readonly logger = new Logger(SessionService.name);
@@ -69,11 +66,7 @@ export class SessionService {
     return (await this.redis.client.exists(redisKeys.session(actor, subjectId, sessionId))) === 1;
   }
 
-  /**
-   * Verifies the presented refresh token against the stored hash and swaps in the new one. Any
-   * mismatch revokes the session outright: either the token was replayed after rotation, or it
-   * leaked.
-   */
+  /** Verifies the presented refresh token against the stored hash and swaps in the new one. Any mismatch revokes the session outright: either the token was replayed after rotation, or it leaked. */
   async rotate(
     actor: ActorType,
     subjectId: string,
@@ -218,8 +211,7 @@ export class SessionService {
   }
 
   private hash(token: string): string {
-    // The token is already a high-entropy signed JWT, so a plain digest is the
-    // right tool here — this is theft detection, not password storage.
+    // The token is already a high-entropy signed JWT, so a plain digest is the right tool here — this is theft detection, not password storage.
     return createHash('sha256').update(token).digest('hex');
   }
 }

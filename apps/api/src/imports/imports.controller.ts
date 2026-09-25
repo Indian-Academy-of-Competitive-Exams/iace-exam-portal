@@ -38,16 +38,12 @@ import { buildCandidateTemplate, buildProgramTemplate, buildStudentTemplate } fr
 export class ImportsController {
   constructor(private readonly imports: ImportsService) {}
 
-  /**
-   * The sample file. Generated on request from the same column list the parser matches on, so it can
-   * never document a format the importer will not accept.
-   */
+  /** The sample file. Generated on request from the same column list the parser matches on, so it can never document a format the importer will not accept. */
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('students/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${STUDENT_IMPORT_TEMPLATE_FILENAME}"`)
-  // Not cached: it is generated from code that changes with the format, and a
-  // stale copy in a proxy is a sample that quietly documents last month's rules.
+  // Not cached: it is generated from code that changes with the format, and a stale copy in a proxy is a sample that quietly documents last month's rules.
   @Header('Cache-Control', 'no-store')
   async template(@Res() response: Response): Promise<void> {
     response.send(await buildStudentTemplate());

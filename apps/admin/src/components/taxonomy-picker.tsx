@@ -4,13 +4,7 @@ import { api } from '../lib/api';
 import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 import { type MultiPickerProps, type PickerProps } from './picker-props';
 
-/**
- * Subject -> topic, each searched on the server a page at a time. A bank has more topics than
- * one request returns, and filtering what happened to load is not filtering.
- *
- * The two cascade: a topic only means something under its subject. Nothing is disabled for the
- * sake of it — without a subject there is no list of topics to offer.
- */
+// Subject -> topic cascade: a topic only means something under its subject, so there's no list to offer without one.
 
 export function SubjectPicker(props: Readonly<PickerProps>) {
   const subjects = usePagedPicker({

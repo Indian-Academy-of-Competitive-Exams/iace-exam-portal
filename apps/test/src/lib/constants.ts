@@ -171,10 +171,7 @@ export const PROFILE_QUERY_KEY = ['me'] as const;
 /** Where this student is signed in, for the Account page's Active devices list. */
 export const ACTIVE_DEVICES_QUERY_KEY = ['me', 'sessions'] as const;
 
-/**
- * localStorage keys owned by this app, namespaced so the SPAs never read each other's.
- * The theme key is absent on purpose: it belongs to @iace/ui and is shared.
- */
+/** localStorage keys owned by this app, namespaced so the SPAs never read each other's; the theme key is absent since it belongs to @iace/ui and is shared. */
 export const STORAGE_KEYS = {
   // Named for the app, not the audience: the student portal is a separate SPA on this origin.
   AUTH: 'iace.test.auth',

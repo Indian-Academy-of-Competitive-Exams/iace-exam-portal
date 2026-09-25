@@ -15,10 +15,7 @@ import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security'
 import { ZodQuery } from '../common/zod-validation.pipe';
 import { AuditService } from './audit.service';
 
-/**
- * Always-on: no `@RequiresFeature` here. Every admin reaches these routes; the service is what
- * decides whether a given row is theirs to see.
- */
+/** Always-on: no `@RequiresFeature` here. Every admin reaches these routes; the service is what decides whether a given row is theirs to see. */
 @Controller('admin/audit')
 @Actors(ActorTypes.ADMIN)
 export class AuditController {

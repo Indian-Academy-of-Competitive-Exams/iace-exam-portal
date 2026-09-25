@@ -23,8 +23,7 @@ export const AUDIT_ARCHIVE_MAX_DAYS_PER_RUN = 14;
 /** Rows read and compressed per page, so one day never sits in memory as a single array. */
 export const AUDIT_ARCHIVE_PAGE_SIZE = 1000;
 
-/** Long enough to page and upload the largest realistic day; the lock is the only thing between
- *  two workers on one day, and BullMQ's job lock expires on a stall. */
+/** Long enough to page and upload the largest realistic day; the lock is the only thing between two workers on one day, and BullMQ's job lock expires on a stall. */
 export const AUDIT_ARCHIVE_LOCK_TTL_SEC = 900;
 
 interface PendingDay {
@@ -64,10 +63,7 @@ export class AuditArchiveProcessor extends WorkerHost {
     await this.archivePendingDays(new Date());
   }
 
-  /**
-   * Repeats `archiveOneDay` until the backlog clears or the bound is hit, so a run BullMQ never
-   * got to — retries exhausted, the worker down at 02:30 — is a delay, never a stranded day.
-   */
+  /** Repeats `archiveOneDay` until the backlog clears or the bound is hit, so a run BullMQ never got to — retries exhausted, the worker down at 02:30 — is a delay, never a stranded day. */
   async archivePendingDays(
     now: Date,
     maxDays: number = AUDIT_ARCHIVE_MAX_DAYS_PER_RUN,
@@ -120,10 +116,7 @@ export class AuditArchiveProcessor extends WorkerHost {
     return { gte, lt: nextInstituteMidnight(gte), eligibleBefore };
   }
 
-  /**
-   * Select, write, verify, and only then delete — the identical [gte, lt) window on every end.
-   * Public so the boundary is testable on its own; `assertWindow` is what keeps that safe.
-   */
+  /** Select, write, verify, and only then delete — the identical [gte, lt) window on every end. Public so the boundary is testable on its own; `assertWindow` is what keeps that safe. */
   async archiveWindow(
     gte: Date,
     lt: Date,
@@ -131,8 +124,7 @@ export class AuditArchiveProcessor extends WorkerHost {
   ): Promise<{ key: string; rows: number } | null> {
     this.assertWindow(gte, lt, eligibleBefore);
 
-    // Without this, a second worker's page read can land after the first one's delete: it uploads
-    // its short body over the complete object, verifies against itself, and the rest is gone.
+    // Without this, a second worker's page read can land after the first one's delete: it uploads its short body over the complete object, verifies against itself, and the rest is gone.
     const lock = redisKeys.auditArchiveDay(instituteDayOf(gte));
     if (!(await this.redis.acquireLock(lock, AUDIT_ARCHIVE_LOCK_TTL_SEC))) {
       this.logger.warn(`Another worker holds ${lock}; leaving that day for the next run`);
@@ -185,8 +177,7 @@ export class AuditArchiveProcessor extends WorkerHost {
     return { key, rows: rowCount };
   }
 
-  /** Resolved here, not at read time: an archive that needs a live database to say who did
-   *  something is not an archive. */
+  /** Resolved here, not at read time: an archive that needs a live database to say who did something is not an archive. */
   private async withActorNames(page: readonly RowActionLog[]): Promise<object[]> {
     const names = await this.audit.namesFor(page);
     return page.map((row) => ({

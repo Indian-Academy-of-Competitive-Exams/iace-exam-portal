@@ -4,10 +4,7 @@ import { browserSignOutSignal } from '@iace/app-kit/browser';
 import { api, tokenStore } from '../lib/api';
 import { ME_QUERY_KEY } from '../lib/constants';
 
-/**
- * This app's session: the actor, the cache key, the client.
- * `ActorTypes.STUDENT` is load-bearing — an admin's JWT is valid and is not a session here.
- */
+/** This app's session: actor, cache key, client. `ActorTypes.STUDENT` is load-bearing — an admin's JWT is valid but not a session here. */
 export const { AuthProvider, useAuth } = createAuth<StudentIdentity>({
   actor: ActorTypes.STUDENT,
   queryKey: ME_QUERY_KEY,

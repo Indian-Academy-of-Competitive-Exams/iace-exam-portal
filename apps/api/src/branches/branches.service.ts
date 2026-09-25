@@ -47,10 +47,7 @@ export class BranchesService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  /**
-   * Whether a branch may take something new — used by whoever is about to attach to one. Throws with
-   * the message the form should show; returns quietly when the branch is fine.
-   */
+  /** Whether a branch may take something new — used by whoever is about to attach to one. Throws with the message the form should show; returns quietly when the branch is fine. */
   async assertUsable(branchId: string, fieldKey = 'branchId'): Promise<void> {
     const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
     if (!branch) {
@@ -65,11 +62,7 @@ export class BranchesService {
     }
   }
 
-  /**
-   * Whether a branch suits the KIND of student being put in it. Separate from `assertUsable`: a
-   * patch that only changes the type leaves the stored branch alone, and a branch retired since
-   * they were put in it is not this save's fault to refuse.
-   */
+  /** Whether a branch suits the KIND of student being put in it. Separate from `assertUsable`: a patch that only changes the type leaves the stored branch alone, and a branch retired since they were put in it is not this save's fault to refuse. */
   async assertSuitsStudentType(
     branchId: string,
     studentType: StudentType,
@@ -96,8 +89,7 @@ export class BranchesService {
       this.prisma.branch.findMany({
         where,
         include: BRANCH_INCLUDE,
-        // The online branch first: it is the one every admin is looking for by
-        // default. `desc` because VIRTUAL is declared after PHYSICAL.
+        // The online branch first: it is the one every admin is looking for by default. `desc` because VIRTUAL is declared after PHYSICAL.
         orderBy: [{ type: 'desc' }, { name: 'asc' }],
         ...pageArgs(query),
       }),
@@ -108,8 +100,7 @@ export class BranchesService {
   }
 
   async create(input: CreateBranchBody): Promise<Branch> {
-    // The name arrives canonical from the schema, so this catches the real
-    // duplicate rather than a differently-typed one.
+    // The name arrives canonical from the schema, so this catches the real duplicate rather than a differently-typed one.
     const clash = await this.findLiveByName(input.name);
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'That branch already exists', {

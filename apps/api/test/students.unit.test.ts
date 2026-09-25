@@ -10,10 +10,7 @@ import {
 } from '@iace/contracts';
 import { isPreTestReady, isProfileCompleted } from '../src/students/student-flags';
 
-/**
- * The flag rules and the privacy boundary. Both are the sort of thing that looks obviously right
- * in review and is wrong in production, so they are asserted rather than read.
- */
+/** The flag rules and the privacy boundary. Both are the sort of thing that looks obviously right in review and is wrong in production, so they are asserted rather than read. */
 
 describe('isPreTestReady', () => {
   const ready = { motherName: 'Lakshmi', fatherName: 'Ravi', dob: new Date('2003-04-11') };
@@ -26,8 +23,7 @@ describe('isPreTestReady', () => {
   });
 
   it('treats whitespace as absent', () => {
-    // "  " passes a NOT NULL check and fails a human one. The gate exists to
-    // collect a real name, so a space is not an answer.
+    // "  " passes a NOT NULL check and fails a human one. The gate exists to collect a real name, so a space is not an answer.
     assert.equal(isPreTestReady({ ...ready, motherName: '   ' }), false);
     assert.equal(isPreTestReady({ ...ready, fatherName: '' }), false);
   });
@@ -65,8 +61,7 @@ describe('isProfileCompleted', () => {
   });
 
   it('ignores Aadhaar and PAN, which nothing in this codebase verifies yet', () => {
-    // Their images are never stored and their verified flags are set by a review that does not
-    // run yet — asking for them would leave the nudge on forever.
+    // Their images are never stored and their verified flags are set by a review that does not run yet — asking for them would leave the nudge on forever.
     assert.equal(isProfileCompleted(complete), true);
   });
 
@@ -134,11 +129,7 @@ describe('admin student contracts', () => {
     assert.equal(parsed.profile?.panVerified, false);
   });
 
-  /**
-   * A malformed JSON column reads as "nothing recorded" rather than reaching a screen that assumes
-   * an array — these are written by hand and by older builds, and a crash on someone else's data is
-   * not the student's problem.
-   */
+  /** A malformed JSON column reads as "nothing recorded" rather than reaching a screen that assumes an array — these are written by hand and by older builds, and a crash on someone else's data is not the student's problem. */
   it('refuses education history that is not a list of entries', () => {
     const junk = { ...detail, profile: { ...profile, educationDetails: 'BSc' } };
 
@@ -168,8 +159,7 @@ describe('admin student contracts', () => {
   });
 
   it('requires a summary to say what a student is enrolled on', () => {
-    // An enrolment is the route to a series, so a list that omits it cannot answer
-    // the question an admin opened it to ask.
+    // An enrolment is the route to a series, so a list that omits it cannot answer the question an admin opened it to ask.
     const { enrolledExams: _enrolledExams, ...withoutEnrolments } = detail;
     assert.equal(studentSummarySchema.safeParse(withoutEnrolments).success, false);
   });
@@ -229,8 +219,7 @@ describe('createStudentSchema — an absent name is not an invalid one', () => {
   });
 
   it('reads an empty name on UPDATE as clearing it, not as absent', () => {
-    // On a patch the two differ: absent means "leave it", null means "remove it",
-    // and an emptied box is the admin asking for the latter.
+    // On a patch the two differ: absent means "leave it", null means "remove it", and an emptied box is the admin asking for the latter.
     assert.equal(updateStudentSchema.parse({ fullName: '' }).fullName, null);
     assert.equal(updateStudentSchema.parse({}).fullName, undefined);
   });
@@ -238,8 +227,7 @@ describe('createStudentSchema — an absent name is not an invalid one', () => {
 
 describe('AppException use in the students module', () => {
   it('reports a duplicate mobile as CONFLICT with a field error', () => {
-    // Shape check for what StudentsService.create throws: the admin form needs
-    // the message on the mobile field, not in a banner.
+    // Shape check for what StudentsService.create throws: the admin form needs the message on the mobile field, not in a banner.
     const error = new AppException(
       'CONFLICT' as never,
       'A student with that mobile number already exists',

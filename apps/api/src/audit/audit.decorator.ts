@@ -14,8 +14,7 @@ export interface AuditRoute {
 export const Audit = (feature: AuditFeature, action: AuditAction | AuditActionResolver) =>
   SetMetadata(AUDIT_KEY, { feature, action } satisfies AuditRoute);
 
-/** The two toggles whose action cannot be named statically.
- * isActive true = permitted; isTestBlocked true = forbidden, so the resolvers' fallbacks differ. */
+/** The two toggles whose action cannot be named statically. isActive true = permitted; isTestBlocked true = forbidden, so the resolvers' fallbacks differ. */
 export const TOGGLE_ACTIONS = {
   signIn: (body: Record<string, unknown>): AuditAction =>
     body.isActive === true ? AUDIT_ACTION.ACTIVATE : AUDIT_ACTION.DEACTIVATE,

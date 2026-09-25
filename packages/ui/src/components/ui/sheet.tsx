@@ -2,10 +2,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '../../lib/utils';
 
-/**
- * A panel sliding in from an edge, on the dialog primitive: focus trap, Escape, scroll lock.
- * Always render a `SheetTitle`; hide it with `sr-only` where there is no visible heading.
- */
+/** A panel sliding in from an edge, on the dialog primitive: focus trap, Escape, scroll lock; always render a `SheetTitle`, hidden with `sr-only` where there's no visible heading. */
 const Sheet = DialogPrimitive.Root;
 const SheetClose = DialogPrimitive.Close;
 

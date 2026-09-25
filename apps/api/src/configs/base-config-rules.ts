@@ -12,11 +12,7 @@ import {
 
 /** The rules that keep a blueprint honest — pure, so they are testable without a database. */
 
-/**
- * The three fields a locked config may still change. Everything else is its SHAPE, which a
- * finalized paper was frozen against. Not a loophole: a stage holds one default, so promoting a
- * clone means clearing `isDefault` on the locked original it replaces.
- */
+/** The three fields a locked config may still change. Everything else is its SHAPE, which a finalized paper was frozen against. Not a loophole: a stage holds one default, so promoting a clone means clearing `isDefault` on the locked original it replaces. */
 export const UNFROZEN_FIELDS = ['name', 'isDefault', 'isActive'] as const;
 
 export const INACTIVE_CONFIG_MESSAGE =
@@ -43,10 +39,7 @@ export function renderModeIssue(examTemplate: ExamTemplate, defaultTestUi: TestU
   return mismatched ? OMR_IS_DEFAULT_ONLY_MESSAGE : null;
 }
 
-/**
- * The shape rules the database also enforces as deferred constraint triggers. Checked here too so
- * the admin gets a field error rather than a raw Postgres exception at commit.
- */
+/** The shape rules the database also enforces as deferred constraint triggers. Checked here too so the admin gets a field error rather than a raw Postgres exception at commit. */
 export function configShapeIssues(
   timerTemplate: TimerTemplate,
   sections: readonly BaseConfigSectionDraft[],

@@ -21,10 +21,7 @@ const assertHas = (params: Record<string, string>, condition: unknown) => {
 };
 
 describe('studentWhere — an absent filter narrows nothing', () => {
-  /**
-   * The failure this exists to prevent: a filter nobody set still restricts the list, and the roster
-   * quietly shows a subset of the students while looking exactly like the whole thing.
-   */
+  /** The failure this exists to prevent: a filter nobody set still restricts the list, and the roster quietly shows a subset of the students while looking exactly like the whole thing. */
   it('is empty when nothing was asked for', () => {
     assert.deepEqual(studentWhere(query()), {});
   });
@@ -35,10 +32,7 @@ describe('studentWhere — an absent filter narrows nothing', () => {
 });
 
 describe('studentWhere — three-state filters', () => {
-  /**
-   * `false` is a question, not a default. A control offering any/yes/no must be able to ask for
-   * "no", so absent and false cannot collapse into each other.
-   */
+  /** `false` is a question, not a default. A control offering any/yes/no must be able to ask for "no", so absent and false cannot collapse into each other. */
   it('tells absent apart from false, for every boolean filter', () => {
     for (const field of [
       'isActive',
@@ -63,10 +57,7 @@ describe('studentWhere — three-state filters', () => {
     assert.equal(conditionsFor().length, 0);
   });
 
-  /**
-   * "Reaches no test" is enrolments AND programs, not one of them. Reading either alone fires on
-   * students who are perfectly well placed, which makes the amber badge meaningless.
-   */
+  /** "Reaches no test" is enrolments AND programs, not one of them. Reading either alone fires on students who are perfectly well placed, which makes the amber badge meaningless. */
   it('reads noAccess as "no enrolment AND no program", both ways round', () => {
     assertHas(
       { noAccess: 'true' },
@@ -158,10 +149,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
     });
   });
 
-  /**
-   * The likeliest one to be hit: pick "Never signed in", then type a name. The status filter used to
-   * disappear and the search ran across everyone.
-   */
+  /** The likeliest one to be hit: pick "Never signed in", then type a name. The status filter used to disappear and the search ran across everyone. */
   it('keeps "never signed in" when a search is typed', () => {
     const params = { neverSignedIn: 'true', q: 'ravi' };
 
@@ -215,10 +203,7 @@ describe('studentOrderBy', () => {
     assert.deepEqual(studentOrderBy(query().sort), [{ createdAt: 'desc' }, { id: 'desc' }]);
   });
 
-  /**
-   * Without a tie-break, rows sharing a sort value can come back in a different order per query —
-   * which shows one student on two pages and hides another entirely.
-   */
+  /** Without a tie-break, rows sharing a sort value can come back in a different order per query — which shows one student on two pages and hides another entirely. */
   it('always tie-breaks on id, whatever the sort', () => {
     for (const sort of Object.values(STUDENT_SORTS)) {
       const order = studentOrderBy(sort);

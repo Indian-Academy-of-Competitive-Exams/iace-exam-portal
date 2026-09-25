@@ -45,15 +45,13 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: corsOrigin(origins, config.isProduction),
     credentials: true,
-    // Without this the browser hides the header, and the SPA could not report
-    // the request id for a response it never got to parse.
+    // Without this the browser hides the header, and the SPA could not report the request id for a response it never got to parse.
     exposedHeaders: [REQUEST_ID_HEADER],
     // Every call carries a bearer token, so without this the browser preflights each one again.
     maxAge: PREFLIGHT_CACHE_SEC,
   });
 
-  // Ensures Prisma disconnects and Redis quits cleanly on SIGTERM — containers
-  // get rescheduled routinely and must not drop connections mid-flight.
+  // Ensures Prisma disconnects and Redis quits cleanly on SIGTERM — containers get rescheduled routinely and must not drop connections mid-flight.
   app.enableShutdownHooks();
 
   const server = app.getHttpServer();

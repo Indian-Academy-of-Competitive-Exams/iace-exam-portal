@@ -202,11 +202,7 @@ export function ProgramsList({
 
 // ---------------------------------------------------------------------------
 
-/**
- * A typo in a code must be fixable before anything carries it; after that the server refuses with
- * a `fieldErrors.code`. Nothing on this row counts the holders, so the input stays editable and
- * the save is what refuses.
- */
+// A code is editable until something carries it, then the server refuses via fieldErrors.code — the save is what blocks it, not this input.
 function ProgramDialog({
   program,
   onDone,

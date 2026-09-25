@@ -15,10 +15,7 @@ describe('the exam audit diff', () => {
     );
   });
 
-  /**
-   * The code is what an enrolment stores, so a change to it is the one an admin will come
-   * looking for. It is refused once anything references it — before that, it is loggable.
-   */
+  /** The code is what an enrolment stores, so a change to it is the one an admin will come looking for. It is refused once anything references it — before that, it is loggable. */
   it('reports a code change', () => {
     const before = {
       course: 'SSC',
@@ -57,11 +54,7 @@ describe('the taxonomy audit diffs', () => {
   });
 });
 
-/**
- * The failure this prevents: with one AuditFeature value for both levels, a subject edit and a
- * topic edit were indistinguishable except by looking `entityId` up in every table — which fails
- * for exactly the DELETE rows the log matters most for, since the id it names is already gone.
- */
+/** The failure this prevents: with one AuditFeature value for both levels, a subject edit and a topic edit were indistinguishable except by looking `entityId` up in every table — which fails for exactly the DELETE rows the log matters most for, since the id it names is already gone. */
 describe('the taxonomy routes file under two distinct features', () => {
   const featureOf = (handler: keyof TaxonomyController) =>
     (Reflect.getMetadata(AUDIT_KEY, TaxonomyController.prototype[handler]) as AuditRoute).feature;

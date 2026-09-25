@@ -56,10 +56,7 @@ import { NotificationsService, PushService } from '../notifications';
 import { MeService } from './me.service';
 import { StudentPrivacyService } from '../students';
 
-/**
- * The signed-in student's own account. No ids in any route — the subject is always
- * `user.id` from the token, so no request shape can reach another student's record.
- */
+/** The signed-in student's own account. No ids in any route — the subject is always `user.id` from the token, so no request shape can reach another student's record. */
 /** The two fields we use off a multipart upload — see imports.controller.ts. */
 interface UploadedFileLike {
   buffer: Buffer;
@@ -188,10 +185,7 @@ export class MeController {
     return this.me.saveDocument(user.id, kind, file);
   }
 
-  /**
-   * Ends every OTHER session and returns a fresh one for this device — see
-   * AuthService.changeStudentPin.
-   */
+  /** Ends every OTHER session and returns a fresh one for this device — see AuthService.changeStudentPin. */
   @Post('pin')
   @HttpCode(HttpStatus.OK)
   changePin(

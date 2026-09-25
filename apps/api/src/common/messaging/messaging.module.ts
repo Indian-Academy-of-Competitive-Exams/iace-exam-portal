@@ -61,10 +61,7 @@ function assertWhatsAppReady(config: AppConfigService): void {
   }
 }
 
-/**
- * Infrastructure, like `redis` and `queue` — every service that has to tell somebody something
- * links it, and none of them become it (docs/03 §4.4).
- */
+/** Infrastructure, like `redis` and `queue` — every service that has to tell somebody something links it, and none of them become it (docs/03 §4.4). */
 @Global()
 @Module({
   imports: [AppConfigModule],

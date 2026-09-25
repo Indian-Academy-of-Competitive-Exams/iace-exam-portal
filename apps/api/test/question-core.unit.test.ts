@@ -223,8 +223,7 @@ describe('validateQuestion — taxonomy', () => {
   });
 
   it('refuses a topic that is not under the subject — the check no foreign key can make', () => {
-    // Both ids are columns on the question, so nothing stops SERIES being filed under
-    // QUANTITATIVE APTITUDE except this rule.
+    // Both ids are columns on the question, so nothing stops SERIES being filed under QUANTITATIVE APTITUDE except this rule.
     const draft = mcq({ topicId: OTHER_SUBJECT_TOPIC });
     assert.ok(codes(draft).includes(QUESTION_VALIDATION_CODE.TOPIC_NOT_IN_SUBJECT));
   });
@@ -408,8 +407,7 @@ describe('computeStemHash', () => {
   });
 
   it('ignores option order even where UTF-16 and locale order disagree', () => {
-    // 'café' sorts after 'zebra' by raw UTF-16 code unit, but before it under a
-    // locale-aware compare — a plain .sort() would hash these two as different questions.
+    // 'café' sorts after 'zebra' by raw UTF-16 code unit, but before it under a locale-aware compare — a plain .sort() would hash these two as different questions.
     const first = mcq({
       options: [
         { position: 1, isCorrect: false, text: { en: 'apple' } },

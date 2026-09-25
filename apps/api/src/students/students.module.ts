@@ -14,8 +14,7 @@ import { StudentPrivacyService } from './student-privacy.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
-  // Identity documents are stored as keys; every read signs them. ConfigsModule is a cycle:
-  // enrolments validate against the exam-type catalog, whose usage counts come back through here.
+  // Identity documents are stored as keys; every read signs them. ConfigsModule is a cycle: enrolments validate against the exam-type catalog, whose usage counts come back through here.
   imports: [
     PrismaModule,
     StorageModule,
@@ -24,8 +23,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     AuthModule,
     BranchesModule,
     forwardRef(() => ConfigsModule),
-    // `require`, not a static import: `access` imports `configs`, which imports this barrel back,
-    // and a top-level import here re-enters a still-loading module.
+    // `require`, not a static import: `access` imports `configs`, which imports this barrel back, and a top-level import here re-enters a still-loading module.
     forwardRef(
       () => (module.require('../access') as { AccessModule: typeof AccessModule }).AccessModule,
     ),

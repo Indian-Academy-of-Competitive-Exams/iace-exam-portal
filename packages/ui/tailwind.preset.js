@@ -9,44 +9,11 @@
 const path = require('node:path');
 const plugin = require('tailwindcss/plugin');
 
-/**
- * Which files Tailwind must READ to know a class is used.
- *
- * This lives in the preset, not in each app's config, because getting it wrong
- * does not fail — it silently omits CSS. `AppShell` lives in
- * `packages/app-kit/browser`, and while that directory went unscanned the
- * entire signed-in chrome was styled by classes Tailwind never emitted:
- * `max-w-6xl` (so the shell had no max width and content ran edge to edge),
- * `py-8` (so there was no gap between the nav and the page), `sm:inline` (so
- * the responsive rules never applied) and `z-10`. Nothing errored. The build
- * was green and the pages were simply wrong, in a way that reads as a design
- * problem rather than a config one.
- *
- * Resolved from __dirname so it is correct whatever directory the build runs
- * in, and globbed by package rather than listed one by one so a new package
- * with a component in it is covered the day it is created. Both `src` and
- * `browser` are matched: app-kit splits its DOM-free tier from its web tier
- * across exactly those two (docs/03 §3).
- */
+/** Which files Tailwind must READ to know a class is used — get this wrong and CSS silently omits, no error; resolved from __dirname and globbed by package (both `src` and `browser`, app-kit's DOM-free/web split, docs/03 §3) so every package is covered. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const WORKSPACE_CONTENT = [path.join(REPO_ROOT, 'packages/*/{src,browser}/**/*.{ts,tsx}')];
 
-/**
- * Wraps a CSS-variable colour so BOTH call shapes work.
- *
- * Tailwind asks for a colour twice over, and the two are easy to conflate:
- *
- *   - with no alpha modifier it passes `opacityValue` as the STRING
- *     "var(--tw-bg-opacity)", part of its own opacity mechanism;
- *   - with `/14` it passes the number 0.14.
- *
- * Treating the first as a number yields `color-mix(... NaN%, transparent)`,
- * which is invalid, so the browser drops the declaration entirely. That is
- * silent: in light mode the fallbacks happen to look like the intended theme,
- * and only a badge that refused to show a background gave it away.
- *
- * So: plain `var()` unless a real number arrives, and color-mix only then.
- */
+/** Wraps a CSS-variable colour for Tailwind's two call shapes: no alpha modifier passes `opacityValue` as the string "var(--tw-bg-opacity)", `/14` passes the number 0.14 — treating the first as a number yields invalid color-mix that the browser silently drops, so plain `var()` unless a real number arrives. */
 const token =
   (name) =>
   ({ opacityValue }) => {
@@ -69,12 +36,7 @@ module.exports = {
       colors: {
         background: token('--background'),
         surface: { DEFAULT: token('--surface'), 2: token('--surface-2') },
-        // `secondary` is the dimmer body ink — quieter than --foreground, not
-        // as quiet as --muted-foreground. It was missing here while
-        // `text-foreground-secondary` was already written in the app shell, and
-        // an undeclared colour is not an error in Tailwind: the class matches
-        // nothing, no CSS is emitted, and the text simply inherits. Two of the
-        // shell's labels have been rendering at full foreground weight since.
+        // `secondary` is the dimmer body ink — quieter than --foreground, not as quiet as --muted-foreground; an undeclared colour is not a Tailwind error, the class just matches nothing and emits no CSS.
         foreground: { DEFAULT: token('--foreground'), secondary: token('--foreground-secondary') },
         border: token('--border'),
         input: token('--input'),
@@ -97,12 +59,7 @@ module.exports = {
           DEFAULT: token('--primary'),
           hover: token('--primary-hover'),
           foreground: token('--primary-foreground'),
-          // The quiet brand pair — a tinted ground with brand-coloured ink, for
-          // marking something as current without shouting. `subtle`/`ink` were
-          // declared in tokens.css and used by the sidebar's active row, but
-          // never mapped here, so `bg-primary-subtle text-primary-ink` emitted
-          // nothing at all: the selected nav item lost its idle styling and
-          // gained none of its own, leaving no visible current page.
+          // The quiet brand pair — a tinted ground with brand-coloured ink, for marking something current without shouting; must be mapped here or `bg-primary-subtle text-primary-ink` emits nothing at all.
           subtle: token('--primary-subtle'),
           ink: token('--primary-ink'),
         },
@@ -206,33 +163,27 @@ module.exports = {
         sm: token('--shadow-sm'),
         md: token('--shadow-md'),
         lg: token('--shadow-lg'),
-        // Focus and invalid are elevation-like tokens on purpose: a control
-        // should never hand-roll either, or the two drift into looking alike.
+        // Focus and invalid are elevation-like tokens on purpose: a control should never hand-roll either, or the two drift into looking alike.
         focus: token('--focus-ring'),
         'focus-invalid': token('--focus-ring-invalid'),
       },
       keyframes: {
-        // Short enough to feel like the tooltip was already there, long enough
-        // not to snap. Lives here so no component hand-rolls its own timing.
+        // Short enough to feel like the tooltip was already there, long enough not to snap; lives here so no component hand-rolls its own timing.
         'tooltip-in': {
           from: { opacity: '0', transform: 'scale(0.96)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
-        // Settles down from the top edge it is anchored to. Six pixels, not
-        // sixty: a toast is a remark, not an arrival.
+        // Settles down from the top edge it's anchored to — six pixels, not sixty: a toast is a remark, not an arrival.
         'toast-in': {
           from: { opacity: '0', transform: 'translateY(-6px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
-        // The dim behind a dialog. Opacity only — anything that moves here
-        // reads as the page itself shifting under the reader.
+        // The dim behind a dialog: opacity only — anything that moves here reads as the page itself shifting under the reader.
         'overlay-in': {
           from: { opacity: '0' },
           to: { opacity: '1' },
         },
-        // Rises the last few pixels into place. Ends at `none` rather than a
-        // written-out transform, so the dialog owns no transform once it has
-        // landed and centring stays the layout's job.
+        // Rises the last few pixels into place; ends at `none` rather than a written-out transform, so the dialog owns no transform once landed and centring stays the layout's job.
         'dialog-in': {
           from: { opacity: '0', transform: 'translateY(0.75rem) scale(0.98)' },
           to: { opacity: '1', transform: 'none' },
@@ -264,8 +215,7 @@ module.exports = {
           from: { transform: 'translateX(0)' },
           to: { transform: 'translateX(100%)' },
         },
-        // The sheen crossing a skeleton. Travels from off one edge to off the
-        // other, so it never parks in the middle of the placeholder.
+        // The sheen crossing a skeleton travels from off one edge to off the other, so it never parks in the middle of the placeholder.
         'skeleton-sweep': {
           from: { transform: 'translateX(-100%)' },
           to: { transform: 'translateX(100%)' },
@@ -276,14 +226,11 @@ module.exports = {
         'toast-in': 'toast-in 160ms ease-out',
         // --dur-fast / --ease-out.
         'overlay-in': 'overlay-in 140ms cubic-bezier(0.2, 0, 0, 1)',
-        // --dur-normal / --ease-spring. The one place a little overshoot earns
-        // its keep: a dialog interrupts, and should feel like it landed.
+        // --dur-normal / --ease-spring: the one place a little overshoot earns its keep — a dialog interrupts, and should feel like it landed.
         'dialog-in': 'dialog-in 220ms cubic-bezier(0.34, 1.4, 0.64, 1)',
-        // --skeleton-dur / --ease-in-out. Slow on purpose: a fast sweep reads
-        // as something happening rather than as something being waited for.
+        // --skeleton-dur / --ease-in-out: slow on purpose, a fast sweep reads as something happening rather than being waited for.
         'skeleton-sweep': 'skeleton-sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
-        // --dur-normal / --ease-out. No overshoot here, unlike the dialog: a
-        // panel that bounces off the screen edge it is attached to looks loose.
+        // --dur-normal / --ease-out: no overshoot here, unlike the dialog — a panel bouncing off the screen edge it's attached to looks loose.
         'sheet-in-left': 'sheet-in-left 220ms cubic-bezier(0.2, 0, 0, 1)',
         'sheet-in-right': 'sheet-in-right 220ms cubic-bezier(0.2, 0, 0, 1)',
         // Quicker than arriving, and eased IN: nobody waits on a thing already dismissed.
@@ -293,13 +240,9 @@ module.exports = {
         'sheet-out-right': 'sheet-out-right 180ms cubic-bezier(0.4, 0, 1, 1)',
       },
       fontFamily: {
-        // Single source of truth: the bilingual Inter + Noto stack lives in
-        // tokens.css (--font-sans). Keeping it here too would drift.
+        // Single source of truth: the bilingual Inter + Noto stack lives in tokens.css (--font-sans); keeping it here too would drift.
         sans: ['var(--font-sans)'],
-        // Mapped for the same reason, and because leaving it out is not
-        // neutral: `font-mono` still WORKS without this line, it just silently
-        // resolves to Tailwind's default stack instead of ours, so the token
-        // reads as unused while the system quietly has two mono faces.
+        // Mapped for the same reason; omitting it isn't neutral — `font-mono` still works but silently falls back to Tailwind's default stack, leaving two mono faces in play.
         mono: ['var(--font-mono)'],
         brand: ['var(--font-brand)'],
       },
@@ -337,21 +280,11 @@ module.exports = {
     },
   },
   plugins: [
-    /**
-     * The base layer every app renders on.
-     *
-     * It lived in each app's index.css, byte-identical, which made the default
-     * border colour and the page's own background an app decision — exactly the
-     * kind of value that drifts once and is then wrong in one place forever.
-     * Delivered through the preset rather than a CSS file so apps need no
-     * @import machinery: they keep only the three @tailwind directives.
-     */
+    /** The base layer every app renders on, delivered through the preset rather than a CSS file so apps need no @import machinery — just the three @tailwind directives. */
     plugin(({ addBase }) => {
       addBase({
         '*': { borderColor: 'var(--border)' },
-        // WebKit draws its own ✕ inside a search field. SearchInput ships one
-        // that is themed, keyboard-reachable and labelled, and two clear
-        // buttons side by side is one of them being wrong.
+        // WebKit draws its own ✕ inside a search field; SearchInput ships a themed, keyboard-reachable, labelled one, so two clear buttons side by side would mean one is wrong.
         'input[type="search"]::-webkit-search-cancel-button': { display: 'none' },
         body: {
           backgroundColor: 'var(--background)',

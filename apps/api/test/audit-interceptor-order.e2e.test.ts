@@ -9,11 +9,7 @@ import { Audit, AuditContext, AuditInterceptor } from '../src/audit';
 import { AuditService, type AuditEntry } from '../src/audit/audit.service';
 import { AppModule } from '../src/app.module';
 
-/**
- * End to end over real HTTP, through a real Nest app wired the way AppModule wires the two
- * `APP_INTERCEPTOR` entries: ResponseInterceptor registered before AuditInterceptor, so
- * AuditInterceptor runs on the inside and sees the handler's own return value.
- */
+/** End to end over real HTTP, through a real Nest app wired the way AppModule wires the two `APP_INTERCEPTOR` entries: ResponseInterceptor registered before AuditInterceptor, so AuditInterceptor runs on the inside and sees the handler's own return value. */
 
 @Controller('probe')
 class ProbeController {
@@ -60,13 +56,7 @@ describe('AuditInterceptor registered after ResponseInterceptor (audit e2e)', ()
     await app.close();
   });
 
-  /**
-   * The failure this prevents: swap the two `APP_INTERCEPTOR` entries in app.module.ts and
-   * AuditInterceptor runs outside ResponseInterceptor instead — it taps `{ success, data,
-   * meta }`, not the handler's `{ id: 'probe_1' }`, finds no `.id`, and a CREATE route (no
-   * `:id` param to fall back on) files no audit row at all. No exception, no log: the event
-   * just never fires, and the audit log silently has a hole in it.
-   */
+  /** The failure this prevents: swap the two `APP_INTERCEPTOR` entries in app.module.ts and AuditInterceptor runs outside ResponseInterceptor instead — it taps `{ success, data, meta }`, not the handler's `{ id: 'probe_1' }`, finds no `.id`, and a CREATE route (no `:id` param to fall back on) files no audit row at all. No exception, no log: the event just never fires, and the audit log silently has a hole in it. */
   it('files the audit row against the handler’s real id, with no :id param to fall back on', async () => {
     const response = await fetch(`${baseUrl}/probe`, { method: 'POST' });
     const body = (await response.json()) as { data: { id: string } };
@@ -76,11 +66,7 @@ describe('AuditInterceptor registered after ResponseInterceptor (audit e2e)', ()
     assert.equal(entries[0]?.entityId, 'probe_1');
   });
 
-  /**
-   * The failure this prevents: the test above proves WHY the order matters, but it pins its own
-   * fixture — swapping the two entries in `app.module.ts` leaves it green. This one reads the
-   * shipped wiring, so the ordering the docblock above describes is actually guarded.
-   */
+  /** The failure this prevents: the test above proves WHY the order matters, but it pins its own fixture — swapping the two entries in `app.module.ts` leaves it green. This one reads the shipped wiring, so the ordering the docblock above describes is actually guarded. */
   it('registers AuditInterceptor after ResponseInterceptor in AppModule itself', () => {
     const providers = (Reflect.getMetadata('providers', AppModule) ?? []) as {
       provide?: unknown;

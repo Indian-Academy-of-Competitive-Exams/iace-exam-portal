@@ -80,10 +80,7 @@ function everyNavPath(items: readonly NavItem[]): string[] {
   ]);
 }
 
-/**
- * The ONE route the nav should mark current: the longest `to` the path matches, so a route that
- * extends a sibling's (`/students/import` under `/students`) highlights only the sibling it is.
- */
+/** The ONE route the nav marks current: the longest `to` the path matches, so a route extending a sibling's highlights only the sibling it is. */
 export function activeNavPath(items: readonly NavItem[], pathname: string): string | undefined {
   return everyNavPath(items)
     .filter((to) => to === pathname || pathname.startsWith(`${to}/`))

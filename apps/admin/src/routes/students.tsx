@@ -98,8 +98,7 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
       header: 'Access',
       cell: (s) =>
         hasNoOwnAccess(s) ? (
-          // Neither enrolled nor granted — not the same as "no access": GLOBAL
-          // reaches everyone, and this query cannot see that.
+          // Neither enrolled nor granted isn't the same as "no access" — GLOBAL reaches everyone and this query can't see that.
           <Badge variant="warning">No enrolment or grant</Badge>
         ) : (
           <AccessCell student={s} />
@@ -128,10 +127,7 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
   ];
 }
 
-/**
- * What a student reaches tests through: their exam enrolments, the first shown and the rest
- * behind a count.
- */
+// What a student reaches tests through: their exam enrolments, the first shown and the rest behind a count.
 function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
   const labels = [...new Set(student.enrolledExams)];
 
@@ -347,16 +343,12 @@ export function StudentsPage() {
 function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
   if (!student.isActive) return <Badge variant="danger">Sign-in suspended</Badge>;
   if (student.hasSignedIn) return <Badge variant="success">Active</Badge>;
-  // Its own state on purpose: they CAN sign in, but on a PIN anyone holding the
-  // roster can work out. "Never signed in" would hide that.
+  // Its own state on purpose — they CAN sign in, but on a PIN anyone with the roster can guess.
   if (student.hasDefaultPin) return <Badge variant="warning">Default PIN</Badge>;
   return <Badge variant="info">Never signed in</Badge>;
 }
 
-/**
- * The name, capped so one long one cannot widen the column. The tooltip hangs off
- * the link, so hover and keyboard focus reveal it from the same target.
- */
+// Name is capped so one long one can't widen the column; the tooltip hangs off the link so hover and keyboard focus both reveal it.
 function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
   const name = student.fullName;
   const { ref, truncated } = useTruncation<HTMLAnchorElement>(name);

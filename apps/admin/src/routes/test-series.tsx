@@ -104,10 +104,7 @@ function seriesColumns(
   ];
 }
 
-/**
- * The offerings. A test reaches a student only through one of these, and only at a branch the
- * series is switched on for — which is why the reach of each one is a column rather than a click.
- */
+// A test reaches a student only through an offering, and only where the series is switched on — so reach is a column, not a click.
 export function SeriesList() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -232,8 +229,7 @@ function SeriesRowActions({
       close();
       onChanged();
     },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
+    // Drop out of the confirm on failure, or the row is left asking a question that's already been answered.
     onError: close,
   });
 

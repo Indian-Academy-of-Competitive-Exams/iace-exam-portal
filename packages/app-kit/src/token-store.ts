@@ -15,10 +15,7 @@ export interface TokenStore {
   clear(): void;
 }
 
-/**
- * Token persistence, outside React. Every app passes its OWN key: the SPAs share one
- * origin, and a shared key would hand an admin's token to a student's requests.
- */
+/** Token persistence, outside React; every app passes its OWN key since the SPAs share one origin, and a shared key would hand an admin's token to a student's requests. */
 export function createTokenStore(storageKey: string, storage: KeyValueStorage): TokenStore {
   return {
     get(): StoredTokens | null {
@@ -26,8 +23,7 @@ export function createTokenStore(storageKey: string, storage: KeyValueStorage): 
         const raw = storage.getItem(storageKey);
         return raw ? (JSON.parse(raw) as StoredTokens) : null;
       } catch {
-        // Unreadable or unparseable is the same as signed out — a corrupt entry
-        // must not throw on every single request.
+        // Unreadable or unparseable is the same as signed out — a corrupt entry must not throw on every request.
         return null;
       }
     },

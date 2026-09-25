@@ -17,8 +17,7 @@ export const FIELD_TRIGGER_CLASS = [
   'disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled',
 ].join(' ');
 
-/** Stable no-op for the unsearchable case — a new arrow each render would make
- *  the hook look like it had a different consumer every time. */
+/** Stable no-op for the unsearchable case — a new arrow each render would make the hook look like it had a different consumer every time. */
 const NO_SEARCH = () => {};
 
 export interface ComboboxItem {
@@ -100,10 +99,7 @@ export function ComboboxShell({
     onSearchChange ?? NO_SEARCH,
   );
 
-  /**
-   * Fetch the next page near the bottom. A scroll handler, not an
-   * IntersectionObserver: the list mounts in a portal and re-renders per page.
-   */
+  /** Fetch the next page near the bottom; a scroll handler, not an IntersectionObserver, since the list mounts in a portal and re-renders per page. */
   const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
     if (!onLoadMore || !hasMore) return;
     if (nearTheEnd(event.currentTarget)) onLoadMore();

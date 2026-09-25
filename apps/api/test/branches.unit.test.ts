@@ -23,10 +23,7 @@ describe('branchDeletionBlocker', () => {
     assert.equal(branchDeletionBlocker({ studentCount: 0, type: BRANCH_TYPE.PHYSICAL }), null);
   });
 
-  /**
-   * The failure this exists to prevent: a branch is tidied away and every student who attends it
-   * silently loses the centre their scheduling reads.
-   */
+  /** The failure this exists to prevent: a branch is tidied away and every student who attends it silently loses the centre their scheduling reads. */
   it('refuses a branch that still has students, and says how many', () => {
     const blocker = branchDeletionBlocker({ studentCount: 3, type: BRANCH_TYPE.PHYSICAL });
     assert.match(blocker ?? '', /still has 3 students/);
@@ -113,10 +110,7 @@ describe('createBranchSchema', () => {
     );
   });
 
-  /**
-   * The failure this prevents: `type` arrived after the importer and the sync path were written,
-   * and a body without one must still create an ordinary centre rather than fail validation.
-   */
+  /** The failure this prevents: `type` arrived after the importer and the sync path were written, and a body without one must still create an ordinary centre rather than fail validation. */
   it('defaults to a physical centre when nobody names a type', () => {
     assert.equal(createBranchSchema.parse({ name: 'AMEERPET' }).type, BRANCH_TYPE.PHYSICAL);
   });
@@ -124,10 +118,7 @@ describe('createBranchSchema', () => {
 
 // ============================================================================
 
-/**
- * A page permission must not become a way to invent a branch. STUDENT_MANAGEMENT is grantable;
- * the branch list every student is assigned against is not.
- */
+/** A page permission must not become a way to invent a branch. STUDENT_MANAGEMENT is grantable; the branch list every student is assigned against is not. */
 describe('SuperAdminGuard', () => {
   const guardFor = (required: boolean | undefined, user: unknown) => {
     const reflector = {

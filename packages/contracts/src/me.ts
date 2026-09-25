@@ -53,10 +53,7 @@ export type EnrolmentStanding = z.infer<typeof enrolmentStandingSchema>;
 export const meSchema = studentDetailSchema.extend({ enrolment: enrolmentStandingSchema });
 export type Me = z.infer<typeof meSchema>;
 
-/**
- * An allowlist, never an omit: everything a student may set about themselves is named here, so
- * a field added to the admin patch cannot become self-writable by forgetting to exclude it.
- */
+/** An allowlist, never an omit: everything a student may set about themselves is named here, so a field added to the admin patch can't become self-writable by omission. */
 export const updateMeSchema = updateStudentSchema.pick({
   fullName: true,
   profile: true,
@@ -64,10 +61,7 @@ export const updateMeSchema = updateStudentSchema.pick({
 export type UpdateMeInput = z.input<typeof updateMeSchema>;
 export type UpdateMeBody = z.infer<typeof updateMeSchema>;
 
-/**
- * The current PIN is required despite the session: one left open on a shared machine
- * would otherwise lock the owner out. The response is a fresh session — store it.
- */
+/** The current PIN is required despite the session: one left open on a shared machine would otherwise lock the owner out; the response is a fresh session — store it. */
 export const changePinSchema = z
   .object({
     currentPin: pinSchema,

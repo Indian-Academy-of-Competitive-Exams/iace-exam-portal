@@ -89,10 +89,7 @@ describe('readUploadedTable — Excel', () => {
 });
 
 describe('readUploadedTable — what it accepts', () => {
-  /**
-   * Sniffed from the bytes, not the filename: a .csv renamed to .xlsx is still a CSV, and the
-   * spreadsheet reader's error for one is unreadable.
-   */
+  /** Sniffed from the bytes, not the filename: a .csv renamed to .xlsx is still a CSV, and the spreadsheet reader's error for one is unreadable. */
   it('still reads a CSV, whatever it was called', async () => {
     const table = await readUploadedTable(Buffer.from('mobile,fullName\n9876543210,Asha\n'));
 
@@ -116,10 +113,7 @@ describe('readUploadedTable — what it accepts', () => {
     );
   });
 
-  /**
-   * A JPEG named .xlsx used to reach the CSV reader and come back as `needs a "mobile" column.
-   * Found: ����notanexcel` — the wrong problem, described in unreadable characters.
-   */
+  /** A JPEG named .xlsx used to reach the CSV reader and come back as `needs a "mobile" column. Found: ����notanexcel` — the wrong problem, described in unreadable characters. */
   it('refuses another binary format wearing an .xlsx name', async () => {
     const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 
@@ -153,8 +147,7 @@ describe('buildStudentTemplate', () => {
   it('produces a file this importer can actually read back', async () => {
     const table = await readUploadedTable(await buildStudentTemplate());
 
-    // Asserted against the column definitions rather than a literal list, so
-    // renaming a header cannot pass this test while breaking the importer.
+    // Asserted against the column definitions rather than a literal list, so renaming a header cannot pass this test while breaking the importer.
     for (const column of STUDENT_IMPORT_COLUMNS) {
       assert.ok(
         column.aliases.some((alias) => table.headers.includes(alias)),
@@ -166,10 +159,7 @@ describe('buildStudentTemplate', () => {
     assert.equal(columnValue(rowAt(table.rows), 'mobile'), '9876543210');
   });
 
-  /**
-   * The headers are read by office staff filling the sheet in, not by us. A camelCase header row
-   * asks them to read our variable names.
-   */
+  /** The headers are read by office staff filling the sheet in, not by us. A camelCase header row asks them to read our variable names. */
   it('names its columns the way a person would', async () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load((await buildStudentTemplate()) as unknown as ArrayBuffer);

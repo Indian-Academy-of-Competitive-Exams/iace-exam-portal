@@ -21,8 +21,7 @@ export type Gender = z.infer<typeof genderSchema>;
 /** The same values as a list, for building a picker without restating them. */
 export const GENDERS = genderSchema.options;
 
-/** `YYYY-MM-DD`. The column is a DATE, so a timestamp would imply a precision
- *  (and a timezone) that a date of birth does not have. */
+/** `YYYY-MM-DD`; the column is a DATE, so a timestamp would imply a precision (and timezone) a date of birth doesn't have. */
 export const dateOnlySchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD')
@@ -55,10 +54,7 @@ export function todayISO(): string {
   return civilDate();
 }
 
-/**
- * Letters plus the marks that appear inside real names — "K. Ravi Kumar", "D'Souza".
- * Commas are refused: "Kumari, Asha" is a spreadsheet artefact, and it greets wrongly.
- */
+/** Letters plus marks inside real names — "K. Ravi Kumar", "D'Souza"; commas are refused since "Kumari, Asha" is a spreadsheet artefact that greets wrongly. */
 export const personNameSchema = z
   .string()
   .trim()
@@ -70,10 +66,7 @@ export const personNameSchema = z
 // Reading
 // ============================================================================
 
-/**
- * Where a student sits relative to the institute. Mandatory on every route in —
- * it decides which branch they may be given.
- */
+/** Where a student sits relative to the institute; mandatory on every route in, since it decides which branch they may be given. */
 export const STUDENT_TYPE = {
   ONLINE: 'ONLINE',
   OFFLINE: 'OFFLINE',
@@ -147,10 +140,7 @@ const studentProfileSchema = z.object({
   gender: genderSchema.nullable(),
   /** A short-lived SIGNED URL, never a stored path — the bucket is private. */
   photoUrl: z.string().nullable(),
-  /**
-   * Aadhaar and PAN are VERIFICATION STATUS only. The images are never stored, so there is
-   * no URL to hand back and no permanent link to an identity document in any response.
-   */
+  /** Aadhaar and PAN are VERIFICATION STATUS only — the images are never stored, so there's no URL to hand back and no permanent link to an identity document. */
   aadhaarVerified: z.boolean(),
   panVerified: z.boolean(),
   /** Also a short-lived SIGNED URL. Unlike Aadhaar and PAN this one IS stored — it is a certificate, not an identity document. */
@@ -218,10 +208,7 @@ export type StudentListQueryInput = z.input<typeof studentListQuerySchema>;
 // Writing
 // ============================================================================
 
-/**
- * A box of spaces is empty to whoever left it, so it is folded away before the real schema.
- * A pipe, not `z.preprocess`, which types its input as `unknown`.
- */
+/** A box of spaces is empty to whoever left it, so it's folded away before the real schema; a pipe, not `z.preprocess`, which types its input as `unknown`. */
 const isBlank = (value: unknown) => typeof value === 'string' && value.trim() === '';
 
 /** Blank or absent → absent. Used where an empty box means "not known yet". */

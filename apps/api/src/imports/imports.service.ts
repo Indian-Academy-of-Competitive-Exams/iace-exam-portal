@@ -55,10 +55,7 @@ export class ImportsService {
     return this.planStudents(file);
   }
 
-  /**
-   * Applies the plan. Re-plans from the same input rather than trusting a preview the client sends
-   * back: the file may have changed, and a client that can hand us a plan can hand us any plan.
-   */
+  /** Applies the plan. Re-plans from the same input rather than trusting a preview the client sends back: the file may have changed, and a client that can hand us a plan can hand us any plan. */
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
     // Re-judged against the scope on COMMIT too: a preview is not a permission check.
     const plan = await this.planStudents(file);
@@ -307,10 +304,7 @@ export class ImportsService {
     return planStudentImport(table, await this.contextFor(table));
   }
 
-  /**
-   * Loads only the mobiles this file refers to rather than the whole table, so a 5,000-row
-   * roster is one bounded query and not a table scan per line.
-   */
+  /** Loads only the mobiles this file refers to rather than the whole table, so a 5,000-row roster is one bounded query and not a table scan per line. */
   private async contextFor(table: CsvTable): Promise<ImportContext> {
     const mobiles = mobilesIn(table);
 
@@ -414,10 +408,7 @@ export class ImportsService {
     return log.id;
   }
 
-  /**
-   * Both endings, one path: the rows are recorded before the status is written, and a failure to
-   * record them is swallowed, because by now the writes they describe already happened.
-   */
+  /** Both endings, one path: the rows are recorded before the status is written, and a failure to record them is swallowed, because by now the writes they describe already happened. */
   private async closeRun(
     logId: string,
     status: ImportLogStatus,

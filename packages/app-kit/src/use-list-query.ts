@@ -8,10 +8,7 @@ import {
   type PageSizeOption,
 } from '@iace/contracts';
 
-/**
- * A stable identity for one set of filters: keys sorted (callers build them with
- * spreads) and `undefined` dropped (`{ q: undefined }` and `{}` are the same question).
- */
+/** A stable identity for one set of filters: keys sorted (callers build with spreads), `undefined` dropped (`{ q: undefined }` and `{}` are the same question). */
 export function filterKey(filters: object): string {
   return JSON.stringify(
     Object.entries(filters)

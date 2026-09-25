@@ -3,14 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-/**
- * The rules the target model states that prisma/schema.prisma has no syntax for. Prisma
- * regenerates the DDL above them from the schema on demand, but everything asserted here
- * survives only because it is written into the migration by hand — and it is invisible to
- * `prisma migrate diff`, so nothing else in the toolchain notices if it goes missing.
- *
- * These tests read the SQL rather than a database: the suite runs with no infrastructure.
- */
+/** The rules the target model states that prisma/schema.prisma has no syntax for. Prisma regenerates the DDL above them from the schema on demand, but everything asserted here survives only because it is written into the migration by hand — and it is invisible to `prisma migrate diff`, so nothing else in the toolchain notices if it goes missing. These tests read the SQL rather than a database: the suite runs with no infrastructure. */
 const MIGRATION = readFileSync(
   join(__dirname, '../../../prisma/migrations/20260820000000_schema_realignment/migration.sql'),
   'utf8',
@@ -62,13 +55,7 @@ describe('required arrays', () => {
       );
     });
 
-    /**
-     * The failure this prevents: Prisma omits an unset list from the INSERT rather than
-     * sending an empty array, so NOT NULL with no default breaks every create that does
-     * not name the column — and Student's only mandatory field is its mobile number. This
-     * half comes from `@default([])` in the schema and is regenerated with the DDL, which
-     * is exactly why it is the half worth pinning.
-     */
+    /** The failure this prevents: Prisma omits an unset list from the INSERT rather than sending an empty array, so NOT NULL with no default breaks every create that does not name the column — and Student's only mandatory field is its mobile number. This half comes from `@default([])` in the schema and is regenerated with the DDL, which is exactly why it is the half worth pinning. */
     it(`${table}.${column} defaults to an empty array, so a create may omit it`, () => {
       const sqlType = escapeForRegex(type);
       assert.match(
@@ -120,10 +107,7 @@ describe('conditional uniqueness a plain unique cannot state', () => {
     );
   });
 
-  /**
-   * The failure this prevents: nulls are distinct, so the composite unique on
-   * (baseConfigId, moduleId, order) lets two module-less sections share an order.
-   */
+  /** The failure this prevents: nulls are distinct, so the composite unique on (baseConfigId, moduleId, order) lets two module-less sections share an order. */
   it("keeps a flat config's section order unique", () => {
     assert.match(
       MIGRATION,
@@ -172,11 +156,7 @@ describe('section shape follows the config timer template', () => {
     });
   }
 
-  /**
-   * The failure deferring prevents: a section may only carry a moduleId once its config is
-   * SESSION_MODULE_LOCKED, and that config may only be SESSION_MODULE_LOCKED once its
-   * sections carry one. Checked per statement, neither order succeeds.
-   */
+  /** The failure deferring prevents: a section may only carry a moduleId once its config is SESSION_MODULE_LOCKED, and that config may only be SESSION_MODULE_LOCKED once its sections carry one. Checked per statement, neither order succeeds. */
   it('re-reads the row at commit, because a later statement may have moved or removed it', () => {
     assert.match(
       MIGRATION,
@@ -226,11 +206,7 @@ describe('a locked config', () => {
     assert.match(MIGRATION, /NEW\."locked"\s+IS DISTINCT FROM OLD\."locked"/);
   });
 
-  /**
-   * The failure this prevents: freezing every column would deadlock the stage. A stage
-   * holds one default config, so promoting a clone means clearing isDefault on the
-   * locked original — and the original cannot be deleted either.
-   */
+  /** The failure this prevents: freezing every column would deadlock the stage. A stage holds one default config, so promoting a clone means clearing isDefault on the locked original — and the original cannot be deleted either. */
   for (const column of ['isDefault', 'isActive', 'name']) {
     it(`still allows ${column} to change, so clone-to-evolve works`, () => {
       const guard = /IF OLD\."locked" AND \(([\s\S]*?)\) THEN/.exec(MIGRATION);
@@ -254,11 +230,7 @@ describe('a locked config', () => {
     });
   }
 
-  /**
-   * The failure this prevents: checking only the destination catches a section moved INTO
-   * a locked config and misses one moved OUT of it — the same hole, from the side where
-   * the locked config silently loses a section.
-   */
+  /** The failure this prevents: checking only the destination catches a section moved INTO a locked config and misses one moved OUT of it — the same hole, from the side where the locked config silently loses a section. */
   it('cannot have a section or module moved out of it', () => {
     assert.match(MIGRATION, /IF TG_OP <> 'INSERT' THEN\s+source_id := OLD\."baseConfigId";/);
     assert.match(MIGRATION, /IF TG_OP <> 'DELETE' THEN\s+target_id := NEW\."baseConfigId";/);
@@ -266,11 +238,7 @@ describe('a locked config', () => {
     assert.match(MIGRATION, /base_config_assert_unlocked\(GREATEST\(source_id, target_id\)\)/);
   });
 
-  /**
-   * The failure this prevents: the child guards fire on a cascade, but by then the parent
-   * row is gone and the lock lookup finds nothing — so deleting the config would take its
-   * whole shape with it, silently.
-   */
+  /** The failure this prevents: the child guards fire on a cascade, but by then the parent row is gone and the lock lookup finds nothing — so deleting the config would take its whole shape with it, silently. */
   it('cannot be deleted, so the cascade never reaches its sections', () => {
     assert.match(
       MIGRATION,
@@ -278,13 +246,7 @@ describe('a locked config', () => {
     );
   });
 
-  /**
-   * The failure this prevents: a non-locking read lets a section edit and a concurrent
-   * finalize both commit, changing the shape after the paper froze against it. FOR SHARE
-   * would also conflict with the finalize, but it is weaker than the lock an ordinary
-   * UPDATE takes, so "edit sections, then update the parent" has to upgrade — and two of
-   * those deadlock.
-   */
+  /** The failure this prevents: a non-locking read lets a section edit and a concurrent finalize both commit, changing the shape after the paper froze against it. FOR SHARE would also conflict with the finalize, but it is weaker than the lock an ordinary UPDATE takes, so "edit sections, then update the parent" has to upgrade — and two of those deadlock. */
   it('is read at the strength an ordinary UPDATE takes, so writers queue instead of deadlocking', () => {
     assert.match(MIGRATION, /FROM "BaseConfig" WHERE "id" = config_id FOR NO KEY UPDATE/);
     assert.doesNotMatch(MIGRATION, /FROM "BaseConfig" WHERE "id" = config_id FOR SHARE/);

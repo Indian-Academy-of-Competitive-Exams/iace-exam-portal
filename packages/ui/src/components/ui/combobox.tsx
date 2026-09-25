@@ -14,10 +14,7 @@ export interface ComboboxProps extends ComboboxListProps {
   clearable?: boolean;
 }
 
-/**
- * Select for a list too long to render at once; the next page loads near the bottom.
- * Paging itself lives in `useInfinitePages` (@iace/app-kit).
- */
+/** Select for a list too long to render at once; the next page loads near the bottom. Paging itself lives in `useInfinitePages` (@iace/app-kit). */
 export function Combobox({
   value,
   onChange,

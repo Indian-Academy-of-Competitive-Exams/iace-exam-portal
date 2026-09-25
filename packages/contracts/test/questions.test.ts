@@ -38,8 +38,7 @@ describe('supported languages', () => {
   });
 
   it('refuses a content key outside the supported set', () => {
-    // The whole point of the constant: a fourth language cannot be smuggled in
-    // as a JSON key, where nothing downstream would ever render it.
+    // The whole point of the constant: a fourth language cannot be smuggled in as a JSON key nothing downstream would render.
     assert.equal(localizedTextSchema.safeParse({ en: 'a', hi: 'b', te: 'c' }).success, true);
     assert.equal(localizedTextSchema.safeParse({ en: 'a', ta: 'b' }).success, false);
     assert.equal(localizedTextSchema.safeParse({ EN: 'a' }).success, false);
@@ -58,10 +57,7 @@ describe('questionDraftSchema', () => {
     assert.deepEqual(parsed.tags, []);
   });
 
-  /**
-   * NOT defaulted, deliberately: a defaulted status turns every save that omits it into an
-   * un-archive, which puts a retired question back into the next paper.
-   */
+  /** NOT defaulted, deliberately: a defaulted status would turn every save that omits it into an un-archive, putting a retired question back into the next paper. */
   it('leaves an omitted status absent rather than assuming ACTIVE', () => {
     assert.equal(questionDraftSchema.parse(draft()).status, undefined);
   });
@@ -142,8 +138,7 @@ describe('the import column contract', () => {
   });
 
   it('every alias is already in the form the parser normalises to', () => {
-    // An alias with a space or an underscore matches nothing: the parser compares
-    // against headers that have had both stripped.
+    // An alias with a space or underscore matches nothing: the parser compares against headers with both stripped.
     for (const column of QUESTION_IMPORT_COLUMNS) {
       for (const alias of column.aliases) {
         assert.equal(alias, alias.toLowerCase().replace(/[\s_-]+/g, ''), `alias ${alias}`);

@@ -8,20 +8,14 @@ import { redisKeys } from '../../redis/redis.keys';
 import { secondsToHuman } from '../../common/duration';
 import { sameHex } from '../../common/same-hex';
 
-/**
- * Picks the rung: the 1st lockout gets the 1st step, the 2nd the 2nd, and anything past the end of
- * the ladder stays on the last one. Pure, so the escalation can be tested without Redis.
- */
+/** Picks the rung: the 1st lockout gets the 1st step, the 2nd the 2nd, and anything past the end of the ladder stays on the last one. Pure, so the escalation can be tested without Redis. */
 export function lockoutDurationFor(steps: number[], lockoutCount: number): number {
   const index = Math.min(Math.max(lockoutCount, 1), steps.length) - 1;
   // steps is validated non-empty at boot; the fallback keeps the type honest.
   return steps[index] ?? steps.at(-1) ?? 900;
 }
 
-/**
- * OWASP's low-memory argon2id profile (19 MiB, t=2, p=1). It costs ~20ms per verify here, which is
- * the right trade for a login that runs once a day per student rather than once per request.
- */
+/** OWASP's low-memory argon2id profile (19 MiB, t=2, p=1). It costs ~20ms per verify here, which is the right trade for a login that runs once a day per student rather than once per request. */
 const ARGON2_OPTIONS = {
   type: argon2.argon2id,
   memoryCost: 19456,
@@ -49,10 +43,7 @@ export class PinService {
     return this.config.get('PIN_LOCKOUT_STEPS_SEC');
   }
 
-  /**
-   * How long the wrong-attempt counter lives. The first rung doubles as this window, so an isolated
-   * typo today never joins forces with one next week.
-   */
+  /** How long the wrong-attempt counter lives. The first rung doubles as this window, so an isolated typo today never joins forces with one next week. */
   get attemptWindowSec(): number {
     return lockoutDurationFor(this.lockoutSteps, 1);
   }
@@ -75,8 +66,7 @@ export class PinService {
 
   async verify(hash: string, pin: string): Promise<boolean> {
     try {
-      // No options here on purpose: argon2 reads the cost parameters back out of the encoded hash, so
-      // raising ARGON2_OPTIONS later still verifies every PIN hashed under the old settings.
+      // No options here on purpose: argon2 reads the cost parameters back out of the encoded hash, so raising ARGON2_OPTIONS later still verifies every PIN hashed under the old settings.
       return await argon2.verify(hash, this.pepper(pin));
     } catch {
       // A malformed or foreign hash is a failed login, not a 500.
@@ -84,10 +74,7 @@ export class PinService {
     }
   }
 
-  /**
-   * Burns the same ~20ms as a real verify when there is no account to check against, so response
-   * time cannot be used to test whether a number is registered.
-   */
+  /** Burns the same ~20ms as a real verify when there is no account to check against, so response time cannot be used to test whether a number is registered. */
   async burnVerifyTime(): Promise<void> {
     this.decoyHash ??= this.hash('0000');
     await this.verify(await this.decoyHash, '0001');
@@ -109,18 +96,14 @@ export class PinService {
     }
   }
 
-  /**
-   * Records a wrong PIN and locks the number once the cap is reached — each time for LONGER than the
-   * last.
-   */
+  /** Records a wrong PIN and locks the number once the cap is reached — each time for LONGER than the last. */
   async registerFailure(mobile: string): Promise<void> {
     const key = redisKeys.pinAttempts(mobile);
     const attempts = await this.redis.client.incr(key);
     if (attempts === 1) await this.redis.client.expire(key, this.attemptWindowSec);
     if (attempts < this.maxAttempts) return;
 
-    // Nth lockout for this number → Nth rung. The counter outlives the lockout it causes (plus the
-    // decay window), so waiting one out and starting over climbs instead of resetting.
+    // Nth lockout for this number → Nth rung. The counter outlives the lockout it causes (plus the decay window), so waiting one out and starting over climbs instead of resetting.
     const lockoutsKey = redisKeys.pinLockouts(mobile);
     const lockouts = await this.redis.client.incr(lockoutsKey);
     const lockoutSec = lockoutDurationFor(this.lockoutSteps, lockouts);
@@ -130,10 +113,7 @@ export class PinService {
     await this.redis.del(key);
   }
 
-  /**
-   * A correct PIN (or a fresh one) wipes the slate, ladder included: whoever did that holds the PIN
-   * or has just proved they hold the number, and both are the owner.
-   */
+  /** A correct PIN (or a fresh one) wipes the slate, ladder included: whoever did that holds the PIN or has just proved they hold the number, and both are the owner. */
   async clearFailures(mobile: string): Promise<void> {
     await this.redis.del(
       redisKeys.pinAttempts(mobile),
@@ -163,8 +143,7 @@ export class PinService {
     const key = redisKeys.pinSetup(mobile);
     const stored = await this.redis.client.get(key);
     if (!stored || !sameHex(this.pepper(setupToken), stored)) {
-      // The ticket is the OTP's continuation, so an expired one sends the
-      // student back to the same place a stale code would.
+      // The ticket is the OTP's continuation, so an expired one sends the student back to the same place a stale code would.
       throw new AppException(
         ErrorCodes.OTP_EXPIRED,
         'This step has expired. Verify your mobile number again',

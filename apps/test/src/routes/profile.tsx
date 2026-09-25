@@ -65,8 +65,7 @@ export function ProfilePage() {
   const gender = useWatch({ control: form.control, name: 'profile.gender' });
   const dob = useWatch({ control: form.control, name: 'profile.dob' });
 
-  // Filled once the record arrives. `reset` rather than defaultValues, because
-  // the form mounts before the fetch resolves.
+  // Filled once the record arrives; `reset`, not defaultValues, since the form mounts before the fetch resolves.
   const { reset } = form;
   useEffect(() => {
     if (!me.data) return;
@@ -91,8 +90,7 @@ export function ProfilePage() {
     mutationFn: (values: UpdateMeInput) => api.me.update(values),
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
-      // The identity carries preTestReady, and saving these fields is exactly
-      // what changes it — without this the prompt would still be there.
+      // The identity carries preTestReady, and saving these fields is what changes it.
       void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
       form.reset(form.getValues());
       setIsEditing(false);

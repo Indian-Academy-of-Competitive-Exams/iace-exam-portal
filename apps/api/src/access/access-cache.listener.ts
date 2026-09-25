@@ -18,8 +18,7 @@ export class AccessCacheListener {
     try {
       await this.resolver.invalidateStudent(event.studentId);
     } catch (error) {
-      // The write already happened, and the entry expires on its own. Losing the bust
-      // must not fail the request that made the change.
+      // The write already happened, and the entry expires on its own. Losing the bust must not fail the request that made the change.
       this.logger.error(`Catalog bust failed for student ${event.studentId}`, error);
     }
   }

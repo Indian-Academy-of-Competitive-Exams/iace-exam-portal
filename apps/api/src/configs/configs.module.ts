@@ -9,13 +9,11 @@ import { BaseConfigsController } from './base-configs.controller';
 import { BaseConfigsService } from './base-configs.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
-/** Owns the catalog — `Exam`, `ExamStage` — and the blueprints built on it. forwardRef: students
- *  validate enrolments against the catalog, and the catalog counts enrolments back. */
+/** Owns the catalog — `Exam`, `ExamStage` — and the blueprints built on it. forwardRef: students validate enrolments against the catalog, and the catalog counts enrolments back. */
 @Module({
   imports: [
     PrismaModule,
-    // `require`, not a static import: a top-level import here re-enters the still-loading
-    // `students` barrel and throws; a CommonJS `require` tolerates the partial circular load.
+    // `require`, not a static import: a top-level import here re-enters the still-loading `students` barrel and throws; a CommonJS `require` tolerates the partial circular load.
     forwardRef(
       () =>
         (module.require('../students') as { StudentsModule: typeof StudentsModule }).StudentsModule,

@@ -19,10 +19,7 @@ export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
 /** Tall enough to read a pool in, short enough that what sits below it stays reachable. */
 export const CAPPED_VIEWPORT = 'max-h-[26rem] overflow-auto';
 
-/**
- * Uppercase headers, a rule between rows, tabular figures. Owns its scrollbar.
- * `border-separate`: a collapsed table drops a sticky heading's borders.
- */
+/** Uppercase headers, a rule between rows, tabular figures; owns its scrollbar. `border-separate` because a collapsed table drops a sticky heading's borders. */
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
   ({ className, scroll, ...props }, ref) => {
     const fills = useInTableFrame();
@@ -48,10 +45,7 @@ const TableHeader = React.forwardRef<
 >(({ className, ...props }, ref) => <thead ref={ref} className={cn(className)} {...props} />);
 TableHeader.displayName = 'TableHeader';
 
-/**
- * Owns the hover, scoped to `&>tr` so it cannot reach a `thead` however rows are composed.
- * The last body row draws no rule — `Pagination` under it has its own `border-t`.
- */
+/** Owns the hover, scoped to `&>tr` so it cannot reach a `thead` however rows are composed; the last body row draws no rule — `Pagination` under it has its own `border-t`. */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -74,10 +68,7 @@ TableRow.displayName = 'TableRow';
 /** On the cells: `border-separate` renders no `<tr>` border, and sticky keeps a cell's. */
 const RULE = 'border-b border-border';
 
-/**
- * A pseudo-element, not the cell's background: a radius on the cell would round its
- * `border-b` too. Rounded at the row's ends only, or cells notch apart mid-row.
- */
+/** A pseudo-element, not the cell's background: a radius on the cell would round its `border-b` too; rounded at the row's ends only, or cells notch apart mid-row. */
 const HOVER_BAND = [
   'relative isolate',
   "before:absolute before:inset-x-0 before:inset-y-[3px] before:-z-10 before:content-['']",

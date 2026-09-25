@@ -44,8 +44,7 @@ ruleTester.run('api-module-boundaries', apiModuleBoundaries, {
       filename: file('imports/imports.module.ts'),
     },
 
-    // The composition root sits directly in src/ and wires everything by
-    // definition — it is exempt, not excused.
+    // The composition root sits directly in src/ and wires everything by definition — it is exempt, not excused.
     {
       code: "import { PinService } from './auth/pin/pin.service';",
       filename: file('app.module.ts'),
@@ -97,12 +96,7 @@ ruleTester.run('api-module-boundaries', apiModuleBoundaries, {
   ],
 });
 
-/**
- * The DOM gate is built-in ESLint rules under a shared config, so there is no
- * rule logic to test — only the list, which is the thing a well-meaning edit
- * would shorten. Asserted here so dropping `sessionStorage` from it is a
- * failing test rather than a silently narrower guarantee.
- */
+/** The DOM gate is built-in ESLint rules under shared config, so only the list needs testing — asserted here so dropping `sessionStorage` fails rather than silently narrowing the guarantee. */
 describe('eslint-no-dom', () => {
   it('refuses every browser global app-kit could reach for', () => {
     const [block] = noDom;

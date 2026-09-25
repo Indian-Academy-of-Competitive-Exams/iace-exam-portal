@@ -18,10 +18,7 @@ export interface FieldProps {
   className?: string;
 }
 
-/**
- * Label + control + hint/error, with `aria-describedby` wired.
- * The hint gives way to the error rather than stacking, so the height never changes.
- */
+/** Label + control + hint/error, with `aria-describedby` wired. The hint gives way to the error rather than stacking, so the height never changes. */
 export function Field({ htmlFor, label, hint, error, children, className }: Readonly<FieldProps>) {
   const messageId = `${htmlFor}-message`;
   const hasMessage = Boolean(error ?? hint);

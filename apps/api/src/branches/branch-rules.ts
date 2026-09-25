@@ -29,18 +29,11 @@ export function branchEditBlocker(
   return null;
 }
 
-/**
- * Virtual is a singleton, not a category. Every rule above says "the online branch", and a
- * second one would be equally unrenameable and undeletable — a typo nobody could ever clear.
- */
+/** Virtual is a singleton, not a category. Every rule above says "the online branch", and a second one would be equally unrenameable and undeletable — a typo nobody could ever clear. */
 export const ONLINE_BRANCH_EXISTS_MESSAGE =
   'The online branch already exists. There can only be one.';
 
-/**
- * Where a student sits has to agree with what kind of student they are: `AccessResolver` reads the
- * branch alone, so an online student parked at a centre inherits that centre's schedule. NON_IACE
- * is deliberately unconstrained — they sit outside the institute, so neither answer is wrong.
- */
+/** Where a student sits has to agree with what kind of student they are: `AccessResolver` reads the branch alone, so an online student parked at a centre inherits that centre's schedule. NON_IACE is deliberately unconstrained — they sit outside the institute, so neither answer is wrong. */
 export function studentBranchBlocker(
   studentType: StudentType,
   branchType: BranchType,

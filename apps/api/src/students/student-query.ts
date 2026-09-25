@@ -39,8 +39,7 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
 
   const and = matchFilters(always, chosen, query.match);
 
-  // An empty AND is a valid Prisma filter, but returning {} keeps "no filters"
-  // obvious to anyone reading a log or a test.
+  // An empty AND is a valid Prisma filter, but returning {} keeps "no filters" obvious to anyone reading a log or a test.
   return and.length === 0 ? {} : { AND: and };
 }
 
@@ -53,10 +52,7 @@ function ownAccessFilter(hasNoneOfTheirOwn: boolean): Prisma.StudentWhereInput {
   return hasNoneOfTheirOwn ? noneOfTheirOwn : { NOT: noneOfTheirOwn };
 }
 
-/**
- * Matches `hasSignedIn` exactly — a PIN the institute set does not count, or the filter and the
- * badge beside it would disagree.
- */
+/** Matches `hasSignedIn` exactly — a PIN the institute set does not count, or the filter and the badge beside it would disagree. */
 function signedInFilter(neverSignedIn: boolean): Prisma.StudentWhereInput {
   return neverSignedIn
     ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
@@ -69,8 +65,7 @@ export function studentOrderBy(sort: StudentSort): Prisma.StudentOrderByWithRela
     case STUDENT_SORTS.OLDEST:
       return [{ createdAt: 'asc' }, { id: 'asc' }];
     case STUDENT_SORTS.NAME:
-      // Nulls last: a student with no name yet is the least useful row to open
-      // an alphabetical list with.
+      // Nulls last: a student with no name yet is the least useful row to open an alphabetical list with.
       return [{ fullName: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }];
     case STUDENT_SORTS.MOBILE:
       return [{ mobile: 'asc' }, { id: 'asc' }];

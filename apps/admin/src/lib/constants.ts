@@ -370,10 +370,7 @@ export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
   INACTIVE: 'Retired',
 };
 
-/**
- * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
- * the screens it gates are the ones that decide who decides.
- */
+// AdminNavItem adds superAdminOnly, which is NOT a feature key — it gates the screens that decide who decides.
 /** Which list the cohorts screen is showing. Absent from the URL means Programs. */
 export const COHORT_TABS = {
   PROGRAMS: 'programs',
@@ -550,16 +547,10 @@ export const QUERY_SCOPES = {
   FILTER: 'filter',
 } as const;
 
-/**
- * The admin list the Permissions screen assigns from. PAGE_SIZE_MAX: an admin
- * missing from it cannot be granted anything. Past a hundred, this needs a Combobox.
- */
+// The admin list the Permissions screen assigns from; past a hundred this needs a Combobox instead.
 export const PAGE_SIZE_FOR_PICKERS = 100;
 
-/**
- * localStorage keys owned by this app, namespaced so the SPAs never read each other's.
- * The theme key is absent on purpose: it belongs to @iace/ui and is shared.
- */
+// localStorage keys namespaced so the SPAs never read each other's; the theme key is absent since it belongs to @iace/ui.
 export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
   /** The question in the box right now. A closed tab loses nothing; only a save writes a row. */

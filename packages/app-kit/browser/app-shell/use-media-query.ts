@@ -1,9 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
-/**
- * Tracks a media query so the shell can pick a different structure, not hide one with CSS.
- * `useSyncExternalStore` — matchMedia is an external store. Server snapshot is the mobile one.
- */
+/** Tracks a media query so the shell can pick a different structure, not hide one with CSS; `useSyncExternalStore` because matchMedia is an external store. */
 export function useMediaQuery(query: string): boolean {
   const subscribe = useCallback(
     (onStoreChange: () => void) => {

@@ -27,10 +27,7 @@ const FINISHED = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATU
 /** A safety net under the event-driven busts, never the mechanism that keeps the catalog right. */
 const CATALOG_TTL_SEC = 15 * 60;
 
-/**
- * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
- * payload the previous build wrote is read back as the new shape until its TTL runs out.
- */
+/** Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a payload the previous build wrote is read back as the new shape until its TTL runs out. */
 const CATALOG_SHAPE = 'v12';
 
 const catalogInclude = (programs: string[]) =>
@@ -128,10 +125,7 @@ export class AccessResolverService {
     return new Map(attempts.map((row) => [row.testId, row.status]));
   }
 
-  /**
-   * The attempt-start guard: the catalog's own resolution, so the two cannot disagree, plus a
-   * live re-read of the switches the cache cannot be trusted to have caught up with.
-   */
+  /** The attempt-start guard: the catalog's own resolution, so the two cannot disagree, plus a live re-read of the switches the cache cannot be trusted to have caught up with. */
   async assertCanStart(studentId: string, testId: string, now: Date = new Date()): Promise<void> {
     const [permitted, { series }] = await Promise.all([
       this.stillPermitted(studentId),
@@ -200,10 +194,7 @@ export class AccessResolverService {
     await this.redis.client.incr(redisKeys.catalogEpoch);
   }
 
-  /**
-   * A block or a deactivation must bite now, not when the entry expires — the cache bust is
-   * best-effort, and this is an authorization answer, not the live-test hot path.
-   */
+  /** A block or a deactivation must bite now, not when the entry expires — the cache bust is best-effort, and this is an authorization answer, not the live-test hot path. */
   private async stillPermitted(studentId: string): Promise<boolean> {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },

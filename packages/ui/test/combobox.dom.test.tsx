@@ -90,8 +90,7 @@ describe('Combobox', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
     const list = await screen.findByRole('listbox');
-    // Skeleton carries no data-slot; it renders a <div aria-hidden>. The
-    // clearable row's Check icon is aria-hidden too, but it is an <svg>.
+    // Skeleton carries no data-slot; it renders a <div aria-hidden>. The clearable row's Check icon is aria-hidden too, but it's an <svg>.
     assert.equal(list.querySelectorAll('div[aria-hidden="true"]').length, 4);
     assert.equal(screen.queryByText('Nothing matches that'), null);
   });
@@ -123,11 +122,7 @@ describe('Combobox', () => {
     assert.equal(screen.queryByRole('listbox'), null);
   });
 
-  /**
-   * Radix focuses the first tabbable descendant of the popover content on
-   * open; with no search box that is the clear row, which reads as the
-   * placeholder. Pinned as observed, not as a deliberate design choice.
-   */
+  /** Radix focuses the first tabbable descendant of the popover content on open; with no search box that's the clear row, which reads as the placeholder. Pinned as observed, not a deliberate design choice. */
   it('moves focus onto the first row when it opens', async () => {
     render(box());
 

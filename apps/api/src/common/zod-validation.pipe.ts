@@ -3,10 +3,7 @@ import { AppException, ErrorCodes } from '@iace/contracts';
 import { type ZodType } from 'zod';
 import { fieldErrorsFrom } from './all-exceptions.filter';
 
-/**
- * Validates a request body against a schema from `@iace/contracts`, so the API and both frontends
- * enforce the exact same rules from one definition.
- */
+/** Validates a request body against a schema from `@iace/contracts`, so the API and both frontends enforce the exact same rules from one definition. */
 export class ZodBody<TOut> implements PipeTransform<unknown, TOut> {
   constructor(private readonly schema: ZodType<TOut>) {}
 
@@ -20,10 +17,7 @@ export class ZodBody<TOut> implements PipeTransform<unknown, TOut> {
   }
 }
 
-/**
- * The same, for `@Query()`. Query strings arrive as strings, so the schema must coerce — see
- * `paginationQuerySchema`, where page and pageSize are numbers on the far side of a `z.coerce`.
- */
+/** The same, for `@Query()`. Query strings arrive as strings, so the schema must coerce — see `paginationQuerySchema`, where page and pageSize are numbers on the far side of a `z.coerce`. */
 export class ZodQuery<TOut> extends ZodBody<TOut> {}
 
 /** A route parameter, validated against a schema. */

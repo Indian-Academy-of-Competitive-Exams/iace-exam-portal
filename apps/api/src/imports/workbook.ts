@@ -63,8 +63,7 @@ async function buildTemplate(options: {
 
   for (const example of examples) sheet.addRow(example);
 
-  // Mobile numbers are text, not numbers: left as numeric, Excel drops a leading zero and shows long
-  // ones in exponent form, and the file that comes back is full of "9.87654E+09".
+  // Mobile numbers are text, not numbers: left as numeric, Excel drops a leading zero and shows long ones in exponent form, and the file that comes back is full of "9.87654E+09".
   sheet.getColumn(1).numFmt = '@';
 
   applyDateColumns(sheet, columns);

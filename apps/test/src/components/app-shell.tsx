@@ -20,8 +20,7 @@ import { ChangePinCard } from '../routes/account';
 export function AppShell() {
   const { identity: student, signOut } = useAuth();
   const queryClient = useQueryClient();
-  // Shared cache entry with the profile screens, so a new photo shows in the
-  // header the moment it uploads rather than on the next reload.
+  // Shared cache entry with the profile screens, so a new photo shows in the header on upload.
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
   // One row is asked for because the answer wanted is `meta.total`, not the rows.
   const unread = useQuery({
@@ -66,8 +65,7 @@ export function AppShell() {
           size="sm"
         />
       }
-      // No `can`: the student portal has no permissions, so every section
-      // shows. filterNavByPermission is deliberately lenient about that.
+      // No `can`: the student portal has no permissions, so every section shows.
     >
       {/*
         A student still on the PIN the institute set cannot get past this.
@@ -101,10 +99,7 @@ function DefaultPinGate() {
   );
 }
 
-/**
- * A banner and not a gate: sign-in, history and results are all still theirs, and the server is
- * what refuses a new attempt. Saying nothing would leave them pressing Start and being turned away.
- */
+/** A banner, not a gate: the server refuses a new attempt — saying nothing would leave them pressing Start. */
 function TestBlockedBanner() {
   return (
     <Alert variant="warning">

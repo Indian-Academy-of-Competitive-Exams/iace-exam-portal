@@ -13,11 +13,7 @@ describe('resolveAuditAction', () => {
     assert.equal(action, AUDIT_ACTION.UPDATE);
   });
 
-  /**
-   * The failure this prevents: sign-in and test-taking are separate columns and separate admin
-   * actions, so one pair of enum values standing for both is how "who deactivated this student"
-   * gets answered about the wrong switch.
-   */
+  /** The failure this prevents: sign-in and test-taking are separate columns and separate admin actions, so one pair of enum values standing for both is how "who deactivated this student" gets answered about the wrong switch. */
   it('reads the sign-in toggle as ACTIVATE or DEACTIVATE', () => {
     const route = { feature: AUDIT_FEATURE.STUDENT, action: TOGGLE_ACTIONS.signIn };
 

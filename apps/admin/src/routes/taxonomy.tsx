@@ -36,11 +36,7 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, SubjectPicker } from '../components/taxonomy-picker';
 
-/**
- * Subject -> topic, the two levels a question is filed under and
- * the lists the import template's dropdowns are generated from. Names are
- * canonical: what is typed is normalised, never refused.
- */
+// Subject -> topic: the two levels a question is filed under, and what the import template's dropdowns are generated from; names are canonical, never refused.
 
 // ============================================================================
 // Subjects

@@ -215,8 +215,7 @@ describe('audit read contracts', () => {
     assert.equal(importLogSchema.safeParse(row).success, true);
   });
 
-  /** The failure this prevents: `status` was a bare string, so a fixture could assert `'DONE'` —
-   *  a value nothing in the system writes — and the parse would happily accept it. */
+  /** Regression guard: `status` was a bare string, so a fixture could assert `'DONE'` — a value nothing writes — and the parse would happily accept it. */
   it('refuses a status outside IMPORT_LOG_STATUS', () => {
     const row = {
       id: 'imp_1',

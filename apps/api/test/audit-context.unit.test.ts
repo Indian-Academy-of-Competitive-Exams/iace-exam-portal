@@ -14,10 +14,7 @@ describe('AuditContext', () => {
     });
   });
 
-  /**
-   * The failure this prevents: a store that does not survive an await is a store every
-   * service writes into and nothing ever reads, and every diff comes out null.
-   */
+  /** The failure this prevents: a store that does not survive an await is a store every service writes into and nothing ever reads, and every diff comes out null. */
   it('survives an await, because every service method is async', async () => {
     const context = new AuditContext();
 

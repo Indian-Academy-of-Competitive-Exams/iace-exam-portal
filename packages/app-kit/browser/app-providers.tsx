@@ -3,10 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, Toaster, TooltipProvider } from '@iace/ui';
 import { type ReactNode } from 'react';
 
-/**
- * The provider stack, in the order that matters: query client outside auth,
- * theme outside everything it paints, Toaster inside the theme but outside the router.
- */
+/** Order matters: query client outside auth, theme outside everything it paints, Toaster inside the theme but outside the router. */
 export function AppProviders({
   queryClient,
   children,

@@ -206,11 +206,7 @@ export function ExamsPage() {
 
 // ---------------------------------------------------------------------------
 
-/**
- * A typo in a code must be fixable before any student is enrolled on it; after that the server
- * refuses (`examEditBlocker`). There is no enrolment count on this row, so the input stays
- * editable and the save is what refuses.
- */
+// A code is editable until a student enrolls, then the server refuses (examEditBlocker) — the save is what blocks it, not this input.
 function ExamDialog({
   exam,
   onDone,

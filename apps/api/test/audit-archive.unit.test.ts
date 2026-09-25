@@ -55,10 +55,7 @@ describe('dayToArchive', () => {
     assert.equal(day.toISOString(), '2026-03-10T18:30:00.000Z');
   });
 
-  /**
-   * The failure this prevents: archiving today would flush rows out from under requests still
-   * adding to it, and the object would be missing everything written after the job ran.
-   */
+  /** The failure this prevents: archiving today would flush rows out from under requests still adding to it, and the object would be missing everything written after the job ran. */
   it('never returns today', () => {
     const now = new Date('2026-04-10T13:45:00Z');
 

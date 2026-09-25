@@ -33,8 +33,7 @@ describe('OtpService — request', () => {
     const challenge = await otp.request(ActorTypes.STUDENT, MOBILE);
 
     assert.equal(challenge.codeLength, 4);
-    // The length of the code actually sent, not of the setting read twice — a
-    // padded code is what the student sees, and the boxes must match it.
+    // The length of the code actually sent, not of the setting read twice — a padded code is what the student sees, and the boxes must match it.
     assert.equal(challenge.codeLength, sender.lastCode.length);
   });
 
@@ -53,8 +52,7 @@ describe('OtpService — request', () => {
     const dev = build();
     assert.equal((await dev.otp.request(ActorTypes.STUDENT, MOBILE)).devCode, dev.sender.lastCode);
 
-    // A real deployment must never hand the code to the caller — that would
-    // make the SMS decorative and the endpoint an open door.
+    // A real deployment must never hand the code to the caller — that would make the SMS decorative and the endpoint an open door.
     const prod = build({ NODE_ENV: 'production' });
     assert.equal((await prod.otp.request(ActorTypes.STUDENT, MOBILE)).devCode, undefined);
   });
@@ -147,8 +145,7 @@ describe('OtpService — verify', () => {
       (e: unknown) => AppException.is(e) && e.code === 'RATE_LIMITED',
     );
 
-    // Gone — even the correct code no longer works. A million tries inside one
-    // TTL is otherwise enough for a 6-digit code.
+    // Gone — even the correct code no longer works. A million tries inside one TTL is otherwise enough for a 6-digit code.
     assert.equal(redis.snapshot()[`otp:student:${MOBILE}`], undefined);
     await assert.rejects(
       () => otp.verify(ActorTypes.STUDENT, MOBILE, sender.lastCode),

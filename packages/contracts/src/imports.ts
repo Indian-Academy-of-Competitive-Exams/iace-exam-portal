@@ -7,10 +7,7 @@ import { genderSchema, studentTypeSchema } from './students';
 // line, and a commit applies only the valid rows.
 // ============================================================================
 
-/**
- * How a record got here. INDIVIDUAL is one admin filling a form, SHEET an
- * uploaded file, SCRIPT the main portal syncing, SELF_SIGNUP the student.
- */
+/** How a record got here: INDIVIDUAL is an admin filling a form, SHEET an uploaded file, SCRIPT the main portal syncing, SELF_SIGNUP the student. */
 export const IMPORT_SOURCE = {
   INDIVIDUAL: 'INDIVIDUAL',
   SHEET: 'SHEET',
@@ -212,11 +209,7 @@ export const XLSX_CONTENT_TYPE =
 /** What the upload control accepts, and what the server will read. */
 export const IMPORT_ACCEPTED_EXTENSIONS = ['.xlsx', '.csv'] as const;
 
-/**
- * The columns, in order — the ONE definition of the format: the sample is generated
- * from this and the parser matches on it. `header` is what a person reads;
- * `aliases` is what the parser accepts, normalised, so an older template still imports.
- */
+/** The columns, in order — the ONE definition of the format: the sample is generated from this and the parser matches it; `header` is what a person reads, `aliases` is what the parser accepts, normalised. */
 export const STUDENT_IMPORT_COLUMNS = [
   {
     key: 'mobile',

@@ -351,9 +351,7 @@ describe('the question sheet — duplicates', () => {
   });
 
   it('re-uploading a sheet is duplicates, not a pile of code clashes', () => {
-    // The row is already in the bank, carrying the code it was imported with.
-    // Reporting that code as taken would make the normal way to use this — add
-    // ten questions to last week's file and upload it again — look like errors.
+    // The row is already in the bank, carrying the code it was imported with. Reporting that code as taken would make the normal way to use this — add ten questions to last week's file and upload it again — look like errors.
     const coded = { ...MCQ_ROW, question_code: 'QA-001' };
     const first = plan([coded]).rows[0];
     assert.ok(first);

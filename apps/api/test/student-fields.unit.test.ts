@@ -25,8 +25,7 @@ describe('dobSchema', () => {
   });
 
   it('REFUSES a future date', () => {
-    // A DOB is one of the three fields the pre-test gate collects, so a mistyped year does not merely
-    // sit in a profile — it marks a student ready for a test on data that cannot be true.
+    // A DOB is one of the three fields the pre-test gate collects, so a mistyped year does not merely sit in a profile — it marks a student ready for a test on data that cannot be true.
     for (const future of [shift(1), shift(400), '2999-01-01']) {
       const parsed = dobSchema.safeParse(future);
       assert.equal(parsed.success, false, `expected ${future} to be refused`);
@@ -59,8 +58,7 @@ describe('personNameSchema', () => {
   });
 
   it('accepts the marks that appear INSIDE real names', () => {
-    // Initials and double-barrelled names are ordinary here; refusing them
-    // would send admins looking for workarounds.
+    // Initials and double-barrelled names are ordinary here; refusing them would send admins looking for workarounds.
     for (const name of ['K. Ravi Kumar', "D'Souza", 'Anne-Marie']) {
       assert.equal(
         personNameSchema.safeParse(name).success,

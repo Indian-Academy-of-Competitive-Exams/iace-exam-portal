@@ -21,8 +21,7 @@ describe('lockoutDurationFor', () => {
   });
 
   it('never returns less than the first rung, whatever the count', () => {
-    // Defensive: a 0 or negative count must not fall off the front of the
-    // ladder into a zero-length lockout.
+    // Defensive: a 0 or negative count must not fall off the front of the ladder into a zero-length lockout.
     assert.equal(lockoutDurationFor(DEFAULT_LADDER, 0), 900);
     assert.equal(lockoutDurationFor(DEFAULT_LADDER, -3), 900);
   });

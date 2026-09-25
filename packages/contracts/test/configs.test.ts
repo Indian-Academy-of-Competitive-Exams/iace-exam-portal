@@ -46,10 +46,7 @@ describe('baseConfigSchema', () => {
     assert.deepEqual(baseConfigSchema.parse(config).languages, ['EN', 'HI']);
   });
 
-  /**
-   * The database enum is uppercase; the lowercase keys in `SUPPORTED_LANGUAGES` are the
-   * ones inside question content JSON, and they are not interchangeable.
-   */
+  /** The database enum is uppercase; the lowercase keys in `SUPPORTED_LANGUAGES` are for question content JSON, and the two are not interchangeable. */
   it('refuses a content-JSON language key where the column value belongs', () => {
     assert.equal(baseConfigSchema.safeParse({ ...config, languages: ['en'] }).success, false);
   });

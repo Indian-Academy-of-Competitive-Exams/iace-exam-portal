@@ -109,8 +109,7 @@ const DialogContent = React.forwardRef<
 );
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-/** Padded on the right whether or not the ✕ is there, so a long title wraps in
- *  the same place either way rather than reflowing when the prop changes. */
+/** Padded on the right whether or not the ✕ is there, so a long title wraps in the same place either way rather than reflowing when the prop changes. */
 function DialogHeader({ className, ...props }: Readonly<React.HTMLAttributes<HTMLDivElement>>) {
   return (
     <div
@@ -190,10 +189,7 @@ export interface ConfirmDialogProps {
   children?: React.ReactNode;
 }
 
-/**
- * Cancel takes the focus and is neutral grey; only the action is crimson.
- * Does not close itself — the caller closes when the work finishes, so a failure stays visible.
- */
+/** Cancel takes the focus and is neutral grey; only the action is crimson. Does not close itself — the caller closes when the work finishes, so a failure stays visible. */
 function ConfirmDialog({
   open,
   onOpenChange,

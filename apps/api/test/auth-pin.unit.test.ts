@@ -34,8 +34,7 @@ describe('PinService — hashing', () => {
   it('gives two students with the SAME PIN different hashes', async () => {
     const { pin } = build();
 
-    // Per-hash salt. Without it, equal hashes would leak "these two share a PIN"
-    // to anyone reading the table.
+    // Per-hash salt. Without it, equal hashes would leak "these two share a PIN" to anyone reading the table.
     assert.notEqual(await pin.hash('4813'), await pin.hash('4813'));
   });
 
@@ -43,8 +42,7 @@ describe('PinService — hashing', () => {
     const { pin } = build();
     const hash = await pin.hash('4813');
 
-    // A stolen Student table, cracked with the wrong pepper, matches nothing.
-    // 10,000 candidates is otherwise a fraction of a second's work.
+    // A stolen Student table, cracked with the wrong pepper, matches nothing. 10,000 candidates is otherwise a fraction of a second's work.
     const { pin: attacker } = build({ PIN_PEPPER: 'a-different-pepper-000000000000000000' });
     assert.equal(await attacker.verify(hash, '4813'), false);
   });
@@ -122,8 +120,7 @@ describe('PinService — lockout', () => {
 
     for (let i = 0; i < 5; i++) await pin.registerFailure(MOBILE);
 
-    // If the counter died with the lock, waiting one out would reset the ladder
-    // — which is precisely the attack.
+    // If the counter died with the lock, waiting one out would reset the ladder — which is precisely the attack.
     assert.equal(await redis.ttl(`pin:lockouts:${MOBILE}`), 900 + 86400);
   });
 

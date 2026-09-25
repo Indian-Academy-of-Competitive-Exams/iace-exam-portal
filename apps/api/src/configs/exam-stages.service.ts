@@ -67,8 +67,7 @@ export class ExamStagesService {
       this.prisma.examStage.findMany({
         where,
         include: STAGE_INCLUDE,
-        // The journey's own order, exam by exam — a stage list read in any other
-        // order is a list nobody can check against the notification.
+        // The journey's own order, exam by exam — a stage list read in any other order is a list nobody can check against the notification.
         orderBy: [{ exam: { name: 'asc' } }, { order: 'asc' }, { name: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
@@ -135,10 +134,7 @@ export class ExamStagesService {
     await this.prisma.examStage.delete({ where: { id } });
   }
 
-  /**
-   * Whether a stage may be built on. For whoever is about to attach a base config, a series or a
-   * test to one — the field key is a parameter, as it is on the exam catalog.
-   */
+  /** Whether a stage may be built on. For whoever is about to attach a base config, a series or a test to one — the field key is a parameter, as it is on the exam catalog. */
   async assertUsable(stageId: string, fieldKey = 'examStageId'): Promise<void> {
     const stage = await this.prisma.examStage.findUnique({
       where: { id: stageId },

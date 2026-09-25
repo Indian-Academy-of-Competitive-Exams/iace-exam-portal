@@ -8,10 +8,7 @@ import { z, type ZodType } from 'zod';
 // controller cannot emit another shape. React to `error.code`, never to `message`.
 // ============================================================================
 
-/**
- * The stable error vocabulary. Add to it; never repurpose a member.
- * Throw with the constant — `AppException(ErrorCodes.PIN_LOCKED, …)`, never the bare string.
- */
+/** The stable error vocabulary — add to it, never repurpose a member; throw with the constant, e.g. `AppException(ErrorCodes.PIN_LOCKED, …)`, never the bare string. */
 export const ErrorCodes = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   UNAUTHENTICATED: 'UNAUTHENTICATED',
@@ -47,8 +44,7 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.SITTING_TAKEN_OVER]: 409,
   [ErrorCodes.SITTING_ENDED]: 409,
   [ErrorCodes.RATE_LIMITED]: 429,
-  // A wrong or stale credential is an authentication failure, not a malformed
-  // request — the body was perfectly well-formed.
+  // A wrong or stale credential is an authentication failure, not a malformed request — the body was well-formed.
   [ErrorCodes.ADMIN_NOT_REGISTERED]: 404,
   [ErrorCodes.OTP_INVALID]: 401,
   [ErrorCodes.OTP_EXPIRED]: 401,

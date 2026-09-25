@@ -12,10 +12,7 @@ import { type AuthIdentity, type AuthSessionResponse } from '@iace/contracts';
 import { type TokenStore } from './token-store';
 import { type SignOutReason, type SignOutSignal } from './sign-out-signal';
 
-/**
- * The session as a screen sees it. `identity` is null with no token, a dead token,
- * or a token for the wrong actor — a student's JWT is valid and is not an admin session.
- */
+/** The session as a screen sees it; `identity` is null with no token, a dead token, or a token for the wrong actor. */
 export interface AuthState<TIdentity> {
   identity: TIdentity | null;
   isLoading: boolean;
@@ -55,10 +52,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
   function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const queryClient = useQueryClient();
 
-    /**
-     * Whether a token exists, in React state — the store is outside React, so
-     * writing to it notifies nothing that renders.
-     */
+    /** Whether a token exists, in React state — the store is outside React, so writing to it notifies nothing that renders. */
     const [hasToken, setHasToken] = useState(() => tokenStore.get() !== null);
     const [signedOutReason, setSignedOutReason] = useState<SignOutReason | null>(null);
 
@@ -77,8 +71,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
       queryClient.removeQueries({ queryKey });
     }, [queryClient]);
 
-    // Raised by the API client when a refresh fails — the session is
-    // unrecoverable, and nothing else is going to notice.
+    // Raised by the API client when a refresh fails — the session is unrecoverable and nothing else notices.
     useEffect(
       () =>
         signOutSignal.subscribe((reason) => {

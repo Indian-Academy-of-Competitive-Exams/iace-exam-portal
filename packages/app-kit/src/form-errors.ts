@@ -1,10 +1,7 @@
 import { AppException } from '@iace/contracts';
 import { type FieldValues, type Path, type UseFormSetError } from 'react-hook-form';
 
-/**
- * Bridges the API's `fieldErrors` into react-hook-form. Keys the form does not know,
- * and the `_` catch-all, fall through to `bannerMessage` rather than being dropped.
- */
+/** Bridges the API's `fieldErrors` into react-hook-form; keys the form doesn't know, and the `_` catch-all, fall through to `bannerMessage` rather than being dropped. */
 
 /** The server keys by full path (`profile.dob`); a form registers the leaf (`dob`). */
 function messagesFor(fieldErrors: Record<string, string[]>, field: string): string[] | undefined {

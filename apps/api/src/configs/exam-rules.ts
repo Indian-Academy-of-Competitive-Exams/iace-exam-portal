@@ -22,10 +22,7 @@ function countOf(count: number, noun: string, plural = `${noun}s`): string | nul
   return `${count} ${count === 1 ? noun : plural}`;
 }
 
-/**
- * Both counts matter: a stage carries the configs, series and tests built on it, so an exam
- * with stages is holding far more than the two rows a delete would appear to touch.
- */
+/** Both counts matter: a stage carries the configs, series and tests built on it, so an exam with stages is holding far more than the two rows a delete would appear to touch. */
 export function examDeletionBlocker(usage: ExamUsage): string | null {
   const held = [
     countOf(usage.stageCount, 'stage'),
@@ -36,10 +33,7 @@ export function examDeletionBlocker(usage: ExamUsage): string | null {
   return `This exam is still used by ${held.join(', ')}. Retire it instead. A retired exam keeps everything it has and is simply no longer offered.`;
 }
 
-/**
- * `Student.enrolledExams` stores the code as free text with no foreign key, so a rename would
- * detach every enrolment with no error and no rows changed.
- */
+/** `Student.enrolledExams` stores the code as free text with no foreign key, so a rename would detach every enrolment with no error and no rows changed. */
 export function examEditBlocker(
   usage: Pick<ExamUsage, 'studentCount'>,
   changes: { code?: string },
@@ -60,10 +54,7 @@ export interface StageUsage {
   seriesCount: number;
 }
 
-/**
- * A stage is the level everything hangs off: its base configs cascade to their sections, and a
- * series or a test pointing at it survives with nothing to describe it.
- */
+/** A stage is the level everything hangs off: its base configs cascade to their sections, and a series or a test pointing at it survives with nothing to describe it. */
 export function stageDeletionBlocker(usage: StageUsage): string | null {
   const held = [
     countOf(usage.configCount, 'base config'),
@@ -75,10 +66,7 @@ export function stageDeletionBlocker(usage: StageUsage): string | null {
   return `This stage is still used by ${held.join(', ')}. Retire it instead. A retired stage keeps everything it has and is simply no longer offered.`;
 }
 
-/**
- * `stageKey` is what the exam-pattern workbook and every seed script address a stage by, with no
- * foreign key behind it — a rename detaches all of them silently.
- */
+/** `stageKey` is what the exam-pattern workbook and every seed script address a stage by, with no foreign key behind it — a rename detaches all of them silently. */
 export function stageEditBlocker(
   usage: Pick<StageUsage, 'configCount'>,
   changes: { stageKey?: string },

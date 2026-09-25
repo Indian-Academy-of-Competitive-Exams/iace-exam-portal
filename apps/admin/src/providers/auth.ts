@@ -10,10 +10,7 @@ import { createAuth } from '@iace/app-kit';
 import { api, signOutSignal, tokenStore } from '../lib/api';
 import { QUERY_KEYS } from '../lib/constants';
 
-/**
- * This app's session: the actor, the cache key, the client, and one admin-only read.
- * `ActorTypes.ADMIN` is load-bearing — a student's JWT is valid and is not a session here.
- */
+// This app's session: actor, cache key, client, one admin-only read; ActorTypes.ADMIN is load-bearing since a student JWT is not a session here.
 export const { AuthProvider, useAuth } = createAuth<
   AdminIdentity,
   { can: (key: FeatureKey, level?: PermissionLevel) => boolean }
@@ -28,10 +25,7 @@ export const { AuthProvider, useAuth } = createAuth<
       await api.auth.logout();
     },
   },
-  /**
-   * Mirrors FeaturePermissionGuard, sharing `satisfiesLevel` rather than reimplementing it.
-   * The two disagreeing is the bug where the UI offers a button the API refuses.
-   */
+  // Mirrors FeaturePermissionGuard via satisfiesLevel — disagreement is the bug where the UI offers a button the API refuses.
   extend: (admin) => ({
     can: (key: FeatureKey, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
       // isActive first, gating the super-admin bypass too — the server's order.

@@ -308,10 +308,7 @@ export class FakeMessageSender implements MessageSender {
 
 // ---------------------------------------------------------------------------
 
-/**
- * In-memory `StorageService`, typed against the two methods it stands in for so a signature
- * drift here fails the build rather than surfacing as a confusing test failure.
- */
+/** In-memory `StorageService`, typed against the two methods it stands in for so a signature drift here fails the build rather than surfacing as a confusing test failure. */
 export class FakeStorage implements Pick<
   StorageService,
   'upload' | 'objectSize' | 'read' | 'createDownloadUrl' | 'publicUrl'
@@ -538,10 +535,7 @@ export class FakeAdminsService {
 // --------------------------------------------------------------------------- Admins / features /
 // grants ---------------------------------------------------------------------------
 
-/**
- * Whatever validates a list of codes before a student may carry them — the exam catalog, the
- * program catalog. One shape, because the seam is `assertUsable(codes, fieldKey)` on both.
- */
+/** Whatever validates a list of codes before a student may carry them — the exam catalog, the program catalog. One shape, because the seam is `assertUsable(codes, fieldKey)` on both. */
 export class FakeCodeCatalog {
   readonly calls: { codes: string[]; fieldKey: string }[] = [];
 

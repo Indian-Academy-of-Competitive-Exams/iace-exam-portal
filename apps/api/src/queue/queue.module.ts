@@ -4,10 +4,7 @@ import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/app-config.service';
 import { QUEUE_NAMES, jobOptionsFor, type QueueName } from './queues';
 
-/**
- * BullMQ over the same Redis instance, on its own connection: workers issue blocking commands
- * (BRPOPLPUSH), which would stall the application client.
- */
+/** BullMQ over the same Redis instance, on its own connection: workers issue blocking commands (BRPOPLPUSH), which would stall the application client. */
 @Global()
 @Module({
   imports: [

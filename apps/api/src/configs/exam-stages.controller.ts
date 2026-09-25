@@ -30,10 +30,7 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { ExamStagesService } from './exam-stages.service';
 
-/**
- * The stage layer of the catalog. Read by whoever builds a config or a test — they pick from the
- * list — while every write is super-admin only, exactly as the exam above it.
- */
+/** The stage layer of the catalog. Read by whoever builds a config or a test — they pick from the list — while every write is super-admin only, exactly as the exam above it. */
 @Controller('admin/exam-stages')
 @Actors(ActorTypes.ADMIN)
 export class ExamStagesController {

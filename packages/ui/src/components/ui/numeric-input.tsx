@@ -12,17 +12,11 @@ export interface NumericInputProps extends Omit<InputProps, 'type'> {
   maxLength?: number;
   /** Conceal the value (a PIN). Still digits-only, still the numeric keypad. */
   masked?: boolean;
-  /**
-   * Replaces the digits-only rule — pasting "+91 98765 43210" must drop the prefix.
-   * Set `maxLength` above the final length, or the browser truncates the paste first.
-   */
+  /** Replaces the digits-only rule — pasting "+91 98765 43210" must drop the prefix; set `maxLength` above the final length, or the browser truncates the paste first. */
   sanitize?: (raw: string) => string;
 }
 
-/**
- * Digits only. `type="tel"` and `inputMode` only ask; a physical keyboard ignores both.
- * `beforeinput` rejects a keystroke; `change` re-filters paste, autofill and drag.
- */
+/** Digits only; `type="tel"` and `inputMode` only ask — a physical keyboard ignores both. `beforeinput` rejects a keystroke, `change` re-filters paste, autofill and drag. */
 const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
   ({ maxLength, masked = false, sanitize, onChange, onBeforeInput, ...props }, ref) => (
     <Input

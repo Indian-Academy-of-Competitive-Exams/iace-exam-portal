@@ -25,10 +25,7 @@ export interface PinFieldProps<TValues extends FieldValues> {
   className?: string;
 }
 
-/**
- * `FormField`'s sibling for boxed inputs. `FormField` hands the control `register`,
- * and `PinInput` renders its own value, so it has to be driven by `Controller`.
- */
+/** `FormField`'s sibling for boxed inputs: `FormField` hands the control `register`, but `PinInput` renders its own value, so it has to be driven by `Controller`. */
 export function PinField<TValues extends FieldValues>({
   form,
   name,

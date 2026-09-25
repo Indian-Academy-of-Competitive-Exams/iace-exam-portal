@@ -141,10 +141,7 @@ describe('Tabs', () => {
     assert.equal(screen.queryByText('Rank 12'), null);
   });
 
-  /**
-   * Roving focus: one tab at a time is in the page's tab order, so Tab moves INTO
-   * the panel rather than across the other tabs.
-   */
+  /** Roving focus: one tab at a time is in the page's tab order, so Tab moves INTO the panel rather than across the other tabs. */
   it('keeps only the current tab in the tab order', () => {
     render(report());
 

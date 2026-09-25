@@ -91,12 +91,7 @@ const FORM_FIELDS = [
 /** An empty input means "no value", which the API expresses as null. */
 const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
 
-/**
- * The two access fields, sent only when this save actually moves one — the server checks the pair
- * as the save would LEAVE it, so a student stored out of agreement before the rule existed stays
- * renameable. `forcedBranchId` is the branch a locked picker stands on: the admin never touched it,
- * but it is what they are looking at, so it is what the save carries.
- */
+// Access fields are sent only when a save actually moves one; forcedBranchId is what a locked picker shows, so the save carries it even untouched.
 function accessPatch(
   values: FormValues,
   dirty: { studentType?: boolean; currentBranchId?: boolean },
@@ -188,8 +183,7 @@ function StudentStateNotice({
 /** Where a student sits relative to the institute — the four fields access resolves through. */
 function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const exams = useExams({ activeOnly: true });
-  // Unfiltered: a student's current branch can be one that has since been retired, and
-  // it must still resolve to a name rather than the raw id the active list no longer carries.
+  // Unfiltered — a student's branch may have since been retired, and must still resolve to a name, not the raw id.
   const allBranches = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
   const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
@@ -399,8 +393,7 @@ export function StudentDetailPage() {
     },
   });
 
-  // useWatch, not form.watch: a fresh function each render re-renders the picker on every keystroke.
-  // The same choice the Access card renders, so the save cannot send what the picker never showed.
+  // useWatch, not form.watch — a fresh function each render would re-render the picker on every keystroke.
   const branch = useBranchChoice(useWatch({ control: form.control, name: 'studentType' }));
   // Seeded once per student: a refetch of the same one would wipe an in-progress edit.
   const seededId = useRef<string | null>(null);
@@ -441,8 +434,7 @@ export function StudentDetailPage() {
     },
     onError: (error) => {
       applyFieldErrors(error, form.setError, FORM_FIELDS);
-      // Bring the offending field into view; on a long form the message can
-      // otherwise land above the fold.
+      // Bring the offending field into view; on a long form the message can otherwise land above the fold.
       requestAnimationFrame(() => {
         document
           .querySelector('[aria-invalid="true"], [role="alert"]')

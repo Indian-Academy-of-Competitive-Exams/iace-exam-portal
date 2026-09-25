@@ -4,11 +4,7 @@ import { api } from '../lib/api';
 import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 import { type MultiPickerProps, type PickerProps } from './picker-props';
 
-/**
- * The exam catalog, searched on the server a page at a time. The code is the label: it is what an
- * enrolment stores, so it is what an admin recognises a row by. A stage is qualified by its
- * exam's code, because "Tier 1" alone names half a dozen different papers.
- */
+// Exam code is the label — it's what an enrolment stores, so a stage is qualified by it since "Tier 1" alone names several papers.
 
 /** A CHOOSER: only active exams, because a retired one is not something to file new work under. */
 export function ExamPicker(props: Readonly<PickerProps>) {

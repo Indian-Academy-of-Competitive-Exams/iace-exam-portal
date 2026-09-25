@@ -9,11 +9,7 @@ import { type NavItem } from '../src';
 
 afterEach(cleanup);
 
-/**
- * jsdom's matchMedia always reports no match, and the shell renders a different
- * component per breakpoint rather than one styled twice — so a test that does
- * not pin the viewport is silently testing the mobile tree.
- */
+/** jsdom's matchMedia always reports no match, and the shell renders a different component per breakpoint — so a test that doesn't pin the viewport silently tests the mobile tree. */
 function setDesktop(isDesktop: boolean) {
   window.matchMedia = ((query: string) => ({
     matches: isDesktop,
@@ -121,10 +117,7 @@ describe('AppShell', () => {
     assert.ok(screen.getByRole('navigation', { name: 'Sections' }));
   });
 
-  /**
-   * The student app has one screen and so no nav. An empty sidebar is a column
-   * of nothing beside the page.
-   */
+  /** The student app has one screen and so no nav; an empty sidebar would be a column of nothing beside the page. */
   it('draws no sidebar when there are no sections', () => {
     setDesktop(true);
     renderShell({ nav: [] });
@@ -148,11 +141,7 @@ describe('AppShell', () => {
     assert.ok(screen.getByRole('button', { name: /admin@iace\.co\.in/ }));
   });
 
-  /**
-   * The shell is a fixed-height frame and its content region is what scrolls, so
-   * a framed page can take the height instead. @iace/ui owns that class because it
-   * also owns the `data-page-frame` the selector matches.
-   */
+  /** The shell is a fixed-height frame whose content region scrolls, so a framed page can take the height; @iace/ui owns the class since it also owns `data-page-frame`. */
   it('scrolls its content region, not the document', () => {
     setDesktop(true);
     const { container } = renderShell();
@@ -330,11 +319,7 @@ describe('AppShell — the nav panel overlays, it never reflows the page', () =>
   });
 });
 
-/**
- * The failure this exists to prevent: a route that extends a sibling's used to light both rows, and
- * the first attempt at fixing it left `aria-current` on both — NavLink defaults the prop to "page"
- * and gates it on its own prefix match, so passing `undefined` changed nothing.
- */
+/** Regression guard: a route extending a sibling's used to light both rows; NavLink defaults aria-current to "page" and gates it by prefix, so passing `undefined` changed nothing. */
 describe('AppShell — which row is current', () => {
   const SECTIONED: readonly NavItem[] = [
     {

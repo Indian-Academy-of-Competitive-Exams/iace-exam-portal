@@ -24,10 +24,7 @@ const BOX = [
   'border-input shadow-sm transition-[box-shadow,border-color]',
 ].join(' ');
 
-/**
- * One real input under N aria-hidden boxes, which is what makes autofill,
- * paste and screen readers work. The caret is pinned to the end — no mid-value editing.
- */
+/** One real input under N aria-hidden boxes, which is what makes autofill, paste and screen readers work; the caret is pinned to the end — no mid-value editing. */
 const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
   (
     {

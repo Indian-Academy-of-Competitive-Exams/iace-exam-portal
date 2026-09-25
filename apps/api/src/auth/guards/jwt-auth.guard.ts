@@ -40,8 +40,7 @@ export class JwtAuthGuard implements CanActivate {
       actor: claims.actor,
       sessionId: claims.sid,
       isSuperAdmin: claims.isSuperAdmin ?? false,
-      // Absent on a student token and on any admin token minted before this
-      // claim existed; both mean active.
+      // Absent on a student token and on any admin token minted before this claim existed; both mean active.
       isActive: claims.isActive ?? true,
       permissions: claims.permissions ?? {},
     };

@@ -36,10 +36,7 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { RequestIdMiddleware } from './common/request-id';
 
-/**
- * Guards run in registration order and every route is protected by default — a new endpoint is
- * authenticated unless it explicitly opts out with @Public().
- */
+/** Guards run in registration order and every route is protected by default — a new endpoint is authenticated unless it explicitly opts out with @Public(). */
 @Module({
   imports: [
     AppConfigModule,

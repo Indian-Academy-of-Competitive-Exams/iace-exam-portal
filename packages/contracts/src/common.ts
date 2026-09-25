@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-/**
- * Which identity table a token belongs to — it decides the table, the Redis keyspace
- * and the reachable routes. Reference it as `ActorTypes.STUDENT`, never the bare string.
- */
+/** Which identity table a token belongs to — decides the table, the Redis keyspace and the reachable routes; reference as `ActorTypes.STUDENT`, never the bare string. */
 export const ActorTypes = {
   STUDENT: 'STUDENT',
   ADMIN: 'ADMIN',
@@ -129,10 +126,7 @@ export const MOBILE_DIGITS = 10;
 /** Country/trunk prefixes a student might type, longest first. */
 const MOBILE_PREFIXES = ['+91', '0091', '91', '0'] as const;
 
-/**
- * Reduces the usual forms to the bare 10 digits. A prefix is stripped ONLY when that
- * leaves 10: `9123456789` is a live series, and taking its "91" leaves 8.
- */
+/** Reduces the usual forms to the bare 10 digits; a prefix is stripped ONLY when that leaves 10 — `9123456789` is a live series, and taking its "91" leaves 8. */
 export function normaliseMobile(raw: string): string {
   const compact = raw.trim().replace(/[\s()-]/g, '');
 
@@ -170,10 +164,7 @@ export const otpCodeSchema = z
 /** The one place the PIN length is decided. Everything else derives from it. */
 export const PIN_LENGTH = 4;
 
-/**
- * Entering an existing PIN: shape only, or the rules would reject accounts that exist.
- * A PIN is not unique across students — it is only checked against the one a mobile resolves to.
- */
+/** Entering an existing PIN: shape only, or the rules would reject accounts that exist; a PIN is not unique across students — it's checked only against the one a mobile resolves to. */
 export const pinSchema = z
   .string()
   .transform((v) => v.trim())
@@ -258,5 +249,4 @@ export const searchQuery = () =>
       return held === '' ? undefined : held;
     });
 
-// The failure shape lives in ./envelope — there is one response envelope for
-// the whole API, and NestJS's default error body is not it.
+// The failure shape lives in ./envelope — one response envelope for the whole API; NestJS's default error body is not it.

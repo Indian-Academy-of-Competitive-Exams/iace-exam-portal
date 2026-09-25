@@ -28,16 +28,7 @@ import { htmlFromPlainText } from './question-content';
 import { computeStemHash, languagesIn, validateQuestion } from './question-core';
 import { lookupName, topicKey, type TaxonomyCatalog } from './taxonomy-context';
 
-/**
- * A sheet of questions, judged row by row. Nothing here writes: the preview an
- * admin reads and the commit that follows are the same function, so what the
- * screen promised is what happens.
- *
- * Every row is turned into the SAME `QuestionDraft` the single-question form
- * posts and handed to the SAME `validateQuestion`. A cell the sheet alone can
- * get wrong — an unreadable number, a subject that is not in the bank — is
- * reported here; everything about what makes a question valid lives in the core.
- */
+/** A sheet of questions, judged row by row: nothing here writes, the preview an admin reads and the commit that follows are the same function, and every row is turned into the SAME `QuestionDraft` the single-question form posts and handed to the SAME `validateQuestion` — a cell the sheet alone can get wrong (an unreadable number, a subject that is not in the bank) is reported here, everything about what makes a question valid lives in the core. */
 
 const CODE = QUESTION_VALIDATION_CODE;
 
@@ -104,8 +95,7 @@ export function planQuestionImport(
     };
   }
 
-  // Two rows of the same question in one file is the commonest sheet mistake,
-  // and the second one has to be reported against the line that repeats it.
+  // Two rows of the same question in one file is the commonest sheet mistake, and the second one has to be reported against the line that repeats it.
   const lineByHash = new Map<string, number>();
   const codesInFile = new Set<string>();
 
@@ -162,17 +152,14 @@ function planRow(
   const type = readType(row, issues);
   const draft = buildDraft(row, type, names, catalog, issues);
 
-  // The core rules run on every row, whatever the sheet got wrong: an admin
-  // fixing one column should see the rest of that row's problems in the same pass.
+  // The core rules run on every row, whatever the sheet got wrong: an admin fixing one column should see the rest of that row's problems in the same pass.
   issues.push(...validateQuestion(draft, catalog.context));
 
   const languages = languagesIn(draft.stem);
   const stemHash = languages.includes(DEFAULT_LANGUAGE) ? computeStemHash(draft) : null;
   const duplicateOf = stemHash ? duplicateFor(stemHash, dedup, lineByHash) : null;
 
-  // Only a row that would be written can clash: a row that is already in the
-  // bank is carrying the code it was imported with, and re-uploading last
-  // week's sheet must not turn every coded row into an error.
+  // Only a row that would be written can clash: a row that is already in the bank is carrying the code it was imported with, and re-uploading last week's sheet must not turn every coded row into an error.
   const code = draft.questionCode;
   if (code && !duplicateOf) {
     if (dedup.questionIdByCode.has(code) || codesInFile.has(code)) {
@@ -193,9 +180,7 @@ function planRow(
   if (reported.length > 0) action = 'skip';
   else if (duplicateOf) action = 'duplicate';
 
-  // Only a row that will really be written claims its stem. A skipped row that
-  // held the hash would make the next good copy of the same question a duplicate
-  // of a line nothing was ever created from.
+  // Only a row that will really be written claims its stem. A skipped row that held the hash would make the next good copy of the same question a duplicate of a line nothing was ever created from.
   if (stemHash && action === 'create') lineByHash.set(stemHash, row.line);
 
   return {
@@ -213,10 +198,7 @@ function planRow(
   };
 }
 
-/**
- * A repeat is skipped rather than reported as an error: re-uploading last week's
- * sheet with ten new questions on the end is the normal way to use this.
- */
+/** A repeat is skipped rather than reported as an error: re-uploading last week's sheet with ten new questions on the end is the normal way to use this. */
 function duplicateFor(
   stemHash: string,
   dedup: ImportDedupContext,
@@ -270,10 +252,7 @@ function buildDraft(
   return draft;
 }
 
-/**
- * Names, not ids: a sheet says QUANTITATIVE APTITUDE and PERCENTAGES. Nothing is created
- * from an import — a name that matches nothing is reported rather than invented.
- */
+/** Names, not ids: a sheet says QUANTITATIVE APTITUDE and PERCENTAGES. Nothing is created from an import — a name that matches nothing is reported rather than invented. */
 function resolveTaxonomy(
   names: { subject: string; topic: string },
   catalog: TaxonomyCatalog,
@@ -371,8 +350,7 @@ function readOptions(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['opt
       if (!blank(value)) text[language] = htmlFromPlainText(value);
     }
 
-    // An empty slot is not an option: reporting "option 4 has no text" for a row
-    // that only ever had three is less use than "this needs four options".
+    // An empty slot is not an option: reporting "option 4 has no text" for a row that only ever had three is less use than "this needs four options".
     if (Object.keys(text).length === 0) continue;
     options.push({ position, isCorrect: position === correct, text });
   }
@@ -465,12 +443,7 @@ function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
   return tags;
 }
 
-/**
- * The sheet and the core reach the same conclusion by different routes: a
- * subject the sheet cannot resolve leaves no id, which the core then reports as
- * a missing one. For those three fields the FIRST issue wins — the sheet's, which
- * quotes what was actually typed — so one line of the preview says a thing once.
- */
+/** The sheet and the core reach the same conclusion by different routes: a subject the sheet cannot resolve leaves no id, which the core then reports as a missing one. For those three fields the FIRST issue wins — the sheet's, which quotes what was actually typed — so one line of the preview says a thing once. */
 const TAXONOMY_FIELDS = new Set(['subjectId', 'topicId']);
 
 function dedupeIssues(issues: ValidationIssue[]): ValidationIssue[] {

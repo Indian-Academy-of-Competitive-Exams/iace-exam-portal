@@ -3,11 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-/**
- * prisma/seed.sql is the only thing that puts a super admin, an exam catalog and the SSC
- * CGL Tier 1 pattern into a fresh database. It is run by hand, so nothing else would
- * notice if it stopped being re-runnable or if its cached totals drifted from its sections.
- */
+/** prisma/seed.sql is the only thing that puts a super admin, an exam catalog and the SSC CGL Tier 1 pattern into a fresh database. It is run by hand, so nothing else would notice if it stopped being re-runnable or if its cached totals drifted from its sections. */
 const SEED = readFileSync(join(__dirname, '../../../prisma/seed.sql'), 'utf8');
 
 const SEEDED_TABLES = [...SEED.matchAll(/INSERT INTO "(\w+)"/g)].map((match) => match[1] ?? '');
@@ -63,12 +59,7 @@ function columns(row: string): string[] {
   return cells.map((cell) => cell.trim().replace(/^'|'$/g, ''));
 }
 
-/**
- * The VALUES rows of the insert into `table`. Everything before VALUES is the column
- * list, so it is dropped by position rather than by counting cells — a three-column
- * insert is a real row, and a helper that quietly returns nothing makes every assertion
- * over it pass without checking anything.
- */
+/** The VALUES rows of the insert into `table`. Everything before VALUES is the column list, so it is dropped by position rather than by counting cells — a three-column insert is a real row, and a helper that quietly returns nothing makes every assertion over it pass without checking anything. */
 function insertedRows(table: string): string[][] {
   const statement = new RegExp(`INSERT INTO "${table}"[\\s\\S]*?;`).exec(SEED);
   assert.ok(statement, `seed.sql inserts nothing into ${table}`);
@@ -92,12 +83,7 @@ describe('the seed is safe to run again', () => {
     }
   });
 
-  /**
-   * The failure this prevents: `ON CONFLICT (col)` absorbs a conflict on that one index
-   * and raises on every other. A config can collide on its primary key OR on the partial
-   * unique over ("examStageId") WHERE "isDefault", so naming either one leaves the seed
-   * erroring after an admin has promoted a default of their own.
-   */
+  /** The failure this prevents: `ON CONFLICT (col)` absorbs a conflict on that one index and raises on every other. A config can collide on its primary key OR on the partial unique over ("examStageId") WHERE "isDefault", so naming either one leaves the seed erroring after an admin has promoted a default of their own. */
   it('names no arbiter, so a conflict on any constraint is absorbed', () => {
     assert.doesNotMatch(STATEMENTS, /ON CONFLICT \(/);
   });
@@ -130,11 +116,7 @@ describe('the first super admin', () => {
 });
 
 describe('the SSC CGL catalog', () => {
-  /**
-   * Two tiers, not four: the 2022 revamp abolished the descriptive Tier 3 and the
-   * DEST/CPT Tier 4, folding the skill test into Tier 2. Seeding the old shape would put
-   * stages on screen that the exam does not have, under keys that are never reused.
-   */
+  /** Two tiers, not four: the 2022 revamp abolished the descriptive Tier 3 and the DEST/CPT Tier 4, folding the skill test into Tier 2. Seeding the old shape would put stages on screen that the exam does not have, under keys that are never reused. */
   it('carries the two tiers the exam actually has', () => {
     const stages = insertedRows('ExamStage');
     assert.deepEqual(
@@ -150,10 +132,7 @@ describe('the SSC CGL catalog', () => {
     );
   });
 
-  /**
-   * Disposition drives whether a stage can carry a mock. Tier 2 is PARTIAL because it is
-   * compound: its objective modules can be sat, its DEST typing module cannot.
-   */
+  /** Disposition drives whether a stage can carry a mock. Tier 2 is PARTIAL because it is compound: its objective modules can be sat, its DEST typing module cannot. */
   it('conducts Tier 1 outright and Tier 2 only in part', () => {
     const dispositions = Object.fromEntries(
       insertedRows('ExamStage').map((cells) => [cells[2], cells[6]]),
@@ -179,10 +158,7 @@ describe('the SSC CGL Tier 1 default config', () => {
     assert.match(config, /3600, 'COMPOSITE_FREE', 'FREE'/);
   });
 
-  /**
-   * The failure this prevents: totalQuestions and totalMarks are a display cache, so a
-   * section edited without them is a config that reports a paper it does not describe.
-   */
+  /** The failure this prevents: totalQuestions and totalMarks are a display cache, so a section edited without them is a config that reports a paper it does not describe. */
   it('caches the totals its own sections add up to', () => {
     const sections = insertedRows('BaseConfigSection');
     const questions = sections.reduce((sum, cells) => sum + Number(cells[5]), 0);

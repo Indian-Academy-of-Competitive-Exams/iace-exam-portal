@@ -6,9 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // Consume the contracts as TS source, not its CommonJS build: the build
-      // targets the NestJS API, and a browser cannot ESM-import CJS. This also
-      // means an edit to a contract hot-reloads here with no rebuild step.
+      // Consume contracts as TS source, not its CJS build — a browser cannot ESM-import CJS, and edits hot-reload with no rebuild.
       '@iace/contracts': fileURLToPath(
         new URL('../../packages/contracts/src/index.ts', import.meta.url),
       ),

@@ -5,10 +5,7 @@ import { parseCsvRows, readCsvTable, normaliseHeader } from '../src/common/impor
 import { mobilesIn, planStudentImport, type ImportContext } from '../src/imports/student-import';
 import { roster } from './support/fakes';
 
-/**
- * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and
- * the import succeeds with the wrong data in the wrong fields.
- */
+/** A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and the import succeeds with the wrong data in the wrong fields. */
 
 const parseCsv = (input: string) => parseCsvRows(input).map((row) => row.cells);
 
@@ -21,8 +18,7 @@ describe('parseCsvRows', () => {
   });
 
   it('survives the BOM Excel writes in front of UTF-8 files', () => {
-    // Left in place it becomes part of the first header, and "mobile" matches
-    // nothing — the whole file then reports a missing column.
+    // Left in place it becomes part of the first header, and "mobile" matches nothing — the whole file then reports a missing column.
     const [header] = parseCsv('\uFEFFmobile,fullName\n9876543210,Asha');
     assert.deepEqual(header, ['mobile', 'fullName']);
   });
@@ -35,8 +31,7 @@ describe('parseCsvRows', () => {
   });
 
   it('keeps a comma that is inside a quoted field', () => {
-    // The single most damaging failure: "Kumari, Asha" splitting into two cells
-    // pushes every later column one to the right, silently.
+    // The single most damaging failure: "Kumari, Asha" splitting into two cells pushes every later column one to the right, silently.
     assert.deepEqual(parseCsv('name,city\n"Kumari, Asha",Hyderabad'), [
       ['name', 'city'],
       ['Kumari, Asha', 'Hyderabad'],
@@ -76,8 +71,7 @@ describe('readCsvTable', () => {
   });
 
   it('numbers lines the way an editor does, header included', () => {
-    // "line 3" has to mean the third line of their file, or it is not useful
-    // against a 400-row sheet.
+    // "line 3" has to mean the third line of their file, or it is not useful against a 400-row sheet.
     const table = readCsvTable('mobile\n9876543210\n9876543211');
     assert.deepEqual(
       table.rows.map((r) => r.line),
@@ -86,8 +80,7 @@ describe('readCsvTable', () => {
   });
 
   it('does not shift line numbers after a blank line — the regression', () => {
-    // Blank lines are dropped, so deriving the number from the row's INDEX reported every row after
-    // one a line early.
+    // Blank lines are dropped, so deriving the number from the row's INDEX reported every row after one a line early.
     const table = readCsvTable('mobile\n9876543210\n\n9876543211\n\n\n9876543212');
 
     assert.deepEqual(
@@ -149,8 +142,7 @@ describe('planStudentImport', () => {
   });
 
   it('skips a bad row and keeps the rest of the file', () => {
-    // The whole point of "forgiving": one bad number must not cost the other
-    // two rows.
+    // The whole point of "forgiving": one bad number must not cost the other two rows.
     const plan = planStudentImport(
       readCsvTable(
         roster('mobile,fullName\n9876543210,Good\nnot-a-number,Bad\n9876543211,Also good'),
@@ -174,8 +166,7 @@ describe('planStudentImport', () => {
   });
 
   it('catches the same number twice in one file, naming the earlier line', () => {
-    // Two "creates" for one number would pass preview and then collide on the
-    // unique index halfway through the commit.
+    // Two "creates" for one number would pass preview and then collide on the unique index halfway through the commit.
     const plan = planStudentImport(
       readCsvTable(roster('mobile\n9876543210\n9876543210')),
       context(),
@@ -234,11 +225,7 @@ describe('planStudentImport — the starting PIN', () => {
     assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
   });
 
-  /**
-   * The failure this exists to prevent: re-importing last term's roster resets the PIN of every
-   * student who had chosen one, handing all of those accounts back to whoever holds the sheet — and
-   * nothing about the import looks wrong.
-   */
+  /** The failure this exists to prevent: re-importing last term's roster resets the PIN of every student who had chosen one, handing all of those accounts back to whoever holds the sheet — and nothing about the import looks wrong. */
   it('never resets a PIN the student chose', () => {
     const plan = planStudentImport(readCsvTable(roster('mobile\n9000000001')), context());
 
@@ -273,10 +260,7 @@ describe('the columns an admin actually writes', () => {
     assert.equal(plan.rows[0]?.fullName, 'Asha Kumari');
   });
 
-  /**
-   * Every one of these is a real file somebody will try: last month's template, a roster exported
-   * from another system, a sheet typed by hand.
-   */
+  /** Every one of these is a real file somebody will try: last month's template, a roster exported from another system, a sheet typed by hand. */
   it('accepts the other names the same column goes by', () => {
     for (const header of ['mobile', 'Phone', 'Contact Number', 'MOBILE_NO']) {
       const plan = planStudentImport(readCsvTable(roster(`${header}\n9876543210`)), context());
@@ -405,10 +389,7 @@ describe('the columns an admin actually writes', () => {
   });
 });
 
-/**
- * These build the lookups the import runs before planning anything. They read the file through the
- * SAME column resolution the planner uses — and once did not, which is the bug below.
- */
+/** These build the lookups the import runs before planning anything. They read the file through the SAME column resolution the planner uses — and once did not, which is the bug below. */
 describe('what the import looks up before it plans', () => {
   it('collects the mobile numbers under the readable header', () => {
     const table = readCsvTable('Mobile Number,Full Name\n9876543210,Asha\n9000000001,Existing');
@@ -416,11 +397,7 @@ describe('what the import looks up before it plans', () => {
     assert.deepEqual(mobilesIn(table), ['9876543210', '9000000001']);
   });
 
-  /**
-   * The failure this exists to prevent, found by re-importing a file rather than by any unit test:
-   * reading the raw `mobile` key while the sheet said "Mobile Number" matched nothing, so every row
-   * of a RE-import looked new.
-   */
+  /** The failure this exists to prevent, found by re-importing a file rather than by any unit test: reading the raw `mobile` key while the sheet said "Mobile Number" matched nothing, so every row of a RE-import looked new. */
   it('finds them under every spelling of the column', () => {
     for (const header of ['Mobile Number', 'mobile', 'Phone', 'CONTACT_NUMBER']) {
       assert.deepEqual(mobilesIn(readCsvTable(`${header}\n9876543210`)), ['9876543210'], header);

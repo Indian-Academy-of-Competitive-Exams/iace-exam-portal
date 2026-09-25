@@ -21,10 +21,7 @@ export interface AppMutationMeta {
   silent?: boolean;
 }
 
-/**
- * The fetching policy every SPA runs on: retry once, no refetch on focus — students
- * sit timed tests on flaky mobile. Also catches every mutation failure in one place.
- */
+/** The fetching policy every SPA runs on: retry once, no refetch on focus — students sit timed tests on flaky mobile; also catches every mutation failure in one place. */
 export function createAppQueryClient(options: { notify?: Notifier } = {}): QueryClient {
   const { notify } = options;
 

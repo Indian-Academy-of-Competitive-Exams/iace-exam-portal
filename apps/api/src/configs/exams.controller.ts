@@ -30,10 +30,7 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { ExamsService } from './exams.service';
 
-/**
- * The exam catalog. Reading is open to anyone who manages students — they pick from the list —
- * while every write is super-admin only, which is the entire reason the catalog exists.
- */
+/** The exam catalog. Reading is open to anyone who manages students — they pick from the list — while every write is super-admin only, which is the entire reason the catalog exists. */
 @Controller('admin/exams')
 @Actors(ActorTypes.ADMIN)
 export class ExamsController {

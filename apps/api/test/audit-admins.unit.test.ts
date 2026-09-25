@@ -25,10 +25,7 @@ describe('what files under FEATURE_PERMISSION', () => {
   const routeOf = (handler: keyof AdminsController) =>
     Reflect.getMetadata(AUDIT_KEY, AdminsController.prototype[handler]) as AuditRoute | undefined;
 
-  /**
-   * `entityId` under FEATURE_PERMISSION is an Admin id, set deliberately by changeGrant. Reading
-   * the key list is not a change and is filed nowhere.
-   */
+  /** `entityId` under FEATURE_PERMISSION is an Admin id, set deliberately by changeGrant. Reading the key list is not a change and is filed nowhere. */
   it('files the two grant routes, and nothing for reading the list', () => {
     assert.equal(routeOf('grant')?.feature, AUDIT_FEATURE.FEATURE_PERMISSION);
     assert.equal(routeOf('revoke')?.feature, AUDIT_FEATURE.FEATURE_PERMISSION);

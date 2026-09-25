@@ -9,10 +9,7 @@ export interface AuditStore {
   unchanged: boolean;
 }
 
-/**
- * The diff a service computed for the write it is doing. Established per request by
- * `AuditContextMiddleware` — an interceptor cannot, because the handler runs on subscribe.
- */
+/** The diff a service computed for the write it is doing. Established per request by `AuditContextMiddleware` — an interceptor cannot, because the handler runs on subscribe. */
 @Injectable()
 export class AuditContext {
   private readonly storage = new AsyncLocalStorage<AuditStore>();

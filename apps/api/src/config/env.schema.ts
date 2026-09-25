@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { API_ROLES } from './api-role';
 
-/** `"true"`/`"1"` → true. `z.coerce.boolean()` is wrong here: it makes the
- *  string "false" truthy. */
+/** `"true"`/`"1"` → true. `z.coerce.boolean()` is wrong here: it makes the string "false" truthy. */
 const boolFromEnv = (fallback: boolean) =>
   z
     .string()
@@ -100,15 +99,12 @@ export const envSchema = z.object({
   OTP_MAX_PER_DAY: z.coerce.number().int().positive().default(5),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
-  // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the
-  // setup ticket live in Redis.
+  // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the setup ticket live in Redis.
   PIN_PEPPER: z.string().min(24, 'PIN_PEPPER must be at least 24 characters'),
   PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  // Escalating lockout. Each time a number is locked out again it climbs one rung; the last rung
-  // repeats forever.
+  // Escalating lockout. Each time a number is locked out again it climbs one rung; the last rung repeats forever.
   PIN_LOCKOUT_STEPS_SEC: secondsLadder([900, 3600, 86400]),
-  // How long a number must go without being locked out before the ladder drops back to the first
-  // rung.
+  // How long a number must go without being locked out before the ladder drops back to the first rung.
   PIN_LOCKOUT_DECAY_SEC: z.coerce.number().int().positive().default(86400),
   PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
 
@@ -129,8 +125,7 @@ export const envSchema = z.object({
   BODY_LIMIT_DEFAULT: byteSize('256kb'),
   BODY_LIMIT_IMPORT: byteSize('10mb'),
 
-  // Object storage. ONE code path: MinIO locally, AWS S3 in production —
-  // only the endpoint, credentials and path-style flag differ.
+  // Object storage. ONE code path: MinIO locally, AWS S3 in production — only the endpoint, credentials and path-style flag differ.
   S3_ENDPOINT: z
     .string()
     .optional()
@@ -263,10 +258,7 @@ export const envSchemaChecked = envSchema
 
 export type Env = z.infer<typeof envSchema>;
 
-/**
- * Fails the process at boot with every problem listed at once — a missing env var should never
- * surface as a mystery 500 an hour into a live test.
- */
+/** Fails the process at boot with every problem listed at once — a missing env var should never surface as a mystery 500 an hour into a live test. */
 export function validateEnv(raw: Record<string, unknown>): Env {
   const parsed = envSchemaChecked.safeParse(raw);
   if (parsed.success) return parsed.data;

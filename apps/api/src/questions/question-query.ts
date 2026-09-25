@@ -93,8 +93,7 @@ function whatWasAsked(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
 }
 
 export function questionOrderBy(sort: QuestionSort): Prisma.QuestionOrderByWithRelationInput[] {
-  // `id` last, always: two questions saved in the same millisecond would
-  // otherwise page in an order the database is free to change between requests.
+  // `id` last, always: two questions saved in the same millisecond would otherwise page in an order the database is free to change between requests.
   if (sort === QUESTION_SORTS.OLDEST) return [{ createdAt: 'asc' }, { id: 'asc' }];
   return [{ createdAt: 'desc' }, { id: 'desc' }];
 }

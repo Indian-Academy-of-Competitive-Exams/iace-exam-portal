@@ -57,10 +57,7 @@ export interface ImportContext {
   programCodes: Set<string>;
 }
 
-/**
- * Which mobile numbers a file mentions — what the import loads existing students by, rather than
- * scanning the table once per row.
- */
+/** Which mobile numbers a file mentions — what the import loads existing students by, rather than scanning the table once per row. */
 export function mobilesIn(table: CsvTable): string[] {
   const mobiles = new Set<string>();
   for (const row of table.rows) {
@@ -143,8 +140,7 @@ function missingHeaders(headers: string[]): string[] {
   const missing = missingColumns(headers);
   if (missing.length === 0) return [];
 
-  // Named the way the sample file names them, because that is the file the
-  // admin is looking at while reading this.
+  // Named the way the sample file names them, because that is the file the admin is looking at while reading this.
   const wanted = missing.map((column) => `"${column.header}"`).join(', ');
   return [
     `The first row must name the columns. This file needs ${wanted}. ` +
@@ -379,8 +375,7 @@ function planRow(
     programs,
     profile,
     existingStudentId: existing?.id ?? null,
-    // A student who already chose a PIN keeps it. Re-importing last term's
-    // roster must not hand every one of those accounts back to the sheet.
+    // A student who already chose a PIN keeps it. Re-importing last term's roster must not hand every one of those accounts back to the sheet.
     willReceiveDefaultPin: action !== 'skip' && !existing?.hasPin,
     action,
     errors,

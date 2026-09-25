@@ -29,9 +29,7 @@ export class FeaturePermissionGuard implements CanActivate {
     if (user?.actor !== ActorTypes.ADMIN) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'Admin access required');
     }
-    // Before the super-admin bypass, deliberately: deactivating an account has to remove access across
-    // the whole platform, and a deactivated super admin who still bypassed every check would be the
-    // one account the feature cannot switch off.
+    // Before the super-admin bypass, deliberately: deactivating an account has to remove access across the whole platform, and a deactivated super admin who still bypassed every check would be the one account the feature cannot switch off.
     if (!user.isActive) {
       throw new AppException(
         ErrorCodes.FORBIDDEN,

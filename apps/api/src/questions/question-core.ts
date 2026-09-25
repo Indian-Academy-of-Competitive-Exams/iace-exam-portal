@@ -48,10 +48,7 @@ const textNode = (value: string | undefined): RichContent => {
   return blank(safe) ? [] : [{ type: 'TEXT', text: asContentHtml(stripImageSrc(safe)) }];
 };
 
-/**
- * Text cells to content nodes. A language reaches the row only if it has a stem:
- * a lone translated option would render as a question with no question.
- */
+/** Text cells to content nodes. A language reaches the row only if it has a stem: a lone translated option would render as a question with no question. */
 export function buildContent(draft: QuestionDraft): BuiltQuestion {
   const languages = languagesIn(draft.stem);
 

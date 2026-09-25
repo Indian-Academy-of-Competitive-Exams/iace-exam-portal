@@ -1,17 +1,5 @@
 #!/usr/bin/env node
-/**
- * Fails when prisma/schema.prisma and the migration history disagree.
- *
- * `prisma migrate diff --from-migrations` insists on `--shadow-database-url` as
- * a flag — it will not read the datasource's shadowDatabaseUrl, and the flag is
- * expanded by the shell long before Prisma loads .env. Passing "$SHADOW_DATABASE_URL"
- * straight from an npm script therefore sends Prisma an empty string and it dies
- * with P1013 about a relative URL, which reads like a malformed connection string
- * rather than a missing one.
- *
- * So read the value here. .env is parsed rather than sourced: values in it
- * contain spaces, and `. .env` runs them as commands.
- */
+/** Fails when prisma/schema.prisma and the migration history disagree; `--shadow-database-url` must be literal (Prisma won't read it from .env, and the shell expands `$SHADOW_DATABASE_URL` empty → P1013), so .env is parsed — not sourced — here. */
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { ROOT, envValue } from './test-database.mjs';

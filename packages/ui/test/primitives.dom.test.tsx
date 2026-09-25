@@ -68,10 +68,7 @@ describe('Separator', () => {
 });
 
 describe('Brandmark', () => {
-  /**
-   * The institute is IACE. A mark that renders an abbreviation, or repeats the
-   * name for a screen reader, reads as a bug in the logo.
-   */
+  /** The institute is IACE; a mark that renders an abbreviation, or repeats the name for a screen reader, reads as a bug in the logo. */
   it('says the institute name once, in full', () => {
     const { container } = render(<Brandmark />);
 
@@ -102,10 +99,7 @@ describe('PinField', () => {
     return <PinField form={form} name="code" label="One-time code" length={4} />;
   }
 
-  /**
-   * One real input under the drawn boxes — that is what makes autofill and paste
-   * work, and what `FormField` cannot give a control that renders its own value.
-   */
+  /** One real input under the drawn boxes — that's what makes autofill and paste work, which `FormField` cannot give a control that renders its own value. */
   it('labels the single field that holds the whole code', () => {
     render(<Form />);
 

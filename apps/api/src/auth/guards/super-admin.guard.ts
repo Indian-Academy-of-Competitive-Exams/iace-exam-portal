@@ -3,10 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { SUPER_ADMIN_KEY, type AuthenticatedUser } from '../../common/security';
 
-/**
- * Super-admin-only routes. Deliberately NOT a feature permission: these gate the list
- * every other admin's choices are made from, so granting one must not open them.
- */
+/** Super-admin-only routes. Deliberately NOT a feature permission: these gate the list every other admin's choices are made from, so granting one must not open them. */
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -22,8 +19,7 @@ export class SuperAdminGuard implements CanActivate {
     if (user?.actor !== ActorTypes.ADMIN || !user.isSuperAdmin) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin can change this');
     }
-    // Being a super admin is not enough if the account is switched off — see
-    // the same check in FeaturePermissionGuard.
+    // Being a super admin is not enough if the account is switched off — see the same check in FeaturePermissionGuard.
     if (!user.isActive) {
       throw new AppException(
         ErrorCodes.FORBIDDEN,

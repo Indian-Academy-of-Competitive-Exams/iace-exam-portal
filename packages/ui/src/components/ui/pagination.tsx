@@ -2,10 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './button';
 import { Combobox } from './combobox';
 
-/**
- * Shows the range ("1–20 of 337"), not just the page number.
- * Page sizes are passed in: the cap is declared in @iace/contracts, not here.
- */
+/** Shows the range ("1–20 of 337"), not just the page number. Page sizes are passed in — the cap is declared in @iace/contracts, not here. */
 export interface PaginationProps {
   page: number;
   pageSize: number;

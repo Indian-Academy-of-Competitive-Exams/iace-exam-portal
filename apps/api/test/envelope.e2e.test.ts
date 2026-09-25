@@ -19,10 +19,7 @@ import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { RequestIdMiddleware } from '../src/common/request-id';
 import { ZodBody } from '../src/common/zod-validation.pipe';
 
-/**
- * End to end over real HTTP, through a real Nest app wired exactly the way AppModule wires the
- * envelope.
- */
+/** End to end over real HTTP, through a real Nest app wired exactly the way AppModule wires the envelope. */
 
 const bodySchema = z.object({ mobile: z.string().min(10, 'Enter a valid 10-digit mobile number') });
 

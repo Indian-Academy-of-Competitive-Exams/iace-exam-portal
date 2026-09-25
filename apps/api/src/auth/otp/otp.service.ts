@@ -68,8 +68,7 @@ export class OtpService {
       expiresInSec: ttlSec,
       resendAfterSec: cooldownSec,
       codeLength: code.length,
-      // Convenience for local development only — never with a real sender,
-      // and never outside development.
+      // Convenience for local development only — never with a real sender, and never outside development.
       ...(this.config.get('OTP_SENDER') === OTP_SENDERS.CONSOLE && this.config.isDevelopment
         ? { devCode: code }
         : {}),
@@ -117,10 +116,7 @@ export class OtpService {
     }
   }
 
-  /**
-   * Consumes the pending code. Throws on wrong/expired codes and burns the challenge once the
-   * attempt cap is hit, so a code cannot be brute-forced inside its TTL.
-   */
+  /** Consumes the pending code. Throws on wrong/expired codes and burns the challenge once the attempt cap is hit, so a code cannot be brute-forced inside its TTL. */
   async verify(actor: ActorType, identifier: string, code: string): Promise<void> {
     const key = redisKeys.otp(actor, identifier);
     const stored = await this.redis.getJson<StoredOtp>(key);
@@ -131,8 +127,7 @@ export class OtpService {
       const attempts = stored.attempts + 1;
       if (attempts >= this.config.get('OTP_MAX_VERIFY_ATTEMPTS')) {
         await this.redis.del(key);
-        // The challenge is burnt, not just wrong — a different code, because
-        // the client's next step is "request a new one", not "try again".
+        // The challenge is burnt, not just wrong — a different code, because the client's next step is "request a new one", not "try again".
         throw new AppException(
           ErrorCodes.RATE_LIMITED,
           'Too many incorrect attempts. Request a new code',
@@ -162,10 +157,7 @@ export class OtpService {
   }
 }
 
-/**
- * Students are reached on the mobile number they signed up with, admins on their email address —
- * the same split the two identity tables have.
- */
+/** Students are reached on the mobile number they signed up with, admins on their email address — the same split the two identity tables have. */
 function channelFor(actor: ActorType, config: AppConfigService): MessageChannel {
   if (actor !== ActorTypes.STUDENT) return MESSAGE_CHANNELS.EMAIL;
 

@@ -32,18 +32,13 @@ function wrap(text: string, width: number): string[] {
   return lines;
 }
 
-/**
- * Development sender: prints the message to the API log instead of spending an SMS.
- * Refused under NODE_ENV=production, so a misconfigured deploy fails at boot rather
- * than logging live OTP codes. Selected by OTP_SENDER=console.
- */
+/** Development sender: prints the message to the API log instead of spending an SMS. Refused under NODE_ENV=production, so a misconfigured deploy fails at boot rather than logging live OTP codes. Selected by OTP_SENDER=console. */
 @Injectable()
 export class ConsoleMessageSender implements MessageSender {
   private readonly logger = new Logger('Outbound');
 
   send(message: OutboundMessage): Promise<void> {
-    // EVERY row is wrapped, not just the body: an address is as capable of
-    // being too long as a sentence is.
+    // EVERY row is wrapped, not just the body: an address is as capable of being too long as a sentence is.
     const rows = [
       `${message.kind} → ${message.actor} via ${message.channel}`,
       message.to,

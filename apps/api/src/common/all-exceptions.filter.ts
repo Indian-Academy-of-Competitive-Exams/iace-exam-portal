@@ -22,10 +22,7 @@ import {
 import { ensureRequestId, type RequestWithId } from './request-id';
 import { PRISMA_ERROR_CODES, isDeadlock, isMalformedValue } from './prisma-errors';
 
-/**
- * The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma,
- * a stray TypeError.
- */
+/** The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma, a stray TypeError. */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Request');
@@ -55,8 +52,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const line = `${where} → ${status} ${error.code} [${requestId}]`;
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
-      // The only place the real cause exists: the response deliberately does not
-      // carry it, so losing it here would mean losing it entirely.
+      // The only place the real cause exists: the response deliberately does not carry it, so losing it here would mean losing it entirely.
       this.logger.error(line, exception instanceof Error ? exception.stack : String(exception));
       report(exception, requestId, where);
       return;
@@ -156,11 +152,7 @@ function translate(exception: unknown): Translated {
   return internal();
 }
 
-/**
- * The numeric status an Express middleware error carries, if it is a client error. 5xx is
- * deliberately excluded: a middleware failing on our side is our bug and belongs in the INTERNAL
- * path, stack and all.
- */
+/** The numeric status an Express middleware error carries, if it is a client error. 5xx is deliberately excluded: a middleware failing on our side is our bug and belongs in the INTERNAL path, stack and all. */
 function expressStatusOf(exception: unknown): number | null {
   if (typeof exception !== 'object' || exception === null) return null;
   const { status, statusCode } = exception as { status?: unknown; statusCode?: unknown };
@@ -180,8 +172,7 @@ const CLIENT_ERROR_MESSAGES: Record<number, string> = {
 function internal(): Translated {
   return {
     status: ERROR_CODE_STATUS.INTERNAL,
-    // Generic on purpose: an unhandled error's message is as likely to be a
-    // connection string as anything a user could act on.
+    // Generic on purpose: an unhandled error's message is as likely to be a connection string as anything a user could act on.
     error: { code: ErrorCodes.INTERNAL, message: 'Something went wrong. Please try again.' },
   };
 }

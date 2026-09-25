@@ -45,8 +45,7 @@ export class AdminsController {
     @Body(new ZodBody(createAdminSchema)) body: CreateAdminBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Admin> {
-    // createdById is taken from the token, never the body — an audit field a
-    // caller can set is not an audit field.
+    // createdById is taken from the token, never the body — an audit field a caller can set is not an audit field.
     return this.admins.create(body, user.id);
   }
 

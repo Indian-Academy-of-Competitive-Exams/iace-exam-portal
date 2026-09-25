@@ -2,10 +2,7 @@ import * as React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '../../lib/utils';
 
-/**
- * For recovering text the layout cut short, never a value's only home.
- * `TooltipProvider` goes once, high in the app, and owns the shared delay.
- */
+/** For recovering text the layout cut short, never a value's only home; `TooltipProvider` goes once, high in the app, and owns the shared delay. */
 function TooltipProvider({
   delayDuration = 300,
   skipDelayDuration = 200,

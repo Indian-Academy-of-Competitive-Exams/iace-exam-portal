@@ -34,11 +34,7 @@ type TopicRow = Prisma.TopicGetPayload<{ include: typeof TOPIC_INCLUDE }>;
 export const AUDITED_SUBJECT_FIELDS = ['name', 'code'] as const;
 export const AUDITED_TOPIC_FIELDS = ['name'] as const;
 
-/**
- * Owns `Subject` and `Topic` (docs/03 §5). Names arrive canonical from the schemas, so a
- * case- or space-different duplicate cannot be created. Anything finer than a topic is a
- * `topic:` tag on the question, not a row here.
- */
+/** Owns `Subject` and `Topic` (docs/03 §5). Names arrive canonical from the schemas, so a case- or space-different duplicate cannot be created. Anything finer than a topic is a `topic:` tag on the question, not a row here. */
 @Injectable()
 export class TaxonomyService {
   constructor(

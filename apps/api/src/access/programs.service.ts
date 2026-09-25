@@ -29,10 +29,7 @@ export const AUDITED_PROGRAM_FIELDS = ['code', 'name', 'isActive'] as const;
 export const INACTIVE_PROGRAM_MESSAGE =
   'That program is no longer offered. Pick another, or reactivate it first.';
 
-/**
- * Owns `Program` — the coaching variants a student is a candidate for. Adding one is a row,
- * never a migration, which is the whole reason it is a table rather than an enum.
- */
+/** Owns `Program` — the coaching variants a student is a candidate for. Adding one is a row, never a migration, which is the whole reason it is a table rather than an enum. */
 @Injectable()
 export class ProgramsService {
   constructor(
@@ -144,10 +141,7 @@ export class ProgramsService {
     return program;
   }
 
-  /**
-   * `Student.programs` holds the code as free text with no foreign key, and a series holds it
-   * too — so a rename or a delete detaches every one of them with no error and no rows changed.
-   */
+  /** `Student.programs` holds the code as free text with no foreign key, and a series holds it too — so a rename or a delete detaches every one of them with no error and no rows changed. */
   private async codeChangeBlocker(code: string, verb = 'change'): Promise<string | null> {
     const [students, series] = await Promise.all([
       this.prisma.student.count({ where: { programs: { has: code } } }),

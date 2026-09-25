@@ -25,10 +25,7 @@ export interface RadioGroupProps extends Omit<React.HTMLAttributes<HTMLElement>,
   inline?: boolean;
 }
 
-/**
- * Native radios: arrow keys, the one-of-many rule and "radio button, 2 of 4" come free.
- * A `fieldset` + `legend` is what ties the question to its answers.
- */
+/** Native radios: arrow keys, the one-of-many rule and "radio button, 2 of 4" come free; a `fieldset` + `legend` ties the question to its answers. */
 export function RadioGroup({
   name,
   value,

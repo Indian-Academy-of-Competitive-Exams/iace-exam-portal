@@ -15,8 +15,7 @@ import { AccessResolverService } from '../access';
 import { AuditContext } from '../audit';
 import { checkDocument, columnFor, documentKey } from './documents';
 
-/** What a student's own profile edit covers — the fields a pre-test prompt asks for, plus contact
- * details. Narrower than `AUDITED_STUDENT_FIELDS`: this route cannot touch enrolment or branch. */
+/** What a student's own profile edit covers — the fields a pre-test prompt asks for, plus contact details. Narrower than `AUDITED_STUDENT_FIELDS`: this route cannot touch enrolment or branch. */
 export const AUDITED_PROFILE_FIELDS = [
   'motherName',
   'fatherName',
@@ -59,8 +58,7 @@ export class MeService {
       ? fieldDiff(before.profile, updated.profile, AUDITED_PROFILE_FIELDS)
       : null;
 
-    // Merged over `StudentsService.update`'s diff, never replacing it: this route can rename the
-    // student too, and replacing it filed that as a change with nothing in it.
+    // Merged over `StudentsService.update`'s diff, never replacing it: this route can rename the student too, and replacing it filed that as a change with nothing in it.
     this.auditContext.setEntityId(studentId);
     this.auditContext.setChanged(columns || profile ? { ...columns, ...profile } : null);
 
@@ -76,19 +74,16 @@ export class MeService {
     checkDocument(file, kind);
     if (!file) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload');
 
-    // Before the upload, not after: an object pushed to S3 for a student who
-    // no longer exists is one nothing will ever read or clean up.
+    // Before the upload, not after: an object pushed to S3 for a student who no longer exists is one nothing will ever read or clean up.
     await this.students.assertExists(studentId);
 
     const key = documentKey(studentId, kind, file.mimetype, Date.now());
     await this.storage.upload(key, file.buffer, file.mimetype);
 
-    // The write — and the `profileCompleted` recompute that has to go with it —
-    // belongs to the module that owns the table.
+    // The write — and the `profileCompleted` recompute that has to go with it — belongs to the module that owns the table.
     await this.students.saveDocumentKey(studentId, columnFor(kind), key);
 
-    // The path is `documents/:kind`, not `:id` — the interceptor's id fallback
-    // has no path param to find here, so the entity has to be named explicitly.
+    // The path is `documents/:kind`, not `:id` — the interceptor's id fallback has no path param to find here, so the entity has to be named explicitly.
     this.auditContext.setEntityId(studentId);
 
     return this.profile(studentId);

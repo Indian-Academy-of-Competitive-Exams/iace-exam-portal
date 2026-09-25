@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EXAM_CODE_MAX, branchNameSchema, canonicalName, examCodeSchema } from '@iace/contracts';
 
-/**
- * Branch names and exam codes are the vocabulary access is routed through, and the failure these
- * rules exist to prevent is the near-duplicate: two rows that mean one thing, that no uniqueness
- * check catches, and that quietly split a cohort in half.
- */
+/** Branch names and exam codes are the vocabulary access is routed through, and the failure these rules exist to prevent is the near-duplicate: two rows that mean one thing, that no uniqueness check catches, and that quietly split a cohort in half. */
 describe('canonicalName — one spelling per name', () => {
   it('folds case, so a name cannot be entered twice by shouting', () => {
     assert.equal(canonicalName('ssc cgl morning'), 'SSC CGL MORNING');

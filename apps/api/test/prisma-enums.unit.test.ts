@@ -35,11 +35,7 @@ import {
   actorTypeSchema,
 } from '@iace/contracts';
 
-/**
- * The two sides of every shared enum: a const object in contracts, and a Prisma enum the database
- * stores. A value present on one side and not the other is a runtime failure no type catches — the
- * guard compares strings the column cannot hold, or a write dies at the driver.
- */
+/** The two sides of every shared enum: a const object in contracts, and a Prisma enum the database stores. A value present on one side and not the other is a runtime failure no type catches — the guard compares strings the column cannot hold, or a write dies at the driver. */
 const SCHEMA = readFileSync(join(__dirname, '../../../prisma/schema.prisma'), 'utf8');
 
 const MIRRORED = {
@@ -84,8 +80,7 @@ function prismaEnum(name: string): string[] {
 
 describe('Prisma enums mirror the const objects in contracts', () => {
   for (const [prismaName, constant] of Object.entries(MIRRORED)) {
-    // Order too, not just membership: `orderBy: { type: 'desc' }` on Branch puts
-    // the virtual branch first only because VIRTUAL is declared last.
+    // Order too, not just membership: `orderBy: { type: 'desc' }` on Branch puts the virtual branch first only because VIRTUAL is declared last.
     it(`${prismaName} carries exactly its const object's values, in order`, () => {
       assert.deepEqual(prismaEnum(prismaName), Object.values(constant));
     });
@@ -96,10 +91,7 @@ describe('Prisma enums mirror the const objects in contracts', () => {
   }
 });
 
-/**
- * The reason the audit actor is its own enum: `ActorTypes` decides which table a token's identity is
- * read from, and nothing signs in as a script or as the system.
- */
+/** The reason the audit actor is its own enum: `ActorTypes` decides which table a token's identity is read from, and nothing signs in as a script or as the system. */
 describe('the token actor stays narrower than the audit actor', () => {
   it('admits only a student and an admin', () => {
     assert.deepEqual(Object.values(ActorTypes), ['STUDENT', 'ADMIN']);

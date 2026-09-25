@@ -226,8 +226,7 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
     meta: { success: 'Question updated.' },
     mutationFn: (move: Move) => RUN[move](question.id),
     onSuccess: settle,
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
+    // Drop out of the confirm on failure, or the row is left asking a question that's already been answered.
     onError: () => setAsking(null),
   });
 

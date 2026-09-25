@@ -9,8 +9,7 @@ export interface RawCsvRow {
 
 /** Splits into rows of raw cells, keeping each row's TRUE line number. */
 export function parseCsvRows(input: string): RawCsvRow[] {
-  // Excel prefixes UTF-8 files with a BOM; left in place it becomes part of the
-  // first header name, so the "mobile" column matches nothing.
+  // Excel prefixes UTF-8 files with a BOM; left in place it becomes part of the first header name, so the "mobile" column matches nothing.
   const text = input.replace(/^\uFEFF/, '');
 
   const rows: RawCsvRow[] = [];
@@ -28,9 +27,7 @@ export function parseCsvRows(input: string): RawCsvRow[] {
     row = [];
   };
 
-  // A `while` rather than a `for`: a quoted field and a CRLF both consume more than one character,
-  // and a loop that advances its own cursor is clearer than one whose counter is reassigned from
-  // inside the body.
+  // A `while` rather than a `for`: a quoted field and a CRLF both consume more than one character, and a loop that advances its own cursor is clearer than one whose counter is reassigned from inside the body.
   let i = 0;
   while (i < text.length) {
     const char = text[i];
@@ -92,10 +89,7 @@ function readQuotedField(
   return { value, endsAt: text.length, newlines };
 }
 
-/**
- * Turns the sheet into objects keyed by header name, keeping the 1-based line number of each row —
- * an error that cannot say "line 42" is not actionable against a 400-row file.
- */
+/** Turns the sheet into objects keyed by header name, keeping the 1-based line number of each row — an error that cannot say "line 42" is not actionable against a 400-row file. */
 export interface CsvRow {
   /** 1-based line in the original file, exactly as an editor shows it. */
   line: number;
@@ -122,8 +116,7 @@ export function readCsvTable(input: string): CsvTable {
   const headers = (grid[0]?.cells ?? []).map(normaliseHeader);
 
   const rows = grid.slice(1).map(({ line, cells }) => ({
-    // Straight from the parser, so a blank line in the middle of the file does
-    // not shift every number after it.
+    // Straight from the parser, so a blank line in the middle of the file does not shift every number after it.
     line,
     values: Object.fromEntries(
       headers.map((header, column) => [header, (cells[column] ?? '').trim()]),

@@ -8,10 +8,7 @@ import { branchNameSchema } from './naming';
 // admin writes only, so whoever assigns one picks a centre rather than typing it.
 // ============================================================================
 
-/**
- * PHYSICAL is a coaching centre students attend; VIRTUAL is a branch with no
- * address, which is where every online student sits.
- */
+/** PHYSICAL is a coaching centre students attend; VIRTUAL is a branch with no address, where every online student sits. */
 export const BRANCH_TYPE = {
   PHYSICAL: 'PHYSICAL',
   VIRTUAL: 'VIRTUAL',

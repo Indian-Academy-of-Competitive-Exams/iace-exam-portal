@@ -43,10 +43,7 @@ export interface StudentSignedUpEvent {
   studentId: string;
 }
 
-/**
- * Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape
- * and a handler cannot claim a shape the producer never sends.
- */
+/** Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape and a handler cannot claim a shape the producer never sends. */
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;

@@ -15,10 +15,7 @@ export interface MultiComboboxProps extends ComboboxListProps {
   chips?: boolean;
 }
 
-/**
- * Combobox for a list too long to render at once, choosing more than one. The list stays open on a
- * pick; the selection sits under the control as chips, because a button cannot hold buttons.
- */
+/** Combobox for a list too long to render at once, choosing more than one; the list stays open on a pick, and the selection sits under the control as chips since a button can't hold buttons. */
 export function MultiCombobox({
   value,
   onChange,

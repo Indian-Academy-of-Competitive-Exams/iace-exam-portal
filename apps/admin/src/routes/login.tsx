@@ -175,8 +175,7 @@ function CodeStep({
             name="code"
             form={form}
             label="One-time code"
-            // The server decides how long a code is; the boxes follow it rather
-            // than assuming six.
+            // The server decides how long a code is; the boxes follow it rather than assuming six.
             length={challenge.codeLength}
             autoFocus
             autoComplete="one-time-code"

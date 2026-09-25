@@ -45,8 +45,7 @@ function RailTooltip({
 function Glyph({ item, collapsed }: Readonly<{ item: NavItem; collapsed: boolean }>) {
   const Icon = item.icon;
   if (Icon) return <Icon className="size-4 shrink-0" aria-hidden />;
-  // A rail with no icon would be a column of blank squares, so fall back to the
-  // initial rather than to nothing.
+  // A rail with no icon would be a column of blank squares, so fall back to the initial.
   return collapsed ? (
     <span className="grid size-4 shrink-0 place-items-center text-xs font-semibold" aria-hidden>
       {item.label.charAt(0)}
@@ -65,8 +64,7 @@ function Leaf({
   activePath?: string;
   onNavigate?: () => void;
 }>) {
-  // Plain Link, not NavLink: NavLink decides `isActive` by prefix and would both
-  // stamp its own aria-current and append its own class token over the top.
+  // Plain Link, not NavLink: NavLink decides `isActive` by prefix and would double-stamp aria-current and class.
   const isActive = item.to !== undefined && item.to === activePath;
   const count = useNavBadge(item.to);
   const label = count > 0 ? `${item.label}, ${count} unread` : item.label;
@@ -90,10 +88,7 @@ function Leaf({
   );
 }
 
-/**
- * A section, opened as a popover beside its row so the sidebar never moves.
- * `resolveNavLayout` picks the shape: INLINE sized to contents, PANEL fixed and scrolling.
- */
+/** A section opens as a popover beside its row so the sidebar never moves; `resolveNavLayout` picks INLINE (sized to contents) or PANEL (fixed, scrolling). */
 function SectionPopover({
   item,
   activePath,

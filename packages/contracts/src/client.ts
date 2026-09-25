@@ -376,8 +376,7 @@ export function queryString(params: Record<string, unknown>): string {
       if (value.length > 0) search.set(key, value.join(CSV_SEPARATOR));
       continue;
     }
-    // Primitives only, each named. An object would become "[object Object]" in
-    // the URL — a filter the server cannot read and nobody can see is wrong.
+    // Primitives only, each named — an object would become "[object Object]" in the URL, a filter nobody can read.
     if (typeof value === 'string') search.set(key, value);
     else if (typeof value === 'number' || typeof value === 'boolean') {
       search.set(key, String(value));
@@ -446,8 +445,7 @@ export function createApiClient(options: ApiClientOptions) {
         ...(body === undefined ? {} : { body: isFormData ? body : JSON.stringify(body) }),
       });
     } catch (cause) {
-      // The request never landed — offline, DNS, CORS, a dead API. Same typed
-      // error as everything else, so callers need no second code path.
+      // The request never landed — offline, DNS, CORS, a dead API; same typed error as everything else, so callers need no second code path.
       throw new AppException(
         ErrorCodes.INTERNAL,
         'Cannot reach the server. Check your connection.',
@@ -481,8 +479,7 @@ export function createApiClient(options: ApiClientOptions) {
     if (failure.success) throw AppException.fromFailure(failure.data, response.status);
 
     if (!response.ok) {
-      // A non-2xx that is not our envelope came from something in front of the
-      // API — a proxy, a gateway, a framework default we do not control.
+      // A non-2xx that is not our envelope came from something in front of the API — a proxy, gateway, or framework default we don't control.
       throw new AppException(
         errorCodeForStatus(response.status),
         `Request failed (${response.status})`,
@@ -585,10 +582,7 @@ export function createApiClient(options: ApiClientOptions) {
     };
   }
 
-  /**
-   * A binary download, authenticated and refresh-aware. It cannot go through `parse` —
-   * reading the body as text would corrupt the file — but a FAILURE is still an envelope.
-   */
+  /** A binary download, authenticated and refresh-aware; it cannot go through `parse` since reading the body as text would corrupt the file, but a FAILURE is still an envelope. */
   async function requestBlob(path: string): Promise<Blob> {
     let response = await send(path, 'GET', undefined, getAccessToken());
 
@@ -1481,10 +1475,7 @@ export function createApiClient(options: ApiClientOptions) {
         /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */
         questionTemplate: (): Promise<Blob> => requestBlob(QUESTION_IMPORT_ROUTES.template),
 
-        /**
-         * Uploads once. The file is kept and an import run opened, so committing
-         * names the run rather than sending the same megabytes a second time.
-         */
+        /** Uploads once — the file is kept and an import run opened, so committing names the run rather than sending the same megabytes twice. */
         previewQuestions: (file: File): Promise<QuestionImportPlan> =>
           write('POST', QUESTION_IMPORT_ROUTES.preview, questionImportPlanSchema, fileBody(file)),
 

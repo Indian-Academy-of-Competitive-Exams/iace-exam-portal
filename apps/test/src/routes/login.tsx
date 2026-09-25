@@ -52,10 +52,7 @@ const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
 
 const STEP_HEADER = 'items-center pt-4 text-center';
 
-/**
- * Mobile + a 4-digit PIN. An OTP appears twice: signup, and recovering a forgotten PIN.
- * Separate buttons rather than a lookup — "does this mobile exist?" is not a question to answer.
- */
+/** Mobile + a 4-digit PIN; OTP appears twice (signup, forgotten PIN). Separate buttons, not a lookup — "does this mobile exist?" is not a question to answer. */
 type Step =
   | { kind: 'signIn' }
   | { kind: 'mobile'; intent: OtpIntent }
@@ -281,8 +278,7 @@ function CodeStep({
     meta: { fields: CODE_FIELDS },
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
     onSuccess: onVerified,
-    // A wrong code comes back as OTP_INVALID with fieldErrors.code — it belongs
-    // under the input the student is about to retype, not in a banner.
+    // A wrong code returns OTP_INVALID with fieldErrors.code — it belongs under the input, not a banner.
     onError: (error) => applyFieldErrors(error, form.setError, CODE_FIELDS),
   });
 
@@ -305,8 +301,7 @@ function CodeStep({
             name="code"
             form={form}
             label="One-time code"
-            // The server decides how long a code is; the boxes follow it rather
-            // than assuming six.
+            // The server decides how long a code is; the boxes follow it rather than assuming six.
             length={challenge.codeLength}
             autoFocus
             autoComplete="one-time-code"

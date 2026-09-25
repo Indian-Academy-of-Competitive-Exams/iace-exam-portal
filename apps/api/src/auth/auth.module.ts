@@ -16,8 +16,7 @@ import { StartingPinService } from './pin/starting-pin.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
-  // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not optional here: OTP,
-  // sessions, device binding and the PIN lockout ladder all live there and nowhere else.
+  // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not optional here: OTP, sessions, device binding and the PIN lockout ladder all live there and nowhere else.
   imports: [
     AppConfigModule,
     PrismaModule,
@@ -25,8 +24,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     EventsModule,
     // Auth reads an admin's grants to put them in a token.
     AdminsModule,
-    // The OTP is one outbound message among several to come; auth no longer
-    // owns the delivery channel, only the decision to send.
+    // The OTP is one outbound message among several to come; auth no longer owns the delivery channel, only the decision to send.
     MessagingModule,
     JwtModule.register({}),
   ],
@@ -40,8 +38,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     StartingPinService,
   ],
   exports: [
-    // AuthService for the student's own PIN change: it owns verification, the lockout ladder, session
-    // revocation and token issuance, and MeController must not reimplement any of the four.
+    // AuthService for the student's own PIN change: it owns verification, the lockout ladder, session revocation and token issuance, and MeController must not reimplement any of the four.
     AuthService,
     TokenService,
     SessionService,

@@ -34,10 +34,7 @@ function diffLabel(field: string, diff: { from: unknown; to: unknown }): string 
   return `${fieldLabel(field)}: ${formatDiffValue(diff.from)} → ${formatDiffValue(diff.to)}`;
 }
 
-/**
- * An import-sourced row carries no diff — `recordImportRows` writes one thin entry per touched
- * entity, by design — so it links to Import runs, where that run's status and counts live.
- */
+// An import-sourced row carries no diff by design; it links to Import runs, where status and counts live.
 export function ChangedCell({ row }: Readonly<{ row: RowAction }>) {
   if (row.changed) {
     const entries = Object.entries(row.changed);

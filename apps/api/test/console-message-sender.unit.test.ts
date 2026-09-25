@@ -5,10 +5,7 @@ import { ActorTypes } from '@iace/contracts';
 import { ConsoleMessageSender } from '../src/common/messaging/console-message-sender';
 import { MESSAGE_CHANNELS, MESSAGE_KINDS, type OutboundMessage } from '../src/common/messaging';
 
-/**
- * The dev sender's only job is to be READABLE, and the thing that stops it being readable is a row
- * wider than the border it is drawn inside.
- */
+/** The dev sender's only job is to be READABLE, and the thing that stops it being readable is a row wider than the border it is drawn inside. */
 function render(over: Partial<OutboundMessage> = {}): string[] {
   const logged: string[] = [];
   const spy = mock.method(Logger.prototype, 'log', (message: string) => void logged.push(message));
@@ -54,8 +51,7 @@ describe('ConsoleMessageSender', () => {
   });
 
   it('breaks a single word too wide for the box', () => {
-    // No spaces to break on. Left alone, this is one 200-character row inside a
-    // 72-character border.
+    // No spaces to break on. Left alone, this is one 200-character row inside a 72-character border.
     const lines = render({ to: 'x'.repeat(200) });
 
     assertBoxIsSquare(lines);

@@ -65,10 +65,7 @@ describe('MultiCombobox', () => {
     assert.equal(screen.getAllByRole('option').length, 3);
   });
 
-  /**
-   * A multi-select carries no clear row, so the first tabbable descendant of the popover is a real
-   * option, not a decoy — unlike `Combobox`, which lands here only by accident.
-   */
+  /** A multi-select carries no clear row, so the first tabbable descendant of the popover is a real option, not a decoy — unlike `Combobox`, which lands here only by accident. */
   it('moves focus onto the first real option when it opens', async () => {
     show(box());
 
@@ -78,10 +75,7 @@ describe('MultiCombobox', () => {
     assert.equal(document.activeElement, screen.getByRole('option', { name: /SSC CGL/ }));
   });
 
-  /**
-   * The failure this exists to prevent: closing on the first pick makes choosing three exam types
-   * three round trips through the trigger, and the search term is lost every time.
-   */
+  /** Regression guard: closing on the first pick would make choosing three exam types three round trips through the trigger, losing the search term every time. */
   it('adds a value and stays open for the next one', async () => {
     const onChange = mock.fn();
     show(box({ onChange }));

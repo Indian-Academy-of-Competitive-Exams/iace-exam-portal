@@ -35,10 +35,7 @@ import { SuperAdminOnly } from '../components/super-admin-only';
 /** What an admin holds for one feature, with "nothing" said out loud. */
 type Level = PermissionLevel | null;
 
-/**
- * The edits since the last save. A DIFF, not a copy: an untouched feature reads
- * through to the server, so a refetch mid-edit cannot eat unsaved work.
- */
+// Edits since last save, a DIFF not a copy — an untouched feature reads through, so a mid-edit refetch can't eat unsaved work.
 type Draft = ReadonlyMap<FeatureKey, Level>;
 
 /** What one feature's row should show: the pending edit, or the stored truth. */
@@ -68,10 +65,7 @@ interface Change {
 const isReduction = ({ from, to }: Change) =>
   to === null || (from === PERMISSION_LEVELS.WRITE && to === PERMISSION_LEVELS.READ);
 
-/**
- * Who holds what, one admin at a time — granting is something you do TO a person.
- * Every panel starts open, so the screen can be scanned and found in.
- */
+// Who holds what, one admin at a time — granting is something you do TO a person; every panel starts open so the screen scans.
 export function PermissionsPage() {
   const queryClient = useQueryClient();
 
@@ -136,10 +130,7 @@ export function PermissionsPage() {
 
 // ---------------------------------------------------------------------------
 
-/**
- * One admin's access, edited as a set: the ticks are free and the SAVE is the deliberate step.
- * The draft lives here so the summary row can show the unsaved count when the panel is shut.
- */
+// Ticks are free, SAVE is the deliberate step; the draft lives here so the summary row shows the unsaved count when the panel is shut.
 function AdminPanel({
   admin,
   features,
@@ -163,8 +154,7 @@ function AdminPanel({
   const setLevel = (key: FeatureKey, next: Level) =>
     setDraft((previous) => {
       const updated = new Map(previous);
-      // Ticking back to what is already stored is not a change. Dropping it
-      // keeps the count honest and keeps the dialog free of no-op lines.
+      // Ticking back to what is already stored is not a change — drop it to keep the count honest.
       if ((admin.permissions[key] ?? null) === next) updated.delete(key);
       else updated.set(key, next);
       return updated;
@@ -201,10 +191,7 @@ function AdminPanel({
         }
       }
     },
-    /**
-     * Dropped whether this succeeded or failed: a run that stopped halfway has already
-     * changed the earlier features, so only the server knows where it got to.
-     */
+    // Dropped whether this succeeded or failed — a halfway run already changed earlier features, so only the server knows where it got to.
     onSettled: () => {
       setDraft(new Map<FeatureKey, Level>());
       setConfirming(false);
@@ -287,8 +274,7 @@ function AdminPanel({
           <ConfirmDialog
             open={confirming}
             onOpenChange={setConfirming}
-            // Crimson only when something is being taken away. A save that only
-            // grants is not a destructive act and should not be dressed as one.
+            // Crimson only when something is taken away — a save that only grants isn't destructive.
             destructive={changes.some(isReduction)}
             loading={save.isPending}
             title={`Apply ${plural(changes.length, 'change')} to ${admin.email}?`}

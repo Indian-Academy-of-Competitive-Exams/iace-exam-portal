@@ -18,10 +18,7 @@ export interface RefreshTokenClaims {
   sid: string;
 }
 
-/**
- * Access and refresh tokens are signed with SEPARATE secrets, so a leaked access secret cannot be
- * used to mint long-lived refresh tokens.
- */
+/** Access and refresh tokens are signed with SEPARATE secrets, so a leaked access secret cannot be used to mint long-lived refresh tokens. */
 @Injectable()
 export class TokenService {
   constructor(
@@ -40,8 +37,7 @@ export class TokenService {
   signAccess(claims: AccessTokenClaims): Promise<string> {
     return this.jwt.signAsync(claims, {
       secret: this.config.get('JWT_ACCESS_SECRET'),
-      // Seconds, not the raw "15m" string: jsonwebtoken's typed `expiresIn` only accepts its own literal
-      // union, and this is the same value the Redis session TTL uses.
+      // Seconds, not the raw "15m" string: jsonwebtoken's typed `expiresIn` only accepts its own literal union, and this is the same value the Redis session TTL uses.
       expiresIn: this.accessTtlSec,
     });
   }

@@ -27,12 +27,7 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
-/**
- * Preview, then commit. Three bad rows still import the other 397.
- *
- * The file is uploaded once: the preview keeps it and hands back the run it
- * opened, so committing names that run instead of sending the same file again.
- */
+// Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
   const { assignmentId } = useParams<{ assignmentId?: string }>();
   const queryClient = useQueryClient();
@@ -177,8 +172,7 @@ function ImportRow({ row }: Readonly<{ row: QuestionImportRow }>) {
 function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
   if (row.action === 'create') return <Badge variant="success">Create</Badge>;
 
-  // A repeat is not an error: re-uploading last week's sheet with ten new
-  // questions on the end is the normal way to use this.
+  // A repeat is not an error — re-uploading last week's sheet with ten new rows added is normal use.
   if (row.action === 'duplicate') {
     return (
       <span className="flex flex-wrap items-center gap-1.5">

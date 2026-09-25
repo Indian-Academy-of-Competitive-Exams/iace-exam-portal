@@ -53,10 +53,7 @@ describe('RadioGroup', () => {
     assert.deepEqual(onValueChange.mock.calls[0]?.arguments, ['8134']);
   });
 
-  /**
-   * `checked={false}` would pin every option unchecked, so a form that registers
-   * the inputs itself could never tick one.
-   */
+  /** `checked={false}` would pin every option unchecked, so a form that registers the inputs itself could never tick one. */
   it('is uncontrolled when the group holds no value', () => {
     render(<Question />);
     const option = screen.getByRole('radio', { name: '4831' }) as HTMLInputElement;
@@ -76,10 +73,7 @@ describe('RadioGroup', () => {
     );
   });
 
-  /**
-   * Disabling is the fieldset's job, which is the native mechanism — an input's
-   * own `disabled` property stays false while its fieldset makes it inert.
-   */
+  /** Disabling is the fieldset's job, the native mechanism — an input's own `disabled` property stays false while its fieldset makes it inert. */
   it('disables the whole group through the fieldset', () => {
     const onValueChange = mock.fn();
     render(

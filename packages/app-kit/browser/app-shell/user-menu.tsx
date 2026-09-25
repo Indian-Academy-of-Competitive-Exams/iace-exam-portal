@@ -12,10 +12,7 @@ import {
 } from '@iace/ui';
 import { type NavItem } from '../../src';
 
-/**
- * Who is signed in, in the top bar, with the account screens and Log out.
- * A menu rather than a popover, so it announces a count and answers the arrow keys.
- */
+/** Who is signed in, in the top bar, with the account screens and Log out; a menu, not a popover, so it announces a count and answers arrow keys. */
 export function UserMenu({
   label,
   avatar,
@@ -37,8 +34,7 @@ export function UserMenu({
           aria-label={label}
           className={cn(
             'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-            // Capped rather than fluid: an email long enough to matter would
-            // otherwise push the theme toggle off the bar on a narrow screen.
+            // Capped rather than fluid: a long email would otherwise push the theme toggle off the bar.
             'max-w-[12rem] shrink-0',
             'text-foreground-secondary hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
           )}

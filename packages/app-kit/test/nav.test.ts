@@ -144,18 +144,14 @@ describe('activeNavPath', () => {
     }),
   ];
 
-  /**
-   * The failure this exists to prevent: a route that EXTENDS a sibling's left both lit, because a
-   * prefix match cannot tell "a page under All students" from "the Import students page".
-   */
+  /** Regression guard: a route that EXTENDS a sibling's left both lit, since a prefix match can't tell "a page under All students" from "the Import students page". */
   it('picks the most specific entry, not every entry the path starts with', () => {
     assert.equal(activeNavPath(nav, '/students/import'), '/students/import');
     assert.equal(activeNavPath(nav, '/questions/taxonomy'), '/questions/taxonomy');
   });
 
   it('still marks the parent for a route no entry owns', () => {
-    // A student's detail page has no nav row of its own, so "All students" is
-    // the honest answer rather than nothing at all.
+    // A student's detail page has no nav row of its own, so "All students" is the honest answer.
     assert.equal(activeNavPath(nav, '/students/stu_42'), '/students');
   });
 
@@ -179,8 +175,7 @@ describe('isNavItemActive', () => {
   });
 
   it('marks a collapsed section current when a child route is open', () => {
-    // Otherwise the sidebar shows nothing highlighted while you are plainly on
-    // one of its pages, which reads as having lost your place.
+    // Otherwise the sidebar shows nothing highlighted while you're plainly on one of its pages.
     assert.equal(isNavItemActive(section, '/students/import'), true);
   });
 

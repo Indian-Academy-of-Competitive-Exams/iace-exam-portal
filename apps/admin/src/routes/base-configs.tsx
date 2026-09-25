@@ -100,10 +100,7 @@ function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<
   ];
 }
 
-/**
- * A stage's blueprints. The shape freezes at the first finalize of a test built from one, so the
- * way a locked config evolves is a clone — which is why Clone sits on the row, not in a menu.
- */
+// A stage's blueprints freeze at first finalize; a locked config only evolves by Clone, so Clone sits on the row, not a menu.
 export function BaseConfigsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);

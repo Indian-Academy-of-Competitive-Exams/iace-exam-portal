@@ -39,10 +39,7 @@ import { Audit, TOGGLE_ACTIONS } from '../audit';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
 
-/**
- * The admin-side student directory. `@Actors(ADMIN)` is the hard boundary — a student's
- * token is a valid JWT and must not reach here. `@RequiresFeature` is per route: read vs write.
- */
+/** The admin-side student directory. `@Actors(ADMIN)` is the hard boundary — a student's token is a valid JWT and must not reach here. `@RequiresFeature` is per route: read vs write. */
 @Controller('admin/students')
 @Actors(ActorTypes.ADMIN)
 export class StudentsController {

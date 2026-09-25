@@ -234,8 +234,7 @@ describe('JwtAuthGuard', () => {
   });
 
   it('does not look up a session for a @Public route', async () => {
-    // Public routes must work before anyone has a session at all — signup would
-    // be unreachable otherwise.
+    // Public routes must work before anyone has a session at all — signup would be unreachable otherwise.
     const { guard } = build();
     const { context } = probe(ProbeController.prototype.publicRoute, {
       headers: { authorization: 'Bearer total-nonsense' },
@@ -297,8 +296,7 @@ describe('ActorGuard', () => {
   });
 
   it('refuses a student token on an admin route, valid though the token is', async () => {
-    // Students and admins are separate tables with separate rules. Both hold perfectly good JWTs; this
-    // is the only thing keeping one out of the other's routes.
+    // Students and admins are separate tables with separate rules. Both hold perfectly good JWTs; this is the only thing keeping one out of the other's routes.
     const { context } = probe(ProbeController.prototype.adminOnly, user(ActorTypes.STUDENT));
 
     assert.throws(
@@ -326,8 +324,7 @@ describe('ActorGuard', () => {
   });
 
   it('honours @Actors declared on the CONTROLLER, not just the handler', async () => {
-    // Otherwise a class-level restriction would be silently decorative, and
-    // every method on an admin controller would be open to students.
+    // Otherwise a class-level restriction would be silently decorative, and every method on an admin controller would be open to students.
     const { context } = contextFor(
       AdminOnlyController.prototype.anyRoute,
       AdminOnlyController,
@@ -376,8 +373,7 @@ describe('FeaturePermissionGuard', () => {
   });
 
   it('refuses READ where the route wants WRITE', async () => {
-    // The failure the levels exist to prevent: a viewer must not be able to
-    // change anything just because they can see it.
+    // The failure the levels exist to prevent: a viewer must not be able to change anything just because they can see it.
     const { context } = probe(
       ProbeController.prototype.managesQuestions,
       admin({ [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ }),
@@ -416,8 +412,7 @@ describe('FeaturePermissionGuard', () => {
   });
 
   it('lets a super admin through without the grant', async () => {
-    // How the hand-inserted bootstrap account reaches every screen before any grants exist. If this
-    // stopped working, a fresh deployment would be unusable and there is no seed to fall back on.
+    // How the hand-inserted bootstrap account reaches every screen before any grants exist. If this stopped working, a fresh deployment would be unusable and there is no seed to fall back on.
     const { context } = probe(ProbeController.prototype.managesQuestions, admin({}, true));
 
     assert.equal(await guard.canActivate(context), true);
@@ -439,8 +434,7 @@ describe('FeaturePermissionGuard', () => {
   });
 
   it('refuses a deactivated admin who still holds a matching grant', async () => {
-    // Grants are pruned on deactivation, but the refusal must not depend on
-    // that cleanup having succeeded.
+    // Grants are pruned on deactivation, but the refusal must not depend on that cleanup having succeeded.
     const { context } = probe(
       ProbeController.prototype.managesQuestions,
       admin({ [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE }, false, false),

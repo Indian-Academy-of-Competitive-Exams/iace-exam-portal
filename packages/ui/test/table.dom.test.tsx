@@ -45,11 +45,7 @@ const groups = () => {
 };
 
 describe('table rows', () => {
-  /**
-   * Nothing in a heading row is clickable, so a highlight there offers something
-   * that is not on offer. The hover belongs to the body and is scoped to its own
-   * rows, so it cannot reach a thead however the rows are composed.
-   */
+  /** Nothing in a heading row is clickable, so a highlight there offers something not on offer; the hover belongs to the body, scoped to its own rows, so it can't reach a thead. */
   it('offer hover on the body only, never on the heading', () => {
     render(table());
     const { head, body } = groups();
@@ -58,11 +54,7 @@ describe('table rows', () => {
     assert.match(body.className, /\[&>tr:hover>td\]:/);
   });
 
-  /**
-   * The fill is a pseudo-element inset from the rules and rounded at the row's two
-   * ends. The radius has to be on the band and not the cell: on the cell it would
-   * round the `border-b` with it, bending the rule away from the table edge.
-   */
+  /** The fill is a pseudo-element inset from the rules and rounded at the row's two ends; the radius must be on the band not the cell, or it rounds `border-b` too and bends the rule away from the table edge. */
   it('tint a hovered row inside its rules, rounding the band and not the rule', () => {
     render(table());
 
@@ -124,10 +116,7 @@ describe('table rows', () => {
 });
 
 describe('TableFrame', () => {
-  /**
-   * A framed page stops the wrapper scrolling, not its padding. Zeroing the bottom
-   * gave the frame the last pixel of the viewport and sat the card on the page edge.
-   */
+  /** A framed page stops the wrapper scrolling, not its padding; zeroing the bottom gave the frame the last pixel of the viewport and sat the card on the page edge. */
   it('keeps the page padding it is framed inside', () => {
     assert.ok(
       !/pb-0/.test(PAGE_CONTENT_CLASS),

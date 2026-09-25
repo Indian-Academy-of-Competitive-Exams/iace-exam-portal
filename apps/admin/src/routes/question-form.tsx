@@ -36,8 +36,7 @@ export function QuestionFormPage() {
 
   const form = useForm<QuestionFormValues>({ defaultValues: emptyValues() });
 
-  // The saved question arrives after the first render; reset rather than key the
-  // whole form off it, so a half-typed edit is not thrown away by a refetch.
+  // The saved question arrives after first render; reset rather than key the form off it, so a refetch can't discard a half-typed edit.
   const loaded = question.data;
   useEffect(() => {
     if (loaded) form.reset(valuesOf(loaded));

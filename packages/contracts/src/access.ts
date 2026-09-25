@@ -36,11 +36,7 @@ export const NOTIFICATION_TYPE = {
 const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 
-/**
- * A coaching variant. Adding one is a row, never a migration.
- * Named for the catalog because `programSchema` in ./students is the code string
- * a student carries, which is a different thing with the obvious name.
- */
+/** A coaching variant — adding one is a row, never a migration; named for the catalog because `programSchema` in ./students is the code string a student carries. */
 export const programCatalogSchema = z.object({
   id: z.string(),
   /** What `Student.programs` and `TestSeries.programCode` both hold. */

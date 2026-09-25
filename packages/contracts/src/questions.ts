@@ -12,11 +12,7 @@ import { type LanguageCode } from './exams';
 // when the institute has them.
 // ============================================================================
 
-/**
- * The languages a question may be authored in. These are the KEYS inside a version's
- * `content` and each of its options' `text`, so a value here is a column in the import
- * sheet and a tab in the form — adding one is not a rename.
- */
+/** The languages a question may be authored in — the KEYS inside a version's `content` and each option's `text`, so a value here is a column in the import sheet and a tab in the form. */
 export const SUPPORTED_LANGUAGES = {
   EN: 'en',
   HI: 'hi',
@@ -50,12 +46,7 @@ export const LANGUAGE_LABELS: Record<QuestionLanguage, string> = {
   [SUPPORTED_LANGUAGES.TE]: 'Telugu',
 };
 
-/**
- * A field in each language the author filled in. `partialRecord`, not `record`:
- * every language is optional at the schema level and English is required by
- * `validateQuestion`, which can say so per field instead of per object.
- * An unknown key is refused here — that is the language check.
- */
+/** A field in each language the author filled in; `partialRecord`, not `record`, since English is required by `validateQuestion` per field, and an unknown key is refused here. */
 export const localizedTextSchema = z.partialRecord(languageSchema, z.string());
 export type LocalizedText = z.infer<typeof localizedTextSchema>;
 
@@ -95,11 +86,7 @@ export const questionStatusSchema = z.enum(QUESTION_STATUS);
 export type QuestionStatus = z.infer<typeof questionStatusSchema>;
 export const QUESTION_STATUSES = questionStatusSchema.options;
 
-/**
- * How a typed answer is compared. EXACT is text, folded for case and spacing;
- * NUMERIC parses both sides as numbers and allows `tolerance` either way, which
- * is what a question answered "3.14" and marked "3.1416" needs.
- */
+/** How a typed answer is compared: EXACT is text folded for case and spacing; NUMERIC parses both sides as numbers and allows `tolerance` either way. */
 export const ANSWER_MODE = {
   EXACT: 'EXACT',
   NUMERIC: 'NUMERIC',
@@ -316,14 +303,12 @@ export const MCQ_OPTION_MAX = 6;
 
 const MARKS_MAX = 999.99;
 
-/** Marks are Decimal(6,2) in the database; more than two places is not a mark. Used by a
- *  base config's sections, and by an answer tolerance. */
+/** Marks are Decimal(6,2) in the database; more than two places is not a mark. Used by a base config's sections, and by an answer tolerance. */
 export const questionMarksSchema = z.coerce
   .number()
   .min(0, 'Marks cannot be negative')
   .max(MARKS_MAX)
-  // Compared against the rounded value rather than `Number.isInteger(value * 100)`:
-  // 0.07 * 100 is 7.000000000000001 in binary, and a real mark would be refused.
+  // Compared against the rounded value rather than `Number.isInteger(value * 100)`: 0.07 * 100 is 7.000000000000001 in binary.
   .refine(
     (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9,
     'Use at most two decimal places',
@@ -379,8 +364,7 @@ export const questionDraftSchema = z.object({
   subjectId: z.string().min(1, 'Choose a subject'),
   topicId: z.string().nullable().optional(),
   difficulty: difficultyLevelSchema,
-  /** Optional, NOT defaulted: an edit that omits it must leave the status where it is, or
-   *  every save would quietly put an archived question back into circulation. */
+  /** Optional, NOT defaulted: an edit that omits it must leave the status where it is, or every save would quietly put an archived question back into circulation. */
   status: questionStatusSchema.optional(),
   questionCode: questionCodeSchema.nullable().optional(),
   stem: localizedTextSchema,
@@ -434,11 +418,7 @@ export const QUESTION_VALIDATION_CODE = {
 } as const;
 const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
 
-/**
- * One problem with one question. `field` is the draft path the form focuses
- * (`stem.en`, `options.2.text.hi`); `column` is what the sheet calls the same
- * thing, so the import preview names a header the admin can see.
- */
+/** One problem with one question: `field` is the draft path the form focuses (`stem.en`, `options.2.text.hi`); `column` is what the sheet calls the same thing. */
 const validationIssueSchema = z.object({
   code: questionValidationCodeSchema,
   message: z.string(),
@@ -564,10 +544,7 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
 export type QuestionListQuery = z.infer<typeof questionListQuerySchema>;
 export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;
 
-/**
- * ARCHIVED retires a question rather than deleting it: it is hidden from the bank and
- * drawn into no future paper, while every paper that already pinned a version is untouched.
- */
+/** ARCHIVED retires a question rather than deleting it: hidden from the bank and drawn into no future paper, while every paper that already pinned a version is untouched. */
 /** A page of drafts is 100 at most, so a bulk decision can never be larger than what was shown. */
 
 export const setQuestionStatusSchema = z.object({
@@ -674,11 +651,7 @@ export const TAG_SEPARATOR = ',';
 /** Carried by every question a sheet creates, so one filter finds what an upload brought in. */
 export const QUESTION_IMPORT_TAG = 'imported';
 
-/**
- * `create` writes the row. `duplicate` is a stem already in the bank or earlier
- * in this file — skipped, and not an error worth blocking the upload for.
- * `skip` has issues.
- */
+/** `create` writes the row; `duplicate` is a stem already in the bank or earlier in this file — skipped, not an error worth blocking the upload for; `skip` has issues. */
 const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip']);
 export type QuestionImportAction = z.infer<typeof questionImportActionSchema>;
 
@@ -792,10 +765,7 @@ export const questionImageSchema = z.object({
 });
 export type QuestionImage = z.infer<typeof questionImageSchema>;
 
-/**
- * Under /imports, which is the one path with the larger body limit — see
- * apps/api/src/common/body-parsers.ts.
- */
+/** Under /imports, which is the one path with the larger body limit — see apps/api/src/common/body-parsers.ts. */
 export const QUESTION_IMPORT_ROUTES = {
   template: '/imports/questions/template',
   preview: '/imports/questions/preview',

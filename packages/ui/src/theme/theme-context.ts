@@ -7,8 +7,7 @@ export interface ThemeContextValue {
   setTheme: (theme: Theme) => void;
 }
 
-/** Context + hook live apart from the provider component so editing the
- *  provider hot-reloads instead of forcing a full page refresh. */
+/** Context + hook live apart from the provider component so editing the provider hot-reloads instead of forcing a full page refresh. */
 export const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function useTheme(): ThemeContextValue {

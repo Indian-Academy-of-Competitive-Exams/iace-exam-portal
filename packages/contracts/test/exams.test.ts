@@ -13,10 +13,7 @@ import {
   updateExamStageSchema,
 } from '../src/index';
 
-/**
- * The code is what `Student.enrolledExams` stores, with no foreign key behind it. A code that is
- * not canonical is a code nothing will ever match again.
- */
+/** The code is what `Student.enrolledExams` stores, with no foreign key behind it — a non-canonical code is one nothing will ever match again. */
 describe('createExamSchema', () => {
   it('normalises the code on the way in', () => {
     assert.deepEqual(
@@ -90,10 +87,7 @@ describe('ADMIN_EXAM_ROUTES', () => {
   });
 });
 
-/**
- * The key is what a seed script and the exam-pattern workbook address a stage by. Underscores,
- * not spaces — and normalised rather than refused, so a typed "ssc cgl t1" still lands on it.
- */
+/** The key is what a seed script and the exam-pattern workbook address a stage by — underscores not spaces, normalised rather than refused, so "ssc cgl t1" still lands on it. */
 describe('createExamStageSchema', () => {
   const stage = { examId: 'exam_1', stageKey: 'SSC_CGL_T1', name: 'Tier 1' };
 

@@ -66,8 +66,7 @@ describe('the question import template', () => {
   });
 
   it('reads back through the importer, taking the Questions tab and not the lists', async () => {
-    // The generated file is the commonest thing an admin uploads, so the reader
-    // has to find the rows on the right tab.
+    // The generated file is the commonest thing an admin uploads, so the reader has to find the rows on the right tab.
     const table = await readUploadedTable(await buildQuestionTemplate(catalog()), {
       preferSheet: QUESTION_IMPORT_SHEETS.QUESTIONS,
     });
@@ -83,8 +82,7 @@ describe('the question import template', () => {
 
     assert.ok(names.includes('SUBJECTS'));
 
-    // ARITHMETIC sits under both subjects. Keyed by topic alone, one list would win
-    // and the other subject's topics would silently disappear.
+    // ARITHMETIC sits under both subjects. Keyed by topic alone, one list would win and the other subject's topics would silently disappear.
     assert.ok(names.includes(topicRangeName('QUANTITATIVE APTITUDE')));
     assert.ok(names.includes(topicRangeName('GENERAL AWARENESS')));
   });
