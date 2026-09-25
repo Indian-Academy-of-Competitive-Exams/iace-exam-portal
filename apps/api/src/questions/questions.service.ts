@@ -448,7 +448,12 @@ export class QuestionsService {
       });
       if (claimed.count !== 1) throw questionEditedElsewhere();
 
-      if (await this.isUsed(tx, id)) throw stillInUse('deleted');
+      if (await this.isUsed(tx, id)) {
+        throw refused(
+          'A paper or an attempt already uses this question, so it cannot be deleted.',
+          'Something already uses this question',
+        );
+      }
 
       await tx.questionVersion.deleteMany({ where: { questionId: id } });
       await tx.question.delete({ where: { id } });
@@ -611,13 +616,6 @@ function assertScreenIsCurrent(before: QuestionRow, draft: QuestionDraft): void 
   if (expected === undefined || expected === before.updatedAt.toISOString()) return;
   throw questionEditedElsewhere();
 }
-
-/** Back to a working copy only while it is nobody's question but its author's. */
-const stillInUse = (what: string) =>
-  refused(
-    `A paper or an attempt already uses this question, so it cannot be ${what}.`,
-    'Something already uses this question',
-  );
 
 /** The shared stale-save refusal, on `status` — the field a question's decisions already ride. */
 const questionEditedElsewhere = () => editedElsewhere(EDIT_SUBJECTS.QUESTION, 'status');

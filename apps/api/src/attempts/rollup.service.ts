@@ -394,7 +394,15 @@ export class RollupService {
     await tx.studentStat.update({
       where: { studentId },
       data: {
-        ...studentCounts(totals),
+        testsAttempted: totals.testsAttempted,
+        testsEvaluated: totals.testsEvaluated,
+        sumScore: totals.sumScore,
+        totalAnswered: totals.totalAnswered,
+        totalCorrect: totals.totalCorrect,
+        totalWrong: totals.totalWrong,
+        totalUnattempted: totals.totalUnattempted,
+        sumTimeSec: BigInt(totals.sumTimeSec),
+        retakeCount: totals.retakeCount,
         lastAttemptAt: totals.lastAttemptAt,
         computedThrough: totals.computedThrough,
         computedAt: now,
@@ -407,7 +415,10 @@ export class RollupService {
         studentId,
         subjectId: subject.subjectId,
         scope: subject.scope,
-        ...subjectCounts(subject),
+        attempted: subject.attempted,
+        correct: subject.correct,
+        wrong: subject.wrong,
+        sumTimeSec: BigInt(subject.sumTimeSec),
         computedAt: now,
       })),
     });
@@ -453,34 +464,6 @@ export class RollupService {
   }
 }
 
-function studentCounts(totals: StudentTotals) {
-  return {
-    testsAttempted: totals.testsAttempted,
-    testsEvaluated: totals.testsEvaluated,
-    sumScore: totals.sumScore,
-    totalAnswered: totals.totalAnswered,
-    totalCorrect: totals.totalCorrect,
-    totalWrong: totals.totalWrong,
-    totalUnattempted: totals.totalUnattempted,
-    sumTimeSec: BigInt(totals.sumTimeSec),
-    retakeCount: totals.retakeCount,
-  };
-}
-
-function subjectCounts(subject: {
-  attempted: number;
-  correct: number;
-  wrong: number;
-  sumTimeSec: number;
-}) {
-  return {
-    attempted: subject.attempted,
-    correct: subject.correct,
-    wrong: subject.wrong,
-    sumTimeSec: BigInt(subject.sumTimeSec),
-  };
-}
-
 function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttempt {
   return {
     id: row.id,
@@ -511,10 +494,8 @@ function questionColumns(question: QuestionTotals, now: Date) {
   return {
     ...question,
     sumTimeSec: BigInt(question.sumTimeSec),
-    optionCounts: asJson(question.optionCounts),
+    optionCounts: question.optionCounts as Prisma.InputJsonValue,
     pValue: pValueOf(question.correctCount, question.attemptedCount),
     computedAt: now,
   };
 }
-
-const asJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;

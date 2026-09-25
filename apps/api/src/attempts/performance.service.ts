@@ -182,7 +182,9 @@ export class PerformanceAnalyticsService {
       testId: anchor.testId,
       score,
       topperScore: numberOrNull(rolled?.maxScore ?? null) ?? live.topperScore,
-      averageScore: averageOf(rolled) ?? live.averageScore,
+      averageScore:
+        (rolled === null ? null : perSitting(Number(rolled.sumScore), rolled.evaluatedCount)) ??
+        live.averageScore,
       rank: standing?.rank ?? null,
       percentile: standing?.percentile ?? null,
       cohortSize: standing?.cohortSize ?? (counted === 0 ? live.size : counted),
@@ -280,9 +282,6 @@ const TEST_STAT_SELECT = {
 type TestStatRow = Prisma.TestStatGetPayload<{ select: typeof TEST_STAT_SELECT }>;
 
 const ONE_PAPER_SCOPES = new Set<string>([PERFORMANCE_SCOPES.ATTEMPT, PERFORMANCE_SCOPES.TEST]);
-
-const averageOf = (rolled: TestStatRow | null): number | null =>
-  rolled === null ? null : perSitting(Number(rolled.sumScore), rolled.evaluatedCount);
 
 /** The owner is part of every WHERE, so another student's work reads as missing, not as refused. */
 function scopeWhere(studentId: string, query: PerformanceReportQuery): Prisma.AttemptWhereInput {

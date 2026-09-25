@@ -97,14 +97,12 @@ export function LeaderboardPage() {
   } as const;
 
   // Nothing ranked to pick from leaves the board control alone in the bar, still reachable.
-  let FILTERS;
-  if (scope === LEADERBOARD_SCOPES.SERIES && seriesRows.length > 0) {
-    FILTERS = [SERIES_FILTER] as const satisfies readonly ListFilter[];
-  } else if (scope === LEADERBOARD_SCOPES.TEST && sat.length > 0) {
-    FILTERS = [TEST_FILTER] as const satisfies readonly ListFilter[];
-  } else {
-    FILTERS = [] as const satisfies readonly ListFilter[];
-  }
+  const FILTERS =
+    scope === LEADERBOARD_SCOPES.SERIES && seriesRows.length > 0
+      ? ([SERIES_FILTER] as const satisfies readonly ListFilter[])
+      : scope === LEADERBOARD_SCOPES.TEST && sat.length > 0
+        ? ([TEST_FILTER] as const satisfies readonly ListFilter[])
+        : ([] as const satisfies readonly ListFilter[]);
 
   const filters = useFilterSpec(FILTERS);
   const testId = filters.values.testId || (sat[0]?.testId ?? '');

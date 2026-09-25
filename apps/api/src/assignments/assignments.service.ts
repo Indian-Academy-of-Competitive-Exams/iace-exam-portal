@@ -107,7 +107,6 @@ const TEST_QUEUE_SELECT = {
 
 type QueueTest = Prisma.TestGetPayload<{ select: typeof TEST_QUEUE_SELECT }>;
 type QueueSection = QueueTest['baseConfig']['sections'][number];
-type HeldAssignment = QueueTest['assignments'][number];
 
 interface DueBounds {
   from?: Date;
@@ -126,8 +125,6 @@ function dueBounds(query: { dueFrom?: string; dueTo?: string }): DueBounds | und
 /** A role nobody holds has no due date, so a due-date filter cannot be looking for it. */
 const withinDue = (at: Date | null, bounds: DueBounds): boolean =>
   at !== null && (!bounds.from || at >= bounds.from) && (!bounds.to || at <= bounds.to);
-
-const nameLike = (text: string): Prisma.StringFilter => ({ contains: text, mode: 'insensitive' });
 
 /** A test still being built: the picker and the progress list must offer and list the same ones. */
 const UNFROZEN_TEST = {
@@ -155,7 +152,7 @@ function roleProgress(
   return {
     assignmentId: held?.id ?? null,
     assigneeId: held?.assigneeId ?? null,
-    assigneeName: held ? nameOf(held.assignee) : null,
+    assigneeName: held ? (held.assignee.fullName ?? held.assignee.email) : null,
     dueAt: held?.dueAt?.toISOString() ?? null,
     finalizedAt: held?.finalizedAt?.toISOString() ?? null,
   };
@@ -171,9 +168,6 @@ const heldByAnyOf = (row: SectionProgressRow, wanted: readonly string[]): boolea
 /** Either half satisfies it: the two roles carry their own dates and need not agree. */
 const dueWithin = (row: SectionProgressRow, bounds: DueBounds): boolean =>
   roles(row).some((held) => withinDue(held.dueAt === null ? null : new Date(held.dueAt), bounds));
-
-const nameOf = (assignee: HeldAssignment['assignee']): string =>
-  assignee.fullName ?? assignee.email;
 
 const SOURCE_UNCHOSEN_MESSAGE =
   'Say where this test gets its questions before handing a section to anybody.';
@@ -355,7 +349,7 @@ export class AssignmentsService {
     const where: Prisma.TestWhereInput = {
       ...UNFROZEN_TEST,
       ...(ownScope(query, isSuperAdmin) ? { assignments: { some: heldBy(adminId, query) } } : {}),
-      ...(query.q ? { title: nameLike(query.q) } : {}),
+      ...(query.q ? { title: { contains: query.q, mode: 'insensitive' } } : {}),
     };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.test.findMany({

@@ -430,7 +430,9 @@ async function writeChildren(
         baseConfigId,
         // Only a session paper has modules, and a section names its own by order. Unnamed falls to the first, which is what a one-module paper means without saying it.
         moduleId: sessionPaper
-          ? (moduleIdByOrder.get(section.moduleOrder ?? -1) ?? firstOf(moduleIdByOrder))
+          ? (moduleIdByOrder.get(section.moduleOrder ?? -1) ??
+            [...moduleIdByOrder.values()][0] ??
+            null)
           : null,
         name: section.name,
         order: section.order,
@@ -466,10 +468,6 @@ function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSecti
     negativeMarks: Number(section.negativeMarks),
     durationSec: section.durationSec,
   };
-}
-
-function firstOf(byOrder: Map<number, string>): string | null {
-  return [...byOrder.values()][0] ?? null;
 }
 
 function toConfig(row: ConfigRow): BaseConfig {

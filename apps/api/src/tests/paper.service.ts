@@ -11,7 +11,6 @@ import {
   type BaseConfigDetail,
   quotaWithPicks,
   sectionQuota,
-  type DifficultyMix,
   type DrawSpec,
   type SectionDrawSpec,
   type SectionQuota,
@@ -55,9 +54,6 @@ const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
 const SECTION_UNDER_TYPED_MESSAGE =
   'Its typist has not written enough questions to fill the rest of this section yet.';
-
-const overSplitMessage = (sectionName: string) =>
-  `${sectionName} already holds more of one difficulty than its split allows. Take one off first.`;
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -152,7 +148,7 @@ export class PaperService {
     }
 
     const quota = sectionQuota(
-      mixOf(test.questionPoolFilter as DrawSpec | null, section.id),
+      (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id]?.mix,
       inSection.map((row) => row.question.difficulty),
     );
     assertWithinSplit(
@@ -615,10 +611,6 @@ function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId
   return row.currentVersionId !== null;
 }
 
-function mixOf(spec: DrawSpec | null, sectionId: string): DifficultyMix | undefined {
-  return spec?.sections?.[sectionId]?.mix;
-}
-
 /** The split bounds hand-picking as much as it does the draw, so one bucket over it is refused. */
 function assertWithinSplit(sectionName: string, quota: SectionQuota, field: string): void {
   const over = DIFFICULTY_LEVELS.some((level) => {
@@ -627,7 +619,7 @@ function assertWithinSplit(sectionName: string, quota: SectionQuota, field: stri
   });
   if (!over) return;
 
-  const message = overSplitMessage(sectionName);
+  const message = `${sectionName} already holds more of one difficulty than its split allows. Take one off first.`;
   throw new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { [field]: [message] } });
 }
 
