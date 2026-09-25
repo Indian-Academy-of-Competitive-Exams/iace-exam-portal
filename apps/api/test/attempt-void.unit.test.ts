@@ -113,14 +113,14 @@ describe('voiding a sitting — archived, and taken out of everything that count
     assert.deepEqual(asked.studentRebuilds, ['stu_1']);
   });
 
-  /** Nothing counted an unfinished sitting, so there is nothing to recount. */
-  it('asks for no recount when the sitting had never been marked', async () => {
+  /** The bug this prevents: a stale read skipping the recount for a sitting the scorer just folded. */
+  it('asks for a recount even off a sitting read as never marked', async () => {
     const { service, asked } = build({ status: ATTEMPT_STATUS.IN_PROGRESS });
 
     await service.void('att_1', { reason: REASON, regrantRanked: false }, ADMIN);
 
-    assert.deepEqual(asked.testRebuilds, []);
-    assert.deepEqual(asked.studentRebuilds, []);
+    assert.deepEqual(asked.testRebuilds, ['tst_1']);
+    assert.deepEqual(asked.studentRebuilds, ['stu_1']);
     // The live key still goes, or the student would keep saving into a sitting that is void.
     assert.deepEqual(asked.stateTaken, ['att_1']);
   });

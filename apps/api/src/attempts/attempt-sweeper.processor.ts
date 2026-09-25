@@ -89,25 +89,34 @@ export class AttemptSweeperProcessor extends WorkerHost {
     }
   }
 
-  /** A job that exhausted its retries left an ended sitting with no score, and nothing owned it. */
+  /** Two gaps the outbox alone can leave: an ended sitting never scored, or a re-score never landed. */
   private async askAgainForUnscored(now: Date = new Date()): Promise<void> {
     const settled = new Date(now.getTime() - SCORING_RETRY_AFTER_MS);
-    const stranded = await this.prisma.attempt.findMany({
-      where: {
-        status: ATTEMPT_STATUS.SUBMITTED,
-        score: null,
-        submittedAt: { lt: settled },
-      },
-      orderBy: { submittedAt: 'asc' },
-      take: RESCORE_BATCH,
-      select: { id: true, testId: true },
-    });
-    if (stranded.length === 0) return;
+    await this.askAgain(
+      settled,
+      () => this.neverScored(settled),
+      'ended unscored; asking for a score again',
+    );
+    await this.askAgain(
+      settled,
+      () => this.staleRescores(settled),
+      'was re-scored but the correction never landed; asking again',
+    );
+  }
+
+  /** Candidates from one arm, then their outbox rows: a request already in flight is never piled onto. */
+  private async askAgain(
+    settled: Date,
+    candidatesOf: () => Promise<{ id: string; testId: string }[]>,
+    why: string,
+  ): Promise<void> {
+    const candidates = await candidatesOf();
+    if (candidates.length === 0) return;
 
     const requests = await this.prisma.outboxEvent.findMany({
       where: {
         eventType: SCORING_REQUEST.EVENT_TYPE,
-        aggregateId: { in: stranded.map((attempt) => attempt.id) },
+        aggregateId: { in: candidates.map((attempt) => attempt.id) },
       },
       select: { aggregateId: true, processedAt: true },
     });
@@ -118,10 +127,37 @@ export class AttemptSweeperProcessor extends WorkerHost {
         .map((row) => row.aggregateId),
     );
 
-    for (const attempt of stranded.filter((row) => !waiting.has(row.id))) {
+    for (const attempt of candidates.filter((row) => !waiting.has(row.id))) {
       await this.outbox.request(this.prisma, attempt);
-      this.logger.warn(`Attempt ${attempt.id} ended unscored; asking for a score again`);
+      this.logger.warn(`Attempt ${attempt.id} ${why}`);
     }
+  }
+
+  /** A job that exhausted its retries left an ended sitting with no score, and nothing owned it. */
+  private neverScored(settled: Date): Promise<{ id: string; testId: string }[]> {
+    return this.prisma.attempt.findMany({
+      where: { status: ATTEMPT_STATUS.SUBMITTED, score: null, submittedAt: { lt: settled } },
+      orderBy: { submittedAt: 'asc' },
+      take: RESCORE_BATCH,
+      select: { id: true, testId: true },
+    });
+  }
+
+  /** An EVALUATED sitting whose last mark predates its own re-score request: the correction never ran. */
+  private async staleRescores(settled: Date): Promise<{ id: string; testId: string }[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string; testId: string }[]>`
+      SELECT a."id", a."testId"
+      FROM "OutboxEvent" o
+      JOIN "Attempt" a
+        ON a."id" = o."aggregateId"
+       AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
+       AND a."updatedAt" < o."createdAt"
+      WHERE o."aggregateType" = ${SCORING_REQUEST.AGGREGATE_TYPE}
+        AND o."eventType" = ${SCORING_REQUEST.EVENT_TYPE}
+        AND o."processedAt" < ${settled}
+      ORDER BY o."processedAt" ASC
+      LIMIT ${RESCORE_BATCH}`;
+    return [...new Map(rows.map((row) => [row.id, row])).values()];
   }
 
   /** The same grace a save gets, so the sweeper never ends a sitting a save could still reach. */

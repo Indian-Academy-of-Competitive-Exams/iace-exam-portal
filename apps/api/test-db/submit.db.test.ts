@@ -37,6 +37,8 @@ const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
 const HOUR_MS = 60 * 60 * 1000;
 const LATE = new Date(Date.now() - HOUR_MS);
 const SETTLED = new Date(Date.now() - HOUR_MS);
+const OLDER = new Date(Date.now() - 2 * HOUR_MS);
+const OLDEST = new Date(Date.now() - 3 * HOUR_MS);
 const WRONG_OPTION = 'o2';
 
 const prisma = testPrisma();
@@ -525,5 +527,56 @@ describe('a sitting the scorer never scored', () => {
     await sweeper.process();
 
     assert.equal(await prisma.outboxEvent.count(), 0);
+  });
+});
+
+describe('an EVALUATED sitting a re-score never landed on', () => {
+  const rescored = () => build({ status: ATTEMPT_STATUS.EVALUATED, submittedAt: LATE });
+
+  const asked = (attemptId: string, testId: string, createdAt: Date, processedAt: Date | null) =>
+    prisma.outboxEvent.create({
+      data: {
+        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
+        aggregateId: attemptId,
+        eventType: SCORING_REQUEST.EVENT_TYPE,
+        payload: { testId },
+        createdAt,
+        processedAt,
+      },
+    });
+
+  /** The failure this prevents: a re-score job that died leaves marks stale against a dropped question. */
+  it('asks again for an EVALUATED sitting whose own request postdates its last mark', async () => {
+    const { attemptId, testId, sweeper } = await rescored();
+    await prisma.attempt.update({ where: { id: attemptId }, data: { updatedAt: OLDER } });
+    await asked(attemptId, testId, LATE, LATE);
+
+    await sweeper.process();
+
+    const rows = await requests();
+    assert.equal(rows.length, 2);
+    assert.equal(rows[1]?.aggregateId, attemptId);
+  });
+
+  /** The mark that answered the request landed, so evaluatedAt's fixed clock must not be re-read. */
+  it('leaves an EVALUATED sitting alone once its last mark lands after the request', async () => {
+    const { attemptId, testId, sweeper } = await rescored();
+    // updatedAt is left at creation time, which sitPaper sets after LATE: the mark already ran.
+    await asked(attemptId, testId, LATE, LATE);
+
+    await sweeper.process();
+
+    assert.equal(await prisma.outboxEvent.count(), 1);
+  });
+
+  it('does not stack a third ask on top of a retry still waiting to be handed on', async () => {
+    const { attemptId, testId, sweeper } = await rescored();
+    await prisma.attempt.update({ where: { id: attemptId }, data: { updatedAt: OLDEST } });
+    await asked(attemptId, testId, OLDER, OLDER);
+    await asked(attemptId, testId, LATE, null);
+
+    await sweeper.process();
+
+    assert.equal(await prisma.outboxEvent.count(), 2);
   });
 });

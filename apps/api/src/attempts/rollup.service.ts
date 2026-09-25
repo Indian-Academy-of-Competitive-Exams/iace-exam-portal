@@ -102,6 +102,9 @@ const SWEEP_LAG = '2 minutes';
 /** Bounded so one pass cannot run for ever; the next sweep takes whatever is left. */
 const SWEEP_TESTS_PER_PASS = 50;
 
+/** A replay per student costs more than the test side's one aggregate statement, same bound anyway. */
+const SWEEP_STUDENTS_PER_PASS = 50;
+
 /** Item analysis reads every sheet, so it runs on the slower clock the report tells students about. */
 const ITEM_SWEEP_EVERY_MS = COHORT_COUNT_EVERY_MIN * 60 * 1000;
 
@@ -111,27 +114,32 @@ export class RollupService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Every test something has landed on since it was last counted. One job id, so one pass runs. */
+  /** Every test something has landed on since it was last counted, and every student its watermark missed. */
   async sweepCohorts(): Promise<number> {
     const tests = await this.changedTests();
     let counted = 0;
     for (const testId of tests) {
-      if (await this.tried(testId, () => this.recountTest(testId))) counted += 1;
+      if (await this.tried(() => this.recountTest(testId), `cohort of test ${testId}`))
+        counted += 1;
     }
     // Its own selection, not this pass's tests: a test goes quiet long before its items are due.
     for (const testId of await this.staleItems()) {
-      await this.tried(testId, () => this.recountTestItems(testId));
+      await this.tried(() => this.recountTestItems(testId), `cohort of test ${testId}`);
+    }
+    // A re-score folds nothing on its own; this watermark is the only thing that asks for it again.
+    for (const studentId of await this.driftedStudents()) {
+      await this.tried(() => this.rebuildStudent(studentId), `rollup of student ${studentId}`);
     }
     return counted;
   }
 
-  /** One test that will not count must not hold up the rest of the pass; the next one takes it again. */
-  private async tried(testId: string, work: () => Promise<void>): Promise<boolean> {
+  /** One that will not count must not hold up the rest of the pass; the next one takes it again. */
+  private async tried(work: () => Promise<void>, describe: string): Promise<boolean> {
     try {
       await work();
       return true;
     } catch (error: unknown) {
-      this.logger.error(`Counting the cohort of test ${testId} failed`, error);
+      this.logger.error(`Counting the ${describe} failed`, error);
       return false;
     }
   }
@@ -165,6 +173,20 @@ export class RollupService {
           WHERE q."testId" = s."testId" AND q."computedAt" >= ${fresh})
       LIMIT ${SWEEP_TESTS_PER_PASS}`;
     return rows.map((row) => row.id);
+  }
+
+  /** The student side is accumulated, not recounted: only a stale watermark says a fold was missed. */
+  private async driftedStudents(): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ studentId: string }[]>`
+      SELECT s."studentId"
+      FROM "StudentStat" s
+      WHERE EXISTS (
+        SELECT 1 FROM "Attempt" a
+        WHERE a."studentId" = s."studentId"
+          AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
+          AND a."updatedAt" > COALESCE(s."computedThrough" - ${SWEEP_LAG}::interval, '-infinity'::timestamptz))
+      LIMIT ${SWEEP_STUDENTS_PER_PASS}`;
+    return rows.map((row) => row.studentId);
   }
 
   /** The cheap pair, off `Attempt` alone: the marks and the packed sections carry all of it. */

@@ -502,6 +502,45 @@ describe('RollupService — the slower clock the item analysis runs on', () => {
   });
 });
 
+describe('RollupService — the student watermark a re-score can leave behind', () => {
+  /** The failure this prevents: a lost `REBUILD_STUDENT` job leaving StudentStat wrong for ever. */
+  it('recounts a student whose watermark fell behind a re-score nobody drained', async () => {
+    const built = build();
+    const paper = await paperOf();
+    const { attemptId, studentId } = await sat(paper, [WRONG, RIGHT, RIGHT, RIGHT]);
+    await counted(built, attemptId);
+    const before = await studentStat(studentId);
+
+    // The drop moves the marks; the rebuild it asks for is left queued, never drained.
+    await disposeQuestion(prisma, paper, 0, PAPER_QUESTION_STATUS.DROPPED);
+    await built.scoring.score(attemptId);
+
+    await built.rollup.sweepCohorts();
+
+    const attempt = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+    const after = await studentStat(studentId);
+    assert.notEqual(num(after?.sumScore), num(before?.sumScore));
+    assert.equal(num(after?.sumScore), Number(attempt.score));
+  });
+
+  /** Bounded like the cohort arm: a student who is not behind must not be replayed every pass. */
+  it('leaves a student whose watermark already covers their last mark alone', async () => {
+    const built = build();
+    const paper = await paperOf();
+    const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
+    await counted(built, attemptId);
+    const before = await studentStat(studentId);
+
+    // Backdated so the sweep reads it as long settled, not freshly landed.
+    await prisma.attempt.update({ where: { id: attemptId }, data: { updatedAt: new Date(0) } });
+
+    await built.rollup.sweepCohorts();
+
+    const after = await studentStat(studentId);
+    assert.equal(after?.computedAt.getTime(), before?.computedAt.getTime());
+  });
+});
+
 describe('RollupQueue — asking for the counting nobody else will', () => {
   it('collapses every ask for a pass onto the one job the sweep runs as', async () => {
     const built = build();

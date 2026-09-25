@@ -144,10 +144,8 @@ export class AttemptResolutionService {
     );
   }
 
-  /** One recount per bounded scope. Rank needs none: the cohort query already leaves a void out. */
+  /** Unconditional: `attempt` was read before the update, so its status cannot be trusted to skip this. */
   private async reverse(attempt: ResolvableAttempt): Promise<void> {
-    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) return;
-
     await Promise.all([
       this.rollup.rebuild(attempt.testId),
       this.rollup.rebuildStudent(attempt.studentId),
