@@ -45,16 +45,12 @@ export function browserLabel(userAgent: string | null): string {
 }
 
 /** What we record about the device a session was opened from. */
-export function deviceFrom(
-  request: Request,
-  claimed?: { deviceId?: string; deviceName?: string },
-): DeviceContext {
+export function deviceFrom(request: Request, claimed?: { deviceName?: string }): DeviceContext {
   const userAgent = request.headers['user-agent'] ?? null;
   const client =
     clientKindSchema.safeParse(firstHeader(request.headers[CLIENT_HEADERS.KIND])).data ?? null;
   const named = claimed?.deviceName ?? firstHeader(request.headers[CLIENT_HEADERS.DEVICE_NAME]);
   return {
-    deviceId: claimed?.deviceId ?? null,
     deviceName: named ?? (client === CLIENT_KINDS.WEB ? browserLabel(userAgent) : null),
     ip: request.ip ?? null,
     userAgent,

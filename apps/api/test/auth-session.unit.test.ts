@@ -53,84 +53,25 @@ describe('SessionService', () => {
     const { sessions } = build();
     const sessionId = await openSession(sessions, 'refresh-1');
 
-    await sessions.rotate(
-      ActorTypes.STUDENT,
-      SUBJECT,
-      sessionId,
-      'refresh-1',
-      'refresh-2',
-      NO_DEVICE,
-      TTL,
-    );
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL);
 
     await assert.doesNotReject(() =>
-      sessions.rotate(
-        ActorTypes.STUDENT,
-        SUBJECT,
-        sessionId,
-        'refresh-2',
-        'refresh-3',
-        NO_DEVICE,
-        TTL,
-      ),
+      sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-2', 'refresh-3', TTL),
     );
   });
 
   it('detects a replayed refresh token and kills the session', async () => {
     const { sessions } = build();
     const sessionId = await openSession(sessions, 'refresh-1');
-    await sessions.rotate(
-      ActorTypes.STUDENT,
-      SUBJECT,
-      sessionId,
-      'refresh-1',
-      'refresh-2',
-      NO_DEVICE,
-      TTL,
-    );
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL);
 
     // Someone presenting the pre-rotation token either stole it or is a stale client; either way the safe reading is that it leaked.
     await assert.rejects(
-      () =>
-        sessions.rotate(
-          ActorTypes.STUDENT,
-          SUBJECT,
-          sessionId,
-          'refresh-1',
-          'refresh-9',
-          NO_DEVICE,
-          TTL,
-        ),
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-9', TTL),
       (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
     );
 
     // And the whole session goes, not just that one request — the thief and the victim are both signed out, which is the point.
-    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
-  });
-
-  it('refuses to rotate a session bound to a different device', async () => {
-    const { sessions } = build();
-    const sessionId = await openSession(sessions, 'refresh-1', {
-      ...NO_DEVICE,
-      deviceId: 'phone-a',
-    });
-
-    await assert.rejects(
-      () =>
-        sessions.rotate(
-          ActorTypes.STUDENT,
-          SUBJECT,
-          sessionId,
-          'refresh-1',
-          'refresh-2',
-          {
-            ...NO_DEVICE,
-            deviceId: 'phone-b',
-          },
-          TTL,
-        ),
-      (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
-    );
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
   });
 
@@ -140,16 +81,7 @@ describe('SessionService', () => {
     redis.advanceSeconds(TTL + 1);
 
     await assert.rejects(
-      () =>
-        sessions.rotate(
-          ActorTypes.STUDENT,
-          SUBJECT,
-          sessionId,
-          'refresh-1',
-          'refresh-2',
-          NO_DEVICE,
-          TTL,
-        ),
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL),
       (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
     );
   });
@@ -252,7 +184,7 @@ describe('SessionService — one session per app kind', () => {
     await openSession(sessions, 'r2', web);
 
     await assert.rejects(
-      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r1b', web, TTL),
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r1b', TTL),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SESSION_REPLACED,
     );
   });
@@ -317,7 +249,7 @@ describe('SessionService — a session that keeps refreshing', () => {
     const { sessions, redis } = build();
     const first = await openSession(sessions, 'r1', web);
     redis.advanceSeconds(TTL - 60);
-    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r2', web, TTL);
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r2', TTL);
     redis.advanceSeconds(TTL - 60);
 
     await openSession(sessions, 'r3', web);
@@ -329,7 +261,7 @@ describe('SessionService — a session that keeps refreshing', () => {
     const { sessions, redis } = build();
     const first = await openSession(sessions, 'r1', web);
     redis.advanceSeconds(TTL - 60);
-    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r2', web, TTL);
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r2', TTL);
     redis.advanceSeconds(TTL - 60);
 
     await sessions.revokeAll(ActorTypes.STUDENT, SUBJECT);
@@ -352,7 +284,7 @@ describe('SessionService — a session that keeps refreshing', () => {
     };
 
     await assert.rejects(
-      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r1b', web, TTL),
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, first, 'r1', 'r1b', TTL),
       (e: unknown) => AppException.is(e) && e.code === ErrorCodes.SESSION_REPLACED,
     );
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, first), false);
@@ -366,7 +298,7 @@ describe('SessionService — a corrupt stored session', () => {
     await redis.client.set(`session:student:${SUBJECT}:${id}`, '{not json', 'EX', TTL);
 
     await assert.rejects(
-      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, id, 'r1', 'r2', NO_DEVICE, TTL),
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, id, 'r1', 'r2', TTL),
       (e: unknown) => AppException.is(e) && e.code === ErrorCodes.UNAUTHENTICATED,
     );
   });

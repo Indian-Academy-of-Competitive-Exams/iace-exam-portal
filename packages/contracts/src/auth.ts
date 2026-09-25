@@ -53,13 +53,8 @@ export type ClientKind = z.infer<typeof clientKindSchema>;
 /** Sent on every request by an app's API client, so every way a session starts knows its kind. */
 export const CLIENT_HEADERS = { KIND: 'x-client', DEVICE_NAME: 'x-device-name' } as const;
 
-/** Optional client-supplied device label; the server binds the session to a fingerprint derived from this plus the request, stored in Redis. */
-const deviceInfoSchema = z
-  .object({
-    deviceId: z.string().max(128).optional(),
-    deviceName: z.string().max(128).optional(),
-  })
-  .optional();
+/** Optional client-supplied device label, so a session listing names the phone rather than its user agent. */
+const deviceInfoSchema = z.object({ deviceName: z.string().max(128).optional() }).optional();
 
 /** Verifying a student OTP does not sign anyone in — it proves the number and hands back a short-lived ticket to set a PIN; the session is created when the PIN is set. */
 export const verifyStudentOtpSchema = z.object({

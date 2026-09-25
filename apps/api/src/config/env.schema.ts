@@ -97,6 +97,10 @@ export const envSchema = z.object({
   OTP_RESEND_COOLDOWN_SEC: z.coerce.number().int().nonnegative().default(45),
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_MAX_PER_DAY: z.coerce.number().int().positive().default(5),
+  // The address-wide twin of OTP_MAX_PER_DAY: a mobile's cap alone does not stop one address minting new numbers.
+  OTP_MAX_PER_DAY_PER_IP: z.coerce.number().int().positive().default(500),
+  // The platform-wide kill switch on OTP spend, in paise — checked against NOTIFICATION_COST_SMS_PAISE.
+  OTP_GLOBAL_DAILY_BUDGET_PAISE: z.coerce.number().int().positive().default(300_000),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
   // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the setup ticket live in Redis.
@@ -111,6 +115,8 @@ export const envSchema = z.object({
   // Rate limits per minute, generous because a branch of two hundred shares one address (.env.example).
   RATE_LIMIT_DEFAULT_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(120),
+  // Tighter than the shared auth bucket: the one route that pays for an SMS or WhatsApp send.
+  RATE_LIMIT_OTP_REQUEST_PER_MIN: z.coerce.number().int().positive().default(15),
   RATE_LIMIT_SITTING_PER_MIN: z.coerce.number().int().positive().default(60),
 
   // Proxies in front. 0 trusts nothing; behind a load balancer this MUST be its hop count.

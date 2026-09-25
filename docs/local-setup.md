@@ -26,7 +26,7 @@ docs/         architecture & design docs (read 01–03 + design/ + CLAUDE.md)
 `apps/mobile` is **in progress and not yet shipped**, and it runs in its own terminal (§7).
 
 Local infra runs in Docker: **PostgreSQL** (data), **Valkey** (OTP, sessions,
-device binding, rate limiting, BullMQ), **MinIO** (S3‑compatible object storage).
+rate limiting, BullMQ), **MinIO** (S3‑compatible object storage).
 
 ---
 

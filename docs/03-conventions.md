@@ -177,7 +177,7 @@ _and_ whose enrolled COURSE matches the series' stage; PROGRAM reaches a program
 carries; EVENT reaches the candidates on its event. **The branch gate belongs to STANDARD alone** —
 the other three kinds and a `StudentGrant` carry no branch condition. A grant overrides every kind,
 and the series' own enabled switch gates all of them. There is no unlock, no prerequisite, no queue
-to ask in. Sessions, OTP and device binding live in **Redis**, never Postgres.
+to ask in. Sessions and OTP live in **Redis**, never Postgres.
 
 ---
 

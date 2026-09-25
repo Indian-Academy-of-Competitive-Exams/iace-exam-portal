@@ -8,7 +8,11 @@ import { ErrorCodes } from '@iace/contracts';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { throttlerOptionsFrom } from '../src/common/throttling/throttling.module';
-import { AuthRateLimit, SittingRateLimit } from '../src/common/throttling/rate-limits';
+import {
+  AuthRateLimit,
+  OtpRequestRateLimit,
+  SittingRateLimit,
+} from '../src/common/throttling/rate-limits';
 import { windowRecord } from '../src/common/throttling/rate-limit';
 
 /** The real policy over a counting map, so the names, the skipping and the 429 envelope are all real. */
@@ -38,6 +42,12 @@ class ProbeController {
     return { ok: true };
   }
 
+  @OtpRequestRateLimit()
+  @Get('otp')
+  otp() {
+    return { ok: true };
+  }
+
   @Get('open')
   open() {
     return { ok: true };
@@ -46,7 +56,9 @@ class ProbeController {
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot(throttlerOptionsFrom({ default: 50, auth: 2, sitting: 3 }, counting())),
+    ThrottlerModule.forRoot(
+      throttlerOptionsFrom({ default: 50, auth: 2, sitting: 3, otpRequest: 1 }, counting()),
+    ),
   ],
   controllers: [ProbeController],
   providers: [
@@ -96,6 +108,12 @@ describe('rate limiting (e2e)', () => {
   it('counts a differently-marked route on its own allowance', async () => {
     for (let i = 0; i < 3; i += 1) assert.equal((await call('/probe/save')).status, 200);
     assert.equal((await call('/probe/save')).status, 429);
+  });
+
+  /** The route that pays for a send: its own tighter allowance, apart from the shared auth bucket. */
+  it('gives the OTP-request route its own, tighter allowance', async () => {
+    assert.equal((await call('/probe/otp')).status, 200);
+    assert.equal((await call('/probe/otp')).status, 429);
   });
 
   it('leaves an unmarked route on the generous default', async () => {

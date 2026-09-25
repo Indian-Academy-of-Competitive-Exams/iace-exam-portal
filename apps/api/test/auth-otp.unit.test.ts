@@ -2,19 +2,22 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { OtpService } from '../src/auth/otp/otp.service';
-import { FakeConfig, FakeMessageSender, FakeRedis } from './support/fakes';
+import { FakeConfig, FakeMessageSender, FakeMetrics, FakeRedis } from './support/fakes';
 
 const MOBILE = '9876543210';
+const IP = '203.0.113.9';
 
 function build(overrides = {}) {
   const redis = new FakeRedis();
   const config = new FakeConfig(overrides);
   const sender = new FakeMessageSender();
+  const metrics = new FakeMetrics();
   return {
     redis,
     config,
     sender,
-    otp: new OtpService(redis.asService(), config.asService(), sender),
+    metrics,
+    otp: new OtpService(redis.asService(), config.asService(), sender, metrics.asService()),
   };
 }
 
@@ -37,7 +40,7 @@ describe('OtpService — request', () => {
     assert.equal(challenge.codeLength, sender.lastCode.length);
   });
 
-  it('stores a hash, never the code itself', async () => {
+  it('stores a hash, never the code itself, with no attempts counted yet', async () => {
     const { otp, redis, sender } = build();
 
     await otp.request(ActorTypes.STUDENT, MOBILE);
@@ -45,7 +48,7 @@ describe('OtpService — request', () => {
     const stored = redis.snapshot()[`otp:student:${MOBILE}`];
     assert.ok(typeof stored === 'string');
     assert.ok(!stored.includes(sender.lastCode));
-    assert.equal(JSON.parse(stored).attempts, 0);
+    assert.equal(redis.snapshot()[`otp:attempts:student:${MOBILE}`], undefined);
   });
 
   it('echoes the code back only for the console sender in development', async () => {
@@ -176,6 +179,26 @@ describe('OtpService — verify', () => {
     assert.ok(ttl > 0, `the key should still exist, got ttl ${ttl}`);
     assert.ok(ttl <= 100, `expected <=100s left, got ${ttl}`);
   });
+
+  /** The failure this prevents: a read-modify-write counter that a wave of guesses advances once instead of once each. */
+  it('makes each concurrent guess consume its own attempt, so a burst reaches the cap', async () => {
+    const { otp, redis } = build();
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        otp.verify(ActorTypes.STUDENT, MOBILE, '000000').then(
+          () => 'accepted',
+          (error: unknown) => (AppException.is(error) ? error.code : 'unknown'),
+        ),
+      ),
+    );
+
+    // OTP_MAX_VERIFY_ATTEMPTS defaults to 5: attempts 1-4 are still under it, 5-8 land past it.
+    assert.equal(outcomes.filter((o) => o === 'OTP_INVALID').length, 4);
+    assert.equal(outcomes.filter((o) => o === 'RATE_LIMITED').length, 4);
+    assert.equal(redis.snapshot()[`otp:student:${MOBILE}`], undefined);
+  });
 });
 
 describe('OtpService — the day a mobile is allowed', () => {
@@ -214,5 +237,73 @@ describe('OtpService — the day a mobile is allowed', () => {
     for (let sent = 0; sent < 6; sent += 1) await otp.request(ActorTypes.ADMIN, 'admin@iace.co.in');
 
     assert.equal(sender.sent.length, 6);
+  });
+});
+
+describe('OtpService — the day one address is allowed', () => {
+  // A high per-mobile cap isolates the per-IP one; distinct mobiles rule out the per-mobile cap firing instead.
+  const small = { OTP_MAX_PER_DAY: 1000, OTP_MAX_PER_DAY_PER_IP: 2, OTP_RESEND_COOLDOWN_SEC: 0 };
+  const refusedAsRateLimited = (error: unknown) =>
+    AppException.is(error) && error.code === ErrorCodes.RATE_LIMITED;
+
+  /** The failure this prevents: SMS pumping, which mints a fresh number every request rather than reusing one. */
+  it('refuses past one address’s daily allowance, whatever mobile it is sent to', async () => {
+    const { otp } = build(small);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000002', IP);
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, '9000000003', IP),
+      refusedAsRateLimited,
+    );
+  });
+
+  it('does not count a different address against this one', async () => {
+    const { otp } = build(small);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000002', IP);
+
+    assert.equal((await otp.request(ActorTypes.STUDENT, '9000000003', '198.51.100.7')).sent, true);
+  });
+
+  /** A branch's own lab session must still get through comfortably under the default budget. */
+  it('lets a legitimate branch through under the default per-address budget', async () => {
+    const { otp } = build({ OTP_RESEND_COOLDOWN_SEC: 0 });
+
+    for (let i = 0; i < 20; i += 1) {
+      const mobile = `90000${String(i).padStart(5, '0')}`;
+      assert.equal((await otp.request(ActorTypes.STUDENT, mobile, IP)).sent, true);
+    }
+  });
+});
+
+describe("OtpService — the platform's daily budget", () => {
+  const budgeted = {
+    OTP_MAX_PER_DAY: 1000,
+    OTP_MAX_PER_DAY_PER_IP: 1000,
+    OTP_RESEND_COOLDOWN_SEC: 0,
+    NOTIFICATION_COST_SMS_PAISE: 100,
+    OTP_GLOBAL_DAILY_BUDGET_PAISE: 200,
+  };
+
+  /** The failure this prevents: many rotating addresses, each under its own cap, adding up to an unbounded bill. */
+  it('trips the kill switch once today’s spend would cross the budget, and surfaces it', async () => {
+    const { otp, metrics } = build(budgeted);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000002', '198.51.100.7');
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, '9000000003', '198.51.100.8'),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.RATE_LIMITED,
+    );
+    assert.deepEqual(metrics.otpSends, ['sent', 'sent', 'refused_budget']);
+  });
+
+  /** Admins cost nothing, so the razor-thin budget below must never reach them. */
+  it('never trips for an admin', async () => {
+    const { otp, sender } = build({ ...budgeted, OTP_GLOBAL_DAILY_BUDGET_PAISE: 1 });
+    for (let i = 0; i < 3; i += 1) await otp.request(ActorTypes.ADMIN, `admin${i}@iace.co.in`);
+
+    assert.equal(sender.sent.length, 3);
   });
 });

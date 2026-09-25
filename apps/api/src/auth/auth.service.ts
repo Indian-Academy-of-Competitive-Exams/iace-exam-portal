@@ -50,8 +50,8 @@ export class AuthService {
   // ==========================================================================
 
   /** Serves both signup and PIN reset. */
-  async requestStudentOtp(mobile: string): Promise<OtpRequestResponse> {
-    return this.otp.request(ActorTypes.STUDENT, mobile);
+  async requestStudentOtp(mobile: string, ip = 'unknown'): Promise<OtpRequestResponse> {
+    return this.otp.request(ActorTypes.STUDENT, mobile, ip);
   }
 
   /** Proves the number and hands back a short-lived ticket. */
@@ -230,7 +230,7 @@ export class AuthService {
   // ==========================================================================
 
   /** Rotating refresh: every use mints a new pair and invalidates the old one. */
-  async refresh(refreshToken: string, device: DeviceContext): Promise<AuthTokens> {
+  async refresh(refreshToken: string): Promise<AuthTokens> {
     const claims = await this.tokens.verifyRefresh(refreshToken);
     const identity = await this.loadIdentity(claims.actor, claims.sub);
     if (!identity)
@@ -248,7 +248,6 @@ export class AuthService {
       claims.sid,
       refreshToken,
       nextRefresh,
-      device,
       this.tokens.refreshTtlSec,
     );
 

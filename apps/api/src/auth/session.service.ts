@@ -44,7 +44,6 @@ export class SessionService {
     const now = new Date().toISOString();
     const session: StoredSession = {
       refreshTokenHash: this.hash(refreshToken),
-      deviceId: device.deviceId,
       deviceName: device.deviceName,
       ip: device.ip,
       userAgent: device.userAgent,
@@ -73,7 +72,6 @@ export class SessionService {
     sessionId: string,
     presentedToken: string,
     nextToken: string,
-    device: DeviceContext,
     ttlSec: number,
   ): Promise<void> {
     const key = redisKeys.session(actor, subjectId, sessionId);
@@ -88,12 +86,6 @@ export class SessionService {
         ErrorCodes.UNAUTHENTICATED,
         'Session is no longer valid. Sign in again',
       );
-    }
-
-    // Device binding: the session stays tied to the device that created it.
-    if (session.deviceId && device.deviceId && session.deviceId !== device.deviceId) {
-      await this.revoke(actor, subjectId, sessionId);
-      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session is bound to a different device');
     }
 
     const next = {

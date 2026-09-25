@@ -11,17 +11,21 @@ export const RATE_LIMIT_KEY = 'iace:rate-limit';
 export const RATE_LIMITS = {
   AUTH: 'auth',
   SITTING: 'sitting',
+  OTP_REQUEST: 'otpRequest',
 } as const;
 
 export type RateLimitName = (typeof RATE_LIMITS)[keyof typeof RATE_LIMITS];
 
 const marked = (name: RateLimitName) => SetMetadata(RATE_LIMIT_KEY, name);
 
-/** OTP, PIN and refresh: unauthenticated, so counted per address, and a branch shares one. */
+/** OTP verify, PIN and refresh: unauthenticated, so counted per address, and a branch shares one. */
 export const AuthRateLimit = () => marked(RATE_LIMITS.AUTH);
 
 /** Autosave and submit: counted per student, so one runaway client cannot crowd out a hall. */
 export const SittingRateLimit = () => marked(RATE_LIMITS.SITTING);
+
+/** The one route that pays for an SMS or WhatsApp send: its own tighter budget, apart from the shared auth bucket. */
+export const OtpRequestRateLimit = () => marked(RATE_LIMITS.OTP_REQUEST);
 
 /** True means "not this route": a named throttler runs only where its own decorator put it. */
 export function notMarkedWith(name: RateLimitName) {

@@ -74,7 +74,7 @@ cannot express (composite FKs, partial-uniques, CHECKs, triggers, GIN) goes in t
 
 Never break these:
 
-- OTP, sessions, device binding live in **Redis**, never the DB.
+- OTP and sessions live in **Redis**, never the DB.
 - Exactly **one S3 upload path** (MinIO locally), never branched by environment.
 - No secrets in code; `.env.example` only. First super admin by **pure SQL**, no seed code.
 - Mobile editable by **ADMIN only**. Aadhaar/PAN images **not stored** (verified booleans only).

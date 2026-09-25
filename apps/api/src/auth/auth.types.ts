@@ -5,7 +5,6 @@ import { type ClientKind } from '@iace/contracts';
 /** The Redis-resident half of a session. Never written to Postgres. */
 export interface StoredSession {
   refreshTokenHash: string;
-  deviceId: string | null;
   deviceName: string | null;
   ip: string | null;
   userAgent: string | null;
@@ -18,15 +17,13 @@ export interface StoredSession {
 /** A session with the id it lives under, as returned to a subject listing their own. */
 export type ListedSession = StoredSession & { id: string };
 
-/** The Redis-resident half of a pending OTP. The code itself is never stored. */
+/** The Redis-resident half of a pending OTP. The code itself is never stored; attempts count in their own atomic key. */
 export interface StoredOtp {
   codeHash: string;
-  attempts: number;
   createdAt: string;
 }
 
 export interface DeviceContext {
-  deviceId: string | null;
   deviceName: string | null;
   ip: string | null;
   userAgent: string | null;

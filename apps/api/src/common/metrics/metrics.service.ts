@@ -25,6 +25,7 @@ export class MetricsService implements OnModuleInit {
 
   private readonly httpDuration: Histogram<'method' | 'route' | 'status'>;
   private readonly submits: Counter<'outcome'>;
+  private readonly otpSends: Counter<'outcome'>;
   private readonly queueDepth: Gauge<'queue'>;
   private readonly queueOldestWait: Gauge<'queue'>;
   private readonly queueFailures: Counter<'queue' | 'outcome'>;
@@ -51,6 +52,13 @@ export class MetricsService implements OnModuleInit {
     this.submits = new Counter({
       name: `${PREFIX}attempt_submits_total`,
       help: 'Sittings handed in — the spike everything downstream is sized for',
+      labelNames: ['outcome'] as const,
+      registers: [this.registry],
+    });
+
+    this.otpSends = new Counter({
+      name: `${PREFIX}otp_sends_total`,
+      help: 'Student OTP sends by outcome — a rising refused_budget count is the SMS-bill kill switch tripping',
       labelNames: ['outcome'] as const,
       registers: [this.registry],
     });
@@ -120,6 +128,10 @@ export class MetricsService implements OnModuleInit {
 
   countSubmit(outcome: 'accepted' | 'refused'): void {
     this.submits.inc({ outcome });
+  }
+
+  countOtpSend(outcome: 'sent' | 'refused_ip_daily' | 'refused_budget'): void {
+    this.otpSends.inc({ outcome });
   }
 
   countQueueFailure(queue: QueueName, spent: boolean): void {

@@ -23,7 +23,7 @@ import {
 } from '@iace/contracts';
 import { AuthService } from './auth.service';
 import { CurrentUser, Public, type AuthenticatedUser } from '../common/security';
-import { AuthRateLimit } from '../common/throttling';
+import { AuthRateLimit, OtpRequestRateLimit } from '../common/throttling';
 import { deviceFrom } from './device';
 import { ZodBody } from '../common/zod-validation.pipe';
 
@@ -33,15 +33,16 @@ export class AuthController {
 
   // ---- Students: OTP at signup / reset, then mobile + 4-digit PIN ------------
 
-  /** Step 1 of signup and of a PIN reset — the same endpoint for both. */
+  /** Step 1 of signup and of a PIN reset — the same endpoint for both, and the one that pays for a send. */
   @Public()
-  @AuthRateLimit()
+  @OtpRequestRateLimit()
   @Post('student/otp/request')
   @HttpCode(HttpStatus.OK)
   requestStudentOtp(
     @Body(new ZodBody(requestStudentOtpSchema)) body: RequestStudentOtpBody,
+    @Req() request: Request,
   ): Promise<OtpRequestResponse> {
-    return this.auth.requestStudentOtp(body.mobile);
+    return this.auth.requestStudentOtp(body.mobile, request.ip ?? 'unknown');
   }
 
   /** Step 2 — returns a ticket to set a PIN, not a session. */
@@ -113,11 +114,8 @@ export class AuthController {
   @AuthRateLimit()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  refresh(
-    @Body(new ZodBody(refreshTokenSchema)) body: RefreshTokenBody,
-    @Req() request: Request,
-  ): Promise<AuthTokens> {
-    return this.auth.refresh(body.refreshToken, deviceFrom(request));
+  refresh(@Body(new ZodBody(refreshTokenSchema)) body: RefreshTokenBody): Promise<AuthTokens> {
+    return this.auth.refresh(body.refreshToken);
   }
 
   /** Returns no payload: the envelope's `success` is the entire answer. */

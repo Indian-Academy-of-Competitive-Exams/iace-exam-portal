@@ -25,6 +25,7 @@ import {
   FakeConfig,
   FakeEventBus,
   FakeMessageSender,
+  FakeMetrics,
   FakeRedis,
   NO_DEVICE,
 } from '../test/support/fakes';
@@ -48,12 +49,13 @@ function build(
   const redis = new FakeRedis();
   const config = new FakeConfig();
   const sender = new FakeMessageSender();
+  const metrics = new FakeMetrics();
   const tokens = new TokenService(new JwtService({}), config.asService());
   const sessions = new SessionService(redis.asService());
   const adminsFacade = new FakeAdminsService(grants);
   const auth = new AuthService(
     prisma,
-    new OtpService(redis.asService(), config.asService(), sender),
+    new OtpService(redis.asService(), config.asService(), sender, metrics.asService()),
     new PinService(redis.asService(), config.asService()),
     tokens,
     sessions,
@@ -400,7 +402,7 @@ describe('AuthService — refresh and me', () => {
     const session = await signUp(ctx, MOBILE, '4813');
     const before = await ctx.tokens.verifyRefresh(session.tokens.refreshToken);
 
-    const next = await ctx.auth.refresh(session.tokens.refreshToken, NO_DEVICE);
+    const next = await ctx.auth.refresh(session.tokens.refreshToken);
     const after = await ctx.tokens.verifyRefresh(next.refreshToken);
 
     assert.notEqual(next.refreshToken, session.tokens.refreshToken);
@@ -431,7 +433,7 @@ describe('AuthService — refresh and me', () => {
     await setStudent({ isActive: false });
 
     await assert.rejects(
-      () => ctx.auth.refresh(session.tokens.refreshToken, NO_DEVICE),
+      () => ctx.auth.refresh(session.tokens.refreshToken),
       failsWith('UNAUTHENTICATED'),
     );
   });

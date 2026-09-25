@@ -12,6 +12,7 @@ import { AppConfigService } from '../../config/app-config.service';
 import { OTP_SENDERS } from '../../config/env.schema';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
+import { MetricsService } from '../../common/metrics';
 import {
   MESSAGE_CHANNELS,
   MESSAGE_KINDS,
@@ -32,9 +33,10 @@ export class OtpService {
     private readonly redis: RedisService,
     private readonly config: AppConfigService,
     @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
+    private readonly metrics: MetricsService,
   ) {}
 
-  async request(actor: ActorType, identifier: string): Promise<OtpRequestResponse> {
+  async request(actor: ActorType, identifier: string, ip = 'unknown'): Promise<OtpRequestResponse> {
     const cooldownKey = redisKeys.otpCooldown(actor, identifier);
     const remaining = await this.redis.ttl(cooldownKey);
     if (remaining > 0) {
@@ -44,8 +46,12 @@ export class OtpService {
         { details: { retryAfterSec: remaining } },
       );
     }
-    // Admins sign in by email OTP on every login, so only a student's SMS is counted against a day.
-    if (actor === ActorTypes.STUDENT) await this.countTowardsDay(identifier);
+    // Admins sign in by email OTP on every login, so only a student's paid send is metered.
+    if (actor === ActorTypes.STUDENT) {
+      await this.countTowardsDay(identifier);
+      await this.assertIpDailyBudget(ip);
+      await this.assertGlobalDailyBudget();
+    }
 
     const ttlSec = this.config.get('OTP_TTL_SEC');
     const cooldownSec = this.config.get('OTP_RESEND_COOLDOWN_SEC');
@@ -53,15 +59,17 @@ export class OtpService {
 
     const stored: StoredOtp = {
       codeHash: this.hash(code),
-      attempts: 0,
       createdAt: new Date().toISOString(),
     };
     await this.redis.setJson(redisKeys.otp(actor, identifier), stored, ttlSec);
+    // A fresh code resets the attempt count: the old key's leftover count must not carry over.
+    await this.redis.del(redisKeys.otpAttempts(actor, identifier));
     if (cooldownSec > 0) {
       await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec);
     }
 
     await this.deliver(actor, identifier, code, ttlSec);
+    if (actor === ActorTypes.STUDENT) this.metrics.countOtpSend('sent');
 
     return {
       sent: true,
@@ -84,6 +92,37 @@ export class OtpService {
       throw new AppException(
         ErrorCodes.RATE_LIMITED,
         'Too many codes have been sent to this number. Try again later',
+      );
+    }
+  }
+
+  /** The address-wide twin of `countTowardsDay`: a mobile's cap alone does not stop one address minting new numbers. */
+  private async assertIpDailyBudget(ip: string): Promise<void> {
+    const key = redisKeys.otpDailyByIp(ip);
+    const sent = await this.redis.client.incr(key);
+    if (sent === 1) await this.redis.client.expire(key, DAY_SEC);
+    if (sent > this.config.get('OTP_MAX_PER_DAY_PER_IP')) {
+      this.metrics.countOtpSend('refused_ip_daily');
+      throw new AppException(
+        ErrorCodes.RATE_LIMITED,
+        'Too many codes have been requested from this network today. Try again tomorrow',
+      );
+    }
+  }
+
+  /** The platform-wide kill switch: once today's spend would cross the budget, every student waits for tomorrow rather than the bill growing unbounded. */
+  private async assertGlobalDailyBudget(): Promise<void> {
+    const sent = await this.redis.client.incr(redisKeys.otpDailyGlobal);
+    if (sent === 1) await this.redis.client.expire(redisKeys.otpDailyGlobal, DAY_SEC);
+
+    const budgetPaise = this.config.get('OTP_GLOBAL_DAILY_BUDGET_PAISE');
+    const maxSends = Math.floor(budgetPaise / this.config.get('NOTIFICATION_COST_SMS_PAISE'));
+    if (sent > maxSends) {
+      this.metrics.countOtpSend('refused_budget');
+      this.logger.error(`OTP daily budget of ${budgetPaise}p exhausted: ${sent} sends today`);
+      throw new AppException(
+        ErrorCodes.RATE_LIMITED,
+        'Verification codes are paused for today. Please try again tomorrow or contact your branch',
       );
     }
   }
@@ -124,25 +163,34 @@ export class OtpService {
       throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired. Request a new one');
 
     if (!sameHex(this.hash(code), stored.codeHash)) {
-      const attempts = stored.attempts + 1;
-      if (attempts >= this.config.get('OTP_MAX_VERIFY_ATTEMPTS')) {
-        await this.redis.del(key);
+      const attemptsKey = redisKeys.otpAttempts(actor, identifier);
+      // INCR is one atomic op in Redis, so N concurrent guesses consume N attempts, never one.
+      const attempts = await this.redis.client.incr(attemptsKey);
+      if (attempts === 1) {
+        const ttl = await this.redis.ttl(key);
+        await this.redis.client.expire(attemptsKey, ttl > 0 ? ttl : 1);
+      }
+      const maxAttempts = this.config.get('OTP_MAX_VERIFY_ATTEMPTS');
+      if (attempts >= maxAttempts) {
+        await this.redis.del(key, attemptsKey);
         // The challenge is burnt, not just wrong — a different code, because the client's next step is "request a new one", not "try again".
         throw new AppException(
           ErrorCodes.RATE_LIMITED,
           'Too many incorrect attempts. Request a new code',
         );
       }
-      const ttl = await this.redis.ttl(key);
-      await this.redis.setJson(key, { ...stored, attempts }, ttl > 0 ? ttl : 1);
       throw new AppException(ErrorCodes.OTP_INVALID, 'Incorrect code', {
         fieldErrors: { code: ['Incorrect code'] },
-        details: { attemptsRemaining: this.config.get('OTP_MAX_VERIFY_ATTEMPTS') - attempts },
+        details: { attemptsRemaining: maxAttempts - attempts },
       });
     }
 
     // Single use: a verified code is gone, and the next resend is immediate.
-    await this.redis.del(key, redisKeys.otpCooldown(actor, identifier));
+    await this.redis.del(
+      key,
+      redisKeys.otpCooldown(actor, identifier),
+      redisKeys.otpAttempts(actor, identifier),
+    );
   }
 
   /** Uniform over the full range — `randomInt` is CSPRNG-backed, unlike Math.random. */

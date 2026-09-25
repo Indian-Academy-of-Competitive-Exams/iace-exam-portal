@@ -9,12 +9,17 @@ import { RoutedMessageSender } from '../src/common/messaging/routed-message-send
 import { createMessageSender } from '../src/common/messaging/messaging.module';
 import { MESSAGE_CHANNELS, MESSAGE_KINDS } from '../src/common/messaging';
 import { OtpService } from '../src/auth/otp/otp.service';
-import { FakeConfig, FakeMessageSender, FakeRedis } from './support/fakes';
+import { FakeConfig, FakeMessageSender, FakeMetrics, FakeRedis } from './support/fakes';
 
 /** The outbound-message seam (docs/03 §10). */
 
 function otpService(config = new FakeConfig(), sender = new FakeMessageSender()) {
-  const service = new OtpService(new FakeRedis().asService(), config.asService(), sender);
+  const service = new OtpService(
+    new FakeRedis().asService(),
+    config.asService(),
+    sender,
+    new FakeMetrics().asService(),
+  );
   return { service, sender };
 }
 

@@ -12,6 +12,16 @@ export const redisKeys = {
   /** Codes sent to one mobile in the last 24 hours. Set on the first, so the window rolls. */
   otpDaily: (mobile: string) => `otp:daily:${mobile}`,
 
+  /** The address-wide twin of `otpDaily`: a mobile's cap alone does not stop one address minting new numbers. */
+  otpDailyByIp: (ip: string) => `otp:daily:ip:${ip}`,
+
+  /** Every OTP sent platform-wide today — the one number the daily SMS/WhatsApp bill is checked against. */
+  otpDailyGlobal: 'otp:daily:global',
+
+  /** Wrong guesses against one pending OTP, INCR'd atomically so a concurrent burst cannot advance it once for the whole wave. */
+  otpAttempts: (actor: ActorType, identifier: string) =>
+    `otp:attempts:${actor.toLowerCase()}:${identifier}`,
+
   /** A student's consecutive failed PIN attempts. Cleared on success, and by its own TTL, so an occasional typo never accumulates into a lockout. */
   pinAttempts: (mobile: string) => `pin:attempts:${mobile}`,
 

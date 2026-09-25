@@ -514,7 +514,6 @@ export function roster(csv: string): string {
 
 /** The device context every session-creating call needs. */
 export const NO_DEVICE: DeviceContext = {
-  deviceId: null,
   deviceName: null,
   ip: null,
   userAgent: null,
@@ -677,10 +676,16 @@ export function rowAt<T>(rows: readonly T[], index = 0): T {
 export class FakeMetrics {
   readonly submits: string[] = [];
 
+  readonly otpSends: string[] = [];
+
   readonly queueFailures: { queue: string; spent: boolean }[] = [];
 
   countSubmit(outcome: string): void {
     this.submits.push(outcome);
+  }
+
+  countOtpSend(outcome: string): void {
+    this.otpSends.push(outcome);
   }
 
   countQueueFailure(queue: string, spent: boolean): void {

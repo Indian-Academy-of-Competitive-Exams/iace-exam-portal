@@ -35,6 +35,7 @@ export function throttlerOptionsFrom(
       { ttl: minutes(1), limit: limits.default },
       named(RATE_LIMITS.AUTH),
       named(RATE_LIMITS.SITTING),
+      named(RATE_LIMITS.OTP_REQUEST),
     ],
     getTracker: (request: Record<string, unknown>) =>
       trackerFor(
@@ -59,6 +60,7 @@ export function throttlerOptionsFrom(
             default: config.get('RATE_LIMIT_DEFAULT_PER_MIN'),
             auth: config.get('RATE_LIMIT_AUTH_PER_MIN'),
             sitting: config.get('RATE_LIMIT_SITTING_PER_MIN'),
+            otpRequest: config.get('RATE_LIMIT_OTP_REQUEST_PER_MIN'),
           },
           new RedisThrottlerStorage(redis),
         ),
