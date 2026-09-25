@@ -54,7 +54,7 @@ export class RollupProcessor extends WorkerHost {
       this.logger.error('A rebuild job names no test, so there is nothing to recount');
       return;
     }
-    await this.rollup.rebuildForTest(testId);
+    await this.rollup.rebuildTest(testId);
   }
 
   private async rebuildStudent(studentId: string | undefined): Promise<void> {

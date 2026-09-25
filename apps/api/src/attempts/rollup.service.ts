@@ -264,14 +264,6 @@ export class RollupService {
     });
   }
 
-  /** A drop or a bonus moved marks already counted: the test's curve and every sitter go again. */
-  async rebuildForTest(testId: string): Promise<void> {
-    await this.rebuildTest(testId);
-    for (const studentId of await this.sitters(testId)) {
-      await this.rebuildStudent(studentId);
-    }
-  }
-
   /** Both halves at once: what an admin's re-sync asks for, and what a backfill writes. */
   async rebuildTest(testId: string): Promise<void> {
     await this.recountTest(testId);
@@ -448,15 +440,6 @@ export class RollupService {
       select: { id: true },
     });
     return rows.map((row) => row.id);
-  }
-
-  private async sitters(testId: string): Promise<string[]> {
-    const rows = await this.prisma.attempt.findMany({
-      where: { testId, status: ATTEMPT_STATUS.EVALUATED },
-      distinct: ['studentId'],
-      select: { studentId: true },
-    });
-    return rows.map((row) => row.studentId);
   }
 
   private async replay(

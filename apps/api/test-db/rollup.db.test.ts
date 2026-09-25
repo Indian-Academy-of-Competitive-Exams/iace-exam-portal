@@ -74,7 +74,7 @@ async function drain(built: World): Promise<number> {
     const data = job.data as { testId?: string; studentId?: string };
     if (job.name === ROLLUP_JOBS.SWEEP_COHORTS) await built.rollup.sweepCohorts();
     if (job.name === ROLLUP_JOBS.REBUILD_TEST && data.testId !== undefined) {
-      await built.rollup.rebuildForTest(data.testId);
+      await built.rollup.rebuildTest(data.testId);
     }
     if (job.name === ROLLUP_JOBS.REBUILD_STUDENT && data.studentId !== undefined) {
       await built.rollup.rebuildStudent(data.studentId);
