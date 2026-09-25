@@ -20,9 +20,6 @@ type CommentRow = Prisma.SectionCommentGetPayload<{ include: typeof COMMENT_INCL
 const NOT_YOURS_TO_WRITE = 'Only this section’s typist and proof-reader can add to its thread.';
 const NOT_YOURS_TO_REWORD = 'You can only reword what you wrote yourself.';
 
-/** The same hour a question's images get: a thread stays open longer than one, so it re-reads. */
-const IMAGE_URL_TTL_SEC = 3600;
-
 /** The discussion on one (test, section) — spec §9. Both assignees and a super admin write; everyone reads. */
 @Injectable()
 export class SectionThreadService {
@@ -38,7 +35,7 @@ export class SectionThreadService {
       include: COMMENT_INCLUDE,
       orderBy: { createdAt: 'asc' },
     });
-    return this.signedAll(rows);
+    return this.servedAll(rows);
   }
 
   async comment(
@@ -54,7 +51,7 @@ export class SectionThreadService {
       data: { testId, baseConfigSectionId, authorId, body: input.body, images: input.images },
       include: COMMENT_INCLUDE,
     });
-    return this.signed(row);
+    return this.served(row);
   }
 
   /** Its own author and nobody else — not a super admin, who would be putting words in a mouth. */
@@ -87,25 +84,18 @@ export class SectionThreadService {
       },
       include: COMMENT_INCLUDE,
     });
-    return this.signed(row);
+    return this.served(row);
   }
 
-  private async signed(row: CommentRow): Promise<SectionComment> {
-    const [only] = await this.signedAll([row]);
+  private served(row: CommentRow): SectionComment {
+    const [only] = this.servedAll([row]);
     return only ?? toComment(row, new Map());
   }
 
-  /** One signing pass for the whole thread: fifty lines of pictures is not fifty round trips. */
-  private async signedAll(rows: readonly CommentRow[]): Promise<SectionComment[]> {
+  /** One pass for the whole thread: fifty lines quoting one diagram resolve it once. */
+  private servedAll(rows: readonly CommentRow[]): SectionComment[] {
     const keys = new Set(rows.flatMap((row) => row.images));
-    const urls = new Map(
-      await Promise.all(
-        [...keys].map(
-          async (key) =>
-            [key, await this.storage.createDownloadUrl(key, IMAGE_URL_TTL_SEC)] as const,
-        ),
-      ),
-    );
+    const urls = new Map([...keys].map((key) => [key, this.storage.publicUrl(key)]));
     return rows.map((row) => toComment(row, urls));
   }
 

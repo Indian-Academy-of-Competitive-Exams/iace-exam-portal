@@ -27,7 +27,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { imageUrlsIn } from './exam-images';
-import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
+import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
@@ -276,7 +276,7 @@ export class AttemptReportService {
     const questions = servedSheet(paper, attempt, attempt.test.baseConfig.shuffleQuestions).map(
       (row) => toSolutionQuestion(row, attempt.languages, shuffleOptions, random),
     );
-    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
+    const urls = imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
 
     return {
       attemptId: attempt.id,
@@ -290,7 +290,7 @@ export class AttemptReportService {
         questionCount: section.questionCount,
         durationSec: section.durationSec,
       })),
-      questions: questions.map((row) => signedQuestion(row, urls)),
+      questions: questions.map((row) => servedQuestion(row, urls)),
     };
   }
 

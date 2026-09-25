@@ -18,7 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { displayOrder } from './attempt-rules';
 import { imageUrlsIn } from './exam-images';
-import { htmlOfQuestion, narrowTo, signedQuestion } from './exam-content';
+import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { PaperSheetService, type ServedPaperRow } from './paper-sheet.service';
@@ -184,7 +184,7 @@ export class AttemptPaperService {
         questionCount: section.questionCount,
         durationSec: section.durationSec,
       })),
-      questions: await this.withImages(
+      questions: this.withImages(
         served.map((row, index) =>
           toExamQuestion({ ...row, order: index + 1 }, languages, config.shuffleOptions, random),
         ),
@@ -192,10 +192,10 @@ export class AttemptPaperService {
     };
   }
 
-  /** Content on disk holds only the image KEY, so the sitting signs its own, long enough to last. */
-  private async withImages(questions: ExamQuestion[]): Promise<ExamQuestion[]> {
-    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
-    return questions.map((question) => signedQuestion(question, urls));
+  /** Content on disk holds only the image KEY, so the sitting resolves each to its media url. */
+  private withImages(questions: ExamQuestion[]): ExamQuestion[] {
+    const urls = imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
+    return questions.map((question) => servedQuestion(question, urls));
   }
 }
 

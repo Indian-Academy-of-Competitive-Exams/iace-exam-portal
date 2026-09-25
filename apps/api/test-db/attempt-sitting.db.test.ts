@@ -38,9 +38,13 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-/** No image is signed in these fixtures; a call would mean the paper started carrying one. */
+/** No image is resolved in these fixtures; a call would mean the paper started carrying one. */
 const noStorage = () =>
-  ({ createDownloadUrl: () => Promise.reject(new Error('unexpected sign')) }) as never;
+  ({
+    publicUrl: () => {
+      throw new Error('unexpected image');
+    },
+  }) as never;
 
 /** A student at a branch the series is switched on for, and one ACTIVE, frozen test in it. */
 async function hall(questionCount = 2) {

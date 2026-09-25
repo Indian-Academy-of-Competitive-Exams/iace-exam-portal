@@ -1,6 +1,6 @@
 # IACE platform — architecture
 
-What this system is, and why the live test holds at 4–5K concurrent.
+What this system is, and why the live test holds at 6–8K concurrent.
 
 The data model is `prisma/schema.prisma` and is not restated here. Module boundaries, table
 ownership and the event catalog are `docs/03-conventions.md`. The mock-test feature itself —
@@ -14,7 +14,8 @@ An online mock-test platform for IACE, a government-exam coaching institute (SSC
 SI/Constable), replacing ThinkExam. ThinkExam is the reference, not the target: copy what works,
 simplify some, upgrade some, discard the rest.
 
-- **Load:** ~2K concurrent normal, must hold 4K, 5K with minor infra additions. Not 10K.
+- **Load:** ~3K concurrent normal, must hold 6K, 8K with minor infra additions, and 10K
+  within the same infra limits.
 - **Portals:** Test (`apps/test`) — sitting a test and reading the report; Admin (`apps/admin`) —
   everything that builds and runs one; Mobile (`apps/mobile`) — the student side on Android, in
   progress; a broad Student portal later.
@@ -218,19 +219,19 @@ small Postgres plus one Redis plus a few API containers carrying the load.
 A handful of managed services, containerised so nothing is tied to a single host. Sizes, costs and
 the release runbook are `docs/04-infrastructure.md`; this table is what each piece is for.
 
-| Service                 | Role                                      | Notes                                                                                       |
-| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ECS Fargate (ARM)       | Runs the API container                    | Three services from one image, chosen by `API_ROLE`: exam, core, worker.                    |
-| RDS (PostgreSQL)        | Durable data                              | Single instance. A read replica only when reads actually strain it.                         |
-| Valkey on EC2           | Live sitting state, queues, sessions      | One node, saving to disk. Losing it loses in-flight sittings, not scored ones.              |
-| S3                      | Question images, content, import files    | Private buckets, presigned URLs. Same SDK path as MinIO locally.                            |
-| CloudFront              | CDN for static assets and question images | In front of S3 and the SPAs.                                                                |
-| S3 + CloudFront         | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                                 |
-| Route 53 + ACM          | DNS and TLS                               | HTTPS everywhere.                                                                           |
-| SSM Parameter Store     | DB, Valkey and SMS credentials            | No secrets in code or in a committed env file — `.env.example` only. S3 uses the task role. |
-| SMS provider (external) | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                  |
-| Web push (external)     | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.              |
-| FCM (external)          | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.               |
+| Service                 | Role                                      | Notes                                                                                            |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ECS Fargate (ARM)       | Runs the API container                    | Three services from one image, chosen by `API_ROLE`: exam, core, worker.                         |
+| RDS (PostgreSQL)        | Durable data                              | Single instance. A read replica only when reads actually strain it.                              |
+| Valkey on EC2           | Live sitting state, queues, sessions      | One node, saving to disk. Losing it loses in-flight sittings, not scored ones.                   |
+| S3                      | Question images, content, import files    | Private bucket. Content images are read on a stable CDN url, private files presigned (`04` §10). |
+| CloudFront              | CDN for static assets and question images | In front of S3 and the SPAs.                                                                     |
+| S3 + CloudFront         | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                                      |
+| Route 53 + ACM          | DNS and TLS                               | HTTPS everywhere.                                                                                |
+| SSM Parameter Store     | DB, Valkey and SMS credentials            | No secrets in code or in a committed env file — `.env.example` only. S3 uses the task role.      |
+| SMS provider (external) | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                       |
+| Web push (external)     | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.                   |
+| FCM (external)          | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.                    |
 
 **Anything in front of the API must pass `x-client` and `x-device-name` through.** A load balancer or
 CDN that strips them makes every sign-in kind-less, so each new sign-in replaces all of a student's

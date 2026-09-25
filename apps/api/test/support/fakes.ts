@@ -314,7 +314,7 @@ export class FakeMessageSender implements MessageSender {
  */
 export class FakeStorage implements Pick<
   StorageService,
-  'upload' | 'objectSize' | 'read' | 'createDownloadUrl'
+  'upload' | 'objectSize' | 'read' | 'createDownloadUrl' | 'publicUrl'
 > {
   objects = new Map<string, Buffer>();
   failNextUpload = false;
@@ -346,6 +346,10 @@ export class FakeStorage implements Pick<
   /** The ttl is in the string so a test can assert one was asked for, not just that a url came back. */
   createDownloadUrl(key: string, expiresInSec = 900): Promise<string> {
     return Promise.resolve(`memory://${key}?ttl=${expiresInSec}`);
+  }
+
+  publicUrl(key: string): string {
+    return `https://media.test/${key}`;
   }
 }
 

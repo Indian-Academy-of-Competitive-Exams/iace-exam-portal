@@ -32,6 +32,9 @@ const secondsLadder = (fallback: number[]) =>
       'must not decrease — each lockout step should be at least as long as the one before',
     );
 
+/** One slash, not `\/+$`: the quantified form backtracks quadratically on a run of them. */
+const TRAILING_SLASH = /\/$/;
+
 /** An unset variable and one set to nothing mean the same thing: not configured. */
 const optional = z
   .string()
@@ -138,6 +141,12 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: optional,
   S3_SECRET_ACCESS_KEY: optional,
   S3_FORCE_PATH_STYLE: boolFromEnv(false),
+
+  // Where content images are READ from — stable and unsigned, so the CDN caches one copy for everyone.
+  MEDIA_BASE_URL: z
+    .string()
+    .min(1, 'MEDIA_BASE_URL is required')
+    .transform((v) => v.trim().replace(TRAILING_SLASH, '')),
 
   // The SMS aggregator, named nowhere: a swap is these three values, not a code change.
   SMS_PROVIDER_URL: optional,

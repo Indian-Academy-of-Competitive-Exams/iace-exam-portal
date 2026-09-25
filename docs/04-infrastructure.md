@@ -178,12 +178,27 @@ logs (one zone, nothing to see).
 
 ## 10. Media
 
-One private bucket, reached by CloudFront with **signed URLs** — not presigned S3 URLs. The
-difference is not privacy but caching: a per-student signed S3 URL means 6,000 students download
-the same diagram 6,000 times from S3, at $0.1093/GB, which is $28–48 a month at event scale.
-Through CloudFront the edge caches it once and the transfer is inside the free tier.
+One private bucket, reached by CloudFront over an origin access control, and a question image is
+served on a **stable unsigned URL** — `MEDIA_BASE_URL` plus the key. Not a presigned S3 URL, and
+not a CloudFront signed one either.
 
-Admin imports and student documents keep S3 presigned URLs; their volume is trivial.
+The reason is caching, not privacy. A signature is per-request, so the URL differs per student,
+and 6,000 students download the same diagram 6,000 times from S3 at $0.1093/GB — $28–48 a month at
+event scale, plus a browser cache that never hits. Unsigned, the edge fetches once and the transfer
+is inside the free tier.
+
+Nothing is given away by dropping the signature. The key is a uuid, the bucket does not list, and
+the image is quoted by a paper whose question text is already served unsigned to the same student.
+A 6-hour presigned URL was a bearer token for content the holder could screenshot anyway. What
+protects a paper is that the server will not serve it before `startedAt` — not the shape of an
+image url. If a threat ever demands more, the answer is CloudFront **signed cookies** (one cookie a
+sitting, urls still stable, caching intact), never a signature in the url.
+
+Uploads carry `Cache-Control: public, max-age=31536000, immutable`, which a fresh uuid per upload
+earns. Locally `minio-init` opens `questions/images` for anonymous download, so the one code path
+holds.
+
+Admin imports and student documents keep S3 presigned URLs — genuinely per-person, trivial volume.
 
 Diagrams are re-encoded to WebP in the admin's browser before upload (`75868e0`): measured
 2,045 KB → 229 KB at 1600 px, with files under 200 KB and GIFs left alone.

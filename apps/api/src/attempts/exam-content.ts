@@ -1,4 +1,4 @@
-/** Narrowing and image-signing shared by the paper a student sits and the review they read after. */
+/** Narrowing and image urls shared by the paper a student sits and the review they read after. */
 import {
   contentLanguageOf,
   type LanguageCode,
@@ -27,9 +27,11 @@ export function narrowTo<T, R = T>(
 /** The HTML inside a run of rich nodes, which is where an image key hides. */
 const htmlIn = (nodes: RichContent | undefined): string[] => (nodes ?? []).map((node) => node.text);
 
-/** The same nodes with every image key replaced by a URL that will still be live in an hour. */
-const signRich = (nodes: RichContent | undefined, urls: ReadonlyMap<string, string>): RichContent =>
-  (nodes ?? []).map((node) => ({ ...node, text: applyImageUrls(node.text, urls) }));
+/** The same nodes with every image key replaced by the url that serves it. */
+const serveRich = (
+  nodes: RichContent | undefined,
+  urls: ReadonlyMap<string, string>,
+): RichContent => (nodes ?? []).map((node) => ({ ...node, text: applyImageUrls(node.text, urls) }));
 
 interface ContentBearing {
   content: LocalizedContent;
@@ -48,8 +50,8 @@ export function htmlOfQuestion(question: ContentBearing): string[] {
   return [...content, ...options];
 }
 
-/** The question with every image key signed; a solution is signed only where one was served. */
-export function signedQuestion<Q extends ContentBearing>(
+/** The question with every image key resolved; a solution is resolved only where one was served. */
+export function servedQuestion<Q extends ContentBearing>(
   question: Q,
   urls: ReadonlyMap<string, string>,
 ): Q {
@@ -61,8 +63,8 @@ export function signedQuestion<Q extends ContentBearing>(
         held
           ? {
               ...held,
-              stem: signRich(held.stem, urls),
-              ...(held.solution ? { solution: signRich(held.solution, urls) } : {}),
+              stem: serveRich(held.stem, urls),
+              ...(held.solution ? { solution: serveRich(held.solution, urls) } : {}),
             }
           : held,
       ]),
@@ -70,7 +72,7 @@ export function signedQuestion<Q extends ContentBearing>(
     options: question.options.map((option) => ({
       ...option,
       text: Object.fromEntries(
-        Object.entries(option.text).map(([language, nodes]) => [language, signRich(nodes, urls)]),
+        Object.entries(option.text).map(([language, nodes]) => [language, serveRich(nodes, urls)]),
       ),
     })),
   };

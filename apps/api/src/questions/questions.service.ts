@@ -89,8 +89,8 @@ export const AUDITED_QUESTION_FIELDS = [
   'answerKey',
 ] as const;
 
-/** Long enough to survive an authoring session; content stores the key, so nothing outlives it. */
-const QUESTION_IMAGE_URL_TTL_SEC = 3600;
+/** A key is a fresh uuid per upload, so the bytes behind one never change. */
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 /** What a caller may relax. The bank refuses a duplicate; the authoring editor reports it. */
 export interface WriteOptions {
@@ -108,39 +108,31 @@ export class QuestionsService {
     private readonly storage: StorageService,
   ) {}
 
-  /** Signs every image the content quotes, in one pass — a stem and its options share images. */
-  private async signed(detail: QuestionDetail): Promise<QuestionDetail> {
-    const [only] = await this.signedAll([detail]);
+  private served(detail: QuestionDetail): QuestionDetail {
+    const [only] = this.servedAll([detail]);
     return only ?? detail;
   }
 
-  /** One signing pass for a whole page: a document of twenty questions is not twenty passes. */
-  private async signedAll(details: QuestionDetail[]): Promise<QuestionDetail[]> {
+  /** One pass for a whole page: a stem and its options share images, and twenty questions share more. */
+  private servedAll(details: QuestionDetail[]): QuestionDetail[] {
     const keys = new Set(
       details.flatMap((detail) => mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn)),
     );
-    const urls = new Map(
-      await Promise.all(
-        [...keys].map(
-          async (key) =>
-            [key, await this.storage.createDownloadUrl(key, QUESTION_IMAGE_URL_TTL_SEC)] as const,
-        ),
-      ),
-    );
+    const urls = new Map([...keys].map((key) => [key, this.storage.publicUrl(key)]));
 
     return details.map((detail) =>
       rewriteQuestionHtml(detail, (html) => applyImageUrls(html, urls)),
     );
   }
 
-  /** Hands back the KEY that content quotes, plus a url that only shows what was just picked. */
+  /** Hands back the KEY that content quotes, plus the url that will serve it from now on. */
   async saveImage(file: UploadedImage | undefined) {
     const { buffer, contentType } = checkQuestionImage(file);
 
     const key = questionImageKey(contentType);
-    await this.storage.upload(key, buffer, contentType);
+    await this.storage.upload(key, buffer, contentType, IMMUTABLE_CACHE_CONTROL);
 
-    return { key, url: await this.storage.createDownloadUrl(key, QUESTION_IMAGE_URL_TTL_SEC) };
+    return { key, url: this.storage.publicUrl(key) };
   }
 
   /** `scope` is a narrowing the caller owns — authoring passes the author, and cannot be widened out of it. */
@@ -158,7 +150,7 @@ export class QuestionsService {
     scope?: Prisma.QuestionWhereInput,
   ): Promise<Paginated<QuestionDetail>> {
     const [rows, total] = await this.pageOf(query, scope);
-    const items = await this.signedAll(rows.map(toDetail));
+    const items = this.servedAll(rows.map(toDetail));
     return paged(query, items, total);
   }
 
@@ -169,7 +161,7 @@ export class QuestionsService {
       include: QUESTION_INCLUDE,
       orderBy: questionOrderBy(QUESTION_SORTS.OLDEST),
     });
-    return this.signedAll(rows.map(toDetail));
+    return this.servedAll(rows.map(toDetail));
   }
 
   private async pageOf(
@@ -206,7 +198,7 @@ export class QuestionsService {
   }
 
   async detail(id: string): Promise<QuestionDetail> {
-    return this.signed(toDetail(await this.require(id)));
+    return this.served(toDetail(await this.require(id)));
   }
 
   /** The chain, newest first, and which papers pin each link — what says who sat which wording. */
@@ -283,7 +275,7 @@ export class QuestionsService {
       });
     });
 
-    return this.signed(toDetail(row));
+    return this.served(toDetail(row));
   }
 
   /** Rewritten in place while nothing reachable pins the version; anything else gains one. */
@@ -305,7 +297,7 @@ export class QuestionsService {
 
     this.auditContext.setChanged(questionDiff(question, row));
 
-    return this.signed(toDetail(row));
+    return this.served(toDetail(row));
   }
 
   /** Re-read inside the transaction, so the row this decides on is the row it goes on to write. */
@@ -430,7 +422,7 @@ export class QuestionsService {
 
     this.auditContext.setChanged(questionDiff(question, updated));
 
-    return this.signed(toDetail(updated));
+    return this.served(toDetail(updated));
   }
 
   /** The soft remove: out of circulation and out of the bank, reversible and losing nothing. */

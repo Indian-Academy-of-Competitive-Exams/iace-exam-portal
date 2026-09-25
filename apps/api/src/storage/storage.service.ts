@@ -25,10 +25,12 @@ export class StorageService implements OnModuleDestroy {
   private readonly logger = new Logger(StorageService.name);
   private readonly client: S3Client;
   private readonly bucket: string;
+  private readonly mediaBase: string;
 
   constructor(config: AppConfigService) {
     const endpoint = config.get('S3_ENDPOINT');
     this.bucket = config.get('S3_BUCKET');
+    this.mediaBase = config.get('MEDIA_BASE_URL');
 
     this.client = new S3Client({
       region: config.get('S3_REGION'),
@@ -49,6 +51,7 @@ export class StorageService implements OnModuleDestroy {
     key: string,
     body: Buffer | Uint8Array | string,
     contentType?: string,
+    cacheControl?: string,
   ): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
@@ -56,8 +59,14 @@ export class StorageService implements OnModuleDestroy {
         Key: key,
         Body: body,
         ContentType: contentType,
+        CacheControl: cacheControl,
       }),
     );
+  }
+
+  /** Content everyone sees: one unsigned URL per key, or the CDN caches a copy per student. */
+  publicUrl(key: string): string {
+    return `${this.mediaBase}/${key}`;
   }
 
   async createDownloadUrl(key: string, expiresInSec = 900): Promise<string> {

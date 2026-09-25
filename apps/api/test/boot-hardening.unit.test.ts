@@ -22,6 +22,7 @@ function env(over: Record<string, string> = {}): Record<string, string> {
     S3_ENDPOINT: 'http://localhost:9000',
     S3_ACCESS_KEY_ID: 'key',
     S3_SECRET_ACCESS_KEY: 'secret',
+    MEDIA_BASE_URL: 'http://localhost:9000/iace-local',
     ...over,
   };
 }

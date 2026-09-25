@@ -85,14 +85,14 @@ export function withoutForeignImages(html: string): string {
   return html.replace(IMG_TAG, (tag) => (DATA_KEY.test(tag) ? tag : ''));
 }
 
-/** Strips the transient src before storing: a signed one would rot, and a `data:` one is bytes. */
+/** Strips the transient src before storing: the key is the record, and a `data:` one is bytes. */
 export function stripImageSrc(html: string): string {
   return html
     .replace(IMG_TAG, (tag) => (DATA_KEY.test(tag) ? tag.replace(SRC_ATTR, '') : tag))
     .replace(IMG_TAG, (tag) => tag.replace(DATA_URI_SRC, ''));
 }
 
-/** Serves only a src it just signed: content stored before the write guard may point anywhere. */
+/** Serves only a src it just built: content stored before the write guard may point anywhere. */
 export function applyImageUrls(html: string, urls: ReadonlyMap<string, string>): string {
   return withoutForeignImages(html).replace(IMG_TAG, (tag) => {
     const bare = tag.replace(SRC_ATTR, '');

@@ -86,14 +86,17 @@ pnpm docker:up
 
 Brings up:
 
-| Service     | Port                        | Notes                                                 |
-| ----------- | --------------------------- | ----------------------------------------------------- |
-| Postgres 17 | 5432                        | user/pass/db = `iace` / `iace_dev_password` / `iace`  |
-| Valkey 8    | 6379                        | the BSD fork of Redis that production runs            |
-| MinIO       | 9000 (API) / 9001 (console) | login = `iace_minio_user` / `iace_minio_password`     |
-| minio‑init  | —                           | one‑shot: creates the `iace-local` bucket, then exits |
+| Service     | Port                        | Notes                                                                                                  |
+| ----------- | --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Postgres 17 | 5432                        | user/pass/db = `iace` / `iace_dev_password` / `iace`                                                   |
+| Valkey 8    | 6379                        | the BSD fork of Redis that production runs                                                             |
+| MinIO       | 9000 (API) / 9001 (console) | login = `iace_minio_user` / `iace_minio_password`                                                      |
+| minio‑init  | —                           | one‑shot: creates the `iace-local` bucket, opens `questions/images` for anonymous download, then exits |
 
 Check: `docker ps` shows `iace-postgres`, `iace-valkey`, `iace-minio` healthy. The MinIO console is at http://localhost:9001.
+
+That anonymous prefix is what `MEDIA_BASE_URL` points at: a question image is served on a stable
+unsigned url so the CDN caches one copy, and locally MinIO plays the CDN (`docs/04` §10).
 
 ## 5. Set up the database
 

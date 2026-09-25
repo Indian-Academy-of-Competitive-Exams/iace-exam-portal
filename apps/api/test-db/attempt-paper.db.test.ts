@@ -37,9 +37,13 @@ after(() => prisma.$disconnect());
 /** The paper is served on the ATTEMPT's own ownership; reach is the brief's gate, not this one. */
 const reachAll = () => ({ assertReachable: () => Promise.resolve() }) as never;
 
-/** No image is signed in these fixtures; a call would mean the paper started carrying one. */
+/** No image is resolved in these fixtures; a call would mean the paper started carrying one. */
 const noStorage = () =>
-  ({ createDownloadUrl: () => Promise.reject(new Error('unexpected sign')) }) as never;
+  ({
+    publicUrl: () => {
+      throw new Error('unexpected image');
+    },
+  }) as never;
 
 const service = new AttemptPaperService(
   prisma,

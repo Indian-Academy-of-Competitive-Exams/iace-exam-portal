@@ -43,6 +43,7 @@ describe('PIN_LOCKOUT_STEPS_SEC validation', () => {
     S3_BUCKET: 'b',
     S3_ACCESS_KEY_ID: 'k',
     S3_SECRET_ACCESS_KEY: 's',
+    MEDIA_BASE_URL: 'https://media.test',
   };
 
   it('parses a comma-separated ladder', () => {

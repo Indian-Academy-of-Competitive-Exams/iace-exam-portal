@@ -1135,7 +1135,7 @@ describe('TaxonomyService', () => {
 });
 
 describe('QuestionsService — serving legacy images', () => {
-  /** Fails if signedAll's `keys.size === 0` shortcut returns: a key-less legacy image would survive. */
+  /** Fails if servedAll's `keys.size === 0` shortcut returns: a key-less legacy image would survive. */
   it('strips an external src a key-less legacy image quotes, on a detail read', async () => {
     const { questions } = await build();
     const subject = (await makeSubject(prisma)).id;
