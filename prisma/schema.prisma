@@ -557,6 +557,8 @@ model Test {
   @@index([examStageId])
   @@index([status])
   @@index([testSeriesId])
+  // Trigram, for the attempt list's ILIKE on test title.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Test_title_trgm_idx")
 }
 
 // One question on a test's paper. A test has exactly one paper, and every sitting is served it.
@@ -746,6 +748,12 @@ model Student {
   @@index([programs], type: Gin)
   @@index([currentBranchId])
   @@index([anonymizedAt])
+  // Trigram, for the roster search's ILIKE on name and mobile.
+  @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "Student_fullName_trgm_idx")
+  @@index([mobile(ops: raw("gin_trgm_ops"))], type: Gin, map: "Student_mobile_trgm_idx")
+  // Composite, matching studentOrderBy's tie-break so the sort is an index scan.
+  @@index([fullName, id], map: "Student_fullName_id_idx")
+  @@index([createdAt, id], map: "Student_createdAt_id_idx")
 }
 
 // Aadhaar/PAN images are never stored here — only the verification status.
