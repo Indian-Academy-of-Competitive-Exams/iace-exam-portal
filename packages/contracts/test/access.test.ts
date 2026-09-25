@@ -5,6 +5,8 @@ import {
   TEST_SERIES_KIND,
   createEventSchema,
   eventListQuerySchema,
+  isAllowedPushEndpoint,
+  pushSubscriptionSchema,
   studentCatalogSeriesSchema,
   testAction,
   testBucket,
@@ -160,5 +162,51 @@ describe('eventListQuerySchema', () => {
     assert.equal(eventListQuerySchema.parse({ activeOnly: 'true' }).activeOnly, true);
     assert.equal(eventListQuerySchema.parse({ activeOnly: 'false' }).activeOnly, false);
     assert.equal(eventListQuerySchema.parse({}).activeOnly, undefined);
+  });
+});
+
+describe('isAllowedPushEndpoint', () => {
+  it('accepts an exact allowed host and a genuine subdomain of one', () => {
+    assert.equal(isAllowedPushEndpoint('https://fcm.googleapis.com/fcm/send/abc'), true);
+    assert.equal(
+      isAllowedPushEndpoint('https://updates.push.services.mozilla.com/wpush/v2/abc'),
+      true,
+    );
+  });
+
+  /** The hole a naive `endsWith(allowed)` leaves open: this host is not a subdomain of the real one. */
+  it('refuses a lookalike host sharing only a suffix with the real one', () => {
+    assert.equal(isAllowedPushEndpoint('https://evil-fcm.googleapis.com/x'), false);
+    assert.equal(isAllowedPushEndpoint('https://fcm.googleapis.com.attacker.test/x'), false);
+  });
+
+  it('refuses a non-https endpoint even to an allowed host', () => {
+    assert.equal(isAllowedPushEndpoint('http://fcm.googleapis.com/fcm/send/abc'), false);
+  });
+
+  it('refuses an internal address and anything unparsable', () => {
+    assert.equal(isAllowedPushEndpoint('https://169.254.169.254/latest/meta-data'), false);
+    assert.equal(isAllowedPushEndpoint('not-a-url'), false);
+  });
+});
+
+describe('pushSubscriptionSchema', () => {
+  const keys = { p256dh: 'key', auth: 'auth' };
+
+  it('accepts a real push service endpoint', () => {
+    const result = pushSubscriptionSchema.safeParse({
+      ...keys,
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+    });
+    assert.equal(result.success, true);
+  });
+
+  it('refuses an internal endpoint with a field error on endpoint', () => {
+    const result = pushSubscriptionSchema.safeParse({
+      ...keys,
+      endpoint: 'http://169.254.169.254/latest/meta-data',
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.success ? null : result.error.issues[0]?.path.join('.'), 'endpoint');
   });
 });

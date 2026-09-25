@@ -7,6 +7,7 @@ import {
   NotificationOutbox,
   type NotificationIntent,
 } from '../src/notifications/notification-outbox';
+import { NotificationDeliveryProcessor } from '../src/notifications/notification-delivery.processor';
 import { NotificationsProcessor } from '../src/notifications/notifications.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { PushService } from '../src/notifications/push.service';
@@ -15,6 +16,7 @@ import { NOTIFICATION_WRITE_JOB_ID } from '../src/queue/queues';
 import {
   FakeConfig,
   FakeFcmSender,
+  FakeMessageSender,
   FakePushSender,
   FakeQueue,
   fakeQueueFailures,
@@ -50,6 +52,13 @@ function build() {
       outbox,
       push,
       new TestOpeningService(prisma, access, outbox),
+      new NotificationDeliveryProcessor(
+        prisma,
+        new NotificationsService(prisma),
+        new FakeMessageSender(),
+        deliveries.asQueue(),
+        fakeQueueFailures(),
+      ),
       deliveries.asQueue(),
       fakeQueueFailures(),
     ),

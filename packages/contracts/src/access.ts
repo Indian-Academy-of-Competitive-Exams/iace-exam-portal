@@ -318,9 +318,35 @@ export const pushConfigSchema = z.object({
 });
 export type PushConfig = z.infer<typeof pushConfigSchema>;
 
+/** The push services a browser's endpoint may point at — never a host a student chose. */
+export const PUSH_ENDPOINT_HOSTS = [
+  'fcm.googleapis.com',
+  'push.services.mozilla.com',
+  'notify.windows.com',
+  'web.push.apple.com',
+] as const;
+
+/** https, and the host is one of `PUSH_ENDPOINT_HOSTS` or a subdomain of one — never a bare suffix match. */
+export function isAllowedPushEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:') return false;
+
+  return PUSH_ENDPOINT_HOSTS.some(
+    (host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
+  );
+}
+
 /** What `pushManager.subscribe` hands back, flattened — the browser's own endpoint and its keys. */
 export const pushSubscriptionSchema = z.object({
-  endpoint: z.string().min(1),
+  endpoint: z
+    .string()
+    .min(1)
+    .refine(isAllowedPushEndpoint, 'That is not a recognised push service'),
   p256dh: z.string().min(1),
   auth: z.string().min(1),
   userAgent: z.string().optional(),

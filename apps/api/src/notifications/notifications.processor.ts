@@ -21,6 +21,7 @@ import {
 import { NotificationsService, type WrittenNotification } from './notifications.service';
 import { PAID_CHANNELS, escalationFor } from './notification-policy';
 import { PushService } from './push.service';
+import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { TestOpeningService } from './test-opening.service';
 import {
   NOTIFICATION_REQUEST,
@@ -51,6 +52,7 @@ export class NotificationsProcessor extends WorkerHost {
     private readonly outbox: NotificationOutbox,
     private readonly push: PushService,
     private readonly openings: TestOpeningService,
+    private readonly deliveryRepair: NotificationDeliveryProcessor,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
     private readonly failures: QueueFailures,
@@ -66,6 +68,7 @@ export class NotificationsProcessor extends WorkerHost {
   async process(job: Job<NotificationJobData>): Promise<void> {
     if (job.name === NOTIFICATION_JOBS.SWEEP) {
       await this.outbox.relay();
+      await this.deliveryRepair.repairStalled();
       return;
     }
     if (job.name === NOTIFICATION_JOBS.TESTS_OPENED) {

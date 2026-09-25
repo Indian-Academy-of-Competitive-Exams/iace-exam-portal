@@ -6,6 +6,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DeliveryChannel, DeliveryStatus, type NotificationType } from '@prisma/client';
 import {
+  isAllowedPushEndpoint,
   NOTIFICATION_INBOX_PATH,
   type PushDeviceBody,
   type PushSubscriptionBody,
@@ -111,8 +112,19 @@ export class PushService {
     // A browser subscription IS the consent, so no subscription is an absence and not a refusal.
     if (targets.length === 0) return;
 
+    // Stored before this host rule existed, or never valid: dropped like a dead one, never POSTed to.
+    const refused = targets.filter((target) => !isAllowedPushEndpoint(target.endpoint));
+    if (refused.length > 0) {
+      await this.prisma.pushSubscription.deleteMany({
+        where: { endpoint: { in: refused.map((target) => target.endpoint) } },
+      });
+    }
+
+    const reachable = targets.filter((target) => isAllowedPushEndpoint(target.endpoint));
+    if (reachable.length === 0) return;
+
     const outcomes = await Promise.all(
-      targets.map(async (target) => ({
+      reachable.map(async (target) => ({
         endpoint: target.endpoint,
         outcome: await this.sender.send(target, payload),
       })),

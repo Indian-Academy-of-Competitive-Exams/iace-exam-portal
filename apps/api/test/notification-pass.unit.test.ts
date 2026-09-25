@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { DeliveryChannel } from '@prisma/client';
 import { NotificationsProcessor } from '../src/notifications/notifications.processor';
+import { type NotificationDeliveryProcessor } from '../src/notifications/notification-delivery.processor';
 import { type NotificationOutbox } from '../src/notifications/notification-outbox';
 import { type NotificationsService } from '../src/notifications/notifications.service';
 import { type PushService } from '../src/notifications/push.service';
@@ -86,6 +87,7 @@ function build(rows: Row[]) {
     { relay: () => Promise.resolve() } as unknown as NotificationOutbox,
     push,
     { sweep: () => Promise.resolve() } as unknown as TestOpeningService,
+    { repairStalled: () => Promise.resolve() } as unknown as NotificationDeliveryProcessor,
     new FakeQueue().asQueue(),
     fakeQueueFailures(),
   );

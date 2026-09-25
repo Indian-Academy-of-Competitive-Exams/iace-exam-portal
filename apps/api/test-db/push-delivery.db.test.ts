@@ -15,7 +15,7 @@ const VAPID = {
 };
 
 const SUBSCRIPTION = {
-  endpoint: 'https://push.example/one',
+  endpoint: 'https://fcm.googleapis.com/fcm/send/one',
   p256dh: 'key-one',
   auth: 'auth-one',
 };
@@ -82,13 +82,16 @@ describe('Sending a notification as a push', () => {
   it('reaches every browser the student has subscribed', async () => {
     const { push, sender, student, delivery } = await build();
     await push.subscribe(student, SUBSCRIPTION);
-    await push.subscribe(student, { ...SUBSCRIPTION, endpoint: 'https://push.example/two' });
+    await push.subscribe(student, {
+      ...SUBSCRIPTION,
+      endpoint: 'https://fcm.googleapis.com/fcm/send/two',
+    });
 
     await push.deliver(delivery);
 
     assert.deepEqual(sender.sent.map((row) => row.endpoint).sort(), [
-      'https://push.example/one',
-      'https://push.example/two',
+      'https://fcm.googleapis.com/fcm/send/one',
+      'https://fcm.googleapis.com/fcm/send/two',
     ]);
   });
 
@@ -165,7 +168,7 @@ describe('When a student has turned push off in the browser', () => {
 describe('When an endpoint has gone', () => {
   /** A push service reporting 410 is telling us the subscription is dead, so we stop holding it. */
   it('prunes the dead subscription and keeps the live one', async () => {
-    const dead = 'https://push.example/dead';
+    const dead = 'https://fcm.googleapis.com/fcm/send/dead';
     const { push, student, delivery } = await build(new FakePushSender(true, [dead]));
     await push.subscribe(student, SUBSCRIPTION);
     await push.subscribe(student, { ...SUBSCRIPTION, endpoint: dead });
@@ -198,6 +201,22 @@ describe('When an endpoint has gone', () => {
     await push.subscribe(student, SUBSCRIPTION);
 
     await assert.doesNotReject(push.deliver(delivery));
+  });
+
+  /** Stored before the host rule existed, or never valid: dropped like a dead one, never POSTed to. */
+  it('drops an endpoint that would be refused today, without ever sending to it', async () => {
+    const refused = 'https://push.example/legacy';
+    const { push, sender, student, delivery } = await build();
+    await push.subscribe(student, SUBSCRIPTION);
+    await push.subscribe(student, { ...SUBSCRIPTION, endpoint: refused });
+
+    await push.deliver(delivery);
+
+    assert.deepEqual(await endpoints(), [SUBSCRIPTION.endpoint]);
+    assert.deepEqual(
+      sender.sent.map((row) => row.endpoint),
+      [SUBSCRIPTION.endpoint],
+    );
   });
 });
 

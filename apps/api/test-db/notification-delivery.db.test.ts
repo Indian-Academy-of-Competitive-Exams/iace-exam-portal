@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DeliveryChannel, DeliveryStatus } from '@prisma/client';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
-import { NotificationDeliveryProcessor } from '../src/notifications/notification-delivery.processor';
+import {
+  DELIVERY_STALE_AFTER_MS,
+  NotificationDeliveryProcessor,
+} from '../src/notifications/notification-delivery.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PaidChannel } from '../src/notifications/notification-policy';
 import {
@@ -189,5 +192,34 @@ describe('A channel with no template registered', () => {
     const row = await deliveryRow(booked?.id ?? '');
     assert.equal(row.status, DeliveryStatus.SKIPPED);
     assert.equal(row.skipReason, 'NO_TEMPLATE');
+  });
+});
+
+describe('A delivery the queue lost track of', () => {
+  /** BullMQ's stall path drops a job without ever running `process()`, so nothing else moves this row. */
+  it('forces a channel past its window to a terminal state and books the fallback', async () => {
+    const { processor, queue, deliveryId } = await build(CHOSEN, [MESSAGE_CHANNELS.WHATSAPP]);
+    await prisma.notificationDelivery.updateMany({
+      data: { queuedAt: new Date(Date.now() - DELIVERY_STALE_AFTER_MS - 1000) },
+    });
+
+    await processor.repairStalled();
+
+    assert.equal((await deliveryRow(deliveryId)).status, DeliveryStatus.FAILED);
+    const fallback = await prisma.notificationDelivery.findMany({
+      where: { channel: DeliveryChannel.SMS },
+    });
+    assert.equal(fallback.length, 1, 'the chain moved on, exactly as the in-band cap would');
+    assert.equal(queue.jobs.length, 1, 'and the fallback is queued, not merely recorded');
+  });
+
+  /** Still legitimately waiting out its defer or its own backoff — repairing this would double-send. */
+  it('leaves a delivery still inside its window alone', async () => {
+    const { processor, sender, deliveryId } = await build(CHOSEN, [MESSAGE_CHANNELS.WHATSAPP]);
+
+    await processor.repairStalled();
+
+    assert.equal(sender.sent.length, 0, 'nothing was attempted');
+    assert.equal((await deliveryRow(deliveryId)).status, DeliveryStatus.PENDING);
   });
 });

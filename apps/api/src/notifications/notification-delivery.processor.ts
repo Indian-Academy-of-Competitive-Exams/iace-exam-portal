@@ -28,6 +28,7 @@ import { QueueFailures } from '../common/metrics/queue-failures';
 import { NotificationsService } from './notifications.service';
 import {
   OUTBOUND_CHANNEL,
+  PAID_CHANNELS,
   SKIP_REASONS,
   nextChannelAfter,
   type PaidChannel,
@@ -42,6 +43,12 @@ const KIND_OF: Partial<Record<NotificationType, MessageKind>> = {
 };
 
 const ATTEMPT_CAP = QUEUE_POLICY[QUEUE_NAMES.NOTIFICATION_DELIVERY].attempts;
+
+/** Worst case a booked channel legitimately waits: the 10-minute escalation defer plus its retries. */
+export const DELIVERY_STALE_AFTER_MS = 20 * 60 * 1000;
+
+/** How many stuck deliveries one sweep repairs; a backlog beyond this waits for the next pass. */
+const REPAIR_BATCH = 25;
 
 interface NotificationWithChain {
   id: string;
@@ -140,6 +147,27 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       if (attempt < ATTEMPT_CAP) throw error;
 
       await this.fallBack(row.notification, channel);
+    }
+  }
+
+  /** A PENDING row this stale outlived BullMQ's own stall path, so nothing else will move it. */
+  async repairStalled(now: Date = new Date()): Promise<void> {
+    const settled = new Date(now.getTime() - DELIVERY_STALE_AFTER_MS);
+    const stuck = await this.prisma.notificationDelivery.findMany({
+      where: {
+        status: DeliveryStatus.PENDING,
+        channel: { in: PAID_CHANNELS },
+        queuedAt: { lt: settled },
+      },
+      orderBy: { queuedAt: 'asc' },
+      take: REPAIR_BATCH,
+      select: { id: true },
+    });
+
+    // ponytail: sequential, not through the queue's rate limiter — repairs are rare and few.
+    for (const row of stuck) {
+      this.logger.warn(`Delivery ${row.id} outlived its window with no worker; forcing a decision`);
+      await this.deliver(row.id, ATTEMPT_CAP);
     }
   }
 
