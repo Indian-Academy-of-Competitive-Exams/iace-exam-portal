@@ -444,6 +444,18 @@ describe('TestsService — editing and removing', () => {
     assert.equal(await testRow(), null);
   });
 
+  /** The failure this prevents: a renamed test still wearing its old title in a cached catalog. */
+  it('tells the series about a rename, which the catalog carries', async () => {
+    const { service, events } = await serviceWith({ test: {} });
+
+    await service.update(TEST, { title: 'Mock 1 (revised)' });
+
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
+      [idFor('srs_1')],
+    );
+  });
+
   /** The failure this prevents: a deleted test still reachable in a student's cached catalog. */
   it('tells the series that carried it that the catalog has moved', async () => {
     const { service, events } = await serviceWith({ test: {} });

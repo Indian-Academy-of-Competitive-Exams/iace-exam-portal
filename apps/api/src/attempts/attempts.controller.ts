@@ -39,6 +39,7 @@ export class AttemptsController {
   ) {}
 
   /** Idempotent: a second start while one is running resumes it, clock and all. */
+  @SittingRateLimit()
   @Post('tests/:testId/attempt')
   @HttpCode(HttpStatus.OK)
   start(

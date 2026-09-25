@@ -18,7 +18,7 @@ import {
   type TestScopeRef,
   type UpdateTestBody,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
@@ -224,9 +224,14 @@ export class TestsService {
         },
         include: TEST_INCLUDE,
       });
-    });
+    }, TX_LIMITS.SHORT);
 
     this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));
+
+    // The catalog caches the title, so a rename must bust it like any offering change.
+    if (updated.title !== test.title) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
+    }
 
     return {
       ...toTest(updated),
