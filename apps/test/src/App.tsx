@@ -7,18 +7,6 @@ import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
 import { NotFoundPage } from './routes/not-found';
 import { AppShell } from './components/app-shell';
-import { AccountPage } from './routes/account';
-import { ProfilePage } from './routes/profile';
-import { TestsPage } from './routes/tests';
-import { SeriesPage } from './routes/series';
-import { TestAboutPage } from './routes/test-about';
-import { TestInstructionsPage } from './routes/test-instructions';
-import { SubmittedPage } from './routes/submitted';
-import { QuestionReportPanel } from './routes/question-report';
-import { ReportRedirect, ReportShell } from './routes/report';
-import { LeaderboardPage } from './routes/leaderboard';
-import { NotificationsPage } from './routes/notifications';
-import { NotificationSettingsPage } from './routes/notification-settings';
 import { PageSkeleton, ReportSkeleton } from './components/ui';
 
 /** DEV only, and lazy so the standing paper never reaches a student's payload. */
@@ -26,7 +14,7 @@ const RailwayPreviewPage = React.lazy(() =>
   import('./routes/railway-preview').then((module) => ({ default: module.RailwayPreviewPage })),
 );
 
-/** Every screen that draws charts or equations, so the plotting and maths libraries stay off the first payload. */
+/** Every screen behind login is lazy, so the first paint pays for login and the shell alone. */
 const DashboardPage = React.lazy(() =>
   import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
 );
@@ -50,6 +38,49 @@ const SolutionPanel = React.lazy(() =>
 );
 const SavedPage = React.lazy(() =>
   import('./routes/saved').then((module) => ({ default: module.SavedPage })),
+);
+const AccountPage = React.lazy(() =>
+  import('./routes/account').then((module) => ({ default: module.AccountPage })),
+);
+const ProfilePage = React.lazy(() =>
+  import('./routes/profile').then((module) => ({ default: module.ProfilePage })),
+);
+const TestsPage = React.lazy(() =>
+  import('./routes/tests').then((module) => ({ default: module.TestsPage })),
+);
+const SeriesPage = React.lazy(() =>
+  import('./routes/series').then((module) => ({ default: module.SeriesPage })),
+);
+const TestAboutPage = React.lazy(() =>
+  import('./routes/test-about').then((module) => ({ default: module.TestAboutPage })),
+);
+const TestInstructionsPage = React.lazy(() =>
+  import('./routes/test-instructions').then((module) => ({
+    default: module.TestInstructionsPage,
+  })),
+);
+const SubmittedPage = React.lazy(() =>
+  import('./routes/submitted').then((module) => ({ default: module.SubmittedPage })),
+);
+const QuestionReportPanel = React.lazy(() =>
+  import('./routes/question-report').then((module) => ({ default: module.QuestionReportPanel })),
+);
+const ReportShell = React.lazy(() =>
+  import('./routes/report').then((module) => ({ default: module.ReportShell })),
+);
+const ReportRedirect = React.lazy(() =>
+  import('./routes/report').then((module) => ({ default: module.ReportRedirect })),
+);
+const LeaderboardPage = React.lazy(() =>
+  import('./routes/leaderboard').then((module) => ({ default: module.LeaderboardPage })),
+);
+const NotificationsPage = React.lazy(() =>
+  import('./routes/notifications').then((module) => ({ default: module.NotificationsPage })),
+);
+const NotificationSettingsPage = React.lazy(() =>
+  import('./routes/notification-settings').then((module) => ({
+    default: module.NotificationSettingsPage,
+  })),
 );
 
 /** Each chunk waits on the shape it is about to become, never on one spinner standing in for all of them. */
@@ -82,40 +113,76 @@ export function App() {
           />
         }
       >
-        <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
+        <Route
+          path={ROUTES.TEST_INSTRUCTIONS_PATTERN}
+          element={whileLoading(
+            <TestInstructionsPage />,
+            <LoadingState>Opening your paper</LoadingState>,
+          )}
+        />
         <Route
           path={ROUTES.EXAM_PATTERN}
           element={whileLoading(<ExamPage />, <LoadingState>Opening your paper</LoadingState>)}
         />
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />, <PageSkeleton />)} />
-          <Route path={ROUTES.TESTS} element={<TestsPage />} />
+          <Route path={ROUTES.TESTS} element={whileLoading(<TestsPage />, <PageSkeleton />)} />
           <Route
             path={ROUTES.PERFORMANCE}
             element={whileLoading(<OverviewPage />, <PageSkeleton />)}
           />
-          <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
-          <Route path={ROUTES.NOTIFICATIONS} element={<NotificationsPage />} />
-          <Route path={ROUTES.NOTIFICATION_SETTINGS} element={<NotificationSettingsPage />} />
+          <Route
+            path={ROUTES.LEADERBOARD}
+            element={whileLoading(<LeaderboardPage />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.NOTIFICATIONS}
+            element={whileLoading(<NotificationsPage />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.NOTIFICATION_SETTINGS}
+            element={whileLoading(<NotificationSettingsPage />, <PageSkeleton />)}
+          />
           <Route path={ROUTES.SAVED} element={whileLoading(<SavedPage />, <PageSkeleton />)} />
-          <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
-          <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
-          <Route path={ROUTES.SUBMITTED_PATTERN} element={<SubmittedPage />} />
-          <Route path={ROUTES.REPORT_PATTERN} element={<ReportShell />}>
+          <Route
+            path={ROUTES.SERIES_PATTERN}
+            element={whileLoading(<SeriesPage />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.TEST_ABOUT_PATTERN}
+            element={whileLoading(<TestAboutPage />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.SUBMITTED_PATTERN}
+            element={whileLoading(<SubmittedPage />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.REPORT_PATTERN}
+            element={whileLoading(<ReportShell />, <ReportSkeleton />)}
+          >
             <Route index element={whileLoading(<ScoreCardPanel />, <ReportSkeleton />)} />
             <Route path="subjects" element={whileLoading(<SubjectPanel />, <ReportSkeleton />)} />
             <Route path="solutions" element={whileLoading(<SolutionPanel />, <ReportSkeleton />)} />
-            <Route path="questions" element={<QuestionReportPanel />} />
+            <Route
+              path="questions"
+              element={whileLoading(<QuestionReportPanel />, <ReportSkeleton />)}
+            />
             <Route path="compare" element={whileLoading(<ComparePanel />, <ReportSkeleton />)} />
           </Route>
-          <Route path={ROUTES.SCORE_CARD_PATTERN} element={<ReportRedirect tab="" />} />
-          <Route path={ROUTES.REVIEW_PATTERN} element={<ReportRedirect tab="solutions" />} />
+          <Route
+            path={ROUTES.SCORE_CARD_PATTERN}
+            element={whileLoading(<ReportRedirect tab="" />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.REVIEW_PATTERN}
+            element={whileLoading(<ReportRedirect tab="solutions" />, <PageSkeleton />)}
+          />
           <Route
             path={ROUTES.QUESTION_REPORT_PATTERN}
-            element={<ReportRedirect tab="questions" />}
+            element={whileLoading(<ReportRedirect tab="questions" />, <PageSkeleton />)}
           />
-          <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
-          <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />
+          <Route path={ROUTES.PROFILE} element={whileLoading(<ProfilePage />, <PageSkeleton />)} />
+          <Route path={ROUTES.ACCOUNT} element={whileLoading(<AccountPage />, <PageSkeleton />)} />
         </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
