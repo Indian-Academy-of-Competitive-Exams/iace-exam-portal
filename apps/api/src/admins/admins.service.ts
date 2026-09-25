@@ -25,6 +25,7 @@ import {
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 
 /** The two levels a key can be held at. A feature always reports both lists. */
 const BOTH_LEVELS = [PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE] as const;
@@ -56,6 +57,7 @@ export class AdminsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   // ==========================================================================
@@ -205,6 +207,8 @@ export class AdminsService {
     this.auditContext.setChanged(
       fieldDiff(before, { ...before, isActive: false }, AUDITED_ACTIVE_FIELDS),
     );
+    // Auth revokes their sessions on this, so the switch-off holds now rather than at token expiry.
+    this.events.emit(DOMAIN_EVENTS.ADMIN_DEACTIVATED, { adminId: id });
     return this.toAdminDto(row, {});
   }
 

@@ -10,6 +10,8 @@ export const DOMAIN_EVENTS = {
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
   /** A student finished signing up and has an account for the first time. WIRED — see students. */
   STUDENT_SIGNED_UP: 'student.signed_up',
+  /** An admin was switched off. WIRED — auth revokes their sessions so the flag takes effect now, not at token expiry. */
+  ADMIN_DEACTIVATED: 'admin.deactivated',
 } as const;
 
 /** Only the names below carry a payload: one without one is not a thing the bus can publish. */
@@ -43,10 +45,15 @@ export interface StudentSignedUpEvent {
   studentId: string;
 }
 
+export interface AdminDeactivatedEvent {
+  adminId: string;
+}
+
 /** Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape and a handler cannot claim a shape the producer never sends. */
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;
+  [DOMAIN_EVENTS.ADMIN_DEACTIVATED]: AdminDeactivatedEvent;
 }

@@ -49,7 +49,7 @@ after(() => prisma.$disconnect());
 
 function build() {
   const audit = new AuditContext();
-  const admins = new AdminsService(prisma, audit);
+  const admins = new AdminsService(prisma, audit, new FakeEventBus().asService());
   const redis = new FakeRedis().asService();
   const configs = new BaseConfigsService(
     prisma,

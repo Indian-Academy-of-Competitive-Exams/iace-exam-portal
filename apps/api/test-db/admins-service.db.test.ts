@@ -5,6 +5,8 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { ADMIN_ROLES, AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
 import { AuditContext } from '../src/audit';
+import { DOMAIN_EVENTS } from '../src/common/events';
+import { FakeEventBus } from '../test/support/fakes';
 import { makeAdmin, resetDatabase, testPrisma, uid } from './support/database';
 
 const ACTOR = randomUUID();
@@ -16,7 +18,12 @@ after(() => prisma.$disconnect());
 
 function build() {
   const auditContext = new AuditContext();
-  return { auditContext, service: new AdminsService(prisma, auditContext) };
+  const events = new FakeEventBus();
+  return {
+    auditContext,
+    events,
+    service: new AdminsService(prisma, auditContext, events.asService()),
+  };
 }
 
 const grantsOf = (adminId: string) =>
@@ -231,6 +238,27 @@ describe('AdminsService — setActive', () => {
 
     assert.deepEqual(await service.permissionsFor(admin.id), {});
     assert.deepEqual(await grantsOf(admin.id), [], 'no grant row may survive the deactivation');
+  });
+
+  /** The failure this prevents: a switched-off admin working on until their access token expires. */
+  it('announces the switch-off, so auth can revoke the sessions now', async () => {
+    const { service, events } = build();
+    const admin = await makeAdmin(prisma);
+
+    await service.setActive(admin.id, false, ACTOR);
+
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ADMIN_DEACTIVATED).map((payload) => payload.adminId),
+      [admin.id],
+    );
+
+    events.forget();
+    await service.setActive(admin.id, true, ACTOR);
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ADMIN_DEACTIVATED),
+      [],
+      'switching ON revokes nothing',
+    );
   });
 
   /** Deactivation is not deletion: the account still exists, signs in, and lists as Deactivated. */
