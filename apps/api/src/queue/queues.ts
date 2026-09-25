@@ -170,3 +170,6 @@ export const ATTEMPT_SWEEP_EVERY_MS = 2 * 60 * 1000;
 
 /** Nightly, at an hour no Indian coaching branch is running a test. */
 export const OUTBOX_PRUNE_CRON = '45 20 * * *';
+
+/** 02:45 IST: the same quiet window as the prune, half an hour clear of it. */
+export const AUDIT_ARCHIVE_CRON = '15 21 * * *';

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job } from 'bullmq';
@@ -126,7 +127,8 @@ export class AuditArchiveProcessor extends WorkerHost {
 
     // Without this, a second worker's page read can land after the first one's delete: it uploads its short body over the complete object, verifies against itself, and the rest is gone.
     const lock = redisKeys.auditArchiveDay(instituteDayOf(gte));
-    if (!(await this.redis.acquireLock(lock, AUDIT_ARCHIVE_LOCK_TTL_SEC))) {
+    const holderId = randomUUID();
+    if (!(await this.redis.acquireLock(lock, holderId, AUDIT_ARCHIVE_LOCK_TTL_SEC))) {
       this.logger.warn(`Another worker holds ${lock}; leaving that day for the next run`);
       return null;
     }
@@ -134,7 +136,10 @@ export class AuditArchiveProcessor extends WorkerHost {
     try {
       return await this.writeAndDrop(gte, lt);
     } finally {
-      await this.redis.del(lock);
+      // A run past its TTL no longer holds the key, and the successor that does must keep it.
+      if (!(await this.redis.releaseLock(lock, holderId))) {
+        this.logger.warn(`${lock} expired mid-run and is now another worker's`);
+      }
     }
   }
 

@@ -51,7 +51,7 @@ async function bootstrap(): Promise<void> {
     maxAge: PREFLIGHT_CACHE_SEC,
   });
 
-  // Ensures Prisma disconnects and Redis quits cleanly on SIGTERM — containers get rescheduled routinely and must not drop connections mid-flight.
+  // On SIGTERM the workers close in onApplicationShutdown, and Prisma and Redis now quit in that same hook, after them.
   app.enableShutdownHooks();
 
   const server = app.getHttpServer();

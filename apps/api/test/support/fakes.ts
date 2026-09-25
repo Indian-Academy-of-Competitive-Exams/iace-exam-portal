@@ -207,8 +207,14 @@ export class FakeRedis {
     return Math.max(ttl, 0);
   }
 
-  async acquireLock(key: string, ttlSec: number): Promise<boolean> {
-    return (await this.client.set(key, '1', 'EX', ttlSec, 'NX')) === 'OK';
+  async acquireLock(key: string, holderId: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, holderId, 'EX', ttlSec, 'NX')) === 'OK';
+  }
+
+  async releaseLock(key: string, holderId: string): Promise<boolean> {
+    if ((await this.client.get(key)) !== holderId) return false;
+    await this.client.del(key);
+    return true;
   }
 
   async holdLock(

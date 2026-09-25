@@ -73,7 +73,11 @@ const leftIds = async () =>
   );
 
 const dayIsFree = (redis: FakeRedis) =>
-  redis.acquireLock(redisKeys.auditArchiveDay(OLD_DAY_KEY), AUDIT_ARCHIVE_LOCK_TTL_SEC);
+  redis.acquireLock(
+    redisKeys.auditArchiveDay(OLD_DAY_KEY),
+    randomUUID(),
+    AUDIT_ARCHIVE_LOCK_TTL_SEC,
+  );
 
 describe('AuditArchiveProcessor', () => {
   it('writes the day to S3 and then deletes exactly that day', async () => {

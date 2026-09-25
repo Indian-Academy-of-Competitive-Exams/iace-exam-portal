@@ -1,10 +1,7 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/app-config.service';
 import { evictionRisk } from './eviction-policy';
-
-/** The value is never read — a lock is the key's existence. */
-const LOCK_HELD = '1';
 
 /** Redis runs one script at a time, so the compare and the set cannot be interleaved. */
 const REPLACE_IF_UNCHANGED = `
@@ -13,13 +10,19 @@ redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
 return 1
 `;
 
+/** The same compare, for a lock: a run that outlived its TTL must not drop its successor's key. */
+const DELETE_IF_HELD_BY = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+return redis.call('DEL', KEYS[1])
+`;
+
 /** Reconnect backoff: quick enough for a restart, slow enough not to storm a Redis that is still down. */
 const RETRY_STEP_MS = 200;
 const RETRY_CEILING_MS = 5000;
 
 /** The application Redis connection: OTP codes, sessions, device binding, rate limiting, live test state. */
 @Injectable()
-export class RedisService implements OnModuleInit, OnModuleDestroy {
+export class RedisService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(RedisService.name);
   private readonly isProduction: boolean;
   readonly client: Redis;
@@ -59,7 +62,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /** Shutdown, not destroy: the workers close in this hook, and they still need the connection. */
+  async onApplicationShutdown(): Promise<void> {
     await this.client.quit();
   }
 
@@ -138,8 +142,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** True only for the caller that took it; everyone else is refused until the TTL runs out. */
-  async acquireLock(key: string, ttlSec: number): Promise<boolean> {
-    return (await this.client.set(key, LOCK_HELD, 'EX', ttlSec, 'NX')) === 'OK';
+  async acquireLock(key: string, holderId: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, holderId, 'EX', ttlSec, 'NX')) === 'OK';
+  }
+
+  /** Releases only what this holder still owns: past the TTL the key is somebody else's. */
+  async releaseLock(key: string, holderId: string): Promise<boolean> {
+    return (await this.client.eval(DELETE_IF_HELD_BY, 1, key, holderId)) === 1;
   }
 
   /** Null once the caller holds it, else who does. The holder re-enters; `steal` takes it over. */

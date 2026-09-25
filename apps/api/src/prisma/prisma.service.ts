@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { PrismaClient, type Prisma } from '@prisma/client';
 
 /** Prisma's interactive defaults (2s/5s) are a cliff a real query plan can miss; these name the two shapes a body here takes. */
@@ -14,7 +14,7 @@ const SLOW_QUERY_MS = 500;
 @Injectable()
 export class PrismaService
   extends PrismaClient<Prisma.PrismaClientOptions, 'query'>
-  implements OnModuleInit, OnModuleDestroy
+  implements OnModuleInit, OnApplicationShutdown
 {
   private readonly logger = new Logger(PrismaService.name);
 
@@ -32,7 +32,8 @@ export class PrismaService
     this.logger.log('Connected to PostgreSQL');
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /** Shutdown, not destroy: the workers close in this hook, and a job mid-body still needs the pool. */
+  async onApplicationShutdown(): Promise<void> {
     await this.$disconnect();
   }
 
