@@ -15,7 +15,7 @@ import {
   type TestSeriesLink,
   type TestStatus,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import {
@@ -301,7 +301,7 @@ export class OfferingService {
     await this.prisma.$transaction(async (tx) => {
       await tx.test.update({ where: { id: testId }, data: { opensAt } });
       await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
-    });
+    }, TX_LIMITS.SHORT);
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);

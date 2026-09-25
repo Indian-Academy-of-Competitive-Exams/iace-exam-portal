@@ -25,7 +25,7 @@ import {
   type TestScopeRef,
   scopedSections,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { BaseConfigsService } from '../configs';
 import {
@@ -179,7 +179,7 @@ export class PaperService {
           negativeMarks: section.negativeMarks,
         })),
       });
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, config));
   }
@@ -220,7 +220,7 @@ export class PaperService {
           order: highest + index + 1,
         })),
       });
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, config));
   }
@@ -313,7 +313,7 @@ export class PaperService {
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
       });
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
@@ -340,7 +340,7 @@ export class PaperService {
     await this.prisma.$transaction(async (tx) => {
       await beginPaperEdit(tx, testId);
       await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
@@ -372,7 +372,7 @@ export class PaperService {
         rows: moved.count,
         sittings: await this.outbox.rescore(tx, testId),
       };
-    });
+    }, TX_LIMITS.BULK);
 
     // Only on a real change, and against the ROW: "test updated" cannot settle a dispute later.
     if (asked) {

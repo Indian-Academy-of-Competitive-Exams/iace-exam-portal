@@ -23,7 +23,7 @@ import {
   type UpdateAdminBody,
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 
 /** The two levels a key can be held at. A feature always reports both lists. */
@@ -62,10 +62,7 @@ export class AdminsService {
   // The facade auth consumes
   // ==========================================================================
 
-  /**
-   * The grant map a token carries. One indexed read, and WRITE wins if both levels are held.
-   * A stored key that code no longer defines is dropped rather than carried.
-   */
+  /** The grant map a token carries. One indexed read, and WRITE wins if both levels are held. A stored key that code no longer defines is dropped rather than carried. */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
     return (await this.grantsByAdmin([adminId])).get(adminId) ?? {};
   }
@@ -110,8 +107,7 @@ export class AdminsService {
       this.prisma.admin.count({ where }),
     ]);
 
-    // One grants query for the whole page rather than one per row: a list of 50
-    // admins would otherwise be 51 queries.
+    // One grants query for the whole page rather than one per row: a list of 50 admins would otherwise be 51 queries.
     const grants = await this.grantsByAdmin(rows.map((row) => row.id));
     return paged(
       query,
@@ -121,8 +117,7 @@ export class AdminsService {
   }
 
   async create(input: CreateAdminBody, createdById: string): Promise<AdminDto> {
-    // Pre-checked like every other create here; the global filter still maps a racing P2002 to the
-    // same CONFLICT, so the check is for the message rather than for correctness.
+    // Pre-checked like every other create here; the global filter still maps a racing P2002 to the same CONFLICT, so the check is for the message rather than for correctness.
     const clash = await this.prisma.admin.findUnique({ where: { email: input.email } });
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'An admin with that email already exists', {
@@ -150,15 +145,14 @@ export class AdminsService {
         });
       }
       return created;
-    });
+    }, TX_LIMITS.SHORT);
 
     // The role's opening grants, which the Permissions screen is free to override afterwards.
     return this.toAdminDto(row, preset);
   }
 
   async update(id: string, input: UpdateAdminBody): Promise<AdminDto> {
-    // requireAdmin, not requireActive: renaming a deactivated admin, or making
-    // one a super admin before switching them back on, are both reasonable.
+    // requireAdmin, not requireActive: renaming a deactivated admin, or making one a super admin before switching them back on, are both reasonable.
     const before = await this.requireAdmin(id);
 
     const row = await this.prisma.admin.update({
@@ -178,14 +172,10 @@ export class AdminsService {
     return this.toAdminDto(row, await this.permissionsFor(id));
   }
 
-  /**
-   * Deactivating prunes every grant in the same transaction as the flag.
-   * Reactivating does NOT give them back.
-   */
+  /** Deactivating prunes every grant in the same transaction as the flag. Reactivating does NOT give them back. */
   async setActive(id: string, isActive: boolean, actingAdminId: string): Promise<AdminDto> {
     if (!isActive && id === actingAdminId) {
-      // Switching yourself off is undone only by another super admin — or, if
-      // you were the last one, only with database access.
+      // Switching yourself off is undone only by another super admin — or, if you were the last one, only with database access.
       throw new AppException(ErrorCodes.CONFLICT, 'You cannot deactivate your own account');
     }
     const before = await this.requireAdmin(id);
@@ -198,13 +188,11 @@ export class AdminsService {
       this.auditContext.setChanged(
         fieldDiff(before, { ...before, isActive: true }, AUDITED_ACTIVE_FIELDS),
       );
-      // Read the grants back rather than assuming none: a super admin may have
-      // granted something while the account was switched off.
+      // Read the grants back rather than assuming none: a super admin may have granted something while the account was switched off.
       return this.toAdminDto(row, await this.permissionsFor(id));
     }
 
-    // The update returns the row, so the transaction hands back what to report — no second read, and
-    // no chance of reporting a state that something else changed in between.
+    // The update returns the row, so the transaction hands back what to report — no second read, and no chance of reporting a state that something else changed in between.
     const row = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.admin.update({
         where: { id },
@@ -212,7 +200,7 @@ export class AdminsService {
       });
       await tx.adminFeaturePermission.deleteMany({ where: { adminId: id } });
       return updated;
-    });
+    }, TX_LIMITS.SHORT);
 
     this.auditContext.setChanged(
       fieldDiff(before, { ...before, isActive: false }, AUDITED_ACTIVE_FIELDS),
@@ -251,8 +239,7 @@ export class AdminsService {
   ): Promise<FeatureDto> {
     await this.requireActive(input.adminId);
 
-    // Neither route carries an `:id` param and both return a Feature, so the interceptor's
-    // fallback would file the row against the feature rather than the admin it was made about.
+    // Neither route carries an `:id` param and both return a Feature, so the interceptor's fallback would file the row against the feature rather than the admin it was made about.
     this.auditContext.setEntityId(input.adminId);
 
     const where = {
@@ -292,10 +279,7 @@ export class AdminsService {
     return admin;
   }
 
-  /**
-   * Exists AND is switched on — the right check before a grant, because granting to a deactivated
-   * admin hands back what deactivation just removed.
-   */
+  /** Exists AND is switched on — the right check before a grant, because granting to a deactivated admin hands back what deactivation just removed. */
   private async requireActive(id: string): Promise<void> {
     const admin = await this.prisma.admin.findUnique({
       where: { id },

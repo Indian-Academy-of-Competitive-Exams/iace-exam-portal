@@ -9,7 +9,7 @@ import {
   type ErasureReceipt,
   type StudentDataExport,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { fromDateColumn } from '../common/time/institute-day';
 import { type LeaderboardService } from '../attempts';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
@@ -113,7 +113,7 @@ export class StudentPrivacyService {
       await tx.student.update({ where: { id: studentId }, data: anonymizedStudent(at) });
       await tx.studentProfile.updateMany({ where: { studentId }, data: anonymizedProfile() });
       return tx.attempt.count({ where: { studentId } });
-    });
+    }, TX_LIMITS.SHORT);
 
     return { studentId, anonymizedAt: at.toISOString(), attemptsKept };
   }

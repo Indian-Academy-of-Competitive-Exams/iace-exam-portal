@@ -29,7 +29,7 @@ import {
 } from '@iace/contracts';
 import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
 import { pageArgs, paged } from '../common/pagination';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
   applyImageUrls,
@@ -273,7 +273,7 @@ export class QuestionsService {
         data: { currentVersionId: version.id },
         include: QUESTION_INCLUDE,
       });
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.served(toDetail(row));
   }
@@ -291,8 +291,9 @@ export class QuestionsService {
     const built = await this.validated(draft);
     if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, id);
 
-    const row = await this.prisma.$transaction((tx) =>
-      this.writeEdit(tx, id, draft, built, createdById),
+    const row = await this.prisma.$transaction(
+      (tx) => this.writeEdit(tx, id, draft, built, createdById),
+      TX_LIMITS.SHORT,
     );
 
     this.auditContext.setChanged(questionDiff(question, row));
@@ -418,7 +419,7 @@ export class QuestionsService {
       if (claimed.count !== 1) throw questionEditedElsewhere();
 
       return tx.question.findUniqueOrThrow({ where: { id }, include: QUESTION_INCLUDE });
-    });
+    }, TX_LIMITS.SHORT);
 
     this.auditContext.setChanged(questionDiff(question, updated));
 
@@ -451,7 +452,7 @@ export class QuestionsService {
 
       await tx.questionVersion.deleteMany({ where: { questionId: id } });
       await tx.question.delete({ where: { id } });
-    });
+    }, TX_LIMITS.SHORT);
 
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
@@ -526,10 +527,7 @@ export class QuestionsService {
     return buildContent(draft);
   }
 
-  /**
-   * The same question typed twice is the failure the bank exists to prevent: a
-   * duplicate splits its own analytics and can be drawn into one paper twice.
-   */
+  /** The same question typed twice is the failure the bank exists to prevent: a duplicate splits its own analytics and can be drawn into one paper twice. */
   /** The question this stem repeats, if the bank already holds one. */
   async duplicateOf(
     stemHash: string,

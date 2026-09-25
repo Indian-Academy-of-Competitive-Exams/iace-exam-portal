@@ -9,7 +9,7 @@ import {
   QUESTION_TYPE,
   type AttemptStatus,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { timeTakenSec } from './leaderboard-score';
 import { RollupQueue } from './rollup-queue';
@@ -130,7 +130,7 @@ export class ScoringProcessor extends WorkerHost {
 
       await this.announceCorrection(tx, attempt, scored.score);
       return { applied: true, first: false };
-    });
+    }, TX_LIMITS.SHORT);
   }
 
   /** Claim, marks and verdicts in ONE statement. Null when the status moved under it. */

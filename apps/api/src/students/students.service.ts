@@ -23,7 +23,7 @@ import {
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { pageArgs, paged } from '../common/pagination';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { StartingPinService } from '../auth';
 import { BranchesService } from '../branches';
@@ -68,10 +68,7 @@ const ACCESS_STUDENT_FIELDS = [
   'isTestBlocked',
 ] as const;
 
-/**
- * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
- * excepted (see its own note; a bulk roster is one statement per file rather than per row).
- */
+/** Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports` excepted (see its own note; a bulk roster is one statement per file rather than per row). */
 @Injectable()
 export class StudentsService {
   constructor(
@@ -221,8 +218,7 @@ export class StudentsService {
       aadhaarVerified: profile.aadhaarVerified,
       panVerified: profile.panVerified,
       tenthMarksheetUrl: await this.signed(profile.tenthMarksheetUrl),
-      // Parsed rather than cast: this is JSON written by an older build or by hand, and a malformed row
-      // should read as "nothing recorded" rather than reach a screen that assumes an array.
+      // Parsed rather than cast: this is JSON written by an older build or by hand, and a malformed row should read as "nothing recorded" rather than reach a screen that assumes an array.
       educationDetails:
         educationEntrySchema.array().safeParse(profile.educationDetails).data ?? null,
       pastExamHistory: pastExamEntrySchema.array().safeParse(profile.pastExamHistory).data ?? null,
@@ -312,11 +308,7 @@ export class StudentsService {
     await this.assertBranchSuitsPatch(student, input);
   }
 
-  /**
-   * The pair as this save would LEAVE it, not the half the request named — flipping only the type
-   * moves an existing branch out of agreement just as surely as picking a new branch does. Skipped
-   * when the patch touches neither, so a student already stored incoherently can still be renamed.
-   */
+  /** The pair as this save would LEAVE it, not the half the request named — flipping only the type moves an existing branch out of agreement just as surely as picking a new branch does. Skipped when the patch touches neither, so a student already stored incoherently can still be renamed. */
   private async assertBranchSuitsPatch(
     student: { studentType: StudentType; currentBranchId: string | null },
     input: UpdateStudentBody,
@@ -348,8 +340,7 @@ export class StudentsService {
     await this.assertPatchUsable(student, input);
 
     const profilePatch = input.profile;
-    // Spread of the EXISTING profile then the patch: readiness is decided on
-    // the merged result, not on the handful of fields this request touched.
+    // Spread of the EXISTING profile then the patch: readiness is decided on the merged result, not on the handful of fields this request touched.
     const nextProfile = profilePatch
       ? { ...student.profile, ...stripUndefined(profilePatch) }
       : student.profile;
@@ -369,8 +360,7 @@ export class StudentsService {
                 update: toProfileData(profilePatch),
               },
             },
-            // Recomputed from the MERGED profile, not the patch: editing only
-            // the mother's name must not decide readiness on that field alone.
+            // Recomputed from the MERGED profile, not the patch: editing only the mother's name must not decide readiness on that field alone.
             preTestReady: isPreTestReady(nextProfile as never),
             profileCompleted: isProfileCompleted(nextProfile as never),
           }
@@ -394,7 +384,7 @@ export class StudentsService {
         });
       }
       return row;
-    });
+    }, TX_LIMITS.SHORT);
 
     const after = auditFieldsOf(updated);
     this.auditContext.setChanged(fieldDiff(before, after, AUDITED_STUDENT_FIELDS));
@@ -522,8 +512,7 @@ export class StudentsService {
       enrolledCourses: row.enrolledCourses,
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
-      // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is
-      // not a sign-in.
+      // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is not a sign-in.
       hasSignedIn: row.pinHash !== null && !row.pinIsDefault,
       hasDefaultPin: row.pinIsDefault,
       preTestReady: row.preTestReady,
@@ -545,8 +534,7 @@ interface AuditedStudentColumns {
   isTestBlocked: boolean;
 }
 
-/** The audited columns off a real row, so a relation write in the update payload can never be
- *  diffed as if it were one. The shape admins and questions already use. */
+/** The audited columns off a real row, so a relation write in the update payload can never be diffed as if it were one. The shape admins and questions already use. */
 function auditFieldsOf(row: AuditedStudentColumns): AuditedStudentColumns {
   return {
     fullName: row.fullName,

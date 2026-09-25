@@ -7,7 +7,7 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { TestStatus } from '@prisma/client';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { type AccessResolverService } from '../access';
 import { NotificationOutbox } from './notification-outbox';
 
@@ -83,7 +83,7 @@ export class TestOpeningService {
       }
       // Stamped WITH the fan-out: a crash between them replays, and never half-tells a cohort.
       await tx.test.update({ where: { id: test.id }, data: { announcedAt: now } });
-    });
+    }, TX_LIMITS.BULK);
   }
 }
 

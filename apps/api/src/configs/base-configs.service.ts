@@ -23,7 +23,7 @@ import {
   type TimerTemplate,
   type UpdateBaseConfigBody,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import {
@@ -76,10 +76,7 @@ export const AUDITED_CONFIG_FIELDS = [
   'totalQuestions',
 ] as const;
 
-/**
- * Owns `BaseConfig`, `BaseConfigModule` and `BaseConfigSection` — a stage's blueprint. A test
- * inherits its shape rather than restating it, so the config freezes when the first paper does.
- */
+/** Owns `BaseConfig`, `BaseConfigModule` and `BaseConfigSection` — a stage's blueprint. A test inherits its shape rather than restating it, so the config freezes when the first paper does. */
 @Injectable()
 export class BaseConfigsService {
   constructor(
@@ -145,16 +142,12 @@ export class BaseConfigsService {
 
       await writeChildren(tx, config.id, timerTemplate, input.sections, modules);
       return config.id;
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.detail(id);
   }
 
-  /**
-   * A locked config refuses every shape change here rather than at the database's trigger, so the
-   * admin reads a sentence instead of a Postgres exception. Name, default and active still move —
-   * that is what lets a clone be promoted over the locked original it replaces.
-   */
+  /** A locked config refuses every shape change here rather than at the database's trigger, so the admin reads a sentence instead of a Postgres exception. Name, default and active still move — that is what lets a clone be promoted over the locked original it replaces. */
   async update(
     id: string,
     input: UpdateBaseConfigBody,
@@ -172,8 +165,7 @@ export class BaseConfigsService {
     const timerTemplate = input.timerTemplate ?? (config.timerTemplate as TimerTemplate);
     const sections = input.sections;
     const modules = input.modules ?? (input.sections ? [] : undefined);
-    // Judged against what the config WILL hold: switching the timer alone can leave the sections
-    // in a shape the new template forbids, and the database would refuse that with a raw error.
+    // Judged against what the config WILL hold: switching the timer alone can leave the sections in a shape the new template forbids, and the database would refuse that with a raw error.
     this.assertShape(
       timerTemplate,
       sections ?? config.sections.map(toSectionDraft),
@@ -208,13 +200,12 @@ export class BaseConfigsService {
       }
 
       if (sections) {
-        // Replaced wholesale: the editor holds the whole paper, and a section has no identity
-        // an edit could match on once its order or its subject changes.
+        // Replaced wholesale: the editor holds the whole paper, and a section has no identity an edit could match on once its order or its subject changes.
         await tx.baseConfigSection.deleteMany({ where: { baseConfigId: id } });
         await tx.baseConfigModule.deleteMany({ where: { baseConfigId: id } });
         await writeChildren(tx, id, timerTemplate, sections, modules ?? []);
       }
-    });
+    }, TX_LIMITS.SHORT);
 
     const updated = await this.requireDetail(id);
     this.auditContext.setChanged(fieldDiff(config, updated, AUDITED_CONFIG_FIELDS));
@@ -222,10 +213,7 @@ export class BaseConfigsService {
     return toDetail(updated, await this.editingBy(id));
   }
 
-  /**
-   * Clone-to-evolve: the copy carries the whole paper, points back at its origin, and starts
-   * unlocked and not the default. It is the only way a locked config changes.
-   */
+  /** Clone-to-evolve: the copy carries the whole paper, points back at its origin, and starts unlocked and not the default. It is the only way a locked config changes. */
   async clone(
     id: string,
     input: CloneBaseConfigBody,
@@ -296,7 +284,7 @@ export class BaseConfigsService {
       }
 
       return config.id;
-    });
+    }, TX_LIMITS.SHORT);
 
     return this.detail(cloneId);
   }
@@ -377,10 +365,7 @@ export class BaseConfigsService {
   }
 }
 
-/**
- * A stage holds ONE default — a partial unique index says so — and the two writes have to share a
- * transaction, or promoting a clone collides with the original it is replacing.
- */
+/** A stage holds ONE default — a partial unique index says so — and the two writes have to share a transaction, or promoting a clone collides with the original it is replacing. */
 async function clearDefault(
   tx: Prisma.TransactionClient,
   examStageId: string,
@@ -443,8 +428,7 @@ async function writeChildren(
     await tx.baseConfigSection.create({
       data: {
         baseConfigId,
-        // Only a session paper has modules, and a section names its own by order. Unnamed falls
-        // to the first, which is what a one-module paper means without saying it.
+        // Only a session paper has modules, and a section names its own by order. Unnamed falls to the first, which is what a one-module paper means without saying it.
         moduleId: sessionPaper
           ? (moduleIdByOrder.get(section.moduleOrder ?? -1) ?? firstOf(moduleIdByOrder))
           : null,

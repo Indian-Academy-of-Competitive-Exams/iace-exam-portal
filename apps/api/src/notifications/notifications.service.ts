@@ -9,7 +9,7 @@ import {
   type Paginated,
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { firstChannelFor, type PaidChannel } from './notification-policy';
 
@@ -70,7 +70,7 @@ export class NotificationsService {
           await tx.notificationDelivery.create({ data: { notificationId: created.id, channel } });
         }
         return created;
-      });
+      }, TX_LIMITS.SHORT);
 
       return toNotification(row);
     } catch (error) {

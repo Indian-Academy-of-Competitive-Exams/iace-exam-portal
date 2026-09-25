@@ -12,7 +12,7 @@ import {
   TEST_SERIES_KIND,
   type TestSeriesKind,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { NotificationOutbox } from '../notifications';
@@ -187,7 +187,7 @@ export class StudentGrantsService {
           testSeriesId: input.testSeriesId,
         });
       }
-    });
+    }, TX_LIMITS.SHORT);
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);

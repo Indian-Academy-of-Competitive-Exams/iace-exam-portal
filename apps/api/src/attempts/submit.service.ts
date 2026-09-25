@@ -7,7 +7,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import { AppException, ATTEMPT_STATUS, ErrorCodes, type SubmittedAttempt } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
@@ -119,7 +119,7 @@ export class SubmitService {
       if (claimed.count === 0) return null;
       // The same transaction as the flip, so submitted and scoring-requested never land apart.
       return this.outbox.request(tx, attempt);
-    });
+    }, TX_LIMITS.SHORT);
   }
 
   /** A queue nobody can reach must not fail a submit that committed — the sweeper hands it on. */

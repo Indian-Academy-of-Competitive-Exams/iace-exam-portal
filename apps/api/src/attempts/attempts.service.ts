@@ -11,7 +11,7 @@ import {
   scopedDurationSec,
   type TestScopeRef,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
@@ -147,7 +147,7 @@ export class AttemptsService {
       await this.lockTheBlueprint(tx, test);
 
       return attempt;
-    });
+    }, TX_LIMITS.SHORT);
   }
 
   /** A blueprint stops moving once somebody is sitting a paper drawn from it, and not before. */

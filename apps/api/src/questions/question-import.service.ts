@@ -14,7 +14,7 @@ import {
 import { importFileKey, readUploadedTable } from '../common/importing';
 import { AuditService } from '../audit';
 import { requireOwnAssignment } from './assignment-guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { buildContent, type BuiltQuestion } from './question-core';
 import {
@@ -28,15 +28,7 @@ import {
 import { buildQuestionTemplate } from './question-workbook';
 import { loadTaxonomyCatalog } from './taxonomy-context';
 
-/**
- * A sheet of questions, in two steps that share one plan.
- *
- * The file is uploaded ONCE: the preview stores it and opens an import run, and
- * the commit names that run rather than sending the same megabytes again. The
- * commit then re-reads the stored file and re-plans it — it never trusts a plan
- * the client hands back, because a client that can send a plan can send any plan,
- * and because the bank may have gained the same question in between.
- */
+/** A sheet of questions, in two steps that share one plan: the file is uploaded ONCE, the preview stores it and opens an import run, and the commit names that run and re-reads and re-plans the stored file rather than trusting a plan the client hands back or sending the same megabytes again — a client that can send a plan can send any plan, and the bank may have gained the same question in between. */
 @Injectable()
 export class QuestionImportService {
   private readonly logger = new Logger(QuestionImportService.name);
@@ -66,8 +58,7 @@ export class QuestionImportService {
       },
     });
 
-    // Keyed by the run, so the sheet that produced a set of questions can always
-    // be fetched back — the answer to "where did this question come from".
+    // Keyed by the run, so the sheet that produced a set of questions can always be fetched back — the answer to "where did this question come from".
     const key = importFileKey(AuditFeature.QUESTION, log.id);
     await this.storage.upload(key, file, XLSX_CONTENT_TYPE);
     await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
@@ -115,8 +106,7 @@ export class QuestionImportService {
         row.action === 'create' && row.draft !== null,
     );
 
-    // Interactive, not an array of promises: every question is three statements — the row,
-    // its first version, and the pointer between them — and all of them share one transaction.
+    // Interactive, not an array of promises: every question is three statements — the row, its first version, and the pointer between them — and all of them share one transaction.
     const created = await this.prisma.$transaction(async (tx) => {
       const rows: { id: string }[] = [];
       for (const row of creatable) {
@@ -134,7 +124,7 @@ export class QuestionImportService {
         rows.push(question);
       }
       return rows;
-    });
+    }, TX_LIMITS.BULK);
 
     try {
       await this.audit.recordImportRows(
@@ -144,8 +134,7 @@ export class QuestionImportService {
         log.actorId,
       );
     } catch (error) {
-      // The questions are already durable; losing their audit rows is a cost, never a reason to
-      // report an import that happened as one that did not.
+      // The questions are already durable; losing their audit rows is a cost, never a reason to report an import that happened as one that did not.
       this.logger.error(`Row actions for import ${log.id} were not recorded`, error);
     }
 
@@ -207,10 +196,7 @@ export class QuestionImportService {
   }
 }
 
-/**
- * The question row — identity and taxonomy only. Where it came from is the ImportLog and its
- * row actions, not a column here.
- */
+/** The question row — identity and taxonomy only. Where it came from is the ImportLog and its row actions, not a column here. */
 function questionData(
   draft: NonNullable<PlannedRow['draft']>,
   built: BuiltQuestion,
