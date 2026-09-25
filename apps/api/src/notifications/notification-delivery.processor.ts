@@ -18,6 +18,7 @@ import {
 } from '../common/messaging';
 import {
   QUEUE_NAMES,
+  DELIVERY_RATE_LIMIT,
   QUEUE_POLICY,
   keyedJob,
   notificationDeliveryJobId,
@@ -51,6 +52,7 @@ interface NotificationWithChain {
 @Injectable()
 @Processor(QUEUE_NAMES.NOTIFICATION_DELIVERY, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.NOTIFICATION_DELIVERY].concurrency,
+  limiter: DELIVERY_RATE_LIMIT,
 })
 export class NotificationDeliveryProcessor extends WorkerHost {
   private readonly logger = new Logger(NotificationDeliveryProcessor.name);

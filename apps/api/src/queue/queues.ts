@@ -35,7 +35,10 @@ export const QUEUE_POLICY = {
 >;
 
 /** A job that ran out of attempts is the dead letter: kept a week, because nobody watches on the day. */
-export const FAILED_JOB_RETENTION = { age: 7 * DAY_SEC, count: 5000 } as const;
+export const FAILED_JOB_RETENTION = { age: 7 * DAY_SEC, count: 500 } as const;
+
+/** The aggregator's ceiling, not ours: paid sends above it are refused and still billed as attempts. */
+export const DELIVERY_RATE_LIMIT = { max: 10, duration: 1_000 } as const;
 
 /** A success is evidence for an hour, and then it is only taking up memory Redis may not evict. */
 export const COMPLETED_JOB_RETENTION = { age: 3600, count: 1000 } as const;
