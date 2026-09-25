@@ -768,7 +768,6 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   );
 }
 
-/** A boolean the form owns. Controlled, because `register` alone cannot hold a checkbox's state. */
 /** A value the form cannot change, drawn like the fields beside it rather than as a table row. */
 function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
@@ -779,6 +778,7 @@ function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string
   );
 }
 
+/** A boolean the form owns. Controlled, because `register` alone cannot hold a checkbox's state. */
 function ToggleField({
   form,
   name,
@@ -846,6 +846,7 @@ function SectionCard({
 }>) {
   const subjectId = useWatch({ control: form.control, name: `sections.${index}.subjectId` });
   const merit = useWatch({ control: form.control, name: `sections.${index}.meritOrQualifying` });
+  const mandatory = useWatch({ control: form.control, name: `sections.${index}.mandatory` });
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
@@ -965,24 +966,13 @@ function SectionCard({
         ) : null}
       </div>
 
-      <ToggleSection form={form} index={index} />
+      {/* `mandatory` is per section and is the only boolean on one. */}
+      <Checkbox
+        checked={mandatory}
+        onChange={(event) => form.setValue(`sections.${index}.mandatory`, event.target.checked)}
+        label="Every student must attempt this section"
+      />
     </div>
-  );
-}
-
-/** `mandatory` is per section and is the only boolean on one. */
-function ToggleSection({
-  form,
-  index,
-}: Readonly<{ form: UseFormReturn<ConfigFormValues>; index: number }>) {
-  const mandatory = useWatch({ control: form.control, name: `sections.${index}.mandatory` });
-
-  return (
-    <Checkbox
-      checked={mandatory}
-      onChange={(event) => form.setValue(`sections.${index}.mandatory`, event.target.checked)}
-      label="Every student must attempt this section"
-    />
   );
 }
 

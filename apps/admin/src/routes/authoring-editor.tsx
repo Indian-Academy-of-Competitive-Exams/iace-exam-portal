@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
@@ -74,13 +74,6 @@ const DUPLICATE_DEBOUNCE_MS = 900;
 
 /** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
 const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
-
-const startingHeader = (): AuthoringHeader => ({
-  subjectId: '',
-  topicId: '',
-  difficulty: DIFFICULTY_LEVEL.MEDIUM,
-  tags: '',
-});
 
 interface Saved {
   header: AuthoringHeader;
@@ -555,12 +548,16 @@ function useSectionSubject(
   subjectId: string | null,
   setHeader: React.Dispatch<React.SetStateAction<AuthoringHeader>>,
 ) {
-  useEffect(() => {
-    if (subjectId === null) return;
-    setHeader((current) =>
-      current.subjectId === subjectId ? current : { ...current, subjectId, topicId: '' },
-    );
-  }, [subjectId, setHeader]);
+  // Derived during render, not in an effect: an effect lets one render escape with the old subject.
+  const [seen, setSeen] = useState(subjectId);
+  if (subjectId !== seen) {
+    setSeen(subjectId);
+    if (subjectId !== null) {
+      setHeader((current) =>
+        current.subjectId === subjectId ? current : { ...current, subjectId, topicId: '' },
+      );
+    }
+  }
 }
 
 /** The fetched question fills the boxes once; a refetch must not overwrite what is being typed. */
@@ -568,13 +565,11 @@ function useFilledOnce(
   question: QuestionDetail | undefined,
   fill: (question: QuestionDetail) => void,
 ) {
-  const filledId = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!question || filledId.current === question.id) return;
-    filledId.current = question.id;
+  const [filledId, setFilledId] = useState<string | null>(null);
+  if (question && filledId !== question.id) {
+    setFilledId(question.id);
     fill(question);
-  }, [question, fill]);
+  }
 }
 
 /** A closed tab loses nothing, and nothing half-written reaches the bank: only a save writes a row. */
@@ -638,7 +633,7 @@ function useChecked(
 /** What a reopened tab starts from: the draft it left, over the blanks a first visit gets. */
 function restore(key: string): Saved {
   const blank: Saved = {
-    header: startingHeader(),
+    header: { subjectId: '', topicId: '', difficulty: DIFFICULTY_LEVEL.MEDIUM, tags: '' },
     state: emptyState(),
     language: DEFAULT_LANGUAGE,
     romanised: true,
