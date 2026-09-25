@@ -221,13 +221,14 @@ the release runbook are `docs/04-infrastructure.md`; this table is what each pie
 
 | Service                 | Role                                      | Notes                                                                                            |
 | ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| ECS Fargate (ARM)       | Runs the API container                    | Three services from one image, chosen by `API_ROLE`: exam, core, worker.                         |
+| EC2 (ARM) + Docker      | Runs the API containers                   | Three from one image, chosen by `API_ROLE`: exam, core, and exactly one worker.                  |
+| Caddy                   | TLS and path routing to the API           | On the same box. Not an ALB — see `04` §4 for what that gives up.                                |
 | RDS (PostgreSQL)        | Durable data                              | Single instance. A read replica only when reads actually strain it.                              |
 | Valkey on EC2           | Live sitting state, queues, sessions      | One node, saving to disk. Losing it loses in-flight sittings, not scored ones.                   |
 | S3                      | Question images, content, import files    | Private bucket. Content images are read on a stable CDN url, private files presigned (`04` §10). |
 | CloudFront              | CDN for static assets and question images | In front of S3 and the SPAs.                                                                     |
 | S3 + CloudFront         | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                                      |
-| Route 53 + ACM          | DNS and TLS                               | HTTPS everywhere.                                                                                |
+| Route 53                | DNS                                       | Caddy gets the API's certificate itself; CloudFront brings its own.                              |
 | SSM Parameter Store     | DB, Valkey and SMS credentials            | No secrets in code or in a committed env file — `.env.example` only. S3 uses the task role.      |
 | SMS provider (external) | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                       |
 | Web push (external)     | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.                   |

@@ -5,81 +5,167 @@ larger one. `docs/01-architecture.md` §6 names the services; this file is the s
 and the runbook.
 
 Every price is US dollars per month in **ap-south-1 (Mumbai)**, pulled from the AWS Price List API
-on 22 September 2026, at 730 hours. Figures that came from a measurement say where it was taken.
+on 22 September 2026, at 730 hours, and **not re-pulled since** — check the Pricing Calculator
+before committing money. Figures that came from a measurement say where it was taken.
+
+**The front door changed on 25 September 2026.** This file described an Application Load Balancer
+in front of ECS Fargate. It now describes **Caddy on EC2**, because an ALB is what makes Fargate
+practical — tasks register themselves in a target group as they scale — and without one the pair
+stops making sense. Whether production goes back to Fargate is **open**, and §3 says what decides
+it.
 
 ---
 
 ## 1. What it costs
 
-| Aspect            | What                                                         | Monthly   |
-| ----------------- | ------------------------------------------------------------ | --------- |
-| Compute           | ECS Fargate on ARM, three services                           | $47–51    |
-| Ingress           | One Application Load Balancer                                | $27       |
-| Frontend delivery | S3 + CloudFront, pay-as-you-go                               | ~$1       |
-| Database          | RDS PostgreSQL 17, `db.t4g.small`, 20 GB gp3                 | $33       |
-| Cache and queues  | Valkey on EC2 `t4g.small`, 20 GB gp3                         | $10       |
-| Networking        | NAT instance `t4g.nano`, S3 gateway endpoint                 | $6.42     |
-| Logs and alarms   | CloudWatch, ~10 alarms, ALB access logs                      | $1.70     |
-| Media             | S3 storage and requests                                      | <$1       |
-| Secrets, DNS, ECR | SSM Parameter Store, Route 53, container registry            | $1.80     |
-| Non-production    | One staging environment sharing prod's ALB, VPC and database | $10       |
-| **Total**         |                                                              | **~$170** |
+**Production**
 
-A one-year no-upfront Compute Savings Plan and an RDS reservation take the always-on part from
-$83.29 to $64.88, so **~$152**. Buy neither at launch (§12).
+| Aspect            | What                                                 | Monthly    |
+| ----------------- | ---------------------------------------------------- | ---------- |
+| Compute           | EC2 `t4g.large`: Caddy, three API containers, Valkey | $32.70     |
+| Storage           | EBS gp3 50 GB, plus snapshots                        | $7.06      |
+| Address           | One Elastic IP                                       | $3.65      |
+| Database          | RDS PostgreSQL 17, `db.t4g.small`, 20 GB gp3         | $33.28     |
+| Frontend delivery | S3 + two CloudFront distributions                    | ~$1        |
+| Media             | S3 storage and requests                              | ~$1        |
+| Logs and alarms   | CloudWatch, ~10 alarms, two Budgets                  | $1.70      |
+| Secrets, DNS, ECR | SSM Parameter Store, Route 53, container registry    | $1.20      |
+| **Total**         |                                                      | **$81.59** |
+
+**Staging** — its own box, §12.
+
+| Aspect    | What                                                            | Monthly    |
+| --------- | --------------------------------------------------------------- | ---------- |
+| Compute   | EC2 `t4g.medium`: Caddy, three API containers, Valkey, Postgres | $16.35     |
+| Storage   | EBS gp3 30 GB                                                   | $2.74      |
+| Address   | One Elastic IP                                                  | $3.65      |
+| SPAs      | S3 + two CloudFront distributions                               | $0.50      |
+| **Total** |                                                                 | **$23.24** |
+
+**Together $104.83, and the invoice is ~$124** — ap-south-1 bills through AWS India at 18% GST on
+top. It is input credit against the institute's GSTIN, but only if the GSTIN is on the account, so
+that is a signup step rather than a footnote.
+
+For comparison, the ALB + Fargate shape this file used to describe came to ~$142 for production
+alone. The saving is the load balancer, the Fargate premium and the NAT instance; what it costs is
+a box you own and a single point of failure (§3).
+
+**Two AWS Budgets, and they are free.** One at the total above, one anomaly detector. Every alarm
+in §9 watches something that is running; none watches something that should have stopped, and on a
+first AWS account a rehearsal instance left up for three weeks costs more than the mistakes the
+alarms catch.
+
+**Internet egress is inside the free tier.** Measured 25 September 2026: a 100-question bilingual
+sitting pulls 41 KB of paper, 3 KB of score card and 56 KB of solution report gzipped — 100 KB, so
+a 6,000-candidate event is 0.6 GB and thirty events a month are ~18 GB against the free 100 GB.
+That margin is what `compression()` in `main.ts` buys; without it the same traffic is ~125 GB and
+billable.
+
+A one-year no-upfront commitment takes the always-on part from $66.44 to ~$52 (§13). Buy nothing
+at launch.
 
 Outside AWS: Sentry (free tier), Grafana Cloud (free tier), the SMS aggregator and WhatsApp
 per message, and the domain.
 
 ## 2. The shape
 
-One VPC. Two availability zones exist only because an ALB requires two subnets; **every running
-thing sits in one of them**, so inter-AZ traffic is zero and the failure domain matches the
-single-AZ database and cache.
+One VPC. Two availability zones exist only because an **RDS subnet group requires two subnets in
+two zones**; every running thing sits in one of them, so inter-AZ traffic is zero and the failure
+domain matches the single-AZ database.
 
-- **Public subnet:** the load balancer and the NAT instance. Nothing else has a public address.
-- **Private subnet:** the three ECS services, RDS, the Valkey box.
-- **Private to AWS:** an S3 gateway endpoint, so media and container image layers never cross NAT.
+- **Public subnet:** the application box, with an Elastic IP. Its security group opens 80 and 443
+  to the world and 22 to one address.
+- **Private subnet:** RDS, reachable only from the box's security group.
+- **No NAT.** The box is public, so nothing needs a gateway to reach SMS, push, Sentry or ECR —
+  which removes the `t4g.nano` and its address the ALB shape needed.
 
 A student's browser resolves the domain at Route 53, loads the two SPAs and question images from
-CloudFront, and sends every API call to the load balancer, which routes by path to the exam or the
-core service. The worker takes no HTTP at all.
+CloudFront, and sends every API call to the box, where **Caddy** terminates TLS and routes by path
+to the exam or the core container. The worker takes no HTTP at all.
 
-## 3. Compute — three services, one image
+## 3. Compute — three containers, one image
 
-`API_ROLE` decides what a container registers (`apps/api/src/config/api-role.ts`). One image
-serves all three; unset means all of them, which is what local development runs.
+`API_ROLE` decides what a container registers (`apps/api/src/config/api-role.ts`). One image serves
+all three; unset means all of them, which is what local development runs. They run under Docker
+Compose on one EC2 box, with `cpus` and `mem_limit` per container — the same CFS quota ECS would
+apply, set by Docker instead.
 
-| Service    | Size            | Count                            | Serves                                                                |
-| ---------- | --------------- | -------------------------------- | --------------------------------------------------------------------- |
-| **exam**   | 1 vCPU / 2 GB   | min 1, max 2; event window below | `AttemptsController`, `MeLeaderboardController`                       |
-| **core**   | 0.5 vCPU / 1 GB | min 1, max 3                     | auth, `me`, saved, results, every `admin/*` route, imports            |
-| **worker** | 0.5 vCPU / 1 GB | first on-demand, extras on Spot  | no routes but health and metrics; all eight processors and schedulers |
+| Service    | Share               | Count                       | Serves                                                                |
+| ---------- | ------------------- | --------------------------- | --------------------------------------------------------------------- |
+| **exam**   | 0.8 vCPU, heap 1536 | scales with the box         | `AttemptsController`, `MeLeaderboardController`                       |
+| **core**   | 0.6 vCPU, heap 768  | scales with the box         | auth, `me`, saved, results, every `admin/*` route, imports            |
+| **worker** | 0.4 vCPU, heap 768  | **exactly one, never more** | no routes but health and metrics; all eight processors and schedulers |
 
-ARM (Graviton) at $0.02383 per vCPU-hour and $0.00261 per GB-hour — about half the x86 rate.
+**The worker is a singleton, and that is a constraint rather than a choice.** The flush runs every
+60 s and the sweep every 120 s, and `concurrency: 1` in `QUEUE_POLICY` is the _only_ thing stopping
+tick N overlapping tick N+1 — it works inside one process and nowhere else. Two worker containers
+put two sweeps over the same keys, which is exactly what the comment beside that setting warns
+about, and no distributed lock exists behind it. Scoring itself is idempotent and would scale
+safely; if it ever needs to, the answer is a fourth role that registers only the scoring processor,
+not a second worker.
 
-**Why the exam service is 1 vCPU.** Measured over real HTTP: at 0.5 vCPU the autosave path peaked
+**Node is single-threaded, so container count is how you use the box.** One `API_ROLE=all`
+container on a 2-vCPU box uses half of it, permanently. Three is the minimum that both uses the
+machine and keeps the schedulers in one place.
+
+**Why exam gets the largest share.** Measured over real HTTP: at 0.5 vCPU the autosave path peaked
 at 545 requests a second with a p99 of ~400 ms, because CFS throttling kicks in; at 1 vCPU it
-reached 2,076 a second with a p99 of 4–30 ms.
+reached 2,076 a second with a p99 of 4–30 ms. An event peaks around 250–350 requests a second, so
+that is roughly six times the headroom.
 
-**Scaling.** Target-tracking on CPU for exam and core, queue depth for the worker. Autoscaling
-overrides a manually set desired count, so a pre-warm raises the **minimum**, never the count.
+**Scoring drains a hall in about a minute.** Measured 25 September 2026 against the real database
+with `scripts/bench-scoring.mjs`: 5,000 sittings of 100 questions reach `EVALUATED` in 4.75 seconds
+at the processor's own concurrency of 8, p95 9.4 ms — **1.99 ms of Postgres CPU and 2.46 ms of Node
+CPU each**, over 3.4 transactions, 61 tuples read and 28.5 written. The concurrency sweep on that
+hardware: 2 → 488 a second, 4 → 798, 8 → 1,052, 16 → 1,254, 24 → 1,301, with p95 climbing from
+4.7 ms to 26.6 ms across it. Eight sits at 81% of the ceiling with a quarter of the queueing.
 
-**Event windows.** Only tests in an EVENT series are pre-warmed: from 20 minutes before `opensAt`
-until scoring finishes plus ~30 minutes of results viewing, the exam minimum goes to
-`ceil(candidates / 2,500)` and the maximum to that plus two.
+Those are a 10-core M4 with Postgres in Docker beside it. A Graviton2 core is roughly three to four
+times slower, so read the hall as **15–20 s of RDS time and 75–125 s of worker time at 0.4 vCPU** —
+worker-bound, and the database is not the constraint. Nobody is blocked while it drains.
+
+**Scaling.** More containers, up to what the box's vCPUs allow; a bigger event means a bigger box,
+which on EC2 is a stop, a resize and a start. Hourly billing makes that cheap: a load test on a
+four-times-larger instance for an afternoon costs cents.
+
+**Event windows.** Only tests in an EVENT series are pre-warmed. On this shape pre-warming means
+resizing the box before `opensAt` rather than raising an autoscaling minimum — deliberate, not
+automatic, and it must be on the release calendar.
+
+**Open: whether production returns to Fargate.** The staging box (§12) is where that gets decided,
+with one number. Simulate a 6,000-candidate event at the intended production size and read the CPU:
+under 50% and one box is plenty, so Fargate's autoscaling solves a problem that does not exist;
+50–80% and you need headroom; over 80%, or more than one box, and two boxes need something in front
+of them — which is an ALB, and once there is an ALB, Fargate is nearly free to adopt. Nothing in
+this file forecloses it: the Dockerfile, the env and the three roles are identical either way.
 
 ## 4. Ingress
 
-One ALB: $0.0239 an hour plus $0.008 per LCU-hour, two public IPv4 addresses at $3.65 each,
-about **$27** all in. Health checks every 10 seconds, deregistration delay 30 seconds — which is
-also why the API needs no SIGTERM grace of its own.
+**Caddy, in a container on the same box.** It obtains and renews a Let's Encrypt certificate per
+hostname by itself over the ACME HTTP challenge, which needs each name resolving to the box and
+ports 80 and 443 open. No ALB, no ACM, no target groups.
 
-The API answers on its own subdomain, straight to the load balancer. It is deliberately **not**
-behind CloudFront: autosaves alone are 15–30M requests a month during events, which would add
-$10–30 in request fees and buy nothing, since the preflight is already cached for two hours.
+```
+api.iace.co.in { reverse_proxy /attempts/* exam:3000
+                 reverse_proxy core:3000 }
+```
 
-**Anything in front of the API must pass `x-client` and `x-device-name` through** (`docs/01` §6).
+**What this gives up, stated plainly:** an ALB is multi-node and self-healing; one Caddy on one box
+is not. A reboot is an outage, and at 10–30 events a month that has to be scheduled around. The
+escape hatch is Route 53 health-checked failover to a second box, or the ALB.
+
+**Let's Encrypt will not issue for `*.amazonaws.com`** — those names are on the Public Suffix List
+and blocked. So an AWS-provided EC2 hostname cannot have HTTPS, which matters because the student
+app is a PWA and a service worker requires it. Every environment needs a real name. CloudFront's
+own `*.cloudfront.net` is the exception and comes with a valid certificate, which is why staging's
+SPAs need no DNS at all.
+
+**The API is deliberately not behind CloudFront:** autosaves alone are 15–30M requests a month
+during events, which would add $10–30 in request fees and buy nothing, since the preflight is
+already cached for two hours.
+
+**Anything in front of the API must pass `x-client` and `x-device-name` through** (`docs/01` §6),
+and `TRUST_PROXY_HOPS` must count the real hops or every rate limit counts one address.
 
 ## 5. Frontend delivery
 
@@ -116,13 +202,13 @@ for staging and 3 reserved. It is written in `.env.example` beside the pool guid
 
 Measured on the current schema, per 100-question sitting:
 
-|              |                                                                     |
-| ------------ | ------------------------------------------------------------------- |
-| Disk         | 3.75 KB (sheet 2.05, attempt 0.76, rollups 0.33, notification 0.61) |
-| WAL          | 14 KB                                                               |
-| Database CPU | ~2.9 ms — 0.13 start, 0.35 per flush, 0.41 submit, 0.22 scoring     |
+|              |                                                                      |
+| ------------ | -------------------------------------------------------------------- |
+| Disk         | 3.75 KB (sheet 2.05, attempt 0.76, rollups 0.33, notification 0.61)  |
+| WAL          | 14 KB                                                                |
+| Database CPU | ~4.7 ms — 0.13 start, 0.35 per flush, 0.41 submit, 1.99 scoring (§3) |
 
-A 6,000-candidate event is about 17 seconds of database CPU. At 250K sittings a month that is
+A 6,000-candidate event is about 28 seconds of database CPU. At 250K sittings a month that is
 ~11 GB a year, so storage is not a cost driver and reads — standings, catalog, results — are the
 only real load.
 
@@ -220,47 +306,78 @@ abort at 7.
 
 ## 12. Non-production
 
-One staging environment, same shape as production, ~$10 a month:
+**Its own box: one EC2 `t4g.medium`, ~$23 a month.** It is production's shape at a tester's size —
+Caddy in front, the same three containers, one worker — with two differences that matter.
 
-- Three ECS services on **Fargate Spot**, 0.5 vCPU / 1 GB each.
-- A **host rule on the production load balancer**, not a second one.
-- Its own database **on the production RDS instance**, with `CONNECTION LIMIT 10` on the role,
-  `statement_timeout` 30 s and `idle_in_transaction_session_timeout` 60 s, so a staging runaway
-  cannot take production's connections or hold its CPU.
-- A second Valkey **process** on the production box, its own port and its own `maxmemory`.
-- Its own bucket, its own SSM parameters, the shared NAT and registry.
+- **Postgres runs as a container on the box**, not RDS. The data is disposable, so the $18 buys
+  nothing yet. Set `max_connections=200`: the image default of 100 is thin against three containers
+  at `connection_limit=25`. When production exists, staging's database **moves onto the production
+  RDS instance** with `CONNECTION LIMIT 10` on the role, `statement_timeout` 30 s and
+  `idle_in_transaction_session_timeout` 60 s — and **that migration is the rehearsal**, on
+  throwaway data, before the same move matters.
+- **`NODE_ENV=development`, `OTP_SENDER=console`.** An admin signs in with an emailed OTP and a
+  student with an SMS one, and the DLT registration behind that SMS does not exist yet; in
+  development the API returns the code as `devCode` on the request response, so a tester signs in
+  with no provider at all. `CORS_ORIGINS` is still enforced — `corsOrigin` uses the list whenever
+  it is non-empty, whatever the mode.
+
+Heaps are 384 MB per container rather than production's 1536/768/768: one tester needs no more, and
+three containers plus Postgres plus Valkey is ~3.25 GB of the 4.
+
+**Only one DNS record.** CloudFront hands out `*.cloudfront.net` with a valid certificate and S3
+presigned URLs use `*.s3.ap-south-1.amazonaws.com`, so only the API needs a name Caddy can get a
+certificate for. Media is presigned S3 here, not CloudFront signed URLs — those are not built (§15).
 
 **Seeded and generated data only — never a restore of production.** Real students' names, mobile
 numbers and marks do not belong in a lower-security environment.
 
-The pre-launch load rehearsal (4–5K candidates) runs against a temporary instance restored from a
-snapshot, not the shared one.
+**This box is also the load-testing rig.** EC2 bills hourly, so resize it to the production
+candidate for an afternoon, run the event, resize back: four hours of an instance four times larger
+costs about a third of a dollar. That is what settles §3's open question, and it is worth running
+against two instance families — one burstable, one not — in the same session.
 
 ## 13. Commitments
 
 Nothing at launch. After 4–8 weeks of real events the baseline is known; commit to 70–80% of it so
 growth and bursts stay on demand.
 
-|                                  | On demand | 1-year, no upfront |
-| -------------------------------- | --------- | ------------------ |
-| Fargate baseline (2 vCPU + 4 GB) | $42.41    | $33.42             |
-| Valkey `t4g.small`               | $8.18     | $5.91              |
-| NAT `t4g.nano`                   | $2.04     | $1.46              |
-| RDS `db.t4g.small`               | $30.66    | $24.09             |
+|                            | On demand | 1-year, no upfront |
+| -------------------------- | --------- | ------------------ |
+| EC2 `t4g.large` (prod)     | $32.70    | ~$23.50            |
+| EC2 `t4g.medium` (staging) | $16.35    | ~$11.75            |
+| RDS `db.t4g.small`         | $30.66    | $24.09             |
 
-Compute Savings Plans cover EC2, Fargate and Lambda in any region and family, so resizing stays
-covered; an RDS reservation is tied to its instance family. Savings Plans do **not** apply to Spot,
-so staging and the worker's extra tasks are already as cheap as they get.
+A Compute Savings Plan covers EC2 in any region and family, so resizing the box stays covered; an
+RDS reservation is tied to its instance family, so do not buy one until §3's open question is
+settled and the database size is not going to move.
+
+**`t4g` is burstable, and unlimited mode is the default.** Past the 20%-per-vCPU baseline you pay a
+surcharge rather than being throttled — about $0.04 per surplus vCPU-hour, so a box pegged for a
+month is ~$47 on top. That is the right trade for an exam (a bill beats an outage), but it needs an
+alarm on `CPUSurplusCreditsCharged`, and it is the single largest gap between the expected and the
+worst-case invoice.
 
 ## 14. How a release goes out
 
 1. Build both targets from `apps/api/Dockerfile`: `runtime` (600 MB, 108 MB pulled) and `migrate`
    (731 MB, 163 MB pulled). The Prisma CLI is only in the migration image.
-2. Push to ECR through the OIDC role.
-3. Run the **migrate** image as a one-off task. It runs `prisma migrate deploy` and exits.
-4. Update the three services to the new `runtime` image. Each container is `tini`-led, so SIGTERM
-   closes Nest and the container exits (`b2029d4`); the ALB's 30-second deregistration drains it.
-5. Old `/assets` files stay in the bucket. Invalidate only `index.html`, `sw.js` and the manifest.
+2. Build the SPAs. **`VITE_API_URL` is substituted at compile time**, so an environment is a build,
+   not a variable — a staging artifact cannot be promoted to production.
+3. Upload the SPAs: hashed assets **first**, with `max-age=31536000, immutable`; then `index.html`,
+   `sw.js` and the manifest with `no-cache`. The other order serves a shell pointing at chunks that
+   are not there yet. Invalidate those three paths only — `/*` evicts the whole asset cache for
+   nothing, and 1,000 invalidation paths a month are free.
+4. **Old `/assets` files are never deleted.** A tab opened before the deploy still lazy-loads a
+   chunk by its old name; keeping them costs about a cent a year.
+5. Run the **migrate** image to completion. It runs `prisma migrate deploy` and exits, and the API
+   containers do not start until it has.
+6. Recreate the API containers. Each is `tini`-led, so SIGTERM closes Nest and the container exits
+   (`b2029d4`). **There is no draining on this shape** — `docker compose up -d` recreates with a
+   gap, which is the cost of not having a load balancer.
+
+A new service worker installs but **does not activate until every tab of the old one closes** —
+there is no `skipWaiting`, deliberately, because a bundle swapped under a sitting in progress is
+worse than a stale tab. Deploying and students seeing the new build are different moments.
 
 Never during an event window, and never a migration that moves data without the rehearsal
 `docs/superpowers/task-constraints.md` prescribes.
@@ -268,8 +385,23 @@ Never during an event window, and never a migration that moves data without the 
 ## 15. Deferred
 
 - **The service worker never prunes its cache** (`iace-shell-v1` is a fixed name), so a student's
-  device keeps up to ~1.5 MB per deploy they load. The fix is stamping the build id into `sw.js`.
+  device keeps up to ~1.5 MB per deploy they load. The `activate` handler already drops every cache
+  whose name is not the current one — it never fires because the name never changes. Stamp the
+  build id into `sw.js` and it cleans itself up.
+- **CloudFront signed URLs for question images.** Until then media is presigned S3, so each student
+  fetches the same diagram from the origin. **This is also the only line that can move the invoice
+  by an order of magnitude**: the free tier is 1 TB, which is ~5.8 MB of images per sitting across
+  thirty 6,000-candidate events. Above that it is $0.109/GB — 23 MB a sitting would be ~$340 a
+  month. Nobody has measured what a real paper carries; `MAX_WIDTH` and `QUALITY` in
+  `shrink-image.ts` are the knobs if it comes back high.
+- **Batching the scoring job.** Measured 25 September 2026: nine round trips per attempt, whose
+  statements total ~0.7 ms against 1.99 ms of database CPU — so most of the database's work is
+  parse, plan and transaction overhead rather than execution. Scoring N attempts per job collapses
+  that to roughly six statements per batch. `foldMistakes` already takes an array.
+- **Whether `SavedQuestion` needs a row per wrong answer.** It is 28 inserts per attempt, 140,000
+  per event, and it scales with how hard the paper is. `AttemptSheet.verdicts` already records
+  which questions were wrong, so the list is derivable; materialising it is a hot-path write and
+  permanent growth.
 - **Redis as a hash per sitting** instead of one JSON document — measured 7.2 KB against 20.5 KB
   under the old shape, and roughly 10× less traffic. Revisit above ~100 Mbps sustained.
 - **Archiving old answer sheets** and pruning read notifications, when the database passes ~200 GB.
-- **A Compose profile running the three roles behind a reverse proxy** — the local prod shape.

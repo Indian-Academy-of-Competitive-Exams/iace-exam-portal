@@ -279,8 +279,8 @@ marks, and a retry cannot count them twice because the claim has already been ta
 The cohort's aggregates all land on one row per test, so writing them per submit would serialise a
 hall on it. They are **recounted, never folded**: a periodic pass finds the tests something has
 landed on since they were last counted and writes the answer outright. A recount needs no ledger —
-running it twice writes the same numbers — which is why there is no `ProcessedRollup` table and no
-delta to reverse. `TestStat` and `TestSectionStat` come from `Attempt` alone, off the marks and the
+running it twice writes the same numbers — which is why no exactly-once ledger table exists, and
+no delta has to be reversed. `TestStat` and `TestSectionStat` come from `Attempt` alone, off the marks and the
 packed `sectionScores`, and run on the short clock; `TestQuestionStat` needs every sheet and runs
 on a slower one.
 
