@@ -158,11 +158,13 @@ export function previewView(): ExamView {
     submit: {
       asking: false,
       isPending: false,
+      failed: false,
       unanswered: QUESTION_COUNT - 2,
       markedForReview: 2,
       ask: noop,
       cancel: noop,
       confirm: noop,
+      retry: noop,
     },
     fullscreen: {
       nagging: false,

@@ -212,6 +212,8 @@ export type LiveAttemptState = z.infer<typeof liveAttemptStateSchema>;
 /** What a save answers with: the counter the screen reads, and the clock it sets itself by. */
 export const attemptSaveAckSchema = z.object({
   revision: z.number().int(),
+  /** False when the batch was dropped as stale — a 200 alone must never read as "saved". */
+  applied: z.boolean(),
   endsAt: z.string(),
   serverNow: z.string(),
 });

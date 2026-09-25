@@ -19,11 +19,14 @@ import type {
 export interface ExamSubmitView {
   asking: boolean;
   isPending: boolean;
+  /** True once every retry is spent: the paper could not go in, and the skin must say so. */
+  failed: boolean;
   unanswered: number;
   markedForReview: number;
   ask: () => void;
   cancel: () => void;
   confirm: () => void;
+  retry: () => void;
 }
 
 /** Leaving full screen is asked about; a skin cannot decide not to. */

@@ -104,6 +104,44 @@ test('a failed flush requeues its changes and reports unsaved work', async (t) =
   assert.equal(result.current.takenOver, false, 'an ordinary failure is not a takeover');
 });
 
+/** The failure this prevents: submit's await resolving as a no-op while the last batch still flies. */
+test('a flush during an in-flight save waits its turn and then delivers what arrived meanwhile', async (t) => {
+  const sent: Array<{ revision: number; answers: Array<{ questionId: string }> }> = [];
+  let release = () => {};
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number }) => {
+        sent.push(body as (typeof sent)[number]);
+        if (sent.length === 1) await new Promise<void>((resolve) => (release = resolve));
+        return { revision: body.revision };
+      },
+    },
+  } as unknown as AppApiClient;
+
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void result.current.flush());
+
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  let second: Promise<boolean> = Promise.resolve(false);
+  act(() => void (second = result.current.flush()));
+  assert.equal(sent.length, 1, 'the second flush waits instead of resolving as a no-op');
+
+  let delivered = false;
+  await act(async () => {
+    release();
+    delivered = await second;
+  });
+
+  assert.equal(sent.length, 2, 'what arrived during the flight went up right after it');
+  assert.equal(sent[1]?.answers[0]?.questionId, 'q2');
+  assert.equal(delivered, true, 'submit can now trust the await to mean everything is saved');
+});
+
 test('a newer edit made during a failed flush is not overwritten by the requeue', async (t) => {
   const calls: Array<{ answers: Array<{ questionId: string; selectedOptionId: string | null }> }> =
     [];
@@ -124,7 +162,7 @@ test('a newer edit made during a failed flush is not overwritten by the requeue'
   t.after(unmount);
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
-  let flying: Promise<void> = Promise.resolve();
+  let flying: Promise<boolean> = Promise.resolve(false);
   act(() => void (flying = result.current.flush()));
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-2' }));

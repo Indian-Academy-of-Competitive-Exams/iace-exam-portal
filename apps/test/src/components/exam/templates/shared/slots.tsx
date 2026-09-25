@@ -203,6 +203,14 @@ export function Palette({ view }: Readonly<ExamSlotProps>) {
 export function BottomBar({ view }: Readonly<ExamSlotProps>) {
   return (
     <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-exam-border px-exam py-3">
+      {view.submit.failed ? (
+        <Alert variant="danger" className="flex w-full items-center justify-between gap-2">
+          Could not submit this paper.
+          <Button type="button" variant="outline" size="sm" onClick={view.submit.retry}>
+            Try again
+          </Button>
+        </Alert>
+      ) : null}
       {/* On a bubble sheet the ink carries all three: a part fill flags it, a full one saves and moves. */}
       {view.testUi === TEST_UI.OMR ? (
         <Button type="button" size="sm" onClick={view.nextQuestion}>

@@ -95,7 +95,9 @@ export function useExamView(
     mutationFn: async () => {
       // The question still on screen has cost time too; bank it before the last save goes.
       state.bankOpen();
-      await state.flush();
+      const delivered = await state.flush();
+      // The paper does not go in behind its own answers; the retry ladder carries them again.
+      if (!delivered) throw new Error('The last answers have not reached the server yet.');
       return api.me.submitAttempt(paper.attemptId, { tab });
     },
     retry: shouldRetrySubmit,
@@ -231,6 +233,9 @@ export function useExamView(
     submit: {
       asking: asking && !state.takenOver,
       isPending: submit.isPending,
+      /** True once every retry is spent: the paper could not go in, and the screen must say so. */
+      failed: submit.isError,
+      retry: end,
       unanswered,
       markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
       ask: () => setAsking(true),

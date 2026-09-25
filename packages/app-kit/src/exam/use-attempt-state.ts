@@ -76,8 +76,8 @@ export interface AttemptStateHandle {
   /** Entering a section tells the server, which stamps when its clock started. */
   enterSection: (sectionId: string, remainingSec: number) => void;
   closeSection: (sectionId: string, remainingSec: number) => void;
-  /** Pushes whatever is pending now — on a section change, and before submitting. */
-  flush: () => Promise<void>;
+  /** Pushes whatever is pending now — on a section change, and before submitting. True means every answer held at the call reached the server. */
+  flush: () => Promise<boolean>;
 }
 
 const answerOf = (change: AnswerChange, held: LiveAnswer | undefined): LiveAnswer => ({
@@ -118,7 +118,7 @@ export function useAttemptState(
   const openedAt = useRef(0);
   const openQuestion = useRef<string | null>(null);
   const revision = useRef(0);
-  const inFlight = useRef(false);
+  const inFlight = useRef<Promise<boolean> | null>(null);
 
   // Starts from the queue, then kept level with the state by every writer below, so banking never waits.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
@@ -156,16 +156,14 @@ export function useAttemptState(
     else answerQueue.storage.setItem(key, JSON.stringify(queued));
   }, [attemptId]);
 
-  const flush = useCallback(async () => {
-    if (inFlight.current || stopped.current) return;
+  const sendPending = useCallback(async (): Promise<boolean> => {
     const changes = [...pending.current.values()];
     const movedSections = pendingSections.current;
-    if (changes.length === 0 && Object.keys(movedSections).length === 0) return;
+    if (changes.length === 0 && Object.keys(movedSections).length === 0) return true;
 
     // Cleared BEFORE the request, so an edit made while it flies belongs to the next batch.
     pending.current = new Map();
     pendingSections.current = {};
-    inFlight.current = true;
     revision.current += 1;
     const sent = revision.current;
     setIsSaving(true);
@@ -186,24 +184,43 @@ export function useAttemptState(
         sections: movedSections,
         tab,
       });
-      // A server already past what we sent dropped this batch as stale and answered 200 anyway.
-      const dropped = saved.revision > sent;
+      // The server says so itself: a drop answers 200 too, and an equal revision hides in the echo.
+      const dropped = saved.applied === false || saved.revision > sent;
       revision.current = seedRevision(revision.current, saved.revision);
       // Answering is also a clock check: the deadline it answers with is the one that counts.
       setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
       if (dropped) requeue();
       setHasUnsaved(dropped);
+      return !dropped;
     } catch (error: unknown) {
       requeue();
       setHasUnsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
       if (isTakenOver(error)) standDown();
+      return false;
     } finally {
       keepQueue();
-      inFlight.current = false;
       setIsSaving(false);
     }
   }, [attemptId, keepQueue, standDown]);
+
+  const flush = useCallback(async (): Promise<boolean> => {
+    // Waits its turn behind the batch in the air, then sends what that batch could not carry — so submit's await really is the last save.
+    while (inFlight.current) {
+      const flying = inFlight.current;
+      await flying;
+      if (inFlight.current === flying) inFlight.current = null;
+    }
+    if (stopped.current) return true;
+    if (pending.current.size === 0 && Object.keys(pendingSections.current).length === 0)
+      return true;
+
+    const run = sendPending();
+    inFlight.current = run;
+    const delivered = await run;
+    if (inFlight.current === run) inFlight.current = null;
+    return delivered;
+  }, [sendPending]);
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
   useEffect(() => {

@@ -24,6 +24,7 @@ import {
   applyBatch,
   heldIn,
   holdsSitting,
+  isStale,
   creditedEndsAt,
   creditedSections,
   isAbandoned,
@@ -121,15 +122,20 @@ export class AttemptStateService {
     batch: SaveAttemptStateBody,
     now: Date = new Date(),
   ): Promise<AttemptSaveAck> {
+    // Judged inside the swap, against the same read the batch was applied to — the last try wins.
+    let applied = false;
     const next = await this.patch(
       attemptId,
-      (held) => answered(held, studentId, batch, now),
+      (held) => {
+        applied = !isStale(held, batch);
+        return answered(held, studentId, batch, now);
+      },
       () => this.durableState(studentId, attemptId),
     );
     // Marked AFTER the write: a mark whose state never landed would flush yesterday's answers.
     await this.redis.client.sadd(redisKeys.attemptsDirty, attemptId);
 
-    return acked(next, now);
+    return { ...acked(next, now), applied };
   }
 
   /** What a reloaded screen needs. `require` already refuses another student and rebuilds a lost key. */
@@ -335,7 +341,7 @@ function mergedOver(durable: HeldState, held: HeldState): HeldState {
 }
 
 /** A save carries the clock back with the counter, so answering is also how the timer stays honest. */
-function acked(state: HeldState, now: Date): AttemptSaveAck {
+function acked(state: HeldState, now: Date): Omit<AttemptSaveAck, 'applied'> {
   return { revision: state.revision, endsAt: state.endsAt, serverNow: now.toISOString() };
 }
 

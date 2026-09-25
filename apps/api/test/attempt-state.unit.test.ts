@@ -348,6 +348,40 @@ describe('pending — what a flush has left to write', () => {
   });
 });
 
+describe('AttemptStateService.save — the ack tells the truth', () => {
+  const IN_TIME = new Date('2026-09-01T05:10:00.000Z');
+  const service = (redis: FakeRedis) =>
+    new AttemptStateService({} as PrismaService, redis.asService());
+  const batch = (revision: number) => ({
+    revision,
+    answers: [change()],
+    sections: {},
+  });
+
+  /** The failure this prevents: a batch dropped under an EQUAL revision echoing back as "Saved". */
+  it('answers applied: false when the batch was dropped as stale', async () => {
+    const redis = new FakeRedis();
+    await redis.setJson(redisKeys.attemptState('att_1'), packHeld(held({ revision: 7 })), 60);
+
+    const ack = await service(redis).save('stu_1', 'att_1', batch(7), IN_TIME);
+
+    assert.equal(ack.applied, false);
+    assert.equal(ack.revision, 7, 'the echo alone could not have said it was dropped');
+    const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
+    assert.deepEqual(after?.answers, {}, 'the stale batch really was dropped');
+  });
+
+  it('answers applied: true when the batch landed', async () => {
+    const redis = new FakeRedis();
+    await redis.setJson(redisKeys.attemptState('att_1'), packHeld(held({ revision: 7 })), 60);
+
+    const ack = await service(redis).save('stu_1', 'att_1', batch(8), IN_TIME);
+
+    assert.equal(ack.applied, true);
+    assert.equal(ack.revision, 8);
+  });
+});
+
 describe('AttemptStateService.clearPending', () => {
   const service = (redis: FakeRedis) =>
     new AttemptStateService({} as PrismaService, redis.asService());
