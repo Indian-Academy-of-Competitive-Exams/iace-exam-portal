@@ -16,6 +16,9 @@ export const SAVE_GRACE_SEC = 30;
 /** How long a paper waits for a candidate who walked away. Past it, the key goes and the sitting ends. */
 export const PAUSE_LIMIT_SEC = 48 * 60 * 60;
 
+/** Total away time one sitting can ever bank: farming many small pauses can't out-earn one big one. */
+export const PAUSE_CREDIT_CAP_SEC = PAUSE_LIMIT_SEC;
+
 /** A gap this short is a reload or a quiet minute of reading, not an absence — it is spent, not given back. */
 export const PRESENT_GRACE_SEC = 60;
 
@@ -31,6 +34,8 @@ export interface HeldState {
   endsAt: string;
   /** ISO of the last save the SERVER took. The gap since it is time the candidate was not sitting. */
   lastSeenAt?: string;
+  /** Away-ms already credited this sitting, so a reload loop cannot bank past what one pause could. */
+  creditedMs?: number;
   revision: number;
   answers: Record<string, LiveAnswer>;
   /** Questions changed since the last flush. Absent on a key written before this shipped. */
@@ -207,9 +212,11 @@ export function awayMs(held: HeldState, now: Date): number {
   return Math.max(0, now.getTime() - Date.parse(seen));
 }
 
-/** What a resume gives back: the grace comes off the WHOLE gap, so a reload loop credits seconds. */
+/** What a resume gives back: the grace comes off the WHOLE gap, capped at what the sitting has left to bank. */
 export function creditMs(held: HeldState, now: Date): number {
-  return Math.max(0, awayMs(held, now) - PRESENT_GRACE_SEC * MILLISECONDS_PER_SECOND);
+  const raw = awayMs(held, now) - PRESENT_GRACE_SEC * MILLISECONDS_PER_SECOND;
+  const room = PAUSE_CREDIT_CAP_SEC * MILLISECONDS_PER_SECOND - (held.creditedMs ?? 0);
+  return Math.max(0, Math.min(raw, room));
 }
 
 /** The deadline a resume gets: the one it had, pushed by the time the paper was not on screen. */
@@ -232,9 +239,14 @@ export function creditedSections(held: HeldState, now: Date): Record<string, Sec
   );
 }
 
-/** Too long away to come back to. The key is gone by now anyway; this is what Postgres judges by. */
+/** Nothing left to bank: past this a reload buys no clock, so holding the sitting open buys nothing. */
+export function creditSpent(held: HeldState): boolean {
+  return (held.creditedMs ?? 0) >= PAUSE_CREDIT_CAP_SEC * MILLISECONDS_PER_SECOND;
+}
+
+/** Too long away to come back to, or out of credit to come back on. What Postgres judges by. */
 export function isAbandoned(held: HeldState, now: Date): boolean {
-  return awayMs(held, now) > PAUSE_LIMIT_SEC * MILLISECONDS_PER_SECOND;
+  return awayMs(held, now) > PAUSE_LIMIT_SEC * MILLISECONDS_PER_SECOND || creditSpent(held);
 }
 
 const MILLISECONDS_PER_SECOND = 1000;

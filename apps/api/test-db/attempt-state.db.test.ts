@@ -220,6 +220,51 @@ describe('AttemptStateService', () => {
     assert.equal(held?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
   });
 
+  /** The bug this prevents: a Redis restart crediting the whole elapsed sitting, not just the outage. */
+  it("seeds a rebuilt key's last-seen from the sheet's last flush, not the start", async () => {
+    const { service, attemptId, live } = await build(true);
+    const lastFlush = new Date(live.startedAt.getTime() + 30 * 60 * 1000);
+    await prisma.attemptSheet.update({ where: { attemptId }, data: { updatedAt: lastFlush } });
+
+    const backAt = new Date(lastFlush.getTime() + 6 * 60 * 1000);
+    const credited = await service.resume(live, undefined, backAt);
+
+    // Six minutes since the last flush, less the grace: not the 36 minutes since the sitting started.
+    assert.equal(credited.toISOString(), new Date(ENDS_AT.getTime() + 5 * 60 * 1000).toISOString());
+  });
+
+  /** The bug this prevents: a rebuild's start-based fallback reading a long, active sitting as abandoned. */
+  it('does not mistake a long but still-active sitting for one abandoned on rebuild', async () => {
+    const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
+    const student = (await makeStudent(prisma)).id;
+    const startedAt = new Date('2026-08-01T00:00:00.000Z');
+    const endsAt = new Date(startedAt.getTime() + 50 * HOUR_MS);
+    const attempt = await sitPaper(prisma, {
+      paper,
+      studentId: student,
+      chosen: [RIGHT_OPTION, null],
+      timeSpent: [20, 0],
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+      startedAt,
+      submittedAt: null,
+    });
+    // Forty-nine hours in, an hour from the deadline, with a flush from moments ago.
+    const lastFlush = new Date(startedAt.getTime() + 49 * HOUR_MS);
+    await prisma.attemptSheet.update({
+      where: { attemptId: attempt.id },
+      data: { updatedAt: lastFlush },
+    });
+    const redis = new FakeRedis();
+    const service = new AttemptStateService(prisma, redis.asService());
+    const live = { id: attempt.id, studentId: student, testId: paper.testId, startedAt, endsAt };
+
+    const resumedAt = new Date(lastFlush.getTime() + 2 * 60 * 1000);
+    const credited = await service.resume(live, undefined, resumedAt);
+
+    // A start-based fallback would read 49 hours since start as abandoned and credit nothing.
+    assert.equal(credited.toISOString(), new Date(endsAt.getTime() + 60 * 1000).toISOString());
+  });
+
   /** The bug this prevents: the key keeping the old deadline, so every save after a resume is refused. */
   it('admits saves against the deadline a resume credited, not the one it walked away from', async () => {
     const { service, student, attemptId, live, q1, change } = await build();

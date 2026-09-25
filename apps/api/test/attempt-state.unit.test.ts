@@ -10,10 +10,12 @@ import {
   awayMs,
   creditedEndsAt,
   creditedSections,
+  creditMs,
   heldIn,
   isAbandoned,
   isInTime,
   isStale,
+  PAUSE_CREDIT_CAP_SEC,
   PAUSE_LIMIT_SEC,
   PRESENT_GRACE_SEC,
   packHeld,
@@ -263,6 +265,56 @@ describe('a paper put down, and one abandoned', () => {
   /** A key written before this shipped has no last save, so the start is the only instant it has. */
   it('counts from the start when nothing has been saved yet', () => {
     assert.equal(awayMs(held(), at('2026-09-01T05:01:00.000Z')), 60_000);
+  });
+});
+
+describe('the cap on what a sitting can bank across every pause', () => {
+  const at = (iso: string) => new Date(iso);
+
+  it('still credits a legitimate pause in full while room remains', () => {
+    const midway = held({
+      lastSeenAt: '2026-09-01T05:10:00.000Z',
+      creditedMs: 10 * 60 * 60 * 1000,
+    });
+    // Ten hours already banked and an hour more away: comfortably under the 48-hour cap.
+    const resumed = creditedEndsAt(midway, at('2026-09-01T06:10:00.000Z'));
+    assert.equal(resumed.toISOString(), '2026-09-01T06:29:00.000Z');
+  });
+
+  /** The failure this prevents: one long idle after the cap is nearly spent still crediting the whole gap. */
+  it('tops out at whatever room is left rather than crediting the whole gap', () => {
+    const almostSpent = held({
+      lastSeenAt: '2026-09-01T05:10:00.000Z',
+      creditedMs: PAUSE_CREDIT_CAP_SEC * 1000 - 60_000,
+    });
+    // One minute of room left, a whole day away: only the minute of room is given.
+    const resumed = creditedEndsAt(almostSpent, at('2026-09-02T05:10:00.000Z'));
+    assert.equal(resumed.toISOString(), '2026-09-01T05:31:00.000Z');
+    assert.equal(PAUSE_CREDIT_CAP_SEC, PAUSE_LIMIT_SEC);
+  });
+
+  /** The failure this prevents: idling twenty minutes and reloading, repeated without bound. */
+  it('cannot be out-earned by any number of reload cycles', () => {
+    const cycle = (creditedMs: number) =>
+      held({ lastSeenAt: '2026-09-01T05:10:00.000Z', creditedMs });
+    const reload = at('2026-09-01T05:30:00.000Z'); // twenty minutes away, every cycle
+
+    let creditedMs = 0;
+    for (let i = 0; i < 200; i += 1) {
+      creditedMs += creditMs(cycle(creditedMs), reload);
+    }
+
+    assert.equal(creditedMs, PAUSE_CREDIT_CAP_SEC * 1000);
+  });
+
+  /** The failure this prevents: a tab reopened every day holding a spent sitting IN_PROGRESS for weeks. */
+  it('reads a sitting out of credit as abandoned, however recently it reloaded', () => {
+    const justReloaded = { lastSeenAt: '2026-09-01T05:29:00.000Z' };
+    const spent = held({ ...justReloaded, creditedMs: PAUSE_CREDIT_CAP_SEC * 1000 });
+    const banking = held({ ...justReloaded, creditedMs: 60_000 });
+
+    assert.equal(isAbandoned(spent, at('2026-09-01T05:30:00.000Z')), true);
+    assert.equal(isAbandoned(banking, at('2026-09-01T05:30:00.000Z')), false);
   });
 });
 

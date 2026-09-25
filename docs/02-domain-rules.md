@@ -171,7 +171,7 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 ## 7. The sitting
 
 - The server owns `startedAt` and `endsAt`; the client clock only counts down to it. The deadline is
-  computed once at start and never recomputed.
+  set once at start, and moves only by the pause credit below.
 - **Resume is not a start.** A live sitting is re-entered without asking the start gate again. A
   test may be sat again any number of times, and nothing counts or caps re-entries into one sitting.
   Two racing starts resolve to one sitting.
@@ -182,8 +182,14 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   and the sitting it was stood down from stays live and resumable. A sitting held by nobody, because
   its key was rebuilt from Postgres, is adopted by the first tab back. A reclaim names its attempt
   and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
-  **The clock does not stop**: a paper left to sit another runs to the deadline it was given at
-  start.
+- **A pause is credited, not stopped.** Falling silent longer than the reload grace
+  (`PRESENT_GRACE_SEC`) moves the deadline, and every open section's clock, out by the gap — a
+  laptop sleeping, a dropped network or a genuine multi-hour pause costs the student nothing. That
+  credit is capped per sitting at `PAUSE_CREDIT_CAP_SEC`, the same ceiling `PAUSE_LIMIT_SEC` already
+  puts on one pause, so no number of reloads can bank more than the one long pause that limit already
+  allows. Past `PAUSE_LIMIT_SEC` of silence the sitting is abandoned, and so is one whose credit is
+  spent — the sweeper ends both at their deadline rather than letting a reopened tab hold a sitting
+  that can no longer earn a second.
 - **`NavigationPolicy` decides what the palette is for.** Under `FREE` it opens any question in the
   section. Under `FORWARD_ONLY` a question left is closed for good: a seat already passed cannot be
   reopened, Save & Next stops wrapping from the last seat back to the first — a wrap is a move

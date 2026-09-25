@@ -27,6 +27,7 @@ import {
   isStale,
   creditedEndsAt,
   creditedSections,
+  creditMs,
   isAbandoned,
   isInTime,
   PAUSE_LIMIT_SEC,
@@ -101,8 +102,14 @@ export class AttemptStateService {
 
     const endsAt = creditedEndsAt({ ...held, endsAt: attempt.endsAt.toISOString() }, now);
     const sections = creditedSections(held, now);
+    const granted = creditMs(held, now);
     await this.open({ ...attempt, endsAt }, tab, now);
-    await this.patch(attempt.id, (put) => ({ ...put, sections }));
+    // Banked cumulatively: however many times this sitting reloads, it cannot out-earn the cap.
+    await this.patch(attempt.id, (put) => ({
+      ...put,
+      sections,
+      creditedMs: (put.creditedMs ?? 0) + granted,
+    }));
     // The row is the caller's to move: this file never writes Postgres on the answer path.
     return endsAt;
   }
@@ -264,7 +271,7 @@ export class AttemptStateService {
         startedAt: true,
         endsAt: true,
         status: true,
-        sheet: { select: { answers: true } },
+        sheet: { select: { answers: true, updatedAt: true } },
       },
     });
     // Another student's id reads as missing: an id is not a thing to confirm the existence of.
@@ -293,6 +300,8 @@ export class AttemptStateService {
       testId: attempt.testId,
       startedAt: attempt.startedAt.toISOString(),
       endsAt: attempt.endsAt.toISOString(),
+      // The last flush, not the start: a rebuild must credit only what it lost, not the whole sitting.
+      lastSeenAt: (attempt.sheet?.updatedAt ?? attempt.startedAt).toISOString(),
       revision: 0,
       answers,
       pending: [],
