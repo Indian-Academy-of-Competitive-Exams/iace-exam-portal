@@ -3,9 +3,9 @@
  * value and callback off the view — only the markup and the class names differ, so
  * the two skins cannot drift into behaving differently.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { isReviewState, secondsLeft, type ExamClock } from '@iace/contracts';
-import { useCountdown, type ExamView } from '@iace/app-kit';
+import { useAnchoredCountdown, useCountdown, type ExamView } from '@iace/app-kit';
 import { cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
@@ -227,19 +227,7 @@ function RailwaySectionClock({
   allowedSec,
   onExpire,
 }: Readonly<{ allowedSec: number; onExpire: () => void }>) {
-  const openedAt = useRef(0);
-
-  useEffect(() => {
-    openedAt.current = Date.now();
-  }, []);
-
-  const left = useCountdown(
-    useCallback(() => {
-      const since = openedAt.current === 0 ? Date.now() : openedAt.current;
-      return Math.max(0, allowedSec - Math.round((Date.now() - since) / 1000));
-    }, [allowedSec]),
-    onExpire,
-  );
+  const left = useAnchoredCountdown(allowedSec, onExpire);
 
   return (
     <p aria-live="off" className="right-time">

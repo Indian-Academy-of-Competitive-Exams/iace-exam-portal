@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react';
 import { Hourglass } from 'lucide-react';
 import { clockText } from '@iace/contracts';
 import { cn } from '@iace/ui';
-import { useCountdown } from '@iace/app-kit';
+import { useAnchoredCountdown } from '@iace/app-kit';
 
 /** A section's own clock, keyed by the section: entering one starts it and nothing else has to. */
 
@@ -14,20 +13,7 @@ export function SectionTimer({
   onExpire,
   labelled = false,
 }: Readonly<{ allowedSec: number; onExpire: () => void; labelled?: boolean }>) {
-  // A timestamp, not a decrementing counter: a backgrounded tab must not buy a student time.
-  const startedAt = useRef(0);
-
-  useEffect(() => {
-    startedAt.current = Date.now();
-  }, []);
-
-  const left = useCountdown(
-    useCallback(() => {
-      const since = startedAt.current === 0 ? Date.now() : startedAt.current;
-      return Math.max(0, allowedSec - Math.round((Date.now() - since) / 1000));
-    }, [allowedSec]),
-    onExpire,
-  );
+  const left = useAnchoredCountdown(allowedSec, onExpire);
 
   return (
     <p

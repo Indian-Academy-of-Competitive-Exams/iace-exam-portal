@@ -57,6 +57,8 @@ const answersFrom = (queued: readonly AnswerChange[]): Record<string, LiveAnswer
 export interface AttemptStateHandle {
   answers: Readonly<Record<string, LiveAnswer>>;
   sections: Readonly<Record<string, SectionProgress>>;
+  /** True once the server's own section state has arrived — before it, "never opened" is not knowable. */
+  sectionsSeeded: boolean;
   /** The clock as the last save left it, so an extension reaches the screen without a reload. */
   clock: ExamClock | null;
   /** True while a save is in flight; the screen says "Saving…" and never blocks on it. */
@@ -106,6 +108,8 @@ export function useAttemptState(
   const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
+  // False until the GET below answers: before it, a screen cannot tell "never opened" from "not yet known".
+  const [sectionsSeeded, setSectionsSeeded] = useState(false);
   const [clock, setClock] = useState<ExamClock | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
@@ -135,6 +139,7 @@ export function useAttemptState(
       // Merged under, never over: an answer given while this flew is the newer one.
       setAnswers((mine) => remember({ ...held.answers, ...mine }));
       setSections((mine) => ({ ...held.sections, ...mine }));
+      setSectionsSeeded(true);
       // Never backwards: a flush racing this GET may already have moved the counter on.
       revision.current = seedRevision(revision.current, held.revision);
     });
@@ -299,6 +304,7 @@ export function useAttemptState(
   return {
     answers,
     sections,
+    sectionsSeeded,
     clock,
     isSaving,
     hasUnsaved,

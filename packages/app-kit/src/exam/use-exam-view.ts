@@ -4,7 +4,7 @@
  * finished view. What a sectional clock changes is which sections are open, and
  * that is read from the config rather than branched into a second screen.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
@@ -80,6 +80,21 @@ export function useExamView(
   const sectional = paper.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
   const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;
   const reachable = openSections(paper.sections, sectional, state.sections);
+
+  // A reload must land where the sitting really is, not the paper's first section.
+  if (sectional && reachable[0] !== undefined && reachable[0] !== sectionId) {
+    setSectionId(reachable[0]);
+  }
+
+  // Stamps a section's clock the first time it is truly known to have never been opened.
+  useEffect(() => {
+    if (!sectional || !state.sectionsSeeded) return;
+    const first = reachable[0];
+    if (first === undefined || state.sections[first] !== undefined) return;
+    const allowed = paper.sections.find((row) => row.id === first)?.durationSec;
+    if (allowed !== null && allowed !== undefined) state.enterSection(first, allowed);
+  }, [sectional, reachable, paper.sections, state]);
+
   const section = paper.sections.find((row) => row.id === sectionId);
   const inSection = paper.questions.filter((row) => row.baseConfigSectionId === sectionId);
   const current = inSection.find((row) => row.questionId === questionId) ?? inSection[0];

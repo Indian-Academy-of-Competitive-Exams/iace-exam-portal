@@ -1,7 +1,7 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
-import { useCountdown } from '../src/exam/use-countdown';
+import { useAnchoredCountdown, useCountdown } from '../src/exam/use-countdown';
 
 /** A clock the test moves by hand; the hook re-reads it on each one-second tick. */
 function handClock(start: number) {
@@ -75,5 +75,56 @@ test('a clock above zero never expires', () => {
 
     assert.equal(result.current, 1, 'the count follows the clock');
     assert.equal(expiries.count, 0);
+  });
+});
+
+/** Mounts on a mocked `Date` too, so the seconds `useAnchoredCountdown` reads off it move by hand. */
+function anchored(allowedSec: number, run: (harness: ReturnType<typeof mountAnchored>) => void) {
+  // A real-looking epoch: a mocked clock starting at 0 would collide with any "not set yet" sentinel.
+  mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1_700_000_000_000 });
+  const harness = mountAnchored(allowedSec);
+  try {
+    run(harness);
+  } finally {
+    harness.unmount();
+    mock.timers.reset();
+  }
+}
+
+function mountAnchored(allowedSec: number) {
+  const hook = renderHook(({ allowedSec }) => useAnchoredCountdown(allowedSec, () => {}), {
+    initialProps: { allowedSec },
+  });
+
+  return {
+    result: hook.result,
+    unmount: hook.unmount,
+    setAllowedSec: (next: number) => hook.rerender({ allowedSec: next }),
+    tick: (ms: number) => act(() => mock.timers.tick(ms)),
+  };
+}
+
+test('an unchanged allowance just counts down with the clock', () => {
+  anchored(1800, ({ result, tick }) => {
+    tick(5_000);
+    assert.equal(result.current, 1795, 'five real seconds cost five seconds of the allowance');
+  });
+});
+
+/** The failure this prevents: a reloaded section's clock subtracting elapsed time twice and closing early. */
+test('a corrected allowance does not have the same elapsed time taken off it twice', () => {
+  anchored(1800, ({ result, setAllowedSec, tick }) => {
+    tick(25_000);
+    assert.equal(result.current, 1775, 'the first 25 real seconds land as usual');
+
+    // A save ack recomputing "seconds left" from the server, exactly as a sectional clock does on reload.
+    setAllowedSec(1775);
+    tick(5_000);
+
+    assert.equal(
+      result.current,
+      1770,
+      'only the next five seconds come off, not the first 25 again',
+    );
   });
 });

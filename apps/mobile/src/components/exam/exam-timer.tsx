@@ -4,10 +4,10 @@
  * background comes back to the true time, and `secondsLeft` clamps at zero so
  * a clock that jumped past it still expires.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { Text, View } from 'react-native';
 import { clockText, secondsLeft, type ExamClock } from '@iace/contracts';
-import { useCountdown } from '@iace/app-kit';
+import { useAnchoredCountdown, useCountdown } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 
 /** Under this the clock turns urgent — five minutes is the warning every exam hall gives. */
@@ -58,20 +58,7 @@ export function SectionTimer({
   allowedSec,
   onExpire,
 }: Readonly<{ allowedSec: number; onExpire: () => void }>) {
-  // A timestamp, not a decrementing counter: a backgrounded app must not buy a student time.
-  const startedAt = useRef(0);
-
-  useEffect(() => {
-    startedAt.current = Date.now();
-  }, []);
-
-  const left = useCountdown(
-    useCallback(() => {
-      const since = startedAt.current === 0 ? Date.now() : startedAt.current;
-      return Math.max(0, allowedSec - Math.round((Date.now() - since) / 1000));
-    }, [allowedSec]),
-    onExpire,
-  );
+  const left = useAnchoredCountdown(allowedSec, onExpire);
 
   return (
     <View
