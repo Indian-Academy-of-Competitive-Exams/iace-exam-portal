@@ -419,7 +419,7 @@ export const scopesSat = (subjects: readonly SubjectStanding[]): TestScope[] =>
     ),
   );
 
-const round2 = (value: number) => Math.round(value * 100) / 100;
+export const round2 = (value: number) => Math.round(value * 100) / 100;
 
 export const OVERVIEW_ROUTES = {
   me: '/me/overview',

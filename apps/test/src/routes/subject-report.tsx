@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
 import { minutes } from '@iace/app-kit';
-import { type PerformanceReport, type SectionalStanding } from '@iace/contracts';
+import { round2, type PerformanceReport, type SectionalStanding } from '@iace/contracts';
 import { attemptReportQuery } from '../lib/queries';
 import { PageBody, ReportSkeleton, Section } from '../components/ui';
 
@@ -102,5 +102,5 @@ function standingOf(row: SectionalStanding) {
 /** What a minute in this section actually bought — the one figure that crosses marks with time. */
 function perMinute(score: number | null, seconds: number | null): string {
   if (score === null || seconds === null || seconds === 0) return DASH;
-  return (Math.round((score / (seconds / 60)) * 100) / 100).toFixed(2);
+  return round2(score / (seconds / 60)).toFixed(2);
 }
