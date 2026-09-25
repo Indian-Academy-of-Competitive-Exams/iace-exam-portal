@@ -5,6 +5,7 @@ import {
   AppException,
   ASSIGNMENT_ROLES,
   ErrorCodes,
+  TEST_SCOPE,
   TEST_STATUS,
   type TestStatus,
 } from '@iace/contracts';
@@ -41,6 +42,24 @@ async function draft(held: readonly [number, number] = [3, 2]): Promise<Paper> {
       data: { questionCount },
     });
   }
+  return paper;
+}
+
+/** A SECTIONAL draft holding rows in its one scoped section alone — the shape PaperService now writes. */
+async function sectionalDraft(held: number): Promise<Paper> {
+  const paper = await makePaper(prisma, {
+    sections: ['Reasoning', 'Quant'],
+    scope: TEST_SCOPE.SECTIONAL,
+    questions: Array.from({ length: held }, () => ({ subject: 'Reasoning', section: 0 })),
+  });
+  await prisma.baseConfigSection.update({
+    where: { id: paper.sectionIds[0] ?? '' },
+    data: { questionCount: 3 },
+  });
+  await prisma.test.update({
+    where: { id: paper.testId },
+    data: { scopeRef: { sectionId: paper.sectionIds[0] } },
+  });
   return paper;
 }
 
@@ -208,6 +227,33 @@ describe('FinalizeService — a second offer', () => {
     assert.equal(again.finalizedAt, first.finalizedAt);
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
     assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
+  });
+});
+
+describe('FinalizeService — a scoped test is judged by its own sections alone', () => {
+  /** THE failure this prevents: a SECTIONAL test that can never be offered because F1 judged the whole config. */
+  it('offers a SECTIONAL test whose one scoped section is full', async () => {
+    const paper = await sectionalDraft(3);
+
+    const result = await service.offer(paper.testId);
+
+    assert.equal(result.finalizedByThisCall, true);
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+    assert.ok((await testRow(paper)).finalizedAt);
+  });
+
+  it('still refuses a SECTIONAL test whose scoped section is short, naming only that section', async () => {
+    const paper = await sectionalDraft(2);
+
+    const error = await service
+      .offer(paper.testId)
+      .then(() => null)
+      .catch((thrown: unknown) => thrown);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.message, 'Reasoning holds 2 of the 3 it needs.');
+    const test = await testRow(paper);
+    assert.equal(test.finalizedAt, null);
   });
 });
 

@@ -23,8 +23,10 @@ import {
   BUILDER,
   makeAdmin,
   makeBuilder,
+  makeQuestion,
   makeSitting,
   makeStudent,
+  makeSubject,
   resetDatabase,
   testPrisma,
 } from './support/database';
@@ -264,6 +266,54 @@ describe('TestsService — the scope has to name a part of the config', () => {
     const created = await service.create(sectional({ sectionId: idFor('sec_2') }), ADMIN);
 
     assert.deepEqual(created.scopeRef, { sectionId: idFor('sec_2') });
+  });
+});
+
+describe('TestsService — a narrower scope drops what it no longer covers', () => {
+  /** THE failure this prevents: a scope narrowed after the paper was built leaves stale rows an offer can't judge. */
+  it('deletes paper rows outside the new scope when a draft narrows to one section', async () => {
+    const { service } = await serviceWith({ test: {} });
+    const subject = await makeSubject(prisma);
+    const inScope = await makeQuestion(prisma, { subjectId: subject.id });
+    const outOfScope = await makeQuestion(prisma, { subjectId: subject.id });
+    await prisma.paperQuestion.createMany({
+      data: [
+        {
+          id: randomUUID(),
+          testId: TEST,
+          baseConfigId: BUILDER.CONFIG,
+          baseConfigSectionId: idFor('sec_1'),
+          questionId: inScope.id,
+          questionVersionId: inScope.versionId,
+          order: 1,
+          marks: 2,
+          negativeMarks: 0.5,
+        },
+        {
+          id: randomUUID(),
+          testId: TEST,
+          baseConfigId: BUILDER.CONFIG,
+          baseConfigSectionId: idFor('sec_2'),
+          questionId: outOfScope.id,
+          questionVersionId: outOfScope.versionId,
+          order: 2,
+          marks: 2,
+          negativeMarks: 0.5,
+        },
+      ],
+    });
+
+    const updated = await service.update(TEST, {
+      scope: TEST_SCOPE.SECTIONAL,
+      scopeRef: { sectionId: idFor('sec_1') },
+    });
+
+    assert.equal(updated.paperQuestionCount, 1);
+    const remaining = await prisma.paperQuestion.findMany({ where: { testId: TEST } });
+    assert.deepEqual(
+      remaining.map((row) => row.questionId),
+      [inScope.id],
+    );
   });
 });
 

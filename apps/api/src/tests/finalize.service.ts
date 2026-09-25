@@ -4,13 +4,14 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  scopedSections,
   TEST_STATUS,
   type OfferResult,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { unreadBySection } from '../assignments';
-import { paperCompletenessIssues } from './test-rules';
+import { paperCompletenessIssues, scopeRefOf } from './test-rules';
 
 const OFFER_SELECT = {
   id: true,
@@ -19,6 +20,8 @@ const OFFER_SELECT = {
   status: true,
   version: true,
   testSeriesId: true,
+  scope: true,
+  scopeRef: true,
 } as const satisfies Prisma.TestSelect;
 
 type OfferRow = Prisma.TestGetPayload<{ select: typeof OFFER_SELECT }>;
@@ -132,12 +135,13 @@ export class FinalizeService {
   ): Promise<void> {
     const sections = await tx.baseConfigSection.findMany({
       where: { baseConfigId: test.baseConfigId },
-      select: { id: true, name: true, questionCount: true },
+      select: { id: true, name: true, questionCount: true, moduleId: true },
       orderBy: { order: 'asc' },
     });
+    const scoped = scopedSections(sections, test.scope, scopeRefOf(test));
 
     const issues = paperCompletenessIssues(
-      sections,
+      scoped,
       paper.map((row) => row.baseConfigSectionId),
     );
     const [first] = issues;

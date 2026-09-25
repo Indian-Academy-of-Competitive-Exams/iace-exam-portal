@@ -6,6 +6,7 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   PAPER_SOURCES,
+  scopedSections,
   TEST_SCOPE,
   fieldDiff,
   type BaseConfigDetail,
@@ -201,6 +202,17 @@ export class TestsService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (movesThePaper(input)) await beginPaperEdit(tx, id);
+      // A row outside the new scope cannot be judged complete or offered, so a narrower scope drops it.
+      if (input.scope !== undefined || input.scopeRef !== undefined) {
+        const keptIds = scopedSections(config.sections, scope, scopeRef).map(
+          (section) => section.id,
+        );
+        if (keptIds.length > 0) {
+          await tx.paperQuestion.deleteMany({
+            where: { testId: id, baseConfigSectionId: { notIn: keptIds } },
+          });
+        }
+      }
       // A picked test has no typist, and a row nobody will finalize would hold `offer` shut forever.
       if (input.paperSource === PAPER_SOURCES.PICKED) {
         await tx.questionAssignment.deleteMany({

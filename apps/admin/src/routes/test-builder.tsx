@@ -144,7 +144,16 @@ function TestBuilder({
   const config = detail?.baseConfig ?? chosenConfig.data ?? null;
 
   const save = useMutation({
-    meta: { success: existing ? 'Test saved.' : 'Draft test created.' },
+    meta: {
+      // Counted by the server: a narrower scope can drop rows the old one held.
+      success: (saved: TestDetail): string => {
+        const base = existing ? 'Test saved.' : 'Draft test created.';
+        const dropped = (detail?.paperQuestionCount ?? 0) - saved.paperQuestionCount;
+        return dropped > 0
+          ? `${base} ${plural(dropped, 'question')} dropped, now outside scope.`
+          : base;
+      },
+    },
     mutationFn: ({ values }: { values: TestFormValues; target: TestBuilderStep }) => {
       const title = values.title.trim();
       // A sat test refuses everything else, so a rename must not carry the rest along with it.
