@@ -825,6 +825,39 @@ describe('QuestionsService — finding a question again', () => {
     assert.equal(found.items.length, 1);
   });
 
+  /** Three arms of one UNION: a term matching any of them finds the question, and only it. */
+  it('finds a question by its stem, by its code, and by a tag', async () => {
+    const { questions } = await build();
+    await questions.create(
+      live({ stem: { en: '<p>Compound interest on a sum</p>', hi: '<p>चक्रवृद्धि ब्याज</p>' } }),
+      ADMIN,
+    );
+    await questions.create(
+      live({
+        questionCode: 'RRB-JE-0042',
+        stem: { en: '<p>Speed of a train</p>', hi: '<p>रेल की गति</p>' },
+      }),
+      ADMIN,
+    );
+    await questions.create(
+      live({
+        tags: ['mensuration drill'],
+        stem: { en: '<p>Area of a trapezium</p>', hi: '<p>समलम्ब का क्षेत्रफल</p>' },
+      }),
+      ADMIN,
+    );
+
+    const byStem = await questions.list(listQuery({ q: 'Compound interest' }));
+    const byCode = await questions.list(listQuery({ q: 'JE-0042' }));
+    const byTag = await questions.list(listQuery({ q: 'mensuration drill' }));
+
+    assert.deepEqual(
+      [byStem.items.length, byCode.items.length, byTag.items.length],
+      [1, 1, 1],
+      'each arm finds its own question and nothing else',
+    );
+  });
+
   /** An archived twin is not in the list the admin is sent back to, so the error has to say so. */
   it('says where the duplicate is when it is out of circulation', async () => {
     const { questions } = await build();

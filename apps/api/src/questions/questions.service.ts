@@ -575,21 +575,21 @@ export class QuestionsService {
     return row;
   }
 
-  /**
-   * Search runs as its own query because the stem is JSON on the version: a question is nodes
-   * per language, so no column holds the text a `contains` filter would read.
-   */
+  /** Its own query: the stem is JSON on the version, so no column holds text a filter could read. */
   private async searchIds(term: string): Promise<string[]> {
     // Content is stored as html, so "Ram & Shyam" sits in it as "Ram &amp; Shyam".
     const like = `%${escapeForContent(term)}%`;
     // A tag is stored as the admin typed it, so the escaping the html content needs would miss it.
     const tagLike = `%${term}%`;
+    // A UNION, not an OR: Postgres builds a BitmapOr within one relation, never across a join.
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT q."id" FROM "Question" q
-      LEFT JOIN "QuestionVersion" v ON v."id" = q."currentVersionId" AND v."questionId" = q."id"
-      WHERE v."content"::text ILIKE ${like}
-         OR q."questionCode" ILIKE ${like}
-         OR EXISTS (SELECT 1 FROM unnest(q."tags") AS tag WHERE tag ILIKE ${tagLike})
+        JOIN "QuestionVersion" v ON v."id" = q."currentVersionId" AND v."questionId" = q."id"
+        WHERE v."content"::text ILIKE ${like}
+      UNION
+      SELECT q."id" FROM "Question" q WHERE q."questionCode" ILIKE ${like}
+      UNION
+      SELECT q."id" FROM "Question" q WHERE "tagsText"(q."tags") ILIKE ${tagLike}
     `;
     return rows.map((row) => row.id);
   }
