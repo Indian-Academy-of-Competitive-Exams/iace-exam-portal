@@ -34,6 +34,7 @@ const production = (over: Record<string, string> = {}): Record<string, string> =
     CORS_ORIGINS: 'https://admin.iace.co.in',
     METRICS_TOKEN: 'scraper-token',
     DATABASE_URL: SIZED_POOL,
+    TRUST_PROXY_HOPS: '1',
     ...over,
   });
 
@@ -107,6 +108,24 @@ describe('the database pool', () => {
 
   it('leaves development alone, where one process serves everything', () => {
     assert.ok(validateEnv(env()).DATABASE_URL);
+  });
+});
+
+describe('the proxy hop count', () => {
+  /** The failure this prevents: a hall of phones sharing Caddy's address in ONE rate-limit bucket. */
+  it('refuses to boot production trusting no proxy', () => {
+    assert.throws(
+      () => validateEnv(production({ TRUST_PROXY_HOPS: '0' })),
+      /TRUST_PROXY_HOPS.*bucket/s,
+    );
+  });
+
+  it('boots production once the hops are counted', () => {
+    assert.equal(validateEnv(production()).TRUST_PROXY_HOPS, 1);
+  });
+
+  it('leaves development alone, where nothing proxies', () => {
+    assert.equal(validateEnv(env()).TRUST_PROXY_HOPS, 0);
   });
 });
 

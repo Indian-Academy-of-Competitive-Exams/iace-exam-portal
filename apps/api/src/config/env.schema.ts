@@ -211,6 +211,10 @@ const metricsAreGuarded = (env: z.infer<typeof envSchema>): boolean =>
 const poolIsSized = (env: z.infer<typeof envSchema>): boolean =>
   env.NODE_ENV !== NODE_ENVS.PRODUCTION || /[?&]connection_limit=\d/.test(env.DATABASE_URL);
 
+/** Production always sits behind Caddy, so hops=0 keys every caller's rate limit to one address. */
+const proxyIsCounted = (env: z.infer<typeof envSchema>): boolean =>
+  env.NODE_ENV !== NODE_ENVS.PRODUCTION || env.TRUST_PROXY_HOPS > 0;
+
 /** Every secret `.env.example` publishes is prefixed with this, so the prefix IS the marker. */
 const DEV_ONLY_SECRET = 'dev_only_';
 
@@ -242,6 +246,11 @@ export const envSchemaChecked = envSchema
   .refine(metricsAreGuarded, {
     path: ['METRICS_TOKEN'],
     message: 'is required in production — /metrics would otherwise answer anybody who asked',
+  })
+  .refine(proxyIsCounted, {
+    path: ['TRUST_PROXY_HOPS'],
+    message:
+      'must count the proxies in front of production (Caddy is 1) — at 0 every caller shares one rate-limit bucket and the hall locks itself out',
   })
   .refine(secretIsReal('JWT_ACCESS_SECRET'), {
     path: ['JWT_ACCESS_SECRET'],
