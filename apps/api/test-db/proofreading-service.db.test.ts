@@ -367,6 +367,7 @@ describe('ProofreadingService.otherTests', () => {
     const live = await makeTest(prisma, section.catalog, {
       title: 'Grand Test 4',
       status: TEST_STATUS.ACTIVE,
+      finalizedAt: new Date(),
       opensAt: opened,
     });
     const liveSection = await makeSection(prisma, section.catalog, {

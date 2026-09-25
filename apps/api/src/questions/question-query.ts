@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client';
 import {
   QUESTION_SORTS,
   QUESTION_STATUS,
-  TEST_STATUS,
   WRITTEN_FOR,
   type QuestionListQuery,
   type QuestionSort,
@@ -13,7 +12,8 @@ import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute
 
 /** Spec §3: reachable is `min(Test.opensAt, min(TestProgramUnlock.opensAt)) <= now`, a program opening earlier than its test included. */
 export const reachableTest = (now: Date): Prisma.TestWhereInput => ({
-  status: { not: TEST_STATUS.DRAFT },
+  // The offer watermark itself, not `status <> DRAFT`: a never-offered draft can be set INACTIVE.
+  finalizedAt: { not: null },
   OR: [
     { opensAt: null },
     { opensAt: { lte: now } },

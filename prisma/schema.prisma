@@ -146,6 +146,8 @@ enum AttemptStatus {
   IN_PROGRESS
   SUBMITTED
   EVALUATED
+  // Reserved, never written - a stranded sitting ends SUBMITTED so it is still scored. Writing it
+  // means choosing for SCORABLE, cohortSittingsOf and slotsAfter, which today all differ by default.
   EXPIRED
   // Archived by an admin (support console). Excluded from every rollup, leaderboard and cohort read.
   VOIDED

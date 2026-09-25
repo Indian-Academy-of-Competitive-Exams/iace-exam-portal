@@ -26,6 +26,7 @@ export const ATTEMPT_STATUS = {
   IN_PROGRESS: 'IN_PROGRESS',
   SUBMITTED: 'SUBMITTED',
   EVALUATED: 'EVALUATED',
+  /** Reserved, never written: a stranded sitting ends SUBMITTED. See the schema before writing it. */
   EXPIRED: 'EXPIRED',
   /** Archived by an admin: excluded from every rollup, leaderboard and cohort read. */
   VOIDED: 'VOIDED',

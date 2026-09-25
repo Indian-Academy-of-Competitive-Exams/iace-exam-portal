@@ -48,6 +48,8 @@ export interface Catalog {
 export interface TestOverrides {
   title?: string | null;
   status?: TestStatus;
+  /** The offer watermark: an ACTIVE test always carries one, so a fixture standing one up must too. */
+  finalizedAt?: Date | null;
   opensAt?: Date | null;
   scope?: TestScope;
   seriesOrder?: number;

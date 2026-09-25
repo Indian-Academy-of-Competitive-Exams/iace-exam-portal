@@ -195,7 +195,11 @@ async function pinnedOn(questionId: string, questionVersionId: string) {
 const openedAgo = (testId: string) =>
   prisma.test.update({
     where: { id: testId },
-    data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() - 60_000) },
+    data: {
+      status: TEST_STATUS.ACTIVE,
+      finalizedAt: new Date(),
+      opensAt: new Date(Date.now() - 60_000),
+    },
   });
 
 const currentVersionOf = async (id: string) => (await questionRow(id)).currentVersionId ?? '';
@@ -630,7 +634,11 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     });
     await prisma.test.update({
       where: { id: testId },
-      data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() + 86_400_000) },
+      data: {
+        status: TEST_STATUS.ACTIVE,
+        finalizedAt: new Date(),
+        opensAt: new Date(Date.now() + 86_400_000),
+      },
     });
     await prisma.testProgramUnlock.create({
       data: { testId, programCode: program.code, opensAt: new Date(Date.now() - 60_000) },
@@ -655,6 +663,21 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     assert.equal((await versions()).length, 1, 'a DRAFT test reaches nobody, past opensAt or not');
   });
 
+  /** The bug this prevents: retiring a half-built test pinning its questions as if it had been offered. */
+  it('leaves a never-offered test unreachable once an admin retires it', async () => {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    await prisma.test.update({
+      where: { id: testId },
+      data: { status: TEST_STATUS.INACTIVE, opensAt: new Date(Date.now() - 60_000) },
+    });
+
+    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal((await versions()).length, 1, 'no offer, so no student ever reached this paper');
+  });
+
   /** The design's central case: offered, so no longer DRAFT, but its own clock has not struck yet. */
   it('rewrites in place while an offered test has not opened yet', async () => {
     const { questions } = await build();
@@ -663,7 +686,11 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     const { testId } = await pinnedOn(created.id, versionId);
     await prisma.test.update({
       where: { id: testId },
-      data: { status: TEST_STATUS.ACTIVE, opensAt: new Date(Date.now() + 86_400_000) },
+      data: {
+        status: TEST_STATUS.ACTIVE,
+        finalizedAt: new Date(),
+        opensAt: new Date(Date.now() + 86_400_000),
+      },
     });
 
     const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
@@ -679,7 +706,10 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     const created = await questions.create(live(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     const { testId } = await pinnedOn(created.id, versionId);
-    await prisma.test.update({ where: { id: testId }, data: { status: TEST_STATUS.ACTIVE } });
+    await prisma.test.update({
+      where: { id: testId },
+      data: { status: TEST_STATUS.ACTIVE, finalizedAt: new Date() },
+    });
 
     const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
 
