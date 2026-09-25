@@ -329,6 +329,30 @@ async function importQuestions(...stems: string[]) {
   return { logId: log?.id ?? '', result };
 }
 
+describe('QuestionImportService — recognising what the bank already holds', () => {
+  /** The dedup read is scoped to this sheet's own hashes, so it must still find the bank's copy. */
+  it('skips a stem already in the bank rather than importing it twice', async () => {
+    const stem = 'What is 20% of 150?';
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const service = new QuestionImportService(
+      prisma,
+      new FakeStorage() as never,
+      new AuditService(prisma, new FakeStorage() as never),
+    );
+    const run = async (...stems: string[]) => {
+      await service.preview(questionSheet(...stems), ADMIN);
+      const logs = await importLogs();
+      return service.commit(logs[logs.length - 1]?.id ?? '');
+    };
+    assert.equal((await run(stem)).created, 1);
+
+    const again = await run(stem, 'What is 30% of 200?');
+
+    assert.equal(again.created, 1, 'only the new stem is written');
+    assert.equal(await prisma.question.count(), 2);
+  });
+});
+
 describe('QuestionImportService.commit — the rows a question sheet leaves behind', () => {
   /** The failure this prevents: a thousand-question import nothing in the Activity tab can trace back. */
   it('writes one audit row per created question, pointing at the run, with no diff', async () => {

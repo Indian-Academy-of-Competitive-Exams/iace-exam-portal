@@ -53,7 +53,15 @@ export interface PlannedRow extends QuestionImportRow {
   /** Only for a row that will be created. Never sent to the client. */
   draft: QuestionDraft | null;
   stemHash: string | null;
+  /** As the schema parsed it, which is what the bank would be asked about. */
+  questionCode: string | null;
 }
+
+/** A first pass has nothing to compare against: it runs to harvest the keys the bank is asked for. */
+export const NO_DEDUP: ImportDedupContext = {
+  questionIdByHash: new Map(),
+  questionIdByCode: new Map(),
+};
 
 export interface QuestionImportPlanning extends Omit<QuestionImportPlan, 'importLogId'> {
   rows: PlannedRow[];
@@ -201,6 +209,7 @@ function planRow(
     duplicateOf,
     draft: action === 'create' ? draft : null,
     stemHash,
+    questionCode: code ?? null,
   };
 }
 

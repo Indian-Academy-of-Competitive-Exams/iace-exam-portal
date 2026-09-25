@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { buildContent, type BuiltQuestion } from './question-core';
 import {
+  NO_DEDUP,
   planQuestionImport,
   withoutDrafts,
   type ImportDedupContext,
@@ -177,16 +178,19 @@ export class QuestionImportService {
     });
     const catalog = await loadTaxonomyCatalog(this.prisma);
 
-    return planQuestionImport(table, catalog, await this.dedupContext());
+    // Planned twice: the first pass only harvests the keys the bank is then asked about.
+    const harvest = planQuestionImport(table, catalog, NO_DEDUP);
+    return planQuestionImport(table, catalog, await this.dedupContext(harvest.rows));
   }
 
-  /**
-   * What the bank already holds, in two reads rather than two per row. Only the
-   * hash and the code are needed, so even a large bank is a small payload.
-   */
-  private async dedupContext(): Promise<ImportDedupContext> {
+  /** Only the rows this sheet could clash with: the whole bank was read to answer a few hundred asks. */
+  private async dedupContext(planned: readonly PlannedRow[]): Promise<ImportDedupContext> {
+    const hashes = planned.flatMap((row) => (row.stemHash === null ? [] : [row.stemHash]));
+    const codes = planned.flatMap((row) => (row.questionCode === null ? [] : [row.questionCode]));
+    if (hashes.length === 0 && codes.length === 0) return NO_DEDUP;
+
     const rows = await this.prisma.question.findMany({
-      where: { stemHash: { not: null } },
+      where: { OR: [{ stemHash: { in: hashes } }, { questionCode: { in: codes } }] },
       select: { id: true, stemHash: true, questionCode: true },
     });
 
