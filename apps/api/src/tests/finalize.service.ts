@@ -58,7 +58,7 @@ export class FinalizeService {
     return offered;
   }
 
-  /** The first offer, and the only one that freezes anything or counts a question's use. */
+  /** The first offer, and the only one that freezes anything. */
   private async freeze(test: OfferRow): Promise<OfferResult> {
     const finalizedAt = new Date();
     const frozen = await this.prisma.$transaction(async (tx) => {
@@ -79,13 +79,6 @@ export class FinalizeService {
       // Throwing here rolls the claim back, so a paper that is not whole leaves the test a draft.
       await this.assertPaperIsWhole(tx, test, paper);
 
-      const served = [...new Set(paper.map((row) => row.questionId))];
-      if (served.length > 0) {
-        await tx.question.updateMany({
-          where: { id: { in: served } },
-          data: { fixedUseCount: { increment: 1 } },
-        });
-      }
       return paper.length;
     }, FREEZE_LIMITS);
 

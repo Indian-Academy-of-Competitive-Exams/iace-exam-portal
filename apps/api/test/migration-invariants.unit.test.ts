@@ -71,7 +71,6 @@ describe('soft delete releases a unique slot', () => {
   for (const [table, column] of [
     ['Student', 'mobile'],
     ['Student', 'externalRef'],
-    ['Branch', 'name'],
   ]) {
     it(`${table}.${column} is unique only among rows that are not deleted`, () => {
       assert.match(

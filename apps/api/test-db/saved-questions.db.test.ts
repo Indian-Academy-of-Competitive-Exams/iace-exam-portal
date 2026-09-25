@@ -195,3 +195,29 @@ describe('SavedQuestionsService — what a revision list is filtered and read by
     assert.equal(facets.subjects.length, 1);
   });
 });
+
+describe('SavedQuestionsService — provenance nulls rather than dangles', () => {
+  /** F5: attemptId and paperQuestionId are now a real FK, so what they name going away nulls them. */
+  it('nulls both once the sitting and the paper row they came from are gone, and the star survives', async () => {
+    const { student, sitting, first } = await world();
+    await saved.bookmark(student.id, { attemptId: sitting.id, questionId: first.id });
+    const before = await prisma.savedQuestion.findFirstOrThrow({
+      where: { studentId: student.id, questionId: first.id },
+    });
+    assert.equal(before.attemptId, sitting.id);
+    assert.ok(before.paperQuestionId);
+
+    await prisma.attempt.delete({ where: { id: sitting.id } });
+    await prisma.paperQuestion.delete({ where: { id: before.paperQuestionId ?? '' } });
+
+    const after = await prisma.savedQuestion.findUniqueOrThrow({ where: { id: before.id } });
+    assert.deepEqual([after.attemptId, after.paperQuestionId], [null, null]);
+
+    const page = await saved.list(student.id, { page: 1, pageSize: 20 });
+    assert.deepEqual(
+      page.items.map((row) => row.questionId),
+      [first.id],
+    );
+    assert.equal(page.items[0]?.testId, null);
+  });
+});

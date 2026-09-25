@@ -101,7 +101,7 @@ export class BranchesService {
 
   async create(input: CreateBranchBody): Promise<Branch> {
     // The name arrives canonical from the schema, so this catches the real duplicate rather than a differently-typed one.
-    const clash = await this.findLiveByName(input.name);
+    const clash = await this.findByName(input.name);
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'That branch already exists', {
         fieldErrors: { name: ['That branch already exists'] },
@@ -129,7 +129,7 @@ export class BranchesService {
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     if (input.name !== undefined && input.name !== branch.name) {
-      const clash = await this.findLiveByName(input.name);
+      const clash = await this.findByName(input.name);
       if (clash) {
         throw new AppException(ErrorCodes.CONFLICT, 'That branch already exists', {
           fieldErrors: { name: ['That branch already exists'] },
@@ -186,14 +186,13 @@ export class BranchesService {
 
   private findLiveVirtual(): Promise<{ id: string } | null> {
     return this.prisma.branch.findFirst({
-      where: { type: BRANCH_TYPE.VIRTUAL, deletedAt: null },
+      where: { type: BRANCH_TYPE.VIRTUAL },
       select: { id: true },
     });
   }
 
-  /** `name` is unique only among live rows, so this is a filtered read, not a lookup by key. */
-  private findLiveByName(name: string): Promise<{ id: string } | null> {
-    return this.prisma.branch.findFirst({ where: { name, deletedAt: null }, select: { id: true } });
+  private findByName(name: string): Promise<{ id: string } | null> {
+    return this.prisma.branch.findUnique({ where: { name }, select: { id: true } });
   }
 
   private async requireBranch(id: string): Promise<BranchRow> {

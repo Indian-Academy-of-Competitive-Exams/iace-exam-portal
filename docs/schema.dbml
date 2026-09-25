@@ -371,7 +371,6 @@ Table Question {
   currentVersionId uuid
   tags text [not null, note: 'array']
   stemHash text
-  fixedUseCount integer [not null, default: 0]
   assignmentId uuid
   releasedAt timestamptz(3)
   createdById uuid
@@ -381,7 +380,6 @@ Table Question {
     (subjectId, difficulty, status)
     (topicId)
     (stemHash)
-    (fixedUseCount)
     (createdById)
     (assignmentId)
     (tags)
@@ -610,15 +608,11 @@ Table AdminFeaturePermission {
 
 Table Branch {
   id uuid [pk, default: `uuid(7)`]
-  name text [not null]
+  name text [unique, not null]
   type BranchType [not null]
   isActive boolean [not null, default: true]
-  deletedAt timestamptz(3)
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
-  indexes {
-    (name)
-  }
 }
 
 Table Program {
@@ -917,6 +911,8 @@ Table SavedQuestion {
   indexes {
     (studentId, questionId) [unique]
     (studentId, createdAt)
+    (attemptId)
+    (paperQuestionId)
   }
 }
 
@@ -983,6 +979,8 @@ Ref: PushSubscription.studentId > Student.id [delete: cascade]
 Ref: PushDevice.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.questionId > Question.id
+Ref: SavedQuestion.attemptId > Attempt.id [delete: set null]
+Ref: SavedQuestion.paperQuestionId > PaperQuestion.id [delete: set null]
 
 // ============================================================================
 // Table groups. Colors are kept as trailing comments: @dbml/core rejects

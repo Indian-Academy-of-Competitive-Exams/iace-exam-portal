@@ -14,7 +14,6 @@ import { FakeEventBus } from '../test/support/fakes';
 import {
   makeAdmin,
   makePaper,
-  makeQuestion,
   resetDatabase,
   testPrisma,
   uid,
@@ -69,14 +68,6 @@ const configRow = (paper: Paper) =>
   prisma.baseConfig.findUniqueOrThrow({ where: { id: paper.catalog.baseConfigId } });
 
 const statusOf = async (paper: Paper): Promise<TestStatus> => (await testRow(paper)).status;
-
-const useCounts = async (paper: Paper) =>
-  (
-    await prisma.question.findMany({
-      where: { id: { in: paper.items.map((item) => item.questionId) } },
-      select: { fixedUseCount: true },
-    })
-  ).map((row) => row.fixedUseCount);
 
 /** A section read at a moment, so a paper question added after it is provably uncovered. */
 async function readAt(paper: Paper, sectionIndex: number, when: Date) {
@@ -171,18 +162,6 @@ describe('FinalizeService — the offer freezes the paper', () => {
 
     assert.equal((await configRow(paper)).locked, false);
   });
-
-  /** `fixedUseCount` is what LEAST_SERVED ranks on, so a double count would bias every later draw. */
-  it('counts each frozen question once against the bank, and one not on the paper not at all', async () => {
-    const paper = await draft();
-    const unused = await makeQuestion(prisma, { subjectId: paper.items[0]?.subjectId ?? '' });
-
-    await service.offer(paper.testId);
-
-    assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
-    const untouched = await prisma.question.findUniqueOrThrow({ where: { id: unused.id } });
-    assert.equal(untouched.fixedUseCount, 0);
-  });
 });
 
 describe('FinalizeService — a second offer', () => {
@@ -195,8 +174,6 @@ describe('FinalizeService — a second offer', () => {
     assert.equal(first.finalizedByThisCall, true);
     assert.equal(second.finalizedByThisCall, false);
     assert.equal(second.finalizedAt, first.finalizedAt);
-    // The failure this prevents: every question on the paper counted twice.
-    assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
     assert.equal((await testRow(paper)).version, 1);
   });
 
@@ -208,11 +185,10 @@ describe('FinalizeService — a second offer', () => {
     // Both read version 0; only the one whose conditional update still matched may write.
     assert.equal(results.filter((result) => result.finalizedByThisCall).length, 1);
     assert.equal((await testRow(paper)).version, 1);
-    assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
   });
 
-  /** `finalizedAt` is the watermark: without it a retired test re-offered counts its paper twice. */
-  it('opens a retired test again without re-freezing or re-counting its paper', async () => {
+  /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
+  it('opens a retired test again without re-freezing its paper', async () => {
     const paper = await draft();
     const first = await service.offer(paper.testId);
     await prisma.test.update({
@@ -226,7 +202,6 @@ describe('FinalizeService — a second offer', () => {
     assert.equal(again.finalizedByThisCall, false);
     assert.equal(again.finalizedAt, first.finalizedAt);
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
-    assert.deepEqual(await useCounts(paper), [1, 1, 1, 1, 1]);
   });
 });
 
@@ -280,7 +255,6 @@ describe('FinalizeService — what it refuses to offer', () => {
     const test = await testRow(paper);
     assert.deepEqual([test.finalizedAt, test.status, test.version], [null, TEST_STATUS.DRAFT, 0]);
     assert.equal((await configRow(paper)).locked, false);
-    assert.deepEqual(await useCounts(paper), [0, 0, 0, 0]);
   });
 
   it('refuses a test that does not exist', async () => {

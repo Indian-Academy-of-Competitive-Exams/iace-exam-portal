@@ -311,7 +311,7 @@ export class ImportsService {
     // Whole small catalogs: cheaper than a lookup per row, and a roster repeats a branch.
     const [branches, exams, programs, students] = await Promise.all([
       this.prisma.branch.findMany({
-        where: { isActive: true, deletedAt: null },
+        where: { isActive: true },
         select: { id: true, name: true, type: true },
       }),
       this.prisma.exam.findMany({ where: { isActive: true }, select: { code: true } }),

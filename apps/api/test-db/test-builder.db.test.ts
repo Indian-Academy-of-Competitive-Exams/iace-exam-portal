@@ -102,14 +102,6 @@ async function builder() {
 const rowsOf = (testId: string) =>
   prisma.paperQuestion.findMany({ where: { testId }, orderBy: { order: 'asc' } });
 
-const useCounts = async (ids: readonly string[]) =>
-  (
-    await prisma.question.findMany({
-      where: { id: { in: [...ids] } },
-      select: { fixedUseCount: true },
-    })
-  ).map((row) => row.fixedUseCount);
-
 const testRow = (id: string) => prisma.test.findUniqueOrThrow({ where: { id } });
 
 describe('the Phase-2 milestone — a config becomes a publishable mock', () => {
@@ -177,10 +169,6 @@ describe('the invariants Phase 2 must not have broken', () => {
       (await rowsOf(draft.id)).map((row) => row.questionId),
       held,
     );
-    assert.deepEqual(
-      await useCounts(held),
-      held.map(() => 1),
-    );
   });
 
   /** The failure this prevents: a live paper moving under students who can already reach it. */
@@ -197,22 +185,5 @@ describe('the invariants Phase 2 must not have broken', () => {
       conflict,
     );
     await assert.rejects(() => paper.removeQuestions(draft.id, [first?.id ?? '']), conflict);
-
-    // Nothing gives the offer's count back, because nothing can move the paper it counted.
-    const drawn = (await rowsOf(draft.id)).map((row) => row.questionId);
-    assert.deepEqual(
-      await useCounts(drawn),
-      drawn.map(() => 1),
-    );
-  });
-
-  it('counts nothing for a paper that has never been offered', async () => {
-    const { draft, paper, pickWholePaper } = await builder();
-
-    await pickWholePaper();
-    await paper.removeQuestions(draft.id, [(await rowsOf(draft.id))[0]?.id ?? '']);
-
-    const everyCount = await prisma.question.findMany({ select: { fixedUseCount: true } });
-    assert.ok(everyCount.every((row) => row.fixedUseCount === 0));
   });
 });

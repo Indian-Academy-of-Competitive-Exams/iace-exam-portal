@@ -227,7 +227,6 @@ export class TestSeriesService {
   async branches(id: string): Promise<SeriesBranch[]> {
     const series = await this.requireSeries(id);
     const rows = await this.prisma.branch.findMany({
-      where: { deletedAt: null },
       select: { id: true, name: true },
       orderBy: [{ name: 'asc' }],
     });
@@ -273,7 +272,7 @@ export class TestSeriesService {
   private async assertBranchesLive(branchIds: readonly string[]): Promise<void> {
     if (branchIds.length === 0) return;
     const found = await this.prisma.branch.count({
-      where: { id: { in: [...branchIds] }, deletedAt: null },
+      where: { id: { in: [...branchIds] } },
     });
     if (found === branchIds.length) return;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, NO_SUCH_BRANCH_MESSAGE, {
@@ -308,7 +307,7 @@ export class TestSeriesService {
   }
 
   private async liveBranchCount(): Promise<number> {
-    return this.prisma.branch.count({ where: { deletedAt: null } });
+    return this.prisma.branch.count();
   }
 }
 

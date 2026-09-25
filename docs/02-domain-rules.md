@@ -84,8 +84,8 @@ Setup, then paper, then offer. There is no certificate step.
   the test a draft.
 - The offer is a conditional update on the test's version. Two offers cannot both win, and a request
   that lost writes nothing.
-- The offer increments `Question.fixedUseCount` for every question it served, once. `finalizedAt` is
-  the watermark that makes it idempotent: a retired test offered again only changes status.
+- `finalizedAt` is the watermark that makes a repeated offer idempotent: a retired test offered again
+  only changes status, and never re-freezes or re-draws its paper.
 - Offering needs a whole paper and every assignment read. The series it reaches a student through is
   not a second condition: a test is created inside one and cannot leave.
 - **An offered test's paper no longer moves** — adding, replacing and removing are refused, and so is

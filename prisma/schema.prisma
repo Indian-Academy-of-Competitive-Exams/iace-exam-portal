@@ -456,8 +456,6 @@ model Question {
   // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
   stemHash         String?
-  // Times used on a paper; incremented atomically at finalize.
-  fixedUseCount    Int             @default(0)
   assignmentId     String?         @db.Uuid
   // Set when its typist hands the section's work so far to the proof-reader. Never cleared.
   releasedAt       DateTime?       @db.Timestamptz(3)
@@ -478,7 +476,6 @@ model Question {
   @@index([subjectId, difficulty, status])
   @@index([topicId])
   @@index([stemHash])
-  @@index([fixedUseCount])
   @@index([createdById])
   @@index([assignmentId])
   @@index([tags], type: Gin)
@@ -585,6 +582,7 @@ model PaperQuestion {
   question          Question           @relation(fields: [questionId], references: [id])
   questionVersion   QuestionVersion    @relation(fields: [questionId, questionVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
   questionStats     TestQuestionStat[]
+  savedQuestions    SavedQuestion[]
 
   @@unique([testId, questionId])
   @@unique([testId, order])
@@ -675,10 +673,11 @@ model Attempt {
   voidReason       String?
   voidedById       String?             @db.Uuid
 
-  test     Test          @relation(fields: [testId], references: [id])
-  student  Student       @relation(fields: [studentId], references: [id])
-  sheet    AttemptSheet?
-  topperOf TestStat[]
+  test           Test            @relation(fields: [testId], references: [id])
+  student        Student         @relation(fields: [studentId], references: [id])
+  sheet          AttemptSheet?
+  topperOf       TestStat[]
+  savedQuestions SavedQuestion[]
 
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
@@ -823,19 +822,15 @@ model AdminFeaturePermission {
 // gates them all, and there are no groups.
 // ============================================================================
 
-// name carries a partial unique index (WHERE deletedAt IS NULL) from the migration.
 model Branch {
   id        String     @id @default(uuid(7)) @db.Uuid
-  name      String
+  name      String     @unique
   type      BranchType
   isActive  Boolean    @default(true)
-  deletedAt DateTime?  @db.Timestamptz(3)
   createdAt DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
 
   students Student[]
-
-  @@index([name])
 }
 
 // A new coaching variant is one INSERT, never a migration.
@@ -1232,9 +1227,13 @@ model SavedQuestion {
   paperQuestionId String?  @db.Uuid
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
 
-  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  question Question @relation(fields: [questionId], references: [id])
+  student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question      Question       @relation(fields: [questionId], references: [id])
+  attempt       Attempt?       @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+  paperQuestion PaperQuestion? @relation(fields: [paperQuestionId], references: [id], onDelete: SetNull)
 
   @@unique([studentId, questionId])
   @@index([studentId, createdAt])
+  @@index([attemptId])
+  @@index([paperQuestionId])
 }

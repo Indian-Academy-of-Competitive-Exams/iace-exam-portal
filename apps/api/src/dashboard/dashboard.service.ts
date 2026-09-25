@@ -81,7 +81,7 @@ export class DashboardService {
 
   private async catalog() {
     const [branches, programs, exams] = await Promise.all([
-      this.prisma.branch.count({ where: { deletedAt: null } }),
+      this.prisma.branch.count(),
       this.prisma.program.count(),
       this.prisma.exam.count(),
     ]);

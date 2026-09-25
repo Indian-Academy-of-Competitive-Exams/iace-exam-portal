@@ -58,9 +58,9 @@ ON CONFLICT DO NOTHING;
 -- single-spaced. The application normalises what an admin types; nothing
 -- normalises a seed, so these are written correct.
 --
--- The guard is Branch_name_live_key — UNIQUE (name) WHERE "deletedAt" IS NULL —
--- so a database that already has these rows under different ids keeps them and
--- this file adds nothing. New devices get the fixed ids below.
+-- The guard is Branch_name_key — a plain UNIQUE (name) — so a database that
+-- already has these rows under different ids keeps them and this file adds
+-- nothing. New devices get the fixed ids below.
 --
 -- A branch a student still attends cannot be deleted, and a retired one takes
 -- no new students, so removing a centre from this list does not remove it from
