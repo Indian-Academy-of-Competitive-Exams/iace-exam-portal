@@ -252,6 +252,7 @@ function questionData(
     questionCode: draft.questionCode ?? null,
     tags: draft.tags,
     stemHash: built.stemHash,
+    stemHashVersion: built.stemHashVersion,
     createdById: actorId,
   };
 }

@@ -532,6 +532,9 @@ A new service worker installs but **does not activate until every tab of the old
 there is no `skipWaiting`, deliberately, because a bundle swapped under a sitting in progress is
 worse than a stale tab. Deploying and students seeing the new build are different moments.
 
+A release that bumps `STEM_HASH_VERSION` rehashes the bank in the worker as it boots, logging
+`Rehashed N question stems`. Until that line, an import can miss a duplicate — hold imports until it.
+
 Never during an event window, and never a migration that moves data without the rehearsal
 `docs/superpowers/task-constraints.md` prescribes.
 

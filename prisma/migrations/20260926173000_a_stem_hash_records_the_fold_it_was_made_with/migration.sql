@@ -1,0 +1,15 @@
+-- Question.stemHash is a sha256 of canonicalStemKey, and the fold behind that key changed: it used to
+-- strip every character that was not a letter or a digit, so "x = 2.5" and "x = 25" hashed alike and
+-- the second was skipped as a duplicate of the first. The new fold keeps signs, dashes, % and / and a
+-- decimal point between digits.
+--
+-- The hash is computed in JavaScript from the stored html (html to preview text, then the fold), so
+-- SQL cannot recompute it. This migration only records which fold each stored hash was made with:
+-- every existing row is version 1, the old fold. The worker recomputes every row below the version
+-- the code writes (STEM_HASH_VERSION, apps/api/src/questions/stem-rehash.service.ts) at boot, in
+-- batches, without touching "updatedAt" — the editor reads that column to detect an edit made
+-- elsewhere, so bumping it on every question would refuse every editor open during the deploy.
+--
+-- Until that pass has finished, an import compares new-fold hashes against old-fold rows and can miss
+-- a duplicate. The pass takes seconds on today's bank; do not import during the deploy.
+ALTER TABLE "Question" ADD COLUMN "stemHashVersion" INTEGER NOT NULL DEFAULT 1;

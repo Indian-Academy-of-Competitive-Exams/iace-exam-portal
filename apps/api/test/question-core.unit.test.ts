@@ -14,6 +14,7 @@ import {
   computeStemHash,
   emptyTaxonomy,
   languagesIn,
+  storedStemHash,
   validateQuestion,
   type TaxonomyContext,
 } from '../src/questions/question-core';
@@ -432,5 +433,28 @@ describe('computeStemHash', () => {
       computeStemHash(typed()),
       computeStemHash(typed({ answerKey: { mode: ANSWER_MODE.EXACT, answers: { en: 'Mumbai' } } })),
     );
+  });
+});
+
+describe('storedStemHash', () => {
+  const stored = (draft: QuestionDraft) => {
+    const built = buildContent(draft);
+    return storedStemHash({
+      type: draft.type,
+      content: built.content,
+      options: built.options.map((option) => ({ ...option, id: `opt_${option.position}` })),
+      answerKey: built.answerKey,
+    });
+  };
+
+  /** The failure this prevents: a rehashed question no longer matching its own re-import. */
+  it('equals the hash of the draft the stored question was built from', () => {
+    const pictured = mcq({
+      stem: { en: '<p>If x = 2.5, <img data-key="questions/images/ab.png"> what is 2x?</p>' },
+    });
+
+    assert.equal(stored(mcq()), computeStemHash(mcq()));
+    assert.equal(stored(pictured), computeStemHash(pictured));
+    assert.equal(stored(typed()), computeStemHash(typed()));
   });
 });

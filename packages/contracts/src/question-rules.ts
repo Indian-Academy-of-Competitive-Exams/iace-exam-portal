@@ -48,16 +48,10 @@ const plainOf = (value: string): string =>
 
 const squashed = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
-/** Case, spacing, punctuation and markup do not make a question different — but its figures do. */
+/** Case, spacing, markup and stray punctuation fold; signs and a decimal point do not: "7.5" is not "75". */
 function foldForCompare(value: string | undefined): string {
   if (!value) return '';
-  return squashed(plainOf(value).replace(/[^\p{L}\p{N}\s]/gu, ''));
-}
-
-/** An option's signs and decimal points ARE its answer: "7.5" is not "75", nor "+ and -" "- and ×". */
-function foldOptionForCompare(value: string | undefined): string {
-  if (!value) return '';
-  const kept = plainOf(value).replace(/[^\p{L}\p{N}\p{S}\s.%/-]/gu, '');
+  const kept = plainOf(value).replace(/[^\p{L}\p{N}\p{S}\p{Pd}\s.%/]/gu, '');
   return squashed(kept.replace(/(?<!\d)\.|\.(?!\d)/g, ''));
 }
 
@@ -209,7 +203,7 @@ function checkOptions(draft: QuestionDraft, issues: ValidationIssue[]): void {
   }
 
   const englishTexts = draft.options
-    .map((option) => foldOptionForCompare(option.text[DEFAULT_LANGUAGE]))
+    .map((option) => foldForCompare(option.text[DEFAULT_LANGUAGE]))
     .filter((text) => text !== '');
   if (new Set(englishTexts).size !== englishTexts.length) {
     issues.push({
@@ -341,8 +335,11 @@ function checkTaxonomy(
   }
 }
 
+/** What a question's identity is read from — all a stored version still has once the draft is gone. */
+export type StemKeyInput = Pick<QuestionDraft, 'type' | 'stem' | 'options' | 'answerKey'>;
+
 /** Two questions in one string: the stem, the options as a SET, and the correct one's text. */
-export function canonicalStemKey(draft: QuestionDraft): string {
+export function canonicalStemKey(draft: StemKeyInput): string {
   const stem = foldForCompare(draft.stem[DEFAULT_LANGUAGE]);
 
   if (draft.type === QUESTION_TYPE.TEXT_FIELD) {

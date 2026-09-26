@@ -458,6 +458,8 @@ model Question {
   // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
   stemHash         String?
+  // The fold stemHash was made with; the worker rehashes any row below the code's STEM_HASH_VERSION.
+  stemHashVersion  Int             @default(1)
   assignmentId     String?         @db.Uuid
   // Set when its typist hands the section's work so far to the proof-reader. Never cleared.
   releasedAt       DateTime?       @db.Timestamptz(3)

@@ -16,6 +16,8 @@ import {
   type LocalizedText,
   type QuestionDraft,
   type QuestionLanguage,
+  type QuestionOption,
+  type QuestionType,
   type RichContent,
   type TaxonomyContext,
   type ValidationIssue,
@@ -37,6 +39,7 @@ export interface BuiltQuestion {
   /** The languages this question was really authored in, in `LANGUAGE_ORDER`. */
   languages: QuestionLanguage[];
   stemHash: string;
+  stemHashVersion: number;
 }
 
 /** Markup is not content: the `<p></p>` an emptied editor box posts is an unanswered field. */
@@ -72,7 +75,14 @@ export function buildContent(draft: QuestionDraft): BuiltQuestion {
 
   const answerKey = draft.answerKey ? normaliseAnswerKey(draft.answerKey, languages) : null;
 
-  return { content, options, answerKey, languages, stemHash: computeStemHash(draft) };
+  return {
+    content,
+    options,
+    answerKey,
+    languages,
+    stemHash: computeStemHash(draft),
+    stemHashVersion: STEM_HASH_VERSION,
+  };
 }
 
 function normaliseAnswerKey(
@@ -106,8 +116,37 @@ export function validateQuestion(
   return validateAgainstRules(draft, taxonomy, mathErrorIn);
 }
 
+/** Bumped whenever canonicalStemKey's fold changes; the worker rehashes every row below it. */
+export const STEM_HASH_VERSION = 2;
+
 export function computeStemHash(draft: QuestionDraft): string {
   return createHash('sha256').update(canonicalStemKey(draft)).digest('hex');
+}
+
+/** What a stored question still says of itself, as the rehash reads it off its current version. */
+export interface StoredQuestion {
+  type: QuestionType;
+  content: LocalizedContent;
+  options: QuestionOption[];
+  answerKey: AnswerKeyDraft | null;
+}
+
+/** Through the html the editor would load and post back, so a rehash equals the next edit's hash. */
+export function storedStemHash(stored: StoredQuestion): string {
+  const english = (rich: LocalizedRich | undefined): LocalizedText => ({
+    [DEFAULT_LANGUAGE]: plainTextOf(rich?.[DEFAULT_LANGUAGE]),
+  });
+  const key = canonicalStemKey({
+    type: stored.type,
+    stem: { [DEFAULT_LANGUAGE]: plainTextOf(stored.content[DEFAULT_LANGUAGE]?.stem) },
+    options: stored.options.map((option) => ({
+      position: option.position,
+      isCorrect: option.isCorrect,
+      text: english(option.text),
+    })),
+    answerKey: stored.answerKey,
+  });
+  return createHash('sha256').update(key).digest('hex');
 }
 
 /** The English stem, shortened — what a list row and an import preview show. */

@@ -282,6 +282,24 @@ describe('canonicalStemKey — what makes two questions the same question', () =
     assert.equal(canonicalStemKey(one), canonicalStemKey(shouted));
   });
 
+  /** The failure this prevents: "x = 25" skipped on import as a duplicate of "x = 2.5". */
+  it('tells apart two stems that differ only by a decimal point or a sign', () => {
+    const decimal = sound({ stem: { en: '<p>If x = 2.5, what is 2x?</p>' } });
+    const whole = sound({ stem: { en: '<p>If x = 25, what is 2x?</p>' } });
+    const plus = sound({ stem: { en: '<p>Simplify a + b</p>' } });
+    const minus = sound({ stem: { en: '<p>Simplify a – b</p>' } });
+
+    assert.notEqual(canonicalStemKey(decimal), canonicalStemKey(whole));
+    assert.notEqual(canonicalStemKey(plus), canonicalStemKey(minus));
+  });
+
+  it('still reads through markup and a full stop that ends a sentence', () => {
+    const plain = sound({ stem: { en: '<p>If x = 2.5, what is 2x?</p>' } });
+    const marked = sound({ stem: { en: '<p><strong>IF</strong>  x = 2.5,   what is 2x.</p>' } });
+
+    assert.equal(canonicalStemKey(plain), canonicalStemKey(marked));
+  });
+
   /** A set, not a list: the same four options shuffled are the same question. */
   it('reads through the order the options were written in', () => {
     const one = sound();

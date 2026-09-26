@@ -271,7 +271,6 @@ Table ExamStage {
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
-    (examId)
     (examId, order)
     (disposition)
   }
@@ -374,6 +373,7 @@ Table Question {
   currentVersionId uuid
   tags text [not null, note: 'array']
   stemHash text
+  stemHashVersion integer [not null, default: 1]
   assignmentId uuid
   releasedAt timestamptz(3)
   createdById uuid
@@ -432,7 +432,6 @@ Table Test {
     (baseConfigId)
     (examStageId)
     (status)
-    (testSeriesId)
     (title)
   }
 }
@@ -474,7 +473,6 @@ Table QuestionAssignment {
   indexes {
     (testId, baseConfigSectionId, role) [unique]
     (assigneeId, finalizedAt)
-    (testId)
   }
 }
 

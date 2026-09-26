@@ -413,7 +413,11 @@ letter-based answer key are why real uploads were rejected wholesale.
 - **Preview, then commit.** Every row's outcome is shown first; a row with problems is listed with
   its reason and skipped; a stem already in the bank, or earlier in the same file, is a **duplicate**
   and is skipped rather than reported as an error — re-uploading a sheet with new questions on the
-  end is normal. Duplicates are found by normalised stem hash.
+  end is normal. Duplicates are found by normalised stem hash: case, spacing, markup and stray
+  punctuation fold away, but signs, dashes, `%`, `/` and a decimal point between digits do not —
+  "x = 2.5" and "x = 25" are two questions. Each row records the fold its hash was made with
+  (`stemHashVersion`); changing the fold means bumping `STEM_HASH_VERSION`, and the worker rehashes
+  every older row at boot.
 - Every imported question carries the `imported` tag, so one filter finds what an upload brought in.
 - An upload is bounded so it stays a single synchronous request.
 

@@ -564,6 +564,7 @@ export class QuestionsService {
       questionCode: draft.questionCode ?? null,
       tags: draft.tags,
       stemHash: built.stemHash,
+      stemHashVersion: built.stemHashVersion,
     } satisfies Omit<Prisma.QuestionUncheckedCreateInput, 'id'>;
   }
 

@@ -6,6 +6,7 @@ import { StorageModule } from '../storage/storage.module';
 import { AuthoringController } from './authoring.controller';
 import { AuthoringService } from './authoring.service';
 import { QuestionImportController } from './question-import.controller';
+import { StemRehashService } from './stem-rehash.service';
 import { QuestionImportService } from './question-import.service';
 import { ProofreadingController } from './proofreading.controller';
 import { ProofreadingService } from './proofreading.service';
@@ -40,6 +41,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     QuestionImportService,
     AuthoringService,
     ProofreadingService,
+    StemRehashService,
   ],
   exports: [QuestionsService, TaxonomyService],
 })
