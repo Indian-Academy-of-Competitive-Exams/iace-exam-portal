@@ -25,6 +25,7 @@ import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
+import { useErrorRows } from '../lib/use-error-rows';
 
 /** Preview, then commit. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
@@ -44,6 +45,9 @@ export function ImportStudentsPage() {
   });
 
   const plan = intake.plan;
+  const errorRows = useErrorRows(intake.file, plan?.summary.invalid ?? 0, (file) =>
+    api.admin.imports.studentErrors(file),
+  );
 
   return (
     <ImportView
@@ -76,6 +80,7 @@ export function ImportStudentsPage() {
           </>
         ) : null
       }
+      errorRows={errorRows}
       stats={
         plan
           ? [

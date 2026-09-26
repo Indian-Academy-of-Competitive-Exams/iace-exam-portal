@@ -22,6 +22,7 @@ import {
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
+import { useErrorRows } from '../lib/use-error-rows';
 import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 
 const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
@@ -51,6 +52,9 @@ export function ImportEventCandidatesPage() {
   });
 
   const plan = intake.plan;
+  const errorRows = useErrorRows(intake.file, plan?.summary.invalid ?? 0, (file) =>
+    api.admin.imports.eventCandidateErrors(id, file),
+  );
 
   return (
     <ImportView
@@ -83,6 +87,7 @@ export function ImportEventCandidatesPage() {
           ? `${intake.result.created} created, ${intake.result.added} on the event, ${intake.result.skipped} skipped.`
           : null
       }
+      errorRows={errorRows}
       stats={
         plan
           ? [

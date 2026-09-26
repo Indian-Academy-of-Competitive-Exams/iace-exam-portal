@@ -11,7 +11,14 @@ import {
   type QuestionImportPlan,
   type QuestionImportResult,
 } from '@iace/contracts';
-import { importFileKey, readUploadedTable } from '../common/importing';
+import {
+  importFileKey,
+  readUploadedTable,
+  refuseFileErrors,
+  rowsWithErrors,
+  type CsvTable,
+} from '../common/importing';
+import { type ExportSheet } from '../common/exporting';
 import { AuditService } from '../audit';
 import { requireOwnAssignment } from './assignment-guard';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
@@ -64,6 +71,17 @@ export class QuestionImportService {
     await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
 
     return withoutDrafts(planning, log.id);
+  }
+
+  /** The rows a preview would skip, as the file had them. Opens no run and stores nothing. */
+  async errorRows(file: Buffer): Promise<ExportSheet> {
+    const table = await readQuestionTable(file);
+    const planning = await this.planTable(table);
+    refuseFileErrors(planning.fileErrors);
+    return rowsWithErrors(
+      table,
+      new Map(planning.rows.map((row) => [row.line, row.issues.map((issue) => issue.message)])),
+    );
   }
 
   /** The same sheet, landing in one section rather than loose in the bank. */
@@ -162,9 +180,10 @@ export class QuestionImportService {
 
   /** Read, resolve, judge — the one path a preview and a commit both take. */
   private async plan(file: Buffer): Promise<QuestionImportPlanning> {
-    const table = await readUploadedTable(file, {
-      preferSheet: QUESTION_IMPORT_SHEETS.QUESTIONS,
-    });
+    return this.planTable(await readQuestionTable(file));
+  }
+
+  private async planTable(table: CsvTable): Promise<QuestionImportPlanning> {
     const catalog = await loadTaxonomyCatalog(this.prisma);
 
     // Planned twice: the first pass only harvests the keys the bank is then asked about.
@@ -231,6 +250,10 @@ function versionData(
     })) as unknown as Prisma.InputJsonValue,
     answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
   };
+}
+
+function readQuestionTable(file: Buffer): Promise<CsvTable> {
+  return readUploadedTable(file, { preferSheet: QUESTION_IMPORT_SHEETS.QUESTIONS });
 }
 
 /** What was wrong with the FILE, kept on the run so the history explains itself. */

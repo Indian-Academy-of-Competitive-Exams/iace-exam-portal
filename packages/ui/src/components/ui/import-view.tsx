@@ -38,6 +38,8 @@ export interface ImportViewProps {
   /** What the commit reported, once it has run. */
   outcome?: React.ReactNode;
   stats?: readonly ImportStat[];
+  /** Offered only while the preview has rows it would skip. */
+  errorRows?: { loading?: boolean; onDownload: () => void };
   /** The preview table. */
   children: React.ReactNode;
 }
@@ -55,6 +57,7 @@ export function ImportView({
   fileErrors,
   outcome,
   stats,
+  errorRows,
   children,
 }: Readonly<ImportViewProps>) {
   return (
@@ -123,6 +126,16 @@ export function ImportView({
                   <StatRow key={stat.label} label={stat.label} value={stat.value} />
                 ))}
               </div>
+              {errorRows ? (
+                <Button
+                  variant="outline"
+                  icon={<Download aria-hidden />}
+                  loading={errorRows.loading}
+                  onClick={errorRows.onDownload}
+                >
+                  Download rows with errors
+                </Button>
+              ) : null}
             </FormSection>
           ) : null}
         </Card>

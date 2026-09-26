@@ -230,8 +230,16 @@ export function createApiCore(options: ApiClientOptions) {
 
   /** A binary download, authenticated and refresh-aware; it cannot go through `parse` since reading the body as text would corrupt the file, but a FAILURE is still an envelope. */
   async function requestBlob(path: string, query: Record<string, unknown> = {}): Promise<Blob> {
-    const url = `${path}${queryString(query)}`;
-    let response = await send(url, 'GET', undefined, getAccessToken());
+    return blobOf(`${path}${queryString(query)}`, 'GET');
+  }
+
+  /** A file posted, a file back: the same download, with the upload as its body. */
+  async function requestUploadBlob(path: string, body: FormData): Promise<Blob> {
+    return blobOf(path, 'POST', body);
+  }
+
+  async function blobOf(url: string, method: 'GET' | 'POST', body?: FormData): Promise<Blob> {
+    let response = await send(url, method, body, getAccessToken());
 
     if (response.status === 401) {
       const refreshed = await refreshTokens();
@@ -239,7 +247,7 @@ export function createApiCore(options: ApiClientOptions) {
         if (sessionIsOver()) onUnauthorized?.();
         throw endedBy(refreshFailure, await peekFailure(response));
       }
-      response = await send(url, 'GET', undefined, refreshed.accessToken);
+      response = await send(url, method, body, refreshed.accessToken);
     }
 
     if (!response.ok) {
@@ -260,7 +268,7 @@ export function createApiCore(options: ApiClientOptions) {
   const list = <T>(path: string, query: object, schema: ZodType<T>) =>
     requestPaginated(`${path}${queryString({ ...query })}`, { schema: schema.array() });
 
-  return { request, requestPaginated, requestBlob, get, write, list };
+  return { request, requestPaginated, requestBlob, requestUploadBlob, get, write, list };
 }
 
 /** The shared transport every domain group calls through, never the schemas it carries. */

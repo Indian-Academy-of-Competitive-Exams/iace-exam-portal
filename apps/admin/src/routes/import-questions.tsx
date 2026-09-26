@@ -27,6 +27,7 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
 import { saveBlob } from '../lib/save-blob';
+import { useErrorRows } from '../lib/use-error-rows';
 
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
@@ -67,6 +68,10 @@ export function ImportQuestionsPage() {
   });
 
   const plan = intake.plan;
+  // A section's typist previews through authoring, which this bank-wide route does not answer for.
+  const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
+    api.admin.imports.questionErrors(file),
+  );
 
   return (
     <ImportView
@@ -109,6 +114,7 @@ export function ImportQuestionsPage() {
           </>
         ) : null
       }
+      errorRows={errorRows}
       stats={
         plan
           ? [

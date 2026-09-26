@@ -275,7 +275,7 @@ function fileBody(file: File): FormData {
 }
 
 export function adminClient(core: ApiCore) {
-  const { get, write, list, requestBlob } = core;
+  const { get, write, list, requestBlob, requestUploadBlob } = core;
 
   return {
     /** Watching one test's sittings, and resolving the ones that broke. */
@@ -894,6 +894,10 @@ export function adminClient(core: ApiCore) {
       commitStudents: (file: File): Promise<StudentImportResult> =>
         write('POST', IMPORT_ROUTES.studentsCommit, studentImportResultSchema, fileBody(file)),
 
+      /** The rows a preview skipped, with an Errors column — a Blob, not an envelope. */
+      studentErrors: (file: File): Promise<Blob> =>
+        requestUploadBlob(IMPORT_ROUTES.studentsErrors, fileBody(file)),
+
       /** The candidate sample — a Blob, not an envelope. */
       candidateTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.candidatesTemplate),
 
@@ -914,6 +918,9 @@ export function adminClient(core: ApiCore) {
           fileBody(file),
         ),
 
+      eventCandidateErrors: (eventId: string, file: File): Promise<Blob> =>
+        requestUploadBlob(IMPORT_ROUTES.eventCandidatesErrors(eventId), fileBody(file)),
+
       /** The program enrolment sample — a Blob, not an envelope. */
       programTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.programStudentsTemplate),
 
@@ -933,12 +940,19 @@ export function adminClient(core: ApiCore) {
           programImportResultSchema,
           fileBody(file),
         ),
+
+      programStudentErrors: (code: string, file: File): Promise<Blob> =>
+        requestUploadBlob(IMPORT_ROUTES.programStudentsErrors(code), fileBody(file)),
+
       /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */
       questionTemplate: (): Promise<Blob> => requestBlob(QUESTION_IMPORT_ROUTES.template),
 
       /** Uploads once — the file is kept and an import run opened, so committing names the run rather than sending the same megabytes twice. */
       previewQuestions: (file: File): Promise<QuestionImportPlan> =>
         write('POST', QUESTION_IMPORT_ROUTES.preview, questionImportPlanSchema, fileBody(file)),
+
+      questionErrors: (file: File): Promise<Blob> =>
+        requestUploadBlob(QUESTION_IMPORT_ROUTES.errors, fileBody(file)),
 
       commitQuestions: (importLogId: string): Promise<QuestionImportResult> =>
         write('POST', QUESTION_IMPORT_ROUTES.commit, questionImportResultSchema, {

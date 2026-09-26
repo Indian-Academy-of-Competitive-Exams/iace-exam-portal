@@ -22,6 +22,7 @@ import {
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
+import { useErrorRows } from '../lib/use-error-rows';
 import { NAV_ITEMS } from '../lib/constants';
 
 export function ImportProgramStudentsPage() {
@@ -40,6 +41,9 @@ export function ImportProgramStudentsPage() {
   });
 
   const plan = intake.plan;
+  const errorRows = useErrorRows(intake.file, plan?.summary.invalid ?? 0, (file) =>
+    api.admin.imports.programStudentErrors(code, file),
+  );
 
   return (
     <ImportView
@@ -72,6 +76,7 @@ export function ImportProgramStudentsPage() {
           ? `${intake.result.enrolled} enrolled, ${intake.result.alreadyEnrolled} already carried it, ${intake.result.skipped} skipped.`
           : null
       }
+      errorRows={errorRows}
       stats={
         plan
           ? [

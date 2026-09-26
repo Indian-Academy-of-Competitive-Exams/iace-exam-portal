@@ -98,6 +98,8 @@ export interface CsvRow {
 
 export interface CsvTable {
   headers: string[];
+  /** The header cells as the file wrote them, index for index with `headers`. */
+  labels?: string[];
   rows: CsvRow[];
 }
 
@@ -113,7 +115,8 @@ export function readCsvTable(input: string): CsvTable {
   const grid = parseCsvRows(input);
   if (grid.length === 0) return { headers: [], rows: [] };
 
-  const headers = (grid[0]?.cells ?? []).map(normaliseHeader);
+  const labels = (grid[0]?.cells ?? []).map((cell) => cell.trim());
+  const headers = labels.map(normaliseHeader);
 
   const rows = grid.slice(1).map(({ line, cells }) => ({
     // Straight from the parser, so a blank line in the middle of the file does not shift every number after it.
@@ -123,5 +126,5 @@ export function readCsvTable(input: string): CsvTable {
     ),
   }));
 
-  return { headers, rows };
+  return { headers, labels, rows };
 }

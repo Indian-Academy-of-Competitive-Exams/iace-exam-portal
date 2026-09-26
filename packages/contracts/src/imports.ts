@@ -171,11 +171,14 @@ export type ProgramImportResult = z.infer<typeof programImportResultSchema>;
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
   studentsCommit: '/imports/students/commit',
+  /** The rows a preview skipped, as a workbook with an Errors column. */
+  studentsErrors: '/imports/students/errors',
   /** The sample workbook, generated from STUDENT_IMPORT_COLUMNS below. */
   studentsTemplate: '/imports/students/template',
   /** An intake is filed against the EVENT whose roster it fills, never against a series. */
   eventCandidatesPreview: (eventId: string) => `/imports/events/${eventId}/candidates/preview`,
   eventCandidatesCommit: (eventId: string) => `/imports/events/${eventId}/candidates/commit`,
+  eventCandidatesErrors: (eventId: string) => `/imports/events/${eventId}/candidates/errors`,
   /** The sample workbook, generated from CANDIDATE_IMPORT_COLUMNS. */
   candidatesTemplate: '/imports/events/candidates/template',
   /** An enrolment is filed against the PROGRAM it adds to, addressed by the code students carry. */
@@ -183,6 +186,8 @@ export const IMPORT_ROUTES = {
     `/imports/programs/${encodeURIComponent(code)}/students/preview`,
   programStudentsCommit: (code: string) =>
     `/imports/programs/${encodeURIComponent(code)}/students/commit`,
+  programStudentsErrors: (code: string) =>
+    `/imports/programs/${encodeURIComponent(code)}/students/errors`,
   /** The sample workbook, generated from PROGRAM_IMPORT_COLUMNS. */
   programStudentsTemplate: '/imports/programs/students/template',
 } as const;

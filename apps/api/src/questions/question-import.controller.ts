@@ -27,6 +27,7 @@ import {
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { requireFile, type UploadedSheet } from '../common/importing/upload';
+import { sendErrorRows } from '../common/importing';
 import { QuestionImportService } from './question-import.service';
 
 @Controller('imports/questions')
@@ -54,6 +55,15 @@ export class QuestionImportController {
     @UploadedFile() file?: UploadedSheet,
   ): Promise<QuestionImportPlan> {
     return this.imports.preview(requireFile(file), user.id);
+  }
+
+  /** Not audited and no export permission: the rows are the admin's own upload. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Post('errors')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  async errors(@Res() response: Response, @UploadedFile() file?: UploadedSheet): Promise<void> {
+    await sendErrorRows(response, await this.imports.errorRows(requireFile(file)));
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)

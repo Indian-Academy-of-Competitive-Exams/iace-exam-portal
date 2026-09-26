@@ -126,8 +126,11 @@ async function readWorkbookTable(buffer: Buffer, options: ReadSheetOptions): Pro
 
   const headerRow = sheet.getRow(1);
   const headers: string[] = [];
+  const labels: string[] = [];
   headerRow.eachCell({ includeEmpty: true }, (cell, column) => {
-    headers[column - 1] = normaliseHeader(cellText(cell));
+    const label = cellText(cell).trim();
+    labels[column - 1] = label;
+    headers[column - 1] = normaliseHeader(label);
   });
   for (let i = 0; i < headers.length; i += 1) headers[i] ??= '';
 
@@ -147,7 +150,12 @@ async function readWorkbookTable(buffer: Buffer, options: ReadSheetOptions): Pro
     rows.push({ line: rowNumber, values });
   });
 
-  return { headers: headers.filter(Boolean), rows };
+  const kept = headers.flatMap((header, index) => (header ? [index] : []));
+  return {
+    headers: kept.map((index) => headers[index] ?? ''),
+    labels: kept.map((index) => labels[index] ?? ''),
+    rows,
+  };
 }
 
 /** A cell as the admin sees it. */

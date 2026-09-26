@@ -779,4 +779,5 @@ export const QUESTION_IMPORT_ROUTES = {
   template: '/imports/questions/template',
   preview: '/imports/questions/preview',
   commit: '/imports/questions/commit',
+  errors: '/imports/questions/errors',
 } as const;

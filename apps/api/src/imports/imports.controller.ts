@@ -30,6 +30,7 @@ import {
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { requireFile, type UploadedSheet } from '../common/importing/upload';
+import { sendErrorRows } from '../common/importing';
 import { ImportsService } from './imports.service';
 import { buildCandidateTemplate, buildProgramTemplate, buildStudentTemplate } from './workbook';
 
@@ -56,6 +57,18 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   preview(@UploadedFile() file?: UploadedSheet): Promise<StudentImportPlan> {
     return this.imports.previewStudents(requireFile(file));
+  }
+
+  /** Not audited and no export permission: the rows are the admin's own upload. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Post('students/errors')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  async studentErrors(
+    @Res() response: Response,
+    @UploadedFile() file?: UploadedSheet,
+  ): Promise<void> {
+    await sendErrorRows(response, await this.imports.studentErrorRows(requireFile(file)));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -101,6 +114,19 @@ export class ImportsController {
     return this.imports.previewProgramStudents(code, requireFile(file));
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Post('programs/:code/students/errors')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  async programStudentErrors(
+    @Param('code') code: string,
+    @Res() response: Response,
+    @UploadedFile() file?: UploadedSheet,
+  ): Promise<void> {
+    const sheet = await this.imports.programStudentErrorRows(code, requireFile(file));
+    await sendErrorRows(response, sheet);
+  }
+
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('programs/:code/students/commit')
   @HttpCode(HttpStatus.OK)
@@ -123,6 +149,19 @@ export class ImportsController {
     @UploadedFile() file?: UploadedSheet,
   ): Promise<CandidateImportPlan> {
     return this.imports.previewEventCandidates(eventId, requireFile(file));
+  }
+
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Post('events/:eventId/candidates/errors')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  async eventCandidateErrors(
+    @Param('eventId') eventId: string,
+    @Res() response: Response,
+    @UploadedFile() file?: UploadedSheet,
+  ): Promise<void> {
+    const sheet = await this.imports.eventCandidateErrorRows(eventId, requireFile(file));
+    await sendErrorRows(response, sheet);
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)

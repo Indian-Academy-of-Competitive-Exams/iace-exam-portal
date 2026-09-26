@@ -3,3 +3,4 @@ export { normaliseHeader, parseCsvRows, readCsvTable, type CsvRow, type CsvTable
 export { looksLikeWorkbook, readUploadedTable } from './sheet-reader';
 export { importFileKey } from './import-log';
 export { toIsoDate } from './date-cell';
+export { refuseFileErrors, rowsWithErrors, sendErrorRows } from './rows-with-errors';

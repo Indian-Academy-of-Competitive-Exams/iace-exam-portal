@@ -27,7 +27,14 @@ import { EventsService } from '../events';
 import { ProgramsService } from '../access';
 
 import { isPreTestReady } from '../students';
-import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
+import {
+  importFileKey,
+  readUploadedTable,
+  refuseFileErrors,
+  rowsWithErrors,
+  type CsvTable,
+} from '../common/importing';
+import { type ExportSheet } from '../common/exporting';
 import { toDateColumn } from '../common/time/institute-day';
 
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
@@ -52,13 +59,19 @@ export class ImportsService {
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
   async previewStudents(file: Buffer): Promise<StudentImportPlan> {
-    return this.planStudents(file);
+    return this.planStudents(await readUploadedTable(file));
+  }
+
+  /** The rows a preview would skip, as the file had them. Writes nothing, like the preview. */
+  async studentErrorRows(file: Buffer): Promise<ExportSheet> {
+    const table = await readUploadedTable(file);
+    return rosterErrorRows(table, await this.planStudents(table));
   }
 
   /** Applies the plan. Re-plans from the same input rather than trusting a preview the client sends back: the file may have changed, and a client that can hand us a plan can hand us any plan. */
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
     // Re-judged against the scope on COMMIT too: a preview is not a permission check.
-    const plan = await this.planStudents(file);
+    const plan = await this.planStudents(await readUploadedTable(file));
     // Only rows that were actually written: a PIN texted for a row that failed opens nothing.
     const issued: StartingPin[] = [];
 
@@ -105,7 +118,13 @@ export class ImportsService {
   /** Writes nothing. The event has to exist, so a stale page cannot fill a deleted roster. */
   async previewEventCandidates(eventId: string, file: Buffer): Promise<CandidateImportPlan> {
     await this.events.detail(eventId);
-    return this.planCandidates(file);
+    return this.planCandidates(await readUploadedTable(file));
+  }
+
+  async eventCandidateErrorRows(eventId: string, file: Buffer): Promise<ExportSheet> {
+    await this.events.detail(eventId);
+    const table = await readUploadedTable(file);
+    return rosterErrorRows(table, await this.planCandidates(table));
   }
 
   /** An existing number only JOINS the roster: nothing on that student is touched. */
@@ -115,7 +134,7 @@ export class ImportsService {
     actorId: string,
   ): Promise<CandidateImportResult> {
     await this.events.detail(eventId);
-    const plan = await this.planCandidates(file);
+    const plan = await this.planCandidates(await readUploadedTable(file));
     const studentIds: string[] = [];
     const issued: StartingPin[] = [];
 
@@ -181,7 +200,13 @@ export class ImportsService {
   /** Writes nothing. The program has to exist and be offered, or there is nothing to enrol into. */
   async previewProgramStudents(code: string, file: Buffer): Promise<ProgramImportPlan> {
     await this.programs.assertUsable([code], 'programCode');
-    return this.planPrograms(code, file);
+    return this.planPrograms(code, await readUploadedTable(file));
+  }
+
+  async programStudentErrorRows(code: string, file: Buffer): Promise<ExportSheet> {
+    await this.programs.assertUsable([code], 'programCode');
+    const table = await readUploadedTable(file);
+    return rosterErrorRows(table, await this.planPrograms(code, table));
   }
 
   /** Adds the code to students who already exist. A number we do not know is skipped, never created. */
@@ -192,7 +217,7 @@ export class ImportsService {
   ): Promise<ProgramImportResult> {
     await this.programs.assertUsable([code], 'programCode');
 
-    const plan = await this.planPrograms(code, file);
+    const plan = await this.planPrograms(code, await readUploadedTable(file));
     const counts = { skipped: plan.summary.alreadyEnrolled, failed: plan.summary.invalid };
 
     const enrolling = plan.rows.flatMap((row) =>
@@ -259,8 +284,7 @@ export class ImportsService {
     return { entityId: student.id, action: AUDIT_ACTION.CREATE };
   }
 
-  private async planCandidates(file: Buffer): Promise<CandidateImportPlan> {
-    const table = await readUploadedTable(file);
+  private async planCandidates(table: CsvTable): Promise<CandidateImportPlan> {
     const mobiles = mobilesIn(table);
     const students =
       mobiles.length === 0
@@ -282,8 +306,7 @@ export class ImportsService {
     });
   }
 
-  private async planPrograms(code: string, file: Buffer): Promise<ProgramImportPlan> {
-    const table = await readUploadedTable(file);
+  private async planPrograms(code: string, table: CsvTable): Promise<ProgramImportPlan> {
     const mobiles = mobilesIn(table);
     const students =
       mobiles.length === 0
@@ -304,8 +327,7 @@ export class ImportsService {
     });
   }
 
-  private async planStudents(file: Buffer): Promise<StudentImportPlan> {
-    const table = await readUploadedTable(file);
+  private async planStudents(table: CsvTable): Promise<StudentImportPlan> {
     return planStudentImport(table, await this.contextFor(table));
   }
 
@@ -445,6 +467,14 @@ export class ImportsService {
       },
     });
   }
+}
+
+function rosterErrorRows(
+  table: CsvTable,
+  plan: { rows: readonly { line: number; errors: string[] }[]; fileErrors: readonly string[] },
+): ExportSheet {
+  refuseFileErrors(plan.fileErrors);
+  return rowsWithErrors(table, new Map(plan.rows.map((row) => [row.line, row.errors])));
 }
 
 /** By relation, not the raw FK: Prisma refuses an unchecked id beside the nested profile write. */
