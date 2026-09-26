@@ -20,10 +20,12 @@ import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
 import { DOMAIN_EVENTS, PIN_RESET_REASONS } from '../src/common/events';
 import { DomainEventBus } from '../src/common/events/domain-event-bus';
+import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import {
   FakeAdminsService,
   FakeConfig,
   FakeEventBus,
+  FakeLeaderboard,
   FakeMessageSender,
   FakeMetrics,
   FakeRedis,
@@ -313,6 +315,78 @@ describe('student.pin_reset', () => {
       Object.keys(ctx.redis.snapshot()).some((key) => key.includes('session')),
       'and the sessions really were revoked before anything was published',
     );
+  });
+});
+
+describe('AuthService.verifyStudentPin — what erasure re-proves', () => {
+  it('resolves quietly for the right PIN, having cleared the ladder', async () => {
+    const ctx = build();
+    const session = await signUp(ctx, MOBILE, '4813');
+    await assert.rejects(() => ctx.auth.verifyStudentPin(session.identity.id, '0000'));
+
+    await ctx.auth.verifyStudentPin(session.identity.id, '4813');
+
+    assert.deepEqual(
+      Object.keys(ctx.redis.snapshot()).filter((key) => key.startsWith('pin:')),
+      [],
+    );
+  });
+
+  /** The failure this exists to prevent: a bearer token alone reaching the irreversible action. */
+  it('refuses the wrong PIN, and climbs the same lockout ladder as sign-in', async () => {
+    const ctx = build();
+    const session = await signUp(ctx, MOBILE, '4813');
+
+    await assert.rejects(
+      () => ctx.auth.verifyStudentPin(session.identity.id, '0000'),
+      failsWith('PIN_INVALID'),
+    );
+
+    for (let i = 0; i < 4; i++) {
+      await assert.rejects(() => ctx.auth.verifyStudentPin(session.identity.id, '0000'));
+    }
+
+    await assert.rejects(
+      () => ctx.auth.verifyStudentPin(session.identity.id, '4813'),
+      failsWith('PIN_LOCKED'),
+    );
+  });
+});
+
+/** What `MeController.erase` does, one await after the other — the gate a wrong PIN must stop before the irreversible write. */
+describe('POST /me/erasure — the PIN gate in front of the irreversible write', () => {
+  const privacy = () =>
+    new StudentPrivacyService(
+      prisma,
+      new FakeLeaderboard().asService(),
+      new FakeEventBus().asService(),
+    );
+
+  it('never reaches anonymize with the wrong PIN', async () => {
+    const ctx = build();
+    const session = await signUp(ctx, MOBILE, '4813');
+
+    await assert.rejects(async () => {
+      await ctx.auth.verifyStudentPin(session.identity.id, '0000');
+      await privacy().anonymize(session.identity.id);
+    }, failsWith('PIN_INVALID'));
+
+    const untouched = await prisma.student.findUniqueOrThrow({
+      where: { id: session.identity.id },
+    });
+    assert.equal(untouched.mobile, MOBILE);
+  });
+
+  it('erases once the right PIN is proved', async () => {
+    const ctx = build();
+    const session = await signUp(ctx, MOBILE, '4813');
+
+    await ctx.auth.verifyStudentPin(session.identity.id, '4813');
+    const receipt = await privacy().anonymize(session.identity.id);
+
+    assert.equal(receipt.studentId, session.identity.id);
+    const erased = await prisma.student.findUniqueOrThrow({ where: { id: session.identity.id } });
+    assert.notEqual(erased.mobile, MOBILE);
   });
 });
 

@@ -71,14 +71,14 @@ export class MeService {
     kind: DocumentKind,
     file: { buffer: Buffer; size: number; mimetype: string } | undefined,
   ): Promise<Me> {
-    checkDocument(file, kind);
+    const contentType = checkDocument(file, kind);
     if (!file) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload');
 
     // Before the upload, not after: an object pushed to S3 for a student who no longer exists is one nothing will ever read or clean up.
     await this.students.assertExists(studentId);
 
-    const key = documentKey(studentId, kind, file.mimetype, Date.now());
-    await this.storage.upload(key, file.buffer, file.mimetype);
+    const key = documentKey(studentId, kind, contentType, Date.now());
+    await this.storage.upload(key, file.buffer, contentType);
 
     // The write — and the `profileCompleted` recompute that has to go with it — belongs to the module that owns the table.
     await this.students.saveDocumentKey(studentId, columnFor(kind), key);

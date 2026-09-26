@@ -2,12 +2,18 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, DOCUMENT_KINDS, DOCUMENT_MAX_BYTES } from '@iace/contracts';
 import { checkDocument, columnFor, documentKey } from '../src/me/documents';
+import { jpegBytes } from './support/image-bytes';
 
 const { PHOTO, TENTH_MARKSHEET } = DOCUMENT_KINDS;
 
-const file = (over: Partial<{ size: number; mimetype: string }> = {}) => ({
+const JPEG = jpegBytes(10, 10);
+const PDF = Buffer.from('%PDF-1.7');
+const HTML = Buffer.from('<!doctype html><script>alert(1)</script>');
+
+const file = (over: Partial<{ size: number; mimetype: string; buffer: Buffer }> = {}) => ({
   size: 1024,
   mimetype: 'image/jpeg',
+  buffer: JPEG,
   ...over,
 });
 
@@ -52,14 +58,30 @@ describe('columnFor', () => {
 });
 
 describe('checkDocument', () => {
-  it('accepts an ordinary phone photo', () => {
-    assert.doesNotThrow(() => checkDocument(file(), PHOTO));
+  it('accepts an ordinary phone photo, and returns what the bytes are', () => {
+    assert.equal(checkDocument(file(), PHOTO), 'image/jpeg');
+  });
+
+  /** The whole point of B6: the browser's claim is never asked. A real photo is accepted whatever label rode in with it. */
+  it('ignores the browser-claimed mimetype entirely, and sniffs the bytes instead', () => {
+    assert.equal(
+      checkDocument(file({ mimetype: 'application/octet-stream' }), PHOTO),
+      'image/jpeg',
+    );
+  });
+
+  /** The exploit this closes: an HTML/SVG/polyglot upload claiming to be a photo. */
+  it('refuses bytes that disagree with the claimed type', () => {
+    assert.throws(
+      () => checkDocument(file({ buffer: HTML, mimetype: 'image/jpeg' }), PHOTO),
+      AppException.is,
+    );
   });
 
   /** A photo has to BE a photo. A PDF headshot renders as a broken box in every <img> that later shows it, and nothing about the upload would have said so. */
   it('refuses a PDF where a photograph is meant', () => {
     assert.throws(
-      () => checkDocument(file({ mimetype: 'application/pdf' }), PHOTO),
+      () => checkDocument(file({ buffer: PDF, mimetype: 'application/pdf' }), PHOTO),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.match(error.message, /not accepted/);
@@ -70,7 +92,7 @@ describe('checkDocument', () => {
 
   it('refuses a type nobody asked for', () => {
     for (const mimetype of ['application/zip', 'text/html', 'application/x-msdownload']) {
-      assert.throws(() => checkDocument(file({ mimetype }), PHOTO), AppException.is);
+      assert.throws(() => checkDocument(file({ buffer: HTML, mimetype }), PHOTO), AppException.is);
     }
   });
 
@@ -95,14 +117,15 @@ describe('checkDocument', () => {
 
   /** The kind decides, not a single list: a scanned certificate is a PDF far more often than not. */
   it('takes a PDF for a marksheet, having refused one for a photo', () => {
-    assert.doesNotThrow(() =>
-      checkDocument(file({ mimetype: 'application/pdf' }), TENTH_MARKSHEET),
+    assert.equal(
+      checkDocument(file({ buffer: PDF, mimetype: 'application/pdf' }), TENTH_MARKSHEET),
+      'application/pdf',
     );
   });
 
   it('still refuses a type nobody asked for, whichever kind it is', () => {
     assert.throws(
-      () => checkDocument(file({ mimetype: 'text/html' }), TENTH_MARKSHEET),
+      () => checkDocument(file({ buffer: HTML, mimetype: 'text/html' }), TENTH_MARKSHEET),
       AppException.is,
     );
   });

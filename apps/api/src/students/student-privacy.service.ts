@@ -10,6 +10,7 @@ import {
   type StudentDataExport,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { fromDateColumn } from '../common/time/institute-day';
 import { type LeaderboardService } from '../attempts';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
@@ -31,6 +32,7 @@ export class StudentPrivacyService {
       ),
     )
     private readonly leaderboard: LeaderboardService,
+    private readonly events: DomainEventBus,
   ) {}
 
   /** Everything held about them, in one read they can keep. Their own sittings, never the papers. */
@@ -114,6 +116,9 @@ export class StudentPrivacyService {
       await tx.studentProfile.updateMany({ where: { studentId }, data: anonymizedProfile() });
       return tx.attempt.count({ where: { studentId } });
     }, TX_LIMITS.SHORT);
+
+    // An erased account keeps no session: this writes `isActive` itself, so `setActive` never sees it.
+    this.events.emit(DOMAIN_EVENTS.STUDENT_DEACTIVATED, { studentId });
 
     return { studentId, anonymizedAt: at.toISOString(), attemptsKept };
   }

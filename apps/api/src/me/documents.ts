@@ -7,6 +7,7 @@ import {
   type DocumentKind,
 } from '@iace/contracts';
 import { type ProfileDocumentColumn } from '../students';
+import { sniffImage } from '../questions';
 
 /** Which profile column each kind writes to. The client never chooses this. */
 const COLUMN_FOR: Record<DocumentKind, ProfileDocumentColumn> = {
@@ -36,25 +37,28 @@ export function documentKey(
   return `students/${studentId}/${kind}-${now}.${extension}`;
 }
 
-/** Whether this file may be stored, and why not if it may not. */
+const PDF_MAGIC = Buffer.from('%PDF-', 'latin1');
+
+/** `sniffImage` only knows pictures; a marksheet may also be the one non-image type accepted here. */
+const isPdf = (buffer: Buffer): boolean => buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC);
+
+/** What the bytes actually are, restricted to what this kind accepts — the browser's mimetype is never asked. */
+function sniffedType(buffer: Buffer, accepted: readonly string[]): string | null {
+  const image = sniffImage(buffer)?.contentType;
+  if (image && accepted.includes(image)) return image;
+  if (accepted.includes('application/pdf') && isPdf(buffer)) return 'application/pdf';
+  return null;
+}
+
+/** Whether this file may be stored, and what it actually is if it may — the BYTES decide, never the claimed mimetype. */
 export function checkDocument(
-  file: { size: number; mimetype: string } | undefined,
+  file: { buffer: Buffer; size: number; mimetype: string } | undefined,
   kind: DocumentKind,
-): void {
+): string {
   if (!file) {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload', {
       fieldErrors: { file: ['Choose a file to upload'] },
     });
-  }
-
-  const accepted = ACCEPTED_TYPES_FOR[kind];
-  if (!accepted.includes(file.mimetype)) {
-    const readable = accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ');
-    throw new AppException(
-      ErrorCodes.VALIDATION_ERROR,
-      `That file type is not accepted here. Upload one of: ${readable}.`,
-      { fieldErrors: { file: ['Not an accepted file type'] } },
-    );
   }
 
   if (file.size > DOCUMENT_MAX_BYTES) {
@@ -71,4 +75,17 @@ export function checkDocument(
       fieldErrors: { file: ['That file is empty'] },
     });
   }
+
+  const accepted = ACCEPTED_TYPES_FOR[kind];
+  const contentType = sniffedType(file.buffer, accepted);
+  if (!contentType) {
+    const readable = accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ');
+    throw new AppException(
+      ErrorCodes.VALIDATION_ERROR,
+      `That file type is not accepted here. Upload one of: ${readable}.`,
+      { fieldErrors: { file: ['Not an accepted file type'] } },
+    );
+  }
+
+  return contentType;
 }

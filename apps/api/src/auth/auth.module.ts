@@ -7,6 +7,7 @@ import { RedisModule } from '../redis/redis.module';
 import { EventsModule } from '../common/events';
 import { MessagingModule } from '../common/messaging';
 import { AdminSessionsListener } from './admin-sessions.listener';
+import { StudentSessionsListener } from './student-sessions.listener';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
@@ -35,6 +36,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     TokenService,
     SessionService,
     AdminSessionsListener,
+    StudentSessionsListener,
     OtpService,
     PinService,
     StartingPinService,

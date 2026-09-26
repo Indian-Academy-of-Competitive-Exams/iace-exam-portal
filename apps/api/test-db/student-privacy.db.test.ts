@@ -3,7 +3,8 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE } from '../src/students/anonymize';
-import { FakeLeaderboard, makeStanding } from '../test/support/fakes';
+import { DOMAIN_EVENTS } from '../src/common/events';
+import { FakeEventBus, FakeLeaderboard, makeStanding } from '../test/support/fakes';
 import {
   makeBranch,
   makeCatalog,
@@ -20,8 +21,8 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-const build = (leaderboard = new FakeLeaderboard()) =>
-  new StudentPrivacyService(prisma, leaderboard.asService());
+const build = (leaderboard = new FakeLeaderboard(), events = new FakeEventBus()) =>
+  new StudentPrivacyService(prisma, leaderboard.asService(), events.asService());
 
 describe('the copy a student may take away', () => {
   it('carries the profile fields nothing else on the platform shows them', async () => {
@@ -107,6 +108,17 @@ describe('erasure is anonymisation', () => {
     // The whole point: a cohort's mean must not move because somebody exercised a right.
     assert.equal(await prisma.attempt.count({ where: { studentId: student.id } }), 1);
     assert.equal(receipt.attemptsKept, 1);
+  });
+
+  /** The bug this prevents: an erased account still answering with its live token. */
+  it('asks for the sessions to go, the same signal a deactivation sends', async () => {
+    const events = new FakeEventBus();
+    const service = build(new FakeLeaderboard(), events);
+    const student = await makeStudent(prisma);
+
+    await service.anonymize(student.id);
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_DEACTIVATED), [{ studentId: student.id }]);
   });
 
   /** Erasing twice would rewrite the date the promise was kept on. */

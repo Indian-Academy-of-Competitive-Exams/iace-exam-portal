@@ -440,6 +440,8 @@ export class StudentsService {
       fieldDiff(student, { ...student, isActive }, AUDITED_ACTIVE_FIELDS),
     );
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
+    // Only a deactivation must sign them out now; a reactivation revokes nothing.
+    if (!isActive) this.events.emit(DOMAIN_EVENTS.STUDENT_DEACTIVATED, { studentId: id });
     return this.detail(id);
   }
 

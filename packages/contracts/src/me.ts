@@ -74,6 +74,13 @@ export const changePinSchema = z
 export type ChangePinInput = z.input<typeof changePinSchema>;
 export type ChangePinBody = z.infer<typeof changePinSchema>;
 
+/** Erasure is irreversible, so it re-proves the PIN exactly as a PIN change does — a session left open on a shared machine must not be enough on its own. */
+export const eraseAccountSchema = z.object({
+  currentPin: pinSchema,
+});
+export type EraseAccountInput = z.input<typeof eraseAccountSchema>;
+export type EraseAccountBody = z.infer<typeof eraseAccountSchema>;
+
 export const ME_ROUTES = {
   profile: '/me',
   update: '/me',

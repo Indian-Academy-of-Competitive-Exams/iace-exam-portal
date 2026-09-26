@@ -6,6 +6,8 @@ export const DOMAIN_EVENTS = {
   STUDENT_PIN_RESET: 'student.pin_reset',
   /** One student's access moved. WIRED — see the access module's cache listener. */
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
+  /** A student was switched off, not merely re-granted or blocked. WIRED — auth revokes their sessions so the switch-off holds now, not at token expiry. */
+  STUDENT_DEACTIVATED: 'student.deactivated',
   /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
   /** A student finished signing up and has an account for the first time. WIRED — see students. */
@@ -37,6 +39,10 @@ export interface StudentAccessChangedEvent {
   studentId: string;
 }
 
+export interface StudentDeactivatedEvent {
+  studentId: string;
+}
+
 export interface AccessCatalogChangedEvent {
   testSeriesId: string;
 }
@@ -53,6 +59,7 @@ export interface AdminDeactivatedEvent {
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
+  [DOMAIN_EVENTS.STUDENT_DEACTIVATED]: StudentDeactivatedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;
   [DOMAIN_EVENTS.ADMIN_DEACTIVATED]: AdminDeactivatedEvent;

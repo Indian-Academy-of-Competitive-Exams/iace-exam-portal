@@ -115,16 +115,11 @@ export class AuthService {
     return { tokens: await this.issue(identity, device), identity };
   }
 
-  /** Replacing a PIN the student already knows. The current one is checked despite the session: one left open on a shared machine would otherwise lock the owner out. Wrong attempts climb the same ladder, and the response is a FRESH session. */
-  async changeStudentPin(
-    studentId: string,
+  /** Proves the PIN a session alone does not: one left open on a shared machine must not be enough by itself. Wrong attempts climb the same ladder as sign-in. */
+  private async verifyCurrentPin(
+    student: Pick<Student, 'mobile' | 'pinHash'>,
     currentPin: string,
-    newPin: string,
-    device: DeviceContext,
-  ): Promise<AuthSessionResponse> {
-    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
+  ): Promise<void> {
     await this.pin.assertNotLocked(student.mobile);
 
     // Burns the same time when there is no PIN to check against, so the clock never says whether one is set.
@@ -139,6 +134,29 @@ export class AuthService {
       });
     }
 
+    await this.pin.clearFailures(student.mobile);
+  }
+
+  /** What an irreversible self-service action re-proves before it runs — same ladder, same message, as a PIN change. */
+  async verifyStudentPin(studentId: string, currentPin: string): Promise<void> {
+    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    await this.verifyCurrentPin(student, currentPin);
+  }
+
+  /** Replacing a PIN the student already knows. The current one is checked despite the session: one left open on a shared machine would otherwise lock the owner out. Wrong attempts climb the same ladder, and the response is a FRESH session. */
+  async changeStudentPin(
+    studentId: string,
+    currentPin: string,
+    newPin: string,
+    device: DeviceContext,
+  ): Promise<AuthSessionResponse> {
+    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    await this.verifyCurrentPin(student, currentPin);
+
     const updated = await this.prisma.student.update({
       where: { id: studentId },
       data: {
@@ -149,7 +167,6 @@ export class AuthService {
     });
 
     await this.sessions.revokeAll(ActorTypes.STUDENT, studentId);
-    await this.pin.clearFailures(student.mobile);
     this.announcePinReset(studentId, student.mobile, PIN_RESET_REASONS.SELF_CHANGE);
 
     const identity = this.studentIdentity(updated);

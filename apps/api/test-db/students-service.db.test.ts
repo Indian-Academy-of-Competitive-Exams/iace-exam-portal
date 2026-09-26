@@ -478,6 +478,36 @@ describe('the student writes that bust the catalog cache', () => {
   });
 });
 
+/** The session listener acts on this one signal alone; a grant or a block firing it too would sign out a student nobody meant to touch. */
+describe('StudentsService — the deactivation signal a session listener can trust', () => {
+  const deactivated = (events: FakeEventBus) => events.of(DOMAIN_EVENTS.STUDENT_DEACTIVATED);
+
+  it('fires only when the switch turns off, not when it turns back on', async () => {
+    const { service, events } = await serviceWith();
+
+    await service.setActive(STUDENT, false);
+    assert.deepEqual(deactivated(events), [{ studentId: STUDENT }]);
+
+    events.forget();
+    await service.setActive(STUDENT, true);
+    assert.deepEqual(deactivated(events), []);
+  });
+
+  it('stays quiet for a test block or an enrolment change', async () => {
+    for (const write of [
+      (service: StudentsService) => service.setTestBlocked(STUDENT, true),
+      (service: StudentsService) => service.update(STUDENT, { enrolledExams: ['SSC CGL'] }),
+    ]) {
+      await resetDatabase(prisma);
+      const { service, events } = await serviceWith();
+
+      await write(service);
+
+      assert.deepEqual(deactivated(events), []);
+    }
+  });
+});
+
 describe('StudentsService — driven live, the diff an admin edit contributes', () => {
   const diffOf = async (context: AuditContext, edit: () => Promise<unknown>) =>
     context.run(async () => {

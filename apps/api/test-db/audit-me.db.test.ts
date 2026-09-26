@@ -11,6 +11,7 @@ import { MeService } from '../src/me/me.service';
 import { type StorageService } from '../src/storage/storage.service';
 import { StudentsService } from '../src/students/students.service';
 import { FakeCodeCatalog, FakeEventBus, FakeQueue, fakeStartingPins } from '../test/support/fakes';
+import { jpegBytes } from '../test/support/image-bytes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
 const STUDENT = randomUUID();
@@ -112,10 +113,11 @@ describe('MeService.saveDocument — the entity the row is filed against', () =>
   it('sets the entity id to the student', async () => {
     const { me, recorded } = await build();
 
+    const bytes = jpegBytes(10, 10);
     const store = await recorded(() =>
       me.saveDocument(STUDENT, DOCUMENT_KINDS.PHOTO, {
-        buffer: Buffer.from('fake-image-bytes'),
-        size: 17,
+        buffer: bytes,
+        size: bytes.length,
         mimetype: 'image/jpeg',
       }),
     );
