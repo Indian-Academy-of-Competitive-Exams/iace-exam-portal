@@ -481,6 +481,8 @@ model Question {
   @@index([tags], type: Gin)
   // Trigram, for the bank search's leading-wildcard ILIKE on the code.
   @@index([questionCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "Question_questionCode_trgm_idx")
+  // The admin dashboard counts the whole bank by status, which no other index leads on.
+  @@index([status])
 }
 
 // Immutable once a reachable test pins it; until then an edit rewrites this row in place.
