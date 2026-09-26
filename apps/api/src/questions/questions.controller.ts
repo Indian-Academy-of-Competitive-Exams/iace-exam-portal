@@ -9,17 +9,21 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { type Response } from 'express';
 import {
   ActorTypes,
   AUDIT_ACTION,
   AUDIT_FEATURE,
+  EXPORT_KINDS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   questionDraftSchema,
+  questionExportQuerySchema,
   QUESTION_IMAGE_FILE_FIELD,
   QUESTION_IMAGE_MAX_BYTES,
   questionAvailabilityQuerySchema,
@@ -28,6 +32,7 @@ import {
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionExportQuery,
   type QuestionImage,
   type QuestionAvailability,
   type QuestionAvailabilityQuery,
@@ -40,11 +45,14 @@ import {
   Actors,
   CurrentUser,
   RequiresAnyFeature,
+  RequiresExport,
   RequiresFeature,
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
-import { Audit } from '../audit';
+import { Audit, AuditContext } from '../audit';
+import { sendWorkbook } from '../common/exporting';
+import { writeQuestionExport } from './question-export';
 import { QuestionsService } from './questions.service';
 
 /** What multer hands back; typed here rather than pulling Express types into a controller. */
@@ -58,7 +66,10 @@ interface UploadedFileLike {
 @Controller('admin/questions')
 @Actors(ActorTypes.ADMIN)
 export class QuestionsController {
-  constructor(private readonly questions: QuestionsService) {}
+  constructor(
+    private readonly questions: QuestionsService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
@@ -66,6 +77,28 @@ export class QuestionsController {
     @Query(new ZodQuery(questionListQuerySchema)) query: QuestionListQuery,
   ): Promise<Paginated<QuestionSummary>> {
     return this.questions.list(query);
+  }
+
+  /** Before `:id`, or "export" is read as a question id. */
+  @RequiresExport(FEATURE_KEYS.QUESTION_MANAGEMENT)
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.EXPORT)
+  @Get('export')
+  async export(
+    @Query(new ZodQuery(questionExportQuerySchema)) query: QuestionExportQuery,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const { questions, authoring } = await this.questions.exportRows(query);
+    const workbook = await writeQuestionExport(questions, authoring);
+    this.auditContext.setEntityId(user.id);
+    this.auditContext.setChanged({
+      filters: {
+        from: null,
+        to: Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)),
+      },
+      rows: { from: null, to: questions.length },
+    });
+    sendWorkbook(response, EXPORT_KINDS.QUESTIONS, workbook);
   }
 
   /** Before `:id`, or "images" is read as a question id. */

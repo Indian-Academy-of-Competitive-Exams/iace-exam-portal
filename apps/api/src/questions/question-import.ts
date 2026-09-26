@@ -59,11 +59,11 @@ export interface QuestionImportPlanning extends Omit<QuestionImportPlan, 'import
 }
 
 /** Column key -> the normalised header the parser will find it under. */
-const HEADER_BY_KEY = new Map(
+const HEADER_BY_KEY = new Map<string, string>(
   QUESTION_IMPORT_COLUMNS.map((column) => [column.key, normaliseHeader(column.header)]),
 );
 
-const ALIASES_BY_KEY = new Map(
+const ALIASES_BY_KEY = new Map<string, readonly string[]>(
   QUESTION_IMPORT_COLUMNS.map((column) => [column.key, column.aliases as readonly string[]]),
 );
 

@@ -7,6 +7,7 @@ import {
   FORM_LEVEL_FIELD,
   QUESTION_SORTS,
   QUESTION_STATUS,
+  QUESTION_STATUSES,
   fieldDiff,
   plainTextOf,
   previewTextOf,
@@ -17,6 +18,7 @@ import {
   type QuestionAvailabilityQuery,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionExportQuery,
   type QuestionLanguage,
   type QuestionStatus,
   type QuestionListQuery,
@@ -28,6 +30,7 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
+import { assertExportable } from '../common/exporting';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -49,6 +52,7 @@ import {
   type BuiltQuestion,
 } from './question-core';
 import { questionOrderBy, questionWhere, reachableTest } from './question-query';
+import { type AuthoringCount } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
 
 const QUESTION_INCLUDE = {
@@ -181,6 +185,40 @@ export class QuestionsService {
       }),
       this.prisma.question.count({ where }),
     ]);
+  }
+
+  /** Every row the list would page through, unsigned — a cell carries the image KEY the stem hash folds. */
+  async exportRows(
+    query: QuestionExportQuery,
+  ): Promise<{ questions: QuestionDetail[]; authoring: AuthoringCount[] }> {
+    const matchedIds = query.q ? await this.searchIds(query.q) : null;
+    const where = questionWhere({ ...query, page: 1, pageSize: 1 }, matchedIds);
+    assertExportable(await this.prisma.question.count({ where }));
+
+    const [rows, groups] = await Promise.all([
+      this.prisma.question.findMany({
+        where,
+        include: QUESTION_INCLUDE,
+        orderBy: questionOrderBy(query.sort),
+      }),
+      this.prisma.question.groupBy({ by: ['createdById', 'status'], where, _count: true }),
+    ]);
+
+    const names = await this.authorNames(groups);
+    const byAuthor = new Map<string | null, AuthoringCount>();
+    for (const group of groups) {
+      const author = byAuthor.get(group.createdById) ?? {
+        author: (group.createdById && names.get(group.createdById)) || 'No author',
+        byStatus: Object.fromEntries(QUESTION_STATUSES.map((status) => [status, 0])) as Record<
+          QuestionStatus,
+          number
+        >,
+      };
+      author.byStatus[group.status] = group._count;
+      byAuthor.set(group.createdById, author);
+    }
+
+    return { questions: rows.map(toDetail), authoring: [...byAuthor.values()] };
   }
 
   /** Counted in the database, because a page of a hundred is not what a section can draw from. */

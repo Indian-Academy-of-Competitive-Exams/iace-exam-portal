@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, ArchiveRestore, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import {
+  EXPORT_KINDS,
   FEATURE_KEYS,
   LANGUAGE_LABELS,
   PERMISSION_LEVELS,
@@ -31,6 +32,7 @@ import { QUESTIONS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { questionFacetFilters } from '../lib/question-filters';
 import { QuestionHistorySheet } from '../components/question-history';
+import { ExportButton } from '../components/export-button';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
 
@@ -170,6 +172,14 @@ export function QuestionsPage() {
         list={questions}
         filters={filterSpec}
         columns={columns}
+        trailing={
+          <ExportButton
+            label={`Export ${questions.total.toLocaleString('en-IN')} ${questions.total === 1 ? 'row' : 'rows'}`}
+            disabled={questions.total === 0}
+            kind={EXPORT_KINDS.QUESTIONS}
+            download={() => api.admin.questions.export(questions.query)}
+          />
+        }
         rowKey={(question) => question.id}
         empty={{ title: 'No questions yet', hint: 'Import a sheet, or add one.' }}
         emptyFiltered="No questions match those filters"

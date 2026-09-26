@@ -544,6 +544,14 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
 export type QuestionListQuery = z.infer<typeof questionListQuerySchema>;
 export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;
 
+/** The list's own query minus the page: every matching row, in the list's order. */
+export const questionExportQuerySchema = questionListQuerySchema.omit({
+  page: true,
+  pageSize: true,
+});
+export type QuestionExportQuery = z.infer<typeof questionExportQuerySchema>;
+export type QuestionExportQueryInput = z.input<typeof questionExportQuerySchema>;
+
 /** ARCHIVED retires a question rather than deleting it: hidden from the bank and drawn into no future paper, while every paper that already pinned a version is untouched. */
 /** A page of drafts is 100 at most, so a bulk decision can never be larger than what was shown. */
 
@@ -559,8 +567,8 @@ export type SetQuestionStatusBody = z.infer<typeof setQuestionStatusSchema>;
 // cannot document a format the importer will not accept.
 // ============================================================================
 
-const languageColumn = (
-  key: string,
+const languageColumn = <Key extends string>(
+  key: Key,
   header: string,
   width: number,
   language: QuestionLanguage,
@@ -735,6 +743,7 @@ export const ADMIN_QUESTION_ROUTES = {
   unarchive: (id: string) => `/admin/questions/${id}/unarchive`,
   remove: (id: string) => `/admin/questions/${id}`,
   uploadImage: '/admin/questions/images',
+  export: '/admin/questions/export',
 } as const;
 
 // ============================================================================

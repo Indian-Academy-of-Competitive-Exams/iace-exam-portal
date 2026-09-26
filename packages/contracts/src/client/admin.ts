@@ -204,6 +204,7 @@ import {
 } from '../imports';
 import {
   ADMIN_QUESTION_ROUTES,
+  type QuestionExportQueryInput,
   QUESTION_IMAGE_FILE_FIELD,
   questionImageSchema,
   ADMIN_TAXONOMY_ROUTES,
@@ -686,6 +687,9 @@ export function adminClient(core: ApiCore) {
     questions: {
       list: (query: QuestionListQueryInput = {}): Promise<Paginated<QuestionSummary>> =>
         list(ADMIN_QUESTION_ROUTES.list, query, questionSummarySchema),
+
+      export: (query: QuestionExportQueryInput): Promise<Blob> =>
+        requestBlob(ADMIN_QUESTION_ROUTES.export, { ...query }),
 
       detail: (id: string): Promise<QuestionDetail> =>
         get(ADMIN_QUESTION_ROUTES.get(id), questionDetailSchema),
