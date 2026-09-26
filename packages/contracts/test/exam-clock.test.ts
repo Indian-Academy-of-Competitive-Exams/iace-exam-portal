@@ -4,6 +4,7 @@ import {
   ANSWER_STATE,
   ANSWER_STATES,
   clockText,
+  furthestSeat,
   isReviewState,
   mayOpenQuestion,
   nextOpenSectionId,
@@ -164,6 +165,28 @@ describe('mayOpenQuestion', () => {
 
   it('opens anything when nothing is open yet', () => {
     assert.equal(mayOpenQuestion(paper, null, 'q1'), true);
+  });
+});
+
+describe('furthestSeat', () => {
+  const paper = ['q1', 'q2', 'q3'];
+
+  it('is the last seat touched, whatever lies blank before it', () => {
+    const answers = { q2: { state: ANSWER_STATE.NOT_ANSWERED } };
+    assert.equal(furthestSeat(paper, answers), 1);
+  });
+
+  /** The failure this prevents: a reload reopening every seat because nothing was open yet. */
+  it('counts a seat only seen, not answered, as reached', () => {
+    const answers = {
+      q1: { state: ANSWER_STATE.ANSWERED },
+      q3: { state: ANSWER_STATE.NOT_ANSWERED },
+    };
+    assert.equal(furthestSeat(paper, answers), 2);
+  });
+
+  it('is before the first seat when nothing has been touched', () => {
+    assert.equal(furthestSeat(paper, { q1: { state: ANSWER_STATE.NOT_VISITED } }), -1);
   });
 });
 

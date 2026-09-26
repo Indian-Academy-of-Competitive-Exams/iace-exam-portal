@@ -377,6 +377,20 @@ export function mayOpenQuestion(
   return questionIds.indexOf(targetId) >= seat;
 }
 
+/** FORWARD_ONLY: the last seat any answer has touched, -1 before one has. Nothing behind it reopens. */
+export function furthestSeat(
+  questionIds: readonly string[],
+  answers: Readonly<Record<string, { state: AnswerState }>>,
+): number {
+  return questionIds.reduce(
+    (furthest, id, seat) =>
+      (answers[id]?.state ?? ANSWER_STATE.NOT_VISITED) === ANSWER_STATE.NOT_VISITED
+        ? furthest
+        : seat,
+    -1,
+  );
+}
+
 /** The seat after this one, wrapping to the first: "next" is never a dead end mid-paper. */
 export function nextQuestionId(
   questionIds: readonly string[],

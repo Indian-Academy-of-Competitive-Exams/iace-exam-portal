@@ -435,6 +435,55 @@ describe('AttemptStateService.save — the ack tells the truth', () => {
   });
 });
 
+describe('AttemptStateService.save — a forward-only paper', () => {
+  const IN_TIME = new Date('2026-09-01T05:10:00.000Z');
+  const SEATS = [
+    { questionId: 'q1', baseConfigSectionId: 'sec_a' },
+    { questionId: 'q2', baseConfigSectionId: 'sec_a' },
+    { questionId: 'q3', baseConfigSectionId: 'sec_a' },
+    { questionId: 'q4', baseConfigSectionId: 'sec_b' },
+  ];
+  const papers = { rowsOf: () => Promise.resolve(SEATS) } as unknown as PaperSheetService;
+  const FORWARD = { shuffleSeed: 1, shuffleQuestions: false };
+  const reachedQ2 = applyBatch(held(), {
+    revision: 1,
+    answers: [change({ questionId: 'q2' })],
+    sections: {},
+  }).answers;
+
+  async function saved(over: Partial<HeldState>, questionIds: string[]) {
+    const redis = new FakeRedis();
+    await redis.setJson(redisKeys.attemptState('att_1'), packHeld(held(over)), 60);
+    const answers = questionIds.map((questionId) =>
+      change({ questionId, selectedOptionId: 'opt_b' }),
+    );
+    const service = new AttemptStateService({} as PrismaService, redis.asService(), papers);
+    await service.save('stu_1', 'att_1', { revision: 1, answers, sections: {} }, IN_TIME);
+    return heldIn(await redis.getJson(redisKeys.attemptState('att_1')))?.answers ?? {};
+  }
+
+  /** The failure this prevents: a replayed save rewriting an answer the candidate has already left. */
+  it('drops a change to a seat behind the furthest one reached', async () => {
+    const answers = await saved({ forwardOnly: FORWARD, answers: reachedQ2 }, ['q1']);
+
+    assert.equal(answers.q1, undefined);
+  });
+
+  it('takes the seat reached, the ones ahead, and another section in the same batch', async () => {
+    const answers = await saved({ forwardOnly: FORWARD, answers: reachedQ2 }, ['q2', 'q3', 'q4']);
+
+    assert.equal(answers.q2?.selectedOptionId, 'opt_b');
+    assert.equal(answers.q3?.selectedOptionId, 'opt_b');
+    assert.equal(answers.q4?.selectedOptionId, 'opt_b');
+  });
+
+  it('leaves a FREE paper answerable anywhere', async () => {
+    const answers = await saved({ answers: reachedQ2 }, ['q1']);
+
+    assert.equal(answers.q1?.selectedOptionId, 'opt_b');
+  });
+});
+
 describe('AttemptStateService.clearPending', () => {
   const service = (redis: FakeRedis) =>
     new AttemptStateService({} as PrismaService, redis.asService(), {} as PaperSheetService);

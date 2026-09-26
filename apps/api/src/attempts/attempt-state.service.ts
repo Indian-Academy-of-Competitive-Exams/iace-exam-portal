@@ -21,8 +21,10 @@ import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { answersOf } from './answer-sheet';
 import { PaperSheetService } from './paper-sheet.service';
+import { displayOrder } from './attempt-rules';
 import {
   applyBatch,
+  forwardOrderOf,
   heldIn,
   holdsSitting,
   isStale,
@@ -34,6 +36,8 @@ import {
   PAUSE_LIMIT_SEC,
   packHeld,
   pendingAfter,
+  withinReach,
+  type ForwardOrder,
   type HeldState,
 } from './attempt-state';
 
@@ -49,6 +53,16 @@ const BEING_ANSWERED = 'This sitting is being written to right now. Try again in
 const ALREADY_ENDED = 'This sitting has ended, so nothing more can be saved to it.';
 const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
 
+/** A sitting as it is opened or resumed: its row, and how a forward-only one orders its seats. */
+export interface SittingOpened {
+  id: string;
+  studentId: string;
+  testId: string;
+  startedAt: Date;
+  endsAt: Date;
+  forwardOnly?: ForwardOrder;
+}
+
 @Injectable()
 export class AttemptStateService {
   constructor(
@@ -58,11 +72,7 @@ export class AttemptStateService {
   ) {}
 
   /** Seeded when the sitting starts, so no later save has to ask Postgres whose attempt this is. */
-  async open(
-    attempt: { id: string; studentId: string; testId: string; startedAt: Date; endsAt: Date },
-    tab?: string,
-    now: Date = new Date(),
-  ): Promise<void> {
+  async open(attempt: SittingOpened, tab?: string, now: Date = new Date()): Promise<void> {
     await this.patch(
       attempt.id,
       (held) => ({
@@ -74,6 +84,7 @@ export class AttemptStateService {
         // Picked up again: the clock starts counting from here, not from where it was put down.
         lastSeenAt: now.toISOString(),
         tab: tab ?? held.tab,
+        forwardOnly: attempt.forwardOnly,
       }),
       () => ({
         attemptId: attempt.id,
@@ -87,6 +98,7 @@ export class AttemptStateService {
         pending: [],
         sections: {},
         tab,
+        forwardOnly: attempt.forwardOnly,
       }),
     );
 
@@ -94,11 +106,7 @@ export class AttemptStateService {
   }
 
   /** Puts back what Postgres holds, and gives back the time the paper was not on screen. */
-  async resume(
-    attempt: { id: string; studentId: string; testId: string; startedAt: Date; endsAt: Date },
-    tab?: string,
-    now: Date = new Date(),
-  ): Promise<Date> {
+  async resume(attempt: SittingOpened, tab?: string, now: Date = new Date()): Promise<Date> {
     const held = await this.require(attempt.studentId, attempt.id);
     if (isAbandoned(held, now)) return attempt.endsAt;
 
@@ -137,9 +145,9 @@ export class AttemptStateService {
     let applied = false;
     const next = await this.patch(
       attemptId,
-      (held) => {
+      async (held) => {
         applied = !isStale(held, batch);
-        return answered(held, studentId, batch, now);
+        return answered(held, studentId, await this.inReach(held, batch), now);
       },
       () => this.durableState(studentId, attemptId),
     );
@@ -199,10 +207,25 @@ export class AttemptStateService {
     await this.patch(attemptId, (held) => ({ ...held, endsAt: endsAt.toISOString() }));
   }
 
+  /** The seats come from the per-process paper cache, so a forward-only save still reads no Postgres once warm. */
+  private async inReach(
+    held: HeldState,
+    batch: SaveAttemptStateBody,
+  ): Promise<SaveAttemptStateBody> {
+    if (!held.forwardOnly) return batch;
+    const { shuffleSeed, shuffleQuestions } = held.forwardOnly;
+    const seats = displayOrder(
+      await this.paperSheet.rowsOf(held.testId),
+      shuffleSeed,
+      shuffleQuestions,
+    );
+    return withinReach(held, batch, seats);
+  }
+
   /** Every write of the key, giving way to one that beat it. Null when gone and nothing seeds it. */
   private patch(
     attemptId: string,
-    change: (held: HeldState) => HeldState,
+    change: (held: HeldState) => HeldState | Promise<HeldState>,
     seed: () => HeldState | Promise<HeldState>,
   ): Promise<HeldState>;
   private patch(
@@ -211,7 +234,7 @@ export class AttemptStateService {
   ): Promise<HeldState | null>;
   private async patch(
     attemptId: string,
-    change: (held: HeldState) => HeldState,
+    change: (held: HeldState) => HeldState | Promise<HeldState>,
     seed?: () => HeldState | Promise<HeldState>,
   ): Promise<HeldState | null> {
     const key = redisKeys.attemptState(attemptId);
@@ -221,7 +244,7 @@ export class AttemptStateService {
       if (!held) return null;
 
       // A change may refuse by throwing; a lost swap judges it again against the fresh read.
-      const next = change(held);
+      const next = await change(held);
       if (await this.redis.replaceJson(key, raw, packHeld(next), STATE_TTL_SEC)) return next;
     }
     throw new AppException(ErrorCodes.CONFLICT, BEING_ANSWERED);
@@ -282,6 +305,8 @@ export class AttemptStateService {
         startedAt: true,
         endsAt: true,
         status: true,
+        shuffleSeed: true,
+        test: { select: { baseConfig: { select: { navigation: true, shuffleQuestions: true } } } },
         sheet: { select: { answers: true, updatedAt: true } },
       },
     });
@@ -314,6 +339,11 @@ export class AttemptStateService {
       answers,
       pending: [],
       sections: {},
+      forwardOnly: forwardOrderOf(
+        attempt.test.baseConfig.navigation,
+        attempt.shuffleSeed,
+        attempt.test.baseConfig.shuffleQuestions,
+      ),
     };
   }
 }

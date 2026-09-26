@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  furthestSeat,
   isReviewState,
   mayOpenQuestion,
   NAVIGATION_POLICY,
@@ -97,7 +98,10 @@ export function useExamView(
 
   const section = paper.sections.find((row) => row.id === sectionId);
   const inSection = paper.questions.filter((row) => row.baseConfigSectionId === sectionId);
-  const current = inSection.find((row) => row.questionId === questionId) ?? inSection[0];
+  const order = inSection.map((row) => row.questionId);
+  // A forward-only reload lands where the candidate had got to, not on a seat already left.
+  const landing = forwardOnly ? Math.max(0, furthestSeat(order, state.answers)) : 0;
+  const current = inSection.find((row) => row.questionId === questionId) ?? inSection[landing];
   const counts = paletteCounts(
     paper.questions.map((row) => row.questionId),
     state.answers,
@@ -145,7 +149,6 @@ export function useExamView(
     setQuestionId(to);
   };
 
-  const order = inSection.map((row) => row.questionId);
   const canOpen = (id: string): boolean =>
     !forwardOnly || mayOpenQuestion(order, current?.questionId ?? null, id);
 

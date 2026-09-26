@@ -14,6 +14,7 @@ import {
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
+import { forwardOrderOf } from './attempt-state';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import {
@@ -34,6 +35,8 @@ const SITTABLE_INCLUDE = {
       languages: true,
       totalQuestions: true,
       locked: true,
+      navigation: true,
+      shuffleQuestions: true,
       // A scoped test is sat on its own sections' clock, never the whole configuration's.
       sections: {
         select: {
@@ -79,13 +82,14 @@ export class AttemptsService {
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = await this.liveAttempt(studentId, testId);
     if (live && (input.resume === undefined || live.id === input.resume)) {
+      const test = await this.requireTest(testId);
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
-      const endsAt = await this.state.resume(live, input.tab);
+      const endsAt = await this.state.resume(opened(live, test), input.tab);
       // Durable too, or the sweeper would judge a resumed sitting by the deadline it walked away from.
       if (endsAt.getTime() !== live.endsAt.getTime()) {
         await this.prisma.attempt.update({ where: { id: live.id }, data: { endsAt } });
       }
-      return toLiveAttempt({ ...live, endsAt }, await this.requireTest(testId), false);
+      return toLiveAttempt({ ...live, endsAt }, test, false);
     }
     // A reclaim of a sitting handed in elsewhere must land on its result, not on a fresh paper.
     if (input.resume !== undefined) throw new AppException(ErrorCodes.SITTING_ENDED);
@@ -103,7 +107,7 @@ export class AttemptsService {
 
     try {
       const started = await this.create(studentId, test, slots, input.languages);
-      await this.state.open(started, input.tab);
+      await this.state.open(opened(started, test), input.tab);
       // The catalog caches where this student has got to, and starting is one of two things that move it.
       await this.access.invalidateStudent(studentId);
       return toLiveAttempt(started, test, true);
@@ -114,7 +118,7 @@ export class AttemptsService {
       if (!won) {
         throw new AppException(ErrorCodes.CONFLICT, 'That sitting has just ended. Open it again.');
       }
-      await this.state.open(won, input.tab);
+      await this.state.open(opened(won, test), input.tab);
       return toLiveAttempt(won, test, false);
     }
   }
@@ -183,6 +187,14 @@ export class AttemptsService {
 }
 
 type AttemptRow = Prisma.AttemptGetPayload<object>;
+
+function opened(attempt: AttemptRow, test: SittableTest) {
+  const { navigation, shuffleQuestions } = test.baseConfig;
+  return {
+    ...attempt,
+    forwardOnly: forwardOrderOf(navigation, attempt.shuffleSeed, shuffleQuestions),
+  };
+}
 
 function toLiveAttempt(
   attempt: AttemptRow,

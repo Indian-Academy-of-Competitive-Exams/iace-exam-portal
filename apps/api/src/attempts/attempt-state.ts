@@ -1,8 +1,11 @@
 import {
   ANSWER_STATE,
+  furthestSeat,
+  NAVIGATION_POLICY,
   type AnswerChange,
   type AnswerState,
   type LiveAnswer,
+  type NavigationPolicy,
   type SaveAttemptStateBody,
   type SectionProgress,
 } from '@iace/contracts';
@@ -21,6 +24,23 @@ export const PAUSE_CREDIT_CAP_SEC = PAUSE_LIMIT_SEC;
 
 /** A gap this short is a reload or a quiet minute of reading, not an absence — it is spent, not given back. */
 export const PRESENT_GRACE_SEC = 60;
+
+/** What a FORWARD_ONLY sitting rebuilds its own seat order from, beside the cached paper. */
+export interface ForwardOrder {
+  shuffleSeed: number;
+  shuffleQuestions: boolean;
+}
+
+/** Absent on a FREE paper, which is every key written before this shipped. */
+export function forwardOrderOf(
+  navigation: NavigationPolicy,
+  shuffleSeed: number,
+  shuffleQuestions: boolean,
+): ForwardOrder | undefined {
+  return navigation === NAVIGATION_POLICY.FORWARD_ONLY
+    ? { shuffleSeed, shuffleQuestions }
+    : undefined;
+}
 
 /** What Redis holds, plus the facts a save is judged against so judging one never reads Postgres. */
 export interface HeldState {
@@ -41,6 +61,7 @@ export interface HeldState {
   /** Questions changed since the last flush. Absent on a key written before this shipped. */
   pending?: string[];
   sections: Record<string, SectionProgress>;
+  forwardOnly?: ForwardOrder;
   /** The tab answering: a string holds it, null was stood down, absent is a key put back cold. */
   tab?: string | null;
 }
@@ -137,6 +158,27 @@ export function holdsSitting(held: HeldState, tab: string | undefined): boolean 
 /** At or below the held revision is a batch a newer save already carried, not one to replay. */
 export function isStale(held: HeldState, batch: SaveAttemptStateBody): boolean {
   return batch.revision <= held.revision;
+}
+
+/** FORWARD_ONLY: a change to a seat behind the furthest one its section has reached is dropped, not taken. */
+export function withinReach(
+  held: HeldState,
+  batch: SaveAttemptStateBody,
+  seats: readonly { questionId: string; baseConfigSectionId: string }[],
+): SaveAttemptStateBody {
+  const bySection = new Map<string, string[]>();
+  for (const seat of seats) {
+    const section = bySection.get(seat.baseConfigSectionId);
+    if (section) section.push(seat.questionId);
+    else bySection.set(seat.baseConfigSectionId, [seat.questionId]);
+  }
+
+  const behind = new Set<string>();
+  for (const order of bySection.values()) {
+    const reached = Math.max(0, furthestSeat(order, held.answers));
+    for (const questionId of order.slice(0, reached)) behind.add(questionId);
+  }
+  return { ...batch, answers: batch.answers.filter((change) => !behind.has(change.questionId)) };
 }
 
 export function applyBatch(
