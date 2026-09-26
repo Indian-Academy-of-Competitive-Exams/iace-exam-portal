@@ -39,6 +39,7 @@ export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-v
 export { useCountdown, useAnchoredCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
 export { isMarkingPending } from './marking';
+export { seenTours, useTourRun, type SeenTours, type TourRun, type TourStep } from './tour';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';
 export {

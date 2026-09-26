@@ -11,22 +11,28 @@ type AdminClient = ReturnType<typeof adminClient>;
 /** A group's schemas load on its first call, so importing the client costs only auth and the envelope. */
 function lazyGroup<T extends object>(load: () => Promise<T>): T {
   let real: Promise<T> | undefined;
-  return new Proxy({} as T, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      return (...args: unknown[]) => {
+  // Admin nests its groups (`admin.dashboard.get`), so the proxy records the path and resolves it on call.
+  const at = (path: string[]): unknown =>
+    new Proxy(() => undefined, {
+      get: (_target, prop) =>
+        typeof prop === 'symbol' || prop === 'then' ? undefined : at([...path, prop]),
+      apply(_target, _this, args: unknown[]) {
         // Assigned on CALL, never on access: touching the property must not pull the group in.
         real ??= load();
         return real.then((group) => {
-          const method = group[prop as keyof T];
+          type Node = Record<string, unknown> | undefined;
+          const owner = path
+            .slice(0, -1)
+            .reduce<Node>((node, key) => node?.[key] as Node, group as Node);
+          const method = owner?.[path.at(-1) ?? ''];
           if (typeof method !== 'function') {
-            throw new TypeError(`Unknown client method: ${String(prop)}`);
+            throw new TypeError(`Unknown client method: ${path.join('.')}`);
           }
-          return method(...args);
+          return method.apply(owner, args);
         });
-      };
-    },
-  });
+      },
+    });
+  return at([]) as T;
 }
 
 /** Callers never see the envelope: every method returns `data` or throws an `AppException`. */

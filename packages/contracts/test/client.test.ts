@@ -115,6 +115,18 @@ describe('typed client — success', () => {
     await api.request('/thing', { schema });
     assert.equal(calls[0]?.client, 'MOBILE');
   });
+
+  it('reaches a nested admin method through the lazy group', async () => {
+    const { api, calls } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
+    assert.equal(await api.admin.branches.remove('b1'), null);
+    assert.equal(calls.length, 1);
+  });
+
+  it('names an unknown method instead of calling undefined', async () => {
+    const { api } = clientWith([]);
+    const admin = api.admin as unknown as { nope: { get: () => Promise<unknown> } };
+    await assert.rejects(admin.nope.get(), /Unknown client method: nope\.get/);
+  });
 });
 
 describe('typed client — failure', () => {
