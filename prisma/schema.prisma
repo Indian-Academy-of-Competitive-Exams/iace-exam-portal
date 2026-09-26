@@ -318,7 +318,6 @@ model ExamStage {
   tests       Test[]
   series      TestSeries[]
 
-  @@index([examId])
   @@index([examId, order])
   @@index([disposition])
 }
@@ -560,7 +559,6 @@ model Test {
   @@index([baseConfigId])
   @@index([examStageId])
   @@index([status])
-  @@index([testSeriesId])
   // Trigram, for the attempt list's ILIKE on test title.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Test_title_trgm_idx")
 }
@@ -619,7 +617,6 @@ model QuestionAssignment {
 
   @@unique([testId, baseConfigSectionId, role])
   @@index([assigneeId, finalizedAt])
-  @@index([testId])
 }
 
 // The discussion on one section of one test, at the pair an assignment keys on.
