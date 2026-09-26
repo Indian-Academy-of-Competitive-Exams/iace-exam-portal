@@ -68,6 +68,7 @@ export function ImportQuestionsPage() {
   });
 
   const plan = intake.plan;
+  const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
     api.admin.imports.questionErrors(file),
@@ -126,6 +127,12 @@ export function ImportQuestionsPage() {
           : undefined
       }
     >
+      {blurry > 0 ? (
+        <Alert variant="warning">
+          {`${blurry} ${blurry === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \\( … \\) in the sheet to make it a real equation.`}
+        </Alert>
+      ) : null}
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -183,7 +190,18 @@ function ImportRow({ row }: Readonly<{ row: QuestionImportRow }>) {
 }
 
 function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
-  if (row.action === 'create') return <Badge variant="success">Create</Badge>;
+  if (row.action === 'create') {
+    return (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="success">Create</Badge>
+        {row.warnings.length > 0 ? (
+          <span className="text-xs text-warning-ink">
+            {row.warnings.map((warning) => warning.message).join('; ')}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
 
   // A repeat is not an error — re-uploading last week's sheet with ten new rows added is normal use.
   if (row.action === 'duplicate') {

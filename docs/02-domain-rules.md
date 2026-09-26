@@ -396,6 +396,9 @@ letter-based answer key are why real uploads were rejected wholesale.
 - Every cell is plain text and arrives exactly as typed, so `x < 5` and `A & B` are safe. Formatting,
   tables and typed equations are **not** read from a sheet — a tag typed into a cell shows as the
   tag. Rich content is added by opening the question in the bank afterwards.
+- **Equations are, written as LaTeX between `\(` and `\)`** in a question, option or solution
+  cell. Each becomes the same inline formula the editor writes, and one KaTeX cannot draw is an error
+  on its line. `\( … \)`, not dollars: "$5 and $10" would read as one formula.
 - **Pictures are.** A picture floating over a question, option or solution cell (its top-left corner
   in that cell — how ThinkExam exports its figures and formula images) is imported into that field;
   over any other column it is an error. Where the text leaves exactly one gap of three spaces per
@@ -403,6 +406,9 @@ letter-based answer key are why real uploads were rejected wholesale.
   position within the cell, so a picture is never put in a gap it only might belong to. They are
   keyed by a hash of their bytes, so a re-upload still matches its own questions as duplicates, and
   uploaded only on commit. The rejected-rows download cannot carry them, and says so on those rows.
+  A picture no taller than a line of text (`FORMULA_PICTURE_MAX_HEIGHT`) is a formula saved at
+  screen resolution: the preview warns that it will read blurry and to retype it as `\( … \)`, but
+  the row still imports.
 - **Nothing is created by an import.** A subject or topic matching nothing in the bank is reported
   against its line, never quietly invented; the dropdowns cascade, so the topics offered on a row are
   the ones under that row's subject.

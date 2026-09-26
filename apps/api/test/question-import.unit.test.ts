@@ -10,7 +10,7 @@ import {
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type CsvTable, normaliseHeader } from '../src/common/importing';
-import { htmlWithPictures } from '../src/questions/question-content';
+import { htmlFromCell } from '../src/questions/question-content';
 import { computeStemHash, emptyTaxonomy } from '../src/questions/question-core';
 import {
   planQuestionImport,
@@ -435,10 +435,10 @@ function planWithPictures(
   return planQuestionImport(sheet, catalog(), noDedup());
 }
 
-describe('htmlWithPictures', () => {
+describe('htmlFromCell', () => {
   it('drops the pictures into the gaps when there is one gap per picture', () => {
     assert.equal(
-      htmlWithPictures('If   , find   .', ['a.png', 'b.png']),
+      htmlFromCell('If   , find   .', ['a.png', 'b.png']),
       '<p>If <img data-key="a.png" alt="">, find <img data-key="b.png" alt="">.</p>',
     );
   });
@@ -446,13 +446,24 @@ describe('htmlWithPictures', () => {
   /** The failure this prevents: a picture landing in a gap it was never lifted out of. */
   it('puts the pictures after the text when the gaps do not match them one for one', () => {
     assert.equal(
-      htmlWithPictures('If   , then what is   ?', ['a.png']),
+      htmlFromCell('If   , then what is   ?', ['a.png']),
       '<p>If   , then what is   ?</p><p><img data-key="a.png" alt=""></p>',
     );
   });
 
+  it('turns \\( … \\) into the same inline formula the editor writes', () => {
+    assert.equal(
+      htmlFromCell(String.raw`If \( \sin A = \frac{m}{n} \), find x < 2`, []),
+      String.raw`<p>If <span data-type="inline-math" data-latex="\sin A = \frac{m}{n}"></span>, find x &lt; 2</p>`,
+    );
+  });
+
+  it('escapes a formula so it cannot close its own attribute', () => {
+    assert.match(htmlFromCell(String.raw`\( a"b \)`, []), /data-latex="a&quot;b"/);
+  });
+
   it('leaves a cell without pictures exactly as before, gaps and all', () => {
-    assert.equal(htmlWithPictures('a   b', []), '<p>a   b</p>');
+    assert.equal(htmlFromCell('a   b', []), '<p>a   b</p>');
   });
 });
 
@@ -465,6 +476,23 @@ describe('planQuestionImport — pictures placed over the sheet', () => {
     const [key] = [...(row?.pictures.keys() ?? [])];
     assert.match(key ?? '', /^questions\/images\/[0-9a-f]{32}\.png$/);
     assert.match(row?.draft?.options[1]?.text.en ?? '', new RegExp(`data-key="${key}"`));
+  });
+
+  it('warns, without refusing, about a picture no taller than a line of text', () => {
+    const row = planWithPictures({ ...MCQ_ROW, option2_en: '' }, { option2_en: [PNG] }).rows[0];
+
+    assert.equal(row?.action, 'create');
+    assert.deepEqual(
+      row?.warnings.map((warning) => warning.column),
+      ['option2_en'],
+    );
+  });
+
+  /** The failure this prevents: a formula that will not draw reaching a candidate as red text. */
+  it('refuses a cell formula KaTeX cannot draw', () => {
+    const row = plan([{ ...MCQ_ROW, stem_en: String.raw`What is \( \frac{1}{ \)?` }]).rows[0];
+
+    assert.ok(row?.issues.some((issue) => issue.code === QUESTION_VALIDATION_CODE.MATH_INVALID));
   });
 
   it('refuses bytes that are not an image, naming the cell', () => {

@@ -1,6 +1,7 @@
 import {
   ANSWER_MODE,
   DEFAULT_LANGUAGE,
+  FORMULA_PICTURE_MAX_HEIGHT,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
   previewTextOf,
@@ -16,6 +17,7 @@ import {
   questionTypeSchema,
   tagSchema,
   type AnswerMode,
+  type ImportWarning,
   type LocalizedText,
   type QuestionDraft,
   type QuestionImportAction,
@@ -24,7 +26,7 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable, normaliseHeader } from '../common/importing';
-import { htmlWithPictures } from './question-content';
+import { htmlFromCell } from './question-content';
 import { importedImageKey, judgeQuestionImage, type CheckedImage } from './question-images';
 import { computeStemHash, languagesIn, validateQuestion } from './question-core';
 import { lookupName, topicKey, type TaxonomyCatalog } from './taxonomy-context';
@@ -108,7 +110,7 @@ interface RowContent {
   pictures: Map<string, CheckedImage>;
 }
 
-function rowContent(row: CsvRow, issues: ValidationIssue[]): RowContent {
+function rowContent(row: CsvRow, issues: ValidationIssue[], warnings: ImportWarning[]): RowContent {
   const pictures = new Map<string, CheckedImage>();
 
   for (const column of QUESTION_IMPORT_COLUMNS) {
@@ -131,11 +133,17 @@ function rowContent(row: CsvRow, issues: ValidationIssue[]): RowContent {
         );
         continue;
       }
+      if (judged.height <= FORMULA_PICTURE_MAX_HEIGHT) {
+        warnings.push({
+          column: key,
+          message: `${LABEL_BY_KEY.get(key)}: this picture looks like a formula saved at text size (${judged.width}×${judged.height} px), so it will look blurry. Type it as \\( … \\) to make it a real equation.`,
+        });
+      }
       const stored = importedImageKey(judged);
       pictures.set(stored, judged);
       keys.push(stored);
     }
-    return htmlWithPictures(cellOf(row, key), keys);
+    return htmlFromCell(cellOf(row, key), keys);
   };
 
   return { html, pictures };
@@ -217,7 +225,8 @@ function planRow(
   const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
 
   const type = readType(row, issues);
-  const content = rowContent(row, issues);
+  const warnings: ImportWarning[] = [];
+  const content = rowContent(row, issues, warnings);
   const draft = buildDraft(row, content, type, names, catalog, issues);
 
   // The core rules run on every row, whatever the sheet got wrong: an admin fixing one column should see the rest of that row's problems in the same pass.
@@ -257,6 +266,7 @@ function planRow(
     topicName: names.topic || null,
     languages,
     issues: reported,
+    warnings,
     duplicateOf,
     draft: action === 'create' ? draft : null,
     stemHash,

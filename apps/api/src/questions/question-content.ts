@@ -74,9 +74,37 @@ export function htmlFromPlainText(text: string): string {
 /** Three spaces or more: what an exporter leaves where it lifted an inline picture out of the text. */
 const PICTURE_GAP = / {3,}/g;
 const GAP_MARK = '\u{E000}';
+const MATH_MARK = '\u{E001}';
+
+/** `\( … \)` on one line: a typist's inline formula. Dollars would read "$5 and $10" as one. */
+const CELL_MATH = /\\\((.+?)\\\)/g;
+
+const ATTRIBUTE_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+};
+
+/** Exactly what the editor writes for an inline formula, so the two are one kind of content. */
+const inlineMath = (latex: string): string =>
+  `<span data-type="inline-math" data-latex="${latex.replaceAll(/[&<>"]/g, (char) => ATTRIBUTE_ESCAPES[char] ?? char)}"></span>`;
+
+/** A sheet cell as html: its `\( … \)` formulas, and its pictures in the gaps left for them or after the text. */
+export function htmlFromCell(text: string, pictureKeys: readonly string[]): string {
+  const formulas: string[] = [];
+  const marked = text.replaceAll(CELL_MATH, (_match, latex: string) => {
+    formulas.push(latex.trim());
+    return MATH_MARK;
+  });
+  let nextFormula = 0;
+  return htmlWithPictures(marked, pictureKeys).replaceAll(MATH_MARK, () =>
+    inlineMath(formulas[nextFormula++] ?? ''),
+  );
+}
 
 /** Pictures fill the gaps only when there is exactly one per picture; otherwise a guess, so they follow the text. */
-export function htmlWithPictures(text: string, keys: readonly string[]): string {
+function htmlWithPictures(text: string, keys: readonly string[]): string {
   const tags = keys.map((key) => `<img data-key="${key}" alt="">`);
   if (tags.length === 0) return htmlFromPlainText(text);
 

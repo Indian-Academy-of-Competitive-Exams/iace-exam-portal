@@ -669,12 +669,22 @@ export const QUESTION_IMPORT_MAX_ROWS = 1000;
 /** Several tags in one cell. */
 export const TAG_SEPARATOR = ',';
 
+/** A picture this short, in pixels, is a formula saved at text size: it will read blurry at any zoom. */
+export const FORMULA_PICTURE_MAX_HEIGHT = 64;
+
 /** Carried by every question a sheet creates, so one filter finds what an upload brought in. */
 export const QUESTION_IMPORT_TAG = 'imported';
 
 /** `create` writes the row; `duplicate` is a stem already in the bank or earlier in this file — skipped, not an error worth blocking the upload for; `skip` has issues. */
 const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip']);
 export type QuestionImportAction = z.infer<typeof questionImportActionSchema>;
+
+/** Worth knowing but not wrong: the row still imports. `column` names the cell, by import key. */
+const importWarningSchema = z.object({
+  column: z.string(),
+  message: z.string(),
+});
+export type ImportWarning = z.infer<typeof importWarningSchema>;
 
 const questionImportRowSchema = z.object({
   /** 1-based line in the uploaded file, header included, as Excel shows it. */
@@ -686,6 +696,7 @@ const questionImportRowSchema = z.object({
   topicName: z.string().nullable(),
   languages: z.array(languageSchema),
   issues: z.array(validationIssueSchema),
+  warnings: z.array(importWarningSchema),
   /** The question this row repeats: an id from the bank, or a line in this file. */
   duplicateOf: z.string().nullable(),
 });
