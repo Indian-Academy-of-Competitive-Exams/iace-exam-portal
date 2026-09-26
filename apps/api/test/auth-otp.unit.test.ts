@@ -224,6 +224,18 @@ describe('OtpService — the day a mobile is allowed', () => {
     assert.equal((await otp.request(ActorTypes.STUDENT, MOBILE)).sent, true);
   });
 
+  /** The failure this prevents: a crash between INCR and EXPIRE leaves a counter that never resets, locking the number out forever. */
+  it('repairs a daily counter a crash left with no TTL', async () => {
+    const { otp, redis } = build(noCooldown);
+    // As if the first request's INCR landed but its EXPIRE never did.
+    await redis.client.set(`otp:daily:${MOBILE}`, '1');
+    assert.equal(await redis.client.ttl(`otp:daily:${MOBILE}`), -1);
+
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    assert.ok((await redis.client.ttl(`otp:daily:${MOBILE}`)) > 0);
+  });
+
   it('counts each mobile on its own', async () => {
     const { otp } = build(noCooldown);
     for (let sent = 0; sent < 5; sent += 1) await otp.request(ActorTypes.STUDENT, MOBILE);

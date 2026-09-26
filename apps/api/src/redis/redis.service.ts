@@ -16,6 +16,28 @@ if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
 return redis.call('DEL', KEYS[1])
 `;
 
+/** Reads an index and deletes it with every member's key in the same pass, so nothing added after the read outlives the delete. */
+const DELETE_INDEXED_SET = `
+local ids = redis.call('SMEMBERS', KEYS[1])
+local keys = {KEYS[1]}
+for i, id in ipairs(ids) do
+  keys[i + 1] = ARGV[1] .. id
+end
+redis.call('DEL', unpack(keys))
+return ids
+`;
+
+/** The take-over from holdLock, atomic: a lapsed lock cannot be read as free by two callers at once. */
+const TAKE_OVER_LOCK = `
+if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then return false end
+local holder = redis.call('GET', KEYS[1])
+if holder == false or holder == ARGV[1] or ARGV[3] == '1' then
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+  return false
+end
+return holder
+`;
+
 /** Reconnect backoff: quick enough for a restart, slow enough not to storm a Redis that is still down. */
 const RETRY_STEP_MS = 200;
 const RETRY_CEILING_MS = 5000;
@@ -141,6 +163,11 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     if (keys.length > 0) await this.client.del(...keys);
   }
 
+  /** Deletes an index and every `keyPrefix + member` key in one script — a member added after the read cannot outlive it. */
+  async deleteIndexedSet(indexKey: string, keyPrefix: string): Promise<string[]> {
+    return this.client.eval(DELETE_INDEXED_SET, 1, indexKey, keyPrefix) as Promise<string[]>;
+  }
+
   /** True only for the caller that took it; everyone else is refused until the TTL runs out. */
   async acquireLock(key: string, holderId: string, ttlSec: number): Promise<boolean> {
     return (await this.client.set(key, holderId, 'EX', ttlSec, 'NX')) === 'OK';
@@ -158,11 +185,15 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     ttlSec: number,
     steal = false,
   ): Promise<string | null> {
-    if ((await this.client.set(key, holderId, 'EX', ttlSec, 'NX')) === 'OK') return null;
-    const holder = await this.client.get(key);
-    if (holder !== null && holder !== holderId && !steal) return holder;
-    await this.client.set(key, holderId, 'EX', ttlSec);
-    return null;
+    const holder = await this.client.eval(
+      TAKE_OVER_LOCK,
+      1,
+      key,
+      holderId,
+      String(ttlSec),
+      steal ? '1' : '0',
+    );
+    return (holder as string | null) ?? null;
   }
 
   /** Remaining TTL in seconds, or 0 when the key is gone / has no expiry. */

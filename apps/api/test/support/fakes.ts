@@ -202,6 +202,15 @@ export class FakeRedis {
     if (keys.length > 0) await this.client.del(...keys);
   }
 
+  /** One thread, so the read and the delete are already atomic — the real one needs a script. */
+  async deleteIndexedSet(indexKey: string, keyPrefix: string): Promise<string[]> {
+    const entry = this.live(indexKey);
+    const ids = entry?.value instanceof Set ? [...entry.value] : [];
+    this.store.delete(indexKey);
+    for (const id of ids) this.store.delete(`${keyPrefix}${id}`);
+    return ids;
+  }
+
   async ttl(key: string): Promise<number> {
     const ttl = await this.client.ttl(key);
     return Math.max(ttl, 0);

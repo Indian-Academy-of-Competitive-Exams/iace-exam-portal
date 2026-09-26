@@ -29,7 +29,9 @@ export class MetricsService implements OnModuleInit {
   private readonly queueDepth: Gauge<'queue'>;
   private readonly queueOldestWait: Gauge<'queue'>;
   private readonly queueFailures: Counter<'queue' | 'outcome'>;
+  private readonly queueConnectionErrors: Counter<'queue'>;
   private readonly redisMemory: Gauge<string>;
+  private readonly redisMemoryRatio: Gauge<string>;
   private readonly redisEvictions: Gauge<string>;
   private readonly liveAttempts: Gauge<string>;
   private readonly dbConnections: Gauge<string>;
@@ -84,9 +86,22 @@ export class MetricsService implements OnModuleInit {
       registers: [this.registry],
     });
 
+    this.queueConnectionErrors = new Counter({
+      name: `${PREFIX}queue_connection_errors_total`,
+      help: 'Redis faults on a queue’s own connection — console-only before this listener existed',
+      labelNames: ['queue'] as const,
+      registers: [this.registry],
+    });
+
     this.redisMemory = new Gauge({
       name: `${PREFIX}redis_memory_bytes`,
       help: 'Redis memory in use. Live attempt state, sessions and OTP are all here',
+      registers: [this.registry],
+    });
+
+    this.redisMemoryRatio = new Gauge({
+      name: `${PREFIX}redis_memory_ratio`,
+      help: 'used_memory / maxmemory. Under noeviction this is the only warning before a SET gets -OOM — evicted_keys stays 0 forever',
       registers: [this.registry],
     });
 
@@ -115,7 +130,10 @@ export class MetricsService implements OnModuleInit {
 
     for (const name of Object.values(QUEUE_NAMES)) {
       try {
-        this.queues.set(name, this.moduleRef.get<Queue>(getQueueToken(name), { strict: false }));
+        const queue = this.moduleRef.get<Queue>(getQueueToken(name), { strict: false });
+        this.queues.set(name, queue);
+        // Without this, an unlistened 'error' is console-only (BullMQ's own fallback) or worse.
+        queue.on('error', (error: Error) => this.countQueueConnectionError(name, error));
       } catch {
         this.logger.warn(`Queue ${name} is registered nowhere, so nothing will measure it`);
       }
@@ -130,12 +148,20 @@ export class MetricsService implements OnModuleInit {
     this.submits.inc({ outcome });
   }
 
-  countOtpSend(outcome: 'sent' | 'refused_ip_daily' | 'refused_budget'): void {
+  countOtpSend(
+    outcome: 'sent' | 'refused_ip_daily' | 'refused_budget' | 'refused_mobile_daily',
+  ): void {
     this.otpSends.inc({ outcome });
   }
 
   countQueueFailure(queue: QueueName, spent: boolean): void {
     this.queueFailures.inc({ queue, outcome: spent ? 'spent' : 'retrying' });
+  }
+
+  /** A fault on the queue's own Redis connection, not a job outcome — BullMQ already survives it. */
+  countQueueConnectionError(queue: QueueName, error: Error): void {
+    this.queueConnectionErrors.inc({ queue });
+    this.logger.error(`${queue} queue connection fault: ${error.message}`, error.stack);
   }
 
   /** Everything that has to be asked for rather than counted, gathered on the scrape itself. */
@@ -170,7 +196,10 @@ export class MetricsService implements OnModuleInit {
     try {
       const info = await this.redis.client.info('memory');
       const stats = await this.redis.client.info('stats');
-      this.redisMemory.set(fieldOf(info, 'used_memory'));
+      const used = fieldOf(info, 'used_memory');
+      const max = fieldOf(info, 'maxmemory');
+      this.redisMemory.set(used);
+      this.redisMemoryRatio.set(max > 0 ? used / max : 0);
       this.redisEvictions.set(fieldOf(stats, 'evicted_keys'));
       this.liveAttempts.set(await this.redis.client.scard(redisKeys.attemptsDirty));
     } catch (error) {

@@ -109,6 +109,24 @@ describe('SessionService', () => {
     }
   });
 
+  it('a session created while revokeAll is running does not survive it', async () => {
+    const { sessions, redis } = build();
+    await openSession(sessions, 'r-old', NO_DEVICE, ActorTypes.ADMIN);
+
+    const sadd = redis.client.sadd.bind(redis.client);
+    redis.client.sadd = async (key: string, member: string) => {
+      const result = await sadd(key, member);
+      // The new session is now indexed — exactly the instant a concurrent revokeAll's read could catch it.
+      await sessions.revokeAll(ActorTypes.ADMIN, SUBJECT);
+      return result;
+    };
+    const newId = await openSession(sessions, 'r-new', NO_DEVICE, ActorTypes.ADMIN);
+
+    // No orphan: gone from both, never alive but invisible to list/revokeAll.
+    assert.equal(await sessions.exists(ActorTypes.ADMIN, SUBJECT, newId), false);
+    assert.deepEqual(await sessions.list(ActorTypes.ADMIN, SUBJECT), []);
+  });
+
   it('keeps students and admins apart even on the same id', async () => {
     const { sessions } = build();
     const sessionId = sessions.newSessionId();

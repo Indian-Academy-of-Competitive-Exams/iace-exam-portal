@@ -116,14 +116,10 @@ export class SessionService {
     await this.redis.client.srem(redisKeys.sessionIndex(actor, subjectId), sessionId);
   }
 
-  /** Sign out everywhere — used on account deactivation and by the user. */
+  /** Sign out everywhere — used on account deactivation and by the user. One script: a sign-in racing this must land wholly before or wholly after it, never in between. */
   async revokeAll(actor: ActorType, subjectId: string): Promise<void> {
     const indexKey = redisKeys.sessionIndex(actor, subjectId);
-    const sessionIds = await this.redis.client.smembers(indexKey);
-    await this.redis.del(
-      ...sessionIds.map((id) => redisKeys.session(actor, subjectId, id)),
-      indexKey,
-    );
+    await this.redis.deleteIndexedSet(indexKey, redisKeys.session(actor, subjectId, ''));
   }
 
   /** Every live session of a subject with its id; an index entry whose key has expired is skipped. */

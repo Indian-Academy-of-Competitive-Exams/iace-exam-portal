@@ -83,12 +83,18 @@ export class OtpService {
     };
   }
 
+  /** INCR then guarantee a TTL, checked every call: a crash between the two commands would otherwise leave a counter that counts up forever. */
+  private async incrementDailyCounter(key: string): Promise<number> {
+    const count = await this.redis.client.incr(key);
+    if ((await this.redis.client.ttl(key)) < 0) await this.redis.client.expire(key, DAY_SEC);
+    return count;
+  }
+
   /** Counted before sending and never refunded: a refused request past the cap is already over it. */
   private async countTowardsDay(mobile: string): Promise<void> {
-    const key = redisKeys.otpDaily(mobile);
-    const sent = await this.redis.client.incr(key);
-    if (sent === 1) await this.redis.client.expire(key, DAY_SEC);
+    const sent = await this.incrementDailyCounter(redisKeys.otpDaily(mobile));
     if (sent > this.config.get('OTP_MAX_PER_DAY')) {
+      this.metrics.countOtpSend('refused_mobile_daily');
       throw new AppException(
         ErrorCodes.RATE_LIMITED,
         'Too many codes have been sent to this number. Try again later',
@@ -98,9 +104,7 @@ export class OtpService {
 
   /** The address-wide twin of `countTowardsDay`: a mobile's cap alone does not stop one address minting new numbers. */
   private async assertIpDailyBudget(ip: string): Promise<void> {
-    const key = redisKeys.otpDailyByIp(ip);
-    const sent = await this.redis.client.incr(key);
-    if (sent === 1) await this.redis.client.expire(key, DAY_SEC);
+    const sent = await this.incrementDailyCounter(redisKeys.otpDailyByIp(ip));
     if (sent > this.config.get('OTP_MAX_PER_DAY_PER_IP')) {
       this.metrics.countOtpSend('refused_ip_daily');
       throw new AppException(
@@ -112,8 +116,7 @@ export class OtpService {
 
   /** The platform-wide kill switch: once today's spend would cross the budget, every student waits for tomorrow rather than the bill growing unbounded. */
   private async assertGlobalDailyBudget(): Promise<void> {
-    const sent = await this.redis.client.incr(redisKeys.otpDailyGlobal);
-    if (sent === 1) await this.redis.client.expire(redisKeys.otpDailyGlobal, DAY_SEC);
+    const sent = await this.incrementDailyCounter(redisKeys.otpDailyGlobal);
 
     const budgetPaise = this.config.get('OTP_GLOBAL_DAILY_BUDGET_PAISE');
     const maxSends = Math.floor(budgetPaise / this.config.get('NOTIFICATION_COST_SMS_PAISE'));
