@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@iace/app-kit/browser';
-import { LoadingState } from '@iace/ui';
+import { LoadingState, PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
@@ -85,7 +85,9 @@ const NotificationSettingsPage = React.lazy(() =>
 
 /** Each chunk waits on the shape it is about to become, never on one spinner standing in for all of them. */
 const whileLoading = (page: React.ReactNode, fallback: React.ReactNode) => (
-  <React.Suspense fallback={fallback}>{page}</React.Suspense>
+  <PageErrorBoundary>
+    <React.Suspense fallback={fallback}>{page}</React.Suspense>
+  </PageErrorBoundary>
 );
 
 /** Phase 0 routing: a login screen and one authed shell. */

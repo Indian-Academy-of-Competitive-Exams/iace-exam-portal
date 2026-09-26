@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { ASSIGNMENT_ROLES } from '@iace/contracts';
 import { ProtectedRoute } from '@iace/app-kit/browser';
+import { PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { AppShell } from './components/app-shell';
 import { PageSkeleton } from './components/page-skeleton';
@@ -127,7 +128,9 @@ const LiveOpsPage = React.lazy(() =>
 
 /** Each chunk waits behind the same held-frame skeleton, so a route swap never shifts the layout. */
 const whileLoading = (page: React.ReactNode) => (
-  <React.Suspense fallback={<PageSkeleton />}>{page}</React.Suspense>
+  <PageErrorBoundary>
+    <React.Suspense fallback={<PageSkeleton />}>{page}</React.Suspense>
+  </PageErrorBoundary>
 );
 
 /** ProtectedRoute is the outer gate; AppShell is the layout inside it. */

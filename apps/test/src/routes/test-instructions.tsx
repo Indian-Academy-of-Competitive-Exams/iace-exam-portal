@@ -14,9 +14,10 @@ export function TestInstructionsPage() {
   const navigate = useNavigate();
   const fullscreen = useFullscreen();
 
-  // The paper's code is fetched while they read, so pressing begin never waits on a download.
+  // Both are fetched while they read: pressing begin, and handing in on a failing network, never wait on a download.
   useEffect(() => {
     void import('./exam');
+    void import('./submitted');
   }, []);
 
   const brief = useQuery({

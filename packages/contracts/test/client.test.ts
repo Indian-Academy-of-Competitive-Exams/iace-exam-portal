@@ -10,6 +10,7 @@ import {
   type ApiFailure,
   type Meta,
 } from '../src/index';
+import { lazyGroup } from '../src/client';
 
 /** Callers get unwrapped `data` or a typed throw — never an envelope or a raw Response. */
 
@@ -127,6 +128,19 @@ describe('typed client — success', () => {
     assert.equal(typeof String(api.admin.exams), 'string');
     assert.equal(typeof api.admin.exams.list.name, 'string');
     assert.equal(calls.length, 0);
+  });
+
+  it('retries a group whose load failed, rather than replaying the failure', async () => {
+    let loads = 0;
+    const group = lazyGroup(async () => {
+      loads += 1;
+      if (loads === 1) throw new TypeError('Failed to fetch dynamically imported module');
+      return { ping: async () => 'pong' };
+    });
+    await assert.rejects(group.ping(), /Failed to fetch/);
+    assert.equal(await group.ping(), 'pong');
+    assert.equal(await group.ping(), 'pong');
+    assert.equal(loads, 2);
   });
 
   it('names an unknown method instead of calling undefined', async () => {

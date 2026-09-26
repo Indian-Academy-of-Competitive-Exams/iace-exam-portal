@@ -15,6 +15,7 @@ export { Accordion } from './components/ui/accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 export { Alert } from './components/ui/alert';
 export { EmptyState, EMPTY_STATE_KINDS, type EmptyMessage } from './components/ui/empty-state';
+export { PageErrorBoundary } from './components/ui/page-error-boundary';
 export { Brandmark } from './components/ui/brandmark';
 export { Avatar } from './components/ui/avatar';
 export { Badge, type BadgeProps } from './components/ui/badge';

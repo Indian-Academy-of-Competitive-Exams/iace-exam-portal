@@ -9,7 +9,7 @@ type MeClient = ReturnType<typeof meClient>;
 type AdminClient = ReturnType<typeof adminClient>;
 
 /** A group's schemas load on its first call, so importing the client costs only auth and the envelope. */
-function lazyGroup<T extends object>(load: () => Promise<T>): T {
+export function lazyGroup<T extends object>(load: () => Promise<T>): T {
   let real: Promise<T> | undefined;
   // Admin nests its groups (`admin.dashboard.get`), so the proxy records the path and resolves it on call.
   const at = (path: string[]): unknown =>
@@ -20,8 +20,11 @@ function lazyGroup<T extends object>(load: () => Promise<T>): T {
         return typeof prop === 'symbol' || prop === 'then' ? undefined : at([...path, prop]);
       },
       apply(_target, _this, args: unknown[]) {
-        // Assigned on CALL, never on access: touching the property must not pull the group in.
-        real ??= load();
+        // Loaded on CALL, never on access; a failed load is dropped so the next call retries it.
+        real ??= load().catch((error: unknown) => {
+          real = undefined;
+          throw error;
+        });
         return real.then((group) => {
           type Node = Record<string, unknown> | undefined;
           const owner = path
