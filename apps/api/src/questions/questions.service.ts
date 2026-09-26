@@ -52,7 +52,7 @@ import {
   type BuiltQuestion,
 } from './question-core';
 import { questionOrderBy, questionWhere, reachableTest } from './question-query';
-import { type AuthoringCount } from './question-export';
+import { type AuthoringCount, type ExportedQuestion } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
 
 const QUESTION_INCLUDE = {
@@ -79,6 +79,24 @@ const QUESTION_INCLUDE = {
 } as const satisfies Prisma.QuestionInclude;
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
+
+const QUESTION_EXPORT_SELECT = {
+  questionCode: true,
+  type: true,
+  difficulty: true,
+  status: true,
+  tags: true,
+  createdAt: true,
+  subject: { select: { name: true } },
+  topic: { select: { name: true } },
+  createdBy: { select: { fullName: true, email: true } },
+  currentVersion: { select: { content: true, options: true, answerKey: true } },
+} as const satisfies Prisma.QuestionSelect;
+
+type QuestionExportRow = Prisma.QuestionGetPayload<{ select: typeof QUESTION_EXPORT_SELECT }>;
+
+/** The one part of a row the content readers need, so a lean export row reads the same way. */
+type WithVersion = Pick<QuestionExportRow, 'currentVersion'>;
 
 /** The COLUMNS an edit can change. What the question says is flattened beside them, leaf by leaf. */
 export const AUDITED_QUESTION_FIELDS = [
@@ -190,7 +208,7 @@ export class QuestionsService {
   /** Every row the list would page through, unsigned — a cell carries the image KEY the stem hash folds. */
   async exportRows(
     query: QuestionExportQuery,
-  ): Promise<{ questions: QuestionDetail[]; authoring: AuthoringCount[] }> {
+  ): Promise<{ questions: ExportedQuestion[]; authoring: AuthoringCount[] }> {
     const matchedIds = query.q ? await this.searchIds(query.q) : null;
     const where = questionWhere({ ...query, page: 1, pageSize: 1 }, matchedIds);
     assertExportable(await this.prisma.question.count({ where }));
@@ -198,7 +216,7 @@ export class QuestionsService {
     const [rows, groups] = await Promise.all([
       this.prisma.question.findMany({
         where,
-        include: QUESTION_INCLUDE,
+        select: QUESTION_EXPORT_SELECT,
         orderBy: questionOrderBy(query.sort),
       }),
       this.prisma.question.groupBy({ by: ['createdById', 'status'], where, _count: true }),
@@ -218,7 +236,7 @@ export class QuestionsService {
       byAuthor.set(group.createdById, author);
     }
 
-    return { questions: rows.map(toDetail), authoring: [...byAuthor.values()] };
+    return { questions: rows.map(toExported), authoring: [...byAuthor.values()] };
   }
 
   /** Counted in the database, because a page of a hundred is not what a section can draw from. */
@@ -690,7 +708,7 @@ function versionDataOf(
 }
 
 /** The current version's options, parsed out of JSON. Absent or malformed reads as none. */
-function currentOptionsOf(row: QuestionRow): QuestionOption[] {
+function currentOptionsOf(row: WithVersion): QuestionOption[] {
   const options = row.currentVersion?.options;
   return Array.isArray(options) ? (options as unknown as QuestionOption[]) : [];
 }
@@ -822,8 +840,25 @@ function toDetail(row: QuestionRow): QuestionDetail {
   };
 }
 
+function toExported(row: QuestionExportRow): ExportedQuestion {
+  return {
+    questionCode: row.questionCode,
+    type: row.type,
+    difficulty: row.difficulty,
+    status: row.status,
+    tags: row.tags,
+    subject: row.subject.name,
+    topic: row.topic?.name ?? null,
+    author: row.createdBy ? (row.createdBy.fullName ?? row.createdBy.email) : null,
+    createdAt: row.createdAt,
+    content: contentOf(row),
+    options: currentOptionsOf(row),
+    answerKey: (row.currentVersion?.answerKey as QuestionDetail['answerKey']) ?? null,
+  };
+}
+
 /** A question with no current version has nothing to show — an empty content map, not a crash. */
-function contentOf(row: QuestionRow): LocalizedContent {
+function contentOf(row: WithVersion): LocalizedContent {
   return (row.currentVersion?.content as LocalizedContent | undefined) ?? {};
 }
 

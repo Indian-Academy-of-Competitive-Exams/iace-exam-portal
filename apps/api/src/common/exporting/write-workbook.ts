@@ -1,3 +1,5 @@
+import { PassThrough } from 'node:stream';
+import { setImmediate } from 'node:timers/promises';
 import ExcelJS from 'exceljs';
 import { instituteWallTime } from '@iace/contracts';
 
@@ -32,8 +34,19 @@ export function exportInstant(at: Date | null): Date | null {
   return at && new Date(`${instituteWallTime(at)}:00Z`);
 }
 
+/** Yielding this often keeps sign-in and token refresh served while a large sheet is written. */
+const ROWS_PER_YIELD = 1_000;
+
+/** Streamed row by row: the whole-model writer ran `core` out of memory at 50,000 rows × 20 columns. */
 export async function writeWorkbook(sheets: ExportSheet[]): Promise<Buffer> {
-  const workbook = new ExcelJS.Workbook();
+  const output = new PassThrough();
+  const chunks: Buffer[] = [];
+  output.on('data', (chunk: Buffer) => chunks.push(chunk));
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    stream: output,
+    useStyles: true,
+    useSharedStrings: false,
+  });
   workbook.creator = 'IACE';
 
   for (const { name, columns, rows } of sheets) {
@@ -42,13 +55,20 @@ export async function writeWorkbook(sheets: ExportSheet[]): Promise<Buffer> {
       const numFmt = column.text ? TEXT_FORMAT : column.date;
       return { header: column.header, width: column.width, style: numFmt ? { numFmt } : {} };
     });
-    sheet.getRow(1).eachCell((cell) => {
+    const header = sheet.getRow(1);
+    header.eachCell((cell) => {
       cell.font = { bold: true };
     });
+    header.commit();
     sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
 
-    for (const row of rows) sheet.addRow(columns.map((column) => column.value(row)));
+    for (const [index, row] of rows.entries()) {
+      sheet.addRow(columns.map((column) => column.value(row))).commit();
+      if ((index + 1) % ROWS_PER_YIELD === 0) await setImmediate();
+    }
+    sheet.commit();
   }
 
-  return Buffer.from(await workbook.xlsx.writeBuffer());
+  await workbook.commit();
+  return Buffer.concat(chunks);
 }

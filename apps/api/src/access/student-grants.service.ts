@@ -19,7 +19,6 @@ import {
   EXPORT_DATE_FORMATS,
   assertExportable,
   exportInstant,
-  readInBatches,
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
@@ -138,9 +137,9 @@ export class StudentGrantsService {
     });
 
     const [cards, names] = await Promise.all([
-      readInBatches(
+      studentCardsOf(
+        this.prisma,
         grants.map((grant) => grant.studentId),
-        (ids) => studentCardsOf(this.prisma, ids),
       ),
       this.audit.namesFor(
         grants.map((grant) => ({ actorId: grant.createdById, actorType: AUDIT_ACTOR_TYPE.ADMIN })),

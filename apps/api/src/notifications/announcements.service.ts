@@ -26,7 +26,6 @@ import {
   EXPORT_DATE_FORMATS,
   assertExportable,
   exportInstant,
-  readInBatches,
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
@@ -202,7 +201,7 @@ export class AnnouncementsService {
     const studentIds = [
       ...new Set(deliveries.flatMap(({ notification }) => notification.studentId ?? [])),
     ];
-    const cards = await readInBatches(studentIds, (ids) => studentCardsOf(this.prisma, ids));
+    const cards = await studentCardsOf(this.prisma, studentIds);
     const byId = new Map(cards.map((card) => [card.id, card]));
     const rows = deliveries.map((delivery) => ({
       ...delivery,

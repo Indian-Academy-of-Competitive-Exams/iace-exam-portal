@@ -116,6 +116,21 @@ describe('writeWorkbook', () => {
       ['Results', 'Summary'],
     );
   });
+
+  it('writes the export cap of 50,000 rows × 20 columns', async () => {
+    const columns = Array.from({ length: 20 }, (_, at) => ({
+      header: `Column ${at}`,
+      width: 10,
+      value: (row: number) => `cell ${row}-${at}`,
+    }));
+    const rows = Array.from({ length: EXPORT_MAX_ROWS }, (_, at) => at);
+
+    const buffer = await writeWorkbook([{ name: 'Wide', columns, rows }]);
+
+    const sheet = (await load(buffer)).getWorksheet('Wide');
+    assert.equal(sheet?.rowCount, EXPORT_MAX_ROWS + 1);
+    assert.equal(sheet?.getCell('T50001').value, `cell ${EXPORT_MAX_ROWS - 1}-19`);
+  });
 });
 
 describe('exportInstant', () => {

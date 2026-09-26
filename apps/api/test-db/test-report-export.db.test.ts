@@ -266,10 +266,11 @@ describe('GET admin/tests/:id/report/export', () => {
     assert.equal(headers('Summary')[0], 'Figure');
   });
 
-  it('writes one audit row naming the test and the rows it carried', async () => {
+  it('writes one audit row naming the test and the rows of both people sheets', async () => {
     const { testId } = await freeTest();
     await makeSitting(prisma, { testId, studentId: await student('Ana'), score: 10 });
     await makeSitting(prisma, { testId, studentId: await student('Bala'), score: 20 });
+    await student('Chitra');
 
     await download(testId);
     const rows = await waitForAuditRows();
@@ -278,7 +279,10 @@ describe('GET admin/tests/:id/report/export', () => {
     assert.equal(rows[0]?.feature, AUDIT_FEATURE.TEST);
     assert.equal(rows[0]?.action, AUDIT_ACTION.EXPORT);
     assert.equal(rows[0]?.entityId, testId);
-    assert.deepEqual(rows[0]?.changed, { rows: { from: null, to: 2 } });
+    assert.deepEqual(rows[0]?.changed, {
+      results: { from: null, to: 2 },
+      absent: { from: null, to: 1 },
+    });
   });
 });
 

@@ -164,11 +164,12 @@ describe('GET admin/audit/row-actions/export', () => {
     assert.equal(rows[0]?.Actor, 'Someone Else');
   });
 
-  it('writes one audit row naming the admin and the filters chosen', async () => {
+  it('writes one audit row naming the admin and the filters applied, never an ignored actor', async () => {
     caller = await adminCaller();
+    const other = await makeAdmin(prisma, { fullName: 'Someone Else' });
     await actionBy(caller.id, AUDIT_FEATURE.STUDENT);
 
-    await exportOf({ feature: AUDIT_FEATURE.STUDENT });
+    await exportOf({ feature: AUDIT_FEATURE.STUDENT, actorId: other.id });
     const logged = await waitForExportRow();
 
     assert.equal(logged?.feature, AUDIT_FEATURE.AUDIT_LOG);

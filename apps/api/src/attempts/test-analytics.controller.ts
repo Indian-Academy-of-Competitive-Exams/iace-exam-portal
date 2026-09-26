@@ -50,12 +50,15 @@ export class AdminTestAnalyticsController {
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.EXPORT)
   @Get(':id/report/export')
   async reportExport(@Param('id') testId: string, @Res() response: Response): Promise<void> {
-    const { workbook, rows } = await buildTestReport(
+    const { workbook, results, absent } = await buildTestReport(
       { prisma: this.prisma, analytics: this.analytics, access: this.access },
       testId,
     );
     this.auditContext.setEntityId(testId);
-    this.auditContext.setChanged({ rows: { from: null, to: rows } });
+    this.auditContext.setChanged({
+      results: { from: null, to: results },
+      absent: { from: null, to: absent },
+    });
     sendWorkbook(response, EXPORT_KINDS.TEST_REPORT, workbook);
   }
 }

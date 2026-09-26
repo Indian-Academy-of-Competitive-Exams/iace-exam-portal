@@ -22,7 +22,6 @@ import {
   EXPORT_DATE_FORMATS,
   assertExportable,
   exportInstant,
-  readInBatches,
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
@@ -304,20 +303,15 @@ export class AuditService {
       ),
     ];
 
-    // Sliced: an export's distinct student actors can outrun Postgres's bind limit on their own.
     const [admins, students] = await Promise.all([
-      readInBatches(idsOf(AUDIT_ACTOR_TYPE.ADMIN), (ids) =>
-        this.prisma.admin.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, fullName: true, email: true },
-        }),
-      ),
-      readInBatches(idsOf(AUDIT_ACTOR_TYPE.STUDENT), (ids) =>
-        this.prisma.student.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, fullName: true, mobile: true },
-        }),
-      ),
+      this.prisma.admin.findMany({
+        where: { id: { in: idsOf(AUDIT_ACTOR_TYPE.ADMIN) } },
+        select: { id: true, fullName: true, email: true },
+      }),
+      this.prisma.student.findMany({
+        where: { id: { in: idsOf(AUDIT_ACTOR_TYPE.STUDENT) } },
+        select: { id: true, fullName: true, mobile: true },
+      }),
     ]);
 
     const names = new Map<string, string>();

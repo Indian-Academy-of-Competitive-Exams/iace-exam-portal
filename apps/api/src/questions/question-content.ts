@@ -9,7 +9,10 @@ function nodesOf(content: RichContent | undefined, visit: Html): RichContent | u
 }
 
 /** Every html string the question holds, in no particular order. */
-export function mapQuestionHtml(detail: QuestionDetail, visit: Html): string[] {
+export function mapQuestionHtml(
+  detail: Pick<QuestionDetail, 'content' | 'options'>,
+  visit: Html,
+): string[] {
   const fromContent = Object.values(detail.content).flatMap((field) => [
     ...(field?.stem ?? []),
     ...(field?.solution ?? []),

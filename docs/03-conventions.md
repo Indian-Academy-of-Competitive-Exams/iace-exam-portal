@@ -333,9 +333,13 @@ Built and in use. Reach for these rather than adding a second of any of them.
   reuses that list's query schema and where-builder, so the file cannot drift from the screen; a
   central exports module would read tables it does not own. `common/exporting` writes the workbook
   (text cells for mobiles and codes, real IST date cells) and counts against `EXPORT_MAX_ROWS` before
-  a row is read. `RequiresExport` demands the owning feature's READ **and** `DATA_EXPORT`, and every
-  export writes one `EXPORT` audit row carrying the filters. Where the file goes back through an
-  importer, its columns are that importer's, and a db test proves the round trip.
+  a row is read. `RequiresExport` demands the owning feature's READ **and** `DATA_EXPORT`; the audit
+  log has no owning feature, so its export needs `DATA_EXPORT` alone. Every export writes one
+  `EXPORT` audit row: a list export records its filters and rows against the admin, a record
+  export (test report, deliveries, grants) its row counts against the record. The rows an import rejected are
+  the admin's own upload, so that download takes the preview's permission, with no `DATA_EXPORT`
+  and no audit row. Where the file goes back through an importer, its columns are that importer's,
+  and a db test proves the round trip.
 
 ---
 

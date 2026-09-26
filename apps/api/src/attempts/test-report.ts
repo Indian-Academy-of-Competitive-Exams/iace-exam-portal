@@ -24,7 +24,7 @@ import { type PrismaService } from '../prisma/prisma.service';
 import { STUDENT_CARD_SELECT, studentCardsOf, type StudentCard } from '../students';
 import { numberOrNull } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
-import { testResultsSql, type TestResultRow } from './test-results-sql';
+import { testResultsSql, type TestResultRow } from './ranking-sql';
 import { type TestAnalyticsService } from './test-analytics.service';
 
 const STATUS_LABELS = {
@@ -62,7 +62,8 @@ interface ResultRow extends Sitting {
 
 export interface TestReport {
   workbook: Buffer;
-  rows: number;
+  results: number;
+  absent: number;
 }
 
 /** What the report reads through; the controller's own providers, so no new one is registered. */
@@ -108,7 +109,7 @@ export async function buildTestReport(
     { name: 'Questions', columns: questionColumns(sections), rows: report.items },
     { name: 'Summary', columns: SUMMARY_COLUMNS, rows: summaryRows(report) },
   ]);
-  return { workbook, rows: results.length };
+  return { workbook, results: results.length, absent: absent.length };
 }
 
 function sectionsOf(sitting: Sitting): ReadonlyMap<string, AttemptSectionScore> {

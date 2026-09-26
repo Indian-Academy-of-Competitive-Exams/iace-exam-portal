@@ -7,6 +7,9 @@
 import { LEADERBOARD_NEIGHBOURS, LEADERBOARD_PODIUM } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 
+/** Unqualified, so it binds to the nearest `Attempt` in scope — the inner one inside the LATERAL. */
+const IN_COHORT = Prisma.sql`"isGraded" AND "status" = 'EVALUATED' AND "score" IS NOT NULL`;
+
 /** One chosen sitting's standing in its own test's cohort. */
 export interface StandingRow {
   attempt_id: string;
@@ -49,11 +52,9 @@ export function standingsSql(where: StandingsWhere): Prisma.Sql {
                       AND b."id" < a."id")
              ) + 1 AS rank
       FROM "Attempt" b
-      WHERE b."testId" = a."testId"
-        AND b."isGraded" AND b."status" = 'EVALUATED' AND b."score" IS NOT NULL
+      WHERE b."testId" = a."testId" AND ${IN_COHORT}
     ) c
-    WHERE ${chosen}
-      AND a."isGraded" AND a."status" = 'EVALUATED' AND a."score" IS NOT NULL
+    WHERE ${chosen} AND ${IN_COHORT}
   `;
 }
 
@@ -76,8 +77,7 @@ export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
              (ROW_NUMBER() OVER (ORDER BY a."score" DESC, a."timeTakenSec" ASC, a."id" ASC))::int AS rank,
              (COUNT(*) OVER ())::int AS cohort
       FROM "Attempt" a
-      WHERE a."testId" = ${testId}::uuid
-        AND a."isGraded" AND a."status" = 'EVALUATED' AND a."score" IS NOT NULL
+      WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
     ),
     mine AS (SELECT rank FROM ranked WHERE "id" = ${attemptId}::uuid)
     SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort,
@@ -89,6 +89,35 @@ export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
        OR r.rank BETWEEN (SELECT rank FROM mine) - ${LEADERBOARD_NEIGHBOURS}
                      AND (SELECT rank FROM mine) + ${LEADERBOARD_NEIGHBOURS}
     ORDER BY r.rank
+  `;
+}
+
+/** A sitting in the report an admin downloads; outside the cohort, its rank is NULL. */
+export interface TestResultRow {
+  attempt_id: string;
+  rank: number | null;
+  percentile: number | null;
+}
+
+/** One window pass in `standingsSql`'s order; ranked first in rank order, then the unranked. */
+export function testResultsSql(testId: string): Prisma.Sql {
+  return Prisma.sql`
+    WITH ranked AS (
+      SELECT a."id",
+             (ROW_NUMBER() OVER (ORDER BY a."score" DESC, a."timeTakenSec" ASC NULLS LAST, a."id" ASC))::int AS rank,
+             sitting_percentile(
+               RANK() OVER (ORDER BY a."score" ASC) - 1,
+               COUNT(*) OVER (PARTITION BY a."score"),
+               COUNT(*) OVER ()
+             )::float8 AS percentile
+      FROM "Attempt" a
+      WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
+    )
+    SELECT a."id" AS attempt_id, r.rank, r.percentile
+    FROM "Attempt" a
+    LEFT JOIN ranked r ON r."id" = a."id"
+    WHERE a."testId" = ${testId}::uuid
+    ORDER BY r.rank ASC NULLS LAST, a."id" ASC
   `;
 }
 
@@ -116,7 +145,7 @@ export function pointsBoardSql(studentId: string, testIds: readonly string[] | n
              a."score"       AS score,
              a."submittedAt" AS submitted_at
       FROM "Attempt" a
-      WHERE a."isGraded" AND a."status" = 'EVALUATED' AND a."score" IS NOT NULL
+      WHERE ${IN_COHORT}
         ${inScope}
     ),
     counted AS (

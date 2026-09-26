@@ -32,6 +32,12 @@ export const CODE_HEADER = 'Existing question code';
 
 export const RICH_CONTENT = { IMAGE: 'Image', EQUATION: 'Equation' } as const;
 
+/** Only what the columns read, so a 50,000-row export never loads a page's counts or assignment. */
+export type ExportedQuestion = Pick<
+  QuestionDetail,
+  'questionCode' | 'type' | 'difficulty' | 'status' | 'tags' | 'content' | 'options' | 'answerKey'
+> & { subject: string; topic: string | null; author: string | null; createdAt: Date };
+
 export interface AuthoringCount {
   author: string;
   byStatus: Record<QuestionStatus, number>;
@@ -51,7 +57,7 @@ export function cellTextOf(content: RichContent | undefined): string {
   return [...lines, ...imageKeysIn(html)].filter((line) => line !== '').join('\n');
 }
 
-export function richContentOf(question: QuestionDetail): string {
+export function richContentOf(question: ExportedQuestion): string {
   const html = mapQuestionHtml(question, (text) => text);
   return [
     html.some((text) => imageKeysIn(text).length > 0) ? RICH_CONTENT.IMAGE : null,
@@ -61,16 +67,16 @@ export function richContentOf(question: QuestionDetail): string {
     .join(', ');
 }
 
-type CellOf = (question: QuestionDetail) => string | null;
+type CellOf = (question: ExportedQuestion) => string | null;
 
 function perLanguage<Prefix extends string>(
   prefix: Prefix,
-  value: (question: QuestionDetail, language: QuestionLanguage) => string | null,
+  value: (question: ExportedQuestion, language: QuestionLanguage) => string | null,
 ): Record<`${Prefix}${QuestionLanguage}`, CellOf> {
   return Object.fromEntries(
     LANGUAGE_ORDER.map((language) => [
       `${prefix}${language}`,
-      (question: QuestionDetail) => value(question, language),
+      (question: ExportedQuestion) => value(question, language),
     ]),
   ) as Record<`${Prefix}${QuestionLanguage}`, CellOf>;
 }
@@ -84,8 +90,8 @@ const optionAt = <Position extends 1 | 2 | 3 | 4>(position: Position) =>
 /** Exhaustive over the import's keys, so a column added there cannot be missed here. */
 const IMPORT_VALUES: Record<QuestionImportColumnKey, CellOf> = {
   type: (question) => question.type,
-  subject: (question) => question.subject.name,
-  topic: (question) => question.topic?.name ?? null,
+  subject: (question) => question.subject,
+  topic: (question) => question.topic,
   difficulty: (question) => question.difficulty,
   ...perLanguage('stem_', (question, language) => cellTextOf(question.content[language]?.stem)),
   ...optionAt(1),
@@ -107,21 +113,21 @@ const IMPORT_VALUES: Record<QuestionImportColumnKey, CellOf> = {
   question_code: () => null,
 };
 
-const QUESTION_COLUMNS: ExportColumn<QuestionDetail>[] = [
-  ...QUESTION_IMPORT_COLUMNS.map((column): ExportColumn<QuestionDetail> => ({
+const QUESTION_COLUMNS: ExportColumn<ExportedQuestion>[] = [
+  ...QUESTION_IMPORT_COLUMNS.map((column): ExportColumn<ExportedQuestion> => ({
     header: column.header,
     width: column.width,
     text: true,
     value: IMPORT_VALUES[column.key],
   })),
   { header: 'Status', width: 12, value: (question) => question.status },
-  { header: 'Author', width: 24, value: (question) => question.author?.name ?? null },
+  { header: 'Author', width: 24, value: (question) => question.author },
   { header: CODE_HEADER, width: 22, text: true, value: (question) => question.questionCode },
   {
     header: 'Created',
     width: 18,
     date: EXPORT_DATE_FORMATS.INSTANT,
-    value: (question) => exportInstant(new Date(question.createdAt)),
+    value: (question) => exportInstant(question.createdAt),
   },
   { header: 'Rich content', width: 18, value: richContentOf },
 ];
@@ -141,7 +147,7 @@ const AUTHORING_COLUMNS: ExportColumn<AuthoringCount>[] = [
 ];
 
 export function writeQuestionExport(
-  questions: QuestionDetail[],
+  questions: ExportedQuestion[],
   authoring: AuthoringCount[],
 ): Promise<Buffer> {
   return writeWorkbook([

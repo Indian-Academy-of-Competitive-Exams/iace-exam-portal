@@ -8,7 +8,8 @@ export async function readInBatches<T>(
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let at = 0; at < ids.length; at += IDS_PER_READ) {
-    rows.push(...(await read(ids.slice(at, at + IDS_PER_READ))));
+    // A spread push overflows the call stack past ~120K rows.
+    for (const row of await read(ids.slice(at, at + IDS_PER_READ))) rows.push(row);
   }
   return rows;
 }

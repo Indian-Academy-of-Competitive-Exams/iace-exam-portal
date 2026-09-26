@@ -55,10 +55,13 @@ export class AuditController {
     @CurrentUser() user: AuthenticatedUser,
     @Res() response: Response,
   ): Promise<void> {
-    const { workbook, rows } = await this.audit.exportRowActions(query, viewerOf(user));
+    const viewer = viewerOf(user);
+    const { workbook, rows } = await this.audit.exportRowActions(query, viewer);
+    // `rowActionWhere` ignores an admin's actor filter, so the log must not claim it was applied.
+    const applied = viewer.isSuperAdmin ? query : { ...query, actorId: undefined };
     this.auditContext.setEntityId(user.id);
     this.auditContext.setChanged({
-      filters: { from: null, to: chosenFilters(query) },
+      filters: { from: null, to: chosenFilters(applied) },
       rows: { from: null, to: rows },
     });
     sendWorkbook(response, EXPORT_KINDS.AUDIT_LOG, workbook);
