@@ -78,3 +78,4 @@ export { usePrint } from './use-print';
 export { useScrollList } from './use-scroll-list';
 export { useLocalFilters, type FilterStore } from './use-local-filters';
 export { shrunkForUpload, worthEncoding, drawnSize, webpName } from './shrink-image';
+export { TourProvider, TourTrigger, usePageTour } from './page-tour';

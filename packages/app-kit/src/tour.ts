@@ -48,30 +48,29 @@ export interface TourRun {
   close: () => void;
 }
 
+const SHUT = { steps: [] as readonly TourStep[], index: 0 };
+
 /** The position in a run, with no idea what a step points AT — which is what lets mobile share it. */
 export function useTourRun(): TourRun {
-  const [steps, setSteps] = useState<readonly TourStep[]>([]);
-  const [index, setIndex] = useState(0);
+  // One state, and every move a functional update: that is what makes all four callbacks stable for a caller holding them across renders.
+  const [{ steps, index }, setRun] = useState(SHUT);
 
-  const close = useCallback(() => {
-    setSteps([]);
-    setIndex(0);
-  }, []);
-
-  const open = useCallback((opening: readonly TourStep[]) => {
-    setSteps(opening);
-    setIndex(0);
-  }, []);
-
-  const next = useCallback(() => {
-    if (index + 1 < steps.length) {
-      setIndex(index + 1);
-      return;
-    }
-    close();
-  }, [index, steps.length, close]);
-
-  const back = useCallback(() => setIndex((at) => Math.max(0, at - 1)), []);
+  const open = useCallback(
+    (opening: readonly TourStep[]) => setRun({ steps: opening, index: 0 }),
+    [],
+  );
+  const close = useCallback(() => setRun(SHUT), []);
+  const back = useCallback(
+    () => setRun((held) => ({ ...held, index: Math.max(0, held.index - 1) })),
+    [],
+  );
+  const next = useCallback(
+    () =>
+      setRun((held) =>
+        held.index + 1 < held.steps.length ? { ...held, index: held.index + 1 } : SHUT,
+      ),
+    [],
+  );
 
   return {
     step: steps[index] ?? null,
