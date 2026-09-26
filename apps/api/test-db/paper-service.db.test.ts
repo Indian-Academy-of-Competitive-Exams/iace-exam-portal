@@ -296,6 +296,23 @@ describe('PaperService — putting several questions on a section in one request
     );
   });
 
+  /** The failure this prevents: a per-question check, so a section's worth of ticks is a hundred reads. */
+  it('checks every question in the batch with a fixed number of reads', async () => {
+    const reads: string[] = [];
+    const service = await serviceWith({ client: countingReads(prisma, reads) });
+
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_1'),
+      questionIds: [idFor('r1'), idFor('r2'), idFor('r3')],
+    });
+
+    // One section, one read of the questions, one of what is drawable, one of what the paper holds.
+    assert.equal(reads.filter((call) => call === 'question.findMany').length, 2);
+    assert.equal(reads.filter((call) => call === 'baseConfigSection.findUnique').length, 1);
+    assert.equal(reads.filter((call) => call === 'question.findUnique').length, 0);
+    assert.equal(reads.filter((call) => call === 'question.count').length, 0);
+  });
+
   /** The failure this task exists to prevent: an admin cannot tell which of their ticks landed. */
   it('refuses a batch that would take a section past its count, and writes none of it', async () => {
     const service = await serviceWith();
@@ -1026,3 +1043,31 @@ describe('PaperService — an offered paper no longer moves', () => {
     assert.deepEqual(await heldIds(), []);
   });
 });
+
+/** The real client, naming every model read it is asked for so a per-row check cannot hide. */
+function countingReads(client: PrismaService, into: string[]): PrismaService {
+  const READS = new Set(['findMany', 'findUnique', 'findFirst', 'count']);
+  return new Proxy(client, {
+    get(target, key) {
+      const held = Reflect.get(target, key) as unknown;
+      if (
+        typeof key !== 'string' ||
+        key.startsWith('$') ||
+        typeof held !== 'object' ||
+        held === null
+      ) {
+        return held;
+      }
+      return new Proxy(held, {
+        get(model, method) {
+          const call = Reflect.get(model, method) as unknown;
+          if (typeof method !== 'string' || !READS.has(method)) return call;
+          return (...args: unknown[]) => {
+            into.push(`${key}.${method}`);
+            return Reflect.apply(call as (...a: unknown[]) => unknown, model, args);
+          };
+        },
+      });
+    },
+  });
+}

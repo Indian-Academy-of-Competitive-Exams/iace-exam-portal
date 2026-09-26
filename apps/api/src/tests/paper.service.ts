@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Question } from '@prisma/client';
 import {
   AppException,
   ASSIGNMENT_ROLES,
@@ -126,12 +126,26 @@ export class PaperService {
 
     this.assertNoRepeats(input.questionIds);
 
-    const questions: Awaited<ReturnType<PaperService['requireDrawable']>>[] = [];
-    for (const questionId of input.questionIds) {
-      const question = await this.requireDrawable(testId, questionId, section.id);
-      await this.assertNotAlreadyOnThePaper(testId, question.id);
-      questions.push(question);
-    }
+    // Four reads for the whole request, not four a question: the checks below are all set lookups.
+    const drawable = await this.drawableContext(testId, input.questionIds, section.id);
+    const onPaper = new Set(
+      (
+        await this.prisma.paperQuestion.findMany({
+          where: { testId, questionId: { in: input.questionIds } },
+          select: { questionId: true },
+        })
+      ).map((row) => row.questionId),
+    );
+
+    const questions = input.questionIds.map((questionId) => {
+      const question = assertDrawableIn(drawable, questionId);
+      if (onPaper.has(questionId)) {
+        throw new AppException(ErrorCodes.VALIDATION_ERROR, ALREADY_ON_THE_PAPER_MESSAGE, {
+          fieldErrors: { questionId: [ALREADY_ON_THE_PAPER_MESSAGE] },
+        });
+      }
+      return question;
+    });
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -403,31 +417,40 @@ export class PaperService {
 
   /** The replacement has to be drawable for the same section, or the paper stops matching itself. */
   private async requireDrawable(testId: string, questionId: string, baseConfigSectionId: string) {
-    const section = await this.prisma.baseConfigSection.findUnique({
-      where: { id: baseConfigSectionId },
-      select: { subjectId: true },
-    });
-    const question = await this.prisma.question.findUnique({
-      where: { id: questionId },
-      select: { id: true, subjectId: true, currentVersionId: true, difficulty: true },
-    });
-    if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+    return assertDrawableIn(
+      await this.drawableContext(testId, [questionId], baseConfigSectionId),
+      questionId,
+    );
+  }
 
-    // Asked of the database, not of the row: drawability now turns on other rows as well as this one.
-    const drawable = await this.prisma.question.count({
-      where: { id: questionId, ...drawableFor(testId) },
-    });
-    if (drawable === 0 || !question.currentVersionId) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
-        fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
-      });
-    }
-    if (section?.subjectId && question.subjectId !== section.subjectId) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, WRONG_SUBJECT_MESSAGE, {
-        fieldErrors: { questionId: [WRONG_SUBJECT_MESSAGE] },
-      });
-    }
-    return { ...question, currentVersionId: question.currentVersionId };
+  /** What drawability turns on, read once for however many questions are being asked about. */
+  private async drawableContext(
+    testId: string,
+    questionIds: readonly string[],
+    baseConfigSectionId: string,
+  ): Promise<DrawableContext> {
+    const ids = [...questionIds];
+    const [section, questions, drawable] = await Promise.all([
+      this.prisma.baseConfigSection.findUnique({
+        where: { id: baseConfigSectionId },
+        select: { subjectId: true },
+      }),
+      this.prisma.question.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, subjectId: true, currentVersionId: true, difficulty: true },
+      }),
+      // Asked of the database, not of the row: drawability turns on other rows as well as this one.
+      this.prisma.question.findMany({
+        where: { id: { in: ids }, ...drawableFor(testId) },
+        select: { id: true },
+      }),
+    ]);
+
+    return {
+      sectionSubjectId: section?.subjectId ?? null,
+      byId: new Map(questions.map((question) => [question.id, question])),
+      drawable: new Set(drawable.map((row) => row.id)),
+    };
   }
 
   /** `@@unique([testId, questionId])` would refuse it, and a constraint error is not a message. */
@@ -628,4 +651,39 @@ const SEED_CEILING = 2 ** 31;
 /** A re-draw the admin did not seed should give a different paper — that is what re-draw means. */
 function freshSeed(): number {
   return randomInt(SEED_CEILING);
+}
+
+/** Every question the request named, with what its drawability turns on, read once. */
+interface DrawableContext {
+  sectionSubjectId: string | null;
+  byId: Map<string, DrawableQuestion>;
+  drawable: Set<string>;
+}
+
+interface DrawableQuestion {
+  id: string;
+  subjectId: string;
+  currentVersionId: string | null;
+  difficulty: Question['difficulty'];
+}
+
+/** The three refusals in the order a caller meets them, off the context rather than the database. */
+function assertDrawableIn(
+  context: DrawableContext,
+  questionId: string,
+): DrawableQuestion & { currentVersionId: string } {
+  const question = context.byId.get(questionId);
+  if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+
+  if (!context.drawable.has(questionId) || !question.currentVersionId) {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
+      fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
+    });
+  }
+  if (context.sectionSubjectId && question.subjectId !== context.sectionSubjectId) {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, WRONG_SUBJECT_MESSAGE, {
+      fieldErrors: { questionId: [WRONG_SUBJECT_MESSAGE] },
+    });
+  }
+  return { ...question, currentVersionId: question.currentVersionId };
 }
