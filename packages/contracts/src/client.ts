@@ -14,8 +14,11 @@ function lazyGroup<T extends object>(load: () => Promise<T>): T {
   // Admin nests its groups (`admin.dashboard.get`), so the proxy records the path and resolves it on call.
   const at = (path: string[]): unknown =>
     new Proxy(() => undefined, {
-      get: (_target, prop) =>
-        typeof prop === 'symbol' || prop === 'then' ? undefined : at([...path, prop]),
+      // What any function has (`name`, `valueOf`, `toString`) stays the function's: React's dev logging stringifies props.
+      get: (target, prop) => {
+        if (prop in target) return Reflect.get(target, prop);
+        return typeof prop === 'symbol' || prop === 'then' ? undefined : at([...path, prop]);
+      },
       apply(_target, _this, args: unknown[]) {
         // Assigned on CALL, never on access: touching the property must not pull the group in.
         real ??= load();

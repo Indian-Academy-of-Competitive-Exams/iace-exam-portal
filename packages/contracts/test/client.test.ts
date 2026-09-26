@@ -122,6 +122,13 @@ describe('typed client — success', () => {
     assert.equal(calls.length, 1);
   });
 
+  it('turns a lazy group into a string without calling it, as React dev logging does', () => {
+    const { api, calls } = clientWith([]);
+    assert.equal(typeof String(api.admin.exams), 'string');
+    assert.equal(typeof api.admin.exams.list.name, 'string');
+    assert.equal(calls.length, 0);
+  });
+
   it('names an unknown method instead of calling undefined', async () => {
     const { api } = clientWith([]);
     const admin = api.admin as unknown as { nope: { get: () => Promise<unknown> } };
