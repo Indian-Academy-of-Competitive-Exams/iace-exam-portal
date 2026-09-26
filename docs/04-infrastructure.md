@@ -17,10 +17,10 @@ arithmetic here moves with it.
 or it is an estimate rather than evidence. §16 lists the ones that have not been re-measured
 against current code — do not build on those without running them again first.
 
-**The shape is two boxes, from 26 September 2026.** The API containers sit on one and the data
-stores on another, sharing one Valkey and one Postgres between staging and production. That is
-partly thrift while production does not exist, and partly measurement: a bench with Postgres on
-loopback flatters itself, and production will always have the database on another host.
+**The shape is an API box per environment, one shared Valkey box, and one shared RDS instance,
+from 26 September 2026.** Splitting the data stores off the API box is partly recovery — the API
+box becomes disposable and live sittings survive replacing it — and partly measurement: a bench
+with Postgres on loopback measures a topology production will never have.
 
 **The front door changed on 25 September 2026.** This file described an Application Load Balancer
 in front of ECS Fargate. It now describes **Caddy on EC2**, because an ALB is what makes Fargate
@@ -32,35 +32,46 @@ it.
 
 ## 1. What it costs
 
-**Two boxes, both environments on them.** The API box is per environment; the data box is shared
-until production needs it not to be.
+**Three boxes and an RDS instance, sized for the stage the platform is at rather than the one it is
+heading for.** Everything here resizes in two minutes and bills hourly, so none of it is a decision
+to agonise over — §13 says when each one moves.
 
-| Box                   | What                                                  | Monthly    |
-| --------------------- | ----------------------------------------------------- | ---------- |
-| **A — API, prod**     | EC2 `t4g.large`: Caddy, exam, core, worker            | $32.70     |
-|                       | EBS gp3 30 GB + Elastic IP                            | $6.39      |
-| **A′ — API, staging** | EC2 `t4g.medium`, the same three containers           | $16.35     |
-|                       | EBS gp3 30 GB + Elastic IP                            | $6.39      |
-| **B — data, shared**  | EC2 `t4g.small`: Valkey + Postgres, no public ingress | $8.18      |
-|                       | EBS gp3 30 GB + Elastic IP (egress only)              | $6.39      |
-| Frontend and media    | S3 + CloudFront, both environments                    | ~$2        |
-| Logs and alarms       | CloudWatch, ~10 alarms, two free Budgets              | $1.70      |
-| Secrets, DNS, ECR     | SSM, Route 53, container registry                     | $1.20      |
-| **Total**             |                                                       | **$81.30** |
+**Today — staging only. Production does not exist yet.**
 
-**The invoice is ~$96** — ap-south-1 bills through AWS India at 18% GST on top. It is input credit
-against the institute's GSTIN, but only if the GSTIN is on the account, so that is a signup step
-rather than a footnote.
+|                       | What                                            | Monthly    |
+| --------------------- | ----------------------------------------------- | ---------- |
+| Box A′ — staging API  | EC2 `t4g.medium`: Caddy, exam, core, worker     | $16.35     |
+|                       | EBS gp3 30 GB + Elastic IP                      | $6.39      |
+| Box B — Valkey        | EC2 `t4g.micro`, one process, no public ingress | $4.09      |
+|                       | EBS gp3 20 GB + public IPv4 (egress only)       | $5.47      |
+| Database              | RDS `db.t4g.micro`, 20 GB gp3, 7-day PITR       | $17.95     |
+| Frontend and media    | S3 + two CloudFront distributions               | ~$1        |
+| DNS, registry, alarms | Route 53, ECR, CloudWatch, two free Budgets     | $2.40      |
+| **Total**             |                                                 | **$53.65** |
 
-**What this is not yet.** Box B runs Postgres as a container, which is throwaway-grade: no
-point-in-time restore, no automated backups, no storage autoscaling. That is deliberate while the
-data is seeded. **Before real marks exist, Postgres moves to RDS `db.t4g.small` (+$33.28)** and
-Box B keeps only Valkey — and doing that migration on disposable data is the rehearsal for doing
-it when it matters.
+**With production alongside it.**
+
+|                              | What                                        | Monthly     |
+| ---------------------------- | ------------------------------------------- | ----------- |
+| Box A — production API       | EC2 `t4g.large` + EBS 30 GB + Elastic IP    | $39.09      |
+| Box A′ — staging API         | EC2 `t4g.small` once builds move to ECR     | $14.57      |
+| Box B — Valkey ×2            | EC2 `t4g.medium`, a process per environment | $22.74      |
+| Database                     | RDS `db.t4g.small`, two databases           | $33.28      |
+| Frontend, media, DNS, alarms |                                             | $3.40       |
+| **Total**                    |                                             | **$113.08** |
+
+**Add 18% GST to both** — ap-south-1 bills through AWS India, so ~$63 today and ~$133 with
+production. It is input credit against the institute's GSTIN, but only if the GSTIN is on the
+account, so that is a signup step rather than a footnote.
+
+**Why staging starts on `t4g.medium` and ends on `small`.** Day one you build on the box, and
+`pnpm install` plus two Vite builds want 2–4 GB. Once images are built elsewhere and pulled from
+ECR, 2 GB runs the three containers with room. Size for the hardest thing you do that day, then
+resize down — forty cents for the privilege.
 
 For comparison, the ALB + Fargate shape this file used to describe came to ~$142 for production
 alone. The saving is the load balancer, the Fargate premium and the NAT instance; what it costs is
-two boxes you own and a failure domain per box (§3, §4).
+boxes you own and a failure domain per box (§3, §4).
 
 **Two AWS Budgets, and they are free.** One at the total above, one anomaly detector. Every alarm
 in §9 watches something that is running; none watches something that should have stopped, and on a
@@ -75,9 +86,6 @@ billable.
 
 **Traffic between the boxes is free** — same VPC, same zone. It is not free of latency: §3.
 
-A one-year no-upfront commitment takes the always-on part from $57.23 to ~$41 (§13). Buy nothing
-at launch.
-
 Outside AWS: Sentry (free tier), Grafana Cloud (free tier), the SMS aggregator and WhatsApp
 per message, and the domain.
 
@@ -91,10 +99,12 @@ one zone, so inter-AZ traffic is zero.
 or the core container; the worker takes no HTTP at all. Security group: 80 and 443 from the world,
 22 from one address. One of these per environment.
 
-**Box B — the data.** Valkey and Postgres, both containers. **Its security group accepts 5432 and
-6379 from Box A's security group and from nothing else** — not from the internet, not by CIDR, by
-group, so a new API box inherits the rule by being in the right group. It carries a public address
-only so it can pull images.
+**Box B — Valkey.** One container per environment, different ports (§7). **Its security group
+accepts 6379 and 6380 from the API boxes' security group and from nothing else** — not from the
+internet, not by CIDR, by group, so a replacement or a second API box inherits the rule by
+membership. It carries a public address only so it can pull images.
+
+**RDS** sits in the private subnet, reachable from the API boxes' security group on 5432.
 
 **No NAT.** Both boxes are public-subnet, so nothing needs a gateway to reach SMS, push, Sentry or
 ECR — which removes the `t4g.nano` and its address that the ALB shape needed.
@@ -102,10 +112,15 @@ ECR — which removes the `t4g.nano` and its address that the ALB shape needed.
 A student's browser resolves the domain at Route 53, loads the two SPAs and question images from
 CloudFront, and sends every API call to Box A.
 
-**Why the split, when one box would be cheaper.** Two reasons, and the second is the real one.
-Postgres and Valkey stop competing with the API for the same two cores, which matters during an
-event. And a benchmark with Postgres on loopback measures a topology production will never have —
-RDS is always another host, so the number that transfers is the one taken across a network hop.
+**Why Valkey has a box of its own, when it would fit beside the API.** Not memory, though it buys
+about one extra exam container of headroom. **Recovery.** With Valkey elsewhere, the API box is
+disposable: resize it, replace it, roll it, and every live sitting continues — a dead box is a
+three-minute fix, launch from the AMI and remap the Elastic IP. With Valkey on it, that same
+recovery drops sitting state on the floor.
+
+It is an honest trade, not a free win: two boxes is two things that can fail, so an incident
+becomes _more_ likely. What it buys is that recovery from one is fast and safe, and for a platform
+whose bad hour cannot be repeated, that is the half that matters.
 
 ## 3. Compute — three containers, one image
 
@@ -241,26 +256,28 @@ solutions and saved questions moved behind `React.lazy`. The SPAs have moved sin
 
 ## 6. Database
 
-**Today: PostgreSQL 17 as a container on Box B, one instance, a database per environment.**
-`max_connections=200` — the image default of 100 is thin against two environments. Production's
-role is unrestricted; **staging's carries `CONNECTION LIMIT 10`, `statement_timeout` 30 s and
-`idle_in_transaction_session_timeout` 60 s**, so a staging runaway cannot take production's
-connections or hold its CPU.
+**RDS PostgreSQL 17 from the start, one instance, a database per environment.** Not a container:
+a container has no backups, no point-in-time restore and no storage autoscaling, and the one
+operational move nobody should make for the first time under pressure is the one that holds marks.
 
-**Before real marks exist: RDS `db.t4g.small`**, single-AZ, 20 GB gp3 autoscaling to 100 GB, 7-day
-point-in-time restore, $30.66 plus $2.62 for the storage. A container has none of that — no
-backups, no PITR, no storage autoscaling — which is fine for seeded data and not fine for a
-student's marks. **Doing that migration while the data is disposable is the rehearsal**, and it is
-the one operational move nobody should be making for the first time under pressure.
+|                   | Instance                      | Storage            | Cost           |
+| ----------------- | ----------------------------- | ------------------ | -------------- |
+| Now, staging only | `db.t4g.micro` — 2 vCPU, 1 GB | 20 GB gp3          | $15.33 + $2.62 |
+| Production        | `db.t4g.small` — 2 vCPU, 2 GB | 20 GB gp3 → 100 GB | $30.66 + $2.62 |
+
+7-day point-in-time restore on both, **including staging** — it is inside the instance price up to
+the allocated storage, and restoring staging from a PITR once is how the procedure gets rehearsed
+before it matters.
+
+**Connections decide the size, not load, and on `micro` they decide it early.** RDS derives
+`max_connections` from memory: about **112 on a 1 GB instance**, ~225 on 2 GB. The budget is exam 8,
+core 25, worker 25 = 58 for production plus 10 for staging = 68. That fits on `micro` with 44
+spare — but a second exam container is the thing that exhausts it, not traffic. `.env.example`
+carries the arithmetic beside the pool guidance.
 
 Postgres 17 rather than 16 because RDS Extended Support costs $0.114 per vCPU-hour once a version
 leaves standard support — more than the instance. 16 leaves on 28 February 2029, 17 on
-28 February 2030. The container is on 17 so the move is a dump and a restore, not an upgrade.
-
-**Connections decide the size, not load.** At `connection_limit=25` a container is generous; the
-budget is exam 8, core 25, worker 25 = 58 for production, 10 for staging, and the rest spare. On
-RDS that becomes 190 of the ~225 a 2 GB instance allows. It is written in `.env.example` beside the
-pool guidance.
+28 February 2030.
 
 **What a sitting costs, measured 25 September 2026** with `scripts/bench-scoring.mjs` — the scoring
 pass only, which is the half that was re-measured after the rollup refactor:
@@ -281,39 +298,45 @@ and the `SavedQuestion` volume is what would change it.
 
 ## 7. Cache and queues
 
-**Valkey as a container on Box B**, append-only file flushed every second, `maxmemory` 1.2 GB,
-`maxmemory-policy noeviction`. Shared by both environments.
+**Valkey on Box B, one container per environment** — different ports, different `maxmemory`, one
+small box. `appendonly yes` flushed every second, `maxmemory-policy noeviction`.
+
+```
+production  :6379   maxmemory 1.2 GB
+staging     :6380   maxmemory 256 MB
+```
+
+**A process each, not one process with two database indexes.** The index would separate the
+keyspaces — which matters, because `redis.keys.ts` namespaces keys by FEATURE and BullMQ has no
+prefix configured, so a shared instance would put both environments in `bull:scoring:*` and let a
+production worker take a staging job. But `maxmemory` is per PROCESS, and under `noeviction` an
+instance that fills makes writes FAIL. One process each separates the memory as well as the keys,
+so a staging runaway cannot stop production saving a candidate's answers.
 
 `noeviction` is not a preference: BullMQ requires it, and this holds live sittings, so an eviction
-policy would silently drop a candidate's answers. The API refuses to boot in production against
-anything else.
+policy would silently drop answers. The API refuses to boot in production against anything else.
+**Set `maxmemory` explicitly at every size** — unset, Valkey grows until the kernel kills it, and an
+OOM-killed Valkey mid-event loses up to a second of answers.
 
-- **ElastiCache Serverless cannot be used at all** — it has no parameter groups, so the policy
-  cannot be set, and BullMQ's own documentation rules it out.
+- **ElastiCache Serverless cannot be used at all** — no parameter groups, so the policy cannot be
+  set, and BullMQ's own documentation rules it out.
 - A node-based `cache.t4g.small` is $23.94 and comes back **empty** after a node failure; no
   current ElastiCache engine writes to disk.
 
-**Two environments on one Valkey are separated by the database index, and nothing else.**
-`redis.keys.ts` namespaces keys by FEATURE, not by environment, and BullMQ has no prefix
-configured — so without this both would share `bull:scoring:*`, a production worker could pick up a
-staging job, and a `FLUSHDB` on staging would take production's sessions with it. ioredis reads the
-index off the URL and both `redis.service.ts` and `queue.module.ts` build their client from it:
+**Box B's size, and what moves it.** CPU never does — Valkey is single-threaded and an event is
+about 960 ops/s against a core that does 100,000+. Memory does, and the thing that decides it is
+not the dataset but the **AOF rewrite fork**: Valkey rewrites its log by forking, and copy-on-write
+can push RSS toward double the dataset while writes are landing.
 
-```
-production  REDIS_URL=redis://<box-b>:6379/0
-staging     REDIS_URL=redis://<box-b>:6379/1
-```
+| Stage                                 | Box B              | Why                                                                 |
+| ------------------------------------- | ------------------ | ------------------------------------------------------------------- |
+| Now, one tester                       | `t4g.micro`, 1 GB  | Valkey ~300 MB + OS ~350 MB                                         |
+| Before the first full-scale load test | `t4g.small`, 2 GB  | 8,000 sittings is a ~280 MB dataset; the rewrite fork can double it |
+| Production at 8,000 live sittings     | `t4g.medium`, 4 GB | Both processes, both with headroom                                  |
 
-**What that does not separate is memory.** `maxmemory` is instance-wide, and under `noeviction` a
-staging runaway that fills it makes PRODUCTION writes fail. That is the trigger to give production
-its own Valkey, and it is the reason the shared box is a phase rather than a design.
-
-A 100-question sitting was measured at 10.2 KB of JSON, 12.1 KB in Redis, and a save moves about
-three times the state (read, then compare-and-set with both values). Those per-sitting figures
-predate the recent work and are unverified (§16); scaled to 8,000 candidates they would put an
-event at roughly 64–120 Mbps and ~57 GB, with peak memory 0.7–1.1 GB, dominated by the 15-minute
-catalog cache. Box B is `t4g.small` (2 GB) while the data is seeded and wants `t4g.medium` before
-production carries 8,000 live sittings.
+That ~280 MB is 97 MB of sitting state plus ~184 MB of catalog cache — and the per-sitting figures
+behind it (10.2 KB of JSON, 12.1 KB stored) predate the recent work and are unverified (§16).
+Scaled to 8,000 candidates they would put an event at roughly 64–120 Mbps and ~57 GB of traffic.
 
 **Traffic between the boxes is free** — same VPC, same zone — but it is not free of latency, and
 §3 says what that costs the scoring drain.
@@ -351,7 +374,7 @@ that no longer exists is worse than no alarm:
 | 5xx rate, request latency      | `iace_http_request_duration_seconds` on `/metrics`, or Caddy's own Prometheus endpoint     |
 | A container down               | EC2 status checks on Box A and Box B, plus the Docker restart count                        |
 | **`CPUSurplusCreditsCharged`** | The burst surcharge, and the largest gap between the expected and worst-case invoice (§13) |
-| CPU, storage, connections      | Box B, and RDS's own metrics once Postgres moves                                           |
+| CPU, storage, connections      | RDS's own metrics; EC2 status checks on Box B                                              |
 | Valkey memory and evictions    | One custom metric, $0.30                                                                   |
 | **CloudFront bytes out**       | The one line that can move the bill by an order of magnitude (§15)                         |
 
@@ -411,13 +434,16 @@ abort at 7.
 
 ## 12. Non-production
 
-**Its own API box, production's data box.** One EC2 `t4g.medium` running Caddy and the same three
-containers, pointing at Box B — which is the whole of the difference from production, and it is
-deliberate: staging exists to rehearse production's shape, not a smaller one.
+**Its own API box, sharing production's Valkey box and RDS instance.** One EC2 `t4g.medium` running
+Caddy and the same three containers — the same shape as production, at a tester's size, because
+staging exists to rehearse production rather than a smaller thing.
 
-- **Postgres:** its own database on Box B, with `CONNECTION LIMIT 10` on the role (§6).
-- **Valkey:** **database index 1**, production on 0. Read §7 before changing this — without it the
-  two share a queue keyspace.
+- **Postgres:** its own database on the shared RDS instance, with `CONNECTION LIMIT 10`,
+  `statement_timeout` 30 s and `idle_in_transaction_session_timeout` 60 s on the role, so a staging
+  runaway cannot take production's connections or hold its CPU (§6).
+- **Valkey:** its own process on Box B, port 6380, `maxmemory` 256 MB (§7).
+- **`t4g.medium` while you build on the box; `t4g.small` once images come from ECR.** Three
+  containers need ~850 MB at rest, but `pnpm install` and two Vite builds want 2–4 GB.
 - **`NODE_ENV=development`, `OTP_SENDER=console`.** An admin signs in with an emailed OTP and a
   student with an SMS one, and the DLT registration behind that SMS does not exist yet; in
   development the API returns the code as `devCode` on the request response, so a tester signs in
@@ -442,20 +468,34 @@ afternoon, run the event, resize back: four hours of an instance four times larg
 third of a dollar. That is what settles §3's open question, and it is worth running against two
 instance families — one burstable, one not — in the same session.
 
-## 13. Commitments
+## 13. When each piece grows, and commitments
 
-Nothing at launch. After 4–8 weeks of real events the baseline is known; commit to 70–80% of it so
-growth and bursts stay on demand.
+Everything here resizes in two minutes — stop, change the instance type, start — and bills hourly.
+So the rule is to run the smallest thing that works and move when a named trigger fires, not when
+it feels prudent.
 
-|                            | On demand | 1-year, no upfront |
-| -------------------------- | --------- | ------------------ |
-| EC2 `t4g.large` (prod)     | $32.70    | ~$23.50            |
-| EC2 `t4g.medium` (staging) | $16.35    | ~$11.75            |
-| RDS `db.t4g.small`         | $30.66    | $24.09             |
+| Piece                  | Now            | Moves to                  | When                                                     |
+| ---------------------- | -------------- | ------------------------- | -------------------------------------------------------- |
+| Box A′ — staging API   | `t4g.medium`   | `t4g.small`               | Images build in CI and come from ECR                     |
+| Box A — production API | —              | `t4g.large`               | Production exists                                        |
+|                        |                | `t4g.xlarge` for an event | Scheduled, on the event calendar — never reactively (§3) |
+| Box B — Valkey         | `t4g.micro`    | `t4g.small`               | Before the first full-scale load test                    |
+|                        |                | `t4g.medium`              | Production carries 8,000 live sittings                   |
+| RDS                    | `db.t4g.micro` | `db.t4g.small`            | A second exam container — **connections, not load** (§6) |
 
-A Compute Savings Plan covers EC2 in any region and family, so resizing the box stays covered; an
-RDS reservation is tied to its instance family, so do not buy one until §3's open question is
-settled and the database size is not going to move.
+**Commit to nothing at launch.** After 4–8 weeks of real events the baseline is known; commit to
+70–80% of it so growth and bursts stay on demand.
+
+|                          | On demand | 1-year, no upfront |
+| ------------------------ | --------- | ------------------ |
+| EC2 `t4g.large` (Box A)  | $32.70    | ~$23.50            |
+| EC2 `t4g.small` (Box A′) | $8.18     | ~$5.91             |
+| EC2 `t4g.medium` (Box B) | $16.35    | ~$11.75            |
+| RDS `db.t4g.small`       | $30.66    | $24.09             |
+
+A Compute Savings Plan covers EC2 in any region and family, so resizing a box stays covered; an RDS
+reservation is tied to its instance family, so do not buy one until §3's open question is settled
+and the database size is not going to move.
 
 **`t4g` is burstable, and unlimited mode is the default.** Past the 20%-per-vCPU baseline you pay a
 surcharge rather than being throttled — about $0.04 per surplus vCPU-hour, so a box pegged for a
