@@ -12,6 +12,7 @@ import {
   type AdminPermissions,
 } from '@iace/contracts';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
+import { AuditController } from '../src/audit/audit.controller';
 import { RequiresExport, type AuthenticatedUser } from '../src/common/security';
 
 class ExportProbe {
@@ -25,9 +26,9 @@ class ExportProbe {
 const guard = new FeaturePermissionGuard(new Reflector());
 
 function canExport(
-  handler: () => void,
+  handler: (...args: never[]) => unknown,
   permissions: AdminPermissions,
-  { isSuperAdmin = false, isActive = true } = {},
+  { isSuperAdmin = false, isActive = true, owner = ExportProbe as object } = {},
 ): boolean {
   const user: AuthenticatedUser = {
     id: 'adm',
@@ -39,7 +40,7 @@ function canExport(
   };
   const context = {
     getHandler: () => handler,
-    getClass: () => ExportProbe,
+    getClass: () => owner,
     switchToHttp: () => ({ getRequest: () => ({ user }) }),
   } as unknown as ExecutionContext;
   return guard.canActivate(context);
@@ -86,5 +87,19 @@ describe('RequiresExport without an owning feature', () => {
 
   it('refuses without DATA_EXPORT', () => {
     assert.throws(() => canExport(route, OWNING), forbidden);
+  });
+});
+
+/** The real route on its real class, so the metadata read is the one production reads. */
+describe('The audit log export', () => {
+  const route = AuditController.prototype.exportRowActions;
+  const owner = AuditController;
+
+  it('refuses an admin without DATA_EXPORT', () => {
+    assert.throws(() => canExport(route, OWNING, { owner }), forbidden);
+  });
+
+  it('passes on DATA_EXPORT alone', () => {
+    assert.equal(canExport(route, EXPORTS, { owner }), true);
   });
 });

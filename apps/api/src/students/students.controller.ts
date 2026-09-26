@@ -54,7 +54,7 @@ import {
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit, AuditContext, TOGGLE_ACTIONS } from '../audit';
-import { sendWorkbook } from '../common/exporting';
+import { chosenFilters, sendWorkbook } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import { type StudentOverviewService } from '../attempts';
 import { StudentsService } from './students.service';
@@ -112,7 +112,7 @@ export class StudentsController {
     );
     this.auditContext.setEntityId(user.id);
     this.auditContext.setChanged({
-      filters: { from: null, to: filtersSet(query) },
+      filters: { from: null, to: chosenFilters(query) },
       rows: { from: null, to: rows },
     });
     sendWorkbook(
@@ -187,7 +187,3 @@ export class StudentsController {
 
 const canReadPerformance = (user: AuthenticatedUser) =>
   satisfiesLevel(user.permissions[FEATURE_KEYS.STUDENT_PERFORMANCE], PERMISSION_LEVELS.READ);
-
-/** Only what was chosen: the log would otherwise carry every unset filter as a null. */
-const filtersSet = (query: StudentExportQuery) =>
-  Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined));

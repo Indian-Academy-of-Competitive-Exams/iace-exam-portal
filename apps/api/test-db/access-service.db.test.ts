@@ -13,11 +13,12 @@ import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import { ExamStagesService } from '../src/configs';
-import { AuditContext } from '../src/audit';
+import { AuditContext, AuditService } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
-import { FakeEventBus, FakeQueue, FakeRedis } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
+  makeAdmin,
   makeBranch,
   makeCatalog,
   makeStage,
@@ -28,6 +29,7 @@ import {
   testPrisma,
   uid,
 } from './support/database';
+import { sheetRows } from './support/workbook';
 
 const ADMIN = uid();
 const PROGRAM = 'SSC CGL FOUNDATION';
@@ -60,6 +62,7 @@ async function build(stageActive = true) {
       auditContext,
       events.asService(),
       new NotificationOutbox(new FakeQueue().asQueue()),
+      new AuditService(prisma, new FakeStorage() as never),
     ),
   };
 }
@@ -715,6 +718,27 @@ describe('StudentGrantsService — the escape hatch', () => {
     await grants.revoke(student.id, held.id);
 
     assert.equal(await prisma.studentGrant.count(), 0);
+  });
+  it("exports exactly the series' grants, naming the admin who made each", async () => {
+    const { grants, stageId } = await build();
+    const held = await seedSeries({ examStageId: stageId });
+    const elsewhere = await seedSeries({ examStageId: stageId, name: 'Another series' });
+    const admin = await makeAdmin(prisma, { fullName: 'Ravi Kumar' });
+    const asha = await makeStudent(prisma, { fullName: 'Asha' });
+    const bala = await makeStudent(prisma, { fullName: 'Bala' });
+    await grants.grant(asha.id, { testSeriesId: held.id }, admin.id);
+    await grants.grant(bala.id, { testSeriesId: held.id }, admin.id);
+    await grants.grant(bala.id, { testSeriesId: elsewhere.id }, admin.id);
+
+    const { workbook, rows } = await grants.exportForSeries(held.id);
+    const sheet = await sheetRows(workbook);
+
+    assert.equal(rows, 2);
+    assert.deepEqual(sheet.map((row) => row.Student).sort(), ['Asha', 'Bala']);
+    assert.deepEqual(
+      sheet.map((row) => row['Granted by']),
+      ['Ravi Kumar', 'Ravi Kumar'],
+    );
   });
 });
 

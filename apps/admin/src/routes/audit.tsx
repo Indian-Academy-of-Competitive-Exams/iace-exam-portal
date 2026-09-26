@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import {
   AUDIT_WINDOW_DAYS,
+  EXPORT_KINDS,
   IMPORT_LOG_STATUS,
   auditActionSchema,
   auditFeatureSchema,
@@ -28,6 +29,7 @@ import {
 } from '@iace/ui';
 import { usePagedPicker } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { ExportButton } from '../components/export-button';
 import { ChangedCell } from '../lib/audit-format';
 import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { api } from '../lib/api';
@@ -270,6 +272,14 @@ export function AuditActivityPage() {
         list={activity}
         filters={buildFilters(selectedActorLabels)}
         columns={columns}
+        trailing={
+          <ExportButton
+            label={`Export ${activity.total.toLocaleString('en-IN')} ${activity.total === 1 ? 'row' : 'rows'}`}
+            disabled={activity.total === 0}
+            kind={EXPORT_KINDS.AUDIT_LOG}
+            download={() => api.admin.audit.rowActionsExport(activity.query)}
+          />
+        }
         rowKey={(row) => row.id}
         banner={
           <Alert variant="info">

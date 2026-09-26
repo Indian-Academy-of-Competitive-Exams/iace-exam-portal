@@ -150,6 +150,13 @@ export const rowActionListQuerySchema = paginationQuerySchema.extend({
 export type RowActionListQuery = z.infer<typeof rowActionListQuerySchema>;
 export type RowActionListQueryInput = z.input<typeof rowActionListQuerySchema>;
 
+export const rowActionExportQuerySchema = rowActionListQuerySchema.omit({
+  page: true,
+  pageSize: true,
+});
+export type RowActionExportQuery = z.infer<typeof rowActionExportQuerySchema>;
+export type RowActionExportQueryInput = z.input<typeof rowActionExportQuerySchema>;
+
 export const importLogSchema = z.object({
   id: z.string(),
   feature: auditFeatureSchema,
@@ -172,6 +179,7 @@ export type ImportLogSummary = z.infer<typeof importLogSchema>;
 
 export const ADMIN_AUDIT_ROUTES = {
   rowActions: '/admin/audit/row-actions',
+  rowActionsExport: '/admin/audit/row-actions/export',
   imports: '/admin/audit/imports',
   importFile: (id: string) => `/admin/audit/imports/${id}/file`,
 } as const;

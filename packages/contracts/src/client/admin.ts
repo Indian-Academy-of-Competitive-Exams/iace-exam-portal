@@ -23,6 +23,7 @@ import {
   rowActionSchema,
   type ImportLogSummary,
   type RowAction,
+  type RowActionExportQueryInput,
   type RowActionListQueryInput,
 } from '../audit';
 import {
@@ -313,6 +314,9 @@ export function adminClient(core: ApiCore) {
 
       detail: (id: string): Promise<Announcement> =>
         get(ANNOUNCEMENT_ROUTES.detail(id), announcementSchema),
+
+      deliveriesExport: (id: string): Promise<Blob> =>
+        requestBlob(ANNOUNCEMENT_ROUTES.deliveriesExport(id)),
     },
 
     students: {
@@ -494,6 +498,9 @@ export function adminClient(core: ApiCore) {
 
       tests: (id: string): Promise<SeriesTestRow[]> =>
         get(ADMIN_SERIES_ROUTES.tests(id), seriesTestRowSchema.array()),
+
+      grantsExport: (id: string): Promise<Blob> =>
+        requestBlob(ADMIN_SERIES_ROUTES.grantsExport(id)),
 
       setTestUnlock: (
         id: string,
@@ -968,6 +975,9 @@ export function adminClient(core: ApiCore) {
     audit: {
       rowActions: (query: RowActionListQueryInput = {}): Promise<Paginated<RowAction>> =>
         list(ADMIN_AUDIT_ROUTES.rowActions, query, rowActionSchema),
+
+      rowActionsExport: (query: RowActionExportQueryInput): Promise<Blob> =>
+        requestBlob(ADMIN_AUDIT_ROUTES.rowActionsExport, { ...query }),
 
       /** The sheet a run was fed — a Blob, not an envelope. */
       importFile: (id: string): Promise<Blob> => requestBlob(ADMIN_AUDIT_ROUTES.importFile(id)),

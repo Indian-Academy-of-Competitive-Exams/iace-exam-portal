@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Plus, Send } from 'lucide-react';
-import { FEATURE_KEYS, PERMISSION_LEVELS, type AnnouncementSummary } from '@iace/contracts';
+import {
+  EXPORT_KINDS,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  type AnnouncementSummary,
+} from '@iace/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
@@ -22,6 +27,7 @@ import {
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { ExportButton } from '../components/export-button';
 import { ComposeAnnouncementDialog } from '../components/announcements/compose-announcement-dialog';
 import { CHANNEL_LABEL, rupees } from '../components/announcements/money';
 
@@ -173,6 +179,14 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
       ) : (
         <Skeleton variant="row" className="h-16" />
       )}
+
+      <div>
+        <ExportButton
+          label="Export deliveries"
+          kind={EXPORT_KINDS.ANNOUNCEMENT_DELIVERIES}
+          download={() => api.admin.announcements.deliveriesExport(announcement.id)}
+        />
+      </div>
     </div>
   );
 }

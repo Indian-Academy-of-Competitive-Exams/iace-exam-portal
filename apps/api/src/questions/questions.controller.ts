@@ -51,7 +51,7 @@ import {
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit, AuditContext } from '../audit';
-import { sendWorkbook } from '../common/exporting';
+import { chosenFilters, sendWorkbook } from '../common/exporting';
 import { writeQuestionExport } from './question-export';
 import { QuestionsService } from './questions.service';
 
@@ -92,10 +92,7 @@ export class QuestionsController {
     const workbook = await writeQuestionExport(questions, authoring);
     this.auditContext.setEntityId(user.id);
     this.auditContext.setChanged({
-      filters: {
-        from: null,
-        to: Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)),
-      },
+      filters: { from: null, to: chosenFilters(query) },
       rows: { from: null, to: questions.length },
     });
     sendWorkbook(response, EXPORT_KINDS.QUESTIONS, workbook);

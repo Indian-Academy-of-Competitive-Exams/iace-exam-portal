@@ -1,6 +1,20 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
+import { type Response } from 'express';
+import {
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   ActorTypes,
+  EXPORT_KINDS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   announcementListQuerySchema,
@@ -12,7 +26,15 @@ import {
   type Paginated,
   type PaginationQuery,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import { Audit, AuditContext } from '../audit';
+import { sendWorkbook } from '../common/exporting';
+import {
+  Actors,
+  CurrentUser,
+  RequiresExport,
+  RequiresFeature,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { AnnouncementsService } from './announcements.service';
 
@@ -20,7 +42,10 @@ import { AnnouncementsService } from './announcements.service';
 @Controller('admin/announcements')
 @Actors(ActorTypes.ADMIN)
 export class AnnouncementsController {
-  constructor(private readonly announcements: AnnouncementsService) {}
+  constructor(
+    private readonly announcements: AnnouncementsService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   @RequiresFeature(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
@@ -53,5 +78,15 @@ export class AnnouncementsController {
   @Get(':id')
   detail(@Param('id') id: string): Promise<Announcement> {
     return this.announcements.detail(id);
+  }
+
+  @RequiresExport(FEATURE_KEYS.NOTIFICATION_MANAGEMENT)
+  @Audit(AUDIT_FEATURE.ANNOUNCEMENT, AUDIT_ACTION.EXPORT)
+  @Get(':id/deliveries/export')
+  async deliveriesExport(@Param('id') id: string, @Res() response: Response): Promise<void> {
+    const { workbook, rows } = await this.announcements.exportDeliveries(id);
+    this.auditContext.setEntityId(id);
+    this.auditContext.setChanged({ rows: { from: null, to: rows } });
+    sendWorkbook(response, EXPORT_KINDS.ANNOUNCEMENT_DELIVERIES, workbook);
   }
 }

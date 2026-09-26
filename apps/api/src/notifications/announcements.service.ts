@@ -22,7 +22,15 @@ import {
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
-import { studentWhere } from '../students';
+import {
+  EXPORT_DATE_FORMATS,
+  assertExportable,
+  exportInstant,
+  readInBatches,
+  writeWorkbook,
+  type ExportColumn,
+} from '../common/exporting';
+import { studentCardsOf, studentWhere, type StudentCard } from '../students';
 import { SKIP_REASONS, type PaidChannel } from './notification-policy';
 import { NotificationOutbox, type NotificationIntent } from './notification-outbox';
 
@@ -175,6 +183,36 @@ export class AnnouncementsService {
     return { ...toSummary(row), stats: await this.statsOf(id) };
   }
 
+  /** One row per notification and channel: the ledger as it stands, not as it was at the send. */
+  async exportDeliveries(announcementId: string): Promise<{ workbook: Buffer; rows: number }> {
+    const found = await this.prisma.announcement.findUnique({
+      where: { id: announcementId },
+      select: { id: true },
+    });
+    if (!found) throw new AppException(ErrorCodes.NOT_FOUND, 'No such announcement');
+
+    const where = { notification: { announcementId } };
+    assertExportable(await this.prisma.notificationDelivery.count({ where }));
+    const deliveries = await this.prisma.notificationDelivery.findMany({
+      where,
+      select: DELIVERY_SELECT,
+      orderBy: [{ notificationId: 'asc' }, { channel: 'asc' }],
+    });
+
+    const studentIds = [
+      ...new Set(deliveries.flatMap(({ notification }) => notification.studentId ?? [])),
+    ];
+    const cards = await readInBatches(studentIds, (ids) => studentCardsOf(this.prisma, ids));
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    const rows = deliveries.map((delivery) => ({
+      ...delivery,
+      student: byId.get(delivery.notification.studentId ?? '') ?? null,
+    }));
+
+    const workbook = await writeWorkbook([{ name: 'Deliveries', columns: DELIVERY_COLUMNS, rows }]);
+    return { workbook, rows: rows.length };
+  }
+
   /** Counted off the ledger rather than stored: a delivery's status keeps moving after the send. */
   private async statsOf(announcementId: string): Promise<AnnouncementStats> {
     const of = (status: DeliveryStatus) =>
@@ -197,6 +235,33 @@ export class AnnouncementsService {
     return { readCount, sent, delivered, failed, skipped, savedByRead };
   }
 }
+
+const DELIVERY_SELECT = {
+  channel: true,
+  status: true,
+  skipReason: true,
+  sentAt: true,
+  deliveredAt: true,
+  failedAt: true,
+  notification: { select: { studentId: true } },
+} as const satisfies Prisma.NotificationDeliverySelect;
+
+type DeliveryRow = Prisma.NotificationDeliveryGetPayload<{ select: typeof DELIVERY_SELECT }> & {
+  student: StudentCard | null;
+};
+
+const AT = EXPORT_DATE_FORMATS.INSTANT;
+
+const DELIVERY_COLUMNS: ExportColumn<DeliveryRow>[] = [
+  { header: 'Student', width: 28, value: (row) => row.student?.fullName ?? null },
+  { header: 'Mobile', width: 14, text: true, value: (row) => row.student?.mobile ?? null },
+  { header: 'Channel', width: 14, value: (row) => row.channel },
+  { header: 'Status', width: 12, value: (row) => row.status },
+  { header: 'Skip reason', width: 16, value: (row) => row.skipReason },
+  { header: 'Sent at', width: 18, date: AT, value: (row) => exportInstant(row.sentAt) },
+  { header: 'Delivered at', width: 18, date: AT, value: (row) => exportInstant(row.deliveredAt) },
+  { header: 'Failed at', width: 18, date: AT, value: (row) => exportInstant(row.failedAt) },
+];
 
 /** Live students only: a soft-deleted or anonymised row is not somebody to announce anything to. */
 function cohortWhere(audience: AnnouncementAudience): Prisma.StudentWhereInput {

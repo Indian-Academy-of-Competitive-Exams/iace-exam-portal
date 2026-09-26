@@ -3,7 +3,7 @@ import { Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { AppException, type TestSeriesDetail } from '@iace/contracts';
+import { AppException, EXPORT_KINDS, type TestSeriesDetail } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
@@ -21,6 +21,7 @@ import {
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { type StageChoice } from '../components/exam-picker';
+import { ExportButton } from '../components/export-button';
 import {
   SERIES_TAB,
   SERVER_FIELDS,
@@ -204,6 +205,13 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
               // The switch saves itself, so it belongs to the record and not to the form's Edit.
               <div className="flex items-center gap-3">
                 {detail ? <SeriesSwitch series={detail} /> : null}
+                {detail ? (
+                  <ExportButton
+                    label="Export grants"
+                    kind={EXPORT_KINDS.SERIES_GRANTS}
+                    download={() => api.admin.testSeries.grantsExport(detail.id)}
+                  />
+                ) : null}
                 {isEditing ? null : (
                   <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                     <Pencil aria-hidden />

@@ -7,10 +7,21 @@ import {
   createAnnouncementSchema,
   type AnnouncementChannel,
 } from '@iace/contracts';
+import { DeliveryChannel } from '@prisma/client';
 import { AnnouncementsService } from '../src/notifications/announcements.service';
 import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
 import { FakeConfig, FakeQueue } from '../test/support/fakes';
-import { makeAdmin, makeBranch, makeStudent, resetDatabase, testPrisma } from './support/database';
+import {
+  makeAdmin,
+  makeAnnouncement,
+  makeBranch,
+  makeNotification,
+  makeStudent,
+  resetDatabase,
+  testPrisma,
+  uid,
+} from './support/database';
+import { sheetRows } from './support/workbook';
 
 /** Sending one spends money, so the guarantees are: the count is right, and the cap is a wall. */
 
@@ -150,5 +161,38 @@ describe('Sending the same notice again', () => {
     await service.send(draft(), admin.id);
 
     assert.equal(await prisma.announcement.count(), 2);
+  });
+});
+
+describe("Exporting an announcement's deliveries", () => {
+  async function toldOver(announcementId: string, channels: DeliveryChannel[], fullName: string) {
+    const student = await makeStudent(prisma, { fullName });
+    const { id } = await makeNotification(prisma, { studentId: student.id });
+    await prisma.notification.update({ where: { id }, data: { announcementId } });
+    await prisma.notificationDelivery.createMany({
+      data: channels.map((channel) => ({ notificationId: id, channel })),
+    });
+  }
+
+  it('writes one row per notification and channel of that announcement, and none of another', async () => {
+    const announcement = await makeAnnouncement(prisma);
+    const other = await makeAnnouncement(prisma);
+    await toldOver(announcement.id, [DeliveryChannel.IN_APP, DeliveryChannel.SMS], 'Asha');
+    await toldOver(announcement.id, [DeliveryChannel.IN_APP], 'Bala');
+    await toldOver(other.id, [DeliveryChannel.IN_APP, DeliveryChannel.SMS], 'Chitra');
+
+    const { workbook, rows } = await service.exportDeliveries(announcement.id);
+    const sheet = await sheetRows(workbook);
+
+    assert.equal(rows, 3);
+    assert.deepEqual(sheet.map((row) => `${String(row.Student)} ${String(row.Channel)}`).sort(), [
+      'Asha IN_APP',
+      'Asha SMS',
+      'Bala IN_APP',
+    ]);
+  });
+
+  it('refuses an announcement that does not exist', async () => {
+    await assert.rejects(service.exportDeliveries(uid()), { code: ErrorCodes.NOT_FOUND });
   });
 });

@@ -9,6 +9,7 @@ export const ANNOUNCEMENT_ROUTES = {
   preview: '/admin/announcements/preview',
   create: '/admin/announcements',
   detail: (id: string) => `/admin/announcements/${id}`,
+  deliveriesExport: (id: string) => `/admin/announcements/${id}/deliveries/export`,
 } as const;
 
 /** The paid channels an announcement may opt into. In-app is always sent and never charged. */

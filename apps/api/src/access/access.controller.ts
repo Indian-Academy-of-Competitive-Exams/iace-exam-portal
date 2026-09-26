@@ -10,13 +10,16 @@ import {
   Post,
   Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import { type Response } from 'express';
 import {
   ActorTypes,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   createProgramSchema,
   createTestSeriesSchema,
+  EXPORT_KINDS,
   FEATURE_KEYS,
   grantSeriesSchema,
   PERMISSION_LEVELS,
@@ -44,12 +47,14 @@ import {
 import {
   Actors,
   CurrentUser,
+  RequiresExport,
   RequiresFeature,
   RequiresSuperAdmin,
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
-import { Audit } from '../audit';
+import { Audit, AuditContext } from '../audit';
+import { sendWorkbook } from '../common/exporting';
 import { ProgramsService } from './programs.service';
 import { TestSeriesService } from './test-series.service';
 import { StudentGrantsService } from './student-grants.service';
@@ -98,7 +103,11 @@ export class ProgramsController {
 @Controller('admin/test-series')
 @Actors(ActorTypes.ADMIN)
 export class TestSeriesController {
-  constructor(private readonly series: TestSeriesService) {}
+  constructor(
+    private readonly series: TestSeriesService,
+    private readonly grants: StudentGrantsService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
@@ -140,6 +149,16 @@ export class TestSeriesController {
   @HttpCode(HttpStatus.OK)
   remove(@Param('id') id: string): Promise<void> {
     return this.series.remove(id);
+  }
+
+  @RequiresExport(FEATURE_KEYS.TEST_MANAGEMENT)
+  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.EXPORT)
+  @Get(':id/grants/export')
+  async grantsExport(@Param('id') id: string, @Res() response: Response): Promise<void> {
+    const { workbook, rows } = await this.grants.exportForSeries(id);
+    this.auditContext.setEntityId(id);
+    this.auditContext.setChanged({ rows: { from: null, to: rows } });
+    sendWorkbook(response, EXPORT_KINDS.SERIES_GRANTS, workbook);
   }
 
   @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

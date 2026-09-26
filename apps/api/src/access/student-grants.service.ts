@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  AUDIT_ACTOR_TYPE,
   AppException,
   ErrorCodes,
   type ExamCourse,
@@ -13,7 +14,16 @@ import {
   type TestSeriesKind,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
-import { AuditContext } from '../audit';
+import { AuditContext, AuditService } from '../audit';
+import {
+  EXPORT_DATE_FORMATS,
+  assertExportable,
+  exportInstant,
+  readInBatches,
+  writeWorkbook,
+  type ExportColumn,
+} from '../common/exporting';
+import { studentCardsOf, type StudentCard } from '../students';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { NotificationOutbox } from '../notifications';
 import { reachableBy } from './access-resolver.service';
@@ -63,6 +73,25 @@ const SOURCE_OF_KIND: Readonly<Record<TestSeriesKind, StudentSeriesSource>> = {
   [TEST_SERIES_KIND.EVENT]: STUDENT_SERIES_SOURCE.EVENT,
 };
 
+interface GrantRow {
+  student: StudentCard;
+  grantedAt: Date;
+  grantedBy: string | null;
+}
+
+const GRANT_COLUMNS: ExportColumn<GrantRow>[] = [
+  { header: 'Student', width: 28, value: (row) => row.student.fullName },
+  { header: 'Mobile', width: 14, text: true, value: (row) => row.student.mobile },
+  { header: 'Branch', width: 20, value: (row) => row.student.currentBranch?.name ?? null },
+  {
+    header: 'Granted at',
+    width: 18,
+    date: EXPORT_DATE_FORMATS.INSTANT,
+    value: (row) => exportInstant(row.grantedAt),
+  },
+  { header: 'Granted by', width: 28, value: (row) => row.grantedBy },
+];
+
 export const BLOCKED_GRANT_MESSAGE =
   'That student is blocked from tests. Lift the block before granting them a series.';
 
@@ -74,6 +103,7 @@ export class StudentGrantsService {
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
     private readonly notifications: NotificationOutbox,
+    private readonly audit: AuditService,
   ) {}
 
   async list(studentId: string): Promise<StudentGrantRow[]> {
@@ -91,6 +121,41 @@ export class StudentGrantsService {
       testSeries: row.testSeries,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  async exportForSeries(testSeriesId: string): Promise<{ workbook: Buffer; rows: number }> {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: { id: true },
+    });
+    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
+
+    assertExportable(await this.prisma.studentGrant.count({ where: { testSeriesId } }));
+    const grants = await this.prisma.studentGrant.findMany({
+      where: { testSeriesId },
+      select: { studentId: true, createdAt: true, createdById: true },
+      orderBy: [{ createdAt: 'desc' }, { studentId: 'asc' }],
+    });
+
+    const [cards, names] = await Promise.all([
+      readInBatches(
+        grants.map((grant) => grant.studentId),
+        (ids) => studentCardsOf(this.prisma, ids),
+      ),
+      this.audit.namesFor(
+        grants.map((grant) => ({ actorId: grant.createdById, actorType: AUDIT_ACTOR_TYPE.ADMIN })),
+      ),
+    ]);
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    const rows = grants.flatMap((grant) => {
+      const student = byId.get(grant.studentId);
+      if (!student) return [];
+      const grantedBy = grant.createdById ? (names.get(grant.createdById) ?? null) : null;
+      return [{ student, grantedAt: grant.createdAt, grantedBy }];
+    });
+
+    const workbook = await writeWorkbook([{ name: 'Grants', columns: GRANT_COLUMNS, rows }]);
+    return { workbook, rows: rows.length };
   }
 
   /** Every series this student reaches and what opens each, read the way the resolver reads it. */

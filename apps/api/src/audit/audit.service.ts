@@ -14,9 +14,18 @@ import {
   type Paginated,
   type PaginationQuery,
   type RowAction,
+  type RowActionExportQuery,
   type RowActionListQuery,
 } from '@iace/contracts';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+import {
+  EXPORT_DATE_FORMATS,
+  assertExportable,
+  exportInstant,
+  readInBatches,
+  writeWorkbook,
+  type ExportColumn,
+} from '../common/exporting';
 import { matchFilters } from '../common/match-filters';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,6 +73,54 @@ function dateRange(
   };
 }
 
+const ROW_ACTION_ORDER: Prisma.RowActionLogOrderByWithRelationInput[] = [
+  { createdAt: 'desc' },
+  { id: 'desc' },
+];
+
+/** A normal admin's `actorId` filter is overwritten with their own id — never trusted from the query. */
+export function rowActionWhere(
+  query: RowActionExportQuery,
+  viewer: AuditViewer,
+): Prisma.RowActionLogWhereInput {
+  const range = dateRange(query.from, query.to);
+  const chosen: Prisma.RowActionLogWhereInput[] = [
+    ...(query.feature ? [{ feature: { in: query.feature } }] : []),
+    ...(query.action ? [{ action: { in: query.action } }] : []),
+    // Honoured for a super admin only: ANDing an ignored one against the pin below finds nobody.
+    ...(viewer.isSuperAdmin && query.actorId ? [{ actorId: { in: query.actorId } }] : []),
+  ];
+  const always: Prisma.RowActionLogWhereInput[] = [
+    ...(query.entityId ? [{ entityId: query.entityId }] : []),
+    ...(range ? [{ createdAt: range }] : []),
+  ];
+
+  const and = matchFilters(always, chosen, query.match);
+  const where: Prisma.RowActionLogWhereInput = and.length > 0 ? { AND: and } : {};
+  // Outside the AND: it narrows whatever the mode built, so ANY cannot widen past the viewer.
+  if (!viewer.isSuperAdmin) where.actorId = viewer.id;
+  return where;
+}
+
+const ROW_ACTION_COLUMNS: ExportColumn<RowAction>[] = [
+  {
+    header: 'When',
+    width: 18,
+    date: EXPORT_DATE_FORMATS.INSTANT,
+    value: (row) => exportInstant(new Date(row.createdAt)),
+  },
+  { header: 'Feature', width: 20, value: (row) => row.feature },
+  { header: 'Action', width: 12, value: (row) => row.action },
+  { header: 'Record', width: 38, text: true, value: (row) => row.entityId },
+  { header: 'Actor type', width: 12, value: (row) => row.actorType },
+  { header: 'Actor', width: 28, value: (row) => row.actorName },
+  {
+    header: 'Changed',
+    width: 60,
+    value: (row) => (row.changed ? JSON.stringify(row.changed) : null),
+  },
+];
+
 /** Owns `RowActionLog` — the only module that writes it. */
 @Injectable()
 export class AuditService {
@@ -108,33 +165,17 @@ export class AuditService {
     });
   }
 
-  /** A normal admin's `actorId` filter is overwritten with their own id — never trusted from the query. */
   async listRowActions(
     query: RowActionListQuery,
     viewer: AuditViewer,
   ): Promise<Paginated<RowAction>> {
     this.assertActive(viewer);
-    const range = dateRange(query.from, query.to);
-    const chosen: Prisma.RowActionLogWhereInput[] = [
-      ...(query.feature ? [{ feature: { in: query.feature } }] : []),
-      ...(query.action ? [{ action: { in: query.action } }] : []),
-      // Honoured for a super admin only: ANDing an ignored one against the pin below finds nobody.
-      ...(viewer.isSuperAdmin && query.actorId ? [{ actorId: { in: query.actorId } }] : []),
-    ];
-    const always: Prisma.RowActionLogWhereInput[] = [
-      ...(query.entityId ? [{ entityId: query.entityId }] : []),
-      ...(range ? [{ createdAt: range }] : []),
-    ];
-
-    const and = matchFilters(always, chosen, query.match);
-    const where: Prisma.RowActionLogWhereInput = and.length > 0 ? { AND: and } : {};
-    // Outside the AND: it narrows whatever the mode built, so ANY cannot widen past the viewer.
-    if (!viewer.isSuperAdmin) where.actorId = viewer.id;
+    const where = rowActionWhere(query, viewer);
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.rowActionLog.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: ROW_ACTION_ORDER,
         ...pageArgs(query),
       }),
       this.prisma.rowActionLog.count({ where }),
@@ -147,6 +188,27 @@ export class AuditService {
       rows.map((row) => this.toRowAction(row, names)),
       total,
     );
+  }
+
+  /** Every row the list would page through, in the list's order; a non-super admin gets only their own. */
+  async exportRowActions(
+    query: RowActionExportQuery,
+    viewer: AuditViewer,
+  ): Promise<{ workbook: Buffer; rows: number }> {
+    this.assertActive(viewer);
+    const where = rowActionWhere(query, viewer);
+    assertExportable(await this.prisma.rowActionLog.count({ where }));
+
+    const rows = await this.prisma.rowActionLog.findMany({ where, orderBy: ROW_ACTION_ORDER });
+    const names = await this.namesFor(rows);
+    const workbook = await writeWorkbook([
+      {
+        name: 'Audit log',
+        columns: ROW_ACTION_COLUMNS,
+        rows: rows.map((row) => this.toRowAction(row, names)),
+      },
+    ]);
+    return { workbook, rows: rows.length };
   }
 
   /** Same scoping rule as `listRowActions` — imports are always admin-initiated, so only `admin` resolves. */
@@ -236,22 +298,26 @@ export class AuditService {
   async namesFor(
     rows: readonly { actorId: string | null; actorType: string }[],
   ): Promise<Map<string, string>> {
-    const adminIds = rows
-      .filter((row) => row.actorType === AUDIT_ACTOR_TYPE.ADMIN && row.actorId)
-      .map((row) => row.actorId as string);
-    const studentIds = rows
-      .filter((row) => row.actorType === AUDIT_ACTOR_TYPE.STUDENT && row.actorId)
-      .map((row) => row.actorId as string);
+    const idsOf = (actorType: string) => [
+      ...new Set(
+        rows.flatMap((row) => (row.actorType === actorType && row.actorId ? [row.actorId] : [])),
+      ),
+    ];
 
-    const [admins, students] = await this.prisma.$transaction([
-      this.prisma.admin.findMany({
-        where: { id: { in: adminIds } },
-        select: { id: true, fullName: true, email: true },
-      }),
-      this.prisma.student.findMany({
-        where: { id: { in: studentIds } },
-        select: { id: true, fullName: true, mobile: true },
-      }),
+    // Sliced: an export's distinct student actors can outrun Postgres's bind limit on their own.
+    const [admins, students] = await Promise.all([
+      readInBatches(idsOf(AUDIT_ACTOR_TYPE.ADMIN), (ids) =>
+        this.prisma.admin.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, fullName: true, email: true },
+        }),
+      ),
+      readInBatches(idsOf(AUDIT_ACTOR_TYPE.STUDENT), (ids) =>
+        this.prisma.student.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, fullName: true, mobile: true },
+        }),
+      ),
     ]);
 
     const names = new Map<string, string>();
