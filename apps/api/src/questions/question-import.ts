@@ -176,8 +176,7 @@ function planRow(
 
   const reported = dedupeIssues(issues);
 
-  const action: QuestionImportAction =
-    reported.length > 0 ? 'skip' : duplicateOf ? 'duplicate' : 'create';
+  const action: QuestionImportAction = actionFor(reported.length > 0, duplicateOf);
 
   // Only a row that will really be written claims its stem. A skipped row that held the hash would make the next good copy of the same question a duplicate of a line nothing was ever created from.
   if (stemHash && action === 'create') lineByHash.set(stemHash, row.line);
@@ -195,6 +194,12 @@ function planRow(
     stemHash,
     questionCode: code ?? null,
   };
+}
+
+/** A row with anything to report is never written, so the duplicate it repeats does not matter. */
+function actionFor(hasIssues: boolean, duplicateOf: string | null): QuestionImportAction {
+  if (hasIssues) return 'skip';
+  return duplicateOf ? 'duplicate' : 'create';
 }
 
 /** A repeat is skipped rather than reported as an error: re-uploading last week's sheet with ten new questions on the end is the normal way to use this. */

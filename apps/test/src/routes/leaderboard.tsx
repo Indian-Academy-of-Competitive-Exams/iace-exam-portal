@@ -97,12 +97,16 @@ export function LeaderboardPage() {
   } as const;
 
   // Nothing ranked to pick from leaves the board control alone in the bar, still reachable.
-  const FILTERS =
-    scope === LEADERBOARD_SCOPES.SERIES && seriesRows.length > 0
-      ? ([SERIES_FILTER] as const satisfies readonly ListFilter[])
-      : scope === LEADERBOARD_SCOPES.TEST && sat.length > 0
-        ? ([TEST_FILTER] as const satisfies readonly ListFilter[])
-        : ([] as const satisfies readonly ListFilter[]);
+  const pickable = () => {
+    if (scope === LEADERBOARD_SCOPES.SERIES && seriesRows.length > 0) {
+      return [SERIES_FILTER] as const satisfies readonly ListFilter[];
+    }
+    if (scope === LEADERBOARD_SCOPES.TEST && sat.length > 0) {
+      return [TEST_FILTER] as const satisfies readonly ListFilter[];
+    }
+    return [] as const satisfies readonly ListFilter[];
+  };
+  const FILTERS = pickable();
 
   const filters = useFilterSpec(FILTERS);
   const testId = filters.values.testId || (sat[0]?.testId ?? '');

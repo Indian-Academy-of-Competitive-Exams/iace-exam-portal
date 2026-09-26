@@ -89,10 +89,8 @@ function caddyPathPattern(pattern: string): RegExp {
 }
 
 const CADDYFILE = readFileSync(join(__dirname, '../../../deploy/Caddyfile'), 'utf8');
-const EXAM_MATCHER = /^\s*@exam\s+path\s+(.+)$/m.exec(CADDYFILE);
-const EXAM_MATCHER_LIST = EXAM_MATCHER?.[1];
-assert.ok(EXAM_MATCHER_LIST, 'deploy/Caddyfile must define an @exam path matcher');
-const EXAM_PATTERNS = EXAM_MATCHER_LIST.trim().split(/\s+/).map(caddyPathPattern);
+const EXAM_MATCHER_LIST = /^\s*@exam\s+path\s+(.+)$/m.exec(CADDYFILE)?.[1] ?? '';
+const EXAM_PATTERNS = EXAM_MATCHER_LIST.trim().split(/\s+/).filter(Boolean).map(caddyPathPattern);
 
 const EXAM_ROUTES = [...routesOf(AttemptsController), ...routesOf(MeLeaderboardController)];
 const CORE_ME_ROUTES = [
@@ -104,6 +102,11 @@ const CORE_ME_ROUTES = [
 ];
 
 describe('the Caddyfile exam matcher against the routes Nest actually registers', () => {
+  /** Without this the two tests below pass vacuously on a Caddyfile that lost its matcher. */
+  it('finds an @exam path matcher to check at all', () => {
+    assert.ok(EXAM_PATTERNS.length > 0, 'deploy/Caddyfile must define an @exam path matcher');
+  });
+
   it('reaches every route the exam role registers', () => {
     for (const route of EXAM_ROUTES) {
       assert.ok(

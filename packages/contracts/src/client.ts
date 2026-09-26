@@ -1,9 +1,9 @@
-import { createApiCore, queryString, type ApiClientOptions } from './client/core';
+import { createApiCore, type ApiClientOptions } from './client/core';
 import { authClient } from './client/auth';
 import type { meClient } from './client/me';
 import type { adminClient } from './client/admin';
 
-export { queryString, type ApiClientOptions };
+export { queryString, type ApiClientOptions } from './client/core';
 
 type MeClient = ReturnType<typeof meClient>;
 type AdminClient = ReturnType<typeof adminClient>;
@@ -14,14 +14,17 @@ function lazyGroup<T extends object>(load: () => Promise<T>): T {
   return new Proxy({} as T, {
     get(_target, prop) {
       if (typeof prop === 'symbol') return undefined;
-      return (...args: unknown[]) =>
-        (real ??= load()).then((group) => {
+      return (...args: unknown[]) => {
+        // Assigned on CALL, never on access: touching the property must not pull the group in.
+        real ??= load();
+        return real.then((group) => {
           const method = group[prop as keyof T];
           if (typeof method !== 'function') {
             throw new TypeError(`Unknown client method: ${String(prop)}`);
           }
           return method(...args);
         });
+      };
     },
   });
 }
