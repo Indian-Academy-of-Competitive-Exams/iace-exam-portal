@@ -7,6 +7,8 @@ export const STORAGE_KEYS = {
   TAB: 'iace.mobile.tab',
   /** Answers a save has not delivered yet, kept on the phone until one does. */
   QUEUED_ANSWERS: 'iace.mobile.queued',
+  /** Which page tours this install has been shown; one key holding the set, so a tour added later needs no migration. */
+  TOURS: 'iace.mobile.tours',
 } as const;
 
 /** The signed-in student's identity, cached under one key. */

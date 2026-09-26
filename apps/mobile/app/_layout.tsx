@@ -9,6 +9,7 @@ import { hydrate } from '../src/lib/api';
 import { AuthProvider, useAuth } from '../src/providers/auth';
 import { useTokenColor } from '../src/lib/use-token-color';
 import { usePushDevice } from '../src/lib/use-push-device';
+import { TourProvider } from '../src/lib/page-tour';
 import '../global.css';
 
 void SplashScreen.preventAutoHideAsync();
@@ -35,7 +36,9 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Navigation />
+        <TourProvider>
+          <Navigation />
+        </TourProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

@@ -59,11 +59,25 @@ export function HeroFigure({ value, unit, caption }: Readonly<HeroFigureProps>) 
 }
 
 /** Every screen's own title. The page step (28), never the hero figure's (36). */
-export function ScreenTitle({ children, meta }: Readonly<{ children: string; meta?: string }>) {
-  return (
-    <View className="gap-0.5">
+export function ScreenTitle({
+  children,
+  meta,
+  action,
+}: Readonly<{ children: string; meta?: string; action?: ReactNode }>) {
+  const titled = (
+    <View className={cn('gap-0.5', action ? 'min-w-0 flex-1' : undefined)}>
       <Text variant="title">{children}</Text>
       {meta ? <Text variant="muted">{meta}</Text> : null}
     </View>
+  );
+
+  // A row only where there is something to sit beside the title; otherwise the column it always was.
+  return action ? (
+    <View className="flex-row items-center gap-3">
+      {titled}
+      {action}
+    </View>
+  ) : (
+    titled
   );
 }
