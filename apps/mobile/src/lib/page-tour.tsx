@@ -59,12 +59,13 @@ function useTourContext(): TourContextValue {
 
 const seen = seenTours(sittingStorage, STORAGE_KEYS.TOURS);
 
-/** Registers a view as a tour target. Spread the result on the View the step points at. */
-export function useTourTarget(key: string): { ref: (view: Measurable | null) => void } {
+/** Registers a view as a tour target; an undefined key attaches nothing, so a list can anchor its first row alone. */
+export function useTourTarget(key?: string): { ref?: (view: Measurable | null) => void } {
   const { targets } = useTourContext();
 
   const ref = useCallback(
     (view: Measurable | null) => {
+      if (key === undefined) return;
       if (view === null) {
         targets.current.delete(key);
         return;
@@ -74,7 +75,7 @@ export function useTourTarget(key: string): { ref: (view: Measurable | null) => 
     [targets, key],
   );
 
-  return { ref };
+  return key === undefined ? {} : { ref };
 }
 
 export function TourProvider({ children }: Readonly<{ children: ReactNode }>) {

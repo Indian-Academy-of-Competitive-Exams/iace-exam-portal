@@ -29,6 +29,8 @@ import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
+import { TourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
+import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { plural } from '../../../src/lib/plural';
 
 type Phase = 'LOADING' | 'ERROR' | 'READY';
@@ -39,6 +41,9 @@ function phaseOf(brief: { isLoading: boolean; isError: boolean }): Phase {
   return 'READY';
 }
 
+/** A stable render prop for the navigator's headerRight, rather than a closure rebuilt each render. */
+const renderTourTrigger = () => <TourTrigger />;
+
 export default function TestAboutScreen() {
   const { id: testId } = useLocalSearchParams<{ id: string }>();
   const now = new Date();
@@ -48,9 +53,13 @@ export default function TestAboutScreen() {
   const series = catalog.data?.series.find((row) => row.tests.some((test) => test.id === testId));
   const listed = series?.tests.find((test) => test.id === testId);
 
+  usePageTour({ id: TOUR_IDS.TEST_ABOUT, steps: TEST_ABOUT_TOUR, ready: brief.isSuccess });
+
   return (
     <Fragment>
-      <Stack.Screen options={{ title: brief.data?.title ?? 'Test' }} />
+      <Stack.Screen
+        options={{ title: brief.data?.title ?? 'Test', headerRight: renderTourTrigger }}
+      />
       <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-5 px-5 py-6">
         <AboutContent
           phase={phaseOf(brief)}
@@ -83,6 +92,8 @@ function AboutContent({
   listed: StudentCatalogTest | undefined;
   now: Date;
 }>) {
+  const band = useTourTarget(TOUR_TARGETS.ABOUT_BAND);
+
   if (phase === 'LOADING') {
     return (
       <View className="gap-3">
@@ -117,12 +128,14 @@ function AboutContent({
 
       {listed ? <ShutNotice test={listed} /> : null}
 
-      <StatTileRow>
-        <StatTile label="Questions" value={brief.totalQuestions} />
-        <StatTile label="Duration" value={`${Math.round(brief.durationSec / 60)} min`} />
-        <StatTile label="Total marks" value={totalMarksOf(brief)} />
-        <StatTile label="Negative" value={negativeOf(brief)} />
-      </StatTileRow>
+      <View {...band}>
+        <StatTileRow>
+          <StatTile label="Questions" value={brief.totalQuestions} />
+          <StatTile label="Duration" value={`${Math.round(brief.durationSec / 60)} min`} />
+          <StatTile label="Total marks" value={totalMarksOf(brief)} />
+          <StatTile label="Negative" value={negativeOf(brief)} />
+        </StatTileRow>
+      </View>
 
       <SectionsCard brief={brief} />
       <PaperCard brief={brief} />
@@ -140,8 +153,10 @@ function ShutNotice({ test }: Readonly<{ test: StudentCatalogTest }>) {
 }
 
 function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
+  const anchor = useTourTarget(TOUR_TARGETS.ABOUT_SECTIONS);
+
   return (
-    <View className="gap-2">
+    <View className="gap-2" {...anchor}>
       <View className="flex-row items-baseline justify-between">
         <Text variant="section">Sections</Text>
         <Text variant="muted">{plural(brief.sections.length, 'section')}</Text>
@@ -164,8 +179,10 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
 }
 
 function PaperCard({ brief }: Readonly<{ brief: ExamBrief }>) {
+  const anchor = useTourTarget(TOUR_TARGETS.ABOUT_PAPER);
+
   return (
-    <View className="gap-2">
+    <View className="gap-2" {...anchor}>
       <Text variant="section">The paper</Text>
       <Card className="gap-3 p-4">
         <InfoRow label="Languages" value={languagesOf(brief)} />

@@ -5,6 +5,7 @@ import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { seriesProgress, type Sittable, type TestResult } from '@iace/app-kit';
 import { Text } from '../ui/text';
+import { useTourTarget } from '../../lib/page-tour';
 import { plural } from '../../lib/plural';
 import { DETAIL_ROUTES } from '../../lib/nav';
 import { TestTile } from './test-tile';
@@ -15,6 +16,8 @@ export interface SeriesShelfProps {
   now: Date;
   /** What each sat paper scored, keyed by test id — the screen already holds the trend. */
   results: ReadonlyMap<string, TestResult>;
+  /** A page tour's anchor, given to the FIRST shelf only so the tour rings one of them. */
+  tour?: string;
 }
 
 const keyOfTile = (row: Sittable) => row.test.id;
@@ -27,12 +30,13 @@ const renderTile =
     <TestTile row={item} now={now} result={results.get(item.test.id)} />
   );
 
-export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelfProps>) {
+export function SeriesShelf({ series, rows, now, results, tour }: Readonly<SeriesShelfProps>) {
   const progress = seriesProgress(series);
   const chevronColor = useUnstableNativeVariable('--muted-foreground');
+  const anchor = useTourTarget(tour);
 
   return (
-    <View className="gap-3">
+    <View className="gap-3" {...anchor}>
       <Link href={DETAIL_ROUTES.SERIES(series.id)} asChild>
         <Pressable className="flex-row items-center gap-1">
           <Text

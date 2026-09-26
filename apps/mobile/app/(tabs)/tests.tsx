@@ -20,6 +20,8 @@ import { FilterSearch, FilterSummary, FilterTrigger } from '../../src/components
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
 import { asText, useFilterState, type FilterSpec, type FilterState } from '../../src/lib/filters';
 import { plural } from '../../src/lib/plural';
+import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour';
+import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 
 const ANY = ANY_CHOICE;
 
@@ -34,6 +36,8 @@ interface Shelf {
 export default function TestsScreen() {
   const catalog = useQuery(catalogQuery);
   const trend = useQuery(performanceQuery);
+
+  usePageTour({ id: TOUR_IDS.TESTS, steps: TESTS_TOUR, ready: catalog.isSuccess });
 
   const reaches = useMemo(() => catalog.data?.series ?? [], [catalog.data]);
   const filters = useMemo(() => testsFilters(reaches), [reaches]);
@@ -133,14 +137,17 @@ interface TestsHeaderProps {
 }
 
 function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeaderProps>) {
+  const header = useTourTarget(TOUR_TARGETS.TESTS_FILTERS);
+
   return (
     <View className="gap-4 pb-2">
-      <View className="flex-row items-start justify-between gap-3">
+      <View className="flex-row items-start justify-between gap-3" {...header}>
         <View className="flex-1">
           <Text variant="title">Tests</Text>
           <Text variant="muted">{plural(count, 'test')}</Text>
         </View>
         <FilterTrigger state={state} filters={filters} />
+        <TourTrigger />
       </View>
 
       {testBlocked ? (
@@ -175,6 +182,12 @@ const keyOfShelf = (shelf: Shelf) => shelf.series.id;
 /** A stable factory, not a component declared inside another — `now`/`results` close over it. */
 const renderShelf =
   (now: Date, results: ReadonlyMap<string, TestResult>) =>
-  ({ item }: { item: Shelf }) => (
-    <SeriesShelf series={item.series} rows={item.tests} now={now} results={results} />
+  ({ item, index }: { item: Shelf; index: number }) => (
+    <SeriesShelf
+      series={item.series}
+      rows={item.tests}
+      now={now}
+      results={results}
+      tour={index === 0 ? TOUR_TARGETS.SERIES_SHELF : undefined}
+    />
   );
