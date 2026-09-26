@@ -1,0 +1,106 @@
+# Box A — the API box, one per environment. Caddy and the three roles, and nothing else:
+# Postgres is RDS and Valkey is Box B (docs/04-infrastructure.md §2).
+#
+#   docker compose -f deploy/compose.yml --env-file deploy/.env up -d --build
+#
+# Only Caddy publishes a port. The three API containers are reachable on the compose network
+# alone, so the box's firewall has two holes in it rather than five.
+
+name: iace-api
+
+services:
+  # Runs to completion before the API starts, exactly as the one-off task does on a real release.
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    restart: 'no'
+
+  exam:
+    build: &api-image
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      API_ROLE: exam
+      API_PORT: 3000
+      UV_THREADPOOL_SIZE: 16
+      NODE_OPTIONS: --max-old-space-size=${EXAM_HEAP_MB:-384}
+    cpus: ${EXAM_CPUS:-0.8}
+    mem_limit: ${EXAM_MEM:-1g}
+    # Long enough for BullMQ to close and Prisma to drain; the default 10s is not.
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck: &api-health
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  core:
+    build: *api-image
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      API_ROLE: core
+      API_PORT: 3000
+      UV_THREADPOOL_SIZE: 8
+      NODE_OPTIONS: --max-old-space-size=${CORE_HEAP_MB:-384}
+    cpus: ${CORE_CPUS:-0.6}
+    mem_limit: ${CORE_MEM:-1g}
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck: *api-health
+
+  # EXACTLY ONE, always. concurrency 1 in QUEUE_POLICY is the only thing stopping the 60s flush
+  # and the 120s sweep overlapping, and it works inside one process and nowhere else (docs/04 §3).
+  worker:
+    build: *api-image
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      API_ROLE: worker
+      API_PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=${WORKER_HEAP_MB:-384}
+    cpus: ${WORKER_CPUS:-0.4}
+    mem_limit: ${WORKER_MEM:-1g}
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck: *api-health
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      API_HOST: ${API_HOST}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificates Caddy obtained. Lose this and every restart asks Let's Encrypt again,
+      # which rate-limits at five duplicate certificates a week per hostname.
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/var/log/caddy
+    depends_on:
+      - exam
+      - core
+
+volumes:
+  caddy-data:
+  caddy-config:
+  caddy-logs:

@@ -1,0 +1,61 @@
+# Box B — Valkey, and nothing else. One PROCESS per environment rather than one process with two
+# database indexes: an index separates the keyspaces, but `maxmemory` is per process, and under
+# `noeviction` a full instance makes writes FAIL. A process each means a staging runaway cannot
+# stop production saving a candidate's answers (docs/04-infrastructure.md §7).
+#
+#   docker compose -f deploy/valkey/compose.yml up -d valkey-staging
+#   docker compose -f deploy/valkey/compose.yml up -d            # both, once production exists
+#
+# Bound to the private address only. The security group is what keeps it private; this is the
+# second lock, so a misconfigured group does not put Valkey on the internet.
+
+name: iace-valkey
+
+services:
+  valkey-prod:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --appendonly
+      - 'yes'
+      # noeviction is not a preference: BullMQ requires it and this holds live sittings.
+      - --maxmemory-policy
+      - noeviction
+      # Always set explicitly — unset, Valkey grows until the kernel kills it, and an OOM-killed
+      # Valkey loses up to a second of answers to the appendfsync window.
+      - --maxmemory
+      - ${PROD_MAXMEMORY:-1200mb}
+    ports:
+      - '${PRIVATE_IP}:6379:6379'
+    volumes:
+      - prod-data:/data
+    # A forced stop costs the last appendfsync window, which mid-event is a second of answers.
+    stop_grace_period: 60s
+    healthcheck: &ping
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  valkey-staging:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --appendonly
+      - 'yes'
+      - --maxmemory-policy
+      - noeviction
+      - --maxmemory
+      - ${STAGING_MAXMEMORY:-256mb}
+    ports:
+      - '${PRIVATE_IP}:6380:6379'
+    volumes:
+      - staging-data:/data
+    stop_grace_period: 60s
+    healthcheck: *ping
+
+volumes:
+  prod-data:
+  staging-data:

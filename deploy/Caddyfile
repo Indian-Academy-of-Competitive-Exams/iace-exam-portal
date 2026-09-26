@@ -1,8 +1,38 @@
-# Real front door for api.iace.co.in — see docs/04-infrastructure.md §4 for why and the traps.
+# Real front door for the API — see docs/04-infrastructure.md §4 for why and the traps.
 # @exam lists every leaf path the exam role actually registers; everything else falls to core.
+#
+# Upstreams are `dynamic a` rather than a fixed host so `docker compose up -d --scale exam=4`
+# needs no change here: Docker's DNS returns every container of a service and Caddy re-resolves.
+{
+	email {$ACME_EMAIL}
+}
 
-api.iace.co.in {
+{$API_HOST} {
 	@exam path /me/tests/*/attempt /me/tests/*/brief /me/attempts/*/paper /me/attempts/*/submit /me/attempts/*/scorecard /me/attempts/*/solutions /me/attempts/*/state /me/performance /me/leaderboard
-	reverse_proxy @exam exam:3000
-	reverse_proxy core:3000
+
+	reverse_proxy @exam {
+		dynamic a {
+			name exam
+			port 3000
+			refresh 10s
+		}
+		# Passive only: a container that starts failing is taken out for 30s and tried again.
+		fail_duration 30s
+		max_fails 3
+	}
+
+	reverse_proxy {
+		dynamic a {
+			name core
+			port 3000
+			refresh 10s
+		}
+		fail_duration 30s
+		max_fails 3
+	}
+
+	log {
+		output file /var/log/caddy/access.log
+		format json
+	}
 }
