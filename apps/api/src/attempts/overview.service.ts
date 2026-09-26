@@ -6,7 +6,13 @@
  */
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
-import { measureOf, type StudentOverview, type SubjectStanding } from '@iace/contracts';
+import {
+  TEST_SCOPE,
+  measureOf,
+  round2,
+  type StudentOverview,
+  type SubjectStanding,
+} from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { perSitting } from './attempt-report';
 import { requireStudent } from './require-student';
@@ -93,6 +99,66 @@ export class StudentOverviewService {
       subjects,
     };
   }
+
+  /** Many students' tallies at once, for an export; a student with no row has sat nothing. */
+  async rollupsFor(studentIds: readonly string[]): Promise<StudentRollups> {
+    const where = { studentId: { in: [...studentIds] } };
+    const [stats, rows] = await Promise.all([
+      this.prisma.studentStat.findMany({ where }),
+      this.prisma.studentSubjectStat.findMany({
+        where: { ...where, scope: TEST_SCOPE.FULL },
+        select: { studentId: true, ...SUBJECT_SELECT },
+      }),
+    ]);
+
+    const subjects = new Map(rows.map((row) => [row.subjectId, row.subject.name]));
+    const byStudent = new Map<string, StudentRollup>(
+      stats.map((stat) => [
+        stat.studentId,
+        {
+          testsAttempted: stat.testsAttempted,
+          testsEvaluated: stat.testsEvaluated,
+          avgScore: perSitting(Number(stat.sumScore), stat.testsEvaluated),
+          accuracy:
+            stat.totalAnswered === 0
+              ? null
+              : round2((stat.totalCorrect / stat.totalAnswered) * 100),
+          avgTimeSec: perSitting(Number(stat.sumTimeSec), stat.testsAttempted),
+          lastAttemptAt: stat.lastAttemptAt,
+          subjectAccuracy: new Map(),
+        },
+      ]),
+    );
+    for (const row of rows) {
+      const tally = { ...row, sumTimeSec: Number(row.sumTimeSec) };
+      byStudent.get(row.studentId)?.subjectAccuracy.set(row.subjectId, measureOf([tally]).accuracy);
+    }
+
+    return {
+      subjects: [...subjects]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      byStudent,
+    };
+  }
+}
+
+export interface StudentRollup {
+  testsAttempted: number;
+  testsEvaluated: number;
+  avgScore: number | null;
+  /** Percent, over the questions answered. */
+  accuracy: number | null;
+  avgTimeSec: number | null;
+  lastAttemptAt: Date | null;
+  /** Subject id to FULL-scope accuracy, percent. */
+  subjectAccuracy: Map<string, number | null>;
+}
+
+export interface StudentRollups {
+  /** Every subject any of them has a FULL-scope row for, by name. */
+  subjects: { id: string; name: string }[];
+  byStudent: ReadonlyMap<string, StudentRollup>;
 }
 
 type SubjectStatRow = Prisma.StudentSubjectStatGetPayload<{ select: typeof SUBJECT_SELECT }>;

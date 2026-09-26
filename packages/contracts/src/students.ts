@@ -204,6 +204,24 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
 export type StudentListQuery = z.infer<typeof studentListQuerySchema>;
 export type StudentListQueryInput = z.input<typeof studentListQuerySchema>;
 
+/** Which workbook a students export writes: the importable roster, or the rollup figures. */
+export const STUDENT_EXPORT_VIEWS = {
+  ROSTER: 'roster',
+  PERFORMANCE: 'performance',
+} as const;
+export type StudentExportView = (typeof STUDENT_EXPORT_VIEWS)[keyof typeof STUDENT_EXPORT_VIEWS];
+
+/** The list's own query minus the page: every matching row, in the list's order. */
+export const studentExportQuerySchema = studentListQuerySchema
+  .omit({ page: true, pageSize: true })
+  .extend({
+    view: z
+      .enum([STUDENT_EXPORT_VIEWS.ROSTER, STUDENT_EXPORT_VIEWS.PERFORMANCE])
+      .default(STUDENT_EXPORT_VIEWS.ROSTER),
+  });
+export type StudentExportQuery = z.infer<typeof studentExportQuerySchema>;
+export type StudentExportQueryInput = z.input<typeof studentExportQuerySchema>;
+
 // ============================================================================
 // Writing
 // ============================================================================
@@ -299,4 +317,5 @@ export const ADMIN_STUDENT_ROUTES = {
   setTestBlocked: (id: string) => `/admin/students/${id}/test-blocked`,
   erasure: (id: string) => `/admin/students/${id}/erasure`,
   sittings: (id: string) => `/admin/students/${id}/sittings`,
+  export: '/admin/students/export',
 } as const;

@@ -111,6 +111,8 @@ export interface ListViewProps<TRow> {
   banner?: React.ReactNode;
   /** First in the filter row: a mandatory scope the list is read through, never one of its filters. */
   leading?: React.ReactNode;
+  /** Last in the filter row: what is done with the rows as filtered, such as an export. */
+  trailing?: React.ReactNode;
   skeletonRows?: number;
   selection?: DataTableSelection;
   expand?: DataTableExpand<TRow>;
@@ -211,10 +213,12 @@ export function FilterRow({
   state,
   filters,
   leading,
+  trailing,
 }: Readonly<{
   state: FilterState;
   filters: readonly ListFilter[];
   leading?: React.ReactNode;
+  trailing?: React.ReactNode;
 }>) {
   const primary = filters.filter((filter) => filter.primary);
   const folded = filters.filter((filter) => !filter.primary);
@@ -286,6 +290,8 @@ export function FilterRow({
             <Badge variant="neutral">{activeCount}</Badge>
           </Button>
         ) : null}
+
+        {trailing ? <div className="ml-auto">{trailing}</div> : null}
       </div>
 
       {folded.length > 0 && open ? (
@@ -314,6 +320,7 @@ export function ListView<TRow>({
   error,
   banner,
   leading,
+  trailing,
   skeletonRows,
   selection,
   expand,
@@ -322,7 +329,9 @@ export function ListView<TRow>({
   const spec = filters ?? [];
   const activeCount = activeFilterCount(list.values, spec);
   const bar =
-    spec.length > 0 || leading ? <FilterRow state={list} filters={spec} leading={leading} /> : null;
+    spec.length > 0 || leading || trailing ? (
+      <FilterRow state={list} filters={spec} leading={leading} trailing={trailing} />
+    ) : null;
 
   const narrowed = activeCount > 0 && emptyFiltered !== undefined;
   const message = narrowed ? emptyFiltered : empty;

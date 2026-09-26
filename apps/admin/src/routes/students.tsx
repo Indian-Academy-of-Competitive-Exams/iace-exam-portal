@@ -8,6 +8,8 @@ import {
   courseLabel,
   BRANCH_TYPE,
   EXAM_COURSES,
+  EXPORT_KINDS,
+  STUDENT_EXPORT_VIEWS,
   examsInCourses,
   FEATURE_KEYS,
   MOBILE_DIGITS,
@@ -48,6 +50,7 @@ import {
   useTruncation,
 } from '@iace/ui';
 import { EventMultiPicker, ProgramMultiPicker } from '../components/access-picker';
+import { ExportButton, type ExportChoice } from '../components/export-button';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -270,6 +273,28 @@ export function StudentsPage() {
   );
   const columns = useMemo(() => studentColumns(), []);
 
+  const exportChoices: ExportChoice[] = [
+    {
+      kind: EXPORT_KINDS.STUDENTS,
+      label: 'Roster',
+      download: () => api.admin.students.export(students.query, STUDENT_EXPORT_VIEWS.ROSTER),
+    },
+  ];
+  if (can(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.READ)) {
+    exportChoices.push({
+      kind: EXPORT_KINDS.STUDENT_PERFORMANCE,
+      label: 'Performance',
+      download: () => api.admin.students.export(students.query, STUDENT_EXPORT_VIEWS.PERFORMANCE),
+    });
+  }
+  const exportControl = (
+    <ExportButton
+      label={`Export ${students.total.toLocaleString('en-IN')} ${students.total === 1 ? 'row' : 'rows'}`}
+      disabled={students.total === 0}
+      choices={exportChoices}
+    />
+  );
+
   const header = (
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
@@ -330,6 +355,7 @@ export function StudentsPage() {
         list={students}
         filters={filterSpec}
         banner={banner}
+        trailing={exportControl}
         columns={columns}
         rowKey={(student) => student.id}
         empty={{ title: 'No students yet', hint: 'Add one, or import a roster.' }}

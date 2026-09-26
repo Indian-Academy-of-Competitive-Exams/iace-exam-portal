@@ -179,6 +179,8 @@ import {
   type CreateStudentInput,
   type SetStudentTestBlockedBody,
   type StudentDetail,
+  type StudentExportQueryInput,
+  type StudentExportView,
   type StudentSittingsQueryInput,
   type StudentListQueryInput,
   type StudentSummary,
@@ -334,6 +336,12 @@ export function adminClient(core: ApiCore) {
       /** Their evaluated sittings, paged. The share picker's own list is capped; a report's is not. */
       sittings: (id: string, query: StudentSittingsQueryInput): Promise<Paginated<ReportSitting>> =>
         list(ADMIN_STUDENT_ROUTES.sittings(id), query, reportSittingSchema),
+
+      /** Every student the list's filters match, as one workbook; the page is not sent. */
+      export: (
+        query: Omit<StudentExportQueryInput, 'view'>,
+        view: StudentExportView,
+      ): Promise<Blob> => requestBlob(ADMIN_STUDENT_ROUTES.export, { ...query, view }),
 
       /** Anonymises the person. Super admin only, and every sitting they sat is left standing. */
       erase: (id: string): Promise<ErasureReceipt> =>

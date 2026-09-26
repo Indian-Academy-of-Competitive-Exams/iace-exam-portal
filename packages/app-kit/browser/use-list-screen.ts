@@ -27,13 +27,16 @@ export function useListScreen<
   values: ListValues<TSpec>;
   total: number;
   pagination: PaginationProps;
+  /** What the list is asked for minus the page: an export sends this, so the file matches the rows. */
+  query: TFilters & { match?: MatchMode };
 } {
   const { queryKey, filters, toQuery, fetchPage, enabled } = options;
   const spec = useFilterSpec(filters, options.store);
 
+  const query = { ...toQuery(spec.values), match: spec.match };
   const list = useListQuery({
     queryKey,
-    filters: { ...toQuery(spec.values), match: spec.match },
+    filters: query,
     fetchPage,
     enabled,
   });
@@ -47,6 +50,7 @@ export function useListScreen<
     retry: list.retry,
     pagination: list.pagination,
     values: spec.values,
+    query,
     setFilter: spec.setFilter,
     clearFilters: spec.clearFilters,
     matchAny: spec.matchAny,

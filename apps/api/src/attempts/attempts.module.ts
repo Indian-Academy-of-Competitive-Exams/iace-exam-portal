@@ -89,7 +89,7 @@ import { SubmitService } from './submit.service';
     ),
   ],
   // Neither processor is here on purpose: an export is how a worker reaches a request path.
-  exports: [LeaderboardService, ScoringOutbox],
+  exports: [LeaderboardService, ScoringOutbox, StudentOverviewService],
 })
 export class AttemptsModule implements OnModuleInit {
   constructor(
