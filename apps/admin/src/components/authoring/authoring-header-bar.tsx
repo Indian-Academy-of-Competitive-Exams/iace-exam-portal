@@ -32,6 +32,7 @@ export function AuthoringHeaderBar({
   header,
   state,
   actions,
+  lead,
   subjectLocked = false,
   onHeaderChange,
   onStateChange,
@@ -39,6 +40,8 @@ export function AuthoringHeaderBar({
   header: AuthoringHeader;
   state: AuthoringState;
   actions: React.ReactNode;
+  /** Before the settings: which question these are the settings of, where there are several. */
+  lead?: React.ReactNode;
   /** The section a scoped editor was opened on names the subject; a typist must not write past it. */
   subjectLocked?: boolean;
   onHeaderChange: (next: AuthoringHeader) => void;
@@ -48,6 +51,7 @@ export function AuthoringHeaderBar({
 
   return (
     <div className="flex flex-none items-center gap-x-4 border-b border-border bg-surface px-4 py-2">
+      {lead ? <div className="flex flex-none items-center gap-2">{lead}</div> : null}
       {/* The batch's settings give way first; what a typist presses must never leave the row. */}
       <div className="flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto">
         <Slot caption="Subject">

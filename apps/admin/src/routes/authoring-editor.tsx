@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
+import { Keyboard, Maximize2, Minimize2, PanelsTopLeft, Save } from 'lucide-react';
 import {
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
-  QUESTION_IMAGE_ACCEPTED_TYPES,
-  QUESTION_IMAGE_MAX_BYTES,
   hasText,
   instituteDayLabel,
-  validateQuestion,
   type AssignmentWithTest,
   type AuthoringSaveResult,
   type QuestionDetail,
@@ -26,51 +23,32 @@ import {
   EMPTY_STATE_KINDS,
   Kbd,
   LoadingState,
-  SegmentedControl,
   StatRow,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   TruncatedText,
-  INDIC_SCRIPTS,
-  mathErrorIn,
-  type IndicScript,
 } from '@iace/ui';
-import { ScaffoldEditor, type ScaffoldRegion } from '@iace/ui/scaffold-editor';
+import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { api } from '../lib/api';
-import { uploadQuestionImage } from '../lib/upload-question-image';
 import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
 import { SectionWorkButton } from '../components/authoring/section-work-sheet';
 import { SectionThreadButton } from '../components/section-thread';
-import {
-  AuthoringChecks,
-  AuthoringPreview,
-  type Check,
-} from '../components/authoring/authoring-preview';
-import { checksFor } from '../components/authoring/authoring-checks';
+import { QuestionPanes } from '../components/authoring/question-panes';
+import { SectionQuestionsWindow } from '../components/authoring/section-questions-window';
+import { useChecked, useDuplicate } from '../components/authoring/use-question-checks';
 import {
   emptyState,
   headerOf,
-  regionsFor,
   stateFrom,
+  SCRIPT_OF,
   stateOf,
-  taxonomyFor,
   toDraft,
   type AuthoringHeader,
   type AuthoringState,
 } from '../components/authoring/question-scaffold';
-
-const IMAGE_LIMITS = {
-  maxBytes: QUESTION_IMAGE_MAX_BYTES,
-  accept: QUESTION_IMAGE_ACCEPTED_TYPES,
-};
-
-const PREVIEW_DEBOUNCE_MS = 600;
-
-/** Longer than the preview's: this one leaves the machine, and a half-typed stem matches nothing. */
-const DUPLICATE_DEBOUNCE_MS = 900;
 
 /** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
 const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
@@ -90,12 +68,6 @@ interface ScopedSection {
   loading: boolean;
   refused: boolean;
 }
-
-/** Which script a language is written in. English is typed as it is read. */
-const SCRIPT_OF: Readonly<Partial<Record<QuestionLanguage, IndicScript>>> = {
-  hi: INDIC_SCRIPTS.DEVANAGARI,
-  te: INDIC_SCRIPTS.TELUGU,
-};
 
 export function AuthoringEditorPage() {
   const { id, assignmentId } = useParams<{ id?: string; assignmentId?: string }>();
@@ -208,7 +180,7 @@ export function AuthoringEditorPage() {
       ) : null}
 
       {gate ?? (
-        <EditorPanes
+        <QuestionPanes
           questionId={editingId}
           state={state}
           language={language}
@@ -238,81 +210,6 @@ function editorGate(loadingQuestion: boolean, assignment: ScopedSection): React.
     );
   }
   return null;
-}
-
-/** The two columns the typist works in: what they are writing, and what it looks like. */
-function EditorPanes({
-  questionId,
-  state,
-  language,
-  romanised,
-  canSave,
-  boxVersion,
-  checks,
-  onRegions,
-  onCycleLanguage,
-  onLanguageChange,
-  onSave,
-}: Readonly<{
-  questionId: string;
-  state: AuthoringState;
-  language: QuestionLanguage;
-  romanised: boolean;
-  canSave: boolean;
-  boxVersion: number;
-  checks: readonly Check[];
-  onRegions: (regions: ScaffoldRegion[]) => void;
-  onCycleLanguage: () => void;
-  onLanguageChange: (next: QuestionLanguage) => void;
-  onSave: () => void;
-}>) {
-  const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
-
-  return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-      <section className="flex min-h-0 flex-col border-border lg:border-r">
-        <PanelHeading
-          action={
-            <SegmentedControl
-              value={language}
-              onChange={(value) => onLanguageChange(value as QuestionLanguage)}
-              aria-label="Language"
-              items={LANGUAGE_ORDER.map((code) => ({
-                value: code,
-                label: code.toUpperCase(),
-                name: LANGUAGE_LABELS[code],
-              }))}
-            />
-          }
-        />
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <ScaffoldEditor
-            aria-label="Question"
-            regions={regionsFor(state, language)}
-            docKey={`${questionId || 'new'}:${language}:${state.type}:${boxVersion}`}
-            onChange={onRegions}
-            onSave={() => {
-              if (canSave) onSave();
-            }}
-            onCycleLanguage={onCycleLanguage}
-            onUploadImage={uploadQuestionImage}
-            imageLimits={IMAGE_LIMITS}
-            lang={language}
-            script={script}
-            className="flex-1 rounded-none border-0 shadow-none"
-          />
-        </div>
-      </section>
-
-      <section className="flex min-h-0 flex-col">
-        <PanelHeading title="Preview and validation" />
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          <AuthoringPreview state={state} language={language} />
-          <AuthoringChecks checks={checks} />
-        </div>
-      </section>
-    </div>
-  );
 }
 
 /** The header's right-hand end. Its own component, so the page reads as a page. */
@@ -386,6 +283,8 @@ function EditorActions({
 function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWithTest }>) {
   const remaining = Math.max(assignment.sectionQuestionCount - assignment.writtenCount, 0);
   const mix = assignment.sectionMix;
+  // Undefined is closed; null opens at the first question, an id at that one.
+  const [reviewing, setReviewing] = useState<string | null | undefined>(undefined);
 
   return (
     <div className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-border bg-muted/40 px-4 py-2">
@@ -397,7 +296,17 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-        <SectionWorkButton assignment={assignment} />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={assignment.writtenCount === 0}
+          onClick={() => setReviewing(null)}
+        >
+          <PanelsTopLeft aria-hidden />
+          Review written
+        </Button>
+        <SectionWorkButton assignment={assignment} onEdit={setReviewing} />
         {/* The other half of the conversation: the reader raises things here, and answers here. */}
         <SectionThreadButton
           testId={assignment.testId}
@@ -423,16 +332,13 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
           />
         ) : null}
       </div>
-    </div>
-  );
-}
 
-/** A pane whose content names itself takes no title; the bar stays so both panes line up. */
-function PanelHeading({ title, action }: Readonly<{ title?: string; action?: React.ReactNode }>) {
-  return (
-    <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4">
-      {title ? <h2 className="text-sm font-semibold">{title}</h2> : <span />}
-      {action}
+      <SectionQuestionsWindow
+        assignment={assignment}
+        open={reviewing !== undefined}
+        onOpenChange={(open) => !open && setReviewing(undefined)}
+        startAt={reviewing ?? null}
+      />
     </div>
   );
 }
@@ -578,56 +484,6 @@ function usePersistedDraft(key: string, enabled: boolean, saved: Saved) {
     if (!enabled) return;
     window.localStorage.setItem(key, JSON.stringify(saved));
   }, [key, enabled, saved]);
-}
-
-/** Asked of the draft on screen, not of the row a save would otherwise have left behind. */
-function useDuplicate(draft: QuestionDraft, editingId: string): string | null {
-  const [asked, setAsked] = useState<QuestionDraft | null>(null);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setAsked(draft), DUPLICATE_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [draft]);
-
-  const found = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', asked, editingId],
-    queryFn: () => api.admin.authoring.duplicate(asked as QuestionDraft, editingId || undefined),
-    enabled: asked !== null && hasText(asked.stem[DEFAULT_LANGUAGE] ?? ''),
-  });
-
-  return found.data?.duplicateOf?.stemPreview ?? null;
-}
-
-/** The rules the save and the sheet are judged by, debounced so the panel settles as you type. */
-function useChecked(
-  draft: QuestionDraft,
-  header: AuthoringHeader,
-  state: AuthoringState,
-  duplicate: string | null,
-) {
-  const [issues, setIssues] = useState<ReturnType<typeof validateQuestion>>([]);
-
-  useEffect(() => {
-    const timer = setTimeout(
-      () => setIssues(validateQuestion(draft, taxonomyFor(header), mathErrorIn)),
-      PREVIEW_DEBOUNCE_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [draft, header]);
-
-  const checks = useMemo(() => {
-    const missing = LANGUAGE_ORDER.filter(
-      (code) => code !== DEFAULT_LANGUAGE && !hasText(state.content[code].stem),
-    );
-    return checksFor(
-      state,
-      issues,
-      missing.map((code) => LANGUAGE_LABELS[code]),
-      duplicate,
-    );
-  }, [state, issues, duplicate]);
-
-  return { issues, checks };
 }
 
 /** What a reopened tab starts from: the draft it left, over the blanks a first visit gets. */

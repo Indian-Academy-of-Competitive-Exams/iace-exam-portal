@@ -32,6 +32,7 @@ export { Spinner, LoadingState } from './components/ui/spinner';
 export { Toaster, toast } from './components/ui/toast';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
 export { Sheet, SheetClose, SheetContent, SheetTitle } from './components/ui/sheet';
+export { ScrollWindow, type ScrollWindowProps } from './components/ui/scroll-window';
 export {
   Dialog,
   DialogClose,

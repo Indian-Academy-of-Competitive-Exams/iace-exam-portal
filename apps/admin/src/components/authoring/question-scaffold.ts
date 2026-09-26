@@ -19,6 +19,7 @@ import {
   type QuestionType,
   type TaxonomyContext,
 } from '@iace/contracts';
+import { INDIC_SCRIPTS, type IndicScript } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { REGION_KIND } from '@iace/ui/scaffold-region';
 
@@ -336,3 +337,9 @@ export function taxonomyFor(header: AuthoringHeader): TaxonomyContext {
   }
   return taxonomy;
 }
+
+/** Which script a language is written in. English is typed as it is read. */
+export const SCRIPT_OF: Readonly<Partial<Record<QuestionLanguage, IndicScript>>> = {
+  hi: INDIC_SCRIPTS.DEVANAGARI,
+  te: INDIC_SCRIPTS.TELUGU,
+};

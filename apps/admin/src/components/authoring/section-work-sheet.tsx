@@ -20,6 +20,7 @@ import {
   SheetContent,
   SheetTitle,
   TruncatedText,
+  cn,
   linkVariants,
   plural,
   type DataTableColumn,
@@ -41,6 +42,7 @@ const sectionWorkKey = (assignmentId: string) =>
   [...QUERY_KEYS.AUTHORING, 'section', assignmentId] as const;
 
 function columnsOf(
+  onEdit: (question: QuestionSummary) => void,
   onDelete: (question: QuestionSummary) => void,
 ): DataTableColumn<QuestionSummary>[] {
   return [
@@ -49,9 +51,13 @@ function columnsOf(
       header: 'Question',
       className: 'max-w-sm',
       cell: (question) => (
-        <Link to={ROUTES.AUTHORING_QUESTION(question.id)} className={linkVariants()}>
+        <button
+          type="button"
+          onClick={() => onEdit(question)}
+          className={cn(linkVariants(), 'max-w-full text-left')}
+        >
           <TruncatedText>{question.stemPreview}</TruncatedText>
-        </Link>
+        </button>
       ),
     },
     {
@@ -82,9 +88,7 @@ function columnsOf(
       className: 'text-right',
       cell: (question) => (
         <RowActions label="Actions for this question">
-          <DropdownMenuItem asChild>
-            <Link to={ROUTES.AUTHORING_QUESTION(question.id)}>Edit</Link>
-          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onEdit(question)}>Edit</DropdownMenuItem>
           <DropdownMenuItem destructive onSelect={() => onDelete(question)}>
             Delete
           </DropdownMenuItem>
@@ -94,8 +98,19 @@ function columnsOf(
   ];
 }
 
-export function SectionWorkButton({ assignment }: Readonly<{ assignment: AssignmentWithTest }>) {
+export function SectionWorkButton({
+  assignment,
+  onEdit,
+}: Readonly<{
+  assignment: AssignmentWithTest;
+  /** Opens the question where the section's questions are edited; the sheet steps aside first. */
+  onEdit: (questionId: string) => void;
+}>) {
   const [open, setOpen] = useState(false);
+  const edit = (question: QuestionSummary) => {
+    setOpen(false);
+    onEdit(question.id);
+  };
 
   return (
     <>
@@ -118,14 +133,20 @@ export function SectionWorkButton({ assignment }: Readonly<{ assignment: Assignm
             </SheetClose>
           </div>
 
-          <SectionWork assignment={assignment} />
+          <SectionWork assignment={assignment} onEdit={edit} />
         </SheetContent>
       </Sheet>
     </>
   );
 }
 
-function SectionWork({ assignment }: Readonly<{ assignment: AssignmentWithTest }>) {
+function SectionWork({
+  assignment,
+  onEdit,
+}: Readonly<{
+  assignment: AssignmentWithTest;
+  onEdit: (question: QuestionSummary) => void;
+}>) {
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState<QuestionSummary | null>(null);
   const [releasing, setReleasing] = useState(false);
@@ -143,7 +164,7 @@ function SectionWork({ assignment }: Readonly<{ assignment: AssignmentWithTest }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),
     ]);
 
-  const columns = useMemo(() => columnsOf(setDeleting), []);
+  const columns = useMemo(() => columnsOf(onEdit, setDeleting), [onEdit]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
