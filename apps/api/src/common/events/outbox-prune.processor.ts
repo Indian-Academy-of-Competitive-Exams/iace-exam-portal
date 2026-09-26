@@ -38,6 +38,11 @@ export class OutboxPruneProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.OUTBOX_PRUNE, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.OUTBOX_PRUNE, error);
+  }
+
   async process(): Promise<void> {
     const removed = await this.prune(new Date());
     if (removed > 0) this.logger.log(`Pruned ${removed} relayed events`);

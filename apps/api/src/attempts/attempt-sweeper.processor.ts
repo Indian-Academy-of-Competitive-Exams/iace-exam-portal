@@ -36,6 +36,11 @@ export class AttemptSweeperProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.ATTEMPT_SWEEP, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.ATTEMPT_SWEEP, error);
+  }
+
   async process(): Promise<void> {
     await this.endStranded();
     // The reconciler: a crash between the commit and the queue leaves a request nobody handed on.
@@ -158,6 +163,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
   }
 
   /** An EVALUATED sitting whose last mark predates its own re-score request: the correction never ran. */
+  // Scans a week of relayed requests, not all of them: the outbox prune drops anything older.
   private async staleRescores(settled: Date): Promise<{ id: string; testId: string }[]> {
     const rows = await this.prisma.$queryRaw<{ id: string; testId: string }[]>`
       SELECT a."id", a."testId"

@@ -28,6 +28,11 @@ export class RollupProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.ROLLUP, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.ROLLUP, error);
+  }
+
   async process(job: Job<RollupJobData>): Promise<void> {
     // A fold queued before this deploy asks for the same thing the sweep does: count what changed.
     if (isDrained(job.name)) {

@@ -80,6 +80,11 @@ export class NotificationDeliveryProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.NOTIFICATION_DELIVERY, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.NOTIFICATION_DELIVERY, error);
+  }
+
   async process(job: Job<NotificationDeliveryJobData>): Promise<void> {
     await this.deliver(job.data.deliveryId, job.attemptsMade + 1);
   }

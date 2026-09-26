@@ -30,6 +30,11 @@ export class AttemptFlushProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.ATTEMPT_FLUSH, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.ATTEMPT_FLUSH, error);
+  }
+
   /** One pass owns the dirty set, so the lanes below are its own and never a second worker's. */
   async process(): Promise<void> {
     const dirty = await this.state.dirtyIds();

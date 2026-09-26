@@ -68,6 +68,11 @@ export class ScoringProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.SCORING, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.SCORING, error);
+  }
+
   async process(job: Job<ScoringJobData>): Promise<void> {
     await this.score(job.data.attemptId);
   }

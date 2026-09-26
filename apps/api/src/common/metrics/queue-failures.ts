@@ -22,4 +22,9 @@ export class QueueFailures {
     if (spent) this.logger.error(`${named} failed for the last time and is gone`, error.stack);
     else this.logger.warn(`${named} failed and will be tried again: ${error.message}`);
   }
+
+  /** A worker's own connection fault, which belongs to no job — unlistened it is console-only. */
+  connectionError(queue: QueueName, error: Error): void {
+    this.metrics.countQueueConnectionError(queue, error);
+  }
 }

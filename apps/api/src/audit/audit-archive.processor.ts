@@ -60,6 +60,11 @@ export class AuditArchiveProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.AUDIT_ARCHIVE, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.AUDIT_ARCHIVE, error);
+  }
+
   async process(): Promise<void> {
     await this.archivePendingDays(new Date());
   }

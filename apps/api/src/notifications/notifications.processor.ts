@@ -65,6 +65,11 @@ export class NotificationsProcessor extends WorkerHost {
     this.failures.record(QUEUE_NAMES.NOTIFICATIONS, job, error);
   }
 
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.failures.connectionError(QUEUE_NAMES.NOTIFICATIONS, error);
+  }
+
   async process(job: Job<NotificationJobData>): Promise<void> {
     if (job.name === NOTIFICATION_JOBS.SWEEP) {
       await this.outbox.relay();
