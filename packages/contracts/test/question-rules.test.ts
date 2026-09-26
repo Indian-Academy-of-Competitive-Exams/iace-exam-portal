@@ -112,6 +112,37 @@ describe('validateQuestion — the options of a multiple choice', () => {
     assert.ok(codes(twice).includes(CODE.OPTION_TEXT_DUPLICATE));
   });
 
+  /** The failure this prevents: real SSC options refused because a sign or a decimal point was folded away. */
+  it('keeps options apart that differ only in a sign or a decimal point', () => {
+    const signs = sound({
+      options: [
+        option(1, '+ and -', true),
+        option(2, '- and ×'),
+        option(3, '÷ and +'),
+        option(4, '× and ÷'),
+      ],
+    });
+    const decimals = sound({
+      options: [
+        option(1, '7.5 degree E.', true),
+        option(2, '75 degree E.'),
+        option(3, '-7.5'),
+        option(4, '1/2'),
+      ],
+    });
+
+    assert.ok(!codes(signs).includes(CODE.OPTION_TEXT_DUPLICATE));
+    assert.ok(!codes(decimals).includes(CODE.OPTION_TEXT_DUPLICATE));
+  });
+
+  it('still refuses options apart only by a trailing full stop', () => {
+    const twice = sound({
+      options: [option(1, 'Five.', true), option(2, 'five'), option(3, 'ten'), option(4, 'twenty')],
+    });
+
+    assert.ok(codes(twice).includes(CODE.OPTION_TEXT_DUPLICATE));
+  });
+
   /** Seats, not names: a paper draws them in order, so 1, 2, 4 would move an option up a letter. */
   it('refuses a gap in the seats', () => {
     const gapped = sound({

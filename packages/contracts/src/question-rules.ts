@@ -43,15 +43,22 @@ export function languagesIn(stem: LocalizedText): QuestionLanguage[] {
   return LANGUAGE_ORDER.filter((language) => !blank(stem[language]));
 }
 
+const plainOf = (value: string): string =>
+  [previewTextOf(value), ...imageKeysIn(value)].join(' ').toLowerCase();
+
+const squashed = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
 /** Case, spacing, punctuation and markup do not make a question different — but its figures do. */
 function foldForCompare(value: string | undefined): string {
   if (!value) return '';
-  return [previewTextOf(value), ...imageKeysIn(value)]
-    .join(' ')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return squashed(plainOf(value).replace(/[^\p{L}\p{N}\s]/gu, ''));
+}
+
+/** An option's signs and decimal points ARE its answer: "7.5" is not "75", nor "+ and -" "- and ×". */
+function foldOptionForCompare(value: string | undefined): string {
+  if (!value) return '';
+  const kept = plainOf(value).replace(/[^\p{L}\p{N}\p{S}\s.%/-]/gu, '');
+  return squashed(kept.replace(/(?<!\d)\.|\.(?!\d)/g, ''));
 }
 
 const stemField = (language: QuestionLanguage) => ({
@@ -202,7 +209,7 @@ function checkOptions(draft: QuestionDraft, issues: ValidationIssue[]): void {
   }
 
   const englishTexts = draft.options
-    .map((option) => foldForCompare(option.text[DEFAULT_LANGUAGE]))
+    .map((option) => foldOptionForCompare(option.text[DEFAULT_LANGUAGE]))
     .filter((text) => text !== '');
   if (new Set(englishTexts).size !== englishTexts.length) {
     issues.push({
