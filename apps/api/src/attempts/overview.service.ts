@@ -13,6 +13,7 @@ import {
   type StudentOverview,
   type SubjectStanding,
 } from '@iace/contracts';
+import { readInBatches } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import { perSitting } from './attempt-report';
 import { requireStudent } from './require-student';
@@ -102,13 +103,16 @@ export class StudentOverviewService {
 
   /** Many students' tallies at once, for an export; a student with no row has sat nothing. */
   async rollupsFor(studentIds: readonly string[]): Promise<StudentRollups> {
-    const where = { studentId: { in: [...studentIds] } };
     const [stats, rows] = await Promise.all([
-      this.prisma.studentStat.findMany({ where }),
-      this.prisma.studentSubjectStat.findMany({
-        where: { ...where, scope: TEST_SCOPE.FULL },
-        select: { studentId: true, ...SUBJECT_SELECT },
-      }),
+      readInBatches(studentIds, (batch) =>
+        this.prisma.studentStat.findMany({ where: { studentId: { in: batch } } }),
+      ),
+      readInBatches(studentIds, (batch) =>
+        this.prisma.studentSubjectStat.findMany({
+          where: { studentId: { in: batch }, scope: TEST_SCOPE.FULL },
+          select: { studentId: true, ...SUBJECT_SELECT },
+        }),
+      ),
     ]);
 
     const subjects = new Map(rows.map((row) => [row.subjectId, row.subject.name]));

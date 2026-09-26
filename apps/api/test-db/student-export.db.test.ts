@@ -340,6 +340,42 @@ describe('GET admin/students/export', () => {
   });
 });
 
+/** Past Postgres's 32,767 bind parameters, with real ids in two different slices. */
+describe('rollupsFor past the bind limit', () => {
+  it('reads every slice and merges them', async () => {
+    const branchId = (await makeBranch(prisma)).id;
+    const subject = await makeSubject(prisma, 'Quant');
+    const computedAt = new Date();
+    const ids = Array.from({ length: 40_000 }, () => uid());
+    const placed = [
+      { at: 5_000, correct: 3 },
+      { at: 35_000, correct: 1 },
+    ];
+    for (const { at, correct } of placed) {
+      const { id } = await offline(branchId);
+      ids[at] = id;
+      await prisma.studentStat.create({ data: { studentId: id, testsAttempted: 1, computedAt } });
+      await prisma.studentSubjectStat.create({
+        data: {
+          studentId: id,
+          subjectId: subject.id,
+          scope: TEST_SCOPE.FULL,
+          attempted: 4,
+          correct,
+          computedAt,
+        },
+      });
+    }
+
+    const { subjects, byStudent } = await rollups.rollupsFor(ids);
+
+    assert.deepEqual(subjects, [{ id: subject.id, name: 'Quant' }]);
+    assert.equal(byStudent.size, 2);
+    assert.equal(byStudent.get(ids[5_000] ?? '')?.subjectAccuracy.get(subject.id), 75);
+    assert.equal(byStudent.get(ids[35_000] ?? '')?.subjectAccuracy.get(subject.id), 25);
+  });
+});
+
 /** The interceptor files its row after the response, off the request's own promise. */
 async function waitForAuditRows() {
   for (let tries = 0; tries < 50; tries += 1) {
