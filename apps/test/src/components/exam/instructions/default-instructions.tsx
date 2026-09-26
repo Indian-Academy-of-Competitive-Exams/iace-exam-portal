@@ -3,6 +3,7 @@ import {
   contentLanguageOf,
   isReviewState,
   LANGUAGE_LABELS,
+  type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
 import {
@@ -32,9 +33,18 @@ const CLOCK = {
   says: 'Set by the server, and it keeps running if you leave this screen. The paper ends by itself when it reaches zero.',
 };
 const CLEAR = { term: 'Clear response', says: 'Removes your answer entirely.' };
+const SUBMIT = {
+  term: 'Submit',
+  says: 'Hands the paper in for good. It asks you to confirm first, and shows what you are leaving unanswered.',
+};
+const SECTIONAL = {
+  term: 'Sectional timing',
+  says: 'Each section has a clock of its own, and a section whose time ends locks — its questions cannot be opened again.',
+};
 
-const FREE_RULES: readonly { term: string; says: string }[] = [
-  CLOCK,
+type Rule = { term: string; says: string };
+
+const FREE_RULES: readonly Rule[] = [
   { term: 'Save & next', says: 'Keeps your answer and moves on.' },
   {
     term: 'Mark for review & next',
@@ -45,17 +55,24 @@ const FREE_RULES: readonly { term: string; says: string }[] = [
     term: 'The palette',
     says: 'Opens any question directly. Moving there does NOT save the question you are on.',
   },
+  SUBMIT,
 ];
 
-const FORWARD_RULES: readonly { term: string; says: string }[] = [
-  CLOCK,
+const FORWARD_RULES: readonly Rule[] = [
   { term: 'Save & next', says: 'Keeps your answer and moves on. It is the only way forward.' },
   CLEAR,
   {
     term: 'The palette',
     says: 'Shows where you are. A question you have left cannot be opened again, and there is no marking one for review.',
   },
+  SUBMIT,
 ];
+
+/** A paper whose sections carry their own clock teaches one more rule than one that does not. */
+function rulesFor(brief: ExamBrief, forwardOnly: boolean): readonly Rule[] {
+  const sectional = brief.sections.some((section) => section.durationSec !== null);
+  return [CLOCK, ...(sectional ? [SECTIONAL] : []), ...(forwardOnly ? FORWARD_RULES : FREE_RULES)];
+}
 
 export function DefaultInstructions({
   view,
@@ -77,7 +94,7 @@ export function DefaultInstructions({
       >
         <PageBody className="pb-6">
           {view.step === 'GENERAL' ? (
-            <GeneralStep forwardOnly={view.forwardOnly} />
+            <GeneralStep brief={brief} forwardOnly={view.forwardOnly} />
           ) : (
             <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
           )}
@@ -107,7 +124,7 @@ function Walk({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
-function GeneralStep({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
+function GeneralStep({ brief, forwardOnly }: Readonly<{ brief: ExamBrief; forwardOnly: boolean }>) {
   return (
     <>
       {forwardOnly ? (
@@ -119,7 +136,7 @@ function GeneralStep({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
 
       <SurfaceCard title="How the paper works">
         <dl className="flex flex-col gap-3 text-sm leading-relaxed">
-          {(forwardOnly ? FORWARD_RULES : FREE_RULES).map((rule) => (
+          {rulesFor(brief, forwardOnly).map((rule) => (
             <div key={rule.term}>
               <dt className="font-medium text-foreground">{rule.term}</dt>
               <dd className="text-muted-foreground">{rule.says}</dd>
