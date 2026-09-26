@@ -45,7 +45,7 @@ to agonise over — §13 says when each one moves.
 | Box B — Valkey        | EC2 `t4g.micro`, one process, no public ingress | $4.09      |
 |                       | EBS gp3 20 GB + public IPv4 (egress only)       | $5.47      |
 | Database              | RDS `db.t4g.micro`, 20 GB gp3, 7-day PITR       | $17.95     |
-| Frontend and media    | S3 + two CloudFront distributions               | ~$1        |
+| Frontend and media    | S3 + three CloudFront distributions             | ~$1        |
 | DNS, registry, alarms | Route 53, ECR, CloudWatch, two free Budgets     | $2.40      |
 | **Total**             |                                                 | **$53.65** |
 
@@ -453,9 +453,9 @@ staging exists to rehearse production rather than a smaller thing.
 Heaps are 384 MB per container rather than production's 1536/768/768: one tester needs no more.
 
 **Only one DNS record per environment.** CloudFront hands out `*.cloudfront.net` with a valid
-certificate and S3 presigned URLs use `*.s3.ap-south-1.amazonaws.com`, so only the API needs a name
-Caddy can get a certificate for. Media is presigned S3 here, not CloudFront signed URLs — those are
-not built (§15).
+certificate, so only the API needs a name Caddy can get a certificate for. Media is the same
+unsigned CloudFront URL as production (§10) — a third distribution per environment, which costs
+nothing to have.
 
 **Seeded and generated data only — never a restore of production.** Real students' names, mobile
 numbers and marks do not belong in a lower-security environment, and while the two share a Valkey
@@ -534,11 +534,12 @@ Never during an event window, and never a migration that moves data without the 
   device keeps up to ~1.5 MB per deploy they load. The `activate` handler already drops every cache
   whose name is not the current one — it never fires because the name never changes. Stamp the
   build id into `sw.js` and it cleans itself up.
-- **CloudFront signed URLs for question images.** Until then media is presigned S3, so each student
-  fetches the same diagram from the origin. **This is also the only line that can move the invoice
-  by an order of magnitude**: the free tier is 1 TB, which is ~5.8 MB of images per sitting across
-  thirty 8,000-candidate events, so **4.4 MB of images per sitting**. Above that it is $0.109/GB —
-  23 MB a sitting would be ~$450 a month. Nobody has measured what a real paper carries; `MAX_WIDTH` and `QUALITY` in
+- **Nobody has measured how many megabytes of images a real paper carries, and it is the only line
+  that can move the invoice by an order of magnitude.** CloudFront's free tier is 1 TB, which
+  across thirty 8,000-candidate events is **4.4 MB of images per sitting**. Above that it is
+  $0.109/GB, so 23 MB a sitting would be ~$450 a month. The unsigned urls in §10 are what keep the
+  edge cache working, so the bill scales with distinct images rather than with students — but the
+  number is still unknown. Measure it off a real paper's Network tab; `MAX_WIDTH` and `QUALITY` in
   `shrink-image.ts` are the knobs if it comes back high.
 - **Batching the scoring job.** Measured 25 September 2026: nine round trips per attempt, whose
   statements total ~0.7 ms against 1.99 ms of database CPU — so most of the database's work is

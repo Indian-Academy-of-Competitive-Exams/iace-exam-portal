@@ -67,8 +67,9 @@ services:
       timeout: 5s
       retries: 20
 
-  # One-shot: wait for MinIO, create the bucket, exit 0. Safe to re-run. The bucket stays private,
-  # as the real one is: every read is a presigned URL, so nothing here needs an anonymous policy.
+  # One-shot: wait for MinIO, create the bucket, exit 0. Safe to re-run. Private except
+  # questions/images, which is open for reading because a content image is served on a stable
+  # unsigned url so the CDN caches one copy — docs/04-infrastructure.md §10 for why.
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     container_name: iace-minio-init
