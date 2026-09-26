@@ -708,6 +708,16 @@ Table ImportLog {
   }
 }
 
+Table ImportRowEdit {
+  importLogId uuid [not null]
+  line integer [not null]
+  draft jsonb [not null]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (importLogId, line) [pk]
+  }
+}
+
 Table RowActionLog {
   id uuid [pk, default: `uuid(7)`]
   feature AuditFeature [not null]
@@ -959,6 +969,7 @@ Ref: EventCandidate.eventId > Event.id [delete: cascade]
 Ref: EventCandidate.studentId > Student.id [delete: cascade]
 Ref: TestProgramUnlock.testId > Test.id [delete: cascade]
 Ref: TestProgramUnlock.programCode > Program.code [delete: restrict]
+Ref: ImportRowEdit.importLogId > ImportLog.id [delete: cascade]
 Ref: RowActionLog.importLogId > ImportLog.id [delete: restrict]
 Ref: Notification.studentId > Student.id [delete: cascade]
 Ref: Notification.adminId > Admin.id [delete: cascade]
@@ -1048,6 +1059,7 @@ TableGroup "Analytics Rollups" { // color: #3F7E44
 
 TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   ImportLog
+  ImportRowEdit
   RowActionLog
   Notification
   Announcement

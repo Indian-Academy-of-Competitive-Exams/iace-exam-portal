@@ -697,6 +697,8 @@ const questionImportRowSchema = z.object({
   languages: z.array(languageSchema),
   issues: z.array(validationIssueSchema),
   warnings: z.array(importWarningSchema),
+  /** Corrected in the review window: judged as corrected, not as the sheet has it. */
+  edited: z.boolean(),
   /** The question this row repeats: an id from the bank, or a line in this file. */
   duplicateOf: z.string().nullable(),
 });
@@ -718,6 +720,14 @@ export const questionImportPlanSchema = z.object({
   fileErrors: z.array(z.string()),
 });
 export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
+
+/** A previewed row's question for the review window, corrections laid over the sheet; a Skip row may lack a subject. */
+export const questionImportDraftSchema = z.object({
+  line: z.number().int(),
+  draft: questionDraftSchema.extend({ subjectId: z.string() }),
+});
+export type QuestionImportDraft = z.infer<typeof questionImportDraftSchema>;
+export const questionImportDraftsSchema = z.array(questionImportDraftSchema);
 
 export const questionImportCommitSchema = z.object({
   importLogId: z.string().min(1),
@@ -804,4 +814,6 @@ export const QUESTION_IMPORT_ROUTES = {
   preview: '/imports/questions/preview',
   commit: '/imports/questions/commit',
   errors: '/imports/questions/errors',
+  drafts: (importLogId: string) => `/imports/questions/${importLogId}/drafts`,
+  row: (importLogId: string, line: number) => `/imports/questions/${importLogId}/rows/${line}`,
 } as const;

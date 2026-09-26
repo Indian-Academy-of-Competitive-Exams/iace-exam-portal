@@ -8,6 +8,9 @@ import {
   IMPORT_LOG_STATUS,
   QUESTION_IMPORT_SHEETS,
   XLSX_CONTENT_TYPE,
+  imageKeysIn,
+  type QuestionDraft,
+  type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
 } from '@iace/contracts';
@@ -33,8 +36,12 @@ import {
   type QuestionImportPlanning,
 } from './question-import';
 import { buildQuestionTemplate } from './question-workbook';
-import { IMMUTABLE_CACHE_CONTROL } from './question-images';
+import { IMMUTABLE_CACHE_CONTROL, applyImageUrls, stripImageSrc } from './question-images';
+import { rewriteDraftHtml } from './question-content';
 import { loadTaxonomyCatalog } from './taxonomy-context';
+
+const UPLOAD_GONE = 'That upload is no longer available';
+const ALREADY_IMPORTED = 'That file has already been imported';
 
 const PICTURES_NOT_CARRIED =
   'This row had pictures, which this download does not carry. Fix the row in your original sheet.';
@@ -73,6 +80,8 @@ export class QuestionImportService {
     const key = importFileKey(AuditFeature.QUESTION, log.id);
     await this.storage.upload(key, file, XLSX_CONTENT_TYPE);
     await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
+    // Stored now, not at Import: the review window has to show them before anything is written.
+    await this.storePictures(planning.rows);
 
     return withoutDrafts(planning, log.id);
   }
@@ -119,19 +128,8 @@ export class QuestionImportService {
   }
 
   async commit(importLogId: string, into: ImportTarget = {}): Promise<QuestionImportResult> {
-    const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
-    if (!log || log.feature !== AuditFeature.QUESTION || !log.fileS3Key) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'That upload is no longer available');
-    }
-    // A section's import commits the sheet that section's own typist previewed, never another's.
-    if (into.actorId !== undefined && log.actorId !== into.actorId) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'That upload is no longer available');
-    }
-    if (log.status === IMPORT_LOG_STATUS.COMMITTED) {
-      throw new AppException(ErrorCodes.CONFLICT, 'That file has already been imported');
-    }
-
-    const planning = await this.plan(await this.storage.read(log.fileS3Key));
+    const { log, file } = await this.openRun(importLogId, into.actorId);
+    const planning = await this.plan(file, await this.editsOf(log.id));
     const creatable = planning.rows.filter(
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
         row.action === 'create' && row.draft !== null,
@@ -201,17 +199,107 @@ export class QuestionImportService {
     }
   }
 
-  /** Read, resolve, judge — the one path a preview and a commit both take. */
-  private async plan(file: Buffer): Promise<QuestionImportPlanning> {
-    return this.planTable(await readQuestionTable(file));
+  /** Every row's question as the review window opens it, pictures given urls it can draw. */
+  async drafts(importLogId: string, actorId: string): Promise<QuestionImportDraft[]> {
+    const { log, file } = await this.openRun(importLogId, actorId);
+    const planning = await this.plan(file, await this.editsOf(log.id));
+    return planning.rows.map((row) => ({ line: row.line, draft: this.drawable(row.editable) }));
   }
 
-  private async planTable(table: CsvTable): Promise<QuestionImportPlanning> {
+  /** Holds one row's correction against the run, and answers with every row judged again. */
+  async saveRow(
+    importLogId: string,
+    line: number,
+    draft: QuestionDraft,
+    actorId: string,
+  ): Promise<QuestionImportPlan> {
+    const { log, file } = await this.openRun(importLogId, actorId);
+    const table = await readQuestionTable(file);
+    if (!table.rows.some((row) => row.line === line)) {
+      throw new AppException(ErrorCodes.NOT_FOUND, `Line ${line} is not in that file`);
+    }
+
+    // The key is the record; a src is only how this window drew the picture.
+    const stored = rewriteDraftHtml(draft, stripImageSrc) as unknown as Prisma.InputJsonValue;
+    await this.prisma.importRowEdit.upsert({
+      where: { importLogId_line: { importLogId: log.id, line } },
+      create: { importLogId: log.id, line, draft: stored },
+      update: { draft: stored },
+    });
+
+    return withoutDrafts(await this.planTable(table, await this.editsOf(log.id)), log.id);
+  }
+
+  async draftsForAssignment(
+    assignmentId: string,
+    importLogId: string,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<QuestionImportDraft[]> {
+    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
+    return this.drafts(importLogId, adminId);
+  }
+
+  async saveRowForAssignment(
+    assignmentId: string,
+    importLogId: string,
+    line: number,
+    draft: QuestionDraft,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<QuestionImportPlan> {
+    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
+    return this.saveRow(importLogId, line, draft, adminId);
+  }
+
+  /** A previewed, uncommitted run; with an actor, only the one who previewed it may touch it. */
+  private async openRun(importLogId: string, actorId: string | undefined) {
+    const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
+    if (!log || log.feature !== AuditFeature.QUESTION || !log.fileS3Key) {
+      throw new AppException(ErrorCodes.NOT_FOUND, UPLOAD_GONE);
+    }
+    if (actorId !== undefined && log.actorId !== actorId) {
+      throw new AppException(ErrorCodes.NOT_FOUND, UPLOAD_GONE);
+    }
+    if (log.status === IMPORT_LOG_STATUS.COMMITTED) {
+      throw new AppException(ErrorCodes.CONFLICT, ALREADY_IMPORTED);
+    }
+    return { log, file: await this.storage.read(log.fileS3Key) };
+  }
+
+  private async editsOf(importLogId: string): Promise<Map<number, QuestionDraft>> {
+    const rows = await this.prisma.importRowEdit.findMany({ where: { importLogId } });
+    return new Map(rows.map((row) => [row.line, row.draft as unknown as QuestionDraft]));
+  }
+
+  private drawable(draft: QuestionDraft): QuestionDraft {
+    const html = [
+      ...Object.values(draft.stem),
+      ...Object.values(draft.solution ?? {}),
+      ...draft.options.flatMap((option) => Object.values(option.text)),
+    ];
+    const keys = new Set(html.flatMap((field) => imageKeysIn(field ?? '')));
+    const urls = new Map([...keys].map((key) => [key, this.storage.publicUrl(key)]));
+    return rewriteDraftHtml(draft, (html) => applyImageUrls(html, urls));
+  }
+
+  /** Read, resolve, judge — the one path a preview and a commit both take. */
+  private async plan(
+    file: Buffer,
+    edits?: ReadonlyMap<number, QuestionDraft>,
+  ): Promise<QuestionImportPlanning> {
+    return this.planTable(await readQuestionTable(file), edits);
+  }
+
+  private async planTable(
+    table: CsvTable,
+    edits?: ReadonlyMap<number, QuestionDraft>,
+  ): Promise<QuestionImportPlanning> {
     const catalog = await loadTaxonomyCatalog(this.prisma);
 
     // Planned twice: the first pass only harvests the keys the bank is then asked about.
-    const harvest = planQuestionImport(table, catalog, NO_DEDUP);
-    return planQuestionImport(table, catalog, await this.dedupContext(harvest.rows));
+    const harvest = planQuestionImport(table, catalog, NO_DEDUP, edits);
+    return planQuestionImport(table, catalog, await this.dedupContext(harvest.rows), edits);
   }
 
   /** Only the rows this sheet could clash with: the whole bank was read to answer a few hundred asks. */

@@ -141,7 +141,7 @@ erodes.
 | branches      | `Branch`                                                                                                                         |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                                          |
 | events        | `Event`, `EventCandidate`                                                                                                        |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                                                |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `ImportRowEdit`                                                               |
 | assignments   | `QuestionAssignment`, `SectionComment`                                                                                           |
 | configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                       |
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                     |

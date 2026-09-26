@@ -324,6 +324,51 @@ export function headerOf(question: QuestionDetail): AuthoringHeader {
   };
 }
 
+/** A draft that never reached the bank — a previewed import row — back in the box, its options by seat. */
+export function stateOfDraft(draft: QuestionDraft): AuthoringState {
+  const isMcq = draft.type === QUESTION_TYPE.SINGLE_MCQ;
+  const seats = isMcq
+    ? Math.max(MCQ_OPTION_COUNT, ...draft.options.map((option) => option.position))
+    : 0;
+  const textAt = (seat: number, language: QuestionLanguage) =>
+    draft.options.find((option) => option.position === seat)?.text[language] ?? '';
+
+  const content = emptyState(draft.type).content;
+  for (const language of LANGUAGE_ORDER) {
+    content[language] = {
+      stem: draft.stem[language] ?? '',
+      solution: draft.solution?.[language] ?? '',
+      options: Array.from({ length: seats }, (_, index) => textAt(index + 1, language)),
+    };
+  }
+
+  return {
+    type: draft.type,
+    optionCount: seats,
+    answer: draftAnswerLine(draft),
+    answerMode: draft.answerKey?.mode ?? ANSWER_MODE.NUMERIC,
+    tolerance: draft.answerKey?.tolerance == null ? '' : String(draft.answerKey.tolerance),
+    content,
+  };
+}
+
+/** What the Answer line says for a draft: the correct seat's letter, or the typed English answer. */
+function draftAnswerLine(draft: QuestionDraft): string {
+  if (draft.type !== QUESTION_TYPE.SINGLE_MCQ)
+    return draft.answerKey?.answers[DEFAULT_LANGUAGE] ?? '';
+  const correct = draft.options.find((option) => option.isCorrect)?.position;
+  return correct ? optionLetter(correct - 1) : '';
+}
+
+export function headerOfDraft(draft: QuestionDraft): AuthoringHeader {
+  return {
+    subjectId: draft.subjectId,
+    topicId: draft.topicId ?? '',
+    difficulty: draft.difficulty,
+    tags: draft.tags.join(', '),
+  };
+}
+
 /** Enough taxonomy to run the rules here; the picker cannot offer a topic outside the subject. */
 export function taxonomyFor(header: AuthoringHeader): TaxonomyContext {
   const taxonomy = emptyTaxonomy();

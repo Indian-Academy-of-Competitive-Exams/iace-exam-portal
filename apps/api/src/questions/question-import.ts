@@ -51,7 +51,12 @@ export interface PlannedRow extends QuestionImportRow {
   questionCode: string | null;
   /** By storage key: what a commit uploads before it writes the question that shows them. */
   pictures: Map<string, CheckedImage>;
+  /** The question this row reads as, whatever its action: what the review window opens. */
+  editable: QuestionDraft;
 }
+
+/** No row corrected yet: the sheet speaks for every line. */
+const NO_EDITS: ReadonlyMap<number, QuestionDraft> = new Map();
 
 /** A first pass has nothing to compare against: it runs to harvest the keys the bank is asked for. */
 export const NO_DEDUP: ImportDedupContext = {
@@ -160,6 +165,7 @@ export function planQuestionImport(
   table: CsvTable,
   catalog: TaxonomyCatalog,
   dedup: ImportDedupContext,
+  edits: ReadonlyMap<number, QuestionDraft> = NO_EDITS,
 ): QuestionImportPlanning {
   const fileErrors = fileLevelErrors(table);
   if (fileErrors.length > 0) {
@@ -174,7 +180,9 @@ export function planQuestionImport(
   const lineByHash = new Map<string, number>();
   const codesInFile = new Set<string>();
 
-  const rows = table.rows.map((row) => planRow(row, catalog, dedup, lineByHash, codesInFile));
+  const rows = table.rows.map((row) =>
+    planRow(row, catalog, dedup, lineByHash, codesInFile, edits.get(row.line)),
+  );
 
   return {
     rows,
@@ -219,15 +227,19 @@ function planRow(
   dedup: ImportDedupContext,
   lineByHash: Map<string, number>,
   codesInFile: Set<string>,
+  edit: QuestionDraft | undefined,
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
-
-  const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
-
-  const type = readType(row, issues);
   const warnings: ImportWarning[] = [];
-  const content = rowContent(row, issues, warnings);
-  const draft = buildDraft(row, content, type, names, catalog, issues);
+
+  // A corrected line is judged as corrected; its cells still name the pictures it may keep showing.
+  const content = rowContent(row, edit ? [] : issues, edit ? [] : warnings);
+  const names = edit
+    ? namesOf(edit, catalog)
+    : { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
+  const draft = edit
+    ? withImportTag(edit)
+    : buildDraft(row, content, readType(row, issues), names, catalog, issues);
 
   // The core rules run on every row, whatever the sheet got wrong: an admin fixing one column should see the rest of that row's problems in the same pass.
   issues.push(...validateQuestion(draft, catalog.context));
@@ -271,8 +283,28 @@ function planRow(
     draft: action === 'create' ? draft : null,
     stemHash,
     questionCode: code ?? null,
-    pictures: action === 'create' ? content.pictures : new Map(),
+    pictures: content.pictures,
+    editable: draft,
+    edited: edit !== undefined,
   };
+}
+
+/** What a corrected line is filed under, by name, as the preview lists every row. */
+function namesOf(
+  draft: QuestionDraft,
+  catalog: TaxonomyCatalog,
+): { subject: string; topic: string } {
+  return {
+    subject: catalog.context.subjects.get(draft.subjectId)?.name ?? '',
+    topic: draft.topicId ? (catalog.context.topics.get(draft.topicId)?.name ?? '') : '',
+  };
+}
+
+/** A correction cannot shed the tag every imported question carries. */
+function withImportTag(draft: QuestionDraft): QuestionDraft {
+  return draft.tags.includes(QUESTION_IMPORT_TAG)
+    ? draft
+    : { ...draft, tags: [QUESTION_IMPORT_TAG, ...draft.tags] };
 }
 
 /** A row with anything to report is never written, so the duplicate it repeats does not matter. */
@@ -553,7 +585,8 @@ export function withoutDrafts(
   return {
     importLogId,
     rows: planning.rows.map(
-      ({ draft: _draft, stemHash: _stemHash, pictures: _pictures, ...row }) => row,
+      ({ draft: _draft, stemHash: _stemHash, pictures: _pictures, editable: _editable, ...row }) =>
+        row,
     ),
     summary: planning.summary,
     fileErrors: planning.fileErrors,

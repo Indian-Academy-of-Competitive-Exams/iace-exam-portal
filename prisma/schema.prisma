@@ -953,9 +953,22 @@ model ImportLog {
   startedAt  DateTime     @default(now()) @db.Timestamptz(3)
   finishedAt DateTime?    @db.Timestamptz(3)
 
-  rows RowActionLog[]
+  rows     RowActionLog[]
+  rowEdits ImportRowEdit[]
 
   @@index([feature, startedAt])
+}
+
+// A previewed sheet's row as corrected in the review window before Import; laid over the file at commit.
+model ImportRowEdit {
+  importLogId String   @db.Uuid
+  line        Int
+  draft       Json
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  importLog ImportLog @relation(fields: [importLogId], references: [id], onDelete: Cascade)
+
+  @@id([importLogId, line])
 }
 
 model RowActionLog {

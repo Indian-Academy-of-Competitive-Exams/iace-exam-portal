@@ -211,6 +211,7 @@ import {
   ADMIN_TAXONOMY_ROUTES,
   QUESTION_IMPORT_ROUTES,
   questionDetailSchema,
+  questionImportDraftsSchema,
   questionImportPlanSchema,
   questionImportResultSchema,
   questionAvailabilitySchema,
@@ -223,6 +224,7 @@ import {
   type QuestionDetail,
   type QuestionImage,
   type QuestionDraftInput,
+  type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
   type QuestionAvailability,
@@ -689,6 +691,25 @@ export function adminClient(core: ApiCore) {
           questionImportResultSchema,
           { importLogId },
         ),
+
+      importDrafts: (assignmentId: string, importLogId: string): Promise<QuestionImportDraft[]> =>
+        get(
+          ADMIN_AUTHORING_ROUTES.importDrafts(assignmentId, importLogId),
+          questionImportDraftsSchema,
+        ),
+
+      saveImportRow: (
+        assignmentId: string,
+        importLogId: string,
+        line: number,
+        draft: QuestionDraftInput,
+      ): Promise<QuestionImportPlan> =>
+        write(
+          'PUT',
+          ADMIN_AUTHORING_ROUTES.importRow(assignmentId, importLogId, line),
+          questionImportPlanSchema,
+          draft,
+        ),
     },
 
     questions: {
@@ -965,6 +986,23 @@ export function adminClient(core: ApiCore) {
         write('POST', QUESTION_IMPORT_ROUTES.commit, questionImportResultSchema, {
           importLogId,
         }),
+
+      /** Every previewed row's question, corrections laid over the sheet, for the review window. */
+      questionDrafts: (importLogId: string): Promise<QuestionImportDraft[]> =>
+        get(QUESTION_IMPORT_ROUTES.drafts(importLogId), questionImportDraftsSchema),
+
+      /** Saves one row's correction against the run and answers with every row judged again. */
+      saveQuestionRow: (
+        importLogId: string,
+        line: number,
+        draft: QuestionDraftInput,
+      ): Promise<QuestionImportPlan> =>
+        write(
+          'PUT',
+          QUESTION_IMPORT_ROUTES.row(importLogId, line),
+          questionImportPlanSchema,
+          draft,
+        ),
     },
 
     /** The landing screen. One payload, carrying only the bands the caller may see. */

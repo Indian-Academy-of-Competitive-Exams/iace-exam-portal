@@ -423,7 +423,7 @@ describe('QuestionImportService — pictures placed over the sheet', () => {
   const picturesIn = (storage: FakeStorage) =>
     [...storage.objects.keys()].filter((key) => key.startsWith('questions/images/'));
 
-  it('stores the picture on commit, never on preview, and the question points at it', async () => {
+  it('stores the picture at preview, so the review window can draw it, and the question points at it', async () => {
     await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
     const storage = new FakeStorage();
     const service = new QuestionImportService(
@@ -434,7 +434,7 @@ describe('QuestionImportService — pictures placed over the sheet', () => {
 
     const plan = await service.preview(await pictureSheet(), ADMIN);
     assert.equal(plan.summary.willCreate, 1);
-    assert.deepEqual(picturesIn(storage), [], 'a preview stores the sheet, not its pictures');
+    assert.equal(picturesIn(storage).length, 1, 'the preview stores the picture');
 
     assert.equal((await service.commit(plan.importLogId)).created, 1);
     const [stored] = picturesIn(storage);

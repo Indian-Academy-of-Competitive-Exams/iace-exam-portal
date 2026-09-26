@@ -28,6 +28,7 @@ const GROUPS = [
     '#6B6B6B',
     [
       'ImportLog',
+      'ImportRowEdit',
       'RowActionLog',
       'Notification',
       'Announcement',

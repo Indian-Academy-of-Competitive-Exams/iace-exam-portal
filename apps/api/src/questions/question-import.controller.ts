@@ -5,7 +5,10 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseIntPipe,
   Post,
+  Put,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -19,8 +22,11 @@ import {
   PERMISSION_LEVELS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
+  questionDraftSchema,
   questionImportCommitSchema,
+  type QuestionDraft,
   type QuestionImportCommitBody,
+  type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
 } from '@iace/contracts';
@@ -64,6 +70,28 @@ export class QuestionImportController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   async errors(@Res() response: Response, @UploadedFile() file?: UploadedSheet): Promise<void> {
     await sendErrorRows(response, await this.imports.errorRows(requireFile(file)));
+  }
+
+  /** The previewed rows as questions, for the review window. Only the admin who previewed them. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get(':importLogId/drafts')
+  drafts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('importLogId') importLogId: string,
+  ): Promise<QuestionImportDraft[]> {
+    return this.imports.drafts(importLogId, user.id);
+  }
+
+  /** A correction to one previewed row. Writes no question: that is still Import's to do. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Put(':importLogId/rows/:line')
+  saveRow(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('importLogId') importLogId: string,
+    @Param('line', ParseIntPipe) line: number,
+    @Body(new ZodBody(questionDraftSchema)) draft: QuestionDraft,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.saveRow(importLogId, line, draft, user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)

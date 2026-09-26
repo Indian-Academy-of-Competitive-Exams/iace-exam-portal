@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { PanelsTopLeft } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
@@ -10,6 +12,7 @@ import {
 import {
   Alert,
   Badge,
+  Button,
   ImportView,
   PageHeader,
   Table,
@@ -19,7 +22,11 @@ import {
   TableHeader,
   TableRow,
   TableState,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   TruncatedText,
+  cn,
   linkVariants,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser';
@@ -28,6 +35,7 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
 import { saveBlob } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
+import { ImportQuestionsWindow } from '../components/authoring/import-questions-window';
 
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
@@ -68,6 +76,9 @@ export function ImportQuestionsPage() {
   });
 
   const plan = intake.plan;
+  // Undefined is closed; null opens at the first row, a line number at that row.
+  const [reviewing, setReviewing] = useState<string | null | undefined>(undefined);
+  const reviewable = plan !== null && plan.rows.length > 0 && !intake.result;
   const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
@@ -78,11 +89,19 @@ export function ImportQuestionsPage() {
     <ImportView
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import questions" />}
       options={
-        into ? (
-          <Alert variant="info">
-            These questions land in the section you were assigned, not loose in the bank.
-          </Alert>
-        ) : null
+        <>
+          {into ? (
+            <Alert variant="info">
+              These questions land in the section you were assigned, not loose in the bank.
+            </Alert>
+          ) : null}
+          {reviewable ? (
+            <Button type="button" variant="outline" onClick={() => setReviewing(null)}>
+              <PanelsTopLeft aria-hidden />
+              Review questions
+            </Button>
+          ) : null}
+        </>
       }
       onDownloadTemplate={() => template.mutate()}
       downloadingTemplate={template.isPending}
@@ -158,16 +177,33 @@ export function ImportQuestionsPage() {
             }
           >
             {plan?.rows.map((row) => (
-              <ImportRow key={row.line} row={row} />
+              <ImportRow
+                key={row.line}
+                row={row}
+                onOpen={reviewable ? () => setReviewing(String(row.line)) : undefined}
+              />
             ))}
           </TableState>
         </TableBody>
       </Table>
+      {plan ? (
+        <ImportQuestionsWindow
+          plan={plan}
+          into={into}
+          open={reviewing !== undefined}
+          onOpenChange={(open) => !open && setReviewing(undefined)}
+          startAt={reviewing ?? null}
+          onPlan={(judged) => intake.stage(intake.file, judged)}
+        />
+      ) : null}
     </ImportView>
   );
 }
 
-function ImportRow({ row }: Readonly<{ row: QuestionImportRow }>) {
+function ImportRow({
+  row,
+  onOpen,
+}: Readonly<{ row: QuestionImportRow; onOpen: (() => void) | undefined }>) {
   const filedUnder = [row.subjectName, row.topicName].filter(Boolean).join(' / ');
 
   return (
@@ -176,7 +212,17 @@ function ImportRow({ row }: Readonly<{ row: QuestionImportRow }>) {
         {row.line}
       </TableCell>
       <TableCell className="max-w-sm">
-        <TruncatedText>{row.stemPreview || '—'}</TruncatedText>
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className={cn(linkVariants(), 'max-w-full text-left')}
+          >
+            <TruncatedText>{row.stemPreview || '—'}</TruncatedText>
+          </button>
+        ) : (
+          <TruncatedText>{row.stemPreview || '—'}</TruncatedText>
+        )}
       </TableCell>
       <TableCell className="text-muted-foreground">{filedUnder || '—'}</TableCell>
       <TableCell className="text-muted-foreground">
@@ -190,14 +236,23 @@ function ImportRow({ row }: Readonly<{ row: QuestionImportRow }>) {
 }
 
 function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
+  const edited = row.edited ? <Badge variant="neutral">Edited</Badge> : null;
   if (row.action === 'create') {
     return (
       <span className="flex flex-wrap items-center gap-1.5">
         <Badge variant="success">Create</Badge>
+        {edited}
         {row.warnings.length > 0 ? (
-          <span className="text-xs text-warning-ink">
-            {row.warnings.map((warning) => warning.message).join('; ')}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={0} className="text-xs text-warning-ink">
+                {`${row.warnings.length} blurry ${row.warnings.length === 1 ? 'picture' : 'pictures'}`}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {row.warnings.map((warning) => warning.message).join(' ')}
+            </TooltipContent>
+          </Tooltip>
         ) : null}
       </span>
     );
@@ -208,6 +263,7 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
     return (
       <span className="flex flex-wrap items-center gap-1.5">
         <Badge variant="info">Already in the bank</Badge>
+        {edited}
         {row.duplicateOf?.startsWith('line ') ? (
           <span className="text-xs text-muted-foreground">same as {row.duplicateOf}</span>
         ) : null}
@@ -218,6 +274,7 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       <Badge variant="danger">Skip</Badge>
+      {edited}
       <span className="text-xs text-destructive">
         {row.issues.map((issue) => issue.message).join('; ')}
       </span>

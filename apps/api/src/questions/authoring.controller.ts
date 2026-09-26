@@ -6,8 +6,10 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseInterceptors,
@@ -39,6 +41,7 @@ import {
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionImportDraft,
   type QuestionSummary,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
@@ -135,6 +138,35 @@ export class AuthoringController {
     return this.imports.previewForAssignment(
       assignmentId,
       requireFile(file),
+      user.id,
+      user.isSuperAdmin,
+    );
+  }
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @Get('assignments/:assignmentId/import/:importLogId/drafts')
+  importDrafts(
+    @Param('assignmentId') assignmentId: string,
+    @Param('importLogId') importLogId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionImportDraft[]> {
+    return this.imports.draftsForAssignment(assignmentId, importLogId, user.id, user.isSuperAdmin);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @Put('assignments/:assignmentId/import/:importLogId/rows/:line')
+  saveImportRow(
+    @Param('assignmentId') assignmentId: string,
+    @Param('importLogId') importLogId: string,
+    @Param('line', ParseIntPipe) line: number,
+    @Body(new ZodBody(questionDraftSchema)) draft: QuestionDraft,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.saveRowForAssignment(
+      assignmentId,
+      importLogId,
+      line,
+      draft,
       user.id,
       user.isSuperAdmin,
     );

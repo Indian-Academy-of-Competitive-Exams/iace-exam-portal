@@ -1,4 +1,9 @@
-import { type QuestionDetail, type RichContent } from '@iace/contracts';
+import {
+  type LocalizedText,
+  type QuestionDetail,
+  type QuestionDraft,
+  type RichContent,
+} from '@iace/contracts';
 
 /** A question's html sits in a stem, a solution and every option, each per language. */
 /** Both directions walk it here, because doing it by hand is how one of the three is forgotten. */
@@ -22,6 +27,19 @@ export function mapQuestionHtml(
   );
 
   return [...fromContent, ...fromOptions].map((node) => visit(node.text));
+}
+
+const textsOf = (text: LocalizedText | undefined, visit: Html): LocalizedText =>
+  Object.fromEntries(Object.entries(text ?? {}).map(([language, html]) => [language, visit(html)]));
+
+/** The same walk over a draft, whose html is a string per language rather than nodes. */
+export function rewriteDraftHtml<T extends QuestionDraft>(draft: T, visit: Html): T {
+  return {
+    ...draft,
+    stem: textsOf(draft.stem, visit),
+    solution: textsOf(draft.solution, visit),
+    options: draft.options.map((option) => ({ ...option, text: textsOf(option.text, visit) })),
+  };
 }
 
 /** The same walk, rebuilding the question rather than collecting from it. */

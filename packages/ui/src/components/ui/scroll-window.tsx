@@ -56,18 +56,48 @@ export function ScrollWindow({
     onActiveChange(active);
   }, [active, onActiveChange]);
 
-  React.useEffect(() => {
-    if (!scrollTo) return;
-    const index = itemKeys.indexOf(scrollTo.key);
-    const land = () => {
-      const wrapper = wrappers.current[index];
-      if (scroller.current && wrapper) scroller.current.scrollTop = wrapper.offsetTop;
-    };
-    land();
-    // Items near the landing mount and take their real height, so land once more after they do.
-    const settle = requestAnimationFrame(() => requestAnimationFrame(land));
-    return () => cancelAnimationFrame(settle);
-  }, [scrollTo, itemKeys]);
+  // A jump makes its item the one in view at once, so it and its neighbours mount before it is landed on.
+  const [asked, setAsked] = React.useState<{ key: string } | null>(null);
+  const [landing, setLanding] = React.useState<string | null>(null);
+
+  // Reopened, the scroll starts at the top again, so the item in view does too.
+  const [shown, setShown] = React.useState(open);
+  if (open !== shown) {
+    setShown(open);
+    if (open) {
+      setActive(0);
+      setAsked(null);
+      setLanding(null);
+    }
+  }
+  if (scrollTo !== asked) {
+    setAsked(scrollTo);
+    const index = scrollTo ? itemKeys.indexOf(scrollTo.key) : -1;
+    if (scrollTo && index >= 0) {
+      setActive(index);
+      setLanding(scrollTo.key);
+    }
+  }
+
+  /** Held at the top while the items around it load and settle their heights, until the reader scrolls. */
+  const landed = React.useRef<string | null>(null);
+  const settle = React.useCallback(() => {
+    const key = landed.current;
+    const wrapper = key ? wrappers.current[itemKeys.indexOf(key)] : undefined;
+    if (scroller.current && wrapper?.dataset.live) scroller.current.scrollTop = wrapper.offsetTop;
+  }, [itemKeys]);
+  React.useLayoutEffect(() => {
+    landed.current = landing;
+    settle();
+  });
+  const letGo = () => {
+    if (landing !== null) setLanding(null);
+  };
+
+  const settleRef = React.useRef(settle);
+  React.useLayoutEffect(() => {
+    settleRef.current = settle;
+  });
 
   const observer = React.useRef<ResizeObserver | null>(null);
   React.useEffect(() => {
@@ -79,6 +109,7 @@ export function ScrollWindow({
           heights.current.set(target.dataset.itemKey, target.offsetHeight);
         }
       }
+      settleRef.current();
     });
     observer.current = watching;
     for (const wrapper of wrappers.current) if (wrapper) watching.observe(wrapper);
@@ -101,6 +132,9 @@ export function ScrollWindow({
         <div
           ref={scroller}
           onScroll={findActive}
+          onWheel={letGo}
+          onTouchMove={letGo}
+          onKeyDown={letGo}
           className="relative min-h-0 flex-1 overflow-y-auto rounded-b-[--modal-radius]"
         >
           {itemKeys.map((key, index) => {
