@@ -59,7 +59,7 @@ export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Books what policy allows to be spent; idempotent on dedupeKey so the outbox may redeliver. */
-  async create(input: NewNotification): Promise<Notification> {
+  async create(input: NewNotification): Promise<Notification & { inserted: boolean }> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
         const created = await tx.notification.create({ data: toRow(input) });
@@ -72,12 +72,12 @@ export class NotificationsService {
         return created;
       }, TX_LIMITS.SHORT);
 
-      return toNotification(row);
+      return { ...toNotification(row), inserted: true };
     } catch (error) {
       const already = isUniqueViolation(error) ? await this.byDedupeKey(input) : null;
       if (!already) throw error;
 
-      return toNotification(already);
+      return { ...toNotification(already), inserted: false };
     }
   }
 

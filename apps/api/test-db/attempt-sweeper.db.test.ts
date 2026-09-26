@@ -4,18 +4,19 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, STUDENT_TYPE } from '@iace/contracts';
 import {
   AttemptSweeperProcessor,
+  NEVER_SCORED_BATCH_CEILING,
   SWEEP_BATCH,
   SWEEP_LANES,
 } from '../src/attempts/attempt-sweeper.processor';
 import { RollupQueue } from '../src/attempts/rollup-queue';
-import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
+import { ScoringOutbox } from '../src/attempts/scoring-outbox';
+import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS, SCORING_RETRY_AFTER_MS } from '../src/queue/queues';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
+import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import { makeCatalog, makeTest, resetDatabase, testPrisma, uid } from './support/database';
 
 const HOUR_MS = 60 * 60 * 1000;
-const NO_MORE_WORK = { relay: () => Promise.resolve(0) } as never;
 
 const prisma = testPrisma();
 
@@ -59,18 +60,44 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
   const rollupQueue = new FakeQueue();
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
+  const metrics = new FakeMetrics();
+  const outbox = new ScoringOutbox(prisma, new FakeQueue().asQueue());
   const sweeper = new AttemptSweeperProcessor(
     prisma,
     state,
     submit,
-    NO_MORE_WORK,
+    outbox,
     new RollupQueue(rollupQueue.asQueue()),
     fakeQueueFailures(),
+    metrics.asService(),
   );
-  return { asked, sweeper, rollupQueue, state };
+  return { asked, sweeper, rollupQueue, state, metrics, outbox };
 }
 
 const ended = () => prisma.attempt.count({ where: { status: ATTEMPT_STATUS.SUBMITTED } });
+
+/** `count` sittings already ended, unscored, and past the grace a scoring job gets to answer. */
+async function unscored(count: number): Promise<string[]> {
+  const test = await makeTest(prisma, await makeCatalog(prisma));
+  const students = Array.from({ length: count }, () => uid());
+  await prisma.student.createMany({
+    data: students.map((id) => ({ id, mobile: uid(), studentType: STUDENT_TYPE.ONLINE })),
+  });
+  const submittedAt = new Date(Date.now() - SCORING_RETRY_AFTER_MS - HOUR_MS);
+  const attempts = students.map((studentId) => ({
+    id: uid(),
+    testId: test.id,
+    studentId,
+    attemptNo: 1,
+    status: ATTEMPT_STATUS.SUBMITTED,
+    startedAt: new Date(submittedAt.getTime() - HOUR_MS),
+    endsAt: submittedAt,
+    submittedAt,
+    shuffleSeed: 1,
+  }));
+  await prisma.attempt.createMany({ data: attempts });
+  return attempts.map((attempt) => attempt.id);
+}
 
 describe('AttemptSweeperProcessor — a paper put down is not a paper abandoned', () => {
   /** The failure this prevents: closing the laptop for an hour ending the sitting at its old deadline. */
@@ -140,6 +167,32 @@ describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => 
     await sweeper.process();
 
     assert.equal(asked.length, SWEEP_BATCH, 'a second read of the same rows is the loop');
+  });
+});
+
+describe('AttemptSweeperProcessor — asking again for the never-scored', () => {
+  /** The gap this closes: a backlog of a handful sat invisible behind a queue depth of zero. */
+  it('asks again for the whole backlog when it fits in one sweep, and reports it on the gauge', async () => {
+    const ids = await unscored(3);
+    const { sweeper, metrics } = build();
+
+    await sweeper.process();
+
+    const requested = await prisma.outboxEvent.findMany({ where: { aggregateId: { in: ids } } });
+    assert.equal(requested.length, 3);
+    assert.deepEqual(metrics.scoringBacklog, [3]);
+  });
+
+  /** The failure this prevents: a fixed 100-a-sweep cap taking a 6,000-row backlog two hours to drain. */
+  it('bounds one sweep to the ceiling, not the whole backlog, but reports the true size', async () => {
+    const count = NEVER_SCORED_BATCH_CEILING + 5;
+    await unscored(count);
+    const { sweeper, metrics } = build();
+
+    await sweeper.process();
+
+    assert.equal(await prisma.outboxEvent.count(), NEVER_SCORED_BATCH_CEILING);
+    assert.deepEqual(metrics.scoringBacklog, [count]);
   });
 });
 

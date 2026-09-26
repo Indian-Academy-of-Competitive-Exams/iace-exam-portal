@@ -166,6 +166,45 @@ describe('Acting on a relayed request', () => {
     );
   });
 
+  /** The bug this prevents: a replay pushes a row it did not insert, on the path with no page-level guard. */
+  it('pushes an escalating intent once, not again on the pass that only reads the row back', async () => {
+    const { outbox } = build();
+    const calls: string[] = [];
+    const fakePush = {
+      deliver: (input: { notificationId: string }) => {
+        calls.push(input.notificationId);
+        return Promise.resolve();
+      },
+    } as unknown as PushService;
+    const access = { studentsReaching: () => Promise.resolve([]) } as never;
+    const processor = new NotificationsProcessor(
+      prisma,
+      new NotificationsService(prisma),
+      outbox,
+      fakePush,
+      new TestOpeningService(prisma, access, outbox),
+      new NotificationDeliveryProcessor(
+        prisma,
+        new NotificationsService(prisma),
+        new FakeMessageSender(),
+        new FakeQueue().asQueue(),
+        fakeQueueFailures(),
+      ),
+      new FakeQueue().asQueue(),
+      fakeQueueFailures(),
+    );
+    const eventId = await outbox.request(
+      prisma,
+      await intentFor({ escalate: [DeliveryChannel.WHATSAPP] }),
+    );
+
+    await processor.writePending();
+    await prisma.outboxEvent.update({ where: { id: eventId }, data: { processedAt: null } });
+    await processor.writePending();
+
+    assert.equal(calls.length, 1, 'the redelivered pass read the row back; it did not insert it');
+  });
+
   /** A pruned request has already been acted on; re-writing it would tell somebody twice. */
   it('writes nothing when there is nothing pending', async () => {
     const { processor } = build();

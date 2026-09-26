@@ -695,6 +695,8 @@ export class FakeMetrics {
 
   readonly queueFailures: { queue: string; spent: boolean }[] = [];
 
+  readonly scoringBacklog: number[] = [];
+
   countSubmit(outcome: string): void {
     this.submits.push(outcome);
   }
@@ -705,6 +707,10 @@ export class FakeMetrics {
 
   countQueueFailure(queue: string, spent: boolean): void {
     this.queueFailures.push({ queue, spent });
+  }
+
+  setScoringBacklog(count: number): void {
+    this.scoringBacklog.push(count);
   }
 
   observeRequest(): void {

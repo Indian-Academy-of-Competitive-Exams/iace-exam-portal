@@ -90,7 +90,7 @@ export class NotificationsProcessor extends WorkerHost {
     return written;
   }
 
-  /** One page: claim it, write it, and mark it only once it is written. */
+  /** One page: written, then marked processed — a replay skips the push for a row it did not insert. */
   private async writePage(): Promise<number> {
     const rows = await this.prisma.outboxEvent.findMany({
       where: { eventType: NOTIFICATION_REQUEST.EVENT_TYPE, processedAt: null },
@@ -127,13 +127,15 @@ export class NotificationsProcessor extends WorkerHost {
   /** The chain a paid send walks needs its own booked row, so this one is written on its own. */
   private async writeOne(intent: NotificationIntent): Promise<void> {
     const written = await this.notifications.create(intent);
-    // Before the window opens, not inside it: the free channels are what the paid one waits on.
-    await this.push.deliver({
-      notificationId: written.id,
-      studentId: intent.studentId,
-      type: intent.type,
-      title: intent.title,
-    });
+    // A row this pass did not insert was already pushed by whichever pass did — pushing again is the bug.
+    if (written.inserted) {
+      await this.push.deliver({
+        notificationId: written.id,
+        studentId: intent.studentId,
+        type: intent.type,
+        title: intent.title,
+      });
+    }
     await this.schedule(written.id, intent);
   }
 

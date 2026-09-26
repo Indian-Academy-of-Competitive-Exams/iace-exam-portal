@@ -70,7 +70,7 @@ function build(rows: Row[]) {
     },
     create: (intent: { studentId: string }) => {
       singles.push(intent);
-      return Promise.resolve({ id: 'ntf_paid' });
+      return Promise.resolve({ id: 'ntf_paid', inserted: true });
     },
   } as unknown as NotificationsService;
 

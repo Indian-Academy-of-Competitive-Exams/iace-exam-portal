@@ -10,6 +10,7 @@ import { RollupQueue } from './rollup-queue';
 import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
+import { MetricsService } from '../common/metrics/metrics.service';
 
 /** Ends the sittings nobody ended, and hands on the scoring and counting nobody enqueued. */
 @Processor(QUEUE_NAMES.ATTEMPT_SWEEP, {
@@ -25,6 +26,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
     private readonly outbox: ScoringOutbox,
     private readonly rollup: RollupQueue,
     private readonly failures: QueueFailures,
+    private readonly metrics: MetricsService,
   ) {
     super();
   }
@@ -92,9 +94,12 @@ export class AttemptSweeperProcessor extends WorkerHost {
   /** Two gaps the outbox alone can leave: an ended sitting never scored, or a re-score never landed. */
   private async askAgainForUnscored(now: Date = new Date()): Promise<void> {
     const settled = new Date(now.getTime() - SCORING_RETRY_AFTER_MS);
+    // One count serves both jobs: the gauge queue depth cannot show, and how wide this pass re-asks.
+    const backlog = await this.unscoredCount(settled);
+    this.metrics.setScoringBacklog(backlog);
     await this.askAgain(
       settled,
-      () => this.neverScored(settled),
+      () => this.neverScored(settled, backlog),
       'ended unscored; asking for a score again',
     );
     await this.askAgain(
@@ -133,12 +138,21 @@ export class AttemptSweeperProcessor extends WorkerHost {
     }
   }
 
+  /** The gauge's own read, and the width of the batch below — both the same predicate, one query. */
+  private unscoredCount(settled: Date): Promise<number> {
+    return this.prisma.attempt.count({
+      where: { status: ATTEMPT_STATUS.SUBMITTED, score: null, submittedAt: { lt: settled } },
+    });
+  }
+
   /** A job that exhausted its retries left an ended sitting with no score, and nothing owned it. */
-  private neverScored(settled: Date): Promise<{ id: string; testId: string }[]> {
+  private neverScored(settled: Date, backlog: number): Promise<{ id: string; testId: string }[]> {
+    if (backlog === 0) return Promise.resolve([]);
     return this.prisma.attempt.findMany({
       where: { status: ATTEMPT_STATUS.SUBMITTED, score: null, submittedAt: { lt: settled } },
       orderBy: { submittedAt: 'asc' },
-      take: RESCORE_BATCH,
+      // Caps one sweep's own sequential re-requests, not the scoring queue, which drains at its own pace.
+      take: Math.min(backlog, NEVER_SCORED_BATCH_CEILING),
       select: { id: true, testId: true },
     });
   }
@@ -173,8 +187,11 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
 const MILLISECONDS_PER_SECOND = 1000;
 
-/** How many stranded sittings one sweep asks about. The next sweep takes the rest. */
+/** How many stale rescores one sweep asks about — a rare correction path, not a backlog drain. */
 const RESCORE_BATCH = 100;
+
+/** The never-scored arm's own ceiling: wide enough to drain 6,000 in minutes, not hours. */
+export const NEVER_SCORED_BATCH_CEILING = 1000;
 
 /** How many stranded sittings one read holds. A sweep keeps reading until the backlog is gone. */
 export const SWEEP_BATCH = 200;

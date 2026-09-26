@@ -150,6 +150,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
       outbox,
       new RollupQueue(new FakeQueue().asQueue()),
       fakeQueueFailures(),
+      new FakeMetrics().asService(),
     ),
   };
 }

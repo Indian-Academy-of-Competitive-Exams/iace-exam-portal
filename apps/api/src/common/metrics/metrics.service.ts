@@ -30,6 +30,7 @@ export class MetricsService implements OnModuleInit {
   private readonly queueOldestWait: Gauge<'queue'>;
   private readonly queueFailures: Counter<'queue' | 'outcome'>;
   private readonly queueConnectionErrors: Counter<'queue'>;
+  private readonly scoringBacklog: Gauge<string>;
   private readonly redisMemory: Gauge<string>;
   private readonly redisMemoryRatio: Gauge<string>;
   private readonly redisEvictions: Gauge<string>;
@@ -122,6 +123,12 @@ export class MetricsService implements OnModuleInit {
       help: 'Backends open against our database, which a submit spike is capable of exhausting',
       registers: [this.registry],
     });
+
+    this.scoringBacklog = new Gauge({
+      name: `${PREFIX}scoring_backlog`,
+      help: 'Sittings ended but still unscored — queue depth reads zero once a spent job is removed',
+      registers: [this.registry],
+    });
   }
 
   /** Taken by name off QUEUE_NAMES, so a queue added later is measured without being listed again. */
@@ -162,6 +169,11 @@ export class MetricsService implements OnModuleInit {
   countQueueConnectionError(queue: QueueName, error: Error): void {
     this.queueConnectionErrors.inc({ queue });
     this.logger.error(`${queue} queue connection fault: ${error.message}`, error.stack);
+  }
+
+  /** The reconciler's own count, pushed once a sweep — the honest stand-in for a queue depth of zero. */
+  setScoringBacklog(count: number): void {
+    this.scoringBacklog.set(count);
   }
 
   /** Everything that has to be asked for rather than counted, gathered on the scrape itself. */
