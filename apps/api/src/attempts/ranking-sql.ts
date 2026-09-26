@@ -16,16 +16,19 @@ export interface StandingRow {
   cohort_size: number;
 }
 
+type StandingsWhere =
+  { attemptId: string } | { studentId: string } | { attemptIds: readonly string[] };
+
+/** One sitting, a named few, or every one a student has sat — the three ways standings are asked for. */
+function chosenSittings(where: StandingsWhere): Prisma.Sql {
+  if ('attemptId' in where) return Prisma.sql`a."id" = ${where.attemptId}::uuid`;
+  if ('attemptIds' in where) return Prisma.sql`a."id" = ANY(${[...where.attemptIds]}::uuid[])`;
+  return Prisma.sql`a."studentId" = ${where.studentId}::uuid`;
+}
+
 /** Each chosen sitting counted against its test's cohort, one LATERAL count per sitting. */
-export function standingsSql(
-  where: { attemptId: string } | { studentId: string } | { attemptIds: readonly string[] },
-): Prisma.Sql {
-  const chosen =
-    'attemptId' in where
-      ? Prisma.sql`a."id" = ${where.attemptId}::uuid`
-      : 'attemptIds' in where
-        ? Prisma.sql`a."id" = ANY(${[...where.attemptIds]}::uuid[])`
-        : Prisma.sql`a."studentId" = ${where.studentId}::uuid`;
+export function standingsSql(where: StandingsWhere): Prisma.Sql {
+  const chosen = chosenSittings(where);
   return Prisma.sql`
     SELECT a."id" AS attempt_id,
            a."testId" AS test_id,
