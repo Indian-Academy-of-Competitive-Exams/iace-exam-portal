@@ -62,6 +62,9 @@ const announcementStatsSchema = z.object({
 });
 export type AnnouncementStats = z.infer<typeof announcementStatsSchema>;
 
+/** How long a delivery ledger row is kept. Read by the pruner AND by the screen that warns about it. */
+export const DELIVERY_RETENTION_DAYS = 180;
+
 /** What the row itself carries. Counting the ledger per row would be six queries each. */
 export const announcementSummarySchema = z.object({
   id: z.string(),

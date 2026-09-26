@@ -5,6 +5,7 @@ export const QUEUE_NAMES = {
   ATTEMPT_FLUSH: 'attempt-flush',
   ATTEMPT_SWEEP: 'attempt-sweep',
   OUTBOX_PRUNE: 'outbox-prune',
+  NOTIFICATION_PRUNE: 'notification-prune',
   ROLLUP: 'rollup',
   NOTIFICATIONS: 'notifications',
   NOTIFICATION_DELIVERY: 'notification-delivery',
@@ -25,6 +26,7 @@ export const QUEUE_POLICY = {
   [QUEUE_NAMES.ATTEMPT_SWEEP]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.AUDIT_ARCHIVE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.OUTBOX_PRUNE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
+  [QUEUE_NAMES.NOTIFICATION_PRUNE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   // Writing rows and booking deliveries. A broadcast arrives in chunks, so width beats depth here.
   [QUEUE_NAMES.NOTIFICATIONS]: { concurrency: 4, attempts: 5, backoffMs: 5000 },
   // Held narrow on purpose: this is what a rate-limited aggregator sees, and it is billable.
@@ -173,3 +175,6 @@ export const OUTBOX_PRUNE_CRON = '45 20 * * *';
 
 /** 02:45 IST: the same quiet window as the prune, half an hour clear of it. */
 export const AUDIT_ARCHIVE_CRON = '15 21 * * *';
+
+/** After the outbox prune and before the audit archive, so the three never contend for the pool. */
+export const NOTIFICATION_PRUNE_CRON = '0 21 * * *';

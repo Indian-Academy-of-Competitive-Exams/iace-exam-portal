@@ -6,6 +6,7 @@ import { type AccessModule } from '../access';
 import { QueueModule } from '../queue/queue.module';
 import {
   NOTIFICATION_JOBS,
+  NOTIFICATION_PRUNE_CRON,
   NOTIFICATION_SWEEP_EVERY_MS,
   QUEUE_NAMES,
   TESTS_OPENED_SWEEP_EVERY_MS,
@@ -14,6 +15,7 @@ import { NotificationsService } from './notifications.service';
 import { NotificationOutbox } from './notification-outbox';
 import { NotificationsProcessor } from './notifications.processor';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
+import { NotificationPruneProcessor } from './notification-prune.processor';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
 import { FcmSender } from './fcm.sender';
@@ -38,7 +40,10 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
     AnnouncementsService,
     NotificationsService,
     NotificationOutbox,
-    ...onRole([API_ROLES.WORKER], [NotificationsProcessor, NotificationDeliveryProcessor]),
+    ...onRole(
+      [API_ROLES.WORKER],
+      [NotificationsProcessor, NotificationDeliveryProcessor, NotificationPruneProcessor],
+    ),
     PushService,
     FcmSender,
     TestOpeningService,
@@ -48,7 +53,10 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
   exports: [NotificationsService, NotificationOutbox, PushService],
 })
 export class NotificationsModule implements OnModuleInit {
-  constructor(@InjectQueue(QUEUE_NAMES.NOTIFICATIONS) private readonly notifications: Queue) {}
+  constructor(
+    @InjectQueue(QUEUE_NAMES.NOTIFICATIONS) private readonly notifications: Queue,
+    @InjectQueue(QUEUE_NAMES.NOTIFICATION_PRUNE) private readonly pruneQueue: Queue,
+  ) {}
 
   /** Fixed scheduler ids: what stops a redeploy from stacking a second sweep of either kind. */
   async onModuleInit(): Promise<void> {
@@ -65,5 +73,9 @@ export class NotificationsModule implements OnModuleInit {
       { every: TESTS_OPENED_SWEEP_EVERY_MS },
       { name: NOTIFICATION_JOBS.TESTS_OPENED },
     );
+    await this.pruneQueue.upsertJobScheduler(QUEUE_NAMES.NOTIFICATION_PRUNE, {
+      pattern: NOTIFICATION_PRUNE_CRON,
+      tz: 'UTC',
+    });
   }
 }

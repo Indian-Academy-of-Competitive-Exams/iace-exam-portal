@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Send } from 'lucide-react';
 import {
+  DELIVERY_RETENTION_DAYS,
   EXPORT_KINDS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -9,6 +10,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
+  Alert,
   Badge,
   BadgeList,
   Button,
@@ -156,6 +158,12 @@ const columnsWith = (
     : []),
 ];
 
+/** Past the window the pruner has taken the rows the counts are made of, which is not zero sends. */
+const retired = (createdAt: string): boolean =>
+  Date.now() - Date.parse(createdAt) > DELIVERY_RETENTION_DAYS * MILLISECONDS_PER_DAY;
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
 /** A row's own detail. The ledger is counted HERE — per row on the list is six queries each. */
 function AnnouncementPanel({ announcement }: Readonly<{ announcement: AnnouncementSummary }>) {
   const detail = useQuery({
@@ -166,6 +174,12 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm">{announcement.body}</p>
+
+      {retired(announcement.createdAt) ? (
+        <Alert variant="info">
+          {`The delivery ledger is kept for ${DELIVERY_RETENTION_DAYS} days, so the counts below read zero and the export is empty for an announcement this old.`}
+        </Alert>
+      ) : null}
 
       {detail.data ? (
         <MetricGroup>
