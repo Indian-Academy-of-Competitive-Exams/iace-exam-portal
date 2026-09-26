@@ -1,4 +1,4 @@
-export { cn, plural, FILLS } from './lib/utils';
+export { cn, plural, FILLS, TOUR_ANCHORS } from './lib/utils';
 export { Button } from './components/ui/button';
 export { Input, UPPERCASE_CODE } from './components/ui/input';
 export { NumericInput, digitsOnly } from './components/ui/numeric-input';
@@ -97,7 +97,7 @@ export {
   type ListFilterValue,
   type ListState,
 } from './components/ui/list-view';
-export { TourSpotlight, TOUR_ANCHORS, type SpotlightRect } from './components/ui/tour-spotlight';
+export { TourSpotlight, type SpotlightRect } from './components/ui/tour-spotlight';
 export { TruncatedText, useTruncation } from './components/ui/truncated-text';
 export {
   Table,

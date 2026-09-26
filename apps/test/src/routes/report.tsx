@@ -73,11 +73,7 @@ export function ReportShell() {
       tabs={{
         value: tab,
         onValueChange: (next) => navigate(ROUTES.REPORT_TAB(attemptId, next)),
-        action: (
-          <span data-tour={TOUR_TARGETS.REPORT_STANDING}>
-            <Standing attemptId={attemptId} />
-          </span>
-        ),
+        action: <Standing attemptId={attemptId} />,
         // Only the open tab's content renders, and the ROUTER is what decides what that is.
         items: REPORT_TABS.map((held) => ({
           value: held.path,

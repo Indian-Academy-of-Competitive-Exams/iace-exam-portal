@@ -46,6 +46,16 @@ function Page({
   );
 }
 
+/** A second screen with a tour of its own, for the route-swap case. */
+function OtherPage() {
+  usePageTour({
+    id: 'next-page',
+    steps: [{ target: 'other', title: 'Somewhere else', body: 'A different screen entirely.' }],
+    ready: true,
+  });
+  return <div data-tour="other">other</div>;
+}
+
 function InlinePage() {
   usePageTour({
     id: 'tests',
@@ -166,6 +176,30 @@ describe('usePageTour auto-firing', () => {
     render(shell(fakeStorage(), <InlinePage />));
 
     assert.ok(screen.getByText('Your tests'));
+  });
+
+  /** A route swap batches the old screen's unregister with the new one's, so the id never commits as null. */
+  it('closes an open tour when another screen takes over', () => {
+    measurable('list', 'begin', 'other');
+    const storage = fakeStorage();
+    storage.setItem(KEY, JSON.stringify(['next-page']));
+    const { rerender } = render(shell(storage, <Page />));
+    assert.ok(screen.getByText('Your tests'));
+
+    rerender(shell(storage, <OtherPage />));
+
+    assert.equal(screen.queryByText('Your tests'), null);
+  });
+
+  /** A control with no width is one nobody can see pointed at, whatever its height. */
+  it('drops a step whose target has width but no height', () => {
+    BOXES.set('list', { top: 80, left: 20, width: 240, height: 0 });
+    BOXES.set('begin', { top: 80, left: 20, width: 240, height: 40 });
+
+    render(shell(fakeStorage(), <Page />));
+
+    assert.ok(screen.getByText('Begin'));
+    assert.ok(screen.getByText('1 of 1'));
   });
 
   it('closes an open tour when the screen it belongs to leaves', () => {

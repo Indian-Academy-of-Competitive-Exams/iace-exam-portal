@@ -23,7 +23,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ATTEMPT_STATUS_LABELS, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
-import { LIVE_OPS_TOUR, TOUR_IDS } from '../lib/tours';
+import { LIVE_OPS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { LiveTestPicker } from '../components/live-test-picker';
 import { SittingActions } from '../components/sitting-actions';
@@ -84,7 +84,7 @@ export function LiveOpsPage() {
     <TableFrame
       header={header}
       toolbar={
-        <div className="flex flex-col gap-3">
+        <div data-tour={TOUR_TARGETS.LIVE_PICKER} className="flex flex-col gap-3">
           <LiveTestPicker
             value={testId}
             onChange={(value) => filters.set({ testId: value, panel: undefined })}

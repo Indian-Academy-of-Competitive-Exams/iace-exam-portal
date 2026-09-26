@@ -1,14 +1,6 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Button } from './button';
 
-/** The anchors every framed screen carries, so a tour points at its tabs or its filter bar without the screen wrapping anything. */
-export const TOUR_ANCHORS = {
-  TABS: 'page-tabs',
-  FILTERS: 'page-filters',
-  IMPORT_PREVIEW: 'import-preview',
-  IMPORT_UPLOAD: 'import-upload',
-} as const;
-
 /** Where the thing being pointed at is, in viewport pixels. A rect rather than an element: this package draws, it does not query the DOM. */
 export interface SpotlightRect {
   readonly top: number;
@@ -30,7 +22,7 @@ export interface TourSpotlightProps {
 
 const CARD = [
   'z-[--z-popover] w-[min(20rem,calc(100vw-2rem))] rounded-[--modal-radius] border border-border',
-  'bg-surface p-4 text-foreground shadow-[--shadow-overlay] focus:outline-none',
+  'flex flex-col gap-1 bg-surface p-4 text-foreground shadow-[--shadow-overlay] focus:outline-none',
   'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
 ].join(' ');
 
@@ -45,8 +37,6 @@ export function TourSpotlight({
   onBack,
   onClose,
 }: Readonly<TourSpotlightProps>) {
-  const position = { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
-
   return (
     <PopoverPrimitive.Root open>
       {/* Swallows clicks so the page below cannot be navigated mid-tour; it does NOT dismiss, or a mis-tap ends the run. Escape and Skip the tour are the ways out. */}
@@ -59,13 +49,10 @@ export function TourSpotlight({
       <div
         data-tour-cutout
         aria-hidden
-        style={{ ...position, boxShadow: '0 0 0 9999px var(--overlay-bg)' }}
+        style={{ ...rect, boxShadow: '0 0 0 9999px var(--overlay-bg)' }}
         className="pointer-events-none fixed z-[--z-overlay] rounded-md"
       />
-      <PopoverPrimitive.Anchor
-        style={position}
-        className="pointer-events-none fixed z-[--z-overlay]"
-      />
+      <PopoverPrimitive.Anchor style={rect} className="pointer-events-none fixed z-[--z-overlay]" />
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           side="bottom"
@@ -78,8 +65,8 @@ export function TourSpotlight({
         >
           {/* A <p>, not a heading: a heading here would make `no-narration` read tour copy as a narrative title. */}
           <p className="text-sm font-semibold">{title}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-          <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">{body}</p>
+          <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-xs tabular-nums text-muted-foreground">
               {index + 1} of {count}
             </span>

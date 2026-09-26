@@ -20,6 +20,7 @@ export const TOUR_TARGETS = {
   QUESTIONS_ACTIONS: 'questions-actions',
   TAXONOMY_NEW: 'taxonomy-new',
   STUDENT_EDIT: 'student-edit',
+  LIVE_PICKER: 'live-picker',
 } as const;
 
 export const TESTS_AND_SERIES_TOUR: readonly TourStep[] = [
@@ -99,7 +100,7 @@ export const LIVE_OPS_TOUR: readonly TourStep[] = [
     body: 'Running, submitted and marked — the same test read at three points, while it is happening.',
   },
   {
-    target: TOUR_ANCHORS.FILTERS,
+    target: TOUR_TARGETS.LIVE_PICKER,
     title: 'Which test you are watching',
     body: 'Pick the paper and the branch; the board counts live from the database rather than from a snapshot.',
   },

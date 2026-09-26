@@ -13,3 +13,11 @@ export const FILLS = 'flex min-h-0 flex-1 flex-col';
 export function plural(count: number, noun: string, plural = `${noun}s`): string {
   return `${count} ${count === 1 ? noun : plural}`;
 }
+
+/** The anchors every framed screen carries, so a tour points at its tabs or its filter bar without the screen wrapping anything. */
+export const TOUR_ANCHORS = {
+  TABS: 'page-tabs',
+  FILTERS: 'page-filters',
+  IMPORT_PREVIEW: 'import-preview',
+  IMPORT_UPLOAD: 'import-upload',
+} as const;

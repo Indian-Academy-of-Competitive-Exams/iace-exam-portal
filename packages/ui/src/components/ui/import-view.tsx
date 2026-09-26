@@ -7,7 +7,7 @@ import { FileDropzone, type FileDropzoneProps } from './file-dropzone';
 import { FormSection } from './form-panel';
 import { LoadingState } from './spinner';
 import { PageFrame } from './table-frame';
-import { TOUR_ANCHORS } from './tour-spotlight';
+import { TOUR_ANCHORS } from '../../lib/utils';
 import { StatRow } from './stat-row';
 
 /** One counted line of the preview — what the file would do, before it does it. */

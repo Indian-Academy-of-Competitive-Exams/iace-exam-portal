@@ -29,7 +29,7 @@ import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
-import { TourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
+import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { plural } from '../../../src/lib/plural';
 
@@ -40,9 +40,6 @@ function phaseOf(brief: { isLoading: boolean; isError: boolean }): Phase {
   if (brief.isError) return 'ERROR';
   return 'READY';
 }
-
-/** A stable render prop for the navigator's headerRight, rather than a closure rebuilt each render. */
-const renderTourTrigger = () => <TourTrigger />;
 
 export default function TestAboutScreen() {
   const { id: testId } = useLocalSearchParams<{ id: string }>();

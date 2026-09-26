@@ -25,7 +25,6 @@ export const TOUR_TARGETS = {
   PERFORMANCE_HERO: 'performance-hero',
   PERFORMANCE_FIGURES: 'performance-figures',
   REPORT_PICKER: 'report-picker',
-  REPORT_STANDING: 'report-standing',
   LEADERBOARD_PODIUM: 'leaderboard-podium',
   LEADERBOARD_RANKS: 'leaderboard-ranks',
   SAVED_NOTE: 'saved-note',
@@ -100,11 +99,6 @@ export const REPORT_TOUR: readonly TourStep[] = [
     target: TOUR_ANCHORS.TABS,
     title: 'Five views of one sitting',
     body: 'Score card, Subject report, Solution report, Question report and Compare, all of the same paper.',
-  },
-  {
-    target: TOUR_TARGETS.REPORT_STANDING,
-    title: 'Rank and percentile',
-    body: 'Where you finished among everyone who sat this paper, counted live rather than frozen at submission.',
   },
   {
     target: TOUR_TARGETS.REPORT_PICKER,

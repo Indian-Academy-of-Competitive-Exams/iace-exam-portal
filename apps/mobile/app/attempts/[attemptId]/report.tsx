@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { REPORT_TABS, type ReportTab } from '@iace/app-kit';
 import { scoreCardQuery } from '../../../src/lib/queries';
 import { ChipRow, type ChipOption } from '../../../src/components/ui/chip-row';
-import { TourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
+import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { REPORT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { ComparePanel } from '../../../src/components/report/compare-panel';
 import { QuestionsPanel } from '../../../src/components/report/questions-panel';
@@ -26,9 +26,6 @@ const TABS: readonly ChipOption[] = REPORT_TABS.map((tab) => ({
 }));
 
 /** One sitting, whole. The tabs are a switch rather than routes: nobody deep-links on a phone. */
-/** A stable render prop for the navigator's headerRight, rather than a closure rebuilt each render. */
-const renderTourTrigger = () => <TourTrigger />;
-
 export default function ReportScreen() {
   const { attemptId = '' } = useLocalSearchParams<{ attemptId: string }>();
   const [tab, setTab] = useState<string>(SCORE_CARD);

@@ -78,12 +78,12 @@ export const REPORT_TOUR: readonly TourStep[] = [
 export const SAVED_TOUR: readonly TourStep[] = [
   {
     target: TOUR_TARGETS.SAVED_FILTERS,
-    title: 'What lands here',
-    body: 'Questions you starred while reading a solution, kept until you drop them.',
+    title: 'Narrowing the set',
+    body: 'Subject and test offer only what your own saved questions span, so no choice here finds nothing.',
   },
   {
     target: TOUR_TARGETS.SAVED_SUMMARY,
-    title: 'Narrowing the set',
-    body: 'Subject and test offer only what your own saved questions span, so no choice here finds nothing.',
+    title: 'What you have narrowed to',
+    body: 'Whatever is filtering the list right now, and where you drop a filter you are done with.',
   },
 ];

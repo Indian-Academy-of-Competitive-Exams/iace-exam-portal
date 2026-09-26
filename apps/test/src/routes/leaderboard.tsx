@@ -59,7 +59,6 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
 export function LeaderboardPage() {
   const trend = useQuery(performanceQuery);
 
-  usePageTour({ id: TOUR_IDS.LEADERBOARD, steps: LEADERBOARD_TOUR, ready: trend.isSuccess });
   const sat = testsSat(trend.data?.points ?? []);
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
@@ -122,6 +121,9 @@ export function LeaderboardPage() {
     // No ranked sitting means no board at ANY scope, all-time included — so nothing is asked for.
     enabled: sat.length > 0 && (scope === LEADERBOARD_SCOPES.ALL_TIME || scopeId !== ''),
   });
+
+  // The podium and the ranks live inside the board's own query, so `trend` landing is too early to point at them.
+  usePageTour({ id: TOUR_IDS.LEADERBOARD, steps: LEADERBOARD_TOUR, ready: board.isSuccess });
 
   const boardControl = (
     <div className="w-44">

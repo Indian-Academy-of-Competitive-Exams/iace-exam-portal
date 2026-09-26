@@ -127,8 +127,6 @@ function TestBuilder({
   const existing = detail !== null;
   const sat = (detail?.attemptCount ?? 0) > 0;
 
-  usePageTour({ id: TOUR_IDS.TEST_BUILDER, steps: TEST_BUILDER_TOUR, ready: true });
-
   const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail, fromSeries) });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const scope = useWatch({ control: form.control, name: 'scope' });
@@ -145,6 +143,8 @@ function TestBuilder({
     enabled: !existing && baseConfigId !== '',
   });
   const config = detail?.baseConfig ?? chosenConfig.data ?? null;
+
+  usePageTour({ id: TOUR_IDS.TEST_BUILDER, steps: TEST_BUILDER_TOUR, ready: config !== null });
 
   const save = useMutation({
     meta: {

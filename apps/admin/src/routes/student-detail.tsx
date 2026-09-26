@@ -362,7 +362,6 @@ const TAB_CONTENT: Readonly<Record<StudentTab, (props: TabProps) => React.ReactN
 
 export function StudentDetailPage() {
   const { id = '' } = useParams();
-  usePageTour({ id: TOUR_IDS.STUDENT_DETAIL, steps: STUDENT_DETAIL_TOUR, ready: true });
   const { can, identity } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
@@ -377,6 +376,13 @@ export function StudentDetailPage() {
   const student = useQuery({
     queryKey: [...QUERY_KEYS.STUDENT, id],
     queryFn: () => api.admin.students.detail(id),
+  });
+
+  // Before the early returns below, and keyed on the query: the tabs it points at are a skeleton until then.
+  usePageTour({
+    id: TOUR_IDS.STUDENT_DETAIL,
+    steps: STUDENT_DETAIL_TOUR,
+    ready: student.isSuccess,
   });
 
   const form = useForm<FormValues>({

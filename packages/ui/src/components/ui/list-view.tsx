@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
-import { cn, FILLS } from '../../lib/utils';
+import { cn, FILLS, TOUR_ANCHORS } from '../../lib/utils';
 import { Badge } from './badge';
 import { Button } from './button';
 import { Combobox, type ComboboxItem } from './combobox';
@@ -235,7 +235,7 @@ export function FilterRow({
   const open = showFolded || foldedCount > 0;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div data-tour={TOUR_ANCHORS.FILTERS} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
         {leading}
         {primary.map((filter) => (

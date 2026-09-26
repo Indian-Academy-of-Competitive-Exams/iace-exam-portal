@@ -22,7 +22,8 @@ import { seenTours, useTourRun, type KeyValueStorage, type TourStep } from '../s
 /** What a mounted screen declares about itself. The mounted page IS the registry: no route table to keep in step with the router. */
 interface Registration {
   readonly id: string;
-  readonly steps: readonly TourStep[];
+  /** A ref, not an array: a screen writing its steps inline hands a new one every render, and registering on that identity loops. */
+  readonly steps: { readonly current: readonly TourStep[] };
 }
 
 interface TourContextValue {
@@ -53,7 +54,7 @@ function boxOf(target: string): SpotlightRect | null {
   const element = targetElement(target);
   if (element === null) return null;
   const { top, left, width, height } = element.getBoundingClientRect();
-  return width === 0 && height === 0 ? null : { top, left, width, height };
+  return width === 0 || height === 0 ? null : { top, left, width, height };
 }
 
 export function TourProvider({
@@ -64,14 +65,18 @@ export function TourProvider({
   const seen = useMemo(() => seenTours(storage, storageKey), [storage, storageKey]);
   const registered = useRef<Registration | null>(null);
   const [registeredId, setRegisteredId] = useState<string | null>(null);
-  const [rect, setRect] = useState<SpotlightRect | null>(null);
+  // Which screen's tour is running, so a route swap can tell a departing run from one the arriving screen just opened.
+  const [owner, setOwner] = useState<string | null>(null);
+  // Held with the target it was measured for: a replay would otherwise paint one frame at the box the last run ended on.
+  const [rect, setRect] = useState<{ target: string; box: SpotlightRect } | null>(null);
   // Every callback here is stable, which is why nothing in this file needs to keep the run in a ref.
   const { step, index, count, open, next, back, close } = useTourRun();
 
   const start = useCallback(
     (opening: Registration) => {
-      const live = opening.steps.filter((one) => boxOf(one.target) !== null);
+      const live = opening.steps.current.filter((one) => boxOf(one.target) !== null);
       if (live.length === 0) return false;
+      setOwner(opening.id);
       open(live);
       return true;
     },
@@ -83,22 +88,13 @@ export function TourProvider({
     setRegisteredId(next?.id ?? null);
   }, []);
 
-  // A screen leaving takes its tour with it, rather than pointing at a page that has gone.
-  const everRegistered = useRef(false);
+  // Keyed on the OWNER: a route swap batches both registrations, so the id never commits as null.
   useEffect(() => {
-    if (registeredId !== null) {
-      everRegistered.current = true;
-      return;
-    }
-    // Not on the first pass: children register in their own effects, which run before this one.
-    if (!everRegistered.current) return;
-    everRegistered.current = false;
-    close();
-  }, [registeredId, close]);
+    if (owner !== null && owner !== registeredId) close();
+  }, [owner, registeredId, close]);
 
   const target = step?.target ?? null;
 
-  // Nothing clears `rect` when the run ends: the spotlight is gone with the step, so a stale box is never read.
   useEffect(() => {
     if (target === null) return;
     targetElement(target)?.scrollIntoView({ block: 'center' });
@@ -108,7 +104,7 @@ export function TourProvider({
         next();
         return;
       }
-      setRect(box);
+      setRect({ target, box });
     };
     measure();
     window.addEventListener('resize', measure);
@@ -123,9 +119,9 @@ export function TourProvider({
   return (
     <TourContext.Provider value={value}>
       {children}
-      {step !== null && rect !== null ? (
+      {step !== null && rect !== null && rect.target === step.target ? (
         <TourSpotlight
-          rect={rect}
+          rect={rect.box}
           title={step.title}
           body={step.body}
           index={index}
@@ -147,19 +143,25 @@ export function usePageTour({
 }: Readonly<{ id: string; steps: readonly TourStep[]; ready: boolean }>): void {
   const { register, start, hasSeen, mark } = useTourContext();
   const attempted = useRef(false);
+  const latest = useRef(steps);
 
-  // Re-registering is harmless even for a screen that builds its steps inline: the id is what lands in state, so React bails out when it has not changed.
+  // Synced in an effect, never during render: the React Compiler rules refuse a ref written while rendering.
   useEffect(() => {
-    register({ id, steps });
+    latest.current = steps;
+  }, [steps]);
+
+  // Keyed on the ID alone. A screen that builds its steps inline would otherwise re-register on every render.
+  useEffect(() => {
+    register({ id, steps: latest });
     return () => register(null);
-  }, [register, id, steps]);
+  }, [register, id]);
 
   useEffect(() => {
     if (attempted.current || !ready || hasSeen(id)) return;
     attempted.current = true;
     // Marked only when it OPENED: a screen whose targets had not painted yet gets another chance on the next visit.
-    if (start({ id, steps })) mark(id);
-  }, [ready, id, steps, start, hasSeen, mark]);
+    if (start({ id, steps: latest })) mark(id);
+  }, [ready, id, start, hasSeen, mark]);
 }
 
 /** Absent on a screen that registered no tour, so a page without the hook cannot show a dead control. */
