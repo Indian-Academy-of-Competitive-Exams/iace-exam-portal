@@ -10,6 +10,7 @@ import {
 import { ROUTES } from '../../lib/constants';
 import { type Sittable, type TestResult } from '@iace/app-kit';
 import { StartSitting } from '../exam/start-sitting';
+import { TOUR_TARGETS } from '../../lib/tours';
 
 /** The wash is scanned across a shelf; the pill is read. Held under the pill so it stays legible. */
 const STATES = {
@@ -48,7 +49,10 @@ export function TestTile({
       )}
     >
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <span className={cn('w-fit rounded-full px-2 py-0.5 text-xs font-semibold', state.pill)}>
+        <span
+          data-tour={TOUR_TARGETS.TEST_STATE}
+          className={cn('w-fit rounded-full px-2 py-0.5 text-xs font-semibold', state.pill)}
+        >
           {pillOf(state.label, result)}
         </span>
 
@@ -58,14 +62,17 @@ export function TestTile({
           </TruncatedText>
         </Link>
 
-        <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted px-3 py-2">
+        <div
+          data-tour={TOUR_TARGETS.TEST_PATTERN}
+          className="flex flex-col gap-1.5 rounded-md border border-border bg-muted px-3 py-2"
+        >
           <StatRow label="Sections" value={row.test.sectionCount} />
           <StatRow label="Questions" value={row.test.totalQuestions} />
           <StatRow label="Duration (minutes)" value={Math.round(row.test.durationSec / 60)} />
           {opens ? <StatRow label="Opens" value={opens} /> : null}
         </div>
 
-        <div className="mt-auto pt-1">
+        <div data-tour={TOUR_TARGETS.TEST_ACTION} className="mt-auto pt-1">
           <TileFoot row={row} result={result} />
         </div>
       </div>

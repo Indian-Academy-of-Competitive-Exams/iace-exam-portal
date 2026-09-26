@@ -5,6 +5,7 @@ import { type StudentCatalogSeries } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
 import { seriesProgress, type Sittable, type TestResult } from '@iace/app-kit';
 import { Shelf } from '../ui';
+import { TOUR_TARGETS } from '../../lib/tours';
 import { TestTile } from './test-tile';
 
 export interface SeriesShelfProps {
@@ -23,6 +24,7 @@ export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelf
       title={
         // The name IS the way in, so the icon is sized by this link rather than at the glyph.
         <Link
+          data-tour={TOUR_TARGETS.SERIES_SHELF}
           className={cn(linkVariants(), 'flex min-w-0 items-center gap-1 [&_svg]:size-4')}
           to={ROUTES.SERIES(series.id)}
         >

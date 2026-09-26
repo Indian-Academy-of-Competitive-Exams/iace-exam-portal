@@ -179,4 +179,6 @@ export const STORAGE_KEYS = {
   TAB: 'iace.test.tab',
   /** Answers a save has not delivered yet, so a reload mid-outage does not lose them. */
   QUEUED_ANSWERS: 'iace.test.queued',
+  /** Which page tours this device has been shown; one key holding the set, so a tour added later needs no migration. */
+  TOURS: 'iace.test.tours',
 } as const;

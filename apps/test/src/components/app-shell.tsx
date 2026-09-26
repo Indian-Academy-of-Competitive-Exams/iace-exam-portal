@@ -2,13 +2,19 @@ import { useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Avatar, PageFrame, PageHeader } from '@iace/ui';
-import { AppShell as Shell } from '@iace/app-kit/browser';
+import {
+  AppShell as Shell,
+  browserStorage,
+  TourProvider,
+  TourTrigger,
+} from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import {
   NAV_ITEMS,
   notificationsQueryKey,
   PROFILE_QUERY_KEY,
   ROUTES,
+  STORAGE_KEYS,
   UNREAD_QUERY_KEY,
   USER_MENU_ITEMS,
 } from '../lib/constants';
@@ -49,25 +55,27 @@ export function AppShell() {
   }, [total, queryClient]);
 
   return (
-    <Shell
-      nav={NAV_ITEMS}
-      width="wide"
-      homeTo={ROUTES.HOME}
-      onSignOut={() => void signOut()}
-      userMenuItems={USER_MENU_ITEMS}
-      navBadges={{ [ROUTES.NOTIFICATIONS]: unread.data?.total ?? 0 }}
-      userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
-      userAvatar={
-        <Avatar
-          src={me.data?.profile?.photoUrl}
-          name={student?.fullName}
-          fallback={student?.mobile}
-          size="sm"
-        />
-      }
-      // No `can`: the student portal has no permissions, so every section shows.
-    >
-      {/*
+    <TourProvider storage={browserStorage} storageKey={STORAGE_KEYS.TOURS}>
+      <Shell
+        nav={NAV_ITEMS}
+        headerEnd={<TourTrigger />}
+        width="wide"
+        homeTo={ROUTES.HOME}
+        onSignOut={() => void signOut()}
+        userMenuItems={USER_MENU_ITEMS}
+        navBadges={{ [ROUTES.NOTIFICATIONS]: unread.data?.total ?? 0 }}
+        userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
+        userAvatar={
+          <Avatar
+            src={me.data?.profile?.photoUrl}
+            name={student?.fullName}
+            fallback={student?.mobile}
+            size="sm"
+          />
+        }
+        // No `can`: the student portal has no permissions, so every section shows.
+      >
+        {/*
         A student still on the PIN the institute set cannot get past this.
         Not a banner they can scroll past: the PIN is the first four digits of
         their own mobile number, so anyone holding the class list can sign in
@@ -77,15 +85,16 @@ export function AppShell() {
         It sits INSIDE the shell rather than being a redirect, so the header
         and Log out stay reachable and there is no navigation to fight.
       */}
-      {student?.hasDefaultPin ? (
-        <DefaultPinGate />
-      ) : (
-        <>
-          {student?.isTestBlocked ? <TestBlockedBanner /> : null}
-          <Outlet />
-        </>
-      )}
-    </Shell>
+        {student?.hasDefaultPin ? (
+          <DefaultPinGate />
+        ) : (
+          <>
+            {student?.isTestBlocked ? <TestBlockedBanner /> : null}
+            <Outlet />
+          </>
+        )}
+      </Shell>
+    </TourProvider>
   );
 }
 

@@ -3,7 +3,7 @@
  * rather than an admin data table, so it is a shelf per series, not a ListView.
  */
 import { useQuery } from '@tanstack/react-query';
-import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
 import {
   ANY_CHOICE,
   asText,
@@ -27,6 +27,7 @@ import {
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { catalogQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS } from '../lib/constants';
+import { TESTS_TOUR, TOUR_IDS } from '../lib/tours';
 import { SeriesShelf } from '../components/tests/series-shelf';
 import { PageBody } from '../components/ui';
 
@@ -38,6 +39,8 @@ type Emptiness = 'NONE' | 'FILTERED' | null;
 export function TestsPage() {
   const catalog = useQuery(catalogQuery);
   const trend = useQuery(performanceQuery);
+
+  usePageTour({ id: TOUR_IDS.TESTS, steps: TESTS_TOUR, ready: catalog.isSuccess });
 
   const FILTERS = testsFilters(catalog.data?.series ?? []) as ListFilter[];
 
