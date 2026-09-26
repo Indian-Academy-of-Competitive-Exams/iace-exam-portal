@@ -187,6 +187,13 @@ is the whole of scaling out and Caddy needs no config change.
 resizing the box before `opensAt` rather than raising an autoscaling minimum — deliberate, not
 automatic, and it must be on the release calendar.
 
+**No catalog edits during a start window.** Any test or series write busts the whole catalog cache
+in one epoch bump, so an admin fixing a title at T0 turns every start in the hall into a cold
+resolve — three Postgres queries each, one of them the heavy nested series read, on the exam pool
+of eight. The cache is 15 minutes; a start storm is minutes. This is an ops rule because it is
+free, and the code alternative (serving a seconds-stale catalog while one request rebuilds) has not
+been built.
+
 **Open: whether production returns to Fargate.** The staging box (§12) is where that gets decided,
 with one number. Simulate an 8,000-candidate event at the intended production size and read the CPU:
 under 50% and one box is plenty, so Fargate's autoscaling solves a problem that does not exist;

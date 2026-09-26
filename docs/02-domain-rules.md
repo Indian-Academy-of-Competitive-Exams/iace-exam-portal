@@ -244,7 +244,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - A test's cohort is its graded, evaluated, scored sittings, and "N sat" is its size. Rank orders it
   by marks, then time taken, then id: more marks always outranks fewer, at equal marks less time
   wins, and the id parts an exact tie so no two sittings share a place. An unfinished sitting, or
-  one with no time recorded, reads as the slowest there is.
+  one with no time recorded, reads as the slowest there is. Time taken is wall time from start to
+  submit, so a paused sitting counts its pause: a pauser always loses the tie-break. That is
+  consistent with "unfinished ranks slowest" and is deliberate, not an oversight.
 - Percentile counts a tie on marks as half, and time does not enter it. A field of one is its own
   top — reporting the median of a field of one reads as a failure.
 - **Nothing saves a rank or a percentile.** Scoring writes the marks and the time taken; every rank

@@ -187,8 +187,10 @@ fires expiry once, so a whole hall hitting zero together cannot become a retry s
 is inserted in the same transaction that flips the sitting to `SUBMITTED`, so no crash can strand an
 attempt nobody scores. Handing it to BullMQ is a separate, repeatable step, deduplicated by job id.
 The worker evaluates (marks and negative marks) and writes the durable scored fields, the time the
-sitting took among them. Thousands of simultaneous submits become a queue that drains in seconds
-instead of thousands of synchronous transactions fighting each other.
+sitting took among them. Thousands of simultaneous submits become a queue instead of thousands of
+synchronous transactions fighting each other — nobody waits on it, but it is not instant: `docs/04`
+§3 measures the drain at a minute or two for a full hall, and that is the figure to watch on the
+day.
 
 **Rank and percentile are counted live from Postgres.** A test's cohort is its graded, evaluated,
 scored sittings, ordered by marks, then time taken, then id. The partial index `Attempt_ranking_idx`
