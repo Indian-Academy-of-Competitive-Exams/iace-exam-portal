@@ -49,9 +49,10 @@ export function TourSpotlight({
 
   return (
     <PopoverPrimitive.Root open>
+      {/* Swallows clicks so the page below cannot be navigated mid-tour; it does NOT dismiss, or a mis-tap ends the run. Escape and Skip the tour are the ways out. */}
       <div
         data-tour-blocker
-        onClick={onClose}
+        aria-hidden
         className="fixed inset-0 z-[--z-overlay] animate-overlay-in"
       />
       {/* One element paints the dim AND the hole: a shadow spread wider than any viewport, with nothing inside it. */}

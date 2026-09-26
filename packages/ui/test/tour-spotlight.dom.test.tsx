@@ -100,8 +100,8 @@ describe('TourSpotlight', () => {
     );
   });
 
-  /** Nothing on the page below may be clicked mid-tour, or the reader navigates out of the run. */
-  it('lays a blocker over the page', () => {
+  /** Nothing on the page below may be clicked mid-tour, or the reader navigates out of their own run. */
+  it('lays a blocker over the page that does not itself dismiss', () => {
     let closed = 0;
     render(<TourSpotlight {...props} onClose={() => (closed += 1)} />);
 
@@ -109,6 +109,6 @@ describe('TourSpotlight', () => {
     assert.ok(blocker instanceof HTMLElement);
 
     fireEvent.click(blocker);
-    assert.equal(closed, 1);
+    assert.equal(closed, 0);
   });
 });
