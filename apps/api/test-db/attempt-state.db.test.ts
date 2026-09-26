@@ -10,7 +10,8 @@ import {
 } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { sheetOf } from '../src/attempts/answer-sheet';
-import { SHEET_ROW_SELECT } from '../src/attempts/paper-sheet.service';
+import { PaperSheetService, SHEET_ROW_SELECT } from '../src/attempts/paper-sheet.service';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from '../test/support/fakes';
 import {
@@ -69,7 +70,7 @@ async function build(durable = false) {
     });
   }
   const redis = new FakeRedis();
-  const service = new AttemptStateService(prisma, redis.asService());
+  const service = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const live = {
     id: attempt.id,
     studentId: student,
@@ -90,6 +91,26 @@ async function build(durable = false) {
 
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
+
+/** The real client, but counting `paperQuestion.findMany` — the one call a rebuild must not repeat. */
+function countingPaperReads(client: PrismaService, into: unknown[]): PrismaService {
+  return new Proxy(client, {
+    get(target, key) {
+      const held = Reflect.get(target, key) as unknown;
+      if (key !== 'paperQuestion') return held;
+      return new Proxy(held as object, {
+        get(model, method) {
+          const call = Reflect.get(model, method) as unknown;
+          if (method !== 'findMany') return call;
+          return (...args: unknown[]) => {
+            into.push(args);
+            return Reflect.apply(call as (...a: unknown[]) => unknown, model, args);
+          };
+        },
+      });
+    },
+  });
+}
 
 describe('AttemptStateService', () => {
   it('saves to Redis and marks the attempt dirty', async () => {
@@ -255,7 +276,11 @@ describe('AttemptStateService', () => {
       data: { updatedAt: lastFlush },
     });
     const redis = new FakeRedis();
-    const service = new AttemptStateService(prisma, redis.asService());
+    const service = new AttemptStateService(
+      prisma,
+      redis.asService(),
+      new PaperSheetService(prisma),
+    );
     const live = { id: attempt.id, studentId: student, testId: paper.testId, startedAt, endsAt };
 
     const resumedAt = new Date(lastFlush.getTime() + 2 * 60 * 1000);
@@ -359,6 +384,77 @@ describe('AttemptStateService', () => {
         () => service.current(uid(), attemptId, NOW),
         refusedWith(ErrorCodes.NOT_FOUND),
       );
+    });
+  });
+
+  /** The failure this prevents: a Redis restart turning every save's rebuild into its own paper scan. */
+  describe('rebuilding after the live key is gone', () => {
+    it('reads the paper once for two sittings of the same test, and puts back each one’s own answers', async () => {
+      const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
+      const [q1 = '', q2 = ''] = paper.items.map((item) => item.questionId);
+      const startedAt = new Date(ENDS_AT.getTime() - HOUR_MS);
+      const studentA = (await makeStudent(prisma)).id;
+      const studentB = (await makeStudent(prisma)).id;
+      const attemptA = await sitPaper(prisma, {
+        paper,
+        studentId: studentA,
+        chosen: [RIGHT_OPTION, null],
+        timeSpent: [20, 0],
+        status: ATTEMPT_STATUS.IN_PROGRESS,
+        startedAt,
+        submittedAt: null,
+      });
+      const attemptB = await sitPaper(prisma, {
+        paper,
+        studentId: studentB,
+        chosen: [null, RIGHT_OPTION],
+        timeSpent: [15, 0],
+        status: ATTEMPT_STATUS.IN_PROGRESS,
+        startedAt,
+        submittedAt: null,
+      });
+      const paperRows = await prisma.paperQuestion.findMany({
+        where: { testId: paper.testId },
+        orderBy: { order: 'asc' },
+        select: SHEET_ROW_SELECT,
+      });
+      const answerOn = (questionId: string) => ({
+        [questionId]: {
+          state: ANSWER_STATE.ANSWERED,
+          selectedOptionId: RIGHT_OPTION,
+          typedAnswer: null,
+          timeSpentSec: 20,
+          answeredAt: '2026-09-01T05:01:00.000Z',
+          firstActionAt: null,
+        },
+      });
+      await prisma.attemptSheet.update({
+        where: { attemptId: attemptA.id },
+        data: { answers: sheetOf(answerOn(q1), paperRows, startedAt) },
+      });
+      await prisma.attemptSheet.update({
+        where: { attemptId: attemptB.id },
+        data: { answers: sheetOf(answerOn(q2), paperRows, startedAt) },
+      });
+
+      const reads: unknown[] = [];
+      const client = countingPaperReads(prisma, reads);
+      const redis = new FakeRedis();
+      const service = new AttemptStateService(
+        client,
+        redis.asService(),
+        new PaperSheetService(client),
+      );
+
+      // Neither key was ever opened, so both saves take the seed branch a Redis restart forces.
+      await service.save(studentA, attemptA.id, { revision: 1, answers: [] }, NOW);
+      await service.save(studentB, attemptB.id, { revision: 1, answers: [] }, NOW);
+
+      const stateA = await service.current(studentA, attemptA.id, NOW);
+      const stateB = await service.current(studentB, attemptB.id, NOW);
+      assert.deepEqual(Object.keys(stateA.answers), [q1]);
+      assert.deepEqual(Object.keys(stateB.answers), [q2]);
+      assert.equal(reads.length, 1, 'the paper is memoised per test, not re-read per rebuild');
     });
   });
 });

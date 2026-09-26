@@ -57,8 +57,9 @@ export class AttemptFlushProcessor extends WorkerHost {
     );
     try {
       await this.sheets.patch(held, ids);
-      // A save landing inside this pass stays pending, so the mark has to outlive the flush too.
-      return (await this.state.clearPending(attemptId, written)) ? attemptId : null;
+      // clearPending unmarks it itself once settled, checked against what it just wrote.
+      await this.state.clearPending(attemptId, written);
+      return null;
     } catch (error) {
       this.logger.error(`Flushing attempt ${attemptId} failed; it stays dirty`, error);
       return null;

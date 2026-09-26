@@ -100,7 +100,7 @@ async function hall(over: Hall = {}) {
     new AttemptsService(
       client,
       resolver(over.permitted),
-      new AttemptStateService(client, redis.asService()),
+      new AttemptStateService(client, redis.asService(), new PaperSheetService(client)),
       new AttemptSheetService(client, new PaperSheetService(client)),
     );
   return { paper, student, service: service(), serviceOn: service };

@@ -79,9 +79,9 @@ async function hall(questionCount = 2) {
 
   const redis = new FakeRedis();
   const access = new AccessResolverService(prisma, redis.asService());
-  const state = new AttemptStateService(prisma, redis.asService());
-  const queue = new FakeQueue();
   const papers = new PaperSheetService(prisma);
+  const state = new AttemptStateService(prisma, redis.asService(), papers);
+  const queue = new FakeQueue();
   const sheets = new AttemptSheetService(prisma, papers);
   return {
     paper,

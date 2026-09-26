@@ -102,7 +102,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
   const hooks: Hooks = {};
   const client = hooked(hooks);
   const redis = new FakeRedis();
-  const state = new AttemptStateService(prisma, redis.asService());
+  const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const queue = new FakeQueue();
   const busts: string[] = [];
   const access = {

@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { answersOf } from './answer-sheet';
+import { PaperSheetService } from './paper-sheet.service';
 import {
   applyBatch,
   heldIn,
@@ -53,6 +54,7 @@ export class AttemptStateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly paperSheet: PaperSheetService,
   ) {}
 
   /** Seeded when the sitting starts, so no later save has to ask Postgres whose attempt this is. */
@@ -245,7 +247,16 @@ export class AttemptStateService {
       pending: pendingAfter(held, written),
     }));
     // A key taken by submit has nothing left to settle; anything still pending is a save that raced.
-    return next === null || (next.pending ?? []).length === 0;
+    const settled = next === null || (next.pending ?? []).length === 0;
+    // Unmarks only if untouched since: a save landing right after keeps its own fresh mark instead.
+    if (settled && next !== null) await this.unmarkIfUnchanged(attemptId, next);
+    return settled;
+  }
+
+  /** The check `clearDirty` used to skip: a mismatch here means something else has since written it. */
+  private async unmarkIfUnchanged(attemptId: string, written: HeldState): Promise<void> {
+    const current = await this.redis.getRaw(redisKeys.attemptState(attemptId));
+    if (current === JSON.stringify(packHeld(written))) await this.clearDirty(attemptId);
   }
 
   /** Redis first, Postgres only if the key has gone — paying on a rare resume, not on every read. */
@@ -282,11 +293,8 @@ export class AttemptStateService {
       throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
     }
 
-    const paper = await this.prisma.paperQuestion.findMany({
-      where: { testId: attempt.testId },
-      orderBy: { order: 'asc' },
-      select: { questionId: true, optionIds: true },
-    });
+    // A sat paper is frozen, so the rows PaperSheetService already holds for it are safe to reuse.
+    const paper = await this.paperSheet.rowsOf(attempt.testId);
     // TOUCHED answers only: an untouched slot is not an answer to put back.
     const answers = Object.fromEntries(
       Object.entries(answersOf(attempt.sheet?.answers, paper, attempt.startedAt)).filter(

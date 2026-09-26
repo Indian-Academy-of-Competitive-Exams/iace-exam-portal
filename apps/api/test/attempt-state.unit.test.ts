@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, type AnswerChange, type LiveAnswer } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { type PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from './support/fakes';
@@ -403,7 +404,7 @@ describe('pending — what a flush has left to write', () => {
 describe('AttemptStateService.save — the ack tells the truth', () => {
   const IN_TIME = new Date('2026-09-01T05:10:00.000Z');
   const service = (redis: FakeRedis) =>
-    new AttemptStateService({} as PrismaService, redis.asService());
+    new AttemptStateService({} as PrismaService, redis.asService(), {} as PaperSheetService);
   const batch = (revision: number) => ({
     revision,
     answers: [change()],
@@ -436,7 +437,7 @@ describe('AttemptStateService.save — the ack tells the truth', () => {
 
 describe('AttemptStateService.clearPending', () => {
   const service = (redis: FakeRedis) =>
-    new AttemptStateService({} as PrismaService, redis.asService());
+    new AttemptStateService({} as PrismaService, redis.asService(), {} as PaperSheetService);
 
   const answer: LiveAnswer = {
     state: ANSWER_STATE.ANSWERED,
@@ -470,6 +471,54 @@ describe('AttemptStateService.clearPending', () => {
 
     const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
     assert.deepEqual(after?.pending, ['q1']);
+  });
+
+  it('drops the dirty mark once everything the pass wrote has settled', async () => {
+    const redis = new FakeRedis();
+    await redis.setJson(
+      redisKeys.attemptState('att_1'),
+      packHeld(held({ pending: ['q1'], answers: { q1: answer } })),
+      60,
+    );
+    await redis.client.sadd(redisKeys.attemptsDirty, 'att_1');
+
+    const settled = await service(redis).clearPending('att_1', { q1: answer });
+
+    assert.equal(settled, true);
+    assert.deepEqual(await redis.client.smembers(redisKeys.attemptsDirty), []);
+  });
+
+  /** The bug this prevents: a flush that just settled wiping the fresh mark a racing save just set. */
+  it('keeps the mark a save sets between the settling write and the unmark check', async () => {
+    const redis = new FakeRedis();
+    await redis.setJson(
+      redisKeys.attemptState('att_1'),
+      packHeld(held({ pending: ['q1'], answers: { q1: answer } })),
+      60,
+    );
+    await redis.client.sadd(redisKeys.attemptsDirty, 'att_1');
+    const attemptService = service(redis);
+
+    const realGetRaw = redis.getRaw.bind(redis);
+    let reads = 0;
+    redis.getRaw = async (key: string) => {
+      reads += 1;
+      // The second read is clearPending's own post-write check; race a save in right before it.
+      if (reads === 2) {
+        await attemptService.save(
+          'stu_1',
+          'att_1',
+          { revision: 1, answers: [change()] },
+          new Date('2026-09-01T05:10:00.000Z'),
+        );
+      }
+      return realGetRaw(key);
+    };
+
+    const settled = await attemptService.clearPending('att_1', { q1: answer });
+
+    assert.equal(settled, true);
+    assert.deepEqual(await redis.client.smembers(redisKeys.attemptsDirty), ['att_1']);
   });
 });
 

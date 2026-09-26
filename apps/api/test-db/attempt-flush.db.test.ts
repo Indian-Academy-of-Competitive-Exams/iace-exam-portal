@@ -40,7 +40,11 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
     submittedAt: null,
   });
   const questionId = paper.items[0]?.questionId ?? '';
-  const state = new AttemptStateService(prisma, new FakeRedis().asService());
+  const state = new AttemptStateService(
+    prisma,
+    new FakeRedis().asService(),
+    new PaperSheetService(prisma),
+  );
   await state.open({
     id: attempt.id,
     studentId,

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { ErrorCodes, type AppException } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { heldIn, holdsSitting, type HeldState } from '../src/attempts/attempt-state';
+import { type PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from './support/fakes';
@@ -30,7 +31,7 @@ const sitting = (id: string) => ({
 });
 
 const serviceOn = (redis: FakeRedis) =>
-  new AttemptStateService({} as PrismaService, redis.asService());
+  new AttemptStateService({} as PrismaService, redis.asService(), {} as PaperSheetService);
 
 const tabOf = async (redis: FakeRedis, attemptId: string): Promise<string | null | undefined> => {
   const state = await redis.getJson<HeldState>(redisKeys.attemptState(attemptId));

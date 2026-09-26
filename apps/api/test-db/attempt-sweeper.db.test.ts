@@ -10,6 +10,7 @@ import {
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import { makeCatalog, makeTest, resetDatabase, testPrisma, uid } from './support/database';
 
@@ -57,7 +58,7 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
   } as never;
   const rollupQueue = new FakeQueue();
   const redis = new FakeRedis();
-  const state = new AttemptStateService(prisma, redis.asService());
+  const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const sweeper = new AttemptSweeperProcessor(
     prisma,
     state,
