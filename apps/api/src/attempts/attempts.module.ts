@@ -9,6 +9,7 @@ import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
 import { NotificationsModule } from '../notifications';
 import { AttemptsController } from './attempts.controller';
+import { MeAttemptReportController } from './attempt-report.controller';
 import { AdminLiveOpsController } from './live-ops.controller';
 import { AdminPerformanceController, MePerformanceController } from './performance.controller';
 import { AdminOverviewController, MeOverviewController } from './overview.controller';
@@ -52,6 +53,7 @@ import { SubmitService } from './submit.service';
       [API_ROLES.CORE],
       [
         AdminLiveOpsController,
+        MeAttemptReportController,
         MePerformanceController,
         AdminPerformanceController,
         MeOverviewController,

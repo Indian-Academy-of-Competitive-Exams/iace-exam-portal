@@ -8,7 +8,7 @@
 }
 
 {$API_HOST} {
-	@exam path /me/tests/*/attempt /me/tests/*/brief /me/attempts/*/paper /me/attempts/*/submit /me/attempts/*/scorecard /me/attempts/*/solutions /me/attempts/*/state /me/performance /me/leaderboard
+	@exam path /me/tests/*/attempt /me/tests/*/brief /me/attempts/*/paper /me/attempts/*/submit /me/attempts/*/state /me/leaderboard
 
 	reverse_proxy @exam {
 		dynamic a {

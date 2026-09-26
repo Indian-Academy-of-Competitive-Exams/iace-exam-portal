@@ -10,9 +10,6 @@ import {
   type LiveAttempt,
   type LiveAttemptState,
   type SaveAttemptStateBody,
-  type PerformanceTrend,
-  type ScoreCard,
-  type SolutionReport,
   type StartAttemptBody,
   type SubmitAttemptBody,
   type SubmittedAttempt,
@@ -22,18 +19,16 @@ import { SittingRateLimit } from '../common/throttling';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
-import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
 import { SubmitService } from './submit.service';
 
-/** The student's own sittings. The subject is always the token's, never a path parameter. */
+/** The live sitting only: starting, autosaving, submitting. Anything read after it ends sits on core. */
 @Controller('me')
 @Actors(ActorTypes.STUDENT)
 export class AttemptsController {
   constructor(
     private readonly attempts: AttemptsService,
     private readonly papers: AttemptPaperService,
-    private readonly reports: AttemptReportService,
     private readonly state: AttemptStateService,
     private readonly submitter: SubmitService,
   ) {}
@@ -75,27 +70,6 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SubmittedAttempt> {
     return this.submitter.submit(user.id, id, body.tab);
-  }
-
-  /** Marks, standing and their OWN answers. Carries no correct option, on any question. */
-  @Get('attempts/:id/scorecard')
-  scoreCard(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ScoreCard> {
-    return this.reports.scoreCard(user.id, id);
-  }
-
-  /** The answer key, and the ONLY endpoint carrying it. Refused until the gate opens. */
-  @Get('attempts/:id/solutions')
-  solutions(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<SolutionReport> {
-    return this.reports.solutions(user.id, id);
-  }
-
-  /** Every test this student has sat, oldest first — the line the Performance tab draws. */
-  @Get('performance')
-  performance(@CurrentUser() user: AuthenticatedUser): Promise<PerformanceTrend> {
-    return this.reports.performance(user.id);
   }
 
   /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */

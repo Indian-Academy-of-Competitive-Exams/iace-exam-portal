@@ -9,6 +9,7 @@ import { AttemptsController } from '../src/attempts/attempts.controller';
 import { MeLeaderboardController } from '../src/attempts/leaderboard.controller';
 import { MeOverviewController } from '../src/attempts/overview.controller';
 import { MePerformanceController } from '../src/attempts/performance.controller';
+import { MeAttemptReportController } from '../src/attempts/attempt-report.controller';
 import { MeQuestionReportController } from '../src/attempts/question-report.controller';
 import { MeController } from '../src/me/me.controller';
 import { SavedController } from '../src/saved/saved.controller';
@@ -95,6 +96,7 @@ const EXAM_PATTERNS = EXAM_MATCHER_LIST.trim().split(/\s+/).filter(Boolean).map(
 const EXAM_ROUTES = [...routesOf(AttemptsController), ...routesOf(MeLeaderboardController)];
 const CORE_ME_ROUTES = [
   ...routesOf(MeController),
+  ...routesOf(MeAttemptReportController),
   ...routesOf(MeOverviewController),
   ...routesOf(MePerformanceController),
   ...routesOf(MeQuestionReportController),
@@ -112,6 +114,16 @@ describe('the Caddyfile exam matcher against the routes Nest actually registers'
       assert.ok(
         EXAM_PATTERNS.some((pattern) => pattern.test(route)),
         `${route} is registered on the exam role but no @exam pattern in deploy/Caddyfile matches it`,
+      );
+    }
+  });
+
+  /** The list below cannot name a controller nobody has written yet; a dead pattern is the signal that one moved. */
+  it('lists no pattern that has stopped matching an exam route', () => {
+    for (const pattern of EXAM_PATTERNS) {
+      assert.ok(
+        EXAM_ROUTES.some((route) => pattern.test(route)),
+        `${pattern.source} is forwarded to exam in deploy/Caddyfile but no exam route answers it`,
       );
     }
   });
