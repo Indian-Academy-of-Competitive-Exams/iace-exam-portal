@@ -329,6 +329,13 @@ Built and in use. Reach for these rather than adding a second of any of them.
   The one exception is data a database trigger freezes, which nothing needs to bust: it may be held
   in process memory. `PaperSheetService` is that case — a sat paper's rows and its pinned versions'
   options and keys, frozen by `paper_question_sat_guard` and `question_version_sat_guard`.
+- **An export is its list, unpaged.** The owning module adds `…/export` beside its list route and
+  reuses that list's query schema and where-builder, so the file cannot drift from the screen; a
+  central exports module would read tables it does not own. `common/exporting` writes the workbook
+  (text cells for mobiles and codes, real IST date cells) and counts against `EXPORT_MAX_ROWS` before
+  a row is read. `RequiresExport` demands the owning feature's READ **and** `DATA_EXPORT`, and every
+  export writes one `EXPORT` audit row carrying the filters. Where the file goes back through an
+  importer, its columns are that importer's, and a db test proves the round trip.
 
 ---
 
