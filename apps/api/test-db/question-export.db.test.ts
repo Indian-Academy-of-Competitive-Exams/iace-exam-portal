@@ -233,22 +233,22 @@ describe('GET admin/questions/export', () => {
     assert.equal(rows.length, ids.length);
     assert.deepEqual(rich, FIXTURES.map((fixture) => fixture.rich).sort());
     const coded = rows.find((row) => row[CODE_HEADER] === 'QA-001');
-    assert.equal(coded?.question_code ?? null, null);
+    assert.equal(coded?.['Question Code'] ?? null, null);
     assert.deepEqual(
       rows.filter((row) => row !== coded).map((row) => row[CODE_HEADER] ?? null),
       [null, null, null],
     );
     const withImage = rows.find((row) => row['Rich content'] === RICH_CONTENT.IMAGE);
-    assert.match(String(withImage?.stem_en), /questions\/images\/3f2a\.png/);
+    assert.match(String(withImage?.['Question (English)']), /questions\/images\/3f2a\.png/);
     const withEquation = rows.find((row) => row['Rich content'] === RICH_CONTENT.EQUATION);
-    assert.match(String(withEquation?.stem_en), /\\frac\{a\}\{b\} < 1/);
+    assert.match(String(withEquation?.['Question (English)']), /\\frac\{a\}\{b\} < 1/);
   });
 
   it('re-plans a coded row whose stem was edited as a clean create, the rest as duplicates', async () => {
     await seedFixtures();
     const workbook = await workbookOf();
     const sheet = workbook.getWorksheet('Questions');
-    const stemColumn = (sheet?.getRow(1).values as Cell[]).indexOf('stem_en');
+    const stemColumn = (sheet?.getRow(1).values as Cell[]).indexOf('Question (English)');
     let edited = 0;
     sheet?.eachRow((row, at) => {
       if (at === 1 || edited > 0 || !String(row.getCell(stemColumn).value).startsWith('What'))

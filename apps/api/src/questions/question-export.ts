@@ -27,7 +27,7 @@ import {
 } from '../common/exporting';
 import { mapQuestionHtml } from './question-content';
 
-/** Not "Question code": the importer would normalise that to its own `question_code` column. */
+/** Not "Question Code": the importer would read that as its own reference column on re-import. */
 export const CODE_HEADER = 'Existing question code';
 
 export const RICH_CONTENT = { IMAGE: 'Image', EQUATION: 'Equation' } as const;

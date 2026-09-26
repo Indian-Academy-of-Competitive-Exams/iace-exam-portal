@@ -205,9 +205,11 @@ function writeInstructions(sheet: ExcelJS.Worksheet): void {
   sheet.getRow(1).font = { bold: true };
 }
 
-const LANGUAGE_LIST = LANGUAGE_ORDER.map(
-  (language) => `${LANGUAGE_LABELS[language]} (_${language})`,
-).join(', ');
+const LANGUAGE_LIST = LANGUAGE_ORDER.map((language) => LANGUAGE_LABELS[language]).join(', ');
+
+/** Named from the columns, so the instructions cannot drift from the headers they describe. */
+const headerOf = (key: QuestionImportColumnKey): string =>
+  QUESTION_IMPORT_COLUMNS.find((column) => column.key === key)?.header ?? key;
 
 const INSTRUCTIONS = [
   'How to fill this in',
@@ -215,7 +217,7 @@ const INSTRUCTIONS = [
   'One row is one question. Fill in the Questions tab; the Lists tab is what the',
   'dropdowns read, so leave it alone.',
   '',
-  `Languages: ${LANGUAGE_LIST}.`,
+  `Languages: ${LANGUAGE_LIST}. Each has its own columns, named in brackets.`,
   'English is required on every question. Hindi and Telugu are optional, but a',
   'question written in one of them needs BOTH its question text and all of its',
   'options in that language: a half-translated paper cannot be sat in it.',
@@ -225,17 +227,17 @@ const INSTRUCTIONS = [
   'Formatting, tables, images and equations are not read from a sheet. A tag typed into a',
   'cell shows as the tag. Add those by opening the question in the bank afterwards.',
   '',
-  'subject / topic: pick from the dropdowns. They cascade, so the topics offered are',
+  `${headerOf('subject')} and ${headerOf('topic')}: pick from the dropdowns. They cascade, so the topics offered are`,
   'the ones under the subject on that row. Nothing is created by an import, so a name',
   'that matches nothing in the bank is reported against its line.',
   '',
-  `SINGLE_MCQ: fill option1..option${MCQ_OPTION_COUNT} and correct_option (1 to ${MCQ_OPTION_COUNT}).`,
-  'TEXT_FIELD: leave the options empty and fill answer_mode and answer_en.',
+  `SINGLE_MCQ: fill Option 1 to Option ${MCQ_OPTION_COUNT} and ${headerOf('correct_option')} (1 to ${MCQ_OPTION_COUNT}).`,
+  `TEXT_FIELD: leave the options empty and fill ${headerOf('answer_mode')} and ${headerOf('answer_en')}.`,
   '  EXACT compares the text, ignoring case and spacing.',
-  '  NUMERIC compares the number, and answer_tolerance is how far either side',
+  `  NUMERIC compares the number, and ${headerOf('answer_tolerance')} is how far either side`,
   '  still counts (0.01 accepts 3.13 to 3.15 for an answer of 3.14).',
   '',
-  `tags: separate several with "${TAG_SEPARATOR}". question_code is your own reference and`,
+  `${headerOf('tags')}: separate several with "${TAG_SEPARATOR}". ${headerOf('question_code')} is your own reference and`,
   'must be unique across the bank; leave it blank if you do not use one.',
   `Every question imported also carries the tag "${QUESTION_IMPORT_TAG}", which is one of the`,
   `${TAGS_MAX} a question may hold. Filter the bank by it to find what an upload brought in.`,

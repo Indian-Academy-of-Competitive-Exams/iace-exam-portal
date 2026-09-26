@@ -381,6 +381,29 @@ describe('the question sheet — the file itself', () => {
     };
 
     const result = planQuestionImport(stripped, catalog(), noDedup());
-    assert.match(result.fileErrors.join(' '), /subject/);
+    assert.match(result.fileErrors.join(' '), /Subject/);
+  });
+
+  /** The failure this prevents: renaming a header rejecting every sheet an admin filled in before. */
+  it('still reads a sheet written with the old snake_case headers', () => {
+    const legacy = (row: Partial<Record<QuestionImportColumnKey, string>>): CsvTable => ({
+      headers: QUESTION_IMPORT_COLUMNS.map((column) => normaliseHeader(column.key)),
+      rows: [
+        {
+          line: 2,
+          values: Object.fromEntries(
+            QUESTION_IMPORT_COLUMNS.map((column) => [
+              normaliseHeader(column.key),
+              row[column.key] ?? '',
+            ]),
+          ),
+        },
+      ],
+    });
+
+    const result = planQuestionImport(legacy(MCQ_ROW), catalog(), noDedup());
+
+    assert.deepEqual(result.fileErrors, []);
+    assert.deepEqual(result.rows[0]?.issues, []);
   });
 });

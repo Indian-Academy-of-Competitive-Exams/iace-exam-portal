@@ -72,8 +72,8 @@ describe('the question import template', () => {
     });
 
     assert.equal(table.rows.length, 2);
-    assert.ok(table.headers.includes('stemen'));
-    assert.match(String(table.rows[0]?.values.stemen), /20% of 150/);
+    assert.ok(table.headers.includes('question(english)'));
+    assert.match(String(table.rows[0]?.values['question(english)']), /20% of 150/);
   });
 
   it('names a topic range per subject, so a repeated topic cannot collide', async () => {
