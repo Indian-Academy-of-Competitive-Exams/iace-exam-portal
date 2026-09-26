@@ -24,7 +24,8 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable, normaliseHeader } from '../common/importing';
-import { htmlFromPlainText } from './question-content';
+import { htmlWithPictures } from './question-content';
+import { importedImageKey, judgeQuestionImage, type CheckedImage } from './question-images';
 import { computeStemHash, languagesIn, validateQuestion } from './question-core';
 import { lookupName, topicKey, type TaxonomyCatalog } from './taxonomy-context';
 
@@ -46,6 +47,8 @@ export interface PlannedRow extends QuestionImportRow {
   stemHash: string | null;
   /** As the schema parsed it, which is what the bank would be asked about. */
   questionCode: string | null;
+  /** By storage key: what a commit uploads before it writes the question that shows them. */
+  pictures: Map<string, CheckedImage>;
 }
 
 /** A first pass has nothing to compare against: it runs to harvest the keys the bank is asked for. */
@@ -67,6 +70,13 @@ const ALIASES_BY_KEY = new Map<string, readonly string[]>(
   QUESTION_IMPORT_COLUMNS.map((column) => [column.key, column.aliases as readonly string[]]),
 );
 
+const LABEL_BY_KEY = new Map<string, string>(
+  QUESTION_IMPORT_COLUMNS.map((column) => [column.key, column.header]),
+);
+
+/** What a candidate reads may carry a picture; a subject, a code or a typed answer is only ever text. */
+const TAKES_PICTURES = /^(stem|option\d|solution)_/;
+
 /** A cell, by column key, accepting any alias the sheet happens to use. */
 export function cellOf(row: CsvRow, key: string): string {
   const header = HEADER_BY_KEY.get(key);
@@ -77,6 +87,63 @@ export function cellOf(row: CsvRow, key: string): string {
     if (value !== undefined) return value.trim();
   }
   return '';
+}
+
+/** The pictures floating over a cell, found under the same header or alias as its text. */
+function picturesAt(row: CsvRow, key: string): Buffer[] {
+  if (!row.pictures) return [];
+  const header = HEADER_BY_KEY.get(key);
+  const found = header ? row.pictures[header] : undefined;
+  if (found) return found;
+  for (const alias of ALIASES_BY_KEY.get(key) ?? []) {
+    const aliased = row.pictures[alias];
+    if (aliased) return aliased;
+  }
+  return [];
+}
+
+/** One row's readable cells as html, collecting the pictures each places and reporting any it cannot. */
+interface RowContent {
+  html: (key: string) => string;
+  pictures: Map<string, CheckedImage>;
+}
+
+function rowContent(row: CsvRow, issues: ValidationIssue[]): RowContent {
+  const pictures = new Map<string, CheckedImage>();
+
+  for (const column of QUESTION_IMPORT_COLUMNS) {
+    if (TAKES_PICTURES.test(column.key) || picturesAt(row, column.key).length === 0) continue;
+    issues.push(
+      pictureIssue(column.key, `A picture sits over ${column.header}, which only takes text`),
+    );
+  }
+
+  const html = (key: string): string => {
+    const keys: string[] = [];
+    for (const [index, bytes] of picturesAt(row, key).entries()) {
+      const judged = judgeQuestionImage(bytes);
+      if ('problem' in judged) {
+        issues.push(
+          pictureIssue(
+            key,
+            `Picture ${index + 1} over ${LABEL_BY_KEY.get(key)}: ${judged.problem}`,
+          ),
+        );
+        continue;
+      }
+      const stored = importedImageKey(judged);
+      pictures.set(stored, judged);
+      keys.push(stored);
+    }
+    return htmlWithPictures(cellOf(row, key), keys);
+  };
+
+  return { html, pictures };
+}
+
+/** Keyed by column, so two bad pictures in two cells are two lines of the preview, not one. */
+function pictureIssue(column: string, message: string): ValidationIssue {
+  return { code: CODE.PICTURE_INVALID, message, field: `picture:${column}`, column };
 }
 
 const blank = (value: string) => value.trim() === '';
@@ -150,7 +217,8 @@ function planRow(
   const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
 
   const type = readType(row, issues);
-  const draft = buildDraft(row, type, names, catalog, issues);
+  const content = rowContent(row, issues);
+  const draft = buildDraft(row, content, type, names, catalog, issues);
 
   // The core rules run on every row, whatever the sheet got wrong: an admin fixing one column should see the rest of that row's problems in the same pass.
   issues.push(...validateQuestion(draft, catalog.context));
@@ -193,6 +261,7 @@ function planRow(
     draft: action === 'create' ? draft : null,
     stemHash,
     questionCode: code ?? null,
+    pictures: action === 'create' ? content.pictures : new Map(),
   };
 }
 
@@ -233,6 +302,7 @@ function readType(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['type']
 
 function buildDraft(
   row: CsvRow,
+  content: RowContent,
   type: QuestionDraft['type'],
   names: { subject: string; topic: string },
   catalog: TaxonomyCatalog,
@@ -246,9 +316,9 @@ function buildDraft(
     topicId: ids.topicId,
     difficulty: readDifficulty(row, issues),
     questionCode: readCode(row, issues),
-    stem: localized(row, 'stem', htmlFromPlainText),
-    solution: localized(row, 'solution', htmlFromPlainText),
-    options: type === QUESTION_TYPE.SINGLE_MCQ ? readOptions(row, issues) : [],
+    stem: localized('stem', content.html),
+    solution: localized('solution', content.html),
+    options: type === QUESTION_TYPE.SINGLE_MCQ ? readOptions(row, content, issues) : [],
     answerKey: type === QUESTION_TYPE.TEXT_FIELD ? readAnswerKey(row, issues) : null,
     tags: readTags(row, issues),
   };
@@ -329,30 +399,26 @@ function readCode(row: CsvRow, issues: ValidationIssue[]): string | null {
   return null;
 }
 
-/** One field across every language, through `as` — a cell is text, so html is escaped into it. */
-function localized(
-  row: CsvRow,
-  field: string,
-  as: (value: string) => string = (value) => value,
-): LocalizedText {
+/** One field across every language, each cell read through `read`. */
+function localized(field: string, read: (key: string) => string): LocalizedText {
   const values: LocalizedText = {};
   for (const language of LANGUAGE_ORDER) {
-    const value = cellOf(row, `${field}_${language}`);
-    if (!blank(value)) values[language] = as(value);
+    const value = read(`${field}_${language}`);
+    if (!blank(value)) values[language] = value;
   }
   return values;
 }
 
-function readOptions(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['options'] {
+function readOptions(
+  row: CsvRow,
+  content: RowContent,
+  issues: ValidationIssue[],
+): QuestionDraft['options'] {
   const correct = readCorrectOption(row, issues);
 
   const options: QuestionDraft['options'] = [];
   for (let position = 1; position <= MCQ_OPTION_COUNT; position += 1) {
-    const text: LocalizedText = {};
-    for (const language of LANGUAGE_ORDER) {
-      const value = cellOf(row, `option${position}_${language}`);
-      if (!blank(value)) text[language] = htmlFromPlainText(value);
-    }
+    const text = localized(`option${position}`, content.html);
 
     // An empty slot is not an option: reporting "option 4 has no text" for a row that only ever had three is less use than "this needs four options".
     if (Object.keys(text).length === 0) continue;
@@ -379,7 +445,7 @@ function readCorrectOption(row: CsvRow, issues: ValidationIssue[]): number | nul
 }
 
 function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['answerKey'] {
-  const answers = localized(row, 'answer');
+  const answers = localized('answer', (key) => cellOf(row, key));
   const rawMode = cellOf(row, 'answer_mode');
   const rawTolerance = cellOf(row, 'answer_tolerance');
 
@@ -476,7 +542,9 @@ export function withoutDrafts(
 ): QuestionImportPlan {
   return {
     importLogId,
-    rows: planning.rows.map(({ draft: _draft, stemHash: _stemHash, ...row }) => row),
+    rows: planning.rows.map(
+      ({ draft: _draft, stemHash: _stemHash, pictures: _pictures, ...row }) => row,
+    ),
     summary: planning.summary,
     fileErrors: planning.fileErrors,
   };

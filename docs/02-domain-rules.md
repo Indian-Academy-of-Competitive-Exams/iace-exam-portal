@@ -394,8 +394,15 @@ letter-based answer key are why real uploads were rejected wholesale.
 - The correct answer is an option **index**, converted to a stable option id on ingest, so a later
   shuffle or edit never breaks the key.
 - Every cell is plain text and arrives exactly as typed, so `x < 5` and `A & B` are safe. Formatting,
-  tables, images and equations are **not** read from a sheet — a tag typed into a cell shows as the
+  tables and typed equations are **not** read from a sheet — a tag typed into a cell shows as the
   tag. Rich content is added by opening the question in the bank afterwards.
+- **Pictures are.** A picture floating over a question, option or solution cell (its top-left corner
+  in that cell — how ThinkExam exports its figures and formula images) is imported into that field;
+  over any other column it is an error. Where the text leaves exactly one gap of three spaces per
+  picture they fill the gaps in order, otherwise they follow the text — an anchor carries no
+  position within the cell, so a picture is never put in a gap it only might belong to. They are
+  keyed by a hash of their bytes, so a re-upload still matches its own questions as duplicates, and
+  uploaded only on commit. The rejected-rows download cannot carry them, and says so on those rows.
 - **Nothing is created by an import.** A subject or topic matching nothing in the bank is reported
   against its line, never quietly invented; the dropdowns cascade, so the topics offered on a row are
   the ones under that row's subject.
@@ -410,8 +417,8 @@ letter-based answer key are why real uploads were rejected wholesale.
 - Every imported question carries the `imported` tag, so one filter finds what an upload brought in.
 - An upload is bounded so it stays a single synchronous request.
 
-Two intake paths, and they are not interchangeable: this sheet for bulk text MCQs, and the rich
-manual editor for anything carrying an image or an equation.
+Two intake paths: this sheet for bulk MCQs, pictures included, and the rich manual editor for
+typed equations, tables and for placing a picture the sheet could only put after the text.
 
 ## 13. A worked blueprint — SSC CGL Tier 1
 

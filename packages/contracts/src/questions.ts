@@ -411,6 +411,8 @@ export const QUESTION_VALIDATION_CODE = {
   TAG_INVALID: 'TAG_INVALID',
   QUESTION_CODE_INVALID: 'QUESTION_CODE_INVALID',
   QUESTION_CODE_TAKEN: 'QUESTION_CODE_TAKEN',
+  /** A picture placed over a sheet cell that is not an image we can store, or over a cell that takes none. */
+  PICTURE_INVALID: 'PICTURE_INVALID',
   /** The same stem appears earlier in this very file. */
   DUPLICATE_IN_FILE: 'DUPLICATE_IN_FILE',
   /** The same stem is already in the bank. */

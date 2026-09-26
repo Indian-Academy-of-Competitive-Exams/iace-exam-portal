@@ -37,6 +37,7 @@ import { StorageService } from '../storage/storage.service';
 import {
   applyImageUrls,
   checkQuestionImage,
+  IMMUTABLE_CACHE_CONTROL,
   imageKeysIn,
   questionImageKey,
   type UploadedImage,
@@ -110,9 +111,6 @@ export const AUDITED_QUESTION_FIELDS = [
   'correctOptionPositions',
   'answerKey',
 ] as const;
-
-/** A key is a fresh uuid per upload, so the bytes behind one never change. */
-const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 /** What a caller may relax. The bank refuses a duplicate; the authoring editor reports it. */
 export interface WriteOptions {

@@ -94,6 +94,8 @@ export interface CsvRow {
   /** 1-based line in the original file, exactly as an editor shows it. */
   line: number;
   values: Record<string, string>;
+  /** Pictures a workbook floats over this row, by normalised header, in the order they were placed. */
+  pictures?: Record<string, Buffer[]>;
 }
 
 export interface CsvTable {

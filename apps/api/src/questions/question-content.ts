@@ -71,6 +71,25 @@ export function htmlFromPlainText(text: string): string {
     .join('');
 }
 
+/** Three spaces or more: what an exporter leaves where it lifted an inline picture out of the text. */
+const PICTURE_GAP = / {3,}/g;
+const GAP_MARK = '\u{E000}';
+
+/** Pictures fill the gaps only when there is exactly one per picture; otherwise a guess, so they follow the text. */
+export function htmlWithPictures(text: string, keys: readonly string[]): string {
+  const tags = keys.map((key) => `<img data-key="${key}" alt="">`);
+  if (tags.length === 0) return htmlFromPlainText(text);
+
+  if ((text.match(PICTURE_GAP) ?? []).length === tags.length) {
+    let next = 0;
+    return htmlFromPlainText(text.replaceAll(PICTURE_GAP, ` ${GAP_MARK}`)).replaceAll(
+      GAP_MARK,
+      () => tags[next++] ?? '',
+    );
+  }
+  return htmlFromPlainText(text) + tags.map((tag) => `<p>${tag}</p>`).join('');
+}
+
 /** Whether ONE div wraps the whole thing — `<div>a</div><p>b</p>` opens on one but is two roots. */
 function isSingleDivRoot(html: string): boolean {
   const tags = [...html.matchAll(DIV_TAG)];

@@ -33,7 +33,11 @@ import {
   type QuestionImportPlanning,
 } from './question-import';
 import { buildQuestionTemplate } from './question-workbook';
+import { IMMUTABLE_CACHE_CONTROL } from './question-images';
 import { loadTaxonomyCatalog } from './taxonomy-context';
+
+const PICTURES_NOT_CARRIED =
+  'This row had pictures, which this download does not carry. Fix the row in your original sheet.';
 
 /** A sheet of questions, in two steps that share one plan: the file is uploaded ONCE, the preview stores it and opens an import run, and the commit names that run and re-reads and re-plans the stored file rather than trusting a plan the client hands back or sending the same megabytes again — a client that can send a plan can send any plan, and the bank may have gained the same question in between. */
 @Injectable()
@@ -78,9 +82,18 @@ export class QuestionImportService {
     const table = await readQuestionTable(file);
     const planning = await this.planTable(table);
     refuseFileErrors(planning.fileErrors);
+    const pictured = new Set(table.rows.flatMap((row) => (row.pictures ? [row.line] : [])));
     return rowsWithErrors(
       table,
-      new Map(planning.rows.map((row) => [row.line, row.issues.map((issue) => issue.message)])),
+      new Map(
+        planning.rows.map((row) => [
+          row.line,
+          [
+            ...row.issues.map((issue) => issue.message),
+            ...(row.issues.length > 0 && pictured.has(row.line) ? [PICTURES_NOT_CARRIED] : []),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -123,6 +136,8 @@ export class QuestionImportService {
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
         row.action === 'create' && row.draft !== null,
     );
+
+    await this.storePictures(creatable);
 
     // Interactive, not an array of promises: every question is three statements — the row, its first version, and the pointer between them — and all of them share one transaction.
     const created = await this.prisma.$transaction(async (tx) => {
@@ -176,6 +191,14 @@ export class QuestionImportService {
     });
 
     return result;
+  }
+
+  /** Before the questions: a row must never show a picture that is not there yet. Keyed by content, so a retry rewrites the same objects. */
+  private async storePictures(rows: readonly PlannedRow[]): Promise<void> {
+    const pictures = new Map(rows.flatMap((row) => [...row.pictures]));
+    for (const [key, image] of pictures) {
+      await this.storage.upload(key, image.buffer, image.contentType, IMMUTABLE_CACHE_CONTROL);
+    }
   }
 
   /** Read, resolve, judge — the one path a preview and a commit both take. */

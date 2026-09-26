@@ -10,6 +10,7 @@ import {
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type CsvTable, normaliseHeader } from '../src/common/importing';
+import { htmlWithPictures } from '../src/questions/question-content';
 import { computeStemHash, emptyTaxonomy } from '../src/questions/question-core';
 import {
   planQuestionImport,
@@ -405,5 +406,83 @@ describe('the question sheet — the file itself', () => {
 
     assert.deepEqual(result.fileErrors, []);
     assert.deepEqual(result.rows[0]?.issues, []);
+  });
+});
+
+/** A 1×1 PNG: the smallest bytes the image sniffer accepts. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+const headerOf = (key: QuestionImportColumnKey): string =>
+  normaliseHeader(QUESTION_IMPORT_COLUMNS.find((column) => column.key === key)?.header ?? key);
+
+function planWithPictures(
+  row: Partial<Record<QuestionImportColumnKey, string>>,
+  pictures: Partial<Record<QuestionImportColumnKey, Buffer[]>>,
+): QuestionImportPlanning {
+  const sheet = table(row);
+  const [only] = sheet.rows;
+  if (only) {
+    only.pictures = Object.fromEntries(
+      Object.entries(pictures).map(([key, bytes]) => [
+        headerOf(key as QuestionImportColumnKey),
+        bytes,
+      ]),
+    );
+  }
+  return planQuestionImport(sheet, catalog(), noDedup());
+}
+
+describe('htmlWithPictures', () => {
+  it('drops the pictures into the gaps when there is one gap per picture', () => {
+    assert.equal(
+      htmlWithPictures('If   , find   .', ['a.png', 'b.png']),
+      '<p>If <img data-key="a.png" alt="">, find <img data-key="b.png" alt="">.</p>',
+    );
+  });
+
+  /** The failure this prevents: a picture landing in a gap it was never lifted out of. */
+  it('puts the pictures after the text when the gaps do not match them one for one', () => {
+    assert.equal(
+      htmlWithPictures('If   , then what is   ?', ['a.png']),
+      '<p>If   , then what is   ?</p><p><img data-key="a.png" alt=""></p>',
+    );
+  });
+
+  it('leaves a cell without pictures exactly as before, gaps and all', () => {
+    assert.equal(htmlWithPictures('a   b', []), '<p>a   b</p>');
+  });
+});
+
+describe('planQuestionImport — pictures placed over the sheet', () => {
+  it('takes an option that is only a picture, keyed by its bytes', () => {
+    const planned = planWithPictures({ ...MCQ_ROW, option2_en: '' }, { option2_en: [PNG] });
+    const row = planned.rows[0];
+
+    assert.deepEqual(row?.issues, []);
+    const [key] = [...(row?.pictures.keys() ?? [])];
+    assert.match(key ?? '', /^questions\/images\/[0-9a-f]{32}\.png$/);
+    assert.match(row?.draft?.options[1]?.text.en ?? '', new RegExp(`data-key="${key}"`));
+  });
+
+  it('refuses bytes that are not an image, naming the cell', () => {
+    const planned = planWithPictures(MCQ_ROW, { stem_en: [Buffer.from('not a picture')] });
+    const issue = planned.rows[0]?.issues.find(
+      (row) => row.code === QUESTION_VALIDATION_CODE.PICTURE_INVALID,
+    );
+
+    assert.equal(planned.rows[0]?.action, 'skip');
+    assert.match(issue?.message ?? '', /Question \(English\)/);
+  });
+
+  it('refuses a picture over a column that only takes text', () => {
+    const planned = planWithPictures(MCQ_ROW, { subject: [PNG] });
+
+    assert.deepEqual(
+      planned.rows[0]?.issues.map((issue) => issue.code),
+      [QUESTION_VALIDATION_CODE.PICTURE_INVALID],
+    );
   });
 });

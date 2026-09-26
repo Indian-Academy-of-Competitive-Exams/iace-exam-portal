@@ -134,20 +134,34 @@ async function readWorkbookTable(buffer: Buffer, options: ReadSheetOptions): Pro
   });
   for (let i = 0; i < headers.length; i += 1) headers[i] ??= '';
 
+  const floating = picturesByCell(workbook, sheet);
   const rows: CsvTable['rows'] = [];
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return;
 
     const values: Record<string, string> = {};
+    const pictures: Record<string, Buffer[]> = {};
     headers.forEach((header, index) => {
-      if (header) values[header] = cellText(row.getCell(index + 1)).trim();
+      if (!header) return;
+      values[header] = cellText(row.getCell(index + 1)).trim();
+      const placed = floating.get(cellKey(rowNumber, index + 1));
+      if (placed) pictures[header] = placed;
     });
 
     // A row of nothing is what trailing formatting leaves behind; reporting it as an error would mean every real file arrived with errors.
-    if (Object.values(values).every((value) => value === '')) return;
+    if (
+      Object.values(values).every((value) => value === '') &&
+      Object.keys(pictures).length === 0
+    ) {
+      return;
+    }
 
     // The sheet's own row number, so an error says the line the admin is looking at in Excel rather than a count of the rows that survived.
-    rows.push({ line: rowNumber, values });
+    rows.push({
+      line: rowNumber,
+      values,
+      ...(Object.keys(pictures).length > 0 ? { pictures } : {}),
+    });
   });
 
   const kept = headers.flatMap((header, index) => (header ? [index] : []));
@@ -159,6 +173,23 @@ async function readWorkbookTable(buffer: Buffer, options: ReadSheetOptions): Pro
 }
 
 /** A cell as the admin sees it. */
+const cellKey = (row: number, column: number): string => `${row}:${column}`;
+
+/** A floating picture belongs to the cell its top-left corner sits in; the drawing's order is the only order it has. */
+function picturesByCell(
+  workbook: ExcelJS.Workbook,
+  sheet: ExcelJS.Worksheet,
+): Map<string, Buffer[]> {
+  const byCell = new Map<string, Buffer[]>();
+  for (const { imageId, range } of sheet.getImages()) {
+    const bytes = workbook.getImage(Number(imageId)).buffer;
+    if (!bytes) continue;
+    const cell = cellKey(range.tl.nativeRow + 1, range.tl.nativeCol + 1);
+    byCell.set(cell, [...(byCell.get(cell) ?? []), Buffer.from(bytes)]);
+  }
+  return byCell;
+}
+
 function cellText(cell: ExcelJS.Cell): string {
   const value: unknown = cell.value;
 

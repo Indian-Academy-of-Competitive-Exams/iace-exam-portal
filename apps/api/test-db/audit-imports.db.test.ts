@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
+import ExcelJS from 'exceljs';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
@@ -394,5 +395,70 @@ describe('QuestionImportService.commit — the status the rows land in', () => {
       statuses.map((row) => row.status),
       [QUESTION_STATUS.ACTIVE, QUESTION_STATUS.ACTIVE],
     );
+  });
+});
+
+/** A 1×1 PNG: the smallest bytes the image sniffer accepts. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/** One question whose second option is only a picture, floated over that cell as an exporter leaves it. */
+async function pictureSheet(): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Questions');
+  const row = { ...QUESTION_ROW, stem_en: 'Which figure comes next?', option2_en: '' };
+  sheet.addRow(QUESTION_IMPORT_COLUMNS.map((column) => column.header));
+  sheet.addRow(
+    QUESTION_IMPORT_COLUMNS.map((column) => row[column.key as QuestionImportColumnKey] ?? ''),
+  );
+  const option2 = QUESTION_IMPORT_COLUMNS.findIndex((column) => column.key === 'option2_en');
+  const image = workbook.addImage({ buffer: PNG as never, extension: 'png' });
+  sheet.addImage(image, { tl: { col: option2, row: 1 }, ext: { width: 20, height: 20 } });
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+describe('QuestionImportService — pictures placed over the sheet', () => {
+  const picturesIn = (storage: FakeStorage) =>
+    [...storage.objects.keys()].filter((key) => key.startsWith('questions/images/'));
+
+  it('stores the picture on commit, never on preview, and the question points at it', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const storage = new FakeStorage();
+    const service = new QuestionImportService(
+      prisma,
+      storage as never,
+      new AuditService(prisma, new FakeStorage() as never),
+    );
+
+    const plan = await service.preview(await pictureSheet(), ADMIN);
+    assert.equal(plan.summary.willCreate, 1);
+    assert.deepEqual(picturesIn(storage), [], 'a preview stores the sheet, not its pictures');
+
+    assert.equal((await service.commit(plan.importLogId)).created, 1);
+    const [stored] = picturesIn(storage);
+    const version = await prisma.questionVersion.findFirstOrThrow();
+    assert.ok(stored && JSON.stringify(version.options).includes(stored));
+  });
+
+  /** The failure this prevents: every re-upload of a sheet with pictures writing its questions again. */
+  it('recognises the same sheet uploaded again as duplicates', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const service = new QuestionImportService(
+      prisma,
+      new FakeStorage() as never,
+      new AuditService(prisma, new FakeStorage() as never),
+    );
+    const run = async () => {
+      const plan = await service.preview(await pictureSheet(), ADMIN);
+      return service.commit(plan.importLogId);
+    };
+    assert.equal((await run()).created, 1);
+
+    const again = await run();
+
+    assert.equal(again.created, 0);
+    assert.equal(await prisma.question.count(), 1);
   });
 });
