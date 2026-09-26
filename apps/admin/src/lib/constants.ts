@@ -244,6 +244,8 @@ export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
   FEATURE_PERMISSION: 'Feature permission',
   PROGRAM: 'Program',
   EVENT: 'Event',
+  ANNOUNCEMENT: 'Announcement',
+  AUDIT_LOG: 'Audit log',
 };
 
 /** What an audit row's `action` is called on screen. */
@@ -256,6 +258,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<AuditAction, string>> = {
   BLOCK: 'Blocked',
   UNBLOCK: 'Unblocked',
   IMPORT: 'Imported',
+  EXPORT: 'Exported',
 };
 
 /** What an audit row's `actorType` is called on screen — the fallback when there is no `actorName`. */

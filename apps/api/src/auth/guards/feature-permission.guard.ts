@@ -4,6 +4,8 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   satisfiesLevel,
   type FeatureKey,
 } from '@iace/contracts';
@@ -41,11 +43,18 @@ export class FeaturePermissionGuard implements CanActivate {
     const keys: readonly FeatureKey[] = Array.isArray(required.key)
       ? required.key
       : [required.key as FeatureKey];
-    if (keys.some((key) => satisfiesLevel(user.permissions[key], required.level))) return true;
-
-    throw new AppException(
-      ErrorCodes.FORBIDDEN,
-      `You do not have ${required.level} access to ${keys.join(' or ')}`,
-    );
+    if (!keys.some((key) => satisfiesLevel(user.permissions[key], required.level))) {
+      throw new AppException(
+        ErrorCodes.FORBIDDEN,
+        `You do not have ${required.level} access to ${keys.join(' or ')}`,
+      );
+    }
+    if (
+      required.export &&
+      !satisfiesLevel(user.permissions[FEATURE_KEYS.DATA_EXPORT], PERMISSION_LEVELS.READ)
+    ) {
+      throw new AppException(ErrorCodes.FORBIDDEN, 'You do not have access to exports');
+    }
+    return true;
   }
 }

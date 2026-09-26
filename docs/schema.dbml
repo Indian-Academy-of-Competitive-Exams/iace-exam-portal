@@ -205,6 +205,8 @@ Enum AuditFeature {
   FEATURE_PERMISSION
   PROGRAM
   EVENT
+  ANNOUNCEMENT
+  AUDIT_LOG
 }
 
 Enum AuditAction {
@@ -216,6 +218,7 @@ Enum AuditAction {
   BLOCK
   UNBLOCK
   IMPORT
+  EXPORT
 }
 
 Enum ActorType {
@@ -384,6 +387,7 @@ Table Question {
     (assignmentId)
     (tags)
     (questionCode)
+    (status)
   }
 }
 

@@ -25,6 +25,7 @@ export const ErrorCodes = {
   PIN_INVALID: 'PIN_INVALID',
   ADMIN_NOT_REGISTERED: 'ADMIN_NOT_REGISTERED',
   DRAW_SHORTFALL: 'DRAW_SHORTFALL',
+  EXPORT_TOO_LARGE: 'EXPORT_TOO_LARGE',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -53,6 +54,7 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.PIN_LOCKED]: 429,
   // The request was fine; the bank simply does not hold enough to build the paper it asked for.
   [ErrorCodes.DRAW_SHORTFALL]: 422,
+  [ErrorCodes.EXPORT_TOO_LARGE]: 422,
   // A dependency is down, not the request: 503 is what tells a load balancer to send this elsewhere.
   [ErrorCodes.SERVICE_UNAVAILABLE]: 503,
   [ErrorCodes.INTERNAL]: 500,
@@ -77,6 +79,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
     'That email has no admin account. Ask a super admin to create one for you.',
   [ErrorCodes.DRAW_SHORTFALL]:
     'The question bank does not hold enough questions to fill every section of this paper.',
+  [ErrorCodes.EXPORT_TOO_LARGE]:
+    'That is too many rows for one file. Narrow the filters and try again.',
   [ErrorCodes.SERVICE_UNAVAILABLE]: 'The service is not ready. Please try again in a moment.',
   [ErrorCodes.INTERNAL]: 'Something went wrong. Please try again.',
 };

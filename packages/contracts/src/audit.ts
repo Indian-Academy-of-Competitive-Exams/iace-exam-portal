@@ -30,6 +30,8 @@ export const AUDIT_FEATURE = {
   FEATURE_PERMISSION: 'FEATURE_PERMISSION',
   PROGRAM: 'PROGRAM',
   EVENT: 'EVENT',
+  ANNOUNCEMENT: 'ANNOUNCEMENT',
+  AUDIT_LOG: 'AUDIT_LOG',
 } as const;
 export const auditFeatureSchema = z.enum(AUDIT_FEATURE);
 export type AuditFeature = z.infer<typeof auditFeatureSchema>;
@@ -43,6 +45,7 @@ export const AUDIT_ACTION = {
   BLOCK: 'BLOCK',
   UNBLOCK: 'UNBLOCK',
   IMPORT: 'IMPORT',
+  EXPORT: 'EXPORT',
 } as const;
 export const auditActionSchema = z.enum(AUDIT_ACTION);
 export type AuditAction = z.infer<typeof auditActionSchema>;

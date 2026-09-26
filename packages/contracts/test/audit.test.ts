@@ -130,6 +130,8 @@ describe('audit vocabulary', () => {
       'FEATURE_PERMISSION',
       'PROGRAM',
       'EVENT',
+      'ANNOUNCEMENT',
+      'AUDIT_LOG',
     ]);
     assert.deepEqual(Object.keys(AUDIT_ACTION), [
       'CREATE',
@@ -140,6 +142,7 @@ describe('audit vocabulary', () => {
       'BLOCK',
       'UNBLOCK',
       'IMPORT',
+      'EXPORT',
     ]);
   });
 

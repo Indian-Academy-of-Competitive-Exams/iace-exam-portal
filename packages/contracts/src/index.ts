@@ -18,6 +18,7 @@ export * from './stats';
 export * from './leaderboard';
 export * from './live-ops';
 export * from './imports';
+export * from './exports';
 export * from './questions';
 export * from './question-rules';
 export * from './authoring';

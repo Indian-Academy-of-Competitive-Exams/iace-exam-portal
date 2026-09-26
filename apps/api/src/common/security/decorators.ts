@@ -2,6 +2,8 @@ import { createParamDecorator, SetMetadata, type ExecutionContext } from '@nestj
 import {
   AppException,
   ErrorCodes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   type ActorType,
   type FeatureKey,
   type PermissionLevel,
@@ -25,6 +27,7 @@ export const Actors = (...actors: ActorType[]) => SetMetadata(ACTORS_KEY, actors
 export interface RequiredFeature {
   key: FeatureKey | readonly FeatureKey[];
   level: PermissionLevel;
+  export?: true;
 }
 
 /** Require a feature permission at a level. Super admins bypass the check. */
@@ -34,6 +37,15 @@ export const RequiresFeature = (key: FeatureKey, level: PermissionLevel) =>
 /** Any ONE of these, for a read two features need — a duplicate endpoint is one that can drift. */
 export const RequiresAnyFeature = (keys: readonly FeatureKey[], level: PermissionLevel) =>
   SetMetadata(REQUIRED_FEATURE_KEY, { key: keys, level } satisfies RequiredFeature);
+
+/** A download: the owning feature's READ and DATA_EXPORT READ, one decorator because a second `RequiresFeature` would overwrite the first. */
+export const RequiresExport = (key?: FeatureKey) =>
+  SetMetadata(
+    REQUIRED_FEATURE_KEY,
+    (key
+      ? { key, level: PERMISSION_LEVELS.READ, export: true }
+      : { key: FEATURE_KEYS.DATA_EXPORT, level: PERMISSION_LEVELS.READ }) satisfies RequiredFeature,
+  );
 
 /** Restrict a route to super admins, above and beyond any page permission. */
 export const RequiresSuperAdmin = () => SetMetadata(SUPER_ADMIN_KEY, true);

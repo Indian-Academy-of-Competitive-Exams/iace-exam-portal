@@ -7,6 +7,7 @@ export {
   Public,
   REQUIRED_FEATURE_KEY,
   RequiresAnyFeature,
+  RequiresExport,
   RequiresFeature,
   RequiresSuperAdmin,
   SUPER_ADMIN_KEY,

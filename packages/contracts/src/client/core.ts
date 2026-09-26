@@ -229,8 +229,9 @@ export function createApiCore(options: ApiClientOptions) {
   }
 
   /** A binary download, authenticated and refresh-aware; it cannot go through `parse` since reading the body as text would corrupt the file, but a FAILURE is still an envelope. */
-  async function requestBlob(path: string): Promise<Blob> {
-    let response = await send(path, 'GET', undefined, getAccessToken());
+  async function requestBlob(path: string, query: Record<string, unknown> = {}): Promise<Blob> {
+    const url = `${path}${queryString(query)}`;
+    let response = await send(url, 'GET', undefined, getAccessToken());
 
     if (response.status === 401) {
       const refreshed = await refreshTokens();
@@ -238,7 +239,7 @@ export function createApiCore(options: ApiClientOptions) {
         if (sessionIsOver()) onUnauthorized?.();
         throw endedBy(refreshFailure, await peekFailure(response));
       }
-      response = await send(path, 'GET', undefined, refreshed.accessToken);
+      response = await send(url, 'GET', undefined, refreshed.accessToken);
     }
 
     if (!response.ok) {

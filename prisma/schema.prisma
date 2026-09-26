@@ -244,6 +244,8 @@ enum AuditFeature {
   FEATURE_PERMISSION
   PROGRAM
   EVENT
+  ANNOUNCEMENT
+  AUDIT_LOG
 }
 
 enum AuditAction {
@@ -255,6 +257,7 @@ enum AuditAction {
   BLOCK
   UNBLOCK
   IMPORT
+  EXPORT
 }
 
 enum ActorType {

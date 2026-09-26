@@ -23,4 +23,5 @@ export const ACTION_BADGE_VARIANT: Readonly<
   BLOCK: 'danger',
   UNBLOCK: 'success',
   IMPORT: 'info',
+  EXPORT: 'info',
 };
