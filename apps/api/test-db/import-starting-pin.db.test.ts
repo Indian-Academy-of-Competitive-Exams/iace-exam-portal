@@ -13,6 +13,7 @@ import {
   fakeStartingPins,
   roster,
 } from '../test/support/fakes';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
 const prisma = testPrisma();
@@ -25,9 +26,12 @@ beforeEach(async () => {
 after(() => prisma.$disconnect());
 
 /** The real minting, over a hash that records the plaintext it was given. */
-const importer = (sender: MessageSender = new FakeMessageSender()) =>
+const importer = (
+  sender: MessageSender = new FakeMessageSender(),
+  wrap: (client: PrismaService) => PrismaService = (client) => client,
+) =>
   new ImportsService(
-    prisma,
+    wrap(prisma),
     fakeStartingPins(sender, (pin) => Promise.resolve(`hashed:${pin}`)),
     new FakeStorage() as never,
     new AuditService(prisma, new FakeStorage() as never),
@@ -98,3 +102,58 @@ describe('the PIN a roster import issues', () => {
     assert.equal(await prisma.student.count(), 1);
   });
 });
+
+describe('the enrolment a program import writes', () => {
+  const PROGRAM = 'SSC FOUNDATION';
+  const enrolmentSheet = (...mobiles: string[]) =>
+    Buffer.from(['mobile,full_name', ...mobiles.map((m) => `${m},Someone`)].join('\n'));
+
+  /** One statement for the whole sheet, so what it wrote is what the run reports. */
+  it('adds the code to every student the sheet names', async () => {
+    await makeStudent(prisma, { mobile: '9000000001' });
+    await makeStudent(prisma, { mobile: '9000000002' });
+
+    const result = await importer().commitProgramStudents(
+      PROGRAM,
+      enrolmentSheet('9000000001', '9000000002'),
+      ADMIN,
+    );
+
+    assert.equal(result.enrolled, 2);
+    assert.deepEqual(
+      (
+        await prisma.student.findMany({ orderBy: { mobile: 'asc' }, select: { programs: true } })
+      ).map((row) => row.programs),
+      [[PROGRAM], [PROGRAM]],
+    );
+  });
+
+  /** The failure this prevents: a stale preview left the student holding the code twice. */
+  it('leaves a student enrolled since the preview holding the code once', async () => {
+    const student = await makeStudent(prisma, { mobile: '9000000001' });
+
+    const result = await importer(new FakeMessageSender(), (client) =>
+      enrollingFirst(client, student.id, PROGRAM),
+    ).commitProgramStudents(PROGRAM, enrolmentSheet('9000000001'), ADMIN);
+
+    const [held] = await prisma.student.findMany({ select: { programs: true } });
+    assert.deepEqual(held?.programs, [PROGRAM], 'once, not twice');
+    assert.equal(result.enrolled, 0, 'nothing was written, so nothing is reported as enrolled');
+  });
+});
+
+/** The real client, enrolling the student itself just before the import's own statement runs. */
+function enrollingFirst(client: PrismaService, studentId: string, code: string): PrismaService {
+  let armed = true;
+  return new Proxy(client, {
+    get(target, key) {
+      const held = Reflect.get(target, key) as unknown;
+      if (key !== '$queryRaw' || !armed) return held;
+      return async (...args: unknown[]) => {
+        armed = false;
+        await client.student.update({ where: { id: studentId }, data: { programs: [code] } });
+        return Reflect.apply(held as (...a: unknown[]) => Promise<unknown>, target, args);
+      };
+    },
+  });
+}

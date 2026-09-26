@@ -195,17 +195,22 @@ export class ImportsService {
     const plan = await this.planPrograms(code, file);
     const counts = { skipped: plan.summary.alreadyEnrolled, failed: plan.summary.invalid };
 
-    const run = await this.withRun(file, plan, actorId, counts, async (outcome) => {
-      for (const row of plan.rows) {
-        if (row.action !== 'enrol' || row.studentId === null) continue;
+    const enrolling = plan.rows.flatMap((row) =>
+      row.action === 'enrol' && row.studentId !== null ? [row.studentId] : [],
+    );
 
-        await this.prisma.student.update({
-          where: { id: row.studentId },
-          data: { programs: { push: code } },
-        });
-        outcome.counts.updated += 1;
-        outcome.rowActions.push({ entityId: row.studentId, action: AUDIT_ACTION.UPDATE });
-      }
+    const run = await this.withRun(file, plan, actorId, counts, async (outcome) => {
+      if (enrolling.length === 0) return;
+      // The guard is what `push` lacked: a student enrolled since the preview would hold the code twice.
+      const enrolled = await this.prisma.$queryRaw<{ id: string }[]>`
+        UPDATE "Student" SET "programs" = array_append("programs", ${code})
+        WHERE "id" = ANY(${enrolling}::uuid[]) AND NOT ("programs" @> ARRAY[${code}])
+        RETURNING "id"`;
+
+      outcome.counts.updated = enrolled.length;
+      outcome.rowActions.push(
+        ...enrolled.map((row) => ({ entityId: row.id, action: AUDIT_ACTION.UPDATE })),
+      );
     });
 
     return { ...plan.summary, enrolled: run.counts.updated, skipped: plan.summary.invalid };
