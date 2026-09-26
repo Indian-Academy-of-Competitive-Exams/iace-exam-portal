@@ -2,8 +2,7 @@ import * as React from 'react';
 import { Card } from './card';
 import { FilterRow, type FilterState, type ListFilter } from './list-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
-import { cn, FILLS } from '../../lib/utils';
-import { TOUR_ANCHORS } from '../../lib/utils';
+import { cn, FILLS, TOUR_ANCHORS } from '../../lib/utils';
 
 /** The app shell's content wrapper, here rather than in the shell so this and `data-page-frame` below cannot drift apart; unsupported `:has()` just scrolls. */
 export const PAGE_CONTENT_CLASS = [
