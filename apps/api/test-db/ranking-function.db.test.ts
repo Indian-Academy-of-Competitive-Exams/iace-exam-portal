@@ -84,16 +84,21 @@ describe('sitting_percentile', () => {
   });
 });
 
+/** A tie on a tiny table says nothing about which index answers the query the cohort read makes. */
+const SITTINGS_TO_SEPARATE_THE_INDEXES = 60;
+
 describe('Attempt_ranking_idx', () => {
   it('serves the cohort count of one test', async () => {
     const catalog = await makeCatalog(prisma);
     const test = await makeTest(prisma, catalog);
-    await makeSitting(prisma, {
-      testId: test.id,
-      studentId: (await makeStudent(prisma)).id,
-      score: 1,
-    });
-    // A small table's two indexes tie on cost until its pages are all-visible and one can scan index-only.
+    // Enough rows that this index wins on cost, not on a tie with every other partial over EVALUATED.
+    for (let at = 0; at < SITTINGS_TO_SEPARATE_THE_INDEXES; at += 1) {
+      await makeSitting(prisma, {
+        testId: test.id,
+        studentId: (await makeStudent(prisma)).id,
+        score: at,
+      });
+    }
     await prisma.$executeRaw`VACUUM ANALYZE "Attempt"`;
 
     const plan = await prisma.$transaction(async (tx) => {
