@@ -63,12 +63,22 @@ function answerKeyIn(key: Prisma.JsonValue): AnswerKey | null {
 }
 
 /** Papers held at once: a worker handles a handful of tests at a time, this only bounds a long-lived process. */
-const HELD_PAPERS = 64;
+export const HELD_PAPERS = 64;
 
+/** A hit re-inserts, which is what makes the eviction below least-RECENTLY-USED and not first-in. */
+export function recall<V>(held: Map<string, V>, key: string): V | undefined {
+  const value = held.get(key);
+  if (value === undefined) return undefined;
+  held.delete(key);
+  held.set(key, value);
+  return value;
+}
+
+/** A Map iterates in insertion order, so the first key is the one longest unread. */
 export function remember<V>(held: Map<string, V>, key: string, value: V): void {
-  if (held.size >= HELD_PAPERS) {
-    const oldest = held.keys().next();
-    if (!oldest.done) held.delete(oldest.value);
+  if (!held.delete(key) && held.size >= HELD_PAPERS) {
+    const coldest = held.keys().next();
+    if (!coldest.done) held.delete(coldest.value);
   }
   held.set(key, value);
 }
@@ -83,7 +93,7 @@ export class PaperSheetService {
 
   /** Only for a test somebody has sat: an unsat paper can still change under a cached copy. */
   async rowsOf(testId: string): Promise<SheetPaperRow[]> {
-    const held = this.rows.get(testId);
+    const held = recall(this.rows, testId);
     if (held) return held;
     const read = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -96,7 +106,7 @@ export class PaperSheetService {
 
   /** The same paper for every candidate, so it is read once. */
   async servedOf(testId: string): Promise<ServedPaperRow[]> {
-    const held = this.served.get(testId);
+    const held = recall(this.served, testId);
     if (held) return held;
     const read = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -110,7 +120,7 @@ export class PaperSheetService {
   /** The answer key rides here: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
   async termsOf(testId: string, paperRevision: number): Promise<PaperTerm[]> {
     const key = `${testId}:${paperRevision}`;
-    const held = this.terms.get(key);
+    const held = recall(this.terms, key);
     if (held) return held;
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
