@@ -227,7 +227,7 @@ export class AttemptReportService {
 
   /** Every test this student has sat, oldest first — the line a trend chart draws. */
   async performance(studentId: string): Promise<PerformanceTrend> {
-    const [sat, tests, standings] = await Promise.all([
+    const [sat, tests] = await Promise.all([
       this.prisma.attempt.findMany({
         where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
         orderBy: { submittedAt: 'desc' },
@@ -239,8 +239,8 @@ export class AttemptReportService {
         distinct: ['testId'],
         select: { testId: true },
       }),
-      this.leaderboard.standingsOfStudent(studentId),
     ]);
+    const standings = await this.leaderboard.standingsOf(sat.map((row) => row.id));
 
     return {
       testsSat: tests.length,

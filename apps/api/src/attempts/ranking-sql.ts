@@ -17,11 +17,15 @@ export interface StandingRow {
 }
 
 /** Each chosen sitting counted against its test's cohort, one LATERAL count per sitting. */
-export function standingsSql(where: { attemptId: string } | { studentId: string }): Prisma.Sql {
+export function standingsSql(
+  where: { attemptId: string } | { studentId: string } | { attemptIds: readonly string[] },
+): Prisma.Sql {
   const chosen =
     'attemptId' in where
       ? Prisma.sql`a."id" = ${where.attemptId}::uuid`
-      : Prisma.sql`a."studentId" = ${where.studentId}::uuid`;
+      : 'attemptIds' in where
+        ? Prisma.sql`a."id" = ANY(${[...where.attemptIds]}::uuid[])`
+        : Prisma.sql`a."studentId" = ${where.studentId}::uuid`;
   return Prisma.sql`
     SELECT a."id" AS attempt_id,
            a."testId" AS test_id,

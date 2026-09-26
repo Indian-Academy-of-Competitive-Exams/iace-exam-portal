@@ -29,12 +29,14 @@ export class LeaderboardService {
   /** Every graded sitting of one student, each against its own test's cohort, keyed by sitting. */
   async standingsOfStudent(studentId: string): Promise<ReadonlyMap<string, SittingStanding>> {
     const rows = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ studentId }));
-    return new Map(
-      rows.map((row) => [
-        row.attempt_id,
-        { attemptId: row.attempt_id, testId: row.test_id, ...standingOf(row) },
-      ]),
-    );
+    return sittingsOf(rows);
+  }
+
+  /** Only the named sittings, each against its own test's cohort — a report's bounded plot. */
+  async standingsOf(attemptIds: readonly string[]): Promise<ReadonlyMap<string, SittingStanding>> {
+    if (attemptIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ attemptIds }));
+    return sittingsOf(rows);
   }
 }
 
@@ -43,3 +45,11 @@ const standingOf = (row: StandingRow): Standing => ({
   percentile: row.percentile,
   cohortSize: row.cohort_size,
 });
+
+const sittingsOf = (rows: readonly StandingRow[]): ReadonlyMap<string, SittingStanding> =>
+  new Map(
+    rows.map((row) => [
+      row.attempt_id,
+      { attemptId: row.attempt_id, testId: row.test_id, ...standingOf(row) },
+    ]),
+  );

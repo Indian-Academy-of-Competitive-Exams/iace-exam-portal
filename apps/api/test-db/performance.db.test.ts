@@ -18,8 +18,11 @@ import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
+  makeCatalog,
   makePaper,
+  makeSitting,
   makeStudent,
+  makeTest,
   resetDatabase,
   sitPaper,
   testPrisma,
@@ -348,6 +351,34 @@ describe('the performance report — the wider scopes', () => {
 
     assert.equal(report.attemptsCounted, 1);
     assert.equal(report.trajectory[0]?.testId, second.testId);
+  });
+
+  /** The defect this prevents: standings scanned every sitting ever made, not just the ≤20 plotted. */
+  it('still stands every plotted sitting once history runs past the cap', async () => {
+    const catalog = await makeCatalog(prisma);
+    const student = await makeStudent(prisma);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const sittings: string[] = [];
+    for (let day = 0; day < 25; day += 1) {
+      const testId = (await makeTest(prisma, catalog)).id;
+      const submittedAt = new Date(Date.UTC(2026, 0, 1) + day * dayMs);
+      const sitting = await makeSitting(prisma, {
+        testId,
+        studentId: student.id,
+        score: 10,
+        submittedAt,
+      });
+      sittings.push(sitting.id);
+    }
+
+    const report = await service.report(student.id, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
+
+    assert.equal(report.attemptsCounted, 20);
+    assert.deepEqual(
+      report.trajectory.map((point) => point.attemptId),
+      sittings.slice(5),
+    );
+    assert.ok(report.trajectory.every((point) => point.rank === 1 && point.percentile === 100));
   });
 });
 

@@ -18,8 +18,11 @@ import { FakeQueue, FakeStorage, fakeQueueFailures } from '../test/support/fakes
 import {
   RIGHT_OPTION,
   disposeQuestion,
+  makeCatalog,
   makePaper,
+  makeSitting,
   makeStudent,
+  makeTest,
   resetDatabase,
   servedAnswers,
   sitPaper,
@@ -429,5 +432,33 @@ describe('the trend across every test a student has sat', () => {
         [retake.id, null, null],
       ],
     );
+  });
+
+  /** The defect this prevents: standings scanned every sitting ever made, not just the 20 plotted. */
+  it('still ranks every plotted sitting once history runs past the trend length', async () => {
+    const catalog = await makeCatalog(prisma);
+    const student = await makeStudent(prisma);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const sittings: string[] = [];
+    for (let day = 0; day < 25; day += 1) {
+      const testId = (await makeTest(prisma, catalog)).id;
+      const submittedAt = new Date(STARTED.getTime() + day * dayMs);
+      const sitting = await makeSitting(prisma, {
+        testId,
+        studentId: student.id,
+        score: 10,
+        submittedAt,
+      });
+      sittings.push(sitting.id);
+    }
+
+    const trend = await reports().performance(student.id);
+
+    assert.equal(trend.testsSat, 25);
+    assert.deepEqual(
+      trend.points.map((point) => point.attemptId),
+      sittings.slice(5),
+    );
+    assert.ok(trend.points.every((point) => point.rank === 1 && point.percentile === 100));
   });
 });

@@ -201,3 +201,35 @@ describe('standingsOfStudent', () => {
     assert.equal((await leaderboard.standingsOfStudent(id)).size, 0);
   });
 });
+
+describe('standingsOf', () => {
+  /** The defect this prevents: the map came from a query that scanned the student's whole history. */
+  it('reads only the named sittings, not the rest of the student’s history', async () => {
+    const [one, two, three] = [await paper(), await paper(), await paper()];
+    const mine = await sitter(one, 120);
+    const also = await makeSitting(prisma, { testId: two, studentId: mine.studentId, score: 40 });
+    await makeSitting(prisma, { testId: three, studentId: mine.studentId, score: 90 });
+
+    const standings = await leaderboard.standingsOf([mine.attemptId, also.id]);
+
+    assert.equal(standings.size, 2);
+    assert.deepEqual(standings.get(mine.attemptId), {
+      attemptId: mine.attemptId,
+      testId: one,
+      rank: 1,
+      percentile: 100,
+      cohortSize: 1,
+    });
+    assert.deepEqual(standings.get(also.id), {
+      attemptId: also.id,
+      testId: two,
+      rank: 1,
+      percentile: 100,
+      cohortSize: 1,
+    });
+  });
+
+  it('reads no standings for an empty list, without a query', async () => {
+    assert.equal((await leaderboard.standingsOf([])).size, 0);
+  });
+});

@@ -140,7 +140,7 @@ export class PerformanceAnalyticsService {
       this.testStats(testIds),
       this.sectionCohort(anchor),
       anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
-      this.leaderboard.standingsOfStudent(studentId),
+      this.leaderboard.standingsOf(sat.map((row) => row.id)),
       this.seriesOf(studentId, query),
     ]);
     const standing = anchor === null ? null : (standings.get(anchor.id) ?? null);
