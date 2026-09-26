@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { normaliseHeader, readCsvTable, type CsvTable } from './csv';
 import { toIsoDate } from './date-cell';
+import { MAX_WORKBOOK_INFLATION_BYTES } from './upload';
 
 /** Reading the roster an admin actually has. */
 
@@ -15,6 +16,54 @@ export function looksLikeWorkbook(buffer: Buffer): boolean {
 /** Whether the bytes are some other binary format wearing a .xlsx name. */
 function looksBinary(buffer: Buffer): boolean {
   return buffer.subarray(0, 512).includes(0x00);
+}
+
+const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
+const CENTRAL_DIRECTORY_HEADER_SIGNATURE = 0x02014b50;
+const END_OF_CENTRAL_DIRECTORY_SIZE = 22;
+const MAX_ZIP_COMMENT_SIZE = 0xffff;
+const CENTRAL_DIRECTORY_HEADER_FIXED_SIZE = 46;
+
+/** Where the end-of-central-directory record starts, found by scanning back from the end — its own comment field is variable-length, so nothing forward of it can be trusted. */
+function findEndOfCentralDirectory(buffer: Buffer): number | null {
+  const earliest = Math.max(
+    0,
+    buffer.length - END_OF_CENTRAL_DIRECTORY_SIZE - MAX_ZIP_COMMENT_SIZE,
+  );
+  for (
+    let offset = buffer.length - END_OF_CENTRAL_DIRECTORY_SIZE;
+    offset >= earliest;
+    offset -= 1
+  ) {
+    if (buffer.readUInt32LE(offset) === END_OF_CENTRAL_DIRECTORY_SIGNATURE) return offset;
+  }
+  return null;
+}
+
+/** The total size a zip's own central directory declares its entries will inflate to, read without decompressing a single byte — that inflation is what `ExcelJS.xlsx.load` spends memory doing. Null means the directory could not be read at all, which is a corrupt-file problem for `load` to report, not a bomb. */
+function declaredInflationBytes(buffer: Buffer): number | null {
+  try {
+    const eocd = findEndOfCentralDirectory(buffer);
+    if (eocd === null) return null;
+
+    const entryCount = buffer.readUInt16LE(eocd + 10);
+    let offset = buffer.readUInt32LE(eocd + 16);
+    let total = 0;
+
+    for (let i = 0; i < entryCount; i += 1) {
+      if (buffer.readUInt32LE(offset) !== CENTRAL_DIRECTORY_HEADER_SIGNATURE) return null;
+      total += buffer.readUInt32LE(offset + 24);
+
+      const nameLength = buffer.readUInt16LE(offset + 28);
+      const extraLength = buffer.readUInt16LE(offset + 30);
+      const commentLength = buffer.readUInt16LE(offset + 32);
+      offset += CENTRAL_DIRECTORY_HEADER_FIXED_SIZE + nameLength + extraLength + commentLength;
+    }
+
+    return total;
+  } catch {
+    return null;
+  }
 }
 
 /** Turns an uploaded file into the same table the CSV path produces, so everything downstream — validation, line numbers, the preview — is one code path with one set of rules. */
@@ -46,6 +95,15 @@ export async function readUploadedTable(
 }
 
 async function readWorkbookTable(buffer: Buffer, options: ReadSheetOptions): Promise<CsvTable> {
+  const inflation = declaredInflationBytes(buffer);
+  if (inflation !== null && inflation > MAX_WORKBOOK_INFLATION_BYTES) {
+    const ceilingMb = Math.round(MAX_WORKBOOK_INFLATION_BYTES / (1024 * 1024));
+    throw new AppException(
+      ErrorCodes.VALIDATION_ERROR,
+      `That file expands to more than ${ceilingMb}MB when opened, which is not a real workbook. Re-save it as .xlsx and try again.`,
+    );
+  }
+
   const workbook = new ExcelJS.Workbook();
   try {
     // ExcelJS types this as ArrayBuffer while accepting a Buffer at runtime.

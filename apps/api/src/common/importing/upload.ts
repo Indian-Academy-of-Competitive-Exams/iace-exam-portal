@@ -17,6 +17,9 @@ export interface UploadedSheet {
   buffer: Buffer;
 }
 
+/** A real roster or question bank inflates to a few MB even padded generously; past this it is a bomb, not a sheet. */
+export const MAX_WORKBOOK_INFLATION_BYTES = 200 * 1024 * 1024;
+
 /** Multer has already refused anything over the ceiling, so a missing file is all that is left to say. */
 export function requireFile(file: UploadedSheet | undefined): Buffer {
   if (!file) {

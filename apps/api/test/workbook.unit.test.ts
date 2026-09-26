@@ -15,6 +15,47 @@ async function workbook(rows: unknown[][], sheetName = 'Students'): Promise<Buff
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
+/** A hand-built zip whose central directory promises a huge inflation with zero real bytes behind it — the same shape as a shared-strings bomb, sized for a test instead of a committed gigabyte fixture. */
+function fakeZipDeclaring(uncompressedSize: number): Buffer {
+  const name = Buffer.from('xl/sharedStrings.xml');
+
+  const localHeader = Buffer.alloc(30 + name.length);
+  localHeader.writeUInt32LE(0x04034b50, 0);
+  localHeader.writeUInt32LE(uncompressedSize, 22);
+  localHeader.writeUInt16LE(name.length, 26);
+  name.copy(localHeader, 30);
+
+  const centralHeader = Buffer.alloc(46 + name.length);
+  centralHeader.writeUInt32LE(0x02014b50, 0);
+  centralHeader.writeUInt32LE(uncompressedSize, 24);
+  centralHeader.writeUInt16LE(name.length, 28);
+  name.copy(centralHeader, 46);
+
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(centralHeader.length, 12);
+  eocd.writeUInt32LE(localHeader.length, 16);
+
+  return Buffer.concat([localHeader, centralHeader, eocd]);
+}
+
+/** Patches the one ExcelJS method that inflates a buffer, on the prototype every `new ExcelJS.Workbook().xlsx` shares, so a test can prove the guard runs before it rather than trusting that it does. */
+function spyOnExcelJsLoad(): { wasCalled: () => boolean; restore: () => void } {
+  const proto = Object.getPrototypeOf(new ExcelJS.Workbook().xlsx) as {
+    load: (...args: unknown[]) => unknown;
+  };
+  const original = proto.load;
+  let called = false;
+  proto.load = function patchedLoad(this: unknown, ...args: unknown[]) {
+    called = true;
+    return original.apply(this, args);
+  };
+
+  return { wasCalled: () => called, restore: () => (proto.load = original) };
+}
+
 describe('readUploadedTable — Excel', () => {
   it('reads a sheet into headers and rows', async () => {
     const table = await readUploadedTable(
@@ -133,6 +174,53 @@ describe('readUploadedTable — what it accepts', () => {
 
     await assert.rejects(
       () => readUploadedTable(broken),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /\.xlsx/);
+        return true;
+      },
+    );
+  });
+});
+
+describe('readUploadedTable — the zip-bomb guard', () => {
+  it('still opens a normal workbook now that a size guard runs first', async () => {
+    const table = await readUploadedTable(
+      await workbook([
+        ['mobile', 'fullName'],
+        ['9876543210', 'Asha Kumari'],
+      ]),
+    );
+
+    assert.equal(table.rows.length, 1);
+  });
+
+  /** B7: the guard has to run BEFORE `workbook.xlsx.load`, because the inflation the bomb relies on happens inside `load` itself — a check that ran after would have already spent the memory it exists to save. */
+  it('refuses a declared-huge workbook before ExcelJS ever loads it', async () => {
+    const bomb = fakeZipDeclaring(500 * 1024 * 1024);
+    const loadSpy = spyOnExcelJsLoad();
+
+    try {
+      await assert.rejects(
+        () => readUploadedTable(bomb),
+        (error: unknown) => {
+          assert.ok(AppException.is(error));
+          assert.match(error.message, /expands to more than/i);
+          return true;
+        },
+      );
+      assert.equal(loadSpy.wasCalled(), false, 'ExcelJS must never inflate a file this size');
+    } finally {
+      loadSpy.restore();
+    }
+  });
+
+  it('leaves a workbook too short to have a central directory for ExcelJS to explain', async () => {
+    // Zip magic only — nothing after it to hold a central directory, so the guard cannot verify a size and steps aside.
+    const tooShortToBeAZip = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+
+    await assert.rejects(
+      () => readUploadedTable(tooShortToBeAZip),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.match(error.message, /\.xlsx/);
