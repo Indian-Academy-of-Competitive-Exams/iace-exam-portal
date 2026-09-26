@@ -10,12 +10,21 @@ export interface SectionProps {
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** A page tour's anchor for this region, landing as `data-tour`. */
+  tour?: string;
 }
 
 /** A named block on a student screen: the heading, then its content at `--gap-group`. */
-export function Section({ title, meta, action, children, className }: Readonly<SectionProps>) {
+export function Section({
+  title,
+  meta,
+  action,
+  children,
+  className,
+  tour,
+}: Readonly<SectionProps>) {
   return (
-    <section className={cn('flex min-w-0 flex-col gap-4', className)}>
+    <section data-tour={tour} className={cn('flex min-w-0 flex-col gap-4', className)}>
       <SectionHeading title={title} meta={meta} action={action} />
       {children}
     </section>

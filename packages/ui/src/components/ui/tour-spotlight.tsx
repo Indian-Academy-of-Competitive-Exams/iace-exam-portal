@@ -1,6 +1,12 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Button } from './button';
 
+/** The anchors every framed screen carries, so a tour points at its tabs or its filter bar without the screen wrapping anything. */
+export const TOUR_ANCHORS = {
+  TABS: 'page-tabs',
+  FILTERS: 'page-filters',
+} as const;
+
 /** Where the thing being pointed at is, in viewport pixels. A rect rather than an element: this package draws, it does not query the DOM. */
 export interface SpotlightRect {
   readonly top: number;

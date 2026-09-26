@@ -14,6 +14,7 @@ import {
   DispositionFigure,
   MeasureTiles,
   PageCrumbs,
+  usePageTour,
   ScopeGapFigure,
   ScoreTrendFigure,
   SpeedAccuracyFigure,
@@ -37,6 +38,7 @@ import {
 } from '@iace/contracts';
 import { overviewQuery, performanceQuery } from '../lib/queries';
 import { ANY_SCOPE, NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
+import { PERFORMANCE_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import {
   BlockPairSkeleton,
   Hero,
@@ -57,6 +59,8 @@ export function OverviewPage() {
   const overview = useQuery(overviewQuery);
   const trend = useQuery(performanceQuery);
 
+  usePageTour({ id: TOUR_IDS.PERFORMANCE, steps: PERFORMANCE_TOUR, ready: overview.isSuccess });
+
   const sat = newestFirst(trend.data?.points ?? []);
   const scopes = overview.data ? scopesSat(overview.data.subjects) : [];
   const chosen = scope !== null && scopes.includes(scope) ? scope : null;
@@ -76,7 +80,10 @@ export function OverviewPage() {
           title="Performance"
           meta={overview.data ? satOn(overview.data) : undefined}
           action={
-            <span className="flex flex-wrap items-center gap-3">
+            <span
+              data-tour={TOUR_TARGETS.PERFORMANCE_PICKERS}
+              className="flex flex-wrap items-center gap-3"
+            >
               {scopes.length > 1 ? (
                 <Combobox
                   aria-label="Scope"
@@ -167,7 +174,11 @@ function Body({
     <>
       {/* With no headline the pace tiles lead, or the band would sit empty down its whole left. */}
       {headline !== null || measured ? (
-        <Hero figure={headline ?? pace} aside={headline ? pace : undefined} />
+        <Hero
+          tour={TOUR_TARGETS.PERFORMANCE_HERO}
+          figure={headline ?? pace}
+          aside={headline ? pace : undefined}
+        />
       ) : null}
 
       <TileGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
@@ -176,7 +187,10 @@ function Body({
         ))}
       </TileGrid>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-4">
+      <div
+        data-tour={TOUR_TARGETS.PERFORMANCE_FIGURES}
+        className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-4"
+      >
         <WeakestSubjectsFigure {...view} className="lg:col-span-2" />
         <ScoreTrendFigure points={sittings} className="lg:col-span-2" />
         <DispositionFigure

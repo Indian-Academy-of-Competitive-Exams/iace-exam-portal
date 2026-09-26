@@ -5,9 +5,10 @@ import { Card, MetricGroup, cn } from '@iace/ui';
 export function StatBand({
   children,
   className,
-}: Readonly<{ children: React.ReactNode; className?: string }>) {
+  tour,
+}: Readonly<{ children: React.ReactNode; className?: string; tour?: string }>) {
   return (
-    <Card className={cn('p-5', className)}>
+    <Card data-tour={tour} className={cn('p-5', className)}>
       <MetricGroup>{children}</MetricGroup>
     </Card>
   );

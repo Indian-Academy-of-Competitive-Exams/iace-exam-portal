@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpenText, Trash2 } from 'lucide-react';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import { SAVED_FILTER_FIELDS } from '@iace/app-kit';
 import {
   Alert,
@@ -28,6 +28,7 @@ import { instituteDayLabel, type SavedQuestion } from '@iace/contracts';
 import { api } from '../lib/api';
 import { SavedQuestionDialog } from '../components/review/saved-question-dialog';
 import { NAV_ITEMS, savedFacetsQueryKey, savedQueryKey } from '../lib/constants';
+import { SAVED_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 
 /** What the list is for, said once at the top rather than on every row. */
 const LIST_NOTE = 'Starred from a solution review, and yours to drop.';
@@ -107,6 +108,8 @@ function SavedList() {
     },
   ] as const satisfies readonly ListFilter[];
 
+  usePageTour({ id: TOUR_IDS.SAVED, steps: SAVED_TOUR, ready: true });
+
   const list = useListScreen({
     queryKey: savedQueryKey(),
     filters: filterSpec,
@@ -125,7 +128,9 @@ function SavedList() {
       banner={
         <>
           {/* ui-copy-ok: rule */}
-          <Alert variant="info">{LIST_NOTE}</Alert>
+          <Alert data-tour={TOUR_TARGETS.SAVED_NOTE} variant="info">
+            {LIST_NOTE}
+          </Alert>
           {reading ? (
             <SavedQuestionDialog saved={reading} onClose={() => setReading(null)} />
           ) : null}

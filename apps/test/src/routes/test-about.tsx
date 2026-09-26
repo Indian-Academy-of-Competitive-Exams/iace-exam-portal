@@ -14,7 +14,7 @@ import {
   plural,
   type DataTableColumn,
 } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
 import { shutReason } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
@@ -32,6 +32,7 @@ import {
 import { StartSitting } from '../components/exam/start-sitting';
 import { briefQuery, catalogQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import {
   BandSkeleton,
   BlockPairSkeleton,
@@ -73,6 +74,8 @@ export function TestAboutPage() {
   const listed = series?.tests.find((test) => test.id === testId);
   const past = (trend.data?.points ?? []).filter((point) => point.testId === testId).reverse();
 
+  usePageTour({ id: TOUR_IDS.TEST_ABOUT, steps: TEST_ABOUT_TOUR, ready: brief.isSuccess });
+
   return (
     <PageFrame
       header={
@@ -102,7 +105,7 @@ export function TestAboutPage() {
           <>
             {listed ? <Shut test={listed} /> : null}
 
-            <StatBand>
+            <StatBand tour={TOUR_TARGETS.ABOUT_BAND}>
               <Metric label="Questions" value={brief.data.totalQuestions} size="sm" />
               <Metric
                 label="Duration (minutes)"
@@ -114,7 +117,11 @@ export function TestAboutPage() {
             </StatBand>
 
             <div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
-              <SurfaceCard title="Sections" meta={plural(brief.data.sections.length, 'section')}>
+              <SurfaceCard
+                tour={TOUR_TARGETS.ABOUT_SECTIONS}
+                title="Sections"
+                meta={plural(brief.data.sections.length, 'section')}
+              >
                 <DataTable
                   columns={SECTION_COLUMNS}
                   rows={brief.data.sections}
@@ -124,7 +131,7 @@ export function TestAboutPage() {
                 />
               </SurfaceCard>
 
-              <SurfaceCard title="The paper">
+              <SurfaceCard tour={TOUR_TARGETS.ABOUT_PAPER} title="The paper">
                 <div className="flex flex-col gap-2">
                   <StatRow label="Languages" value={languagesOf(brief.data)} />
                   <StatRow label="Sectional timing" value={sectionalOf(brief.data)} />
@@ -212,7 +219,7 @@ function Exits({
   const action = listed ? testAction(listed) : null;
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div data-tour={TOUR_TARGETS.ABOUT_EXIT} className="flex flex-wrap items-center gap-3">
       {action ? (
         <StartSitting testId={testId}>
           {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}

@@ -11,7 +11,7 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import { PageCrumbs, useFilters, useFilterSpec } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
 import {
   LEADERBOARD_SCOPES,
   leaderboardScopeSchema,
@@ -31,6 +31,7 @@ import {
   leaderboardQueryKey,
 } from '../lib/constants';
 import { Podium, Standings } from '../components/leaderboard/board';
+import { LEADERBOARD_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { RowsSkeleton, Section } from '../components/ui';
 
 // TEST is the empty row, not a labelled one, so an unset URL shows the board it actually defaults to.
@@ -57,6 +58,8 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
 
 export function LeaderboardPage() {
   const trend = useQuery(performanceQuery);
+
+  usePageTour({ id: TOUR_IDS.LEADERBOARD, steps: LEADERBOARD_TOUR, ready: trend.isSuccess });
   const sat = testsSat(trend.data?.points ?? []);
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
@@ -236,11 +239,15 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
         Only a first sitting is ranked. A retake is marked, but it is not on this board.
       </Alert>
 
-      <Section title="Podium">
+      <Section tour={TOUR_TARGETS.LEADERBOARD_PODIUM} title="Podium">
         <Podium rows={board.podium} />
       </Section>
 
-      <Section title="Ranks" meta={plural(board.cohortSize, 'student')}>
+      <Section
+        tour={TOUR_TARGETS.LEADERBOARD_RANKS}
+        title="Ranks"
+        meta={plural(board.cohortSize, 'student')}
+      >
         <Standings board={board} empty="Everyone on this board is on the podium" />
       </Section>
     </div>

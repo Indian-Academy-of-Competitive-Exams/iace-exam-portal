@@ -10,11 +10,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
 import { REPORT_TABS, newestFirst, reportTabOf, sittingHint } from '@iace/app-kit';
 import { type PerformancePoint, type ScoreCard } from '@iace/contracts';
 import { performanceQuery, scoreCardQuery } from '../lib/queries';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
+import { REPORT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 
 const UNTITLED = 'Untitled test';
 
@@ -31,6 +32,8 @@ export function ReportShell() {
   const current = sat.points.find((point) => point.attemptId === attemptId) ?? null;
 
   const tab = reportTabOf(pathname, ROUTES.REPORT(attemptId));
+
+  usePageTour({ id: TOUR_IDS.REPORT, steps: REPORT_TOUR, ready: sat.points.length > 0 });
 
   return (
     <PageFrame
@@ -50,25 +53,31 @@ export function ReportShell() {
           title="Report"
           meta={current === null ? undefined : marksOf(current)}
           action={
-            <Combobox
-              value={attemptId}
-              onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}
-              items={sat.newestFirst.map((point) => ({
-                value: point.attemptId,
-                label: point.testTitle ?? UNTITLED,
-                hint: sittingHint(point),
-              }))}
-              clearable={false}
-              aria-label="Test"
-              className={PICKER_WIDTH.REPORT}
-            />
+            <span data-tour={TOUR_TARGETS.REPORT_PICKER} className="inline-flex">
+              <Combobox
+                value={attemptId}
+                onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}
+                items={sat.newestFirst.map((point) => ({
+                  value: point.attemptId,
+                  label: point.testTitle ?? UNTITLED,
+                  hint: sittingHint(point),
+                }))}
+                clearable={false}
+                aria-label="Test"
+                className={PICKER_WIDTH.REPORT}
+              />
+            </span>
           }
         />
       }
       tabs={{
         value: tab,
         onValueChange: (next) => navigate(ROUTES.REPORT_TAB(attemptId, next)),
-        action: <Standing attemptId={attemptId} />,
+        action: (
+          <span data-tour={TOUR_TARGETS.REPORT_STANDING}>
+            <Standing attemptId={attemptId} />
+          </span>
+        ),
         // Only the open tab's content renders, and the ROUTER is what decides what that is.
         items: REPORT_TABS.map((held) => ({
           value: held.path,

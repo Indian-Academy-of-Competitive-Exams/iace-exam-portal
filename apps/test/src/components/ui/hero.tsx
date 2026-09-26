@@ -13,12 +13,23 @@ export interface HeroProps {
   /** The right-hand block — a window, a chip, the actions. */
   aside?: React.ReactNode;
   className?: string;
+  /** A page tour's anchor for this hero, landing as `data-tour`. */
+  tour?: string;
 }
 
 /** The focal element every primary student screen opens on, before its supporting grid. */
-export function Hero({ eyebrow, title, meta, figure, aside, className }: Readonly<HeroProps>) {
+export function Hero({
+  eyebrow,
+  title,
+  meta,
+  figure,
+  aside,
+  className,
+  tour,
+}: Readonly<HeroProps>) {
   return (
     <div
+      data-tour={tour}
       className={cn(
         'flex flex-wrap items-end justify-between gap-x-10 gap-y-6 rounded-2xl border border-border bg-gradient-to-br from-surface to-primary-subtle p-6 shadow-sm sm:p-8',
         className,
