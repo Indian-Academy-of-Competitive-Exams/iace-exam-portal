@@ -97,6 +97,7 @@ export {
   type ListFilterValue,
   type ListState,
 } from './components/ui/list-view';
+export { TourSpotlight, type SpotlightRect } from './components/ui/tour-spotlight';
 export { TruncatedText, useTruncation } from './components/ui/truncated-text';
 export {
   Table,
