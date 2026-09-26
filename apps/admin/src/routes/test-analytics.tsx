@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import {
+  EXPORT_KINDS,
   FEATURE_KEYS,
   ITEM_SIGNALS,
   PERMISSION_LEVELS,
@@ -41,6 +42,7 @@ import {
   type MeasureBar,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { ExportButton } from '../components/export-button';
 import {
   ANALYTICS_SYNC_MAX_MS,
   ANALYTICS_SYNC_POLL_MS,
@@ -163,12 +165,18 @@ export function TestAnalyticsPage() {
             </>
           }
           action={
-            <Freshness
-              summary={report.summary}
-              canSync={canSync}
-              syncing={sync !== null || resync.isPending}
-              onSync={() => resync.mutate()}
-            />
+            <div className="flex items-center gap-2">
+              <Freshness
+                summary={report.summary}
+                canSync={canSync}
+                syncing={sync !== null || resync.isPending}
+                onSync={() => resync.mutate()}
+              />
+              <ExportButton
+                kind={EXPORT_KINDS.TEST_REPORT}
+                download={() => api.admin.tests.reportExport(id)}
+              />
+            </div>
           }
         />
       }

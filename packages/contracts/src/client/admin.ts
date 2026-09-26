@@ -555,6 +555,8 @@ export function adminClient(core: ApiCore) {
       resyncAnalytics: (id: string): Promise<NoContent> =>
         write('POST', ADMIN_TEST_ROUTES.resyncAnalytics(id), noContentSchema),
 
+      reportExport: (id: string): Promise<Blob> => requestBlob(ADMIN_TEST_ROUTES.reportExport(id)),
+
       /** The paper as it stands, built a question or a section at a time. */
       readPaper: (id: string): Promise<TestPaper> =>
         get(ADMIN_TEST_PAPER_ROUTES.read(id), testPaperSchema),

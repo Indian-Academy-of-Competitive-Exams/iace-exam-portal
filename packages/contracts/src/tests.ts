@@ -524,6 +524,8 @@ export const ADMIN_TEST_ROUTES = {
   analytics: (id: string) => `/admin/tests/${id}/analytics`,
   /** Asks for the three rollups to be worked out again from the sittings, now. */
   resyncAnalytics: (id: string) => `/admin/tests/${id}/analytics/resync`,
+  /** Every sitting with its standing, the absentees and the paper's figures, as one workbook. */
+  reportExport: (id: string) => `/admin/tests/${id}/report/export`,
 } as const;
 
 // ============================================================================

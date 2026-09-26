@@ -8,3 +8,6 @@ export { studentWhere } from './student-query';
 
 /** DPDP: the copy a student may take away, and erasure as anonymisation. */
 export { StudentPrivacyService } from './student-privacy.service';
+
+/** A report's person columns, for a module holding student ids. */
+export { STUDENT_CARD_SELECT, studentCardsOf, type StudentCard } from './student-cards';
