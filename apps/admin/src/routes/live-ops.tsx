@@ -10,7 +10,7 @@ import {
   type LiveSitting,
   type RecentSubmission,
 } from '@iace/contracts';
-import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
@@ -23,6 +23,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ATTEMPT_STATUS_LABELS, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { LIVE_OPS_TOUR, TOUR_IDS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { LiveTestPicker } from '../components/live-test-picker';
 import { SittingActions } from '../components/sitting-actions';
@@ -54,6 +55,7 @@ const STATUS_VARIANT = {
 
 export function LiveOpsPage() {
   const { can } = useAuth();
+  usePageTour({ id: TOUR_IDS.LIVE_OPS, steps: LIVE_OPS_TOUR, ready: true });
   const filters = useFilters<'testId' | 'panel'>();
   const testId = filters.get('testId');
   const panel = (filters.get('panel') || PANELS.ACTIVE) as Panel;

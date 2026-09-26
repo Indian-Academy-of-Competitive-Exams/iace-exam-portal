@@ -1,8 +1,13 @@
 import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Badge, EmptyState, EMPTY_STATE_KINDS, PageHeader } from '@iace/ui';
-import { AppShell as Shell } from '@iace/app-kit/browser';
-import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
+import {
+  AppShell as Shell,
+  browserStorage,
+  TourProvider,
+  TourTrigger,
+} from '@iace/app-kit/browser';
+import { NAV_ITEMS, ROUTES, STORAGE_KEYS, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 // can goes to the shell, which reads featureKey; superAdminOnly is stripped here since it isn't one.
@@ -20,19 +25,22 @@ export function AppShell() {
   );
 
   return (
-    <Shell
-      nav={nav}
-      can={can}
-      width="wide"
-      homeTo={ROUTES.HOME}
-      portal="Admin"
-      onSignOut={() => void signOut()}
-      userLabel={admin?.email ?? ''}
-      // No account entries: an admin signs in with an emailed code and has no profile screen.
-      brandSuffix={admin?.isSuperAdmin ? <Badge variant="primary">Super admin</Badge> : null}
-    >
-      {isDeactivated ? <DeactivatedNotice /> : <Outlet />}
-    </Shell>
+    <TourProvider storage={browserStorage} storageKey={STORAGE_KEYS.TOURS}>
+      <Shell
+        nav={nav}
+        can={can}
+        headerEnd={<TourTrigger />}
+        width="wide"
+        homeTo={ROUTES.HOME}
+        portal="Admin"
+        onSignOut={() => void signOut()}
+        userLabel={admin?.email ?? ''}
+        // No account entries: an admin signs in with an emailed code and has no profile screen.
+        brandSuffix={admin?.isSuperAdmin ? <Badge variant="primary">Super admin</Badge> : null}
+      >
+        {isDeactivated ? <DeactivatedNotice /> : <Outlet />}
+      </Shell>
+    </TourProvider>
   );
 }
 

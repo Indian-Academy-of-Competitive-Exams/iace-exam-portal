@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
-import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
 import { Button, PageHeader, TableFrame } from '@iace/ui';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { TESTS_AND_SERIES_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { SeriesList } from './test-series';
 import { TestsList } from './tests';
@@ -14,6 +15,7 @@ const VIEW = { SERIES: 'series', TESTS: 'tests' } as const;
 
 export function TestsAndSeriesPage() {
   const { can } = useAuth();
+  usePageTour({ id: TOUR_IDS.TESTS_AND_SERIES, steps: TESTS_AND_SERIES_TOUR, ready: true });
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const filters = useFilters<'view' | 'q' | 'examId' | 'examStageId' | 'kind' | 'isEnabled'>();
   const view = filters.get('view') || VIEW.SERIES;
@@ -25,7 +27,7 @@ export function TestsAndSeriesPage() {
       // A test is built inside the series that carries it, so only a series is made from here.
       action={
         canWrite && view === VIEW.SERIES ? (
-          <Button size="sm" asChild>
+          <Button data-tour={TOUR_TARGETS.SERIES_NEW} size="sm" asChild>
             <Link to={ROUTES.TEST_SERIES_NEW}>
               <Plus aria-hidden />
               New series

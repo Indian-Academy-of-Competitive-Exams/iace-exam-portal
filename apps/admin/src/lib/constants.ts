@@ -555,4 +555,6 @@ export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
   /** The question in the box right now. A closed tab loses nothing; only a save writes a row. */
   AUTHORING_DRAFT: 'iace.admin.authoring',
+  /** Which page tours this device has been shown; one key holding the set, so a tour added later needs no migration. */
+  TOURS: 'iace.admin.tours',
 } as const;

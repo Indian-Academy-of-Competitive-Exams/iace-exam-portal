@@ -14,7 +14,7 @@ import {
   type TestSeriesSummary,
 } from '@iace/contracts';
 import { bannerMessage } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
 import {
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -39,6 +39,7 @@ import {
   TEST_BUILDER_STEP_LABELS,
   TEST_STATUS_LABELS,
 } from '../lib/constants';
+import { TEST_BUILDER_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { ConfigSummaryButton } from '../components/config-summary';
 import {
@@ -125,6 +126,8 @@ function TestBuilder({
   const queryClient = useQueryClient();
   const existing = detail !== null;
   const sat = (detail?.attemptCount ?? 0) > 0;
+
+  usePageTour({ id: TOUR_IDS.TEST_BUILDER, steps: TEST_BUILDER_TOUR, ready: true });
 
   const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail, fromSeries) });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
@@ -258,7 +261,7 @@ function TestBuilder({
             meta={metaOf(detail)}
             action={
               config ? (
-                <span className="flex flex-wrap gap-2">
+                <span data-tour={TOUR_TARGETS.BUILDER_ACTION} className="flex flex-wrap gap-2">
                   <ConfigSummaryButton config={config} />
                   {detail ? (
                     <Button size="sm" variant="outline" asChild>
@@ -273,11 +276,13 @@ function TestBuilder({
             }
           />
 
-          <Stepper
-            label="Building this test"
-            steps={steps}
-            onValueChange={(value) => open(value as TestBuilderStep)}
-          />
+          <div data-tour={TOUR_TARGETS.BUILDER_STEPS}>
+            <Stepper
+              label="Building this test"
+              steps={steps}
+              onValueChange={(value) => open(value as TestBuilderStep)}
+            />
+          </div>
 
           {banner ? <Alert variant="danger">{banner}</Alert> : null}
         </>

@@ -10,7 +10,7 @@ import {
   QUESTION_STATUSES,
   type QuestionSummary,
 } from '@iace/contracts';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import {
   Badge,
   BadgeList,
@@ -27,6 +27,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { DIFFICULTY_VARIANT, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { QUESTIONS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { questionFacetFilters } from '../lib/question-filters';
 import { QuestionHistorySheet } from '../components/question-history';
@@ -95,6 +96,7 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
 
 export function QuestionsPage() {
   const { can } = useAuth();
+  usePageTour({ id: TOUR_IDS.QUESTIONS, steps: QUESTIONS_TOUR, ready: true });
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
   // Held outside the spec: changing the subjects also has to drop the topics under them.
@@ -143,7 +145,7 @@ export function QuestionsPage() {
       title="Questions"
       action={
         canWrite ? (
-          <span className="flex flex-wrap gap-2">
+          <span data-tour={TOUR_TARGETS.QUESTIONS_ACTIONS} className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" asChild>
               <Link to={ROUTES.IMPORT_QUESTIONS}>
                 <Upload aria-hidden />

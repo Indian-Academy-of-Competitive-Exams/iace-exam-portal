@@ -5,6 +5,8 @@ import { Button } from './button';
 export const TOUR_ANCHORS = {
   TABS: 'page-tabs',
   FILTERS: 'page-filters',
+  IMPORT_PREVIEW: 'import-preview',
+  IMPORT_UPLOAD: 'import-upload',
 } as const;
 
 /** Where the thing being pointed at is, in viewport pixels. A rect rather than an element: this package draws, it does not query the DOM. */

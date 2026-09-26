@@ -22,13 +22,20 @@ import {
   TruncatedText,
   linkVariants,
 } from '@iace/ui';
-import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
 import { saveBlob } from '../lib/save-blob';
 
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
+  usePageTour({
+    id: TOUR_IDS.IMPORT_QUESTIONS,
+    steps: IMPORT_QUESTIONS_TOUR,
+    ready: true,
+  });
+
   const { assignmentId } = useParams<{ assignmentId?: string }>();
   const queryClient = useQueryClient();
   // The same sheet either way; the section is only where the questions land.

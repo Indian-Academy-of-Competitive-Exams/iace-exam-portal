@@ -15,7 +15,7 @@ import {
   type Topic,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import {
   Button,
   DropdownMenuItem,
@@ -33,6 +33,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { TAXONOMY_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, SubjectPicker } from '../components/taxonomy-picker';
 
@@ -106,6 +107,7 @@ const LEVELS = {
 
 export function TaxonomyPage() {
   const { can } = useAuth();
+  usePageTour({ id: TOUR_IDS.TAXONOMY, steps: TAXONOMY_TOUR, ready: true });
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [creating, setCreating] = useState(false);
   const queryClient = useQueryClient();
@@ -119,7 +121,7 @@ export function TaxonomyPage() {
       title="Subjects and topics"
       action={
         canWrite ? (
-          <Button size="sm" onClick={() => setCreating(true)}>
+          <Button data-tour={TOUR_TARGETS.TAXONOMY_NEW} size="sm" onClick={() => setCreating(true)}>
             <Plus aria-hidden />
             {onSubjects ? 'New subject' : 'New topic'}
           </Button>

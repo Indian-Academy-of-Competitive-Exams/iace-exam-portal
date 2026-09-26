@@ -7,6 +7,7 @@ import { FileDropzone, type FileDropzoneProps } from './file-dropzone';
 import { FormSection } from './form-panel';
 import { LoadingState } from './spinner';
 import { PageFrame } from './table-frame';
+import { TOUR_ANCHORS } from './tour-spotlight';
 import { StatRow } from './stat-row';
 
 /** One counted line of the preview — what the file would do, before it does it. */
@@ -59,7 +60,10 @@ export function ImportView({
   return (
     <PageFrame className="lg:overflow-hidden" header={header}>
       <div className="grid gap-5 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="relative order-2 flex flex-col gap-4 p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto">
+        <Card
+          data-tour={TOUR_ANCHORS.IMPORT_PREVIEW}
+          className="relative order-2 flex flex-col gap-4 p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto"
+        >
           {fileErrors?.length ? (
             <Alert variant="danger">
               <span>{fileErrors.join(' ')}</span>
@@ -75,7 +79,10 @@ export function ImportView({
           {children}
         </Card>
 
-        <Card className="relative order-1 flex flex-col gap-6 p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
+        <Card
+          data-tour={TOUR_ANCHORS.IMPORT_UPLOAD}
+          className="relative order-1 flex flex-col gap-6 p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto"
+        >
           {/* The template comes first: the shape of the file matters before anywhere to put one. */}
           <FormSection title="Start from the template">
             <Button

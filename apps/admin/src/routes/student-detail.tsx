@@ -43,11 +43,12 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { GENDER_LABELS, NAV_ITEMS, QUERY_KEYS, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { STUDENT_DETAIL_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
 import { StudentPerformancePanel } from '../components/student-performance';
 import { ActionsTab } from './student-detail-actions';
 import { EventsTab } from './student-detail-events';
@@ -361,6 +362,7 @@ const TAB_CONTENT: Readonly<Record<StudentTab, (props: TabProps) => React.ReactN
 
 export function StudentDetailPage() {
   const { id = '' } = useParams();
+  usePageTour({ id: TOUR_IDS.STUDENT_DETAIL, steps: STUDENT_DETAIL_TOUR, ready: true });
   const { can, identity } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
@@ -530,7 +532,12 @@ export function StudentDetailPage() {
             meta={`+91 ${detail.mobile} · ${signInSummary(detail)}`}
             action={
               onDetails && !isEditing ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Button
+                  data-tour={TOUR_TARGETS.STUDENT_EDIT}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(true)}
+                >
                   <Pencil aria-hidden />
                   Edit details
                 </Button>
