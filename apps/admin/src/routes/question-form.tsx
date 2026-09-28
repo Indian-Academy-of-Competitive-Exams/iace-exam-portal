@@ -9,6 +9,7 @@ import { Alert, Button, FormPanel, PageHeader, Skeleton, SkeletonParagraph } fro
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { QuestionFields } from '../components/question-fields';
+import { BankQuestionWindow } from '../components/authoring/bank-question-window';
 import {
   SERVER_FIELDS,
   emptyValues,
@@ -25,8 +26,9 @@ export function QuestionFormPage() {
   const queryClient = useQueryClient();
   const existing = id !== undefined;
   const questionId = id ?? '';
-  // A new question opens ready to type; one that already exists opens read-only.
-  const [isEditing, setIsEditing] = useState(!existing);
+  // A new question is typed here; one that already exists is read here and edited in the window.
+  const isEditing = !existing;
+  const [windowOpen, setWindowOpen] = useState(false);
 
   const question = useQuery({
     queryKey: [...QUERY_KEYS.QUESTION, id],
@@ -43,11 +45,8 @@ export function QuestionFormPage() {
   }, [loaded, form]);
 
   const save = useMutation({
-    meta: { success: existing ? 'Question saved.' : 'Question added.' },
-    mutationFn: (values: QuestionFormValues) =>
-      existing
-        ? api.admin.questions.update(questionId, toDraft(values, loaded))
-        : api.admin.questions.create(toDraft(values)),
+    meta: { success: 'Question added.' },
+    mutationFn: (values: QuestionFormValues) => api.admin.questions.create(toDraft(values)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
       navigate(ROUTES.QUESTIONS);
@@ -57,15 +56,7 @@ export function QuestionFormPage() {
 
   const banner = bannerMessage(save.error, [...SERVER_FIELDS]);
 
-  let title = 'New question';
-  if (existing) title = isEditing ? 'Edit question' : 'Question';
-
-  /** A new question has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
-  const cancel = () => {
-    if (!existing) return navigate(ROUTES.QUESTIONS);
-    form.reset();
-    setIsEditing(false);
-  };
+  const title = existing ? 'Question' : 'New question';
 
   if (existing && question.isLoading) {
     // The form has a known shape, so it is drawn and held rather than spun at.
@@ -84,11 +75,11 @@ export function QuestionFormPage() {
       footer={
         isEditing ? (
           <>
-            <Button type="button" variant="outline" onClick={cancel}>
+            <Button type="button" variant="outline" onClick={() => navigate(ROUTES.QUESTIONS)}>
               Cancel
             </Button>
             <Button type="submit" loading={save.isPending}>
-              {existing ? 'Save question' : 'Add question'}
+              Add question
             </Button>
           </>
         ) : undefined
@@ -98,7 +89,7 @@ export function QuestionFormPage() {
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={title}
-            action={<HeaderActions isEditing={isEditing} onEdit={() => setIsEditing(true)} />}
+            action={existing ? <EditAction onEdit={() => setWindowOpen(true)} /> : null}
           />
 
           {banner ? <Alert variant="danger">{banner}</Alert> : null}
@@ -106,17 +97,18 @@ export function QuestionFormPage() {
       }
     >
       <QuestionFields form={form} saved={loaded} />
+      {existing ? (
+        <BankQuestionWindow
+          questionId={questionId}
+          open={windowOpen}
+          onOpenChange={setWindowOpen}
+        />
+      ) : null}
     </FormPanel>
   );
 }
 
-/** Editing hides it: while the form is live, Save and Cancel are the only decisions on offer. */
-function HeaderActions({
-  isEditing,
-  onEdit,
-}: Readonly<{ isEditing: boolean; onEdit: () => void }>) {
-  if (isEditing) return null;
-
+function EditAction({ onEdit }: Readonly<{ onEdit: () => void }>) {
   return (
     <Button variant="outline" size="sm" onClick={onEdit}>
       <Pencil aria-hidden />
