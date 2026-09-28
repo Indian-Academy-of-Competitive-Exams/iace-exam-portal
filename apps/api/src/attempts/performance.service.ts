@@ -57,7 +57,6 @@ const REPORT_SELECT = {
   submittedAt: true,
   startedAt: true,
   shuffleSeed: true,
-  sheet: { select: { answers: true, verdicts: true } },
   test: {
     select: {
       title: true,
@@ -122,18 +121,27 @@ export class PerformanceAnalyticsService {
     const sat = recent.toReversed();
     // Everything but the trajectory describes the anchor, so one payload never mixes two papers.
     const anchor = sat.findLast((row) => row.isGraded) ?? sat.at(-1) ?? null;
-    const paper =
+    // The anchor's sheet alone: the other sittings only ever give the trajectory their marks.
+    const [paper, sheet] =
       anchor === null
-        ? []
-        : await this.prisma.paperQuestion.findMany({
-            where: { testId: anchor.testId },
-            orderBy: { order: 'asc' },
-            select: PERFORMANCE_ROW_SELECT,
-          });
+        ? [[], null]
+        : await Promise.all([
+            this.prisma.paperQuestion.findMany({
+              where: { testId: anchor.testId },
+              orderBy: { order: 'asc' },
+              select: PERFORMANCE_ROW_SELECT,
+            }),
+            this.prisma.attemptSheet.findUnique({
+              where: { attemptId: anchor.id },
+              select: { answers: true, verdicts: true },
+            }),
+          ]);
     const rows =
       anchor === null
         ? []
-        : toReported(servedSheet(paper, anchor, anchor.test.baseConfig.shuffleQuestions));
+        : toReported(
+            servedSheet(paper, { ...anchor, sheet }, anchor.test.baseConfig.shuffleQuestions),
+          );
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
     const [testStats, sectionCohort, topper, standings, series] = await Promise.all([

@@ -214,24 +214,27 @@ export class AnnouncementsService {
 
   /** Counted off the ledger rather than stored: a delivery's status keeps moving after the send. */
   private async statsOf(announcementId: string): Promise<AnnouncementStats> {
-    const of = (status: DeliveryStatus) =>
-      this.prisma.notificationDelivery.count({
-        where: { notification: { announcementId }, status },
-      });
+    const [readCount, groups] = await Promise.all([
+      this.prisma.notification.count({ where: { announcementId, isRead: true } }),
+      // One pass over the ledger, grouped, rather than one count per status over the same rows.
+      this.prisma.notificationDelivery.groupBy({
+        by: ['status', 'skipReason'],
+        where: { notification: { announcementId } },
+        orderBy: { status: 'asc' },
+        _count: { _all: true },
+      }),
+    ]);
+    const counted = (keep: (row: (typeof groups)[number]) => boolean) =>
+      groups.filter(keep).reduce((sum, row) => sum + row._count._all, 0);
 
-    const [readCount, sent, delivered, failed, skipped, savedByRead] =
-      await this.prisma.$transaction([
-        this.prisma.notification.count({ where: { announcementId, isRead: true } }),
-        of(DeliveryStatus.SENT),
-        of(DeliveryStatus.DELIVERED),
-        of(DeliveryStatus.FAILED),
-        of(DeliveryStatus.SKIPPED),
-        this.prisma.notificationDelivery.count({
-          where: { notification: { announcementId }, skipReason: SKIP_REASONS.ALREADY_READ },
-        }),
-      ]);
-
-    return { readCount, sent, delivered, failed, skipped, savedByRead };
+    return {
+      readCount,
+      sent: counted((row) => row.status === DeliveryStatus.SENT),
+      delivered: counted((row) => row.status === DeliveryStatus.DELIVERED),
+      failed: counted((row) => row.status === DeliveryStatus.FAILED),
+      skipped: counted((row) => row.status === DeliveryStatus.SKIPPED),
+      savedByRead: counted((row) => row.skipReason === SKIP_REASONS.ALREADY_READ),
+    };
   }
 }
 
