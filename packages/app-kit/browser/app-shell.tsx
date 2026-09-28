@@ -57,6 +57,9 @@ export interface AppShellProps {
   width?: ShellWidth;
 }
 
+/** One object for every shell with no counts, so the badge context never changes under it. */
+const NO_BADGES: NavBadges = {};
+
 /** Desktop and mobile are separate components — rendering both would give two tab orders; fixed-height frame, only the content region scrolls. */
 export function AppShell({
   nav,
@@ -70,7 +73,7 @@ export function AppShell({
   headerEnd,
   homeTo = '/',
   can,
-  navBadges,
+  navBadges = NO_BADGES,
   width = 'wide',
 }: Readonly<AppShellProps>) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
@@ -96,7 +99,7 @@ export function AppShell({
 
   return (
     // dvh, not vh: mobile browser chrome would crop the bottom of the frame.
-    <NavBadgeProvider badges={navBadges ?? {}}>
+    <NavBadgeProvider badges={navBadges}>
       <div className="flex h-dvh flex-col overflow-hidden bg-background">
         {/* `fixed`, not `absolute`: an sr-only child of a scrollport resolves against the page and grows it. */}
         <a

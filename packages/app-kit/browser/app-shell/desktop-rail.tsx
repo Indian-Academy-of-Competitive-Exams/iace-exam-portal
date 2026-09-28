@@ -40,7 +40,7 @@ export function DesktopRail({
           {rail.open ? (
             <NavPanel items={items} pathname={pathname} drilldown={false} onNavigate={rail.close} />
           ) : (
-            <SidebarNav items={items} pathname={pathname} collapsed />
+            <SidebarNav items={items} pathname={pathname} />
           )}
         </nav>
       </div>

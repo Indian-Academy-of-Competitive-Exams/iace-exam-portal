@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Avatar, PageFrame, PageHeader } from '@iace/ui';
@@ -54,6 +54,9 @@ export function AppShell() {
     }
   }, [total, queryClient]);
 
+  const unreadCount = total ?? 0;
+  const navBadges = useMemo(() => ({ [ROUTES.NOTIFICATIONS]: unreadCount }), [unreadCount]);
+
   return (
     <TourProvider storage={browserStorage} storageKey={STORAGE_KEYS.TOURS}>
       <Shell
@@ -67,7 +70,7 @@ export function AppShell() {
             .then(signOut)
         }
         userMenuItems={USER_MENU_ITEMS}
-        navBadges={{ [ROUTES.NOTIFICATIONS]: unread.data?.total ?? 0 }}
+        navBadges={navBadges}
         userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
         userAvatar={
           <Avatar

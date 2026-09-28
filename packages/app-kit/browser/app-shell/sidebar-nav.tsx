@@ -2,16 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { NavBadge, useNavBadge } from './nav-badges';
 import * as Popover from '@radix-ui/react-popover';
-import { ChevronRight } from 'lucide-react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
-import {
-  NAV_LAYOUT,
-  activeNavPath,
-  isNavItemActive,
-  isNavSection,
-  resolveNavLayout,
-  type NavItem,
-} from '../../src';
+import { activeNavPath, isNavItemActive, isNavSection, type NavItem } from '../../src';
 
 /** One row in the sidebar. The chevron points right: a panel opens beside, never below. */
 const ROW = [
@@ -88,20 +80,8 @@ function Leaf({
   );
 }
 
-/** A section opens as a popover beside its row so the sidebar never moves; `resolveNavLayout` picks INLINE (sized to contents) or PANEL (fixed, scrolling). */
-function SectionPopover({
-  item,
-  activePath,
-  collapsed,
-  wide,
-  onNavigate,
-}: Readonly<{
-  item: NavItem;
-  activePath?: string;
-  collapsed: boolean;
-  wide: boolean;
-  onNavigate?: () => void;
-}>) {
+/** A section opens as the wide popover beside its rail row, so the sidebar never moves. */
+function SectionPopover({ item, activePath }: Readonly<{ item: NavItem; activePath?: string }>) {
   const [open, setOpen] = useState(false);
 
   const children = item.children ?? [];
@@ -109,33 +89,23 @@ function SectionPopover({
   const groups = children.filter(isNavSection);
   const loose = children.filter((child) => !isNavSection(child));
 
-  const close = () => {
-    setOpen(false);
-    onNavigate?.();
-  };
+  const close = () => setOpen(false);
 
   return (
     <li>
       <Popover.Root open={open} onOpenChange={setOpen}>
-        <RailTooltip label={item.label} collapsed={collapsed}>
+        <RailTooltip label={item.label} collapsed>
           <Popover.Trigger asChild>
             <button
               type="button"
               className={cn(
                 ROW,
                 isNavItemActive(item, activePath) || open ? ROW_ACTIVE : ROW_IDLE,
-                collapsed && ROW_RAIL,
+                ROW_RAIL,
               )}
             >
-              <Glyph item={item} collapsed={collapsed} />
-              {collapsed ? (
-                <span className="sr-only">{item.label}</span>
-              ) : (
-                <>
-                  <span className="flex-1 text-left">{item.label}</span>
-                  <ChevronRight className="size-4 shrink-0" aria-hidden />
-                </>
-              )}
+              <Glyph item={item} collapsed />
+              <span className="sr-only">{item.label}</span>
             </button>
           </Popover.Trigger>
         </RailTooltip>
@@ -147,12 +117,7 @@ function SectionPopover({
             // Aligned to its row and one step off the sidebar.
             sideOffset={4}
             collisionPadding={8}
-            className={cn(
-              'z-[--z-popover] flex flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-surface p-2 shadow-lg',
-              wide
-                ? 'w-[--nav-panel-w] max-h-[--nav-panel-max-h]'
-                : 'min-w-52 max-h-[--nav-panel-max-h]',
-            )}
+            className="z-[--z-popover] flex max-h-[--nav-panel-max-h] w-[--nav-panel-w] flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-surface p-2 shadow-lg"
           >
             <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {item.label}
@@ -199,47 +164,24 @@ function SectionPopover({
   );
 }
 
-/** The desktop nav list. `collapsed` is the icon rail, where every popover is the wide shape. */
+/** The desktop icon rail: a row is its glyph, and a section opens beside it. */
 export function SidebarNav({
   items,
   pathname,
-  collapsed,
-  onNavigate,
-}: Readonly<{
-  items: readonly NavItem[];
-  pathname: string;
-  collapsed: boolean;
-  onNavigate?: () => void;
-}>): ReactNode {
+}: Readonly<{ items: readonly NavItem[]; pathname: string }>): ReactNode {
   const activePath = activeNavPath(items, pathname);
 
   return (
     <ul className="flex flex-col gap-0.5">
-      {items.map((item) => {
-        if (!isNavSection(item)) {
-          return (
-            <li key={item.label}>
-              <Leaf
-                item={item}
-                collapsed={collapsed}
-                activePath={activePath}
-                onNavigate={onNavigate}
-              />
-            </li>
-          );
-        }
-        const wide = collapsed || resolveNavLayout(item) === NAV_LAYOUT.PANEL;
-        return (
-          <SectionPopover
-            key={item.label}
-            item={item}
-            activePath={activePath}
-            collapsed={collapsed}
-            wide={wide}
-            onNavigate={onNavigate}
-          />
-        );
-      })}
+      {items.map((item) =>
+        isNavSection(item) ? (
+          <SectionPopover key={item.label} item={item} activePath={activePath} />
+        ) : (
+          <li key={item.label}>
+            <Leaf item={item} collapsed activePath={activePath} />
+          </li>
+        ),
+      )}
     </ul>
   );
 }
