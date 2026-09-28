@@ -1,5 +1,5 @@
 /** The assignments module's public surface (docs/03 §4.1). */
 export { AssignmentsModule } from './assignments.module';
 export { AssignmentsService } from './assignments.service';
-/** What a finalized reading did NOT cover — the offer gate in `tests` turns on it. */
-export { unreadBySection } from './unread-questions';
+/** What a reader has not checked — the offer gate and the paper's writes in `tests` turn on it. */
+export { reopenReadingIfUnchecked, uncheckedOn } from './unread-questions';

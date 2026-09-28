@@ -69,35 +69,47 @@ const configRow = (paper: Paper) =>
 
 const statusOf = async (paper: Paper): Promise<TestStatus> => (await testRow(paper)).status;
 
-/** A section read at a moment, so a paper question added after it is provably uncovered. */
-async function readAt(paper: Paper, sectionIndex: number, when: Date) {
-  const admin = await makeAdmin(prisma, { fullName: 'Priya' });
-  return prisma.questionAssignment.create({
+/** A released reading of one section, and a tick from its reader on every question there but `unchecked`. */
+async function readSection(paper: Paper, sectionIndex: number, unchecked: readonly string[] = []) {
+  const admin = await makeAdmin(prisma);
+  const baseConfigSectionId = paper.sectionIds[sectionIndex] ?? '';
+  await prisma.questionAssignment.create({
     data: {
       id: uid(),
       testId: paper.testId,
       baseConfigId: paper.catalog.baseConfigId,
-      baseConfigSectionId: paper.sectionIds[sectionIndex] ?? '',
+      baseConfigSectionId,
       assigneeId: admin.id,
       role: ASSIGNMENT_ROLES.PROOFREADER,
-      finalizedAt: when,
+      handedAt: new Date(),
+      finalizedAt: new Date(),
     },
-    select: { id: true },
+  });
+  const onPaper = await prisma.paperQuestion.findMany({
+    where: { testId: paper.testId, baseConfigSectionId, questionId: { notIn: [...unchecked] } },
+    select: { questionId: true },
+  });
+  await prisma.questionReview.createMany({
+    data: onPaper.map(({ questionId }) => ({
+      testId: paper.testId,
+      baseConfigSectionId,
+      questionId,
+      checkedAt: new Date(),
+      checkedById: admin.id,
+    })),
   });
 }
 
 describe('FinalizeService — a reading covers the paper, not just the section', () => {
-  /** The failure this prevents: a question nobody read reaching a student because the row said finalized. */
-  it('refuses a paper question added after its section was marked read', async () => {
+  /** The failure this prevents: a question nobody checked reaching a student because the row said released. */
+  it('refuses a paper question its reader has not checked', async () => {
     const paper = await draft();
-    const yesterday = new Date(Date.now() - 86_400_000);
-    await readAt(paper, 0, yesterday);
-    await readAt(paper, 1, yesterday);
-    // Added now, so it joined the paper long after either reading said it was done.
-    await prisma.paperQuestion.updateMany({
+    const [swappedIn] = await prisma.paperQuestion.findMany({
       where: { testId: paper.testId, baseConfigSectionId: paper.sectionIds[0] ?? '' },
-      data: { createdAt: new Date() },
+      select: { questionId: true },
     });
+    await readSection(paper, 0, [swappedIn?.questionId ?? '']);
+    await readSection(paper, 1);
 
     const error = await service
       .offer(paper.testId)
@@ -105,13 +117,16 @@ describe('FinalizeService — a reading covers the paper, not just the section',
       .catch((thrown: unknown) => thrown);
 
     assert.ok(AppException.is(error));
-    assert.match(error.message, /has not seen/);
+    assert.match(
+      error.message,
+      /Reasoning has 1 question on the paper its proof-reader has not checked/,
+    );
   });
 
-  it('offers a paper whose questions all predate the reading', async () => {
+  it('offers a paper whose every question its reader checked', async () => {
     const paper = await draft();
-    await readAt(paper, 0, new Date());
-    await readAt(paper, 1, new Date());
+    await readSection(paper, 0);
+    await readSection(paper, 1);
 
     await service.offer(paper.testId);
 

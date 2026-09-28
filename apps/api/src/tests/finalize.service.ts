@@ -12,7 +12,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
-import { unreadBySection } from '../assignments';
+import { uncheckedOn } from '../assignments';
 import { paperCompletenessIssues, scopeRefOf } from './test-rules';
 
 const OFFER_SELECT = {
@@ -175,21 +175,30 @@ export class FinalizeService {
     await this.assertPaperWasRead(testId);
   }
 
-  /** Finalized is not the same as covering the paper — the paper can change after the reading. */
+  /** Released is not the same as covering the paper: every question on a read section carries its reader's tick. */
   private async assertPaperWasRead(testId: string): Promise<void> {
-    const unread = await unreadBySection(this.prisma, testId);
-    if (unread.size === 0) return;
-
-    const sections = await this.prisma.baseConfigSection.findMany({
-      where: { id: { in: [...unread.keys()] } },
-      select: { id: true, name: true },
+    const unchecked = await this.prisma.paperQuestion.findMany({
+      where: {
+        ...uncheckedOn(testId),
+        baseConfigSection: {
+          assignments: {
+            some: { testId, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null },
+          },
+        },
+      },
+      select: { baseConfigSection: { select: { name: true } } },
     });
-    const issues = sections.map((section) => {
-      const count = unread.get(section.id) ?? 0;
-      return `${section.name} has ${count} question${count === 1 ? '' : 's'} on the paper that its proof-reader has not seen.`;
-    });
+    const bySection = new Map<string, number>();
+    for (const { baseConfigSection } of unchecked) {
+      bySection.set(baseConfigSection.name, (bySection.get(baseConfigSection.name) ?? 0) + 1);
+    }
+    const issues = [...bySection].map(
+      ([name, count]) =>
+        `${name} has ${count} question${count === 1 ? '' : 's'} on the paper its proof-reader has not checked.`,
+    );
     const [first] = issues;
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, first ?? '', {
+    if (first === undefined) return;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });
   }

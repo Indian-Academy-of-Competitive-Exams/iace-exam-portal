@@ -126,6 +126,26 @@ const sayFramed = (testId: string) =>
 const finalizedNow = (id: string) =>
   prisma.questionAssignment.update({ where: { id }, data: { finalizedAt: new Date() } });
 
+/** A reader's release as the flow leaves it: every question on their section checked, then the stamp. */
+async function releasedNow(id: string) {
+  const { testId, baseConfigSectionId } = await prisma.questionAssignment.findUniqueOrThrow({
+    where: { id },
+  });
+  const onPaper = await prisma.paperQuestion.findMany({
+    where: { testId, baseConfigSectionId },
+    select: { questionId: true },
+  });
+  await prisma.questionReview.createMany({
+    data: onPaper.map(({ questionId }) => ({
+      testId,
+      baseConfigSectionId,
+      questionId,
+      checkedAt: new Date(),
+    })),
+  });
+  await finalizedNow(id);
+}
+
 /** A section's paper at its count, handed to its reader and every question checked: ready to release. */
 async function wholePaper(catalog: Catalog, testId: string, baseConfigSectionId: string) {
   await fillPaper(catalog, testId, baseConfigSectionId);
@@ -1162,7 +1182,7 @@ describe('the offer gate', () => {
         /1 section is still being proof-read: Reasoning/.test(error.message),
     );
 
-    await finalizedNow(created.id);
+    await releasedNow(created.id);
     const result = await finalizer.offer(paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
@@ -1211,7 +1231,7 @@ describe('the offer gate', () => {
         /1 section is still being proof-read: Reasoning/.test(error.message),
     );
 
-    await finalizedNow(readerRow.id);
+    await releasedNow(readerRow.id);
     const result = await finalizer.offer(paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);

@@ -983,6 +983,83 @@ describe('PaperService — a section reaches its proof-reader', () => {
   });
 });
 
+describe('PaperService — a released section changed after its reading', () => {
+  /** Quant released by its reader, who checked both questions the paper holds there. */
+  async function released() {
+    const service = await serviceWith();
+    await pickWholePaper(service);
+    const admin = await makeAdmin(prisma, { fullName: 'Ravi' });
+    const reading = await prisma.questionAssignment.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_2'),
+        assigneeId: admin.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+        handedAt: new Date(),
+        finalizedAt: new Date(),
+      },
+    });
+    await prisma.questionReview.createMany({
+      data: [idFor('q1'), idFor('q2')].map((questionId) => ({
+        testId: TEST,
+        baseConfigSectionId: idFor('sec_2'),
+        questionId,
+        checkedAt: new Date(),
+        checkedById: admin.id,
+      })),
+    });
+    const releasedAt = async () =>
+      (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } }))
+        .finalizedAt;
+    const rowOf = async (questionId: string) =>
+      (await rows()).find((row) => row.questionId === questionId)?.id ?? '';
+    return { service, releasedAt, rowOf };
+  }
+
+  /** The failure this prevents: a test nobody can offer, holding a question its reader may no longer check. */
+  it('goes back to its reader when a question they never checked is swapped in', async () => {
+    const { service, releasedAt, rowOf } = await released();
+
+    await service.replaceQuestion(TEST, await rowOf(idFor('q1')), { questionId: idFor('q3') });
+
+    assert.equal(await releasedAt(), null);
+  });
+
+  it('goes back to its reader when an unchecked question is added or drawn', async () => {
+    for (const refill of [
+      (service: PaperService) =>
+        service.addQuestions(TEST, {
+          baseConfigSectionId: idFor('sec_2'),
+          questionIds: [idFor('q3')],
+        }),
+      (service: PaperService) => service.fillSection(TEST, idFor('sec_2')),
+    ]) {
+      await resetDatabase(prisma);
+      const { service, releasedAt, rowOf } = await released();
+      await service.removeQuestions(TEST, [await rowOf(idFor('q2'))]);
+      assert.notEqual(await releasedAt(), null, 'a question taken off leaves nothing to read');
+
+      await refill(service);
+
+      assert.equal(await releasedAt(), null);
+    }
+  });
+
+  it('stays released when the question put back is one its reader already checked', async () => {
+    const { service, releasedAt, rowOf } = await released();
+    await service.removeQuestions(TEST, [await rowOf(idFor('q2'))]);
+
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q2')],
+    });
+
+    assert.notEqual(await releasedAt(), null);
+  });
+});
+
 describe('PaperService — two admins on one paper', () => {
   const pick = (service: PaperService, questionId: string, editor: Editor) =>
     service.addQuestions(

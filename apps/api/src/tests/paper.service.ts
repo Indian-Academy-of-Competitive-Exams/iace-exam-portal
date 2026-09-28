@@ -41,6 +41,7 @@ import { beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
 import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
+import { reopenReadingIfUnchecked } from '../assignments';
 import { AuditContext } from '../audit';
 
 const NOT_DRAWABLE_MESSAGE =
@@ -200,6 +201,7 @@ export class PaperService {
           negativeMarks: section.negativeMarks,
         })),
       });
+      await reopenReadingIfUnchecked(tx, testId, section.id);
     }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, config));
@@ -242,6 +244,7 @@ export class PaperService {
           order: highest + index + 1,
         })),
       });
+      await reopenReadingIfUnchecked(tx, testId, section.id);
     }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, config));
@@ -332,6 +335,7 @@ export class PaperService {
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
       });
+      await reopenReadingIfUnchecked(tx, testId, row.baseConfigSectionId);
     }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));

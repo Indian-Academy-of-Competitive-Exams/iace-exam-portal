@@ -42,6 +42,7 @@ import { sectionEditingBy } from '../common/edit-lock';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+import { uncheckedOn } from './unread-questions';
 
 const CHOOSE_WITH_DONE_MESSAGE =
   'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
@@ -551,11 +552,7 @@ export class AssignmentsService {
   /** Released means every question on the paper was looked at and passed, not only most of them. */
   private async assertEveryQuestionChecked(row: AssignmentRow): Promise<void> {
     const unchecked = await this.prisma.paperQuestion.count({
-      where: {
-        testId: row.testId,
-        baseConfigSectionId: row.baseConfigSectionId,
-        question: { reviews: { none: { testId: row.testId, checkedAt: { not: null } } } },
-      },
+      where: { ...uncheckedOn(row.testId), baseConfigSectionId: row.baseConfigSectionId },
     });
     if (unchecked > 0) {
       throw notWhole(`${unchecked} of this section's questions are not checked yet.`);

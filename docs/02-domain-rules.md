@@ -391,8 +391,10 @@ and needs no mapping at all.
   Only the sent-back questions go back; the rest stay with the reader. The typist fixes one and
   marks it fixed, and it returns to be checked again. A minor fix the reader makes directly.
 - **Releasing a section needs every question on its paper checked** and none still with the
-  typist. It sets the reader's `finalizedAt` and ends their authority over it. A paper row that
-  joins after the release is unread until the section is released again.
+  typist. It sets the reader's `finalizedAt` and ends their authority over it. A question added,
+  drawn or swapped onto the paper after the release that the reader has not checked sends the
+  section back to them in the same write, and the offer refuses any question on a read section
+  without its tick — one definition of read, the tick, for release and offer alike.
 - **A test owner changes a question only when the section is back with them**: a picked section
   before it is handed over, or any section once its reader has released it — and never once the
   test is offered.
