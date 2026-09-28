@@ -467,8 +467,7 @@ h3 {
 
    The document stays in normal flow — that is what paginates it — so what goes
    is every element that neither contains it nor sits inside it. Nothing here
-   sets a colour: the print runs on the light token set, which `usePrint` turns
-   on before the dialog opens.
+   sets a colour: the sheet prints in whichever token set is live.
    ========================================================================== */
 @media print {
   body :not(:has([data-print-document])):not([data-print-document]):not([data-print-document] *) {
