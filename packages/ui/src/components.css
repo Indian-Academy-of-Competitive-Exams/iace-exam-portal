@@ -2,7 +2,7 @@
    IACE COMPONENTS — what a React component cannot carry
    packages/ui/components.css   ·   requires tokens.css v0.3
 
-   scrollbars · headings · rich content · watermark · scaffold editor · figures · print
+   scrollbars · headings · rich content · watermark · scaffold editor · figures
 
    Every value here is a token reference. If you find yourself writing a raw
    px or hex below this line, the token layer is missing something — add it
@@ -455,43 +455,4 @@ h3 {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
-}
-
-/* ============================================================================
-   PRINT — a document, not a viewport
-
-   The app is scrollports inside a fixed frame. Paper is one long flow, so this
-   undoes that for a region marked `data-print-document` and drops everything
-   else: the shell, the filters and the page's own controls are screen chrome
-   and none of them belong on the sheet.
-
-   The document stays in normal flow — that is what paginates it — so what goes
-   is every element that neither contains it nor sits inside it. Nothing here
-   sets a colour: the sheet prints in whichever token set is live.
-   ========================================================================== */
-@media print {
-  body :not(:has([data-print-document])):not([data-print-document]):not([data-print-document] *) {
-    display: none;
-  }
-
-  /* `!important` on purpose: this outranks the frames' own `overflow-hidden`, which is the
-     one thing standing between the document and the second page. */
-  html:has([data-print-document]),
-  html:has([data-print-document]) body,
-  body :has([data-print-document]),
-  [data-print-document] {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  /* Raising a flag needs the app, so the controls for it are not on the paper. */
-  [data-print-document] [data-print-hide] {
-    display: none;
-  }
-
-  /* A question is read whole: it moves to the next sheet rather than splitting. */
-  [data-print-block] {
-    break-inside: avoid;
-  }
 }

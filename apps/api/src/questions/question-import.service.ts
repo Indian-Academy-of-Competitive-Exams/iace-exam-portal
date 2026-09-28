@@ -294,7 +294,7 @@ export class QuestionImportService {
   /** A previewed, uncommitted run; with an actor, only the one who previewed it may touch it. */
   private async openRun(importLogId: string, actorId: string | undefined) {
     const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
-    if (!log || log.feature !== AUDIT_FEATURE.QUESTION || !log.fileS3Key) {
+    if (log?.feature !== AUDIT_FEATURE.QUESTION || !log.fileS3Key) {
       throw new AppException(ErrorCodes.NOT_FOUND, UPLOAD_GONE);
     }
     if (actorId !== undefined && log.actorId !== actorId) {

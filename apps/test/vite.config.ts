@@ -19,7 +19,11 @@ function stampServiceWorker(): Plugin {
       if (!source.includes(SW_CACHE_NAME))
         throw new Error(`sw.js no longer names ${SW_CACHE_NAME}`);
       const build = createHash('sha256')
-        .update(Object.keys(bundle).sort().join('\n'))
+        .update(
+          Object.keys(bundle)
+            .sort((a, b) => a.localeCompare(b, 'en'))
+            .join('\n'),
+        )
         .digest('hex')
         .slice(0, 12);
       writeFileSync(file, source.replace(SW_CACHE_NAME, `iace-shell-${build}`));
