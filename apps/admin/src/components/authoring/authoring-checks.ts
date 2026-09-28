@@ -1,5 +1,6 @@
 import { QUESTION_TYPE, type ValidationIssue } from '@iace/contracts';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
+import { KEY_NAMES } from '../../lib/constants';
 import { type Check } from './authoring-preview';
 
 /** What the rules found, said as the checklist a typist reads top to bottom. */
@@ -67,7 +68,7 @@ export function checksFor(
       key: 'languages',
       label: `${missing.join(' and ')} not entered yet`,
       state: 'warn',
-      meta: 'Alt+L to switch',
+      meta: `${KEY_NAMES.ALT}+L to switch`,
     });
   }
 

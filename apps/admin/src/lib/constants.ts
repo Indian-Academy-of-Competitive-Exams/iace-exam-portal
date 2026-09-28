@@ -364,6 +364,11 @@ export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>>
 };
 
 /** Who staffs a section. Written out — never "PR" for a proof-reader. */
+const IS_MAC = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac');
+
+/** A Mac prints Cmd and Option where every other keyboard prints Ctrl and Alt; the editor answers to both. */
+export const KEY_NAMES = { MOD: IS_MAC ? 'Cmd' : 'Ctrl', ALT: IS_MAC ? 'Option' : 'Alt' } as const;
+
 /** Why a question went back to its typist, in the words the reader picks it by. */
 export const SEND_BACK_REASON_LABELS: Readonly<Record<SendBackReason, string>> = {
   [SEND_BACK_REASONS.SPELLING]: 'Spelling mistakes',

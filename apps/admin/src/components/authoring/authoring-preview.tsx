@@ -42,9 +42,7 @@ export function AuthoringPreview({
                 <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               )}
               <RichContent html={option} lang={language} className="min-w-0 flex-1" />
-              {index === correct ? (
-                <span className="shrink-0 text-xs font-medium text-success-ink">Correct</span>
-              ) : null}
+              {index === correct ? <span className="sr-only">Correct</span> : null}
             </li>
           ))}
         </ol>

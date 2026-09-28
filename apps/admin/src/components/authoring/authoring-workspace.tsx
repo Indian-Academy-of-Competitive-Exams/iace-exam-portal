@@ -166,15 +166,21 @@ export function AuthoringWorkspace({
   const shown = edits[active] ?? base;
   const editable = isNew || (activeCard?.editable ?? false);
 
-  // Lands on the question the URL named, once the cards are there to land on.
-  const landed = useRef(false);
+  const held = useRef(active);
   useEffect(() => {
-    if (landed.current || !startAt) return;
-    const card = cardRefs.current.get(startAt);
-    if (!card) return;
-    landed.current = true;
-    card.scrollIntoView({ block: 'start' });
-  });
+    held.current = active;
+  }, [active]);
+
+  // Cards are the scroller's height, so any resize moves them all: hold the card in view, the opened one first.
+  useEffect(() => {
+    const view = scroller.current;
+    if (!view) return;
+    const stay = new ResizeObserver(() =>
+      cardRefs.current.get(held.current)?.scrollIntoView({ block: 'start' }),
+    );
+    stay.observe(view);
+    return () => stay.disconnect();
+  }, []);
 
   useEffect(() => {
     if (active) onActive?.(active);

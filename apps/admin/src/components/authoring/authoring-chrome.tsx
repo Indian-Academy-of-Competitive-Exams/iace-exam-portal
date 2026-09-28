@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
 import { Kbd } from '@iace/ui';
+import { KEY_NAMES } from '../../lib/constants';
 import { TOUR_TARGETS } from '../../lib/tours';
 
-const IS_MAC = navigator.userAgent.includes('Mac');
-/** A Mac prints Cmd and Option where every other keyboard prints Ctrl and Alt; the editor answers to both. */
-const MOD_KEY = IS_MAC ? 'Cmd' : 'Ctrl';
-const ALT_KEY = IS_MAC ? 'Option' : 'Alt';
+const { MOD: MOD_KEY, ALT: ALT_KEY } = KEY_NAMES;
 
 /** A keyboard-only tool says which keys, once, on one line that costs the box no room. */
 export function Legend({
