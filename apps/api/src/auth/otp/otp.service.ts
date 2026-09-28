@@ -68,9 +68,8 @@ export class OtpService {
       await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec);
     }
 
-    await this.deliver(actor, identifier, code, ttlSec).catch(async (error: unknown) => {
-      // Nothing reached them, so nothing should make them wait before asking again.
-      await this.redis.del(cooldownKey);
+    // The cooldown stays: the day's counters are spent, and it paces a retry through an outage.
+    await this.deliver(actor, identifier, code, ttlSec).catch((error: unknown) => {
       this.logger.error(`An OTP for ${actor} could not be sent`, error);
       throw new AppException(
         ErrorCodes.SERVICE_UNAVAILABLE,
