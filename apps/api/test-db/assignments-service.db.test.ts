@@ -21,12 +21,14 @@ import {
   type SectionProgressQueryInput,
   type SectionProgressRow,
 } from '@iace/contracts';
+import type { Prisma } from '@prisma/client';
 import { AuditContext } from '../src/audit';
 import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { FinalizeService } from '../src/tests/finalize.service';
+import type { PrismaService } from '../src/prisma/prisma.service';
 import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
@@ -293,6 +295,67 @@ describe('AssignmentsService — assigning', () => {
         error.code === ErrorCodes.VALIDATION_ERROR &&
         Boolean(error.fieldErrors?.assigneeId),
     );
+  });
+});
+
+/** Nothing outside the transaction can see a lock, so this records the order its statements left in. */
+function watchingLocks(order: string[]): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) =>
+          work(
+            new Proxy(tx, {
+              get(inner, member: string | symbol) {
+                if (member === '$queryRaw') {
+                  return (sql: TemplateStringsArray, ...values: unknown[]) => {
+                    if (sql.join('?').includes('FROM "Test"')) order.push('test');
+                    return inner.$queryRaw(sql, ...values);
+                  };
+                }
+                if (member !== 'questionAssignment') return Reflect.get(inner, member) as unknown;
+                return new Proxy(inner.questionAssignment, {
+                  get(delegate, method: string | symbol) {
+                    if (method !== 'update') return Reflect.get(delegate, method) as unknown;
+                    return (args: Prisma.QuestionAssignmentUpdateArgs) => {
+                      order.push('holder');
+                      return delegate.update(args);
+                    };
+                  },
+                });
+              },
+            }),
+          ),
+        );
+    },
+  });
+}
+
+describe('AssignmentsService — one lock order, Test before its rows', () => {
+  /** The failure this prevents: passing a role on while an edit that holds the test reopens the same holder, a deadlock. */
+  it('locks the test before it marks the earlier holder replaced', async () => {
+    const { assignments, admins } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog);
+    const first = await makeAdmin(prisma);
+    const second = await makeAdmin(prisma);
+    await grant(first.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    await grant(second.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const reading = (assigneeId: string) =>
+      body({ baseConfigSectionId: section.id, assigneeId, role: ASSIGNMENT_ROLES.PROOFREADER });
+    await assignments.assign(test.id, reading(first.id), first.id);
+    const order: string[] = [];
+    const watched = new AssignmentsService(
+      watchingLocks(order),
+      new FakeRedis().asService(),
+      admins,
+    );
+
+    await watched.assign(test.id, reading(second.id), second.id);
+
+    assert.deepEqual(order, ['test', 'holder']);
   });
 });
 

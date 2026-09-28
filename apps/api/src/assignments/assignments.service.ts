@@ -261,6 +261,8 @@ export class AssignmentsService {
 
     try {
       const row = await this.prisma.$transaction(async (tx) => {
+        // Test before its rows, the app's one lock order: an edit reopening this holder took the test first.
+        await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" = ${testId}::uuid FOR UPDATE`;
         if (holding) {
           await tx.questionAssignment.update({
             where: { id: holding.id },
