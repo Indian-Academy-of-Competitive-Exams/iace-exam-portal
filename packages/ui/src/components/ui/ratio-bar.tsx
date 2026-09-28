@@ -67,10 +67,12 @@ export function RatioBar({
     onChange(moved(values, handle, handle === 0 ? boundary : boundary - values[0]));
   };
 
+  const follow = React.useEffectEvent((handle: 0 | 1, clientX: number) => dragTo(handle, clientX));
+
   /** On the WINDOW: a pointer leaves a few-pixel handle long before the drag is over. */
   React.useEffect(() => {
     if (dragging === null) return undefined;
-    const move = (event: PointerEvent) => dragTo(dragging, event.clientX);
+    const move = (event: PointerEvent) => follow(dragging, event.clientX);
     const stop = () => setDragging(null);
 
     window.addEventListener('pointermove', move);
@@ -81,7 +83,7 @@ export function RatioBar({
       window.removeEventListener('pointerup', stop);
       window.removeEventListener('pointercancel', stop);
     };
-  });
+  }, [dragging]);
 
   const fills = [
     { part: parts[0], value: values[0] },
