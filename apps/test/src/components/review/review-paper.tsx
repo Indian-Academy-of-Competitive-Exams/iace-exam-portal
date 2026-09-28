@@ -20,17 +20,16 @@ import {
   type ExamSection,
   type LanguageCode,
   type LanguageMode,
-  type ScoreCardQuestion,
-  type SolutionQuestion,
 } from '@iace/contracts';
-import { htmlOf, shownLanguages } from '@iace/app-kit';
-
-/** One question as the review holds it: always their own answer, and the key only past the gate. */
-export type ReviewedQuestion = ScoreCardQuestion & Partial<SolutionQuestion>;
-
-/** How a question went, which is what colours the palette and the marker beside an option. */
-const VERDICT = { RIGHT: 'RIGHT', WRONG: 'WRONG', LEFT: 'LEFT' } as const;
-type Verdict = (typeof VERDICT)[keyof typeof VERDICT];
+import {
+  htmlOf,
+  shownLanguages,
+  VERDICT,
+  verdictOf,
+  type BookmarkControl,
+  type ReviewedQuestion,
+  type Verdict,
+} from '@iace/app-kit';
 
 const VERDICT_LABEL: Readonly<Record<Verdict, string>> = {
   [VERDICT.RIGHT]: 'Correct',
@@ -44,18 +43,6 @@ const VERDICT_SEAT: Readonly<Record<Verdict, string>> = {
   [VERDICT.LEFT]: 'border-border bg-muted text-muted-foreground',
 };
 
-const verdictOf = (question: ReviewedQuestion): Verdict => {
-  if (question.isCorrect === true) return VERDICT.RIGHT;
-  return question.isCorrect === false ? VERDICT.WRONG : VERDICT.LEFT;
-};
-
-/** The star, wired by the screen. Absent while the gate is shut — there is nothing to review yet. */
-export interface BookmarkControl {
-  saved: ReadonlySet<string>;
-  onToggle: (questionId: string) => void;
-  pendingId: string | null;
-}
-
 export interface ReviewPaperProps {
   sections: readonly ExamSection[];
   questions: readonly ReviewedQuestion[];
@@ -63,6 +50,7 @@ export interface ReviewPaperProps {
   languageMode: LanguageMode;
   /** What the gate is still holding back, said once at the top rather than per question. */
   notice?: React.ReactNode;
+  /** Absent while the gate is shut — there is nothing to review yet. */
   bookmark?: BookmarkControl;
 }
 

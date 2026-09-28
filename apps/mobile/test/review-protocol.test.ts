@@ -8,12 +8,8 @@ import {
   PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
 } from '@iace/contracts';
-import {
-  reviewScreen,
-  verdictOf,
-  VERDICT,
-  type ReviewedQuestion,
-} from '../src/components/review/review-protocol';
+import { verdictOf, VERDICT, type ReviewedQuestion } from '@iace/app-kit';
+import { reviewScreen } from '../src/components/review/review-protocol';
 
 const node = (text: string) => [{ type: 'TEXT' as const, text }];
 

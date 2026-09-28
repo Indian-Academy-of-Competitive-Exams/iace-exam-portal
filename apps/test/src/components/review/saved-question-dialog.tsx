@@ -15,7 +15,8 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
-import { ReviewQuestion, type ReviewedQuestion } from './review-paper';
+import { type ReviewedQuestion } from '@iace/app-kit';
+import { ReviewQuestion } from './review-paper';
 
 /** The two reads the review screen already makes, cached per sitting so a second row is free. */
 function useSatQuestion(saved: SavedQuestion) {

@@ -14,7 +14,7 @@ import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { ReviewContent } from '../review/review-content';
-import { type ReviewedQuestion } from '../review/review-protocol';
+import { type ReviewedQuestion } from '@iace/app-kit';
 
 export function SavedQuestionSheet({
   saved,

@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../ui/text';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
-import { VERDICT, verdictOf, type ReviewedQuestion, type Verdict } from './review-protocol';
+import { VERDICT, verdictOf, type ReviewedQuestion, type Verdict } from '@iace/app-kit';
 
 interface VerdictStyle {
   label: string;

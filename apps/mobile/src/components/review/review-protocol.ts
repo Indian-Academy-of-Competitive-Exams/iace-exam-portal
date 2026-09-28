@@ -10,23 +10,9 @@ import {
   type LanguageMode,
   type QuestionLanguage,
   type RichContent,
-  type ScoreCardQuestion,
-  type SolutionQuestion,
 } from '@iace/contracts';
-import { htmlOf, shownLanguages } from '@iace/app-kit';
+import { htmlOf, shownLanguages, type ReviewedQuestion } from '@iace/app-kit';
 import { type QuestionScreen, type ScreenContent } from '../exam/question-bridge';
-
-/** One question as the review holds it: always their own answer, the key only past the gate. */
-export type ReviewedQuestion = ScoreCardQuestion & Partial<SolutionQuestion>;
-
-/** How a question went, which is what colours a palette cell and the marker beside an option. */
-export const VERDICT = { RIGHT: 'RIGHT', WRONG: 'WRONG', LEFT: 'LEFT' } as const;
-export type Verdict = (typeof VERDICT)[keyof typeof VERDICT];
-
-export function verdictOf(question: ReviewedQuestion): Verdict {
-  if (question.isCorrect === true) return VERDICT.RIGHT;
-  return question.isCorrect === false ? VERDICT.WRONG : VERDICT.LEFT;
-}
 
 export interface ReviewInput {
   question: ReviewedQuestion;

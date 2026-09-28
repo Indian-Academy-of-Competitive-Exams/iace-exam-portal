@@ -11,7 +11,8 @@ import { type LanguageCode, type LanguageMode } from '@iace/contracts';
 import { showScript } from '../exam/question-protocol';
 import { QuestionPageView } from '../exam/question-page-view';
 import { Skeleton } from '../ui/skeleton';
-import { reviewScreen, type ReviewedQuestion } from './review-protocol';
+import { type ReviewedQuestion } from '@iace/app-kit';
+import { reviewScreen } from './review-protocol';
 
 export interface ReviewContentProps {
   question: ReviewedQuestion;
