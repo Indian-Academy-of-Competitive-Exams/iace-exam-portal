@@ -43,6 +43,7 @@ import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { uncheckedOn } from './unread-questions';
 import { formRefusal } from '../common/form-refusal';
+import { everyTermMatches } from '../common/search-terms';
 
 const CHOOSE_WITH_DONE_MESSAGE =
   'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
@@ -415,7 +416,8 @@ export class AssignmentsService {
       .filter((row) => !query.assigneeId || heldByAnyOf(row, query.assigneeId))
       .filter((row) => !due || dueWithin(row, due));
 
-    const items = rows.slice((query.page - 1) * query.pageSize, query.page * query.pageSize);
+    const { skip, take } = pageArgs(query);
+    const items = rows.slice(skip, skip + take);
     const written = await this.sectionWrittenCounts(items);
     return paged(
       query,
@@ -436,7 +438,9 @@ export class AssignmentsService {
     const where: Prisma.TestWhereInput = {
       ...UNFROZEN_TEST,
       ...(ownScope(query, isSuperAdmin) ? { assignments: { some: heldBy(adminId, query) } } : {}),
-      ...(query.q ? { title: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.TestWhereInput>(query.q, (term) => [
+        { title: { contains: term, mode: 'insensitive' } },
+      ]),
     };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.test.findMany({

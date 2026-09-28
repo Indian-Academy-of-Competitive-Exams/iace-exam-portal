@@ -17,6 +17,7 @@ import {
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
+import { everyTermMatches } from '../common/search-terms';
 
 const SUBJECT_INCLUDE = {
   _count: { select: { topics: true, questions: true } },
@@ -47,9 +48,9 @@ export class TaxonomyService {
   // ==========================================================================
 
   async listSubjects(query: SubjectListQuery): Promise<Paginated<Subject>> {
-    const where: Prisma.SubjectWhereInput = query.q
-      ? { name: { contains: query.q, mode: 'insensitive' } }
-      : {};
+    const where = everyTermMatches<Prisma.SubjectWhereInput>(query.q, (term) => [
+      { name: { contains: term, mode: 'insensitive' } },
+    ]);
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.subject.findMany({
@@ -107,7 +108,9 @@ export class TaxonomyService {
 
   async listTopics(query: TopicListQuery): Promise<Paginated<Topic>> {
     const where: Prisma.TopicWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.TopicWhereInput>(query.q, (term) => [
+        { name: { contains: term, mode: 'insensitive' } },
+      ]),
       ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
     };
 

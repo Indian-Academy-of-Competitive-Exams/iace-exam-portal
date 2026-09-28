@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { type Prisma } from '@prisma/client';
 import {
   ADMIN_ROLES,
   AppException,
@@ -26,6 +27,7 @@ import { pageArgs, paged } from '../common/pagination';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { everyTermMatches } from '../common/search-terms';
 
 /** The two levels a key can be held at. A feature always reports both lists. */
 const BOTH_LEVELS = [PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE] as const;
@@ -90,14 +92,10 @@ export class AdminsService {
   async list(query: AdminListQuery): Promise<Paginated<AdminDto>> {
     const where = {
       ...(query.activeOnly === undefined ? {} : { isActive: query.activeOnly }),
-      ...(query.q
-        ? {
-            OR: [
-              { email: { contains: query.q, mode: 'insensitive' as const } },
-              { fullName: { contains: query.q, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+      ...everyTermMatches<Prisma.AdminWhereInput>(query.q, (term) => [
+        { email: { contains: term, mode: 'insensitive' } },
+        { fullName: { contains: term, mode: 'insensitive' } },
+      ]),
     };
 
     const [rows, total] = await Promise.all([

@@ -38,6 +38,7 @@ const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
+import { everyTermMatches } from '../common/search-terms';
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
@@ -123,7 +124,9 @@ export class StudentsService {
     const where: Prisma.AttemptWhereInput = {
       studentId,
       status: ATTEMPT_STATUS.EVALUATED,
-      ...(query.q ? { test: { title: { contains: query.q, mode: 'insensitive' } } } : {}),
+      ...everyTermMatches<Prisma.AttemptWhereInput>(query.q, (term) => [
+        { test: { title: { contains: term, mode: 'insensitive' } } },
+      ]),
     };
 
     const [rows, total] = await this.prisma.$transaction([

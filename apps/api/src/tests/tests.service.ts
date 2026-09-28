@@ -39,6 +39,8 @@ import {
 import { beginDraftPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 import { formRefusal } from '../common/form-refusal';
+import { pageArgs, paged } from '../common/pagination';
+import { everyTermMatches } from '../common/search-terms';
 
 const TEST_INCLUDE = {
   baseConfig: {
@@ -95,7 +97,9 @@ export class TestsService {
 
   async list(query: TestListQuery): Promise<Paginated<Test>> {
     const where: Prisma.TestWhereInput = {
-      ...(query.q ? { title: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.TestWhereInput>(query.q, (term) => [
+        { title: { contains: term, mode: 'insensitive' } },
+      ]),
       ...(query.examStageId ? { examStageId: query.examStageId } : {}),
       ...(query.examId ? { examStage: { examId: { in: query.examId } } } : {}),
       ...(query.baseConfigId ? { baseConfigId: query.baseConfigId } : {}),
@@ -107,13 +111,12 @@ export class TestsService {
         where,
         include: TEST_INCLUDE,
         orderBy: [{ createdAt: 'desc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.test.count({ where }),
     ]);
 
-    return { items: rows.map(toTest), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toTest), total);
   }
 
   async detail(id: string): Promise<TestDetail> {

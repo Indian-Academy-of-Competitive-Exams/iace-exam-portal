@@ -1,20 +1,17 @@
 import { type Prisma } from '@prisma/client';
 import { ANSWERED_STATES, TEST_STATUS, type AnswerState, type LiveSitting } from '@iace/contracts';
 import { type HeldState } from './attempt-state';
+import { everyTermMatches } from '../common/search-terms';
 
 /** Which tests the ops picker may offer. */
 export function watchableTestsWhere(q: string | undefined): Prisma.TestWhereInput {
   return {
     status: TEST_STATUS.ACTIVE,
     // Both, because a test with no title of its own is shown by the series it sits in.
-    ...(q
-      ? {
-          OR: [
-            { title: { contains: q, mode: 'insensitive' } },
-            { testSeries: { name: { contains: q, mode: 'insensitive' } } },
-          ],
-        }
-      : {}),
+    ...everyTermMatches<Prisma.TestWhereInput>(q, (term) => [
+      { title: { contains: term, mode: 'insensitive' } },
+      { testSeries: { name: { contains: term, mode: 'insensitive' } } },
+    ]),
   };
 }
 

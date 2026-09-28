@@ -111,11 +111,11 @@ describe('which tests the ops picker offers', () => {
   it('adds a typed search beside the status rule, rather than replacing it', () => {
     const where = watchableTestsWhere('cgl');
 
-    assert.deepEqual(Object.keys(where).toSorted(), ['OR', 'status']);
-    assert.equal(where.OR?.length, 2);
+    assert.deepEqual(Object.keys(where).toSorted(), ['AND', 'status']);
+    assert.equal(where.AND && Array.isArray(where.AND) ? where.AND.length : 0, 1);
   });
 
   it('asks nothing about titles when nothing was typed', () => {
-    assert.equal(watchableTestsWhere(undefined).OR, undefined);
+    assert.equal(watchableTestsWhere(undefined).AND, undefined);
   });
 });

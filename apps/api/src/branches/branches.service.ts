@@ -23,6 +23,7 @@ import {
   INACTIVE_BRANCH_MESSAGE,
   ONLINE_BRANCH_EXISTS_MESSAGE,
 } from './branch-rules';
+import { everyTermMatches } from '../common/search-terms';
 
 const BRANCH_INCLUDE = {
   _count: { select: { students: true } },
@@ -81,7 +82,9 @@ export class BranchesService {
 
   async list(query: BranchListQuery): Promise<Paginated<Branch>> {
     const where: Prisma.BranchWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.BranchWhereInput>(query.q, (term) => [
+        { name: { contains: term, mode: 'insensitive' } },
+      ]),
       ...(query.activeOnly ? { isActive: true } : {}),
     };
 

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
+import { everyTermMatches } from '../common/search-terms';
 
 /** Turns the roster's filters into a Prisma query. */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
@@ -27,14 +28,13 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
 
   if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
 
-  const search = query.q?.trim();
-  if (search) {
-    always.push({
-      OR: [
-        { mobile: { contains: search } },
-        { fullName: { contains: search, mode: 'insensitive' } },
-      ],
-    });
+  if (query.q?.trim()) {
+    always.push(
+      everyTermMatches<Prisma.StudentWhereInput>(query.q, (term) => [
+        { mobile: { contains: term } },
+        { fullName: { contains: term, mode: 'insensitive' } },
+      ]),
+    );
   }
 
   const and = matchFilters(always, chosen, query.match);

@@ -45,6 +45,8 @@ import {
   LOCKED_CONFIG_MESSAGE,
 } from './base-config-rules';
 import { formRefusal } from '../common/form-refusal';
+import { pageArgs, paged } from '../common/pagination';
+import { everyTermMatches } from '../common/search-terms';
 
 const CONFIG_INCLUDE = {
   examStage: {
@@ -90,7 +92,9 @@ export class BaseConfigsService {
 
   async list(query: BaseConfigListQuery): Promise<Paginated<BaseConfig>> {
     const where: Prisma.BaseConfigWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.BaseConfigWhereInput>(query.q, (term) => [
+        { name: { contains: term, mode: 'insensitive' } },
+      ]),
       ...(query.examStageId ? { examStageId: query.examStageId } : {}),
       ...(query.examId ? { examStage: { examId: { in: query.examId } } } : {}),
       ...(query.defaultOnly ? { isDefault: true } : {}),
@@ -103,13 +107,12 @@ export class BaseConfigsService {
         include: CONFIG_INCLUDE,
         // The stage's own pattern first, then the customs built from it.
         orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.baseConfig.count({ where }),
     ]);
 
-    return { items: rows.map(toConfig), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toConfig), total);
   }
 
   async detail(id: string): Promise<BaseConfigDetail> {

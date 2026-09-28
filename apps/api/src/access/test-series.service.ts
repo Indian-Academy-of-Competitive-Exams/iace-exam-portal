@@ -24,6 +24,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
 import { isEnabledPatch, startsSwitchedOn } from './series-switch';
+import { everyTermMatches } from '../common/search-terms';
 
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
 const KIND_PAIRING_MESSAGES = {
@@ -100,7 +101,11 @@ export class TestSeriesService {
       ...(query.isEnabled === undefined ? [] : [{ isEnabled: query.isEnabled }]),
     ];
     const always: Prisma.TestSeriesWhereInput[] = query.q
-      ? [{ name: { contains: query.q, mode: 'insensitive' } }]
+      ? [
+          everyTermMatches<Prisma.TestSeriesWhereInput>(query.q, (term) => [
+            { name: { contains: term, mode: 'insensitive' } },
+          ]),
+        ]
       : [];
 
     // Not a filter: it stands outside `match`, which is the reader's All/Any over THEIR choices.

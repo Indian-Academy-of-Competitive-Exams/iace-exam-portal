@@ -21,6 +21,7 @@ import { AttemptStateService } from './attempt-state.service';
 import { numberOrNull } from './attempt-report';
 import { SITTING_SELECT, sittingsFrom, watchableTestsWhere } from './live-ops';
 import { MS_PER_MINUTE } from '../common/time/units';
+import { pageArgs, paged } from '../common/pagination';
 
 const SUBMISSION_SELECT = {
   id: true,
@@ -49,8 +50,7 @@ export class LiveOpsService {
         where,
         // Newest window first: what an ops admin is watching opened recently, or is about to.
         orderBy: [{ opensAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
         select: {
           id: true,
           title: true,
@@ -62,8 +62,9 @@ export class LiveOpsService {
       this.prisma.test.count({ where }),
     ]);
 
-    return {
-      items: rows.map((row) => {
+    return paged(
+      query,
+      rows.map((row) => {
         return {
           id: row.id,
           title: row.title,
@@ -72,10 +73,8 @@ export class LiveOpsService {
           opensAt: row.opensAt?.toISOString() ?? null,
         };
       }),
-      page: query.page,
-      pageSize: query.pageSize,
       total,
-    };
+    );
   }
 
   async board(testId: string, now: Date = new Date()): Promise<LiveOpsBoard> {

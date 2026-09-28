@@ -24,6 +24,7 @@ import {
   stageEditBlocker,
   type StageUsage,
 } from './exam-rules';
+import { pageArgs, paged } from '../common/pagination';
 
 const STAGE_INCLUDE = {
   exam: { select: { id: true, code: true, name: true, course: true } },
@@ -69,13 +70,12 @@ export class ExamStagesService {
         include: STAGE_INCLUDE,
         // The journey's own order, exam by exam — a stage list read in any other order is a list nobody can check against the notification.
         orderBy: [{ exam: { name: 'asc' } }, { order: 'asc' }, { name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.examStage.count({ where }),
     ]);
 
-    return { items: rows.map(toStage), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toStage), total);
   }
 
   async create(input: CreateExamStageBody): Promise<ExamStage> {

@@ -20,6 +20,7 @@ import {
   examEditBlocker,
   INACTIVE_EXAM_MESSAGE,
 } from './exam-rules';
+import { pageArgs, paged } from '../common/pagination';
 
 const EXAM_INCLUDE = {
   _count: { select: { stages: true } },
@@ -62,13 +63,12 @@ export class ExamsService {
         where,
         include: EXAM_INCLUDE,
         orderBy: [{ course: 'asc' }, { name: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
+        ...pageArgs(query),
       }),
       this.prisma.exam.count({ where }),
     ]);
 
-    return { items: rows.map(toExam), page: query.page, pageSize: query.pageSize, total };
+    return paged(query, rows.map(toExam), total);
   }
 
   async create(input: CreateExamBody): Promise<Exam> {

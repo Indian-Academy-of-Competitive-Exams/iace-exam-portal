@@ -155,9 +155,13 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
 
     assertHas(params, { OR: [{ pinHash: null }, { pinIsDefault: true }] });
     assertHas(params, {
-      OR: [
-        { mobile: { contains: 'ravi' } },
-        { fullName: { contains: 'ravi', mode: 'insensitive' } },
+      AND: [
+        {
+          OR: [
+            { mobile: { contains: 'ravi' } },
+            { fullName: { contains: 'ravi', mode: 'insensitive' } },
+          ],
+        },
       ],
     });
   });
@@ -189,9 +193,13 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
     assertHas(
       { q: 'ravi' },
       {
-        OR: [
-          { mobile: { contains: 'ravi' } },
-          { fullName: { contains: 'ravi', mode: 'insensitive' } },
+        AND: [
+          {
+            OR: [
+              { mobile: { contains: 'ravi' } },
+              { fullName: { contains: 'ravi', mode: 'insensitive' } },
+            ],
+          },
         ],
       },
     );
