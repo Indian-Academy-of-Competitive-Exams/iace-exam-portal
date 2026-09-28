@@ -12,7 +12,6 @@ import {
   type AnswerKey,
   type LanguageCode,
   type LocalizedContent,
-  type QuestionOption,
   type PerformancePoint,
   type PerformanceTrend,
   type ScoreCard,
@@ -34,6 +33,7 @@ import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { elapsedSeconds, marksBySection, percentageOf, sectionsWithScores } from './attempt-report';
+import { optionsIn } from './rollup-fold';
 
 const NOT_YOURS = 'No such sitting';
 
@@ -335,7 +335,7 @@ function toSolutionQuestion(
   shuffleOptions: boolean,
   random: () => number,
 ): SolutionQuestion {
-  const stored = (row.questionVersion.options as QuestionOption[] | null) ?? [];
+  const stored = optionsIn(row.questionVersion.options);
   const options = stored.map((option) => ({ ...option, text: narrowTo(option.text, languages) }));
   return {
     ...toScoreCardQuestion(row),

@@ -22,6 +22,7 @@ import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { PaperSheetService, type ServedPaperRow } from './paper-sheet.service';
+import { optionsIn } from './rollup-fold';
 
 /** Named field by field, never `include`: the sitting's own scored columns never load at all. */
 const PAPER_SELECT = {
@@ -205,7 +206,7 @@ function toExamQuestion(
   shuffleOptions: boolean,
   random: () => number,
 ): ExamQuestion {
-  const options = (row.questionVersion.options as QuestionOption[] | null) ?? [];
+  const options = optionsIn(row.questionVersion.options);
   const visible = options.map((option) => toExamOption(option, languages));
 
   return {
