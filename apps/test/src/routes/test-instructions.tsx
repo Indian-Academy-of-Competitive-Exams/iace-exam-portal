@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
+import { isBriefRefused } from '@iace/app-kit';
 import { useFullscreen } from '@iace/app-kit/browser';
 import { briefQuery } from '../lib/queries';
 import { ROUTES } from '../lib/constants';
@@ -30,6 +31,18 @@ export function TestInstructionsPage() {
     return (
       <div className="grid h-dvh place-items-center">
         <LoadingState>Opening your instructions</LoadingState>
+      </div>
+    );
+  }
+
+  if (brief.isError && !isBriefRefused(brief.error)) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not load this test"
+          onRetry={() => void brief.refetch()}
+        />
       </div>
     );
   }

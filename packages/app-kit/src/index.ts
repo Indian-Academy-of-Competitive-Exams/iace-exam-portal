@@ -79,6 +79,7 @@ export {
   averageAccuracy,
   bestRank,
   continueWith,
+  isBriefRefused,
   matching,
   minutes,
   openNow,

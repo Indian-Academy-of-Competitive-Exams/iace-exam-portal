@@ -1,5 +1,7 @@
 import {
+  AppException,
   ATTEMPT_STATUS,
+  ErrorCodes,
   TEST_BUCKET,
   instituteDayLabel,
   testAction,
@@ -9,6 +11,11 @@ import {
   type StudentCatalogTest,
   type TestBucket,
 } from '@iace/contracts';
+
+/** NOT_FOUND or FORBIDDEN is the server refusing this student; offline or a 5xx can be retried. */
+export const isBriefRefused = (error: unknown): boolean =>
+  AppException.is(error) &&
+  (error.code === ErrorCodes.NOT_FOUND || error.code === ErrorCodes.FORBIDDEN);
 
 /** How far through a series a student is. Pure, so both the shelf and the series page share it. */
 export interface SeriesProgress {

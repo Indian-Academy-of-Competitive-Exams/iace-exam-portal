@@ -13,6 +13,7 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
+import { isBriefRefused } from '@iace/app-kit';
 import { Text } from '../../../src/components/ui/text';
 import { briefQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
@@ -23,7 +24,6 @@ import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { SystemCheck } from '../../../src/components/tests/system-check';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
-import { isBriefRefused } from '../../../src/lib/exam-routes';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
 

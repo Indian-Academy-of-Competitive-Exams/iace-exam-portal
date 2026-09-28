@@ -74,6 +74,20 @@ export function ExamPage() {
     );
   }
 
+  if (paper.isError) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Your paper did not load"
+          /* ui-copy-ok: consequence — waiting here costs the candidate time */
+          hint="The clock is running on the server."
+          onRetry={() => void paper.refetch()}
+        />
+      </div>
+    );
+  }
+
   if (!paper.data || !attempt.data) {
     return <LoadingState>Opening your paper</LoadingState>;
   }

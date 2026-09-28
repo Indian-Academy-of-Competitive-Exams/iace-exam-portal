@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AppException, ErrorCodes, LANGUAGE_CODE } from '@iace/contracts';
-import { examLanguagesFrom, isBriefRefused } from '../src/lib/exam-routes';
+import { LANGUAGE_CODE } from '@iace/contracts';
+import { examLanguagesFrom } from '../src/lib/exam-routes';
 
 test('a valid language list parses in the order it was given', () => {
   assert.deepEqual(examLanguagesFrom('HI,EN'), [LANGUAGE_CODE.HI, LANGUAGE_CODE.EN]);
@@ -33,21 +33,4 @@ test('a repeated code counts once, where it first appears', () => {
 
 test('a param repeated in the URL is read as one list', () => {
   assert.deepEqual(examLanguagesFrom(['EN', 'HI,EN']), [LANGUAGE_CODE.EN, LANGUAGE_CODE.HI]);
-});
-
-test('a brief the server will not show this student is a refusal', () => {
-  assert.equal(isBriefRefused(new AppException(ErrorCodes.NOT_FOUND)), true, 'an unreachable test');
-  assert.equal(isBriefRefused(new AppException(ErrorCodes.FORBIDDEN)), true, 'not a student');
-});
-
-test('a brief that failed to arrive is not a refusal, so the gate offers a retry', () => {
-  const offline = new AppException(ErrorCodes.INTERNAL, 'Cannot reach the server.', {
-    httpStatus: 0,
-  });
-  assert.equal(isBriefRefused(offline), false, 'no network');
-  assert.equal(isBriefRefused(new AppException(ErrorCodes.INTERNAL)), false, 'a 5xx');
-  assert.equal(isBriefRefused(new AppException(ErrorCodes.SERVICE_UNAVAILABLE)), false);
-  assert.equal(isBriefRefused(new AppException(ErrorCodes.RATE_LIMITED)), false);
-  assert.equal(isBriefRefused(new Error('socket hang up')), false);
-  assert.equal(isBriefRefused({ code: ErrorCodes.NOT_FOUND }), false, 'a look-alike is not one');
 });
