@@ -5,6 +5,8 @@ import { QUERY_KEYS } from '../../lib/constants';
 import { QuestionsWindow, type Held, type QuestionsSource } from './questions-window';
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 
+const bankLead = () => <span className="text-sm font-semibold">Question</span>;
+
 /** A bank question in the same window every section edits in, saved through the bank. */
 export function BankQuestionWindow({
   questionId,
@@ -28,7 +30,7 @@ export function BankQuestionWindow({
           };
         },
       }),
-      lead: () => <span className="text-sm font-semibold">Question</span>,
+      lead: bankLead,
       subjectLocked: false,
       checkDuplicates: false,
       save: async (id, held) => {

@@ -31,7 +31,7 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SectionThreadButton } from '../components/section-thread';
-import { QuestionsWindow } from '../components/authoring/questions-window';
+import { QuestionsWindow, type WindowPosition } from '../components/authoring/questions-window';
 import { SectionGridPanel } from '../components/authoring/section-grid-panel';
 import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 import {
@@ -128,7 +128,7 @@ export function SectionWorkPage() {
         rowKey={(row) => row.id}
         isLoading={mine.isLoading || rows.isLoading}
         isError={mine.isError || rows.isError}
-        onRetry={() => void (mine.isError ? mine.refetch() : rows.refetch())}
+        onRetry={() => (mine.isError ? mine.refetch() : rows.refetch())}
         empty={moment === SECTION_MOMENTS.WAITING ? 'Nothing handed over yet' : 'No questions yet'}
       />
 
@@ -372,6 +372,20 @@ function DeleteItem({ row }: Readonly<{ row: SectionRow }>) {
   );
 }
 
+/** The grid the window carries beside it, with the section's thread under the tiles. */
+function gridBeside(keys: readonly string[], section: SectionKey, canComment: boolean) {
+  const thread = (
+    <SectionThreadButton
+      testId={section.testId}
+      sectionId={section.sectionId}
+      canWrite={canComment}
+    />
+  );
+  return (position: WindowPosition) => (
+    <SectionGridPanel keys={keys} position={position} footer={thread} />
+  );
+}
+
 function SectionWindow({
   seat,
   section,
@@ -408,19 +422,7 @@ function SectionWindow({
       open={open}
       onOpenChange={(next) => !next && onClose()}
       startAt={startAt}
-      aside={(position) => (
-        <SectionGridPanel
-          keys={source.keys}
-          position={position}
-          footer={
-            <SectionThreadButton
-              testId={section.testId}
-              sectionId={section.sectionId}
-              canWrite={canComment}
-            />
-          }
-        />
-      )}
+      aside={gridBeside(source.keys, section, canComment)}
     />
   );
 }
