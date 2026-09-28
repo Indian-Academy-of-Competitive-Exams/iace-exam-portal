@@ -51,7 +51,6 @@ import {
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
 import { AssignStep } from './test-builder-assign-step';
-import { PaperStep } from './test-builder-paper-step';
 import { OfferSaveDialog, OfferStep } from './test-builder-offering';
 import { useOfferDraft, type OfferHold } from './use-offer-draft';
 
@@ -391,8 +390,6 @@ function StepBody({
   const { identity } = useAuth();
   const editingBy = detail?.editingBy ?? null;
   const elsewhere = editingBy?.adminId !== identity?.id ? editingBy : null;
-  // Picking questions IS saying where they come from, so the paper waits on the choice above it.
-  const sourceChosen = detail?.paperSource !== null;
 
   return (
     <>
@@ -414,12 +411,7 @@ function StepBody({
         <SetupStep form={form} detail={detail} fromSeries={fromSeries} config={config} sat={sat} />
       ) : null}
 
-      {step === TEST_BUILDER_STEP.PAPER ? (
-        <>
-          <AssignStep detail={detail} config={config} />
-          {sourceChosen ? <PaperStep detail={detail} config={config} /> : null}
-        </>
-      ) : null}
+      {step === TEST_BUILDER_STEP.PAPER ? <AssignStep detail={detail} config={config} /> : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <OfferStep detail={detail} offer={offer} />
       ) : null}

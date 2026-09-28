@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -35,12 +36,14 @@ import {
   TooltipTrigger,
   TruncatedText,
   DatePicker,
+  linkVariants,
   type BadgeProps,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
-import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
+import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { sectionFullness, sectionTally } from './test-paper-view';
 import { SectionThreadButton } from '../components/section-thread';
 
 /** Sits beside the paper it staffs: who types and reads each section, before the paper is judged. */
@@ -90,13 +93,29 @@ export function AssignStep({
     queryFn: () => api.admin.assignments.forTest(detail?.id ?? ''),
     enabled: Boolean(detail?.id),
   });
+  const paper = useQuery({
+    queryKey: [...QUERY_KEYS.TEST_PAPER, detail?.id ?? ''],
+    queryFn: () => api.admin.tests.readPaper(detail?.id ?? ''),
+    enabled: Boolean(detail?.paperSource),
+  });
   const [assigning, setAssigning] = useState<AssignTarget | null>(null);
   const [removing, setRemoving] = useState<Assignment | null>(null);
 
-  // Nothing to staff yet: the paper step below says so, and this has nothing to add to it.
-  if (!detail || !config) return null;
+  if (!detail || !config) {
+    return (
+      <EmptyState title="No paper yet" /* ui-copy-ok: rule */ hint="Save this test to build one." />
+    );
+  }
   const sections = scopedSections(config.sections, detail.scope, detail.scopeRef);
-  if (sections.length === 0) return null;
+  if (sections.length === 0) {
+    return (
+      <EmptyState
+        title="No sections"
+        /* ui-copy-ok: consequence */
+        hint="This test's configuration has none, so there is no paper to build."
+      />
+    );
+  }
 
   const comingOff = comingOffFor(assignments.data);
   if (detail.paperSource === null) {
@@ -130,8 +149,10 @@ export function AssignStep({
     (identity?.isSuperAdmin ?? false) ||
     [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id);
 
+  const held = paper.data ? heldBySection(paper.data) : null;
+
   return (
-    <FormSection title="Assignments" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
+    <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
       {outstanding ? (
         <Alert variant="info">
           A test cannot be offered until every section is
@@ -140,7 +161,14 @@ export function AssignStep({
       ) : null}
 
       <DataTable
-        columns={columnsOf(detail.id, detail.paperSource, mayComment, setAssigning, setRemoving)}
+        columns={columnsOf(
+          detail.id,
+          detail.paperSource,
+          held,
+          mayComment,
+          setAssigning,
+          setRemoving,
+        )}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
         isLoading={assignments.isLoading}
@@ -169,9 +197,33 @@ export function AssignStep({
   );
 }
 
+/** Amber only where work has started and stalled: an untouched section is not a warning. */
+const CHIP_VARIANT = {
+  EMPTY: 'neutral',
+  SHORT: 'warning',
+  FULL: 'success',
+} as const;
+
+function heldBySection(paper: {
+  sections: readonly { baseConfigSectionId: string; questions: readonly unknown[] }[];
+}): ReadonlyMap<string, number> {
+  return new Map(paper.sections.map((one) => [one.baseConfigSectionId, one.questions.length]));
+}
+
+function PaperCell({
+  section,
+  held,
+}: Readonly<{ section: BaseConfigSection; held: ReadonlyMap<string, number> | null }>) {
+  const fullness = sectionFullness(section, held);
+  const tally = sectionTally(section, held);
+  if (!fullness || !tally) return <Badge variant="neutral">{section.questionCount}</Badge>;
+  return <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge>;
+}
+
 function columnsOf(
   testId: string,
   source: PaperSource,
+  held: ReadonlyMap<string, number> | null,
   mayComment: (row: SectionRow) => boolean,
   onAssign: (target: AssignTarget) => void,
   onRemove: (assignment: Assignment) => void,
@@ -181,13 +233,16 @@ function columnsOf(
       key: 'section',
       header: 'Section',
       className: 'max-w-[14rem] font-medium',
-      cell: (row) => <TruncatedText>{row.section.name}</TruncatedText>,
+      cell: (row) => (
+        <Link to={ROUTES.SECTION(testId, row.section.id)} className={linkVariants()}>
+          <TruncatedText>{row.section.name}</TruncatedText>
+        </Link>
+      ),
     },
     {
-      key: 'questions',
-      header: 'Questions',
-      numeric: true,
-      cell: (row) => row.section.questionCount,
+      key: 'paper',
+      header: 'Paper',
+      cell: (row) => <PaperCell section={row.section} held={held} />,
     },
     {
       key: 'typist',
@@ -227,7 +282,7 @@ function columnsOf(
     {
       key: 'actions',
       className: 'text-right',
-      cell: (row) => <SectionActions row={row} onRemove={onRemove} />,
+      cell: (row) => <SectionActions testId={testId} row={row} onRemove={onRemove} />,
     },
   ];
 
@@ -325,12 +380,21 @@ function SourceChoice({
 
 /** Assigning is the icon beside the tag now, so the menu is only ever what is already there. */
 function SectionActions({
+  testId,
   row,
   onRemove,
-}: Readonly<{ row: SectionRow; onRemove: (assignment: Assignment) => void }>) {
-  const items = removeItemsFor(row, onRemove);
-  if (items.length === 0) return null;
-  return <RowActions label={`Actions for ${row.section.name}`}>{items}</RowActions>;
+}: Readonly<{ testId: string; row: SectionRow; onRemove: (assignment: Assignment) => void }>) {
+  return (
+    <RowActions label={`Actions for ${row.section.name}`}>
+      <DropdownMenuItem asChild>
+        <Link to={ROUTES.SECTION(testId, row.section.id)}>Open section</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to={`${ROUTES.TEST_PAPER(testId)}?section=${row.section.id}`}>Open paper</Link>
+      </DropdownMenuItem>
+      {removeItemsFor(row, onRemove)}
+    </RowActions>
+  );
 }
 
 function removeItemsFor(row: SectionRow, onRemove: (assignment: Assignment) => void): ReactNode[] {
