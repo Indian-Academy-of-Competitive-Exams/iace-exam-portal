@@ -67,6 +67,7 @@ const KEY_ROW_SELECT = {
 
 const REPORT_ROW_SELECT = {
   ...SHEET_ROW_SELECT,
+  ...KEY_ROW_SELECT,
   marks: true,
   negativeMarks: true,
   status: true,
@@ -91,11 +92,11 @@ export class QuestionReportService {
       throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
     }
 
-    const [cohort, paper, topper, keyed, rows] = await Promise.all([
+    // One read of the paper serves both the sheet and its key.
+    const [cohort, paper, topper, rows] = await Promise.all([
       this.cohortItems(attempt.testId),
       this.paperTotals(attempt.testId),
       topperOf(this.prisma, attempt.testId),
-      this.keyOf(attempt.testId),
       this.prisma.paperQuestion.findMany({
         where: { testId: attempt.testId },
         orderBy: { order: 'asc' },
@@ -104,7 +105,7 @@ export class QuestionReportService {
     ]);
     const served = servedSheet(rows, attempt, attempt.test.baseConfig.shuffleQuestions);
 
-    return this.assemble(attempt, served, { cohort, paper, topper, keyed });
+    return this.assemble(attempt, served, { cohort, paper, topper, keyed: keyOf(rows) });
   }
 
   /** The same payload the student reads, for any student the admin's branches reach. */
@@ -190,25 +191,23 @@ export class QuestionReportService {
       sumTimeSec: stat === null ? 0 : Number(stat.sumTimeSec),
     };
   }
+}
 
-  private async keyOf(testId: string): Promise<Map<string, KeyedQuestion>> {
-    const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId },
-      select: KEY_ROW_SELECT,
+function keyOf(
+  rows: readonly Prisma.PaperQuestionGetPayload<{ select: typeof KEY_ROW_SELECT }>[],
+): Map<string, KeyedQuestion> {
+  const keyed = new Map<string, KeyedQuestion>();
+  for (const row of rows) {
+    const options = optionsIn(row.questionVersion.options);
+    keyed.set(row.questionId, {
+      options,
+      correctAnswer:
+        row.question.type === QUESTION_TYPE.TEXT_FIELD
+          ? acceptedAnswerIn(row.questionVersion.answerKey)
+          : null,
     });
-    const keyed = new Map<string, KeyedQuestion>();
-    for (const row of rows) {
-      const options = optionsIn(row.questionVersion.options);
-      keyed.set(row.questionId, {
-        options,
-        correctAnswer:
-          row.question.type === QUESTION_TYPE.TEXT_FIELD
-            ? acceptedAnswerIn(row.questionVersion.answerKey)
-            : null,
-      });
-    }
-    return keyed;
   }
+  return keyed;
 }
 
 function toSat(row: ReportPaperRow): SatQuestion {
