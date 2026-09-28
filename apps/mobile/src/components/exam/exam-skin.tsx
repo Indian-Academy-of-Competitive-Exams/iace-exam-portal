@@ -261,6 +261,14 @@ function SittingFoot({
   return (
     <Fragment>
       <View className="gap-2 border-t border-exam-border px-4 py-2">
+        {submit.failed ? (
+          <Fragment>
+            <Alert variant="danger">Could not submit this paper.</Alert>
+            <Button variant="outline" onPress={submit.retry}>
+              Try again
+            </Button>
+          </Fragment>
+        ) : null}
         {/* On a bubble sheet the ink carries all three: a part fill flags it, a full one saves and moves. */}
         {view.testUi === TEST_UI.OMR ? (
           <Button onPress={view.nextQuestion}>Next</Button>
@@ -292,7 +300,7 @@ function SittingFoot({
         open={submit.asking && !fullscreen.nagging}
         // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Submit this test?"
-        description={`${plural(submit.unanswered, 'question')} unanswered and ${submit.markedForReview} marked for review. Once submitted the paper closes and nothing more can be changed.`}
+        description={submittingSays(view)}
         confirmLabel="Submit"
         loading={submit.isPending}
         onConfirm={submit.confirm}
@@ -355,6 +363,13 @@ function SittingRules({ onClose }: Readonly<{ onClose: () => void }>) {
       </ScrollView>
     </View>
   );
+}
+
+/** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
+function submittingSays(view: ExamView): string {
+  const { submit } = view;
+  const marked = view.forwardOnly ? '' : ` and ${submit.markedForReview} marked for review`;
+  return `${plural(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
 }
 
 /** Said once without a count, because "1 times" is how a screen tells a student it is a machine. */
