@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   ASSIGNMENT_ROLES,
   DIFFICULTY_LEVELS,
@@ -20,11 +21,14 @@ import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ChartFigure,
+  ConfirmDialog,
+  DropdownMenuItem,
   LinePlot,
   ListView,
   Metric,
   MetricGroup,
   PageHeader,
+  RowActions,
   TableFrame,
   TruncatedText,
   linkVariants,
@@ -131,7 +135,60 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
         </TruncatedText>
       ),
     },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (question) => <HistoryActions question={question} />,
+    },
   ];
+}
+
+/** Same shape the bank's own question prompts take, so both confirms read alike. */
+const DELETE_PROMPT = { title: 'Delete this question?', confirmLabel: 'Delete' } as const;
+
+/** A section's question is deleted on its section page; here only what was typed straight into the bank. */
+function HistoryActions({ question }: Readonly<{ question: QuestionSummary }>) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const remove = useMutation({
+    meta: { success: 'Question deleted.' },
+    mutationFn: () => api.admin.authoring.remove(question.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
+      setAsking(false);
+    },
+    onError: () => setAsking(false),
+  });
+  const deletable = !question.inUse && question.writtenFor === null;
+
+  return (
+    <>
+      <RowActions label="Actions for this question">
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.AUTHORING_QUESTION(question.id)}>
+            <Pencil aria-hidden />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+        {deletable ? (
+          <DropdownMenuItem destructive onSelect={() => setAsking(true)}>
+            <Trash2 aria-hidden />
+            Delete
+          </DropdownMenuItem>
+        ) : null}
+      </RowActions>
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title={DELETE_PROMPT.title}
+        description={`“${question.stemPreview}” is removed from the bank for good.`}
+        confirmLabel={DELETE_PROMPT.confirmLabel}
+        destructive
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
+  );
 }
 
 /** Every language, so a question missing Telugu says so rather than simply not mentioning it. */
