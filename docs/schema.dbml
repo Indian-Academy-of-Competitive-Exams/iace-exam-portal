@@ -739,7 +739,8 @@ Table ImportLog {
 Table ImportRowEdit {
   importLogId uuid [not null]
   line integer [not null]
-  draft jsonb [not null]
+  draft jsonb
+  leftOut boolean [not null, default: false]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (importLogId, line) [pk]

@@ -147,3 +147,41 @@ describe('QuestionImportService — correcting a previewed row', () => {
     );
   });
 });
+
+describe('QuestionImportService — leaving a previewed row out', () => {
+  it('writes nothing for a row left out, and Import skips it', async () => {
+    const { imports, importLogId } = await previewed();
+
+    const plan = await imports.leaveOutRow(importLogId, 2, true, ADMIN);
+    assert.equal(plan.rows.find((row) => row.line === 2)?.action, 'left_out');
+    assert.equal(plan.summary.leftOut, 1);
+
+    const result = await imports.commit(importLogId);
+    assert.equal(result.created, 0);
+    assert.equal(await prisma.question.count(), 0);
+  });
+
+  /** The failure this prevents: bringing a corrected row back and importing it as the sheet had it. */
+  it('brings a corrected row back with its correction', async () => {
+    const { imports, importLogId } = await previewed();
+    const [, skipped] = await imports.drafts(importLogId, ADMIN);
+    assert.ok(skipped);
+    await imports.saveRow(importLogId, 3, fixed(skipped.draft), ADMIN);
+    await imports.leaveOutRow(importLogId, 3, true, ADMIN);
+
+    const plan = await imports.leaveOutRow(importLogId, 3, false, ADMIN);
+
+    const row = plan.rows.find((one) => one.line === 3);
+    assert.equal(row?.action, 'create');
+    assert.equal(row?.edited, true);
+  });
+
+  it('refuses another admin, as if the run did not exist', async () => {
+    const { imports, importLogId } = await previewed();
+
+    await assert.rejects(
+      imports.leaveOutRow(importLogId, 2, true, OTHER_ADMIN),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+});

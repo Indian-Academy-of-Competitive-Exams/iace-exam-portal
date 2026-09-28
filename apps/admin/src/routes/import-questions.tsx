@@ -52,17 +52,22 @@ function intakeFor(into: string | null) {
   };
 }
 
-function ImportOutcome({
-  result,
-  into,
-}: Readonly<{
-  result: { created: number; duplicates: number; invalid: number };
-  into: string | null;
-}>) {
+interface ImportCounts {
+  created: number;
+  duplicates: number;
+  invalid: number;
+  leftOut: number;
+}
+
+function importedText({ created, duplicates, invalid, leftOut }: ImportCounts): string {
+  const setAside = leftOut > 0 ? `, ${leftOut} left out` : '';
+  return `Imported: ${created} created, ${duplicates} already in the bank, ${invalid} skipped${setAside}.`;
+}
+
+function ImportOutcome({ result, into }: Readonly<{ result: ImportCounts; into: string | null }>) {
   return (
     <>
-      Imported: {result.created} created, {result.duplicates} already in the bank, {result.invalid}{' '}
-      skipped.{' '}
+      {importedText(result)}{' '}
       <Link
         to={into ? ROUTES.AUTHORING_FOR_ASSIGNMENT(into) : ROUTES.QUESTIONS}
         className={linkVariants({ variant: 'inline' })}
@@ -103,10 +108,7 @@ export function ImportQuestionsPage() {
   const intake = useImportScreen({
     ...intakeFor(into),
     writes: (plan) => plan.summary.willCreate,
-    success: (data) => {
-      const result = data as { created: number; duplicates: number; invalid: number };
-      return `Imported: ${result.created} created, ${result.duplicates} already in the bank, ${result.invalid} skipped.`;
-    },
+    success: (data) => importedText(data as ImportCounts),
     onCommitted: () =>
       queryClient.invalidateQueries({
         queryKey: into ? QUERY_KEYS.AUTHORING : QUERY_KEYS.QUESTIONS,
@@ -212,6 +214,9 @@ export function ImportQuestionsPage() {
               { label: 'New questions', value: plan.summary.willCreate },
               { label: 'Already in the bank', value: plan.summary.duplicates },
               { label: 'Skipped (have problems)', value: plan.summary.invalid },
+              ...(plan.summary.leftOut > 0
+                ? [{ label: 'Left out', value: plan.summary.leftOut }]
+                : []),
             ]
           : undefined
       }
@@ -322,6 +327,15 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
         {row.duplicateOf?.startsWith('line ') ? (
           <span className="text-xs text-muted-foreground">same as {row.duplicateOf}</span>
         ) : null}
+      </span>
+    );
+  }
+
+  if (row.action === 'left_out') {
+    return (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="neutral">Left out</Badge>
+        {edited}
       </span>
     );
   }

@@ -96,7 +96,13 @@ describe('the question sheet', () => {
   it('plans a complete row as a create', () => {
     const result = plan([MCQ_ROW]);
 
-    assert.deepEqual(result.summary, { total: 1, willCreate: 1, duplicates: 0, invalid: 0 });
+    assert.deepEqual(result.summary, {
+      total: 1,
+      willCreate: 1,
+      duplicates: 0,
+      invalid: 0,
+      leftOut: 0,
+    });
     const row = rowAt(result.rows);
     assert.equal(row.line, 2);
     assert.equal(row.action, 'create');
@@ -307,7 +313,13 @@ describe('the question sheet — duplicates', () => {
     assert.equal(result.rows[0]?.action, 'duplicate');
     assert.equal(result.rows[0]?.duplicateOf, 'q_existing');
     assert.deepEqual(result.rows[0]?.issues, []);
-    assert.deepEqual(result.summary, { total: 1, willCreate: 0, duplicates: 1, invalid: 0 });
+    assert.deepEqual(result.summary, {
+      total: 1,
+      willCreate: 0,
+      duplicates: 1,
+      invalid: 0,
+      leftOut: 0,
+    });
   });
 
   it('points the second copy in a file at the line it repeats', () => {
@@ -512,5 +524,36 @@ describe('planQuestionImport — pictures placed over the sheet', () => {
       planned.rows[0]?.issues.map((issue) => issue.code),
       [QUESTION_VALIDATION_CODE.PICTURE_INVALID],
     );
+  });
+});
+
+describe('the question sheet — a row left out', () => {
+  const leavingOut = (
+    lines: number[],
+    ...rows: Partial<Record<QuestionImportColumnKey, string>>[]
+  ) => planQuestionImport(table(...rows), catalog(), noDedup(), undefined, new Set(lines));
+
+  it('writes nothing for it, and counts it apart from the skipped', () => {
+    const result = leavingOut([2], MCQ_ROW);
+
+    assert.equal(result.rows[0]?.action, 'left_out');
+    assert.equal(result.rows[0]?.draft, null);
+    assert.deepEqual(result.summary, {
+      total: 1,
+      willCreate: 0,
+      duplicates: 0,
+      invalid: 0,
+      leftOut: 1,
+    });
+  });
+
+  /** The failure this prevents: the copy that stays reported as a repeat of the one set aside. */
+  it('holds neither its stem nor its code against a later row', () => {
+    const coded = { ...MCQ_ROW, question_code: 'QA-9' };
+
+    const result = leavingOut([2], coded, coded);
+
+    assert.equal(result.rows[1]?.action, 'create');
+    assert.deepEqual(result.rows[1]?.issues, []);
   });
 });

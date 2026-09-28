@@ -43,6 +43,12 @@ import { loadTaxonomyCatalog } from './taxonomy-context';
 const UPLOAD_GONE = 'That upload is no longer available';
 const ALREADY_IMPORTED = 'That file has already been imported';
 
+/** What the review window laid over the file: each corrected line's draft, and the lines left out. */
+interface RowOverlay {
+  drafts: ReadonlyMap<number, QuestionDraft>;
+  leftOut: ReadonlySet<number>;
+}
+
 const PICTURES_NOT_CARRIED =
   'This row had pictures, which this download does not carry. Fix the row in your original sheet.';
 
@@ -129,7 +135,7 @@ export class QuestionImportService {
 
   async commit(importLogId: string, into: ImportTarget = {}): Promise<QuestionImportResult> {
     const { log, file } = await this.openRun(importLogId, into.actorId);
-    const planning = await this.plan(file, await this.editsOf(log.id));
+    const planning = await this.plan(file, await this.overlayOf(log.id));
     const creatable = planning.rows.filter(
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
         row.action === 'create' && row.draft !== null,
@@ -180,7 +186,7 @@ export class QuestionImportService {
       data: {
         total: planning.summary.total,
         created: result.created,
-        skipped: planning.summary.duplicates,
+        skipped: planning.summary.duplicates + planning.summary.leftOut,
         failed: planning.summary.invalid,
         status: IMPORT_LOG_STATUS.COMMITTED,
         finishedAt: new Date(),
@@ -202,7 +208,7 @@ export class QuestionImportService {
   /** Every row's question as the review window opens it, pictures given urls it can draw. */
   async drafts(importLogId: string, actorId: string): Promise<QuestionImportDraft[]> {
     const { log, file } = await this.openRun(importLogId, actorId);
-    const planning = await this.plan(file, await this.editsOf(log.id));
+    const planning = await this.plan(file, await this.overlayOf(log.id));
     return planning.rows.map((row) => ({ line: row.line, draft: this.drawable(row.editable) }));
   }
 
@@ -213,21 +219,19 @@ export class QuestionImportService {
     draft: QuestionDraft,
     actorId: string,
   ): Promise<QuestionImportPlan> {
-    const { log, file } = await this.openRun(importLogId, actorId);
-    const table = await readQuestionTable(file);
-    if (!table.rows.some((row) => row.line === line)) {
-      throw new AppException(ErrorCodes.NOT_FOUND, `Line ${line} is not in that file`);
-    }
-
     // The key is the record; a src is only how this window drew the picture.
     const stored = rewriteDraftHtml(draft, stripImageSrc) as unknown as Prisma.InputJsonValue;
-    await this.prisma.importRowEdit.upsert({
-      where: { importLogId_line: { importLogId: log.id, line } },
-      create: { importLogId: log.id, line, draft: stored },
-      update: { draft: stored },
-    });
+    return this.changeRow(importLogId, line, actorId, { draft: stored });
+  }
 
-    return withoutDrafts(await this.planTable(table, await this.editsOf(log.id)), log.id);
+  /** Sets one previewed row aside from Import, or brings it back with any correction it carried. */
+  async leaveOutRow(
+    importLogId: string,
+    line: number,
+    leftOut: boolean,
+    actorId: string,
+  ): Promise<QuestionImportPlan> {
+    return this.changeRow(importLogId, line, actorId, { leftOut });
   }
 
   async draftsForAssignment(
@@ -252,6 +256,40 @@ export class QuestionImportService {
     return this.saveRow(importLogId, line, draft, adminId);
   }
 
+  async leaveOutRowForAssignment(
+    assignmentId: string,
+    importLogId: string,
+    line: number,
+    leftOut: boolean,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<QuestionImportPlan> {
+    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
+    return this.leaveOutRow(importLogId, line, leftOut, adminId);
+  }
+
+  /** One row's change from the review window, held against the run; answers with every row judged again. */
+  private async changeRow(
+    importLogId: string,
+    line: number,
+    actorId: string,
+    change: { draft: Prisma.InputJsonValue } | { leftOut: boolean },
+  ): Promise<QuestionImportPlan> {
+    const { log, file } = await this.openRun(importLogId, actorId);
+    const table = await readQuestionTable(file);
+    if (!table.rows.some((row) => row.line === line)) {
+      throw new AppException(ErrorCodes.NOT_FOUND, `Line ${line} is not in that file`);
+    }
+
+    await this.prisma.importRowEdit.upsert({
+      where: { importLogId_line: { importLogId: log.id, line } },
+      create: { importLogId: log.id, line, ...change },
+      update: change,
+    });
+
+    return withoutDrafts(await this.planTable(table, await this.overlayOf(log.id)), log.id);
+  }
+
   /** A previewed, uncommitted run; with an actor, only the one who previewed it may touch it. */
   private async openRun(importLogId: string, actorId: string | undefined) {
     const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
@@ -267,9 +305,16 @@ export class QuestionImportService {
     return { log, file: await this.storage.read(log.fileS3Key) };
   }
 
-  private async editsOf(importLogId: string): Promise<Map<number, QuestionDraft>> {
+  private async overlayOf(importLogId: string): Promise<RowOverlay> {
     const rows = await this.prisma.importRowEdit.findMany({ where: { importLogId } });
-    return new Map(rows.map((row) => [row.line, row.draft as unknown as QuestionDraft]));
+    return {
+      drafts: new Map(
+        rows.flatMap((row) =>
+          row.draft === null ? [] : [[row.line, row.draft as unknown as QuestionDraft] as const],
+        ),
+      ),
+      leftOut: new Set(rows.filter((row) => row.leftOut).map((row) => row.line)),
+    };
   }
 
   private drawable(draft: QuestionDraft): QuestionDraft {
@@ -284,22 +329,18 @@ export class QuestionImportService {
   }
 
   /** Read, resolve, judge — the one path a preview and a commit both take. */
-  private async plan(
-    file: Buffer,
-    edits?: ReadonlyMap<number, QuestionDraft>,
-  ): Promise<QuestionImportPlanning> {
-    return this.planTable(await readQuestionTable(file), edits);
+  private async plan(file: Buffer, overlay?: RowOverlay): Promise<QuestionImportPlanning> {
+    return this.planTable(await readQuestionTable(file), overlay);
   }
 
-  private async planTable(
-    table: CsvTable,
-    edits?: ReadonlyMap<number, QuestionDraft>,
-  ): Promise<QuestionImportPlanning> {
+  private async planTable(table: CsvTable, overlay?: RowOverlay): Promise<QuestionImportPlanning> {
     const catalog = await loadTaxonomyCatalog(this.prisma);
+    const { drafts, leftOut } = overlay ?? {};
 
     // Planned twice: the first pass only harvests the keys the bank is then asked about.
-    const harvest = planQuestionImport(table, catalog, NO_DEDUP, edits);
-    return planQuestionImport(table, catalog, await this.dedupContext(harvest.rows), edits);
+    const harvest = planQuestionImport(table, catalog, NO_DEDUP, drafts, leftOut);
+    const dedup = await this.dedupContext(harvest.rows);
+    return planQuestionImport(table, catalog, dedup, drafts, leftOut);
   }
 
   /** Only the rows this sheet could clash with: the whole bank was read to answer a few hundred asks. */

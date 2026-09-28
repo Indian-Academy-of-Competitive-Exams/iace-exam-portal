@@ -27,11 +27,13 @@ import {
   authoringHistoryQuerySchema,
   questionDraftSchema,
   questionImportCommitSchema,
+  questionImportLeaveOutSchema,
   type AuthoringCreateInput,
   type AuthoringDuplicate,
   type AuthoringDuplicateQuery,
   type AuthoringHistoryQuery,
   type QuestionImportCommitBody,
+  type QuestionImportLeaveOut,
   type QuestionImportPlan,
   type QuestionImportResult,
   type AuthoringSaveResult,
@@ -166,6 +168,25 @@ export class AuthoringController {
       importLogId,
       line,
       draft,
+      user.id,
+      user.isSuperAdmin,
+    );
+  }
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @Put('assignments/:assignmentId/import/:importLogId/rows/:line/left-out')
+  leaveOutImportRow(
+    @Param('assignmentId') assignmentId: string,
+    @Param('importLogId') importLogId: string,
+    @Param('line', ParseIntPipe) line: number,
+    @Body(new ZodBody(questionImportLeaveOutSchema)) body: QuestionImportLeaveOut,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.leaveOutRowForAssignment(
+      assignmentId,
+      importLogId,
+      line,
+      body.leftOut,
       user.id,
       user.isSuperAdmin,
     );

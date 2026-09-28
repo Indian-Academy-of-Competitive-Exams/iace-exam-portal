@@ -1,7 +1,16 @@
 import { useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ban, Undo2 } from 'lucide-react';
 import { type QuestionImportPlan, type QuestionImportRow } from '@iace/contracts';
-import { Badge, Tooltip, TooltipContent, TooltipTrigger, TruncatedText, cn } from '@iace/ui';
+import {
+  Badge,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TruncatedText,
+  cn,
+} from '@iace/ui';
 import { api } from '../../lib/api';
 import { QUERY_KEYS } from '../../lib/constants';
 import { AuthoringWorkspace, type Held, type WorkspaceSource } from './authoring-workspace';
@@ -11,6 +20,7 @@ import { headerOfDraft, stateOfDraft, toDraft } from './question-scaffold';
 function OutcomeBadge({ row }: Readonly<{ row: QuestionImportRow }>) {
   if (row.action === 'create') return <Badge variant="success">Create</Badge>;
   if (row.action === 'duplicate') return <Badge variant="info">Already in the bank</Badge>;
+  if (row.action === 'left_out') return <Badge variant="neutral">Left out</Badge>;
   return <Badge variant="danger">Skip</Badge>;
 }
 
@@ -51,6 +61,27 @@ function RowLead({
   );
 }
 
+/** Sets a row aside from Import, or brings it back; either way nothing is written until Import. */
+function LeaveOut({
+  row,
+  leave,
+}: Readonly<{ row: QuestionImportRow; leave: (leftOut: boolean) => Promise<void> }>) {
+  const leftOut = row.action === 'left_out';
+  const change = useMutation({ mutationFn: () => leave(!leftOut) });
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      loading={change.isPending}
+      onClick={() => change.mutate()}
+    >
+      {leftOut ? <Undo2 aria-hidden /> : <Ban aria-hidden />}
+      {leftOut ? 'Bring back' : 'Leave out'}
+    </Button>
+  );
+}
+
 /** Every row of the sheet, corrected on the authoring page before Import; nothing reaches the bank until then. */
 export function ImportWorkspace({
   plan,
@@ -82,11 +113,20 @@ export function ImportWorkspace({
           : api.admin.imports.questionDrafts(importLogId),
     };
 
+    const leave = async (line: number, leftOut: boolean) => {
+      onPlan(
+        into
+          ? await api.admin.authoring.leaveOutImportRow(into, importLogId, line, { leftOut })
+          : await api.admin.imports.leaveOutQuestionRow(importLogId, line, { leftOut }),
+      );
+    };
+
     return {
       cards: rows.map((row, index) => ({
         key: String(row.line),
         lead: <RowLead row={row} index={index} total={rows.length} />,
-        editable: true,
+        actions: <LeaveOut row={row} leave={(leftOut) => leave(row.line, leftOut)} />,
+        editable: row.action !== 'left_out',
       })),
       query: (line) => ({
         queryKey: [...draftsKey, line],

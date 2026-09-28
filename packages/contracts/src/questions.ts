@@ -673,8 +673,8 @@ export const FORMULA_PICTURE_MAX_HEIGHT = 64;
 /** Carried by every question a sheet creates, so one filter finds what an upload brought in. */
 export const QUESTION_IMPORT_TAG = 'imported';
 
-/** `create` writes the row; `duplicate` is a stem already in the bank or earlier in this file — skipped, not an error worth blocking the upload for; `skip` has issues. */
-const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip']);
+/** `create` writes the row; `duplicate` is a stem already in the bank or earlier in this file — skipped, not an error worth blocking the upload for; `skip` has issues; `left_out` was set aside in the review window. */
+const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip', 'left_out']);
 export type QuestionImportAction = z.infer<typeof questionImportActionSchema>;
 
 /** Worth knowing but not wrong: the row still imports. `column` names the cell, by import key. */
@@ -707,6 +707,7 @@ const questionImportSummarySchema = z.object({
   willCreate: z.number().int(),
   duplicates: z.number().int(),
   invalid: z.number().int(),
+  leftOut: z.number().int(),
 });
 
 export const questionImportPlanSchema = z.object({
@@ -726,6 +727,10 @@ export const questionImportDraftSchema = z.object({
 });
 export type QuestionImportDraft = z.infer<typeof questionImportDraftSchema>;
 export const questionImportDraftsSchema = z.array(questionImportDraftSchema);
+
+/** A previewed row set aside from Import, or brought back. */
+export const questionImportLeaveOutSchema = z.object({ leftOut: z.boolean() });
+export type QuestionImportLeaveOut = z.infer<typeof questionImportLeaveOutSchema>;
 
 export const questionImportCommitSchema = z.object({
   importLogId: z.string().min(1),
@@ -814,4 +819,6 @@ export const QUESTION_IMPORT_ROUTES = {
   errors: '/imports/questions/errors',
   drafts: (importLogId: string) => `/imports/questions/${importLogId}/drafts`,
   row: (importLogId: string, line: number) => `/imports/questions/${importLogId}/rows/${line}`,
+  leaveOut: (importLogId: string, line: number) =>
+    `/imports/questions/${importLogId}/rows/${line}/left-out`,
 } as const;

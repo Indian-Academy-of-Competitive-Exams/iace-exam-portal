@@ -107,4 +107,6 @@ export const ADMIN_AUTHORING_ROUTES = {
     `/admin/authoring/assignments/${assignmentId}/import/${importLogId}/drafts`,
   importRow: (assignmentId: string, importLogId: string, line: number) =>
     `/admin/authoring/assignments/${assignmentId}/import/${importLogId}/rows/${line}`,
+  importRowLeaveOut: (assignmentId: string, importLogId: string, line: number) =>
+    `/admin/authoring/assignments/${assignmentId}/import/${importLogId}/rows/${line}/left-out`,
 } as const;

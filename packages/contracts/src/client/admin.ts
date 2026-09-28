@@ -223,6 +223,7 @@ import {
   type QuestionImage,
   type QuestionDraftInput,
   type QuestionImportDraft,
+  type QuestionImportLeaveOut,
   type QuestionImportPlan,
   type QuestionImportResult,
   type QuestionAvailability,
@@ -714,6 +715,19 @@ export function adminClient(core: ApiCore) {
           questionImportPlanSchema,
           draft,
         ),
+
+      leaveOutImportRow: (
+        assignmentId: string,
+        importLogId: string,
+        line: number,
+        body: QuestionImportLeaveOut,
+      ): Promise<QuestionImportPlan> =>
+        write(
+          'PUT',
+          ADMIN_AUTHORING_ROUTES.importRowLeaveOut(assignmentId, importLogId, line),
+          questionImportPlanSchema,
+          body,
+        ),
     },
 
     questions: {
@@ -1013,6 +1027,19 @@ export function adminClient(core: ApiCore) {
           QUESTION_IMPORT_ROUTES.row(importLogId, line),
           questionImportPlanSchema,
           draft,
+        ),
+
+      /** Sets one row aside from Import, or brings it back, and answers with every row judged again. */
+      leaveOutQuestionRow: (
+        importLogId: string,
+        line: number,
+        body: QuestionImportLeaveOut,
+      ): Promise<QuestionImportPlan> =>
+        write(
+          'PUT',
+          QUESTION_IMPORT_ROUTES.leaveOut(importLogId, line),
+          questionImportPlanSchema,
+          body,
         ),
     },
 

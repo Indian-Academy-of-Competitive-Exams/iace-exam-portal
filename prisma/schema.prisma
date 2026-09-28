@@ -996,11 +996,13 @@ model ImportLog {
   @@index([feature, startedAt])
 }
 
-// A previewed sheet's row as corrected in the review window before Import; laid over the file at commit.
+// A previewed sheet's row as corrected, or left out, in the review window before Import; laid over the file at commit.
 model ImportRowEdit {
   importLogId String   @db.Uuid
   line        Int
-  draft       Json
+  // Null for a row left out without being corrected.
+  draft       Json?
+  leftOut     Boolean  @default(false)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   importLog ImportLog @relation(fields: [importLogId], references: [id], onDelete: Cascade)

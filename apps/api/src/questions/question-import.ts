@@ -58,6 +58,8 @@ export interface PlannedRow extends QuestionImportRow {
 /** No row corrected yet: the sheet speaks for every line. */
 const NO_EDITS: ReadonlyMap<number, QuestionDraft> = new Map();
 
+const NO_LINES: ReadonlySet<number> = new Set();
+
 /** A first pass has nothing to compare against: it runs to harvest the keys the bank is asked for. */
 export const NO_DEDUP: ImportDedupContext = {
   questionIdByHash: new Map(),
@@ -166,12 +168,13 @@ export function planQuestionImport(
   catalog: TaxonomyCatalog,
   dedup: ImportDedupContext,
   edits: ReadonlyMap<number, QuestionDraft> = NO_EDITS,
+  leftOut: ReadonlySet<number> = NO_LINES,
 ): QuestionImportPlanning {
   const fileErrors = fileLevelErrors(table);
   if (fileErrors.length > 0) {
     return {
       rows: [],
-      summary: { total: 0, willCreate: 0, duplicates: 0, invalid: 0 },
+      summary: { total: 0, willCreate: 0, duplicates: 0, invalid: 0, leftOut: 0 },
       fileErrors,
     };
   }
@@ -181,7 +184,10 @@ export function planQuestionImport(
   const codesInFile = new Set<string>();
 
   const rows = table.rows.map((row) =>
-    planRow(row, catalog, dedup, lineByHash, codesInFile, edits.get(row.line)),
+    planRow(row, catalog, dedup, lineByHash, codesInFile, {
+      edit: edits.get(row.line),
+      leftOut: leftOut.has(row.line),
+    }),
   );
 
   return {
@@ -191,6 +197,7 @@ export function planQuestionImport(
       willCreate: rows.filter((row) => row.action === 'create').length,
       duplicates: rows.filter((row) => row.action === 'duplicate').length,
       invalid: rows.filter((row) => row.action === 'skip').length,
+      leftOut: rows.filter((row) => row.action === 'left_out').length,
     },
     fileErrors: [],
   };
@@ -227,7 +234,7 @@ function planRow(
   dedup: ImportDedupContext,
   lineByHash: Map<string, number>,
   codesInFile: Set<string>,
-  edit: QuestionDraft | undefined,
+  { edit, leftOut }: { edit: QuestionDraft | undefined; leftOut: boolean },
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
   const warnings: ImportWarning[] = [];
@@ -250,7 +257,7 @@ function planRow(
 
   // Only a row that would be written can clash: a row that is already in the bank is carrying the code it was imported with, and re-uploading last week's sheet must not turn every coded row into an error.
   const code = draft.questionCode;
-  if (code && !duplicateOf) {
+  if (code && !duplicateOf && !leftOut) {
     if (dedup.questionIdByCode.has(code) || codesInFile.has(code)) {
       issues.push({
         code: CODE.QUESTION_CODE_TAKEN,
@@ -265,7 +272,9 @@ function planRow(
 
   const reported = dedupeIssues(issues);
 
-  const action: QuestionImportAction = actionFor(reported.length > 0, duplicateOf);
+  const action: QuestionImportAction = leftOut
+    ? 'left_out'
+    : actionFor(reported.length > 0, duplicateOf);
 
   // Only a row that will really be written claims its stem. A skipped row that held the hash would make the next good copy of the same question a duplicate of a line nothing was ever created from.
   if (stemHash && action === 'create') lineByHash.set(stemHash, row.line);

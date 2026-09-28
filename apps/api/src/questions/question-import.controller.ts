@@ -24,8 +24,10 @@ import {
   XLSX_CONTENT_TYPE,
   questionDraftSchema,
   questionImportCommitSchema,
+  questionImportLeaveOutSchema,
   type QuestionDraft,
   type QuestionImportCommitBody,
+  type QuestionImportLeaveOut,
   type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
@@ -92,6 +94,18 @@ export class QuestionImportController {
     @Body(new ZodBody(questionDraftSchema)) draft: QuestionDraft,
   ): Promise<QuestionImportPlan> {
     return this.imports.saveRow(importLogId, line, draft, user.id);
+  }
+
+  /** One previewed row set aside from Import, or brought back. Writes no question either way. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Put(':importLogId/rows/:line/left-out')
+  leaveOutRow(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('importLogId') importLogId: string,
+    @Param('line', ParseIntPipe) line: number,
+    @Body(new ZodBody(questionImportLeaveOutSchema)) body: QuestionImportLeaveOut,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.leaveOutRow(importLogId, line, body.leftOut, user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
