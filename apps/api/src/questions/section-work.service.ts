@@ -128,7 +128,12 @@ export class SectionWorkService {
   ) {}
 
   async one(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
-    const context = await this.load(pair, viewer);
+    return this.workOf(await this.load(pair, viewer));
+  }
+
+  /** A review write changes nothing `load` read, so an action answers from the context it checked. */
+  private async workOf(context: Context): Promise<SectionWork> {
+    const { pair } = context;
     const scoped = await this.scoped(context);
     const history = context.rows.filter((row) => row.replacedAt !== null);
     return {
@@ -254,7 +259,7 @@ export class SectionWorkService {
       create: { ...pair, questionId, ...checked },
       update: checked,
     });
-    return this.one(pair, viewer);
+    return this.workOf(context);
   }
 
   async uncheck(pair: Pair, questionId: string, viewer: SectionViewer): Promise<SectionWork> {
@@ -264,7 +269,7 @@ export class SectionWorkService {
       where: { testId: pair.testId, questionId },
       data: { checkedAt: null, checkedById: null },
     });
-    return this.one(pair, viewer);
+    return this.workOf(context);
   }
 
   /** One question back to the typist with a reason; the rest of the section stays with the reader. */
@@ -294,7 +299,7 @@ export class SectionWorkService {
       create: { ...pair, questionId, ...sent },
       update: sent,
     });
-    return this.one(pair, viewer);
+    return this.workOf(context);
   }
 
   /** The typist's answer to a send-back: it goes back to the reader to be checked again. */
@@ -313,7 +318,7 @@ export class SectionWorkService {
       where: { testId_questionId: { testId: pair.testId, questionId } },
       data: { fixedAt: new Date(), fixedById: viewer.id },
     });
-    return this.one(pair, viewer);
+    return this.workOf(context);
   }
 
   private async load(pair: Pair, viewer: SectionViewer): Promise<Context> {
