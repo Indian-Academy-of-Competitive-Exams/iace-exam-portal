@@ -43,24 +43,24 @@ to agonise over — §13 says when each one moves.
 | Box A′ — staging API  | EC2 `t4g.medium`: Caddy, exam, core, worker     | $16.35     |
 |                       | EBS gp3 30 GB + Elastic IP                      | $6.39      |
 | Box B — Valkey        | EC2 `t4g.micro`, one process, no public ingress | $4.09      |
-|                       | EBS gp3 20 GB + public IPv4 (egress only)       | $5.47      |
+|                       | EBS gp3 10 GB + public IPv4 (egress only)       | $4.56      |
 | Database              | RDS `db.t4g.micro`, 20 GB gp3, 7-day PITR       | $17.95     |
 | Frontend and media    | S3 + three CloudFront distributions             | ~$1        |
 | DNS, registry, alarms | Route 53, ECR, CloudWatch, two free Budgets     | $2.40      |
-| **Total**             |                                                 | **$53.65** |
+| **Total**             |                                                 | **$52.74** |
 
 **With production alongside it.**
 
-|                              | What                                        | Monthly     |
-| ---------------------------- | ------------------------------------------- | ----------- |
-| Box A — production API       | EC2 `t4g.large` + EBS 30 GB + Elastic IP    | $39.09      |
-| Box A′ — staging API         | EC2 `t4g.small` once builds move to ECR     | $14.57      |
-| Box B — Valkey ×2            | EC2 `t4g.medium`, a process per environment | $22.74      |
-| Database                     | RDS `db.t4g.small`, two databases           | $33.28      |
-| Frontend, media, DNS, alarms |                                             | $3.40       |
-| **Total**                    |                                             | **$113.08** |
+|                              | What                                     | Monthly     |
+| ---------------------------- | ---------------------------------------- | ----------- |
+| Box A — production API       | EC2 `t4g.large` + EBS 30 GB + Elastic IP | $39.09      |
+| Box A′ — staging API         | EC2 `t4g.small` once builds move to ECR  | $14.57      |
+| Box B — Valkey ×2            | EC2 `t4g.medium`, 20 GB, a process each  | $21.82      |
+| Database                     | RDS `db.t4g.small`, two databases        | $33.28      |
+| Frontend, media, DNS, alarms |                                          | $3.40       |
+| **Total**                    |                                          | **$112.16** |
 
-**Add 18% GST to both** — ap-south-1 bills through AWS India, so ~$63 today and ~$133 with
+**Add 18% GST to both** — ap-south-1 bills through AWS India, so ~$62 today and ~$132 with
 production. It is input credit against the institute's GSTIN, but only if the GSTIN is on the
 account, so that is a signup step rather than a footnote.
 
@@ -335,11 +335,17 @@ about 960 ops/s against a core that does 100,000+. Memory does, and the thing th
 not the dataset but the **AOF rewrite fork**: Valkey rewrites its log by forking, and copy-on-write
 can push RSS toward double the dataset while writes are landing.
 
-| Stage                                 | Box B              | Why                                                                 |
-| ------------------------------------- | ------------------ | ------------------------------------------------------------------- |
-| Now, one tester                       | `t4g.micro`, 1 GB  | Valkey ~300 MB + OS ~350 MB                                         |
-| Before the first full-scale load test | `t4g.small`, 2 GB  | 8,000 sittings is a ~280 MB dataset; the rewrite fork can double it |
-| Production at 8,000 live sittings     | `t4g.medium`, 4 GB | Both processes, both with headroom                                  |
+| Stage                                 | Box B              | Disk  | Why                                                                 |
+| ------------------------------------- | ------------------ | ----- | ------------------------------------------------------------------- |
+| Now, one tester                       | `t4g.micro`, 1 GB  | 10 GB | Valkey ~300 MB + OS ~350 MB                                         |
+| Before the first full-scale load test | `t4g.small`, 2 GB  | 10 GB | 8,000 sittings is a ~280 MB dataset; the rewrite fork can double it |
+| Production at 8,000 live sittings     | `t4g.medium`, 4 GB | 20 GB | Both processes, both with headroom                                  |
+
+**The disk is sized by the AOF, not the OS.** Valkey lets the log grow to roughly twice the dataset
+before rewriting, and the rewrite writes a second file alongside the first — so plan for about
+three times the dataset plus ~3 GB of OS. Ten gigabytes carries staging and a load test; production
+holding 1.2 GB of live sittings wants twenty. gp3 gives 3,000 IOPS and 125 MB/s at **any** size, so
+a small volume costs nothing in speed — only headroom.
 
 That ~280 MB is 97 MB of sitting state plus ~184 MB of catalog cache — and the per-sitting figures
 behind it (10.2 KB of JSON, 12.1 KB stored) predate the recent work and are unverified (§16).
@@ -481,14 +487,14 @@ Everything here resizes in two minutes — stop, change the instance type, start
 So the rule is to run the smallest thing that works and move when a named trigger fires, not when
 it feels prudent.
 
-| Piece                  | Now            | Moves to                  | When                                                     |
-| ---------------------- | -------------- | ------------------------- | -------------------------------------------------------- |
-| Box A′ — staging API   | `t4g.medium`   | `t4g.small`               | Images build in CI and come from ECR                     |
-| Box A — production API | —              | `t4g.large`               | Production exists                                        |
-|                        |                | `t4g.xlarge` for an event | Scheduled, on the event calendar — never reactively (§3) |
-| Box B — Valkey         | `t4g.micro`    | `t4g.small`               | Before the first full-scale load test                    |
-|                        |                | `t4g.medium`              | Production carries 8,000 live sittings                   |
-| RDS                    | `db.t4g.micro` | `db.t4g.small`            | A second exam container — **connections, not load** (§6) |
+| Piece                  | Now                | Moves to                  | When                                                     |
+| ---------------------- | ------------------ | ------------------------- | -------------------------------------------------------- |
+| Box A′ — staging API   | `t4g.medium`       | `t4g.small`               | Images build in CI and come from ECR                     |
+| Box A — production API | —                  | `t4g.large`               | Production exists                                        |
+|                        |                    | `t4g.xlarge` for an event | Scheduled, on the event calendar — never reactively (§3) |
+| Box B — Valkey         | `t4g.micro`, 10 GB | `t4g.small`               | Before the first full-scale load test                    |
+|                        |                    | `t4g.medium`              | Production carries 8,000 live sittings                   |
+| RDS                    | `db.t4g.micro`     | `db.t4g.small`            | A second exam container — **connections, not load** (§6) |
 
 **Commit to nothing at launch.** After 4–8 weeks of real events the baseline is known; commit to
 70–80% of it so growth and bursts stay on demand.
