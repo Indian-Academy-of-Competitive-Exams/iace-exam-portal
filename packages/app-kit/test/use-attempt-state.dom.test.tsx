@@ -390,3 +390,48 @@ test('a store that refuses to write never stops the answers being saved', async 
   assert.equal(await act(() => result.current.flush()), true, 'and so does the next one');
   assert.equal(sent.length, 2);
 });
+
+/** The failure this prevents: a save hangs, the student moves on, the tab reloads — and the batch in the air is gone. */
+test('keeps the batch in the air on the device until the server answers it', async (t) => {
+  const storage = fakeStorage();
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: () => new Promise(() => undefined),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api, storage)));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void result.current.flush());
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+
+  const kept = JSON.parse(storage.getItem(QUEUE_KEY) ?? '[]') as { questionId: string }[];
+  assert.deepEqual(
+    kept.map((change) => change.questionId).sort((a, b) => a.localeCompare(b)),
+    ['q1', 'q2'],
+  );
+});
+
+/** Unseeded, a bare visit says "no answer", and a later save would clear the one the server holds. */
+test('banks no bare visit before the server has said what is already answered', async (t) => {
+  const sent: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: () => new Promise(() => undefined),
+      saveAttemptState: async (_id: string, body: { revision: number }) => {
+        sent.push(body);
+        return { revision: body.revision };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+
+  act(() => result.current.open('q1'));
+  act(() => result.current.open('q2'));
+  await act(async () => void (await result.current.flush()));
+
+  assert.equal(sent.length, 0, 'nothing was answered here, so nothing is sent');
+});

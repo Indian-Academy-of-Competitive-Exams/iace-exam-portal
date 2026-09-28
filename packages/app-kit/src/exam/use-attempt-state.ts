@@ -124,6 +124,9 @@ export function useAttemptState(
   const openQuestion = useRef<string | null>(null);
   const revision = useRef(0);
   const inFlight = useRef<Promise<boolean> | null>(null);
+  // The batch in the air: kept on the device too, or a reload before its answer loses it.
+  const flying = useRef<AnswerChange[]>([]);
+  const seeded = useRef(false);
 
   // Starts from the queue, then kept level with the state by every writer below, so banking never waits.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
@@ -144,6 +147,7 @@ export function useAttemptState(
           setAnswers((mine) => remember({ ...held.answers, ...mine }));
           setSections((mine) => ({ ...held.sections, ...mine }));
           setSectionsSeeded(true);
+          seeded.current = true;
           // Never backwards: a flush racing this GET may already have moved the counter on.
           revision.current = seedRevision(revision.current, held.revision);
         },
@@ -164,7 +168,9 @@ export function useAttemptState(
   }, []);
 
   const keepQueue = useCallback(() => {
-    const queued = [...pending.current.values()];
+    const byQuestion = new Map(flying.current.map((change) => [change.questionId, change]));
+    for (const change of pending.current.values()) byQuestion.set(change.questionId, change);
+    const queued = [...byQuestion.values()];
     const { answerQueue } = mounted.current;
     const key = queueKeyFor(answerQueue, attemptId);
     try {
@@ -183,6 +189,7 @@ export function useAttemptState(
     // Cleared BEFORE the request, so an edit made while it flies belongs to the next batch.
     pending.current = new Map();
     pendingSections.current = {};
+    flying.current = changes;
     revision.current += 1;
     const sent = revision.current;
     setIsSaving(true);
@@ -218,6 +225,7 @@ export function useAttemptState(
       if (isTakenOver(error)) standDown();
       return false;
     } finally {
+      flying.current = [];
       keepQueue();
       setIsSaving(false);
     }
@@ -262,6 +270,11 @@ export function useAttemptState(
     if (questionId === null) return;
 
     const now = Date.now();
+    // Unseeded, a bare visit reads as "no answer" and would clear one the server holds.
+    if (!seeded.current && answersNow.current[questionId] === undefined) {
+      openedAt.current = now;
+      return;
+    }
     const spent = Math.max(0, Math.round((now - openedAt.current) / 1000));
     // The instant it came on screen, not the instant it left: that is what "first" means.
     const change = visitFor(questionId, answersNow.current[questionId], spent, seenAtOf(openedAt));
