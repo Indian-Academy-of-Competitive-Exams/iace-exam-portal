@@ -18,6 +18,9 @@ export const UNFROZEN_FIELDS = ['name', 'isDefault', 'isActive'] as const;
 export const INACTIVE_CONFIG_MESSAGE =
   'That config is retired. Pick another, or reactivate it first.';
 
+export const BUILT_ON_CONFIG_MESSAGE =
+  'Tests are built on this config, so its sections stay as they are. Clone it to change them; the clone starts where this one left off.';
+
 export const LOCKED_CONFIG_MESSAGE =
   'This config is locked, because a test built from it has already been sat. Clone it to change its shape; the clone starts where this one left off.';
 

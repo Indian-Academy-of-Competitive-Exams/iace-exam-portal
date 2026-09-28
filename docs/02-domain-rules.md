@@ -49,6 +49,9 @@ there is no per-test duration, marks or timing. The way to change a shape is to 
   finalized. Once locked, only its name, `isDefault` and `isActive` still move; everything else is
   the shape a frozen paper was drawn against. `clonedFromId` is the lineage, and promoting a clone
   means clearing `isDefault` on the original it replaces — a stage holds exactly one default.
+- Before it locks, a config that tests are built on still keeps its **sections and modules**: a
+  save rewrites them with new ids, and a test's paper rows, assignments, sectional scope and draw
+  spec all name them by id. Clone it to change them.
 - A locked config is never deleted, nor is one that tests inherit from. Retire it: it keeps its
   history and is simply no longer offered.
 

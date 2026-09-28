@@ -14,7 +14,14 @@ import { AuditContext } from '../src/audit';
 import { EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
 import { type Editor } from '../src/common/edit-lock';
 import { FakeRedis } from '../test/support/fakes';
-import { makeAdmin, makeStage, resetDatabase, testPrisma, uid } from './support/database';
+import {
+  makeAdmin,
+  makePaper,
+  makeStage,
+  resetDatabase,
+  testPrisma,
+  uid,
+} from './support/database';
 
 const ADMIN = uid();
 
@@ -364,6 +371,74 @@ describe('BaseConfigsService — a locked config', () => {
     const locked = await seedConfig({ examStageId: await makeStage(prisma), locked: true });
 
     await assert.rejects(() => service.remove(locked), AppException.is);
+  });
+});
+
+describe('BaseConfigsService — a config a test is built on', () => {
+  /** The failure this prevents: a 500 from a paper row's foreign key, or a draft whose sections vanish under it. */
+  it('refuses a section rewrite, with a paper on it or not yet, and says to clone it', async () => {
+    for (const questions of [[], ['Reasoning']]) {
+      await resetDatabase(prisma);
+      const paper = await makePaper(prisma, { questions });
+      const configId = paper.catalog.baseConfigId;
+
+      await assert.rejects(
+        () => service.update(configId, { sections: draft(paper.catalog.examStageId).sections }),
+        (error: unknown) =>
+          AppException.is(error) &&
+          error.code === ErrorCodes.CONFLICT &&
+          /[Cc]lone/.test(error.message),
+      );
+      const kept = await prisma.baseConfigSection.findMany({
+        where: { baseConfigId: configId },
+        select: { id: true },
+      });
+      assert.deepEqual(
+        kept.map((section) => section.id),
+        paper.sectionIds,
+      );
+    }
+  });
+
+  /** The editor posts the whole paper on every save, renumbered from zero, so a rename carries it back unchanged. */
+  it('takes a rename that posts back the paper it already holds', async () => {
+    const paper = await makePaper(prisma, {
+      sections: ['Reasoning', 'Quant'],
+      questions: ['Reasoning'],
+    });
+    const configId = paper.catalog.baseConfigId;
+    const stored = await prisma.baseConfigSection.findMany({
+      where: { baseConfigId: configId },
+      orderBy: { order: 'asc' },
+    });
+
+    await service.update(configId, {
+      name: 'Tier 1 (drafts)',
+      sections: stored.map((section, index) => ({
+        name: section.name,
+        order: index,
+        subjectId: section.subjectId,
+        questionCount: section.questionCount,
+        marksPerQuestion: Number(section.marksPerQuestion),
+        negativeMarks: Number(section.negativeMarks),
+        durationSec: section.durationSec,
+        perQuestionSec: section.perQuestionSec,
+        mandatory: section.mandatory,
+        meritOrQualifying: section.meritOrQualifying,
+        qualifyingCutoff: null,
+      })),
+    });
+
+    assert.equal((await configRow(configId)).name, 'Tier 1 (drafts)');
+    const kept = await prisma.baseConfigSection.findMany({
+      where: { baseConfigId: configId },
+      orderBy: { order: 'asc' },
+      select: { id: true },
+    });
+    assert.deepEqual(
+      kept.map((section) => section.id),
+      paper.sectionIds,
+    );
   });
 });
 

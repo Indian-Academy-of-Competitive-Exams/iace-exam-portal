@@ -5,6 +5,7 @@ import {
   ErrorCodes,
   EXAM_TEMPLATE,
   FORM_LEVEL_FIELD,
+  MERIT_TYPE,
   TEST_UI,
   TIMER_TEMPLATE,
   configTotalsOf,
@@ -41,6 +42,7 @@ import {
   renderModeIssue,
   INACTIVE_CONFIG_MESSAGE,
   locksOutEdit,
+  BUILT_ON_CONFIG_MESSAGE,
   LOCKED_CONFIG_MESSAGE,
 } from './base-config-rules';
 
@@ -165,6 +167,16 @@ export class BaseConfigsService {
     const timerTemplate = input.timerTemplate ?? (config.timerTemplate as TimerTemplate);
     const sections = input.sections;
     const modules = input.modules ?? (input.sections ? [] : undefined);
+    // The editor posts the whole paper on every save, so only a paper that differs is rewritten.
+    const rewritesPaper =
+      sections !== undefined &&
+      postedPaperKey(timerTemplate, sections, modules ?? []) !== storedPaperKey(config);
+    // A test's paper rows, assignments, scope and draw spec all name these sections by id, and a rewrite mints new ones.
+    if (rewritesPaper && config._count.tests > 0) {
+      throw new AppException(ErrorCodes.CONFLICT, BUILT_ON_CONFIG_MESSAGE, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [BUILT_ON_CONFIG_MESSAGE] },
+      });
+    }
     // Judged against what the config WILL hold: switching the timer alone can leave the sections in a shape the new template forbids, and the database would refuse that with a raw error.
     this.assertShape(
       timerTemplate,
@@ -199,7 +211,7 @@ export class BaseConfigsService {
         await tx.baseConfig.update({ where: { id }, data: { isDefault: input.isDefault } });
       }
 
-      if (sections) {
+      if (rewritesPaper) {
         // Replaced wholesale: the editor holds the whole paper, and a section has no identity an edit could match on once its order or its subject changes.
         await tx.baseConfigSection.deleteMany({ where: { baseConfigId: id } });
         await tx.baseConfigModule.deleteMany({ where: { baseConfigId: id } });
@@ -459,6 +471,83 @@ function assertScreenIsCurrent(config: DetailRow, expected: string | undefined):
 }
 
 /** A stored section, in the form the shape rules read — they judge a draft, not a row. */
+/** The stored paper as a save would write it, by position rather than by order number, so a posted paper can be told from it. */
+function storedPaperKey(config: DetailRow): string {
+  const rankOf = rankByOrder(config.modules, (module) => module.id);
+  return paperKey(
+    config.modules.map((module) => ({ ...module, key: [module.name, module.durationSec] })),
+    config.sections.map((section) => ({
+      order: section.order,
+      module: section.moduleId === null ? null : (rankOf.get(section.moduleId) ?? null),
+      key: [
+        section.name,
+        section.subjectId,
+        section.questionCount,
+        Number(section.marksPerQuestion),
+        Number(section.negativeMarks),
+        section.durationSec,
+        section.perQuestionSec,
+        section.mandatory,
+        section.meritOrQualifying,
+        section.qualifyingCutoff === null ? null : Number(section.qualifyingCutoff),
+      ],
+    })),
+  );
+}
+
+/** A posted paper with `writeChildren`'s defaults and module fallback applied, in `storedPaperKey`'s terms. */
+function postedPaperKey(
+  timerTemplate: TimerTemplate,
+  sections: readonly BaseConfigSectionDraft[],
+  modules: readonly BaseConfigModuleDraft[],
+): string {
+  const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
+  const rankOf = rankByOrder(modules, (module) => module.order);
+  const moduleOf = (asked: number | null | undefined) =>
+    rankOf.get(asked ?? -1) ?? (modules.length > 0 ? 0 : null);
+  return paperKey(
+    modules.map((module) => ({ ...module, key: [module.name, module.durationSec ?? null] })),
+    sections.map((section) => ({
+      order: section.order,
+      module: sessionPaper ? moduleOf(section.moduleOrder) : null,
+      key: [
+        section.name,
+        section.subjectId ?? null,
+        section.questionCount,
+        section.marksPerQuestion,
+        section.negativeMarks,
+        section.durationSec ?? null,
+        section.perQuestionSec ?? null,
+        section.mandatory ?? true,
+        section.meritOrQualifying ?? MERIT_TYPE.MERIT,
+        section.qualifyingCutoff ?? null,
+      ],
+    })),
+  );
+}
+
+/** Each row's place among its siblings, since a save renumbers from zero whatever the stored numbers were. */
+function rankByOrder<T extends { order: number }, K>(rows: readonly T[], idOf: (row: T) => K) {
+  return new Map([...rows].sort((a, b) => a.order - b.order).map((row, rank) => [idOf(row), rank]));
+}
+
+interface KeyedModule {
+  order: number;
+  key: unknown[];
+}
+
+interface KeyedSection extends KeyedModule {
+  module: number | null;
+}
+
+const paperKey = (modules: readonly KeyedModule[], sections: readonly KeyedSection[]): string =>
+  JSON.stringify([
+    [...modules].sort((a, b) => a.order - b.order).map((module) => module.key),
+    [...sections]
+      .sort((a, b) => (a.module ?? -1) - (b.module ?? -1) || a.order - b.order)
+      .map((section) => [section.module, ...section.key]),
+  ]);
+
 function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSectionDraft {
   return {
     name: section.name,
