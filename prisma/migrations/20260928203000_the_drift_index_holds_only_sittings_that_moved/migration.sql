@@ -8,12 +8,14 @@
 --
 -- The old partial index held every EVALUATED sitting and could not answer the new comparison
 -- without a heap fetch per row, which is the cost 20260926100000 removed. This one holds only the
--- rows the sweep can return: a handful after a dropped question or a void, nothing otherwise. Its
+-- rows the sweep can return: the sittings re-scored or voided since their first evaluation, which
+-- grows with each dropped question or void but stays a small slice of the table. Its
 -- predicate compares two columns of the row, so the query's own `updatedAt > evaluatedAt` proves
 -- it with no parameter involved.
 --
--- No data moves. The index is rebuilt from the table; the build takes a write lock on "Attempt"
--- for as long as one pass over it takes, which the release runbook already keeps out of an event window (docs/04 §14).
+-- No data moves. Prisma applies this in one transaction, so DROP INDEX holds an ACCESS EXCLUSIVE
+-- lock on "Attempt" through the rebuild: reads wait as well as writes, for one pass over the table.
+-- The release runbook already keeps a release out of an event window (docs/04 §14).
 
 DROP INDEX "Attempt_student_drift_idx";
 

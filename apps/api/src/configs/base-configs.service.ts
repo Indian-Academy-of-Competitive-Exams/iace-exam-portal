@@ -470,7 +470,6 @@ function assertScreenIsCurrent(config: DetailRow, expected: string | undefined):
   throw editedElsewhere(EDIT_SUBJECTS.BASE_CONFIG);
 }
 
-/** A stored section, in the form the shape rules read — they judge a draft, not a row. */
 /** The stored paper as a save would write it, by position rather than by order number, so a posted paper can be told from it. */
 function storedPaperKey(config: DetailRow): string {
   const rankOf = rankByOrder(config.modules, (module) => module.id);
@@ -548,6 +547,7 @@ const paperKey = (modules: readonly KeyedModule[], sections: readonly KeyedSecti
       .map((section) => [section.module, ...section.key]),
   ]);
 
+/** A stored section, in the form the shape rules read — they judge a draft, not a row. */
 function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSectionDraft {
   return {
     name: section.name,
