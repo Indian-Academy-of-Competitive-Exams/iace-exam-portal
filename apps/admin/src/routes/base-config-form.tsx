@@ -454,7 +454,11 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
       navigate(ROUTES.BASE_CONFIGS);
     },
-    onError: (error) => applyServerErrors(error, form, form.getValues('sections').length),
+    onError: (error) => {
+      // Closed, or the banner and fields holding the error stay behind its overlay.
+      setPromoting(null);
+      applyServerErrors(error, form, form.getValues('sections').length);
+    },
   });
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });

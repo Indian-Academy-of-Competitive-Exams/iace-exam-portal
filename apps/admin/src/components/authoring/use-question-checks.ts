@@ -21,20 +21,26 @@ const DUPLICATE_DEBOUNCE_MS = 900;
 
 /** Asked of the draft on screen, not of the row a save would otherwise have left behind. */
 export function useDuplicate(draft: QuestionDraft | null, editingId: string): string | null {
-  const [asked, setAsked] = useState<QuestionDraft | null>(null);
+  // The card travels with its draft, so a debounce straddling a card switch asks nothing of the new one.
+  const [asked, setAsked] = useState<{ draft: QuestionDraft; editingId: string } | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setAsked(draft), DUPLICATE_DEBOUNCE_MS);
+    const timer = setTimeout(
+      () => setAsked(draft ? { draft, editingId } : null),
+      DUPLICATE_DEBOUNCE_MS,
+    );
     return () => clearTimeout(timer);
-  }, [draft]);
+  }, [draft, editingId]);
 
+  const current = asked?.editingId === editingId ? asked : null;
   const found = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', asked, editingId],
-    queryFn: () => api.admin.authoring.duplicate(asked as QuestionDraft, editingId || undefined),
-    enabled: asked !== null && hasText(asked.stem[DEFAULT_LANGUAGE] ?? ''),
+    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', current?.draft, editingId],
+    queryFn: () =>
+      api.admin.authoring.duplicate(current?.draft as QuestionDraft, editingId || undefined),
+    enabled: current !== null && hasText(current.draft.stem[DEFAULT_LANGUAGE] ?? ''),
   });
 
-  return found.data?.duplicateOf?.stemPreview ?? null;
+  return current ? (found.data?.duplicateOf?.stemPreview ?? null) : null;
 }
 
 /** The rules the save and the sheet are judged by, debounced so the panel settles as you type. */

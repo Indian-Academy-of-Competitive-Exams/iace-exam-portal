@@ -28,7 +28,7 @@ import { useAuth } from '../providers/auth';
 import { LiveTestPicker } from '../components/live-test-picker';
 import { SittingActions } from '../components/sitting-actions';
 
-const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
   hour: 'numeric',
   minute: '2-digit',

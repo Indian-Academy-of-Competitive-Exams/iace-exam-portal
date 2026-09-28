@@ -179,11 +179,12 @@ function TestBuilder({
       toast.success(savedMessage(saved, detail));
       // The server's copy is already here, so the lists go stale without this one being fetched again.
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS, refetchType: 'none' });
-      queryClient.setQueryData(testQueryKey(saved.id), saved);
       if (!existing) {
+        // Left to load: the skeleton it shows is what remounts the builder on the step asked for.
         navigate(ROUTES.TEST(saved.id), { replace: true, state: { step: target } });
         return;
       }
+      queryClient.setQueryData(testQueryKey(saved.id), saved);
       form.reset(form.getValues());
       setStep(target);
     },

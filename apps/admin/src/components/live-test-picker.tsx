@@ -4,7 +4,7 @@ import { Combobox } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 
-const WINDOW_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const WINDOW_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
   day: 'numeric',
   month: 'short',
