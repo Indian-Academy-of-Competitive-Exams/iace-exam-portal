@@ -367,7 +367,6 @@ export function OfferSaveDialog({
     onError: () => onOpenChange(false),
     // An opening deletes every program row it overtakes, so what stuck is read back, never assumed.
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST });
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
     },
   });

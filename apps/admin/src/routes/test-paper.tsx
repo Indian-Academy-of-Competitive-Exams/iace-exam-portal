@@ -49,11 +49,10 @@ import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
 import { sectionFullness, sectionTally } from './test-paper-view';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, testQueryKey } from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
 
-const TEST_KEY = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
 const PAPER_KEY = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as const;
 
 /** Referentially stable, so a test that has never had a pool does not remount the editor. */
@@ -76,7 +75,7 @@ export function TestPaperPage() {
   const testId = id ?? '';
 
   const test = useQuery({
-    queryKey: TEST_KEY(testId),
+    queryKey: testQueryKey(testId),
     queryFn: () => api.admin.tests.detail(testId),
     enabled: testId !== '',
   });
@@ -155,14 +154,14 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     mutationFn: (next: DrawSpec) => api.admin.tests.update(detail.id, { questionPoolFilter: next }),
     onSuccess: async (saved) => {
       setDraft(null);
-      queryClient.setQueryData(TEST_KEY(saved.id), saved);
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS, refetchType: 'none' });
+      queryClient.setQueryData(testQueryKey(saved.id), saved);
     },
   });
 
   const refresh = async (next: TestPaper) => {
     queryClient.setQueryData(PAPER_KEY(detail.id), next);
-    await queryClient.invalidateQueries({ queryKey: TEST_KEY(detail.id) });
+    await queryClient.invalidateQueries({ queryKey: testQueryKey(detail.id) });
   };
 
   const spec = draft ?? detail.questionPoolFilter ?? NO_SPEC;

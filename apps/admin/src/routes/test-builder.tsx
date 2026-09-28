@@ -35,6 +35,7 @@ import { api } from '../lib/api';
 import {
   NAV_ITEMS,
   QUERY_KEYS,
+  testQueryKey,
   ROUTES,
   TEST_BUILDER_STEP_LABELS,
   TEST_STATUS_LABELS,
@@ -56,8 +57,6 @@ import { useOfferDraft, type OfferHold } from './use-offer-draft';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
-const TEST_KEY = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
-
 /** Each step is done when the thing it exists to produce is there, not when it has been walked past. */
 function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
   const done = new Set<TestBuilderStep>();
@@ -77,7 +76,7 @@ export function TestBuilderPage() {
   const fromSeriesId = existing ? null : search.get('series');
 
   const test = useQuery({
-    queryKey: TEST_KEY(testId),
+    queryKey: testQueryKey(testId),
     queryFn: () => api.admin.tests.detail(testId),
     enabled: existing,
   });
@@ -177,12 +176,13 @@ function TestBuilder({
           });
     },
     onSuccess: async (saved, { target }) => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
+      // The server's copy is already here, so the lists go stale without this one being fetched again.
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS, refetchType: 'none' });
+      queryClient.setQueryData(testQueryKey(saved.id), saved);
       if (!existing) {
         navigate(ROUTES.TEST(saved.id), { replace: true, state: { step: target } });
         return;
       }
-      queryClient.setQueryData(TEST_KEY(saved.id), saved);
       form.reset(form.getValues());
       setStep(target);
     },

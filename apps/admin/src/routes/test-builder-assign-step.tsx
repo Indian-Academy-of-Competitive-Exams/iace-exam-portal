@@ -52,7 +52,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
-import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS, ROUTES, testQueryKey } from '../lib/constants';
 import { sectionFullness, sectionTally } from './test-paper-view';
 import { SectionThreadButton } from '../components/section-thread';
 
@@ -359,7 +359,7 @@ function SourceDialog({ testId }: Readonly<{ testId: string }>) {
     meta: { success: 'Question source set.' },
     mutationFn: (paperSource: PaperSource) => api.admin.tests.update(testId, { paperSource }),
     onSuccess: async (saved) => {
-      queryClient.setQueryData([...QUERY_KEYS.TEST, saved.id], saved);
+      queryClient.setQueryData(testQueryKey(saved.id), saved);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
       setOpen(false);
     },

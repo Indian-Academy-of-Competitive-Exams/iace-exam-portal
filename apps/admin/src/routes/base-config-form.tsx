@@ -332,8 +332,8 @@ export function BaseConfigFormPage() {
     );
   }
 
-  // Mounted only once the saved config is here, so a refetch cannot throw away a half-typed edit.
-  return <ConfigEditor detail={config.data ?? null} />;
+  // Remounted only when the saved version moves, so a refetch of the same one keeps a half-typed edit.
+  return <ConfigEditor key={config.data?.updatedAt} detail={config.data ?? null} />;
 }
 
 // ============================================================================

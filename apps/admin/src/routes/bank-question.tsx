@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { DIFFICULTY_LEVEL } from '@iace/contracts';
 import { api } from '../lib/api';
-import { QUERY_KEYS, ROUTES } from '../lib/constants';
+import { QUERY_KEYS, QUERY_SCOPES, ROUTES } from '../lib/constants';
 import {
   AuthoringWorkspace,
   type Held,
@@ -20,18 +20,17 @@ export function BankQuestionPage() {
   const queryClient = useQueryClient();
 
   const source = useMemo((): WorkspaceSource => {
-    const settle = () =>
-      Promise.all(
-        [QUERY_KEYS.QUESTION, QUERY_KEYS.QUESTIONS].map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey }),
-        ),
-      );
+    const settle = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
     return {
       cards: id ? [{ key: id, lead, editable: true }] : [],
       query: (key) => ({
-        queryKey: [...QUERY_KEYS.QUESTION, key, 'held'],
+        queryKey: [...QUERY_KEYS.QUESTION, key, QUERY_SCOPES.HELD],
         queryFn: async (): Promise<Held> => {
-          const question = await api.admin.questions.detail(key);
+          // Through the detail's own key, so the page it was opened from has already read it.
+          const question = await queryClient.fetchQuery({
+            queryKey: [...QUERY_KEYS.QUESTION, key],
+            queryFn: () => api.admin.questions.detail(key),
+          });
           return {
             header: headerOf(question),
             state: stateOf(question),

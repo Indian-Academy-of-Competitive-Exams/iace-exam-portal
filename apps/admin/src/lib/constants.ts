@@ -515,14 +515,14 @@ export const NEW_RECORD = 'new';
 
 const ADMIN = 'admin';
 
-/** Every query key this app owns; a raw key that drifts by a character fails silently at invalidation. */
+/** Every query key this app owns; a record sits under its list's root, so invalidating the list reaches it. */
 export const QUERY_KEYS = {
   ADMINS: [ADMIN, 'admins'],
   ASSIGNMENTS: [ADMIN, 'assignments'],
   AUTHORING: [ADMIN, 'authoring'],
   ANNOUNCEMENTS: [ADMIN, 'announcements'],
   AUDIT: [ADMIN, 'audit'],
-  BASE_CONFIG: [ADMIN, 'base-config'],
+  BASE_CONFIG: [ADMIN, 'base-configs', 'detail'],
   BASE_CONFIGS: [ADMIN, 'base-configs'],
   BRANCHES: [ADMIN, 'branches'],
   DASHBOARD: [ADMIN, 'dashboard'],
@@ -534,13 +534,13 @@ export const QUERY_KEYS = {
   ME: ['auth', 'me'],
   PROGRAMS: [ADMIN, 'programs'],
   PROOFREADING: [ADMIN, 'proofreading'],
-  QUESTION: [ADMIN, 'question'],
+  QUESTION: [ADMIN, 'questions', 'detail'],
   QUESTIONS: [ADMIN, 'questions'],
-  STUDENT: [ADMIN, 'student'],
+  STUDENT: [ADMIN, 'students', 'detail'],
   STUDENTS: [ADMIN, 'students'],
   SECTION_THREAD: [ADMIN, 'section-thread'],
   SUBJECTS: [ADMIN, 'subjects'],
-  TEST: [ADMIN, 'test'],
+  TEST: [ADMIN, 'tests', 'detail'],
   TEST_ANALYTICS: [ADMIN, 'test-analytics'],
   TEST_PAPER: [ADMIN, 'test-paper'],
   TEST_SERIES: [ADMIN, 'test-series'],
@@ -560,6 +560,8 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
 };
 
+export const testQueryKey = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
+
 export const studentSittingsQueryKey = (studentId: string, search: string) =>
   [...QUERY_KEYS.STUDENT, studentId, 'sittings', search] as const;
 
@@ -577,6 +579,8 @@ export const QUERY_SCOPES = {
   PICKER: 'picker',
   /** A FILTER: it narrows a list, so it must reach a retired value or those rows go missing. */
   FILTER: 'filter',
+  /** A question as the authoring workspace holds it, apart from the detail it was read from. */
+  HELD: 'held',
 } as const;
 
 // The admin list the Permissions screen assigns from; past a hundred this needs a Combobox instead.

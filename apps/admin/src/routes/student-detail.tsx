@@ -435,8 +435,8 @@ export function StudentDetailPage() {
         },
       }),
     onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS, refetchType: 'none' });
       queryClient.setQueryData([...QUERY_KEYS.STUDENT, id], updated);
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
       form.reset(toFormValues(updated));
       setIsEditing(false);
     },

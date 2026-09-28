@@ -43,7 +43,13 @@ import {
   type BadgeProps,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS, REVIEW_STATE_LABELS, ROUTES, SEND_BACK_REASON_LABELS } from '../lib/constants';
+import {
+  QUERY_KEYS,
+  QUERY_SCOPES,
+  REVIEW_STATE_LABELS,
+  ROUTES,
+  SEND_BACK_REASON_LABELS,
+} from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SectionThreadButton } from '../components/section-thread';
 import { OtherTestsNotice } from '../components/cross-test-warning';
@@ -179,7 +185,7 @@ function SectionWorkspace({
         cardOf(work, question, index, seat, onChanged),
       ),
       query: (id) => ({
-        queryKey: [...workKey(testId, sectionId), id, 'held'],
+        queryKey: [...workKey(testId, sectionId), id, QUERY_SCOPES.HELD],
         queryFn: async (): Promise<Held> => {
           const question = await api.admin.sectionWork.question(testId, sectionId, id);
           return {

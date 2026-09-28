@@ -17,8 +17,8 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
   const name = detail.fullName ?? detail.mobile;
 
   const applyUpdate = (updated: StudentDetail) => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS, refetchType: 'none' });
     queryClient.setQueryData([...QUERY_KEYS.STUDENT, id], updated);
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
   };
 
   const setTestBlocked = useMutation({
@@ -55,7 +55,6 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
     onError: () => setEraseConfirm(false),
     onSuccess: () => {
       setEraseConfirm(false);
-      void queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.STUDENT, id] });
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
     },
   });
