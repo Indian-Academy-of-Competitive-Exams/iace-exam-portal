@@ -15,11 +15,13 @@ import {
   type Paginated,
   type CreateAdminBody,
   type Feature,
+  type FeatureKey,
+  type PermissionLevel,
   type PermissionGrantBody,
   type SetAdminActiveBody,
   type UpdateAdminBody,
 } from '@iace/contracts';
-import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Actors, CurrentUser, RequiresSuperAdmin } from '../common/security';
 import { type AuthenticatedUser } from '../common/security';
 import { Audit, TOGGLE_ACTIONS } from '../audit';
@@ -85,14 +87,10 @@ export class AdminsController {
   @Audit(AUDIT_FEATURE.FEATURE_PERMISSION, AUDIT_ACTION.DELETE)
   @Delete('features/:featureKey/permissions/:level/:adminId')
   revoke(
-    @Param('featureKey') featureKey: string,
-    @Param('level') level: string,
+    @Param('featureKey', new ZodParam(featureKeySchema)) featureKey: FeatureKey,
+    @Param('level', new ZodParam(permissionLevelSchema)) level: PermissionLevel,
     @Param('adminId') adminId: string,
   ): Promise<Feature> {
-    return this.admins.revoke({
-      featureKey: featureKeySchema.parse(featureKey),
-      level: permissionLevelSchema.parse(level),
-      adminId,
-    });
+    return this.admins.revoke({ featureKey, level, adminId });
   }
 }

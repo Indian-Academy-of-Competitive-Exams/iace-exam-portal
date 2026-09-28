@@ -1,11 +1,13 @@
 import ExcelJS from 'exceljs';
 import {
   CANDIDATE_IMPORT_COLUMNS,
+  EARLIEST_BIRTH_DATE,
   EARLIEST_BIRTH_YEAR,
   IMPORT_MAX_ROWS,
   PROGRAM_IMPORT_COLUMNS,
   STUDENT_IMPORT_COLUMNS,
 } from '@iace/contracts';
+import { toDateColumn } from '../common/time/institute-day';
 
 /** The sample file the UI offers. */
 export function buildStudentTemplate(): Promise<Buffer> {
@@ -81,7 +83,7 @@ const DATE_COLUMN_KEYS = ['dob'] as const;
 
 /** A real date column stores a serial, so how Excel DRAWS it can never reach the importer. */
 function applyDateColumns(sheet: ExcelJS.Worksheet, columns: readonly { key: string }[]): void {
-  const earliest = new Date(Date.UTC(EARLIEST_BIRTH_YEAR, 0, 1));
+  const earliest = toDateColumn(EARLIEST_BIRTH_DATE);
 
   for (const key of DATE_COLUMN_KEYS) {
     const index = columns.findIndex((column) => column.key === key);

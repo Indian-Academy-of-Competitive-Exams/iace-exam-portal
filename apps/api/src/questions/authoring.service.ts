@@ -5,6 +5,7 @@ import {
   AUTHORING_HISTORY_DAYS,
   AUTHORING_TAG_SUGGESTIONS,
   ErrorCodes,
+  INSTITUTE_TIME_ZONE,
   QUESTION_STATUSES,
   QUESTION_SORTS,
   todayISO,
@@ -129,7 +130,7 @@ export class AuthoringService {
   /** Grouped in the database at the institute's day boundary, never at UTC midnight. */
   private async countByDay(adminId: string, firstDay: string): Promise<Map<string, number>> {
     const rows = await this.prisma.$queryRaw<{ day: string; written: bigint }[]>`
-      SELECT to_char((q."createdAt" AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD') AS day,
+      SELECT to_char((q."createdAt" AT TIME ZONE ${INSTITUTE_TIME_ZONE})::date, 'YYYY-MM-DD') AS day,
              COUNT(*) AS written
       FROM "Question" q
       WHERE q."createdById" = ${adminId}::uuid AND q."createdAt" >= ${startOfInstituteDay(firstDay)}

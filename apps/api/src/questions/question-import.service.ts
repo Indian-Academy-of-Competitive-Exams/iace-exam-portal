@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
-import { AuditFeature, ImportSource, Prisma } from '@prisma/client';
+import { ImportSource, Prisma } from '@prisma/client';
 import {
+  AUDIT_FEATURE,
   AppException,
   AUDIT_ACTION,
   ErrorCodes,
@@ -73,7 +74,7 @@ export class QuestionImportService {
 
     const log = await this.prisma.importLog.create({
       data: {
-        feature: AuditFeature.QUESTION,
+        feature: AUDIT_FEATURE.QUESTION,
         source: ImportSource.SHEET,
         actorId,
         total: planning.summary.total,
@@ -83,7 +84,7 @@ export class QuestionImportService {
     });
 
     // Keyed by the run, so the sheet that produced a set of questions can always be fetched back — the answer to "where did this question come from".
-    const key = importFileKey(AuditFeature.QUESTION, log.id);
+    const key = importFileKey(AUDIT_FEATURE.QUESTION, log.id);
     await this.storage.upload(key, file, XLSX_CONTENT_TYPE);
     await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
     // Stored now, not at Import: the review window has to show them before anything is written.
@@ -166,7 +167,7 @@ export class QuestionImportService {
     try {
       await this.audit.recordImportRows(
         log.id,
-        AuditFeature.QUESTION,
+        AUDIT_FEATURE.QUESTION,
         created.map((question) => ({ entityId: question.id, action: AUDIT_ACTION.CREATE })),
         log.actorId,
       );
@@ -293,7 +294,7 @@ export class QuestionImportService {
   /** A previewed, uncommitted run; with an actor, only the one who previewed it may touch it. */
   private async openRun(importLogId: string, actorId: string | undefined) {
     const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
-    if (!log || log.feature !== AuditFeature.QUESTION || !log.fileS3Key) {
+    if (!log || log.feature !== AUDIT_FEATURE.QUESTION || !log.fileS3Key) {
       throw new AppException(ErrorCodes.NOT_FOUND, UPLOAD_GONE);
     }
     if (actorId !== undefined && log.actorId !== actorId) {
