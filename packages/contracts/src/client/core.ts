@@ -76,7 +76,13 @@ export function createApiCore(options: ApiClientOptions) {
   /** The AppException from the last failed refresh, so `onUnauthorized` can say why. */
   let refreshFailure: AppException | undefined;
 
-  async function send(path: string, method: string, body: unknown, token: string | null) {
+  async function send(
+    path: string,
+    method: string,
+    body: unknown,
+    token: string | null,
+    signal?: AbortSignal,
+  ) {
     // FormData: the browser must set its own Content-Type, boundary included.
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
@@ -89,6 +95,7 @@ export function createApiCore(options: ApiClientOptions) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         ...(body === undefined ? {} : { body: isFormData ? body : JSON.stringify(body) }),
+        ...(signal ? { signal } : {}),
       });
     } catch (cause) {
       // The request never landed — offline, DNS, CORS, a dead API; same typed error as everything else, so callers need no second code path.
@@ -151,9 +158,11 @@ export function createApiCore(options: ApiClientOptions) {
     if (!refreshToken) return null;
 
     for (let asked = 0; ; asked += 1) {
+      const abandon = new AbortController();
+      const timer = setTimeout(() => abandon.abort(), REFRESH_TIMEOUT_MS);
       try {
         const envelope = await parse(
-          await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null),
+          await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null, abandon.signal),
           authTokensSchema,
         );
         onTokensRefreshed?.(envelope.data);
@@ -164,6 +173,8 @@ export function createApiCore(options: ApiClientOptions) {
         const backoff = worthAskingAgain(refreshFailure) ? refreshBackoffMs(asked) : undefined;
         if (backoff === undefined) return null;
         await new Promise((wake) => setTimeout(wake, backoff));
+      } finally {
+        clearTimeout(timer);
       }
     }
   }
@@ -282,6 +293,9 @@ const REFUSED = 401;
 
 /** Halved and jittered: a hall whose tokens expired in the same minute must not ask again in step. */
 const REFRESH_BACKOFF_MS = [1_000, 2_000, 4_000] as const;
+
+/** Four tries at this plus the backoff end by ~50s, inside the 60s the server still answers a replaced token for. */
+const REFRESH_TIMEOUT_MS = 10_000;
 
 function refreshBackoffMs(asked: number, random: () => number = Math.random): number | undefined {
   const step = REFRESH_BACKOFF_MS[asked];

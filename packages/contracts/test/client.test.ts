@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import { z } from 'zod';
 import {
   createApiClient,
@@ -29,9 +29,12 @@ const success = (data: unknown, extra: Partial<Meta> = {}) =>
 const failure = (status: number, error: ApiFailure['error']) =>
   json(status, { success: false, error, meta } satisfies ApiFailure);
 
+/** A request the network swallows: it answers nothing until the caller abandons it. */
+const HANG = Symbol('hang');
+
 /** Builds a client over a scripted queue of responses, recording each call. */
 function clientWith(
-  responses: Response[],
+  responses: (Response | typeof HANG)[],
   tokens: { access?: string; refresh?: string } = {},
   headers?: Readonly<Record<string, string>>,
 ) {
@@ -57,6 +60,11 @@ function clientWith(
       });
       const next = responses.shift();
       if (!next) throw new Error(`unexpected extra request to ${url}`);
+      if (next === HANG) {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      }
       return Promise.resolve(next);
     }) as unknown as typeof fetch,
   });
@@ -266,6 +274,34 @@ describe('typed client — 401 handling', () => {
     assert.deepEqual(await api.request('/thing', { schema }), { id: 'abc' });
     assert.equal(calls.length, 4, 'the throttled refresh is asked a second time');
     assert.deepEqual(causes, [], 'a throttle says nothing about whether the session is still good');
+  });
+
+  /** The server answers the replaced token again for 60 seconds only; a refresh left hanging must be asked again inside that. */
+  it('abandons a refresh that never answers, and asks again', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const { api, calls, causes } = clientWith(
+        [
+          failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
+          HANG,
+          success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
+          success({ id: 'abc' }),
+        ],
+        { access: 'stale', refresh: 'r1' },
+      );
+
+      const answered = api.request('/thing', { schema });
+      for (let waited = 0; waited < 30_000 && calls.length < 4; waited += 500) {
+        await new Promise((settle) => setImmediate(settle));
+        mock.timers.tick(500);
+      }
+
+      assert.equal(calls.length, 4, 'the hung refresh was given up on and asked again');
+      assert.deepEqual(await answered, { id: 'abc' });
+      assert.deepEqual(causes, []);
+    } finally {
+      mock.timers.reset();
+    }
   });
 
   it('keeps the session when the refresh never gets through at all', async () => {
