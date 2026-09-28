@@ -315,7 +315,10 @@ nothing stands in the way of computing it — that is a feature to ask for, not 
 The pass's watermark is `Attempt.updatedAt`, not `evaluatedAt`. The two things that move marks
 already counted — a dropped question re-scoring every sitting, and a void — both leave `evaluatedAt`
 exactly where it was, so a pass keyed on it would see neither. It also looks back past its own
-watermark by a short lag, because a sitting can commit after a pass has read.
+watermark by a short lag, because a sitting can commit after a pass has read. On the student side
+the watermark is when a rebuild last read, and only a sitting that moved after its first evaluation
+(`updatedAt` past `evaluatedAt`) counts as drift: the first evaluation commits its fold with its
+marks, so treating it as drift would replay every student on every pass.
 
 Every evaluated sitting feeds `StudentStat` and `StudentSubjectStat`, retakes included, because a
 retake is still work a student did; `StudentStat.retakeCount` counts them, and its score sum leaves

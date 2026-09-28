@@ -36,7 +36,6 @@ const FOLD_SELECT = {
   wrongCount: true,
   unattemptedCount: true,
   submittedAt: true,
-  evaluatedAt: true,
   sectionScores: true,
   startedAt: true,
   shuffleSeed: true,
@@ -175,7 +174,7 @@ export class RollupService {
     return rows.map((row) => row.id);
   }
 
-  /** The student side is accumulated, not recounted: only a stale watermark says a fold was missed. */
+  /** A first evaluation is folded with its marks, so only a sitting that moved after it can be missed. */
   private async driftedStudents(): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ studentId: string }[]>`
       SELECT s."studentId"
@@ -184,6 +183,7 @@ export class RollupService {
         SELECT 1 FROM "Attempt" a
         WHERE a."studentId" = s."studentId"
           AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
+          AND a."updatedAt" > a."evaluatedAt"
           AND a."updatedAt" > COALESCE(s."computedThrough" - ${SWEEP_LAG}::interval, '-infinity'::timestamptz))
       LIMIT ${SWEEP_STUDENTS_PER_PASS}`;
     return rows.map((row) => row.studentId);
@@ -354,12 +354,12 @@ export class RollupService {
       INSERT INTO "StudentStat" (
         "studentId", "testsAttempted", "testsEvaluated", "sumScore", "totalAnswered",
         "totalCorrect", "totalWrong", "totalUnattempted", "sumTimeSec", "retakeCount",
-        "lastAttemptAt", "computedThrough", "computedAt")
+        "lastAttemptAt", "computedAt")
       VALUES (
         ${studentId}::uuid, ${totals.testsAttempted}, ${totals.testsEvaluated},
         ${totals.sumScore}, ${totals.totalAnswered}, ${totals.totalCorrect}, ${totals.totalWrong},
         ${totals.totalUnattempted}, ${BigInt(totals.sumTimeSec)}, ${totals.retakeCount},
-        ${totals.lastAttemptAt}::timestamptz, ${totals.computedThrough}::timestamptz, ${now})
+        ${totals.lastAttemptAt}::timestamptz, ${now})
       ON CONFLICT ("studentId") DO UPDATE SET
         "testsAttempted" = "StudentStat"."testsAttempted" + EXCLUDED."testsAttempted",
         "testsEvaluated" = "StudentStat"."testsEvaluated" + EXCLUDED."testsEvaluated",
@@ -372,7 +372,6 @@ export class RollupService {
         "retakeCount" = "StudentStat"."retakeCount" + EXCLUDED."retakeCount",
         -- GREATEST ignores a NULL side, which is what maxOf did with the row it used to read back.
         "lastAttemptAt" = GREATEST("StudentStat"."lastAttemptAt", EXCLUDED."lastAttemptAt"),
-        "computedThrough" = GREATEST("StudentStat"."computedThrough", EXCLUDED."computedThrough"),
         "computedAt" = EXCLUDED."computedAt"`;
   }
 
@@ -426,7 +425,7 @@ export class RollupService {
         sumTimeSec: BigInt(totals.sumTimeSec),
         retakeCount: totals.retakeCount,
         lastAttemptAt: totals.lastAttemptAt,
-        computedThrough: totals.computedThrough,
+        computedThrough: now,
         computedAt: now,
       },
     });
@@ -498,7 +497,6 @@ function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttem
     wrongCount: row.wrongCount ?? 0,
     unattemptedCount: row.unattemptedCount ?? 0,
     submittedAt: row.submittedAt,
-    evaluatedAt: row.evaluatedAt,
     scope: row.test.scope,
     sections: sectionScoresIn(row.sectionScores) ?? [],
     questions: servedSheet(paper, row, false).map((question) => ({

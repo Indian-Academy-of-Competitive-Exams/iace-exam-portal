@@ -165,7 +165,6 @@ describe('RollupService — counting one sitting in', () => {
     );
     assert.equal(student?.totalAnswered, 3);
     assert.equal(num(student?.sumTimeSec), 120);
-    assert.notEqual(student?.computedThrough, null);
   });
 
   it('measures each question, and leaves discrimination for the pass that earns it', async () => {
@@ -530,9 +529,6 @@ describe('RollupService — the student watermark a re-score can leave behind', 
     const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
     await counted(built, attemptId);
     const before = await studentStat(studentId);
-
-    // Backdated so the sweep reads it as long settled, not freshly landed.
-    await prisma.attempt.update({ where: { id: attemptId }, data: { updatedAt: new Date(0) } });
 
     await built.rollup.sweepCohorts();
 

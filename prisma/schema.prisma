@@ -1156,7 +1156,7 @@ model StudentStat {
   sumTimeSec       BigInt    @default(0)
   retakeCount      Int       @default(0)
   lastAttemptAt    DateTime? @db.Timestamptz(3)
-  // Watermark for drift detection and targeted rebuilds.
+  // When a rebuild last read every sitting; a sitting re-scored after it, less the sweep lag, is drift.
   computedThrough  DateTime? @db.Timestamptz(3)
   computedAt       DateTime  @db.Timestamptz(3)
 

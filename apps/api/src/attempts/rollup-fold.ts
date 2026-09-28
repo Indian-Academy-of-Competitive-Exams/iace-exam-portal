@@ -39,7 +39,6 @@ export interface FoldableAttempt {
   wrongCount: number;
   unattemptedCount: number;
   submittedAt: Date | null;
-  evaluatedAt: Date | null;
   scope: TestScope;
   sections: AttemptSectionScore[];
   questions: FoldableQuestion[];
@@ -65,7 +64,6 @@ export interface StudentTotals {
   sumTimeSec: number;
   retakeCount: number;
   lastAttemptAt: Date | null;
-  computedThrough: Date | null;
   subjects: Map<string, SubjectTotals>;
 }
 
@@ -111,7 +109,6 @@ export function emptyStudentTotals(): StudentTotals {
     sumTimeSec: 0,
     retakeCount: 0,
     lastAttemptAt: null,
-    computedThrough: null,
     subjects: new Map(),
   };
 }
@@ -139,7 +136,6 @@ export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttem
   totals.totalAnswered += attempt.correctCount + attempt.wrongCount;
   totals.sumTimeSec += timeSpentOn(attempt);
   totals.lastAttemptAt = maxOf(totals.lastAttemptAt, attempt.submittedAt);
-  totals.computedThrough = maxOf(totals.computedThrough, attempt.evaluatedAt);
 
   if (attempt.isGraded) {
     totals.testsEvaluated += 1;

@@ -124,11 +124,7 @@ export class ScoringProcessor extends WorkerHost {
       if (first === null) return { applied: false, first: false };
 
       if (first) {
-        await this.rollups.foldStudentSitting(
-          tx,
-          foldableOf(attempt, scored, terms, served, now),
-          now,
-        );
+        await this.rollups.foldStudentSitting(tx, foldableOf(attempt, scored, terms, served), now);
         await this.announce(tx, attempt);
         return { applied: true, first: true };
       }
@@ -240,7 +236,6 @@ function foldableOf(
   scored: PaperScore,
   terms: readonly PaperTerm[],
   served: readonly ScorableQuestion[],
-  now: Date,
 ): FoldableAttempt {
   return {
     id: attempt.id,
@@ -253,7 +248,6 @@ function foldableOf(
     wrongCount: scored.wrongCount,
     unattemptedCount: scored.unattemptedCount,
     submittedAt: attempt.submittedAt,
-    evaluatedAt: now,
     scope: attempt.test.scope,
     sections: scored.sections,
     // `scorePaper` pushes one verdict per row it was handed, so all three lists are the paper's order.
