@@ -7,14 +7,12 @@ import {
   QUESTION_TYPE,
   type QUESTION_TYPES,
   TAG_SEPARATOR,
-  hasText,
   plainTextOf,
   type QuestionDetail,
-  type QuestionDraftInput,
   type QuestionLanguage,
 } from '@iace/contracts';
 
-/** One question as the boxes hold it, and the draft the API takes, in both directions. */
+/** One question as the read-only boxes hold it. */
 
 type LanguageMap = Record<QuestionLanguage, string>;
 
@@ -92,63 +90,3 @@ export function valuesOf(question: QuestionDetail): QuestionFormValues {
     tolerance: question.answerKey?.tolerance == null ? '' : String(question.answerKey.tolerance),
   };
 }
-
-/** Blank boxes are absent: an emptied editor still holds `<p></p>`, which says nothing. */
-function filled(map: LanguageMap): Partial<LanguageMap> {
-  const out: Partial<LanguageMap> = {};
-  for (const language of LANGUAGE_ORDER) {
-    if (hasText(map[language])) out[language] = map[language].trim();
-  }
-  return out;
-}
-
-export function toDraft(values: QuestionFormValues, saved?: QuestionDetail): QuestionDraftInput {
-  const isMcq = values.type === QUESTION_TYPE.SINGLE_MCQ;
-
-  return {
-    // What this screen was built from, so a save over somebody else's is refused rather than applied.
-    expectedUpdatedAt: saved?.updatedAt,
-    type: values.type,
-    subjectId: values.subjectId,
-    topicId: values.topicId || null,
-    difficulty: values.difficulty,
-    questionCode: values.questionCode.trim() || null,
-    stem: filled(values.stem),
-    solution: filled(values.solution),
-    options: isMcq
-      ? values.options
-          .map((option, index) => ({
-            position: index + 1,
-            isCorrect: String(index + 1) === values.correctOption,
-            text: filled(option.text),
-          }))
-          .filter((option) => Object.keys(option.text).length > 0)
-      : [],
-    answerKey: isMcq
-      ? null
-      : {
-          mode: values.answerMode,
-          answers: filled(values.answers),
-          ...(values.answerMode === ANSWER_MODE.NUMERIC && values.tolerance.trim() !== ''
-            ? { tolerance: values.tolerance }
-            : {}),
-        },
-    tags: values.tags
-      .split(TAG_SEPARATOR)
-      .map((tag) => tag.trim())
-      .filter((tag) => tag !== ''),
-  };
-}
-
-/** Every path the server can name, so a failure lands on its own input. */
-export const SERVER_FIELDS = [
-  'subjectId',
-  'topicId',
-  'difficulty',
-  'type',
-  'questionCode',
-  'tags',
-  'options',
-  ...LANGUAGE_ORDER.map((language) => `stem.${language}` as const),
-  ...LANGUAGE_ORDER.map((language) => `solution.${language}` as const),
-] as const;

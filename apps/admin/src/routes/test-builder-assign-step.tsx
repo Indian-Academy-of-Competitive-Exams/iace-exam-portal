@@ -266,7 +266,7 @@ function columnsOf({
       header: 'Section',
       className: 'max-w-[14rem] font-medium',
       cell: (row) => (
-        <Link to={ROUTES.SECTION(testId, row.section.id)} className={linkVariants()}>
+        <Link to={ROUTES.TEST_SECTION(testId, row.section.id)} className={linkVariants()}>
           <TruncatedText>{row.section.name}</TruncatedText>
         </Link>
       ),
@@ -482,7 +482,7 @@ function SectionActions({
   return (
     <RowActions label={`Actions for ${row.section.name}`}>
       <DropdownMenuItem asChild>
-        <Link to={ROUTES.SECTION(testId, row.section.id)}>Open section</Link>
+        <Link to={ROUTES.TEST_SECTION(testId, row.section.id)}>Open section</Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link to={`${ROUTES.TEST_PAPER(testId)}?section=${row.section.id}`}>Open paper</Link>

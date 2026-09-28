@@ -26,7 +26,6 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
-import { SECTION_AS } from '../components/authoring/section-moment';
 import {
   AssignmentSectionPicker,
   AssignmentTestPicker,
@@ -38,10 +37,10 @@ import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 
 const isTypist = (role: AssignmentRole) => role === ASSIGNMENT_ROLES.TYPIST;
 
-const rowHref = (row: AssignmentWithTest): string => {
-  const section = ROUTES.SECTION(row.testId, row.baseConfigSectionId);
-  return isTypist(row.role) ? section : `${section}?as=${SECTION_AS.READER}`;
-};
+const rowHref = (row: AssignmentWithTest): string =>
+  isTypist(row.role)
+    ? ROUTES.TYPING_SECTION(row.testId, row.baseConfigSectionId)
+    : ROUTES.READING_SECTION(row.testId, row.baseConfigSectionId);
 
 function progressVariant(written: number, target: number): BadgeProps['variant'] {
   if (written === 0) return 'neutral';

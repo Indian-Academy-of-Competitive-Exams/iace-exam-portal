@@ -452,11 +452,11 @@ letter-based answer key are why real uploads were rejected wholesale.
   (`stemHashVersion`); changing the fold means bumping `STEM_HASH_VERSION`, and the worker rehashes
   every older row at boot.
 - **Rows are corrected before Import, not after.** The preview opens every row, a Skip row included,
-  in the review window; a saved correction is held against the run and its line (`ImportRowEdit`),
+  on the authoring page, one card per row; a saved correction is held against the run and its line (`ImportRowEdit`),
   never in the bank, and every row is judged again at once, so a fixed row turns to Create and a
   correction that now repeats another becomes a duplicate. Import lays the corrections over the
   re-read file and judges it all once more. Only the admin who previewed a run may correct it, and
-  not once it is imported. Sheet pictures are stored at preview so the window can draw them.
+  not once it is imported. Sheet pictures are stored at preview so the page can draw them.
 - Every imported question carries the `imported` tag, so one filter finds what an upload brought in.
 - An upload is bounded so it stays a single synchronous request.
 

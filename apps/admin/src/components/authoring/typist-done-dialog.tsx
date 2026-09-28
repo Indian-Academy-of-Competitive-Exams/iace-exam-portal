@@ -4,7 +4,7 @@ import {
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
   sectionQuota,
-  type AssignmentWithTest,
+  type Assignment,
   type QuestionSummary,
 } from '@iace/contracts';
 import {
@@ -32,7 +32,7 @@ import { sectionQuestions } from './section-questions';
 export function TypistDoneDialog({
   assignment,
   onClose,
-}: Readonly<{ assignment: AssignmentWithTest | null; onClose: () => void }>) {
+}: Readonly<{ assignment: Assignment | null; onClose: () => void }>) {
   if (assignment === null) return null;
   return <DoneDialog key={assignment.id} assignment={assignment} onClose={onClose} />;
 }
@@ -40,7 +40,7 @@ export function TypistDoneDialog({
 function DoneDialog({
   assignment,
   onClose,
-}: Readonly<{ assignment: AssignmentWithTest; onClose: () => void }>) {
+}: Readonly<{ assignment: Assignment; onClose: () => void }>) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [discarded, setDiscarded] = useState<ReadonlySet<string>>(new Set());
@@ -183,7 +183,7 @@ const chosenLevels = (rows: readonly QuestionSummary[], chosen: ReadonlySet<stri
 
 /** What stands between this choice and Done, in the words the server would refuse it with. */
 function selectionGaps(
-  assignment: AssignmentWithTest,
+  assignment: Assignment,
   rows: readonly QuestionSummary[],
   chosen: ReadonlySet<string>,
 ): string[] {
@@ -206,7 +206,7 @@ function selectionGaps(
 }
 
 function mixBadges(
-  assignment: AssignmentWithTest,
+  assignment: Assignment,
   rows: readonly QuestionSummary[],
   chosen: ReadonlySet<string>,
 ) {

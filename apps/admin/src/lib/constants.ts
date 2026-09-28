@@ -50,6 +50,10 @@ import {
   type TestStatus,
   type TestUi,
   type TimerTemplate,
+  REVIEW_STATES,
+  SEND_BACK_REASONS,
+  type ReviewState,
+  type SendBackReason,
 } from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -68,34 +72,33 @@ export const ROUTES = {
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
   QUESTION_NEW: '/questions/new',
-  /** Every section handed to this admin, either role, and each section's workspace under it. */
+  /** Addresses from before the authoring page, kept so a bookmark still lands. */
   WORK: '/work',
-  SECTION: (testId: string, sectionId: string) => `/work/tests/${testId}/sections/${sectionId}`,
   SECTION_PATTERN: '/work/tests/:testId/sections/:sectionId',
-  SECTION_QUESTION: (testId: string, sectionId: string, questionId: string) =>
-    `/work/tests/${testId}/sections/${sectionId}/questions/${questionId}`,
   SECTION_QUESTION_PATTERN: '/work/tests/:testId/sections/:sectionId/questions/:questionId',
   /** The reader's own queue; the typist's is AUTHORING_ASSIGNMENTS. */
   PROOFREADING_ASSIGNMENTS: '/proofreading/assignments',
+  /** One section's authoring page, entered as its typist, its reader or the test's owner. */
+  TYPING_SECTION: (testId: string, sectionId: string) =>
+    `/authoring/assignments/tests/${testId}/sections/${sectionId}`,
+  TYPING_SECTION_PATTERN: '/authoring/assignments/tests/:testId/sections/:sectionId',
+  READING_SECTION: (testId: string, sectionId: string) =>
+    `/proofreading/assignments/tests/${testId}/sections/${sectionId}`,
+  READING_SECTION_PATTERN: '/proofreading/assignments/tests/:testId/sections/:sectionId',
+  TEST_SECTION: (testId: string, sectionId: string) => `/tests/${testId}/sections/${sectionId}`,
+  TEST_SECTION_PATTERN: '/tests/:testId/sections/:sectionId',
   SECTION_PROGRESS: '/tests/section-progress',
-  PROOFREADING_SECTION: (assignmentId: string) => `/proofreading/assignments/${assignmentId}`,
   PROOFREADING_SECTION_PATTERN: '/proofreading/assignments/:assignmentId',
-  /** The same screen on the pair an assignment keys on, for a section nobody has been given. */
-  PROOFREADING_OF_SECTION: (testId: string, sectionId: string) =>
-    `/proofreading/sections/${testId}/${sectionId}`,
   PROOFREADING_OF_SECTION_PATTERN: '/proofreading/sections/:testId/:sectionId',
-  /** One question of a section, edited on a page rather than in a dialog a question outgrows. */
-  PROOFREADING_QUESTION: (assignmentId: string, questionId: string) =>
-    `/proofreading/assignments/${assignmentId}/questions/${questionId}`,
   PROOFREADING_QUESTION_PATTERN: '/proofreading/assignments/:assignmentId/questions/:questionId',
-  PROOFREADING_SECTION_QUESTION: (testId: string, sectionId: string, questionId: string) =>
-    `/proofreading/sections/${testId}/${sectionId}/questions/${questionId}`,
   PROOFREADING_SECTION_QUESTION_PATTERN:
     '/proofreading/sections/:testId/:sectionId/questions/:questionId',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
   QUESTION_PATTERN: '/questions/:id',
+  QUESTION_EDIT: (id: string) => `/questions/${id}/edit`,
+  QUESTION_EDIT_PATTERN: '/questions/:id/edit',
   /** Authoring: one box for typing questions, and the author's own record of what they typed. */
   AUTHORING_EDITOR: '/authoring',
   AUTHORING_QUESTION: (id: string) => `/authoring/${id}`,
@@ -361,6 +364,20 @@ export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>>
 };
 
 /** Who staffs a section. Written out — never "PR" for a proof-reader. */
+/** Why a question went back to its typist, in the words the reader picks it by. */
+export const SEND_BACK_REASON_LABELS: Readonly<Record<SendBackReason, string>> = {
+  [SEND_BACK_REASONS.SPELLING]: 'Spelling mistakes',
+  [SEND_BACK_REASONS.DATA_CORRECTION]: 'Data correction',
+  [SEND_BACK_REASONS.ANSWER_OPTION]: 'No suitable option as answer',
+};
+
+export const REVIEW_STATE_LABELS: Readonly<Record<ReviewState, string>> = {
+  [REVIEW_STATES.UNCHECKED]: 'Not checked',
+  [REVIEW_STATES.CHECKED]: 'Checked',
+  [REVIEW_STATES.SENT_BACK]: 'Sent back',
+  [REVIEW_STATES.FIXED]: 'Fixed',
+};
+
 export const ASSIGNMENT_ROLE_LABELS: Readonly<Record<AssignmentRole, string>> = {
   TYPIST: 'Typist',
   PROOFREADER: 'Proof-reader',

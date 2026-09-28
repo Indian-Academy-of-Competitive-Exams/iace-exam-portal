@@ -28,7 +28,6 @@ import {
   AssignmentSectionPicker,
   AssignmentTestPicker,
 } from '../components/assignment-scope-picker';
-import { SECTION_AS } from '../components/authoring/section-moment';
 import { chooseTest } from '../lib/assignment-filters';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
@@ -88,11 +87,15 @@ function RoleCell({
   );
 }
 
-/** Every section opens its workspace: a holder sees it as theirs, anyone else as the test's owner. */
+/** A holder opens the section as what they hold it as; anybody else, as the test's owner. */
 function sectionHref(row: SectionProgressRow, held: SectionRoleProgress | null, adminId: string) {
-  const section = ROUTES.SECTION(row.testId, row.baseConfigSectionId);
-  const reading = held === row.reading && held?.assigneeId === adminId;
-  return reading ? `${section}?as=${SECTION_AS.READER}` : section;
+  if (held?.assigneeId === adminId && held === row.typing) {
+    return ROUTES.TYPING_SECTION(row.testId, row.baseConfigSectionId);
+  }
+  if (held?.assigneeId === adminId && held === row.reading) {
+    return ROUTES.READING_SECTION(row.testId, row.baseConfigSectionId);
+  }
+  return ROUTES.TEST_SECTION(row.testId, row.baseConfigSectionId);
 }
 
 function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {

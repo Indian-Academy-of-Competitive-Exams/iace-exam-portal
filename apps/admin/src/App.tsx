@@ -53,8 +53,13 @@ const AssignmentQueuePage = React.lazy(() =>
 const SectionProgressPage = React.lazy(() =>
   import('./routes/section-progress').then((module) => ({ default: module.SectionProgressPage })),
 );
-const SectionWorkPage = React.lazy(() =>
-  import('./routes/section-work').then((module) => ({ default: module.SectionWorkPage })),
+const BankQuestionPage = React.lazy(() =>
+  import('./routes/bank-question').then((module) => ({ default: module.BankQuestionPage })),
+);
+const SectionAuthoringPage = React.lazy(() =>
+  import('./routes/section-authoring').then((module) => ({
+    default: module.SectionAuthoringPage,
+  })),
 );
 const SectionRedirect = React.lazy(() =>
   import('./routes/section-redirect').then((module) => ({ default: module.SectionRedirect })),
@@ -160,19 +165,25 @@ export function App() {
           <Route path={ROUTES.COHORTS} element={whileLoading(<CohortsPage />)} />
           <Route path={ROUTES.QUESTIONS} element={whileLoading(<QuestionsPage />)} />
           {/* Before the :id route, or "new", "import" and "taxonomy" would be read as a question id. */}
-          <Route path={ROUTES.QUESTION_NEW} element={whileLoading(<QuestionFormPage />)} />
+          <Route path={ROUTES.QUESTION_NEW} element={whileLoading(<BankQuestionPage />)} />
           <Route path={ROUTES.IMPORT_QUESTIONS} element={whileLoading(<ImportQuestionsPage />)} />
           <Route path={ROUTES.TAXONOMY} element={whileLoading(<TaxonomyPage />)} />
           <Route path={ROUTES.QUESTION_PATTERN} element={whileLoading(<QuestionFormPage />)} />
+          <Route path={ROUTES.QUESTION_EDIT_PATTERN} element={whileLoading(<BankQuestionPage />)} />
           <Route
             path={ROUTES.WORK}
             element={<Navigate replace to={ROUTES.AUTHORING_ASSIGNMENTS} />}
           />
-          <Route path={ROUTES.SECTION_PATTERN} element={whileLoading(<SectionWorkPage />)} />
-          <Route
-            path={ROUTES.SECTION_QUESTION_PATTERN}
-            element={whileLoading(<SectionWorkPage />)}
-          />
+          {[
+            ROUTES.TYPING_SECTION_PATTERN,
+            ROUTES.READING_SECTION_PATTERN,
+            ROUTES.TEST_SECTION_PATTERN,
+          ].map((path) => (
+            <Route key={path} path={path} element={whileLoading(<SectionAuthoringPage />)} />
+          ))}
+          {[ROUTES.SECTION_PATTERN, ROUTES.SECTION_QUESTION_PATTERN].map((path) => (
+            <Route key={path} path={path} element={whileLoading(<SectionRedirect />)} />
+          ))}
           <Route
             path={ROUTES.PROOFREADING_ASSIGNMENTS}
             element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />)}
@@ -183,7 +194,11 @@ export function App() {
             ROUTES.PROOFREADING_QUESTION_PATTERN,
             ROUTES.PROOFREADING_SECTION_QUESTION_PATTERN,
           ].map((path) => (
-            <Route key={path} path={path} element={whileLoading(<SectionRedirect />)} />
+            <Route
+              key={path}
+              path={path}
+              element={whileLoading(<SectionRedirect role={ASSIGNMENT_ROLES.PROOFREADER} />)}
+            />
           ))}
           <Route path={ROUTES.AUTHORING_EDITOR} element={whileLoading(<AuthoringEditorPage />)} />
           {/* Before the :id route, or "history" would be read as a question id. */}
@@ -199,7 +214,7 @@ export function App() {
           />
           <Route
             path={ROUTES.AUTHORING_FOR_ASSIGNMENT_PATTERN}
-            element={whileLoading(<AuthoringEditorPage />)}
+            element={whileLoading(<SectionRedirect />)}
           />
           <Route
             path={ROUTES.AUTHORING_EDITOR_PATTERN}

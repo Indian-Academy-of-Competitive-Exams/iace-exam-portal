@@ -30,6 +30,8 @@ export function QuestionPanes({
   onLanguageChange,
   onSave,
   flow = false,
+  lead,
+  previewAction,
 }: Readonly<{
   questionId: string;
   state: AuthoringState;
@@ -44,6 +46,10 @@ export function QuestionPanes({
   onSave: () => void;
   /** In a window that scrolls as a whole, each pane grows with its question instead. */
   flow?: boolean;
+  /** Ahead of the languages: whose question this is, where there are several. */
+  lead?: React.ReactNode;
+  /** At the preview's end: what may be done to this question. */
+  previewAction?: React.ReactNode;
 }>) {
   const scrolls = flow ? '' : 'min-h-0 flex-1 overflow-y-auto';
   const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
@@ -57,6 +63,7 @@ export function QuestionPanes({
     >
       <section className="flex min-h-0 flex-col border-border lg:border-r">
         <PanelHeading
+          lead={lead}
           action={
             <SegmentedControl
               value={language}
@@ -90,7 +97,10 @@ export function QuestionPanes({
       </section>
 
       <section className="flex min-h-0 flex-col">
-        <PanelHeading title="Preview and validation" />
+        <PanelHeading
+          lead={<h2 className="text-sm font-semibold">Preview and validation</h2>}
+          action={previewAction}
+        />
         <div className={cn('flex flex-col gap-4 p-4', scrolls)}>
           <AuthoringPreview state={state} language={language} />
           <AuthoringChecks checks={checks} />
@@ -100,12 +110,15 @@ export function QuestionPanes({
   );
 }
 
-/** A pane whose content names itself takes no title; the bar stays so both panes line up. */
-function PanelHeading({ title, action }: Readonly<{ title?: string; action?: React.ReactNode }>) {
+/** A pane whose content names itself takes no lead; the bar stays so both panes line up. */
+function PanelHeading({
+  lead,
+  action,
+}: Readonly<{ lead?: React.ReactNode; action?: React.ReactNode }>) {
   return (
-    <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4">
-      {title ? <h2 className="text-sm font-semibold">{title}</h2> : <span />}
-      {action}
+    <div className="flex min-h-10 flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4">
+      {lead ?? <span />}
+      {action ? <div className="flex flex-none items-center gap-2">{action}</div> : null}
     </div>
   );
 }

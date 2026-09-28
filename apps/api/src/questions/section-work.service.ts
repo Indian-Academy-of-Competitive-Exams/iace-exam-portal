@@ -484,7 +484,7 @@ export class SectionWorkService {
 
 /** The row the viewer holds right now; a replaced one only reads. */
 const heldNow = (context: Context): Assignment | null =>
-  context.mine && context.mine.replacedAt === null ? context.mine : null;
+  context.mine?.replacedAt === null ? context.mine : null;
 
 /** Picked and not yet handed on, or released by its reader: then the section is back with its owner. */
 function withOwner(context: Context): boolean {

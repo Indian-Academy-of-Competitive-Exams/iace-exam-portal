@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { PanelsTopLeft } from 'lucide-react';
+import { ArrowLeft, PanelsTopLeft, Upload } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
@@ -36,7 +36,7 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
 import { saveBlob } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
-import { ImportQuestionsWindow } from '../components/authoring/import-questions-window';
+import { ImportWorkspace } from '../components/authoring/import-workspace';
 
 /** The same sheet either way; a section's typist previews and commits through authoring. */
 function intakeFor(into: string | null) {
@@ -114,14 +114,54 @@ export function ImportQuestionsPage() {
   });
 
   const plan = intake.plan;
-  // Undefined is closed; null opens at the first row, a line number at that row.
-  const [reviewing, setReviewing] = useState<string | null | undefined>(undefined);
+  // A fresh preview opens on the authoring page; stepping back to the sheet is remembered per run.
+  const [leftRun, setLeftRun] = useState<string | null>(null);
+  const [startAt, setStartAt] = useState<string | null>(null);
   const reviewable = plan !== null && plan.rows.length > 0 && !intake.result;
+  const review = (line: string | null) => {
+    setStartAt(line);
+    setLeftRun(null);
+  };
   const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
     api.admin.imports.questionErrors(file),
   );
+
+  if (reviewable && leftRun !== plan.importLogId) {
+    return (
+      <ImportWorkspace
+        plan={plan}
+        into={into}
+        startAt={startAt}
+        onPlan={(judged) => intake.stage(intake.file, judged)}
+        actions={
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setLeftRun(plan.importLogId)}
+            >
+              <ArrowLeft aria-hidden />
+              Preview
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!intake.canCommit}
+              loading={intake.isCommitting}
+              onClick={intake.commit}
+            >
+              <Upload aria-hidden />
+              {`Import ${intake.writes} questions`}
+            </Button>
+          </>
+        }
+      />
+    );
+  }
 
   return (
     <ImportView
@@ -134,7 +174,7 @@ export function ImportQuestionsPage() {
             </Alert>
           ) : null}
           {reviewable ? (
-            <Button type="button" variant="outline" onClick={() => setReviewing(null)}>
+            <Button type="button" variant="outline" onClick={() => review(null)}>
               <PanelsTopLeft aria-hidden />
               Review questions
             </Button>
@@ -201,22 +241,12 @@ export function ImportQuestionsPage() {
               <ImportRow
                 key={row.line}
                 row={row}
-                onOpen={reviewable ? () => setReviewing(String(row.line)) : undefined}
+                onOpen={reviewable ? () => review(String(row.line)) : undefined}
               />
             ))}
           </TableState>
         </TableBody>
       </Table>
-      {plan ? (
-        <ImportQuestionsWindow
-          plan={plan}
-          into={into}
-          open={reviewing !== undefined}
-          onOpenChange={(open) => !open && setReviewing(undefined)}
-          startAt={reviewing ?? null}
-          onPlan={(judged) => intake.stage(intake.file, judged)}
-        />
-      ) : null}
     </ImportView>
   );
 }

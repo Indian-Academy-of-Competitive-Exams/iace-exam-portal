@@ -1,40 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Keyboard, Maximize2, Minimize2, PanelsTopLeft, Save } from 'lucide-react';
+import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
 import {
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
   hasText,
-  instituteDayLabel,
-  type AssignmentWithTest,
   type AuthoringSaveResult,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionLanguage,
 } from '@iace/contracts';
-import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
-import {
-  Alert,
-  Button,
-  EmptyState,
-  EMPTY_STATE_KINDS,
-  Kbd,
-  LoadingState,
-  StatRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TruncatedText,
-} from '@iace/ui';
+import { Button, LoadingState, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { api } from '../lib/api';
-import { QUERY_KEYS, ROUTES, STORAGE_KEYS } from '../lib/constants';
+import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
-import { SectionThreadButton } from '../components/section-thread';
+import { Legend, useFocusMode } from '../components/authoring/authoring-chrome';
 import { QuestionPanes } from '../components/authoring/question-panes';
 import { useChecked, useDuplicate } from '../components/authoring/use-question-checks';
 import {
@@ -48,9 +33,6 @@ import {
   type AuthoringState,
 } from '../components/authoring/question-scaffold';
 
-/** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
-const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
-
 interface Saved {
   header: AuthoringHeader;
   state: AuthoringState;
@@ -59,16 +41,8 @@ interface Saved {
   romanised: boolean;
 }
 
-/** The section a scoped editor writes for, and why the panes are not its to open yet. */
-interface ScopedSection {
-  scoped: string;
-  section: AssignmentWithTest | null;
-  loading: boolean;
-  refused: boolean;
-}
-
 export function AuthoringEditorPage() {
-  const { id, assignmentId } = useParams<{ id?: string; assignmentId?: string }>();
+  const { id } = useParams<{ id?: string }>();
   const { identity } = useAuth();
   const storageKey = `${STORAGE_KEYS.AUTHORING_DRAFT}.${identity?.id ?? ''}`;
 
@@ -90,10 +64,6 @@ export function AuthoringEditorPage() {
     queryFn: () => api.admin.authoring.detail(editingId),
     enabled: editingId !== '',
   });
-  const assignment = useTypistAssignment(assignmentId);
-  const heldElsewhere = useSectionHolder(assignment.section, identity?.id);
-  const sectionSubjectId = assignment.section?.sectionSubjectId ?? null;
-  useSectionSubject(editingId === '' ? sectionSubjectId : null, setHeader);
 
   useFilledOnce(editing.data, (question) => {
     setHeader(headerOf(question));
@@ -112,7 +82,7 @@ export function AuthoringEditorPage() {
   const duplicate = useDuplicate(draft, editingId);
   const { issues, checks } = useChecked(draft, header, state, duplicate);
 
-  const save = useSaveQuestion(editingId, draft, assignment.scoped, () => {
+  const save = useSaveQuestion(editingId, draft, () => {
     if (editingId) return;
     // The header survives: the next fifty questions are the same subject at the same level.
     setState(emptyState(state.type));
@@ -142,14 +112,12 @@ export function AuthoringEditorPage() {
     [language],
   );
 
-  const gate = editorGate(editing.isPending && editingId !== '', assignment);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <AuthoringHeaderBar
         header={header}
         state={state}
-        subjectLocked={sectionSubjectId !== null}
+        subjectLocked={false}
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
@@ -160,54 +128,45 @@ export function AuthoringEditorPage() {
             language={language}
             romanised={romanised}
             immersive={focus.immersive}
-            canSave={canSave}
-            saveLabel={id ? 'Save' : 'Save and next'}
-            onSave={() => save.mutate()}
             onRomanised={() => setRomanised((on) => !on)}
             onFocus={focus.toggle}
           />
         }
       />
 
-      {assignment.section ? <AssignmentContext assignment={assignment.section} /> : null}
+      <div className="flex min-h-0 flex-1 bg-muted/40 p-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+          {editing.isPending && editingId !== '' ? (
+            <LoadingState>Loading the question</LoadingState>
+          ) : (
+            <QuestionPanes
+              questionId={editingId}
+              state={state}
+              language={language}
+              romanised={romanised}
+              canSave={canSave}
+              boxVersion={boxVersion}
+              checks={checks}
+              onRegions={onRegions}
+              onCycleLanguage={cycleLanguage}
+              onLanguageChange={switchLanguage}
+              onSave={() => save.mutate()}
+            />
+          )}
+        </div>
+      </div>
 
-      {heldElsewhere ? (
-        <Alert variant="warning" className="mx-4 mt-4">
-          {`${heldElsewhere.fullName ?? 'Another admin'} is editing this section. Their changes have to land first.`}
-        </Alert>
-      ) : null}
-
-      {gate ?? (
-        <QuestionPanes
-          questionId={editingId}
-          state={state}
-          language={language}
-          romanised={romanised}
-          canSave={canSave}
-          boxVersion={boxVersion}
-          checks={checks}
-          onRegions={onRegions}
-          onCycleLanguage={cycleLanguage}
-          onLanguageChange={switchLanguage}
-          onSave={() => save.mutate()}
-        />
-      )}
-
-      <Legend language={language} />
+      <Legend
+        language={language}
+        actions={
+          <Button type="button" size="sm" disabled={!canSave} onClick={() => save.mutate()}>
+            <Save aria-hidden />
+            {id ? 'Save' : 'Save and next'}
+          </Button>
+        }
+      />
     </div>
   );
-}
-
-/** Nothing to edit yet, or nothing they may edit: what stands in for the panes. */
-function editorGate(loadingQuestion: boolean, assignment: ScopedSection): React.ReactNode {
-  if (loadingQuestion) return <LoadingState>Loading the question</LoadingState>;
-  if (assignment.loading) return <LoadingState>Loading the assignment</LoadingState>;
-  if (assignment.refused) {
-    return (
-      <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This section is not assigned to you" />
-    );
-  }
-  return null;
 }
 
 /** The header's right-hand end. Its own component, so the page reads as a page. */
@@ -215,18 +174,12 @@ function EditorActions({
   language,
   romanised,
   immersive,
-  canSave,
-  saveLabel,
-  onSave,
   onRomanised,
   onFocus,
 }: Readonly<{
   language: QuestionLanguage;
   romanised: boolean;
   immersive: boolean;
-  canSave: boolean;
-  saveLabel: string;
-  onSave: () => void;
   onRomanised: () => void;
   onFocus: () => void;
 }>) {
@@ -254,11 +207,6 @@ function EditorActions({
         </Tooltip>
       ) : null}
 
-      <Button type="button" size="sm" disabled={!canSave} onClick={onSave}>
-        <Save aria-hidden />
-        {saveLabel}
-      </Button>
-
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -277,144 +225,10 @@ function EditorActions({
   );
 }
 
-/** The section a scoped editor is writing for: its target, and its mix when the test sets one. */
-function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWithTest }>) {
-  const remaining = Math.max(assignment.sectionQuestionCount - assignment.writtenCount, 0);
-  const mix = assignment.sectionMix;
-
-  return (
-    <div className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-border bg-muted/40 px-4 py-2">
-      <div className="min-w-0">
-        <TruncatedText className="text-sm font-medium">{assignment.sectionName}</TruncatedText>
-        <TruncatedText className="text-xs text-muted-foreground">
-          {assignment.testTitle ?? 'Untitled test'}
-        </TruncatedText>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-        <Button asChild type="button" size="sm" variant="outline">
-          <Link to={ROUTES.SECTION(assignment.testId, assignment.baseConfigSectionId)}>
-            <PanelsTopLeft aria-hidden />
-            Section
-          </Link>
-        </Button>
-        {/* The other half of the conversation: the reader raises things here, and answers here. */}
-        <SectionThreadButton
-          testId={assignment.testId}
-          sectionId={assignment.baseConfigSectionId}
-          canWrite
-        />
-        <StatRow
-          className="w-auto"
-          label="Written"
-          value={`${assignment.writtenCount} / ${assignment.sectionQuestionCount}`}
-        />
-        <StatRow className="w-auto" label="Remaining" value={remaining} />
-        <StatRow
-          className="w-auto"
-          label="Due"
-          value={instituteDayLabel(assignment.dueAt) ?? 'No due date'}
-        />
-        {mix ? (
-          <StatRow
-            className="w-auto"
-            label="Mix"
-            value={`${mix.LOW} low · ${mix.MEDIUM} medium · ${mix.HIGH} high`}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-/** A keyboard-only tool says which keys, once, where it does not cost the box any room. */
-function Legend({ language }: Readonly<{ language: QuestionLanguage }>) {
-  return (
-    <div className="flex flex-none flex-wrap items-center gap-x-5 gap-y-1 border-t border-border bg-surface px-4 py-2 text-xs text-muted-foreground">
-      <Shortcut keys={['↑', '↓']}>move</Shortcut>
-      <Shortcut keys={['Enter']}>next</Shortcut>
-      <Shortcut keys={[MOD_KEY, 'Enter']}>save and next</Shortcut>
-      <Shortcut keys={['$…$']}>maths</Shortcut>
-      <Shortcut keys={[MOD_KEY, 'V']}>paste an image</Shortcut>
-      <Shortcut keys={['Alt', 'L']}>{LANGUAGE_LABELS[language]}</Shortcut>
-    </div>
-  );
-}
-
-function Shortcut({
-  keys,
-  children,
-}: Readonly<{ keys: readonly string[]; children: React.ReactNode }>) {
-  return (
-    <span className="flex items-center gap-1">
-      {keys.map((key, index) => (
-        <span key={`${key}:${index}`} className="flex items-center gap-1">
-          {index > 0 ? <span aria-hidden>+</span> : null}
-          <Kbd>{key}</Kbd>
-        </span>
-      ))}
-      <span>{children}</span>
-    </span>
-  );
-}
-
-/** Escape and F11 raise the exit count, so leaving full screen is derived, not listened for. */
-function useFocusMode() {
-  const fullscreen = useFullscreen();
-  const [focusedAt, setFocusedAt] = useState<number | null>(null);
-  const immersive = focusedAt !== null && fullscreen.exits === focusedAt;
-  useWorkspace(immersive);
-
-  const toggle = () => {
-    if (immersive) {
-      setFocusedAt(null);
-      void fullscreen.exit();
-      return;
-    }
-    setFocusedAt(fullscreen.exits);
-    void fullscreen.enter();
-  };
-
-  return { immersive, toggle };
-}
-
-/** Their own sections, so a URL naming somebody else's is refused rather than opened empty. */
-function useTypistAssignment(scoped = ''): ScopedSection {
-  const held = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'one', scoped],
-    queryFn: () => api.admin.assignments.one(scoped),
-    enabled: scoped !== '',
-    retry: false,
-  });
-  const section = held.data ?? null;
-
-  return {
-    scoped,
-    section,
-    loading: scoped !== '' && held.isPending,
-    refused: scoped !== '' && !held.isPending && section === null,
-  };
-}
-
-/** Who else is in this section right now — read once on load, so the warning lands before the work. */
-function useSectionHolder(section: AssignmentWithTest | null, adminId: string | undefined) {
-  const testId = section?.testId ?? '';
-  const sectionId = section?.baseConfigSectionId ?? '';
-  const lock = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'lock', testId, sectionId],
-    queryFn: () => api.admin.assignments.sectionLock(testId, sectionId),
-    enabled: testId !== '' && sectionId !== '',
-  });
-
-  const editingBy = lock.data?.editingBy ?? null;
-  return editingBy && editingBy.adminId !== adminId ? editingBy : null;
-}
-
 /** Saving is all the server hears: a new question, or the draft this editor was opened on. */
 function useSaveQuestion(
   questionId: string,
   draft: QuestionDraft,
-  assignmentId: string,
   onSaved: (result: AuthoringSaveResult) => void,
 ) {
   const queryClient = useQueryClient();
@@ -424,30 +238,12 @@ function useSaveQuestion(
     mutationFn: () =>
       questionId
         ? api.admin.authoring.update(questionId, draft)
-        : api.admin.authoring.create({ ...draft, assignmentId: assignmentId || null }),
+        : api.admin.authoring.create({ ...draft, assignmentId: null }),
     onSuccess: async (result) => {
       onSaved(result);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
-      if (assignmentId) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
     },
   });
-}
-
-/** The section names the subject, so it wins over whatever the last batch left in the draft. */
-function useSectionSubject(
-  subjectId: string | null,
-  setHeader: React.Dispatch<React.SetStateAction<AuthoringHeader>>,
-) {
-  // Derived during render, not in an effect: an effect lets one render escape with the old subject.
-  const [seen, setSeen] = useState(subjectId);
-  if (subjectId !== seen) {
-    setSeen(subjectId);
-    if (subjectId !== null) {
-      setHeader((current) =>
-        current.subjectId === subjectId ? current : { ...current, subjectId, topicId: '' },
-      );
-    }
-  }
 }
 
 /** The fetched question fills the boxes once; a refetch must not overwrite what is being typed. */

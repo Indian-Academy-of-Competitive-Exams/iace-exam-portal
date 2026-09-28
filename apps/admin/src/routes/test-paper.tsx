@@ -479,30 +479,11 @@ function SectionWorkspace({
     </Button>
   );
 
+  // A framed section arrives here uneditable, so picking is the picked source's alone.
   const picking = editable && !withReader;
   const fillAction =
     picking && rows.length < section.questionCount ? (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          {/* A span, because a disabled button fires no pointer events and the tooltip needs one. */}
-          <span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={poolDirty || framed}
-              loading={fill.isPending}
-              onClick={() => fill.mutate()}
-            >
-              Fill remaining
-            </Button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>
-          {framed
-            ? 'This paper is framed, so its questions come from its typists. Add them from Written for this test.'
-            : 'Tops the section up from the bank, within its split'}
-        </TooltipContent>
-      </Tooltip>
+      <FillButton disabled={poolDirty} loading={fill.isPending} onFill={() => fill.mutate()} />
     ) : null;
 
   const shortfallBanner = shortfall ? (
@@ -517,7 +498,7 @@ function SectionWorkspace({
   }
 
   const handOver =
-    !framed && picking && reader && !reader.handedAt && rows.length >= section.questionCount ? (
+    picking && reader && !reader.handedAt && rows.length >= section.questionCount ? (
       <HandOverButton testId={testId} section={section} onChanged={onChanged} />
     ) : null;
 
@@ -572,6 +553,32 @@ function SectionWorkspace({
         />
       </div>
     </>
+  );
+}
+
+function FillButton({
+  disabled,
+  loading,
+  onFill,
+}: Readonly<{ disabled: boolean; loading: boolean; onFill: () => void }>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* A span, because a disabled button fires no pointer events and the tooltip needs one. */}
+        <span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            loading={loading}
+            onClick={onFill}
+          >
+            Fill remaining
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Tops the section up from the bank, within its split</TooltipContent>
+    </Tooltip>
   );
 }
 

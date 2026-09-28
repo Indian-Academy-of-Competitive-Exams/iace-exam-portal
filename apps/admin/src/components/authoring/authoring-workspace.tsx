@@ -1,0 +1,684 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { Keyboard, ListChecks, Maximize2, Minimize2, Save, X } from 'lucide-react';
+import {
+  DEFAULT_LANGUAGE,
+  DIFFICULTY_LEVEL,
+  LANGUAGE_LABELS,
+  LANGUAGE_ORDER,
+  validateQuestion,
+  type QuestionLanguage,
+} from '@iace/contracts';
+import {
+  Badge,
+  Button,
+  SegmentedControl,
+  Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+  mathErrorIn,
+} from '@iace/ui';
+import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
+import { AuthoringHeaderBar } from './authoring-header-bar';
+import { AuthoringPreview } from './authoring-preview';
+import { Legend, useFocusMode } from './authoring-chrome';
+import { QuestionPanes } from './question-panes';
+import {
+  SCRIPT_OF,
+  emptyState,
+  stateFrom,
+  taxonomyFor,
+  toDraft,
+  type AuthoringHeader,
+  type AuthoringState,
+} from './question-scaffold';
+import { useChecked, useDuplicate } from './use-question-checks';
+
+/** What the box says. Held as an edit only while it differs from the saved one: that is what "unsaved" means. */
+export interface Held {
+  header: AuthoringHeader;
+  state: AuthoringState;
+  /** Whatever a save must still match on the server, carried untouched through every edit. */
+  stamp?: string;
+}
+
+/** One question's card: where it stands, what may be done to it, and whether it can be typed into. */
+export interface WorkspaceCard {
+  key: string;
+  lead: React.ReactNode;
+  actions?: React.ReactNode;
+  notice?: React.ReactNode;
+  editable: boolean;
+}
+
+/** Where the cards come from, and where a saved one goes. */
+export interface WorkspaceSource {
+  cards: readonly WorkspaceCard[];
+  query: (key: string) => { queryKey: QueryKey; queryFn: () => Promise<Held> };
+  save: (key: string, held: Held) => Promise<unknown>;
+  subjectLocked: boolean;
+  /** Only where a copy of a bank question refuses the save; an import row just becomes a duplicate. */
+  checkDuplicates: boolean;
+  /** A blank card after the last, for writing the next question; absent where nothing new is written. */
+  create?: { header: AuthoringHeader; save: (held: Held) => Promise<unknown> };
+}
+
+interface PanelPosition {
+  activeKey: string;
+  jump: (key: string) => void;
+}
+
+/** The progress panel: the trigger opens it over the cards, and it can move them. */
+export interface WorkspacePanel {
+  label: string;
+  render: (position: PanelPosition) => React.ReactNode;
+}
+
+/** The key of the blank card a new question is typed into. */
+export const NEW_CARD = 'new';
+
+interface View {
+  language: QuestionLanguage;
+  /** Bumped when the box must be rebuilt: a language, a type, or an option count changed. */
+  box: number;
+}
+
+const FIRST_VIEW: View = { language: DEFAULT_LANGUAGE, box: 0 };
+
+const BLANK_HEADER: AuthoringHeader = {
+  subjectId: '',
+  topicId: '',
+  difficulty: DIFFICULTY_LEVEL.MEDIUM,
+  tags: '',
+};
+
+const sameHeld = (a: Held, b: Held): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** Cards either side of the one in view that keep a live editor; the rest are placeholders. */
+const LIVE_AROUND = 1;
+
+/** With Alt held, the arrow that moves to the previous or the next question. */
+const QUESTION_STEP_KEYS: Readonly<Record<string, number>> = { ArrowUp: -1, ArrowDown: 1 };
+
+const BAR =
+  'flex min-h-10 flex-none items-center justify-between gap-3 border-b border-border px-4';
+
+/** Every question of a source as one card per screen: one scroll moves to the next, the header follows. */
+export function AuthoringWorkspace({
+  source,
+  startAt,
+  onActive,
+  title,
+  saveLabel,
+  extraActions,
+  panel,
+}: Readonly<{
+  source: WorkspaceSource;
+  startAt: string | null;
+  /** Told the card in view, so the page's URL can follow it. */
+  onActive?: (key: string) => void;
+  /** What every card belongs to, named in its language bar ahead of the question. */
+  title?: React.ReactNode;
+  saveLabel: string;
+  /** Beside Save in the bottom bar. */
+  extraActions?: React.ReactNode;
+  panel?: WorkspacePanel;
+}>) {
+  const queryClient = useQueryClient();
+  const focus = useFocusMode();
+  const keys = useMemo(
+    () => [...source.cards.map((card) => card.key), ...(source.create ? [NEW_CARD] : [])],
+    [source],
+  );
+  // The next question is the same subject at the same level: a save keeps the header it was typed under.
+  const [newHeader, setNewHeader] = useState<AuthoringHeader | null>(null);
+  const blank = useMemo(
+    (): Held => ({
+      header: newHeader ?? source.create?.header ?? BLANK_HEADER,
+      state: emptyState(),
+    }),
+    [newHeader, source.create?.header],
+  );
+
+  const [edits, setEdits] = useState<Record<string, Held>>({});
+  const [views, setViews] = useState<Record<string, View>>({});
+  const [activeKey, setActiveKey] = useState(startAt && keys.includes(startAt) ? startAt : '');
+  const [romanised, setRomanised] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLElement>());
+
+  const active = activeKey || keys[0] || '';
+  const activeIndex = keys.indexOf(active);
+  const activeCard = source.cards.find((card) => card.key === active) ?? null;
+  const isNew = active === NEW_CARD;
+  const language = (views[active] ?? FIRST_VIEW).language;
+
+  const activeBase = useQuery({
+    ...source.query(active),
+    enabled: active !== '' && !isNew,
+  });
+  const base = isNew ? blank : (activeBase.data ?? null);
+  const shown = edits[active] ?? base;
+  const editable = isNew || (activeCard?.editable ?? false);
+
+  // Lands on the question the URL named, once the cards are there to land on.
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || !startAt) return;
+    const card = cardRefs.current.get(startAt);
+    if (!card) return;
+    landed.current = true;
+    card.scrollIntoView({ block: 'start' });
+  });
+
+  useEffect(() => {
+    if (active) onActive?.(active);
+  }, [active, onActive]);
+
+  const findActive = () => {
+    const view = scroller.current;
+    if (!view) return;
+    const line = view.scrollTop + view.clientHeight / 2;
+    let found = keys[0] ?? '';
+    for (const key of keys) {
+      const card = cardRefs.current.get(key);
+      if (card && card.offsetTop <= line) found = key;
+    }
+    if (found !== activeKey) setActiveKey(found);
+  };
+
+  const jump = useCallback((key: string) => {
+    const card = cardRefs.current.get(key);
+    if (!card) return;
+    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    // Typing follows the card in view, never the one scrolled away.
+    const box = card.querySelector<HTMLElement>('[contenteditable="true"]');
+    if (box) box.focus({ preventScroll: true });
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, []);
+  const step = useCallback(
+    (by: number) => {
+      const target = keys[activeIndex + by];
+      if (target) jump(target);
+    },
+    [keys, activeIndex, jump],
+  );
+
+  useEffect(() => {
+    const move = (event: KeyboardEvent) => {
+      const by = QUESTION_STEP_KEYS[event.key];
+      if (!event.altKey || by === undefined) return;
+      if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
+      // Captured before the editor, whose own arrows move between the parts of one question.
+      event.preventDefault();
+      event.stopPropagation();
+      step(by);
+    };
+    window.addEventListener('keydown', move, true);
+    return () => window.removeEventListener('keydown', move, true);
+  }, [step]);
+
+  const edit = useCallback(
+    (key: string, change: (current: Held) => Held) => {
+      setEdits((all) => {
+        const saved =
+          key === NEW_CARD ? blank : queryClient.getQueryData<Held>(source.query(key).queryKey);
+        if (!saved) return all;
+        const next = change(all[key] ?? saved);
+        // Back to what is saved, whether typed back or normalised by the editor: nothing is pending.
+        if (sameHeld(next, saved)) {
+          const { [key]: _same, ...rest } = all;
+          return rest;
+        }
+        return { ...all, [key]: next };
+      });
+    },
+    [queryClient, source, blank],
+  );
+  const view = useCallback((key: string, change: (current: View) => View) => {
+    setViews((all) => ({ ...all, [key]: change(all[key] ?? FIRST_VIEW) }));
+  }, []);
+  const rebuild = (key: string) => view(key, (current) => ({ ...current, box: current.box + 1 }));
+
+  const save = useMutation({
+    meta: { success: 'Question saved.' },
+    mutationFn: ({ key, held }: { key: string; held: Held }) =>
+      key === NEW_CARD && source.create ? source.create.save(held) : source.save(key, held),
+    onSuccess: (_result, { key, held }) => {
+      setEdits(({ [key]: _saved, ...rest }) => rest);
+      if (key === NEW_CARD) {
+        setNewHeader(held.header);
+        rebuild(NEW_CARD);
+      } else {
+        step(1);
+      }
+    },
+  });
+
+  const draft = useMemo(() => (shown ? toDraft(shown.state, shown.header) : null), [shown]);
+  const duplicate = useDuplicate(
+    source.checkDuplicates && draft ? draft : toDraft(emptyState(), BLANK_HEADER),
+    isNew ? '' : active,
+  );
+  const issues = useMemo(
+    () => (draft && shown ? validateQuestion(draft, taxonomyFor(shown.header), mathErrorIn) : []),
+    [draft, shown],
+  );
+  const dirty = active in edits;
+  const canSave = !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
+
+  const saveAndNext = () => {
+    const held = edits[active];
+    if (held && editable) save.mutate({ key: active, held });
+    else step(1);
+  };
+
+  const tools = (
+    <HeaderTools
+      language={language}
+      romanised={romanised}
+      editable={editable}
+      immersive={focus.immersive}
+      panelLabel={panel?.label ?? null}
+      panelOpen={panelOpen}
+      onRomanised={() => setRomanised((on) => !on)}
+      onPanel={() => setPanelOpen((open) => !open)}
+      onFocus={focus.toggle}
+    />
+  );
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPanelOpen(false);
+    };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [panelOpen]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      {editable && shown ? (
+        <AuthoringHeaderBar
+          header={shown.header}
+          state={shown.state}
+          subjectLocked={source.subjectLocked}
+          onHeaderChange={(next) => edit(active, (current) => ({ ...current, header: next }))}
+          onStateChange={(next) => {
+            edit(active, (current) => ({ ...current, state: next }));
+            rebuild(active);
+          }}
+          lead={dirty ? <Badge variant="warning">Unsaved</Badge> : undefined}
+          actions={tools}
+        />
+      ) : (
+        <div className="flex flex-none items-center justify-end gap-x-4 border-b border-border bg-surface px-4 py-2">
+          {tools}
+        </div>
+      )}
+
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          ref={scroller}
+          onScroll={findActive}
+          className="relative min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto bg-muted/40"
+        >
+          {keys.map((key, index) => {
+            const card = source.cards.find((one) => one.key === key);
+            const live = Math.abs(index - Math.max(activeIndex, 0)) <= LIVE_AROUND;
+            const lead = (
+              <CardLead title={title}>
+                {key === NEW_CARD ? (
+                  <span className="text-sm font-semibold">New question</span>
+                ) : (
+                  card?.lead
+                )}
+              </CardLead>
+            );
+            return (
+              <section
+                key={key}
+                data-card={key}
+                ref={(node) => {
+                  if (node) cardRefs.current.set(key, node);
+                  else cardRefs.current.delete(key);
+                }}
+                aria-label={key === NEW_CARD ? 'New question' : `Question ${index + 1}`}
+                className="flex min-h-full snap-start p-4"
+              >
+                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+                  {live ? card?.notice : null}
+                  {live ? (
+                    <CardBody
+                      questionKey={key}
+                      source={source}
+                      blank={blank}
+                      held={edits[key]}
+                      editable={key === NEW_CARD || (card?.editable ?? false)}
+                      lead={lead}
+                      actions={card?.actions}
+                      view={views[key] ?? FIRST_VIEW}
+                      romanised={romanised}
+                      onEdit={(change) => edit(key, change)}
+                      onView={(change) => view(key, change)}
+                      onSave={saveAndNext}
+                    />
+                  ) : (
+                    <>
+                      <div className={BAR}>{lead}</div>
+                      <div className="min-h-[60vh]" />
+                    </>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        {panel ? (
+          <aside
+            aria-label={panel.label}
+            aria-hidden={!panelOpen}
+            className={cn(
+              'absolute inset-y-0 right-0 z-20 flex w-80 max-w-full flex-col border-l border-border bg-surface shadow-lg transition-transform duration-200',
+              panelOpen ? 'translate-x-0' : 'pointer-events-none translate-x-full',
+            )}
+          >
+            <div className="flex flex-none items-center justify-between border-b border-border px-4 py-2">
+              <h2 className="text-sm font-semibold">{panel.label}</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Close ${panel.label}`}
+                onClick={() => setPanelOpen(false)}
+              >
+                <X aria-hidden />
+              </Button>
+            </div>
+            <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
+              <PanelBody panel={panel} activeKey={active} jump={jump} />
+            </div>
+          </aside>
+        ) : null}
+      </div>
+
+      <Legend
+        language={language}
+        questions
+        actions={
+          <>
+            {extraActions}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canSave}
+              loading={save.isPending}
+              onClick={saveAndNext}
+            >
+              <Save aria-hidden />
+              {editable ? saveLabel : 'Next'}
+            </Button>
+          </>
+        }
+      />
+    </div>
+  );
+}
+
+/** Whose question this is and which one, at the start of the card's language bar. */
+function CardLead({
+  title,
+  children,
+}: Readonly<{ title: React.ReactNode; children: React.ReactNode }>) {
+  return (
+    <span className="flex min-w-0 items-center gap-3">
+      {title}
+      <span className="flex flex-none items-center gap-2">{children}</span>
+    </span>
+  );
+}
+
+function PanelBody({ panel, ...position }: Readonly<PanelPosition & { panel: WorkspacePanel }>) {
+  return panel.render(position);
+}
+
+function CardBody({
+  questionKey,
+  source,
+  blank,
+  held,
+  editable,
+  lead,
+  actions,
+  view,
+  romanised,
+  onEdit,
+  onView,
+  onSave,
+}: Readonly<{
+  questionKey: string;
+  source: WorkspaceSource;
+  blank: Held;
+  held: Held | undefined;
+  editable: boolean;
+  lead: React.ReactNode;
+  actions: React.ReactNode;
+  view: View;
+  romanised: boolean;
+  onEdit: (change: (current: Held) => Held) => void;
+  onView: (change: (current: View) => View) => void;
+  onSave: () => void;
+}>) {
+  const isNew = questionKey === NEW_CARD;
+  const base = useQuery({ ...source.query(questionKey), enabled: !isNew });
+  const saved = isNew ? blank : base.data;
+
+  if (!saved) {
+    return (
+      <>
+        <div className={BAR}>{lead}</div>
+        <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </>
+    );
+  }
+  const shown = held ?? saved;
+  if (!editable) {
+    return (
+      <ReadBody state={shown.state} lead={lead} actions={actions} view={view} onView={onView} />
+    );
+  }
+  return (
+    <EditBody
+      questionKey={isNew ? '' : questionKey}
+      shown={shown}
+      lead={lead}
+      actions={actions}
+      view={view}
+      romanised={romanised}
+      onEdit={onEdit}
+      onView={onView}
+      onSave={onSave}
+    />
+  );
+}
+
+/** A question as its reader will see it, one language at a time, with nothing to type into. */
+function ReadBody({
+  state,
+  lead,
+  actions,
+  view,
+  onView,
+}: Readonly<{
+  state: AuthoringState;
+  lead: React.ReactNode;
+  actions: React.ReactNode;
+  view: View;
+  onView: (change: (current: View) => View) => void;
+}>) {
+  return (
+    <>
+      <div className={BAR}>
+        {lead}
+        <span className="flex flex-none items-center gap-2">
+          {actions}
+          <SegmentedControl
+            value={view.language}
+            onChange={(value) =>
+              onView((current) => ({ ...current, language: value as QuestionLanguage }))
+            }
+            aria-label="Language"
+            items={LANGUAGE_ORDER.map((code) => ({
+              value: code,
+              label: code.toUpperCase(),
+              name: LANGUAGE_LABELS[code],
+            }))}
+          />
+        </span>
+      </div>
+      <div className="p-4">
+        <AuthoringPreview state={state} language={view.language} />
+      </div>
+    </>
+  );
+}
+
+function EditBody({
+  questionKey,
+  shown,
+  lead,
+  actions,
+  view,
+  romanised,
+  onEdit,
+  onView,
+  onSave,
+}: Readonly<{
+  questionKey: string;
+  shown: Held;
+  lead: React.ReactNode;
+  actions: React.ReactNode;
+  view: View;
+  romanised: boolean;
+  onEdit: (change: (current: Held) => Held) => void;
+  onView: (change: (current: View) => View) => void;
+  onSave: () => void;
+}>) {
+  const draft = useMemo(() => toDraft(shown.state, shown.header), [shown]);
+  const { checks } = useChecked(draft, shown.header, shown.state, null);
+  const switchTo = (language: QuestionLanguage) =>
+    onView((current) => ({ language, box: current.box + 1 }));
+
+  return (
+    <QuestionPanes
+      flow
+      lead={lead}
+      previewAction={actions}
+      questionId={questionKey}
+      state={shown.state}
+      language={view.language}
+      romanised={romanised}
+      canSave
+      boxVersion={view.box}
+      checks={checks}
+      onRegions={(regions: ScaffoldRegion[]) =>
+        onEdit((current) => ({
+          ...current,
+          state: stateFrom(current.state, view.language, regions),
+        }))
+      }
+      onCycleLanguage={() => {
+        const at = LANGUAGE_ORDER.indexOf(view.language);
+        switchTo(LANGUAGE_ORDER[(at + 1) % LANGUAGE_ORDER.length] ?? view.language);
+      }}
+      onLanguageChange={switchTo}
+      onSave={onSave}
+    />
+  );
+}
+
+/** The header's right end: how letters are typed, progress, full screen. */
+function HeaderTools({
+  language,
+  romanised,
+  editable,
+  immersive,
+  panelLabel,
+  panelOpen,
+  onRomanised,
+  onPanel,
+  onFocus,
+}: Readonly<{
+  language: QuestionLanguage;
+  romanised: boolean;
+  editable: boolean;
+  immersive: boolean;
+  panelLabel: string | null;
+  panelOpen: boolean;
+  onRomanised: () => void;
+  onPanel: () => void;
+  onFocus: () => void;
+}>) {
+  return (
+    <div className="flex flex-none items-center gap-2">
+      {editable && SCRIPT_OF[language] ? (
+        <IconAction
+          label={
+            romanised
+              ? `Typing dhanyavaad writes it in ${LANGUAGE_LABELS[language]}`
+              : 'Roman letters stay as they are typed'
+          }
+          pressed={romanised}
+          onClick={onRomanised}
+        >
+          <Keyboard aria-hidden />
+        </IconAction>
+      ) : null}
+      {panelLabel ? (
+        <IconAction label={panelLabel} pressed={panelOpen} onClick={onPanel}>
+          <ListChecks aria-hidden />
+        </IconAction>
+      ) : null}
+      <IconAction label={immersive ? 'Leave full screen' : 'Full screen'} onClick={onFocus}>
+        {immersive ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
+      </IconAction>
+    </div>
+  );
+}
+
+function IconAction({
+  label,
+  pressed,
+  onClick,
+  children,
+}: Readonly<{
+  label: string;
+  pressed?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant={pressed ? 'default' : 'ghost'}
+          size="icon"
+          aria-label={label}
+          aria-pressed={pressed}
+          onClick={onClick}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
