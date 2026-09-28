@@ -26,17 +26,22 @@ const demanded = (handler: Reflected) =>
   ]);
 
 describe('what the proof-reading routes charge', () => {
-  /** The section-keyed way in has no assignment behind it, so nothing but super admin gates it. */
-  it('keeps every section-keyed route to a super admin', () => {
-    const keyedOnTheSection = [
+  /** The failure this prevents: a test owner editing a section's questions through its paper. */
+  it('lets a test owner read a section by its pair, and keeps the edit to a super admin', () => {
+    const reads = [
       ProofreadingController.prototype.forSection,
+      ProofreadingController.prototype.oneInSection,
       ProofreadingController.prototype.sectionOtherTests,
-      ProofreadingController.prototype.editSectionQuestion,
     ];
 
-    for (const handler of keyedOnTheSection) {
-      assert.equal(superAdminOnly(handler), true);
+    for (const handler of reads) {
+      assert.equal(superAdminOnly(handler), false);
+      assert.deepEqual(demanded(handler), {
+        key: FEATURE_KEYS.TEST_MANAGEMENT,
+        level: PERMISSION_LEVELS.READ,
+      });
     }
+    assert.equal(superAdminOnly(ProofreadingController.prototype.editSectionQuestion), true);
   });
 
   /** An ordinary reader still comes in through the assignment that named them, at its own price. */

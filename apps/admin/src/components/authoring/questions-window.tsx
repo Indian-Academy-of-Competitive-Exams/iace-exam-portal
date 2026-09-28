@@ -14,6 +14,7 @@ import {
   Button,
   ConfirmDialog,
   ScrollWindow,
+  SegmentedControl,
   Skeleton,
   Tooltip,
   TooltipContent,
@@ -22,6 +23,7 @@ import {
 } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { AuthoringHeaderBar } from './authoring-header-bar';
+import { AuthoringPreview } from './authoring-preview';
 import { QuestionPanes } from './question-panes';
 import {
   SCRIPT_OF,
@@ -54,6 +56,16 @@ export interface QuestionsSource {
   /** Only where a copy of a bank question refuses the save; an import row just becomes a duplicate. */
   checkDuplicates: boolean;
   save: (key: string, held: Held) => Promise<unknown>;
+  /** Read, not edited: the moment has taken the section out of this viewer's hands. */
+  locked?: boolean;
+  /** Above the question, for what the reader should know before touching it. */
+  notice?: (key: string) => React.ReactNode;
+}
+
+/** Where the window stands, for a panel beside it that can also move it. */
+export interface WindowPosition {
+  active: number;
+  jump: (key: string) => void;
 }
 
 /** How a block is being looked at — never a change to the question. */
@@ -80,12 +92,14 @@ export function QuestionsWindow({
   open,
   onOpenChange,
   startAt,
+  aside,
 }: Readonly<{
   source: QuestionsSource;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The question to land on; null opens at the first. */
   startAt: string | null;
+  aside?: (position: WindowPosition) => React.ReactNode;
 }>) {
   const queryClient = useQueryClient();
   const { keys } = source;
@@ -170,42 +184,52 @@ export function QuestionsWindow({
     if (target) setScrollTo({ key: target });
   };
 
-  const header = shown ? (
-    <AuthoringHeaderBar
-      header={shown.header}
-      state={shown.state}
-      subjectLocked={source.subjectLocked}
-      onHeaderChange={(next) => edit(activeKey, (current) => ({ ...current, header: next }))}
-      onStateChange={(next) => {
-        edit(activeKey, (current) => ({ ...current, state: next }));
-        rebuild(activeKey);
-      }}
-      lead={
-        <>
-          {source.lead(active)}
-          {activeKey in edits ? <Badge variant="warning">Unsaved</Badge> : null}
-        </>
-      }
-      actions={
-        <WindowActions
-          language={(views[activeKey] ?? FIRST_VIEW).language}
-          romanised={romanised}
-          canSave={canSave}
-          saving={save.isPending}
-          atFirst={active === 0}
-          atLast={active >= keys.length - 1}
-          onRomanised={() => setRomanised((on) => !on)}
-          onStep={step}
-          onSave={() => saveOne(activeKey)}
-          onClose={() => close(false)}
-        />
-      }
-    />
-  ) : (
+  const moving = {
+    atFirst: active === 0,
+    atLast: active >= keys.length - 1,
+    onStep: step,
+    onClose: () => close(false),
+  };
+  let header: React.ReactNode = (
     <div className="flex h-12 items-center px-4">
       <Skeleton className="h-6 w-80" />
     </div>
   );
+  if (source.locked) {
+    header = <LockedBar lead={source.lead(active)} actions={<WindowActions {...moving} />} />;
+  } else if (shown) {
+    header = (
+      <AuthoringHeaderBar
+        header={shown.header}
+        state={shown.state}
+        subjectLocked={source.subjectLocked}
+        onHeaderChange={(next) => edit(activeKey, (current) => ({ ...current, header: next }))}
+        onStateChange={(next) => {
+          edit(activeKey, (current) => ({ ...current, state: next }));
+          rebuild(activeKey);
+        }}
+        lead={
+          <>
+            {source.lead(active)}
+            {activeKey in edits ? <Badge variant="warning">Unsaved</Badge> : null}
+          </>
+        }
+        actions={
+          <WindowActions
+            {...moving}
+            editing={{
+              language: (views[activeKey] ?? FIRST_VIEW).language,
+              romanised,
+              canSave,
+              saving: save.isPending,
+              onRomanised: () => setRomanised((on) => !on),
+              onSave: () => saveOne(activeKey),
+            }}
+          />
+        }
+      />
+    );
+  }
 
   return (
     <>
@@ -217,6 +241,7 @@ export function QuestionsWindow({
         itemKeys={keys}
         onActiveChange={setActive}
         scrollTo={scrollTo}
+        aside={aside?.({ active, jump: (key) => setScrollTo({ key }) })}
         renderItem={(index) => {
           const key = keys[index] ?? '';
           return (
@@ -252,6 +277,19 @@ export function QuestionsWindow({
 }
 
 /** One question in the scroll: its box and its preview, exactly as the section editor lays them out. */
+/** The bar a read-only window keeps: where the question stands, and how to move on. */
+function LockedBar({
+  lead,
+  actions,
+}: Readonly<{ lead: React.ReactNode; actions: React.ReactNode }>) {
+  return (
+    <div className="flex flex-none items-center gap-x-4 bg-surface px-4 py-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">{lead}</div>
+      {actions}
+    </div>
+  );
+}
+
 function QuestionBlock({
   questionKey,
   source,
@@ -281,16 +319,57 @@ function QuestionBlock({
       </div>
     );
   }
+  const notice = source.notice?.(questionKey);
+  if (source.locked) {
+    return (
+      <>
+        {notice}
+        <ReadBlock state={base.data.state} view={view} onView={onView} />
+      </>
+    );
+  }
   return (
-    <LoadedBlock
-      questionKey={questionKey}
-      shown={held ?? base.data}
-      view={view}
-      romanised={romanised}
-      onEdit={onEdit}
-      onView={onView}
-      onSave={onSave}
-    />
+    <>
+      {notice}
+      <LoadedBlock
+        questionKey={questionKey}
+        shown={held ?? base.data}
+        view={view}
+        romanised={romanised}
+        onEdit={onEdit}
+        onView={onView}
+        onSave={onSave}
+      />
+    </>
+  );
+}
+
+/** A question as its reader will see it, one language at a time, with nothing to type into. */
+function ReadBlock({
+  state,
+  view,
+  onView,
+}: Readonly<{
+  state: AuthoringState;
+  view: View;
+  onView: (change: (current: View) => View) => void;
+}>) {
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <SegmentedControl
+        value={view.language}
+        onChange={(value) =>
+          onView((current) => ({ ...current, language: value as QuestionLanguage }))
+        }
+        aria-label="Language"
+        items={LANGUAGE_ORDER.map((code) => ({
+          value: code,
+          label: code.toUpperCase(),
+          name: LANGUAGE_LABELS[code],
+        }))}
+      />
+      <AuthoringPreview state={state} language={view.language} />
+    </div>
   );
 }
 
@@ -344,27 +423,27 @@ function LoadedBlock({
 }
 
 /** The header's right-hand end: move, save the question in view, close. */
-function WindowActions({
-  language,
-  romanised,
-  canSave,
-  saving,
-  atFirst,
-  atLast,
-  onRomanised,
-  onStep,
-  onSave,
-  onClose,
-}: Readonly<{
+/** Present only where the window edits; a read-only one moves and closes. */
+interface Editing {
   language: QuestionLanguage;
   romanised: boolean;
   canSave: boolean;
   saving: boolean;
+  onRomanised: () => void;
+  onSave: () => void;
+}
+
+function WindowActions({
+  editing,
+  atFirst,
+  atLast,
+  onStep,
+  onClose,
+}: Readonly<{
+  editing?: Editing;
   atFirst: boolean;
   atLast: boolean;
-  onRomanised: () => void;
   onStep: (by: number) => void;
-  onSave: () => void;
   onClose: () => void;
 }>) {
   return (
@@ -375,6 +454,18 @@ function WindowActions({
       <IconAction label="Next question" disabled={atLast} onClick={() => onStep(1)}>
         <ChevronDown aria-hidden />
       </IconAction>
+      {editing ? <EditingActions editing={editing} /> : null}
+      <IconAction label="Close" onClick={onClose}>
+        <X aria-hidden />
+      </IconAction>
+    </>
+  );
+}
+
+function EditingActions({ editing }: Readonly<{ editing: Editing }>) {
+  const { language, romanised, canSave, saving, onRomanised, onSave } = editing;
+  return (
+    <>
       {SCRIPT_OF[language] ? (
         <IconAction
           label={
@@ -392,9 +483,6 @@ function WindowActions({
         <Save aria-hidden />
         Save
       </Button>
-      <IconAction label="Close" onClick={onClose}>
-        <X aria-hidden />
-      </IconAction>
     </>
   );
 }

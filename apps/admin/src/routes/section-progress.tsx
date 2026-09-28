@@ -28,6 +28,7 @@ import {
   AssignmentSectionPicker,
   AssignmentTestPicker,
 } from '../components/assignment-scope-picker';
+import { SECTION_AS } from '../components/authoring/section-moment';
 import { chooseTest } from '../lib/assignment-filters';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
@@ -87,30 +88,14 @@ function RoleCell({
   );
 }
 
-/** Their own work is the one thing a progress view still has to open; everything else is a read. */
-const ownWork = (
-  held: SectionRoleProgress | null,
-  adminId: string,
-  to: (assignmentId: string) => string,
-): string | null =>
-  held?.assignmentId && held.assigneeId === adminId ? to(held.assignmentId) : null;
-
-/** A super admin reaches any outstanding reading, one nobody holds on its own pair — assigning nobody. */
-function readingHref(
-  row: SectionProgressRow,
-  adminId: string,
-  isSuperAdmin: boolean,
-): string | null {
-  const held = row.reading;
-  const mine = ownWork(held, adminId, ROUTES.PROOFREADING_SECTION);
-  const outstanding = isSuperAdmin && held !== null && held.finalizedAt === null;
-  if (mine || !outstanding) return mine;
-  return held.assignmentId
-    ? ROUTES.PROOFREADING_SECTION(held.assignmentId)
-    : ROUTES.PROOFREADING_OF_SECTION(row.testId, row.baseConfigSectionId);
+/** Every section opens its workspace: a holder sees it as theirs, anyone else as the test's owner. */
+function sectionHref(row: SectionProgressRow, held: SectionRoleProgress | null, adminId: string) {
+  const section = ROUTES.SECTION(row.testId, row.baseConfigSectionId);
+  const reading = held === row.reading && held?.assigneeId === adminId;
+  return reading ? `${section}?as=${SECTION_AS.READER}` : section;
 }
 
-function columnsOf(adminId: string, isSuperAdmin: boolean): DataTableColumn<SectionProgressRow>[] {
+function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
   return [
     {
       key: 'test',
@@ -126,7 +111,11 @@ function columnsOf(adminId: string, isSuperAdmin: boolean): DataTableColumn<Sect
       key: 'section',
       header: 'Section',
       className: 'max-w-[14rem]',
-      cell: (row) => <TruncatedText>{row.sectionName}</TruncatedText>,
+      cell: (row) => (
+        <Link to={sectionHref(row, null, adminId)} className={linkVariants()}>
+          <TruncatedText>{row.sectionName}</TruncatedText>
+        </Link>
+      ),
     },
     {
       key: 'questions',
@@ -141,7 +130,7 @@ function columnsOf(adminId: string, isSuperAdmin: boolean): DataTableColumn<Sect
         <RoleCell
           held={row.typing}
           doneLabel="Written"
-          href={ownWork(row.typing, adminId, ROUTES.AUTHORING_FOR_ASSIGNMENT)}
+          href={sectionHref(row, row.typing, adminId)}
         />
       ),
     },
@@ -153,7 +142,7 @@ function columnsOf(adminId: string, isSuperAdmin: boolean): DataTableColumn<Sect
         <RoleCell
           held={row.reading}
           doneLabel="Read"
-          href={readingHref(row, adminId, isSuperAdmin)}
+          href={sectionHref(row, row.reading, adminId)}
         />
       ),
     },
@@ -163,7 +152,6 @@ function columnsOf(adminId: string, isSuperAdmin: boolean): DataTableColumn<Sect
 export function SectionProgressPage() {
   const { identity } = useAuth();
   const adminId = identity?.id ?? '';
-  const isSuperAdmin = identity?.isSuperAdmin ?? false;
 
   // Held outside the spec: choosing another test also has to drop the section under the old one.
   const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
@@ -259,7 +247,7 @@ export function SectionProgressPage() {
       <ListView
         list={sections}
         filters={buildFilters(selectedAssigneeLabels)}
-        columns={columnsOf(adminId, isSuperAdmin)}
+        columns={columnsOf(adminId)}
         rowKey={(row) => `${row.testId}:${row.baseConfigSectionId}`}
         empty="No sections yet"
         emptyFiltered="No sections match those filters"

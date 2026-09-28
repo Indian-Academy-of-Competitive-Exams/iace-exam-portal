@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Keyboard, Maximize2, Minimize2, PanelsTopLeft, Save } from 'lucide-react';
 import {
@@ -31,13 +31,11 @@ import {
 } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { api } from '../lib/api';
-import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
+import { QUERY_KEYS, ROUTES, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
-import { SectionWorkButton } from '../components/authoring/section-work-sheet';
 import { SectionThreadButton } from '../components/section-thread';
 import { QuestionPanes } from '../components/authoring/question-panes';
-import { SectionQuestionsWindow } from '../components/authoring/section-questions-window';
 import { useChecked, useDuplicate } from '../components/authoring/use-question-checks';
 import {
   emptyState,
@@ -283,8 +281,6 @@ function EditorActions({
 function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWithTest }>) {
   const remaining = Math.max(assignment.sectionQuestionCount - assignment.writtenCount, 0);
   const mix = assignment.sectionMix;
-  // Undefined is closed; null opens at the first question, an id at that one.
-  const [reviewing, setReviewing] = useState<string | null | undefined>(undefined);
 
   return (
     <div className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-border bg-muted/40 px-4 py-2">
@@ -296,17 +292,12 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={assignment.writtenCount === 0}
-          onClick={() => setReviewing(null)}
-        >
-          <PanelsTopLeft aria-hidden />
-          Review written
+        <Button asChild type="button" size="sm" variant="outline">
+          <Link to={ROUTES.SECTION(assignment.testId, assignment.baseConfigSectionId)}>
+            <PanelsTopLeft aria-hidden />
+            Section
+          </Link>
         </Button>
-        <SectionWorkButton assignment={assignment} onEdit={setReviewing} />
         {/* The other half of the conversation: the reader raises things here, and answers here. */}
         <SectionThreadButton
           testId={assignment.testId}
@@ -332,13 +323,6 @@ function AssignmentContext({ assignment }: Readonly<{ assignment: AssignmentWith
           />
         ) : null}
       </div>
-
-      <SectionQuestionsWindow
-        assignment={assignment}
-        open={reviewing !== undefined}
-        onOpenChange={(open) => !open && setReviewing(undefined)}
-        startAt={reviewing ?? null}
-      />
     </div>
   );
 }

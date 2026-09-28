@@ -48,7 +48,7 @@ export class ProofreadingController {
     return this.proofreading.oneFor(assignmentId, questionId, user.id, user.isSuperAdmin);
   }
 
-  @RequiresSuperAdmin()
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId/sections/:sectionId/questions/:questionId')
   oneInSection(
     @Param('testId') testId: string,
@@ -69,8 +69,8 @@ export class ProofreadingController {
     return this.proofreading.otherTests(assignmentId, questionId, user.id, user.isSuperAdmin);
   }
 
-  /** Keyed on the section itself, so a section nobody was given still opens. Super admin only. */
-  @RequiresSuperAdmin()
+  /** Keyed on the section itself: its test's owner reads the paper; only a super admin edits through it. */
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId/sections/:sectionId/questions')
   forSection(
     @Param('testId') testId: string,
@@ -79,7 +79,7 @@ export class ProofreadingController {
     return this.proofreading.forSection(testId, sectionId);
   }
 
-  @RequiresSuperAdmin()
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId/sections/:sectionId/questions/:questionId/other-tests')
   sectionOtherTests(
     @Param('testId') testId: string,

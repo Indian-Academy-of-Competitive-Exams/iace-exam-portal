@@ -13,15 +13,18 @@ const sections = (keys: FeatureKey[]) =>
   filterNavByPermission(NAV_ITEMS, holding(...keys)).map((item) => item.label);
 
 describe('the Authoring section', () => {
-  it('is there for an admin who holds the key, with all three of its rows', () => {
-    const shown = filterNavByPermission(NAV_ITEMS, holding(FEATURE_KEYS.QUESTION_AUTHORING));
-    const authoring = shown.find((item) => item.label === 'Authoring');
+  it('is there for a typist with all three of its rows, and for a reader with only their sections', () => {
+    const rowsFor = (key: FeatureKey) =>
+      filterNavByPermission(NAV_ITEMS, holding(key))
+        .find((item) => item.label === 'Authoring')
+        ?.children?.map((child) => child.to);
 
-    assert.ok(authoring);
-    assert.deepEqual(
-      authoring.children?.map((child) => child.to),
-      [ROUTES.AUTHORING_EDITOR, ROUTES.AUTHORING_ASSIGNMENTS, ROUTES.AUTHORING_HISTORY],
-    );
+    assert.deepEqual(rowsFor(FEATURE_KEYS.QUESTION_AUTHORING), [
+      ROUTES.WORK,
+      ROUTES.AUTHORING_EDITOR,
+      ROUTES.AUTHORING_HISTORY,
+    ]);
+    assert.deepEqual(rowsFor(FEATURE_KEYS.QUESTION_PROOFREAD), [ROUTES.WORK]);
   });
 
   it('is gone for an admin who does not, however much else they hold', () => {
@@ -29,15 +32,12 @@ describe('the Authoring section', () => {
     assert.ok(!sections([]).includes('Authoring'));
   });
 
-  /** The failure this prevents: a screen opened from a queue lighting up a row it did not come from. */
-  it('keeps a scoped screen under the queue it was opened from', () => {
+  /** The failure this prevents: a section opened from the queue lighting up a row it did not come from. */
+  it('keeps a section and its questions under the queue they were opened from', () => {
+    assert.equal(activeNavPath(NAV_ITEMS, ROUTES.SECTION('a-test', 'a-section')), ROUTES.WORK);
     assert.equal(
-      activeNavPath(NAV_ITEMS, ROUTES.AUTHORING_FOR_ASSIGNMENT('an-assignment')),
-      ROUTES.AUTHORING_ASSIGNMENTS,
-    );
-    assert.equal(
-      activeNavPath(NAV_ITEMS, ROUTES.PROOFREADING_SECTION('an-assignment')),
-      ROUTES.PROOFREADING_ASSIGNMENTS,
+      activeNavPath(NAV_ITEMS, ROUTES.SECTION_QUESTION('a-test', 'a-section', 'a-question')),
+      ROUTES.WORK,
     );
   });
 

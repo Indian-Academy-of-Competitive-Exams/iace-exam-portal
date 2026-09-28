@@ -512,6 +512,8 @@ export class AssignmentsService {
         writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0),
         typistDone:
           row.role === ASSIGNMENT_ROLES.TYPIST ? row.finalizedAt !== null : so_far.typistDone,
+        readerDone:
+          row.role === ASSIGNMENT_ROLES.PROOFREADER ? row.finalizedAt !== null : so_far.readerDone,
       });
     }
     return bySection;
@@ -642,9 +644,10 @@ const sectionKey = (row: { testId: string; baseConfigSectionId: string }): strin
 export interface SectionCounts {
   writtenCount: number;
   typistDone: boolean | null;
+  readerDone: boolean | null;
 }
 
-const NO_COUNTS: SectionCounts = { writtenCount: 0, typistDone: null };
+const NO_COUNTS: SectionCounts = { writtenCount: 0, typistDone: null, readerDone: null };
 
 function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
   return {
@@ -659,6 +662,7 @@ function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     writtenCount: counts.writtenCount,
     typistDone: counts.typistDone,
+    readerDone: counts.readerDone,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
     sectionSubjectId: row.baseConfigSection.subjectId,

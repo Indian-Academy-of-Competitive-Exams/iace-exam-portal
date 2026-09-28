@@ -1,6 +1,5 @@
 import * as React from 'react';
-import { Route, Routes } from 'react-router-dom';
-import { ASSIGNMENT_ROLES } from '@iace/contracts';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
@@ -53,15 +52,11 @@ const AssignmentQueuePage = React.lazy(() =>
 const SectionProgressPage = React.lazy(() =>
   import('./routes/section-progress').then((module) => ({ default: module.SectionProgressPage })),
 );
-const ProofreadingSectionPage = React.lazy(() =>
-  import('./routes/proofreading-section').then((module) => ({
-    default: module.ProofreadingSectionPage,
-  })),
+const SectionWorkPage = React.lazy(() =>
+  import('./routes/section-work').then((module) => ({ default: module.SectionWorkPage })),
 );
-const ProofreadingQuestionPage = React.lazy(() =>
-  import('./routes/proofreading-question').then((module) => ({
-    default: module.ProofreadingQuestionPage,
-  })),
+const SectionRedirect = React.lazy(() =>
+  import('./routes/section-redirect').then((module) => ({ default: module.SectionRedirect })),
 );
 const AuthoringEditorPage = React.lazy(() =>
   import('./routes/authoring-editor').then((module) => ({ default: module.AuthoringEditorPage })),
@@ -168,32 +163,30 @@ export function App() {
           <Route path={ROUTES.IMPORT_QUESTIONS} element={whileLoading(<ImportQuestionsPage />)} />
           <Route path={ROUTES.TAXONOMY} element={whileLoading(<TaxonomyPage />)} />
           <Route path={ROUTES.QUESTION_PATTERN} element={whileLoading(<QuestionFormPage />)} />
+          <Route path={ROUTES.WORK} element={whileLoading(<AssignmentQueuePage />)} />
+          <Route path={ROUTES.SECTION_PATTERN} element={whileLoading(<SectionWorkPage />)} />
+          <Route
+            path={ROUTES.SECTION_QUESTION_PATTERN}
+            element={whileLoading(<SectionWorkPage />)}
+          />
           <Route
             path={ROUTES.PROOFREADING_ASSIGNMENTS}
-            element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />)}
+            element={<Navigate replace to={ROUTES.WORK} />}
           />
-          <Route
-            path={ROUTES.PROOFREADING_SECTION_PATTERN}
-            element={whileLoading(<ProofreadingSectionPage />)}
-          />
-          <Route
-            path={ROUTES.PROOFREADING_OF_SECTION_PATTERN}
-            element={whileLoading(<ProofreadingSectionPage />)}
-          />
-          <Route
-            path={ROUTES.PROOFREADING_QUESTION_PATTERN}
-            element={whileLoading(<ProofreadingQuestionPage />)}
-          />
-          <Route
-            path={ROUTES.PROOFREADING_SECTION_QUESTION_PATTERN}
-            element={whileLoading(<ProofreadingQuestionPage />)}
-          />
+          {[
+            ROUTES.PROOFREADING_SECTION_PATTERN,
+            ROUTES.PROOFREADING_OF_SECTION_PATTERN,
+            ROUTES.PROOFREADING_QUESTION_PATTERN,
+            ROUTES.PROOFREADING_SECTION_QUESTION_PATTERN,
+          ].map((path) => (
+            <Route key={path} path={path} element={whileLoading(<SectionRedirect />)} />
+          ))}
           <Route path={ROUTES.AUTHORING_EDITOR} element={whileLoading(<AuthoringEditorPage />)} />
           {/* Before the :id route, or "history" would be read as a question id. */}
           <Route path={ROUTES.AUTHORING_HISTORY} element={whileLoading(<AuthoringHistoryPage />)} />
           <Route
             path={ROUTES.AUTHORING_ASSIGNMENTS}
-            element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />)}
+            element={<Navigate replace to={ROUTES.WORK} />}
           />
           {/* Before the :assignmentId route, or "import" is read as an assignment id. */}
           <Route

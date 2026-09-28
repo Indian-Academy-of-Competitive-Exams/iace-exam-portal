@@ -16,6 +16,8 @@ export interface ScrollWindowProps {
   /** Items either side of the one in view that keep a live body; the rest hold their last height. */
   overscan?: number;
   estimatedHeight?: number;
+  /** Beside the scroll, on the right, at its full height — never inside it. */
+  aside?: React.ReactNode;
 }
 
 /** The reading line, as a share of the window's height: the item across it is the one being read. */
@@ -33,6 +35,7 @@ export function ScrollWindow({
   scrollTo = null,
   overscan = 2,
   estimatedHeight = 480,
+  aside,
 }: Readonly<ScrollWindowProps>) {
   const scroller = React.useRef<HTMLDivElement | null>(null);
   const wrappers = React.useRef<(HTMLDivElement | null)[]>([]);
@@ -137,25 +140,28 @@ export function ScrollWindow({
       <DialogContent size="window" showClose={false} aria-describedby={undefined}>
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <div className="flex-none border-b border-border">{header}</div>
-        <div
-          ref={scroller}
-          onScroll={findActive}
-          className="relative min-h-0 flex-1 overflow-y-auto rounded-b-[--modal-radius]"
-        >
-          {itemKeys.map((key, index) => {
-            const live = Math.abs(index - active) <= overscan;
-            return (
-              <div
-                key={key}
-                data-item-key={key}
-                data-live={live ? 'true' : undefined}
-                ref={(node) => hold(node, index, key, live)}
-                className="border-b-8 border-muted"
-              >
-                {live ? renderItem(index) : null}
-              </div>
-            );
-          })}
+        <div className="flex min-h-0 flex-1">
+          <div
+            ref={scroller}
+            onScroll={landing === null ? findActive : undefined}
+            className="relative min-h-0 min-w-0 flex-1 overflow-y-auto rounded-bl-[--modal-radius]"
+          >
+            {itemKeys.map((key, index) => {
+              const live = Math.abs(index - active) <= overscan;
+              return (
+                <div
+                  key={key}
+                  data-item-key={key}
+                  data-live={live ? 'true' : undefined}
+                  ref={(node) => hold(node, index, key, live)}
+                  className="border-b-8 border-muted"
+                >
+                  {live ? renderItem(index) : null}
+                </div>
+              );
+            })}
+          </div>
+          {aside}
         </div>
       </DialogContent>
     </Dialog>

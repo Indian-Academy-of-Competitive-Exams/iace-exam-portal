@@ -25,7 +25,8 @@ import {
   type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { ASSIGNMENT_ROLE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { SECTION_AS } from '../components/authoring/section-moment';
 import {
   AssignmentSectionPicker,
   AssignmentTestPicker,
@@ -37,10 +38,15 @@ import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 
 const isTypist = (role: AssignmentRole) => role === ASSIGNMENT_ROLES.TYPIST;
 
-const rowHref = (row: AssignmentWithTest): string =>
-  isTypist(row.role)
-    ? ROUTES.AUTHORING_FOR_ASSIGNMENT(row.id)
-    : ROUTES.PROOFREADING_SECTION(row.id);
+const ASSIGNMENT_ROLE_ORDER = [ASSIGNMENT_ROLES.TYPIST, ASSIGNMENT_ROLES.PROOFREADER] as const;
+
+const roleOf = (value: string | undefined): AssignmentRole | undefined =>
+  ASSIGNMENT_ROLE_ORDER.find((one) => one === value);
+
+const rowHref = (row: AssignmentWithTest): string => {
+  const section = ROUTES.SECTION(row.testId, row.baseConfigSectionId);
+  return isTypist(row.role) ? section : `${section}?as=${SECTION_AS.READER}`;
+};
 
 function progressVariant(written: number, target: number): BadgeProps['variant'] {
   if (written === 0) return 'neutral';
@@ -100,6 +106,11 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
       ),
     },
     {
+      key: 'role',
+      header: 'Role',
+      cell: (row) => <Badge variant="neutral">{ASSIGNMENT_ROLE_LABELS[row.role]}</Badge>,
+    },
+    {
       key: 'section',
       header: 'Section',
       className: 'max-w-[14rem]',
@@ -137,8 +148,8 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
   ];
 }
 
-/** Every section handed to this admin in one role, and the screen a row of it opens. */
-export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>) {
+/** Every section handed to this admin, typing or reading, and the workspace a row of it opens. */
+export function AssignmentQueuePage() {
   const queryClient = useQueryClient();
   const [finishing, setFinishing] = useState<AssignmentWithTest | null>(null);
   const [reading, setReading] = useState<AssignmentWithTest | null>(null);
@@ -148,7 +159,7 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
   const testId = urlFilters.get('testId');
   const sectionId = urlFilters.get('baseConfigSectionId');
-  const scope = { role, mine: true };
+  const scope = { mine: true };
 
   const filters = [
     {
@@ -174,6 +185,16 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
       ),
     },
     {
+      key: 'role',
+      kind: 'choice',
+      label: 'Role',
+      primary: true,
+      items: [
+        { value: '', label: 'Both' },
+        ...ASSIGNMENT_ROLE_ORDER.map((one) => ({ value: one, label: ASSIGNMENT_ROLE_LABELS[one] })),
+      ],
+    },
+    {
       key: 'outstanding',
       kind: 'choice',
       label: 'State',
@@ -188,10 +209,10 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   ] as const satisfies readonly ListFilter[];
 
   const queue = useListScreen({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', role],
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine'],
     filters,
     toQuery: (values) => ({
-      role,
+      role: roleOf(values.role),
       outstanding: values.outstanding === 'true' ? ('true' as const) : undefined,
       testId: values.testId || undefined,
       baseConfigSectionId: values.baseConfigSectionId || undefined,

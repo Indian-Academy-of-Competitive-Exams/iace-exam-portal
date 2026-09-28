@@ -20,8 +20,8 @@ export interface NavItem {
   children?: NavItem[];
   /** Defaults to AUTO. Override to force INLINE or PANEL. */
   layout?: NavLayout;
-  /** Render only when `can(featureKey)` says so. Absent means always shown. */
-  featureKey?: FeatureKey;
+  /** Render only when `can` allows it — any one of them, when several. Absent means always shown. */
+  featureKey?: FeatureKey | readonly FeatureKey[];
 }
 
 /** A section is an item with children. A leaf navigates; a section opens. */
@@ -70,7 +70,9 @@ export function filterNavByPermission(
   items: readonly NavItem[],
   can?: (featureKey: FeatureKey) => boolean,
 ): NavItem[] {
-  return filterNavBy(items, (item) => Boolean(item.featureKey && can && !can(item.featureKey)));
+  const allowed = (key: FeatureKey | readonly FeatureKey[]) =>
+    typeof key === 'string' ? can?.(key) : key.some((one) => can?.(one));
+  return filterNavBy(items, (item) => Boolean(item.featureKey && can && !allowed(item.featureKey)));
 }
 
 function everyNavPath(items: readonly NavItem[]): string[] {
