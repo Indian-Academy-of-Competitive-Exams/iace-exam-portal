@@ -71,7 +71,15 @@ export function LeaderboardPanel() {
         />
       ) : null}
 
-      {!asked ? <EmptyState title="No tests sat yet" /> : null}
+      {!asked && trend.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
+      {!asked && trend.isError ? (
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Your tests did not load"
+          onRetry={() => void trend.refetch()}
+        />
+      ) : null}
+      {!asked && trend.isSuccess ? <EmptyState title="No tests sat yet" /> : null}
       {asked && board.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
       {asked && board.isError ? (
         <EmptyState

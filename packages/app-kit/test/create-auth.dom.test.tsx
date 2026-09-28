@@ -85,7 +85,8 @@ describe('createAuth', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => assert.equal(seen.at(-1)?.actor, 'STUDENT'));
+    // The retry is spread over a second or two, so the wait covers the widest draw.
+    await waitFor(() => assert.equal(seen.at(-1)?.actor, 'STUDENT'), { timeout: 3000 });
     assert.equal(asked, 2);
     client.clear();
   });
