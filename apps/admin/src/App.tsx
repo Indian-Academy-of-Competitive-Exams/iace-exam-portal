@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { ASSIGNMENT_ROLES } from '@iace/contracts';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
@@ -163,7 +164,10 @@ export function App() {
           <Route path={ROUTES.IMPORT_QUESTIONS} element={whileLoading(<ImportQuestionsPage />)} />
           <Route path={ROUTES.TAXONOMY} element={whileLoading(<TaxonomyPage />)} />
           <Route path={ROUTES.QUESTION_PATTERN} element={whileLoading(<QuestionFormPage />)} />
-          <Route path={ROUTES.WORK} element={whileLoading(<AssignmentQueuePage />)} />
+          <Route
+            path={ROUTES.WORK}
+            element={<Navigate replace to={ROUTES.AUTHORING_ASSIGNMENTS} />}
+          />
           <Route path={ROUTES.SECTION_PATTERN} element={whileLoading(<SectionWorkPage />)} />
           <Route
             path={ROUTES.SECTION_QUESTION_PATTERN}
@@ -171,7 +175,7 @@ export function App() {
           />
           <Route
             path={ROUTES.PROOFREADING_ASSIGNMENTS}
-            element={<Navigate replace to={ROUTES.WORK} />}
+            element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />)}
           />
           {[
             ROUTES.PROOFREADING_SECTION_PATTERN,
@@ -186,7 +190,7 @@ export function App() {
           <Route path={ROUTES.AUTHORING_HISTORY} element={whileLoading(<AuthoringHistoryPage />)} />
           <Route
             path={ROUTES.AUTHORING_ASSIGNMENTS}
-            element={<Navigate replace to={ROUTES.WORK} />}
+            element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />)}
           />
           {/* Before the :assignmentId route, or "import" is read as an assignment id. */}
           <Route

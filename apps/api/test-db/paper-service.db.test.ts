@@ -966,6 +966,12 @@ describe('PaperService — a section reaches its proof-reader', () => {
       ErrorCodes.CONFLICT,
       'a section already with its reader is not handed over twice',
     );
+    const [row] = await rows();
+    assert.equal(
+      (await refused(service.removeQuestions(TEST, [row?.id ?? '']))).code,
+      ErrorCodes.CONFLICT,
+      'the owner does not move a paper its reader is reading',
+    );
   });
 
   it('never by the owner on a typed section, or to nobody', async () => {

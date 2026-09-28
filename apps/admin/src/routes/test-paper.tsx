@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SlidersHorizontal } from 'lucide-react';
 import {
+  ASSIGNMENT_ROLES,
   AppException,
   FEATURE_KEYS,
   FORM_LEVEL_FIELD,
@@ -10,6 +11,8 @@ import {
   PERMISSION_LEVELS,
   sectionQuota,
   scopedSections,
+  type Assignment,
+  type AssignmentRole,
   type BaseConfigSection,
   type DrawSpec,
   type PaperRow,
@@ -27,6 +30,7 @@ import {
   Badge,
   Button,
   CAPPED_VIEWPORT,
+  ConfirmDialog,
   PageHeader,
   PanelFrame,
   Skeleton,
@@ -36,6 +40,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
+  plural,
   type BreadcrumbItem,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -120,6 +125,15 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
   // Sticky for the life of the screen: the rebuild is delayed and deduped, so there is nothing to poll.
   const [rescoring, setRescoring] = useState(false);
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const assignments = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, detail.id],
+    queryFn: () => api.admin.assignments.forTest(detail.id),
+  });
+  const holderOf = (sectionId: string, role: AssignmentRole) =>
+    assignments.data?.find(
+      (row) =>
+        row.baseConfigSectionId === sectionId && row.role === role && row.replacedAt === null,
+    ) ?? null;
 
   const held = useMemo(() => {
     const counts = new Map<string, number>();
@@ -203,6 +217,9 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     );
   }
 
+  // A typed paper is its typists' choice: nothing to draw from, nothing to fill, nothing to save.
+  const framed = detail.paperSource === PAPER_SOURCES.FRAMED;
+
   // The screen owns these, not any one section, so they ride the toolbar above the strip.
   const banners =
     offered || rescoring ? <PaperBanners frozen={offered} rescoring={rescoring} /> : undefined;
@@ -220,21 +237,23 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
 
   const tabs = {
     value: openSection.id,
-    action: stripAction,
+    action: framed ? undefined : stripAction,
     onValueChange: (next: string) => filters.set({ section: next }),
     items: sections.map((section) => ({
       value: section.id,
       label: <SectionTab section={section} held={held} />,
       content: (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <DrawnFrom
-            testId={detail.id}
-            section={section}
-            spec={spec.sections[section.id] ?? {}}
-            canSave={canEditPaper}
-            open={poolOpen}
-            onChange={(next) => setDraft({ sections: { ...spec.sections, [section.id]: next } })}
-          />
+          {framed ? null : (
+            <DrawnFrom
+              testId={detail.id}
+              section={section}
+              spec={spec.sections[section.id] ?? {}}
+              canSave={canEditPaper}
+              open={poolOpen}
+              onChange={(next) => setDraft({ sections: { ...spec.sections, [section.id]: next } })}
+            />
+          )}
 
           <SectionWorkspace
             testId={detail.id}
@@ -245,8 +264,10 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
               paper.sections.find((row) => row.baseConfigSectionId === section.id)?.questions ?? []
             }
             held={onThePaper}
-            editable={canEditPaper}
+            editable={canEditPaper && !framed}
             disposable={canDispose}
+            typist={holderOf(section.id, ASSIGNMENT_ROLES.TYPIST)}
+            reader={holderOf(section.id, ASSIGNMENT_ROLES.PROOFREADER)}
             attemptCount={detail.attemptCount}
             onRescoring={() => setRescoring(true)}
             poolDirty={draft !== null}
@@ -394,6 +415,8 @@ function SectionWorkspace({
   poolDirty,
   onChanged,
   onRescoring,
+  typist,
+  reader,
 }: Readonly<{
   testId: string;
   /** A framed section is its typist's work, so there is no remainder for the bank to fill. */
@@ -411,8 +434,13 @@ function SectionWorkspace({
   poolDirty: boolean;
   onChanged: (next: TestPaper) => Promise<void>;
   onRescoring: () => void;
+  typist: Assignment | null;
+  reader: Assignment | null;
 }>) {
   const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
+  const released = Boolean(reader?.finalizedAt);
+  const withReader = Boolean(reader?.handedAt) && !released;
+  const framed = paperSource === PAPER_SOURCES.FRAMED;
 
   const add = useMutation({
     meta: { success: 'Added to the paper.', fields: ADD_ERROR_FIELDS },
@@ -451,9 +479,9 @@ function SectionWorkspace({
     </Button>
   );
 
-  const framed = paperSource === PAPER_SOURCES.FRAMED;
+  const picking = editable && !withReader;
   const fillAction =
-    editable && rows.length < section.questionCount ? (
+    picking && rows.length < section.questionCount ? (
       <Tooltip>
         <TooltipTrigger asChild>
           {/* A span, because a disabled button fires no pointer events and the tooltip needs one. */}
@@ -483,6 +511,16 @@ function SectionWorkspace({
     </Alert>
   ) : null;
 
+  // A typed section reaches its owner when its reader releases it, and not a question before.
+  if (framed && !released) {
+    return <Alert variant="info">{whereTypedWorkIs(typist, reader)}</Alert>;
+  }
+
+  const handOver =
+    !framed && picking && reader && !reader.handedAt && rows.length >= section.questionCount ? (
+      <HandOverButton testId={testId} section={section} onChanged={onChanged} />
+    ) : null;
+
   return (
     <>
       {refused ? (
@@ -490,9 +528,14 @@ function SectionWorkspace({
           {refused}
         </Alert>
       ) : null}
+      {withReader ? (
+        <Alert variant="info" className="shrink-0">
+          With its proof-reader until they release it. Its paper cannot change before then.
+        </Alert>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-        {editable ? (
+        {picking ? (
           <QuestionChooser
             testId={testId}
             paperSource={paperSource}
@@ -504,7 +547,7 @@ function SectionWorkspace({
           />
         ) : null}
 
-        {editable ? (
+        {picking ? (
           // Only where they sit side by side: stacked, the gap already separates them.
           <Separator orientation="vertical" dashed className="hidden lg:block" />
         ) : null}
@@ -514,13 +557,68 @@ function SectionWorkspace({
           section={section}
           rows={rows}
           spec={spec}
-          editable={editable}
+          editable={picking}
           disposition={disposable ? { attemptCount, onRescoring } : undefined}
-          action={fillAction}
+          action={
+            fillAction || handOver ? (
+              <>
+                {fillAction}
+                {handOver}
+              </>
+            ) : null
+          }
           banner={shortfallBanner}
           onChanged={onChanged}
         />
       </div>
+    </>
+  );
+}
+
+/** Where a typed section stands before its reader releases it to the owner. */
+function whereTypedWorkIs(typist: Assignment | null, reader: Assignment | null): string {
+  if (!typist) return 'Nobody types this section yet. Give it a typist in the builder.';
+  if (!typist.finalizedAt) return `With ${typist.assigneeName} until they mark it done.`;
+  if (!reader) return 'Typed. Give it a proof-reader in the builder.';
+  return `With ${reader.assigneeName} until they release it.`;
+}
+
+/** A picked section, full, handed to its reader from where it was picked. */
+function HandOverButton({
+  testId,
+  section,
+  onChanged,
+}: Readonly<{
+  testId: string;
+  section: BaseConfigSection;
+  onChanged: (next: TestPaper) => Promise<void>;
+}>) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const handOver = useMutation({
+    meta: { success: `${section.name} handed to its proof-reader.` },
+    mutationFn: () => api.admin.tests.handOverSection(testId, section.id),
+    onSuccess: async (next) => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
+      await onChanged(next);
+      setAsking(false);
+    },
+  });
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setAsking(true)}>
+        Hand over to proof-reader
+      </Button>
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title={`Hand ${section.name} to its proof-reader?`}
+        description={`Its ${plural(section.questionCount, 'question')} go to the proof-reader to check. This section's paper cannot change until they release it.`}
+        confirmLabel="Hand over"
+        loading={handOver.isPending}
+        onConfirm={() => handOver.mutate()}
+      />
     </>
   );
 }

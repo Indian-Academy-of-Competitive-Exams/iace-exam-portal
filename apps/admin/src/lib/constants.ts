@@ -13,6 +13,7 @@ import {
   Radar,
   Route,
   ShieldCheck,
+  SpellCheck,
   SlidersHorizontal,
   Upload,
   Users,
@@ -74,7 +75,7 @@ export const ROUTES = {
   SECTION_QUESTION: (testId: string, sectionId: string, questionId: string) =>
     `/work/tests/${testId}/sections/${sectionId}/questions/${questionId}`,
   SECTION_QUESTION_PATTERN: '/work/tests/:testId/sections/:sectionId/questions/:questionId',
-  /** Addresses from before the workspace; each only redirects into it now. */
+  /** The reader's own queue; the typist's is AUTHORING_ASSIGNMENTS. */
   PROOFREADING_ASSIGNMENTS: '/proofreading/assignments',
   SECTION_PROGRESS: '/tests/section-progress',
   PROOFREADING_SECTION: (assignmentId: string) => `/proofreading/assignments/${assignmentId}`,
@@ -414,25 +415,22 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
-  /** Its own section, on keys of its own: a typist or a reader gets this and not the bank above it. */
+  /** Its own section, on a key of its own: a reader holds sections, never the bank. */
+  {
+    label: 'Proof-reading',
+    icon: SpellCheck,
+    featureKey: FEATURE_KEYS.QUESTION_PROOFREAD,
+    children: [{ to: ROUTES.PROOFREADING_ASSIGNMENTS, label: 'My sections', icon: ListChecks }],
+  },
+  /** Its own section, on a key of its own: a typist gets this and not the bank above it. */
   {
     label: 'Authoring',
     icon: PenLine,
-    featureKey: [FEATURE_KEYS.QUESTION_AUTHORING, FEATURE_KEYS.QUESTION_PROOFREAD],
+    featureKey: FEATURE_KEYS.QUESTION_AUTHORING,
     children: [
-      { to: ROUTES.WORK, label: 'My sections', icon: ListChecks },
-      {
-        to: ROUTES.AUTHORING_EDITOR,
-        label: 'Editor',
-        icon: PenLine,
-        featureKey: FEATURE_KEYS.QUESTION_AUTHORING,
-      },
-      {
-        to: ROUTES.AUTHORING_HISTORY,
-        label: 'History',
-        icon: History,
-        featureKey: FEATURE_KEYS.QUESTION_AUTHORING,
-      },
+      { to: ROUTES.AUTHORING_EDITOR, label: 'Editor', icon: PenLine },
+      { to: ROUTES.AUTHORING_ASSIGNMENTS, label: 'My sections', icon: ListChecks },
+      { to: ROUTES.AUTHORING_HISTORY, label: 'History', icon: History },
     ],
   },
   {

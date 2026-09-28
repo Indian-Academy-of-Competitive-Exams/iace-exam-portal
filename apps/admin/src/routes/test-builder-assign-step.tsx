@@ -16,13 +16,20 @@ import {
   type TestDetail,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, UserRoundPen } from 'lucide-react';
 import {
   Alert,
   Badge,
   Button,
   ConfirmDialog,
   DataTable,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenuItem,
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -30,6 +37,8 @@ import {
   FormCombobox,
   FormDialog,
   FormSection,
+  RadioGroup,
+  RadioGroupItem,
   RowActions,
   Tooltip,
   TooltipContent,
@@ -37,6 +46,7 @@ import {
   TruncatedText,
   DatePicker,
   linkVariants,
+  plural,
   type BadgeProps,
   type DataTableColumn,
 } from '@iace/ui';
@@ -50,32 +60,35 @@ import { SectionThreadButton } from '../components/section-thread';
 
 const ROLE_ORDER = [ASSIGNMENT_ROLES.TYPIST, ASSIGNMENT_ROLES.PROOFREADER] as const;
 
-/** The consequence of each source, in the words the confirm repeats back before it is fixed. */
+/** What each source means for the people on it, said beside the choice that fixes it for good. */
 const SOURCE_CHOICES = {
   [PAPER_SOURCES.FRAMED]: {
-    action: 'Have them framed',
-    consequence:
-      'Every section takes a typist to write its questions and a proof-reader to read them.',
+    hint: 'A typist writes each section and a proof-reader checks it before it reaches you.',
   },
   [PAPER_SOURCES.PICKED]: {
-    action: 'Pick them from the bank',
-    consequence:
-      'Every section takes a proof-reader only, and you pick its questions from the bank yourself.',
+    hint: 'You pick each section from the bank; a proof-reader checks it and a typist fixes what they send back.',
   },
 } as const;
 
-const NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });
+const SOURCE_ORDER = [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED] as const;
 
-/** Only an unfinalized typist is discarded by a switch to PICKED — a finished one is a record. */
-const comingOffFor = (assignments: readonly Assignment[] | undefined): Assignment[] =>
-  (assignments ?? []).filter(
-    (row) => row.role === ASSIGNMENT_ROLES.TYPIST && row.finalizedAt === null,
+/** The holder a role has now; an earlier one stays on the record but no longer acts. */
+const holding = (rows: readonly Assignment[], section: string, role: AssignmentRole) =>
+  rows.find(
+    (row) => row.baseConfigSectionId === section && row.role === role && row.replacedAt === null,
+  );
+
+const earlier = (rows: readonly Assignment[], section: string, role: AssignmentRole) =>
+  rows.filter(
+    (row) => row.baseConfigSectionId === section && row.role === role && row.replacedAt !== null,
   );
 
 interface SectionRow {
   section: BaseConfigSection;
   typist?: Assignment;
   proofreader?: Assignment;
+  earlierTypists: Assignment[];
+  earlierReaders: Assignment[];
 }
 
 interface AssignTarget {
@@ -100,6 +113,7 @@ export function AssignStep({
   });
   const [assigning, setAssigning] = useState<AssignTarget | null>(null);
   const [removing, setRemoving] = useState<Assignment | null>(null);
+  const [handingOver, setHandingOver] = useState<BaseConfigSection | null>(null);
 
   if (!detail || !config) {
     return (
@@ -117,10 +131,7 @@ export function AssignStep({
     );
   }
 
-  const comingOff = comingOffFor(assignments.data);
-  if (detail.paperSource === null) {
-    return <SourceChoice testId={detail.id} current={null} comingOff={comingOff} />;
-  }
+  if (detail.paperSource === null) return <SourceDialog testId={detail.id} />;
 
   if (assignments.isError) {
     return (
@@ -134,16 +145,20 @@ export function AssignStep({
     );
   }
 
+  const all = assignments.data ?? [];
   const rowOf = (section: BaseConfigSection): SectionRow => ({
     section,
-    typist: assignments.data?.find(
-      (row) => row.baseConfigSectionId === section.id && row.role === ASSIGNMENT_ROLES.TYPIST,
-    ),
-    proofreader: assignments.data?.find(
-      (row) => row.baseConfigSectionId === section.id && row.role === ASSIGNMENT_ROLES.PROOFREADER,
-    ),
+    typist: holding(all, section.id, ASSIGNMENT_ROLES.TYPIST),
+    proofreader: holding(all, section.id, ASSIGNMENT_ROLES.PROOFREADER),
+    earlierTypists: earlier(all, section.id, ASSIGNMENT_ROLES.TYPIST),
+    earlierReaders: earlier(all, section.id, ASSIGNMENT_ROLES.PROOFREADER),
   });
-  const outstanding = (assignments.data ?? []).some((row) => row.finalizedAt === null);
+  const outstanding = all.some(
+    (row) =>
+      row.replacedAt === null &&
+      row.finalizedAt === null &&
+      (row.role === ASSIGNMENT_ROLES.PROOFREADER || detail.paperSource === PAPER_SOURCES.FRAMED),
+  );
   // The server refuses anybody else, so a box they cannot post from is not shown at all.
   const mayComment = (row: SectionRow): boolean =>
     (identity?.isSuperAdmin ?? false) ||
@@ -155,21 +170,21 @@ export function AssignStep({
     <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
       {outstanding && !detail.finalizedAt ? (
         <Alert variant="info">
-          A test cannot be offered until every section is
-          {detail.paperSource === PAPER_SOURCES.PICKED ? ' read.' : ' typed and read.'}
+          A test cannot be offered until every section is released by its proof-reader.
         </Alert>
       ) : null}
 
       <DataTable
-        columns={columnsOf(
-          detail.id,
-          detail.paperSource,
+        columns={columnsOf({
+          testId: detail.id,
+          source: detail.paperSource,
           held,
           mayComment,
           // An offered paper takes nobody new and loses nobody: there is nothing left to type or read.
-          detail.finalizedAt ? null : setAssigning,
-          detail.finalizedAt ? null : setRemoving,
-        )}
+          onAssign: detail.finalizedAt ? null : setAssigning,
+          onRemove: detail.finalizedAt ? null : setRemoving,
+          onHandOver: detail.finalizedAt ? null : setHandingOver,
+        })}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
         isLoading={assignments.isLoading}
@@ -193,7 +208,12 @@ export function AssignStep({
         onRemoved={() => assignments.refetch()}
       />
 
-      <SourceChoice testId={detail.id} current={detail.paperSource} comingOff={comingOff} />
+      <HandOverDialog
+        testId={detail.id}
+        section={handingOver}
+        onClose={() => setHandingOver(null)}
+        onHanded={() => assignments.refetch()}
+      />
     </FormSection>
   );
 }
@@ -221,15 +241,26 @@ function PaperCell({
   return <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge>;
 }
 
-function columnsOf(
-  testId: string,
-  source: PaperSource,
-  held: ReadonlyMap<string, number> | null,
-  mayComment: (row: SectionRow) => boolean,
-  onAssign: ((target: AssignTarget) => void) | null,
-  onRemove: ((assignment: Assignment) => void) | null,
-): DataTableColumn<SectionRow>[] {
-  const columns: DataTableColumn<SectionRow>[] = [
+interface ColumnsInput {
+  testId: string;
+  source: PaperSource;
+  held: ReadonlyMap<string, number> | null;
+  mayComment: (row: SectionRow) => boolean;
+  onAssign: ((target: AssignTarget) => void) | null;
+  onRemove: ((assignment: Assignment) => void) | null;
+  onHandOver: ((section: BaseConfigSection) => void) | null;
+}
+
+function columnsOf({
+  testId,
+  source,
+  held,
+  mayComment,
+  onAssign,
+  onRemove,
+  onHandOver,
+}: ColumnsInput): DataTableColumn<SectionRow>[] {
+  return [
     {
       key: 'section',
       header: 'Section',
@@ -252,6 +283,7 @@ function columnsOf(
       cell: (row) => (
         <RoleCell
           assignment={row.typist}
+          earlier={row.earlierTypists}
           questionCount={row.section.questionCount}
           onAssign={
             onAssign
@@ -268,6 +300,7 @@ function columnsOf(
       cell: (row) => (
         <RoleCell
           assignment={row.proofreader}
+          earlier={row.earlierReaders}
           questionCount={row.section.questionCount}
           onAssign={
             onAssign
@@ -291,41 +324,36 @@ function columnsOf(
     {
       key: 'actions',
       className: 'text-right',
-      cell: (row) => <SectionActions testId={testId} row={row} onRemove={onRemove} />,
+      cell: (row) => (
+        <SectionActions
+          testId={testId}
+          row={row}
+          onRemove={onRemove}
+          onHandOver={handOverFor(row, source, held, onHandOver)}
+        />
+      ),
     },
   ];
-
-  // A picked test has no typist to name, and an action a row cannot take is left out.
-  if (source === PAPER_SOURCES.PICKED) return columns.filter((column) => column.key !== 'typist');
-  return columns;
 }
 
-/** Switching to PICKED takes the unfinished typists with it, so the confirm names them first. */
-function descriptionOf(
-  choosing: PaperSource | null,
-  comingOff: readonly Assignment[],
-  mayMoveItLater: boolean,
-): string {
-  if (!choosing) return '';
-  const discarded = choosing === PAPER_SOURCES.PICKED ? comingOff : [];
-  const names = NAMES.format(discarded.map((row) => `${row.assigneeName} on ${row.sectionName}`));
-  const takes = names ? ` This takes ${names} off the test.` : '';
-  // Telling a super admin it cannot be undone, beside the button they undo it with, is just untrue.
-  const after = mayMoveItLater
-    ? ' Nobody but a super admin can move it after this.'
-    : ' This cannot be undone.';
-  return `${SOURCE_CHOICES[choosing].consequence}${takes}${after}`;
+/** Offered only where it would succeed: a picked section, full, with a reader it has not reached. */
+function handOverFor(
+  row: SectionRow,
+  source: PaperSource,
+  held: ReadonlyMap<string, number> | null,
+  onHandOver: ((section: BaseConfigSection) => void) | null,
+): (() => void) | null {
+  const reader = row.proofreader;
+  const full = (held?.get(row.section.id) ?? 0) >= row.section.questionCount;
+  const ready = source === PAPER_SOURCES.PICKED && full && reader && !reader.handedAt;
+  return ready && onHandOver ? () => onHandOver(row.section) : null;
 }
 
-/** The one-way door: a test says where its questions come from before anybody is handed a section. */
-function SourceChoice({
-  testId,
-  current,
-  comingOff,
-}: Readonly<{ testId: string; current: PaperSource | null; comingOff: readonly Assignment[] }>) {
-  const { identity } = useAuth();
+/** Framed or picked, chosen in a dialog the first time the paper is opened, and never again. */
+function SourceDialog({ testId }: Readonly<{ testId: string }>) {
   const queryClient = useQueryClient();
-  const [choosing, setChoosing] = useState<PaperSource | null>(null);
+  const [open, setOpen] = useState(true);
+  const [chosen, setChosen] = useState<PaperSource | ''>('');
 
   const choose = useMutation({
     meta: { success: 'Question source set.' },
@@ -333,57 +361,109 @@ function SourceChoice({
     onSuccess: async (saved) => {
       queryClient.setQueryData([...QUERY_KEYS.TEST, saved.id], saved);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
-      setChoosing(null);
+      setOpen(false);
     },
   });
 
-  const dialog = (
-    <ConfirmDialog
-      open={choosing !== null}
-      onOpenChange={(open) => !open && setChoosing(null)}
-      destructive={choosing === PAPER_SOURCES.PICKED && comingOff.length > 0}
-      title={choosing ? PAPER_SOURCE_LABELS[choosing] : ''}
-      description={descriptionOf(choosing, comingOff, identity?.isSuperAdmin ?? false)}
-      confirmLabel={choosing ? SOURCE_CHOICES[choosing].action : ''}
-      loading={choose.isPending}
-      onConfirm={() => choosing && choose.mutate(choosing)}
-    />
+  return (
+    <>
+      <EmptyState
+        title="No question source yet"
+        action={
+          <Button type="button" onClick={() => setOpen(true)}>
+            Choose question source
+          </Button>
+        }
+      />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Question source</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="flex flex-col gap-4">
+            <Alert variant="warning">
+              Chosen once for this test. Nobody can change it afterwards.
+            </Alert>
+            <RadioGroup
+              name="paper-source"
+              legend="Question source"
+              hideLegend
+              value={chosen}
+              onValueChange={(next) => setChosen(next as PaperSource)}
+              className="grid gap-3"
+            >
+              {SOURCE_ORDER.map((source) => (
+                <RadioGroupItem
+                  key={source}
+                  id={`paper-source-${source}`}
+                  value={source}
+                  className="rounded-lg border border-border p-3 has-[input:checked]:border-primary"
+                  label={
+                    <span className="flex flex-col gap-1">
+                      <span className="font-medium">{PAPER_SOURCE_LABELS[source]}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {SOURCE_CHOICES[source].hint}
+                      </span>
+                    </span>
+                  }
+                />
+              ))}
+            </RadioGroup>
+          </DialogBody>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              disabled={chosen === ''}
+              loading={choose.isPending}
+              onClick={() => chosen && choose.mutate(chosen)}
+            >
+              Choose
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
+}
 
-  // Already chosen: the one hand that may still move it, and nobody else is shown a door they cannot open.
-  if (current !== null) {
-    if (!identity?.isSuperAdmin) return null;
-    const other = current === PAPER_SOURCES.FRAMED ? PAPER_SOURCES.PICKED : PAPER_SOURCES.FRAMED;
-    return (
-      <div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setChoosing(other)}>
-          {SOURCE_CHOICES[other].action}
-        </Button>
-        {dialog}
-      </div>
-    );
-  }
+/** A picked section goes to its reader; from then the paper is theirs to read until they release it. */
+function HandOverDialog({
+  testId,
+  section,
+  onClose,
+  onHanded,
+}: Readonly<{
+  testId: string;
+  section: BaseConfigSection | null;
+  onClose: () => void;
+  onHanded: () => void;
+}>) {
+  const queryClient = useQueryClient();
+  const handOver = useMutation({
+    meta: { success: `${section?.name ?? 'Section'} handed to its proof-reader.` },
+    mutationFn: (sectionId: string) => api.admin.tests.handOverSection(testId, sectionId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_PAPER });
+      onHanded();
+      onClose();
+    },
+  });
 
   return (
-    <FormSection title="Question source">
-      <Alert variant="warning">
-        <span>
-          {SOURCE_CHOICES.FRAMED.consequence} {SOURCE_CHOICES.PICKED.consequence} This is chosen
-          once and cannot be changed.
-        </span>
-      </Alert>
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={() => setChoosing(PAPER_SOURCES.FRAMED)}>
-          {SOURCE_CHOICES.FRAMED.action}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => setChoosing(PAPER_SOURCES.PICKED)}>
-          {SOURCE_CHOICES.PICKED.action}
-        </Button>
-      </div>
-
-      {dialog}
-    </FormSection>
+    <ConfirmDialog
+      open={section !== null}
+      onOpenChange={(open) => !open && onClose()}
+      title={`Hand ${section?.name ?? 'this section'} to its proof-reader?`}
+      description={`Its ${plural(section?.questionCount ?? 0, 'question')} go to the proof-reader to check. You cannot change this section's paper until they release it.`}
+      confirmLabel="Hand over"
+      loading={handOver.isPending}
+      onConfirm={() => section && handOver.mutate(section.id)}
+    />
   );
 }
 
@@ -392,10 +472,12 @@ function SectionActions({
   testId,
   row,
   onRemove,
+  onHandOver,
 }: Readonly<{
   testId: string;
   row: SectionRow;
   onRemove: ((assignment: Assignment) => void) | null;
+  onHandOver: (() => void) | null;
 }>) {
   return (
     <RowActions label={`Actions for ${row.section.name}`}>
@@ -405,6 +487,9 @@ function SectionActions({
       <DropdownMenuItem asChild>
         <Link to={`${ROUTES.TEST_PAPER(testId)}?section=${row.section.id}`}>Open paper</Link>
       </DropdownMenuItem>
+      {onHandOver ? (
+        <DropdownMenuItem onSelect={onHandOver}>Hand over to proof-reader</DropdownMenuItem>
+      ) : null}
       {onRemove ? removeItemsFor(row, onRemove) : null}
     </RowActions>
   );
@@ -416,7 +501,8 @@ function removeItemsFor(row: SectionRow, onRemove: (assignment: Assignment) => v
     const assignment = role === ASSIGNMENT_ROLES.TYPIST ? row.typist : row.proofreader;
     const word = ASSIGNMENT_ROLE_LABELS[role].toLowerCase();
 
-    if (assignment && !assignment.finalizedAt) {
+    // Worked under means on the record: the role passes to somebody else instead.
+    if (assignment?.removable) {
       items.push(
         <DropdownMenuItem key={role} destructive onSelect={() => onRemove(assignment)}>
           Remove {word}
@@ -429,10 +515,12 @@ function removeItemsFor(row: SectionRow, onRemove: (assignment: Assignment) => v
 
 function RoleCell({
   assignment,
+  earlier,
   questionCount,
   onAssign,
 }: Readonly<{
   assignment: Assignment | undefined;
+  earlier: readonly Assignment[];
   questionCount: number;
   onAssign?: () => void;
 }>) {
@@ -459,23 +547,47 @@ function RoleCell({
   const progress = progressOf(assignment, questionCount);
   return (
     <div className="flex flex-col gap-1">
-      <TruncatedText className="font-medium">{assignment.assigneeName}</TruncatedText>
+      <span className="flex min-w-0 items-center gap-1">
+        <TruncatedText className="font-medium">{assignment.assigneeName}</TruncatedText>
+        {onAssign ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon" variant="ghost" onClick={onAssign}>
+                <UserRoundPen />
+                <span className="sr-only">Give to somebody else</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Give to somebody else</TooltipContent>
+          </Tooltip>
+        ) : null}
+      </span>
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">
           {assignment.dueAt ? `Due ${instituteDayLabel(assignment.dueAt)}` : 'No due date'}
         </span>
         <Badge variant={progress.variant}>{progress.label}</Badge>
       </div>
+      {earlier.length > 0 ? (
+        <TruncatedText className="text-xs text-muted-foreground">
+          {`Earlier: ${earlier.map((row) => row.assigneeName).join(', ')}`}
+        </TruncatedText>
+      ) : null}
     </div>
   );
 }
 
-/** Finalized reads as done outright; short of that, the count is the section's own — true for both roles. */
+/** A reader's state is where the section is with them; a typist's, how much of it is written. */
 function progressOf(
   assignment: Assignment,
   questionCount: number,
 ): { variant: BadgeProps['variant']; label: string } {
-  if (assignment.finalizedAt) return { variant: 'success', label: 'Finalized' };
+  if (assignment.role === ASSIGNMENT_ROLES.PROOFREADER) {
+    if (assignment.finalizedAt) return { variant: 'success', label: 'Released' };
+    return assignment.handedAt
+      ? { variant: 'warning', label: 'Reading' }
+      : { variant: 'neutral', label: 'Not reached' };
+  }
+  if (assignment.finalizedAt) return { variant: 'success', label: 'Done' };
   const { writtenCount } = assignment;
   if (writtenCount === 0) return { variant: 'neutral', label: `0/${questionCount}` };
   return {

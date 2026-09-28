@@ -25,7 +25,7 @@ import {
   type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ASSIGNMENT_ROLE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { SECTION_AS } from '../components/authoring/section-moment';
 import {
   AssignmentSectionPicker,
@@ -37,11 +37,6 @@ import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 /** One section handed to one admin, from either side of it, and the screen a row of it opens. */
 
 const isTypist = (role: AssignmentRole) => role === ASSIGNMENT_ROLES.TYPIST;
-
-const ASSIGNMENT_ROLE_ORDER = [ASSIGNMENT_ROLES.TYPIST, ASSIGNMENT_ROLES.PROOFREADER] as const;
-
-const roleOf = (value: string | undefined): AssignmentRole | undefined =>
-  ASSIGNMENT_ROLE_ORDER.find((one) => one === value);
 
 const rowHref = (row: AssignmentWithTest): string => {
   const section = ROUTES.SECTION(row.testId, row.baseConfigSectionId);
@@ -70,8 +65,27 @@ interface RowMoves {
 }
 
 /** What an outstanding row can do next: a typist marks done; a reader, once the typist has, reads or sends back. */
+/** Where the section stands for this row's holder, in the words each role uses. */
+function stateOf(row: AssignmentWithTest): { label: string; variant: BadgeProps['variant'] } {
+  if (row.replacedAt) return { label: 'Passed on', variant: 'neutral' };
+  if (isTypist(row.role)) {
+    return row.finalizedAt
+      ? { label: 'Done', variant: 'success' }
+      : { label: 'Typing', variant: 'neutral' };
+  }
+  if (row.finalizedAt) return { label: 'Released', variant: 'success' };
+  return row.handedAt
+    ? { label: 'Reading', variant: 'warning' }
+    : { label: 'Not reached', variant: 'neutral' };
+}
+
+function StateBadge({ row }: Readonly<{ row: AssignmentWithTest }>) {
+  const state = stateOf(row);
+  return <Badge variant={state.variant}>{state.label}</Badge>;
+}
+
 function RowMenu({ row, moves }: Readonly<{ row: AssignmentWithTest; moves: RowMoves }>) {
-  if (row.finalizedAt) return null;
+  if (row.finalizedAt || row.replacedAt) return null;
   if (isTypist(row.role)) {
     return (
       <RowActions label={`Actions for ${row.sectionName}`}>
@@ -100,11 +114,6 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
       ),
     },
     {
-      key: 'role',
-      header: 'Role',
-      cell: (row) => <Badge variant="neutral">{ASSIGNMENT_ROLE_LABELS[row.role]}</Badge>,
-    },
-    {
       key: 'section',
       header: 'Section',
       className: 'max-w-[14rem]',
@@ -128,11 +137,7 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
     {
       key: 'state',
       header: 'State',
-      cell: (row) => (
-        <Badge variant={row.finalizedAt ? 'success' : 'neutral'}>
-          {row.finalizedAt ? 'Finalized' : 'Outstanding'}
-        </Badge>
-      ),
+      cell: (row) => <StateBadge row={row} />,
     },
     {
       key: 'actions',
@@ -143,7 +148,8 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
 }
 
 /** Every section handed to this admin, typing or reading, and the workspace a row of it opens. */
-export function AssignmentQueuePage() {
+/** One role's own queue: the typist's under Authoring, the reader's under Proof-reading. */
+export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>) {
   const queryClient = useQueryClient();
   const [finishing, setFinishing] = useState<AssignmentWithTest | null>(null);
   const [reading, setReading] = useState<AssignmentWithTest | null>(null);
@@ -152,7 +158,7 @@ export function AssignmentQueuePage() {
   const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
   const testId = urlFilters.get('testId');
   const sectionId = urlFilters.get('baseConfigSectionId');
-  const scope = { mine: true };
+  const scope = { role, mine: true };
 
   const filters = [
     {
@@ -178,16 +184,6 @@ export function AssignmentQueuePage() {
       ),
     },
     {
-      key: 'role',
-      kind: 'choice',
-      label: 'Role',
-      primary: true,
-      items: [
-        { value: '', label: 'Both' },
-        ...ASSIGNMENT_ROLE_ORDER.map((one) => ({ value: one, label: ASSIGNMENT_ROLE_LABELS[one] })),
-      ],
-    },
-    {
       key: 'outstanding',
       kind: 'choice',
       label: 'State',
@@ -202,10 +198,10 @@ export function AssignmentQueuePage() {
   ] as const satisfies readonly ListFilter[];
 
   const queue = useListScreen({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine'],
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', role],
     filters,
     toQuery: (values) => ({
-      role: roleOf(values.role),
+      role,
       outstanding: values.outstanding === 'true' ? ('true' as const) : undefined,
       testId: values.testId || undefined,
       baseConfigSectionId: values.baseConfigSectionId || undefined,

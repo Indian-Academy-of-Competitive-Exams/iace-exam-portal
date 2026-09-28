@@ -133,6 +133,7 @@ export class PaperService {
     const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
     this.assertNotTyped(test, editor);
+    await this.assertWithOwner(testId, [section.id], editor);
 
     this.assertNoRepeats(input.questionIds);
 
@@ -219,6 +220,7 @@ export class PaperService {
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
     this.assertNotTyped(test, editor);
+    await this.assertWithOwner(testId, [section.id], editor);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -320,6 +322,7 @@ export class PaperService {
 
     const row = await this.requireRow(testId, rowId);
     this.assertNotTyped(test, editor);
+    await this.assertWithOwner(testId, [row.baseConfigSectionId], editor);
     const question = await this.requireDrawable(testId, input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
@@ -521,8 +524,11 @@ export class PaperService {
     this.assertAssemblable(test);
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
-    for (const rowId of rowIds) await this.requireRow(testId, rowId);
+    const sectionIds = new Set<string>();
+    for (const rowId of rowIds)
+      sectionIds.add((await this.requireRow(testId, rowId)).baseConfigSectionId);
     this.assertNotTyped(test, editor);
+    await this.assertWithOwner(testId, [...sectionIds], editor);
 
     await this.prisma.$transaction(async (tx) => {
       await beginPaperEdit(tx, testId);
@@ -680,7 +686,32 @@ export class PaperService {
     return rows.filter(hasVersion);
   }
 
-  /** A typed section is placed by its typist's Done and changed only by sending it back. */
+  /** Handed to its reader and not yet released, a section's paper is theirs to read, not the owner's to move. */
+  private async assertWithOwner(
+    testId: string,
+    baseConfigSectionIds: readonly string[],
+    editor: Editor,
+  ): Promise<void> {
+    if (editor.isSuperAdmin) return;
+    const reading = await this.prisma.questionAssignment.findFirst({
+      where: {
+        testId,
+        baseConfigSectionId: { in: [...baseConfigSectionIds] },
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+        replacedAt: null,
+        handedAt: { not: null },
+        finalizedAt: null,
+      },
+      select: { baseConfigSection: { select: { name: true } } },
+    });
+    if (!reading) return;
+    const issue = `${reading.baseConfigSection.name} is with its proof-reader until they release it.`;
+    throw new AppException(ErrorCodes.CONFLICT, issue, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [issue] },
+    });
+  }
+
+  /** A typed section is placed by its typist's Done and changed only by its reader's send-back. */
   private assertNotTyped(test: { paperSource: PaperSource | null }, editor: Editor): void {
     if (test.paperSource !== PAPER_SOURCES.FRAMED || editor.isSuperAdmin) return;
     throw new AppException(ErrorCodes.CONFLICT, TYPED_SECTION_MESSAGE, {
