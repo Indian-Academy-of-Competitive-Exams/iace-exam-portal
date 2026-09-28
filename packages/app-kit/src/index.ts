@@ -82,6 +82,7 @@ export {
   attemptPaperQueryKey,
   createStudentQueries,
 } from './student-queries';
+export { TOP_QUARTER, trendOf, type Trendline } from './trend';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
 export {
   ANY_CHOICE,
@@ -114,6 +115,7 @@ export {
   sittablesOf,
   sittingHint,
   upNext,
+  waitingOn,
   type SeriesProgress,
   type Sittable,
   type TestResult,

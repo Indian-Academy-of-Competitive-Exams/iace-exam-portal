@@ -14,18 +14,8 @@ import {
   cn,
   linkVariants,
   plural,
-  type LinePoint,
-  type PlotBand,
-  type PlotReference,
 } from '@iace/ui';
-import {
-  continueWith,
-  newestFirst,
-  openNow,
-  sittablesOf,
-  upNext,
-  type Sittable,
-} from '@iace/app-kit';
+import { newestFirst, sittablesOf, trendOf, waitingOn, type Sittable } from '@iace/app-kit';
 import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
   instituteDateTimeLabel,
@@ -66,9 +56,6 @@ const TREND_HEIGHT = 190;
 
 /** Drawn so a low line reads as a low SCORE rather than as a plot that failed to render. */
 const TREND_TICKS = [0, 25, 50, 75, 100];
-
-/** Where a percentile stops being a middle and starts being a placing worth chasing. */
-const TOP_QUARTER: PlotBand = { from: 75, to: 100, label: 'Top quarter' };
 
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
 export function DashboardPage() {
@@ -259,44 +246,6 @@ function Trend({
   );
 }
 
-interface Trendline {
-  title: string;
-  suffix: string;
-  points: LinePoint[];
-  band?: PlotBand;
-  reference?: PlotReference;
-}
-
-/** A percentile needs a marked ranked sitting; until there is one the same line reads the marks. */
-function trendOf(points: readonly PerformancePoint[]): Trendline | null {
-  if (points.length === 0) return null;
-  const ranked = points.some((point) => point.percentile !== null);
-
-  const plotted = points.map((point) => ({
-    key: point.attemptId,
-    label: point.testTitle ?? 'Untitled test',
-    value: ranked ? point.percentile : point.percentage,
-    caption: `${point.score} of ${point.maxMarks} marks`,
-  }));
-
-  const mean = average(plotted.map((point) => point.value));
-
-  return {
-    title: ranked ? 'Percentile' : 'Score',
-    suffix: ranked ? '' : '%',
-    points: plotted,
-    band: ranked ? TOP_QUARTER : undefined,
-    reference: mean === null ? undefined : { value: mean, label: 'Your average', tone: 'neutral' },
-  };
-}
-
-/** Null-safe because an unranked sitting has no percentile, and a mean of nothing is not zero. */
-function average(values: readonly (number | null)[]): number | null {
-  const held = values.filter((value) => value !== null);
-  if (held.length === 0) return null;
-  return Math.round(held.reduce((sum, value) => sum + value, 0) / held.length);
-}
-
 /** The last few sittings, so a student who has finished everything still lands on something. */
 function RecentResults({
   trend,
@@ -371,13 +320,6 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
       {row.action === 'RESUME' ? 'Resume' : 'Start test'}
     </StartSitting>
   );
-}
-
-/** One paper each, in the order a student would reach for them — never the same one twice. */
-function waitingOn(rows: readonly Sittable[]): Sittable[] {
-  const running = continueWith(rows);
-  const open = openNow(rows).find((row) => row.test.id !== running?.test.id);
-  return [running, open, upNext(rows)[0]].filter((row) => row !== undefined);
 }
 
 const laneOf = (row: Sittable): Lane => {

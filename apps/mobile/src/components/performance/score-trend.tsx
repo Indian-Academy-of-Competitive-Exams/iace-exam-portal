@@ -1,9 +1,9 @@
 /// <reference types="nativewind/types" />
 import { View } from 'react-native';
+import { trendOf } from '@iace/app-kit';
 import { type PerformancePoint } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { plural } from '../../lib/plural';
-import { trendOf } from '../../lib/trend';
 import { LinePlot } from '../ui/line-plot';
 
 const TICKS = [0, 25, 50, 75, 100];

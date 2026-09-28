@@ -2,14 +2,7 @@
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import {
-  continueWith,
-  newestFirst,
-  openNow,
-  sittablesOf,
-  upNext,
-  type Sittable,
-} from '@iace/app-kit';
+import { newestFirst, sittablesOf, waitingOn, type Sittable } from '@iace/app-kit';
 import {
   currentStreak,
   dispositionRates,
@@ -195,13 +188,6 @@ function Recent({ recent }: Readonly<{ recent: readonly PerformancePoint[] }>) {
       </Card>
     </View>
   );
-}
-
-/** One paper each, in the order a student would reach for them — never the same one twice. */
-function waitingOn(rows: readonly Sittable[]): Sittable[] {
-  const running = continueWith(rows);
-  const open = openNow(rows).find((row) => row.test.id !== running?.test.id);
-  return [running, open, upNext(rows)[0]].filter((row) => row !== undefined);
 }
 
 const resultLine = (point: PerformancePoint) =>

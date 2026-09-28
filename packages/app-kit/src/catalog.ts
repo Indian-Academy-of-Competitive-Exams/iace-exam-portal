@@ -17,6 +17,13 @@ export const isBriefRefused = (error: unknown): boolean =>
   AppException.is(error) &&
   (error.code === ErrorCodes.NOT_FOUND || error.code === ErrorCodes.FORBIDDEN);
 
+/** One paper each, in the order a student would reach for them — never the same one twice. */
+export function waitingOn(rows: readonly Sittable[]): Sittable[] {
+  const running = continueWith(rows);
+  const open = openNow(rows).find((row) => row.test.id !== running?.test.id);
+  return [running, open, upNext(rows)[0]].filter((row) => row !== undefined);
+}
+
 /** How far through a series a student is. Pure, so both the shelf and the series page share it. */
 export interface SeriesProgress {
   total: number;
