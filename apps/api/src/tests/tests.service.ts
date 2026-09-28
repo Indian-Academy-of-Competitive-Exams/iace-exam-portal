@@ -37,7 +37,7 @@ import {
   titleRefused,
   testDeletionBlocker,
 } from './test-rules';
-import { beginPaperEdit } from './begin-paper-edit';
+import { beginDraftPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 
 const TEST_INCLUDE = {
@@ -199,7 +199,7 @@ export class TestsService {
     this.assertCovers(config, scope, scopeRef);
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (movesThePaper(input)) await beginPaperEdit(tx, id);
+      if (movesThePaper(input)) await beginDraftPaperEdit(tx, id);
       // A row outside the new scope cannot be judged complete or offered, so a narrower scope drops it.
       if (input.scope !== undefined || input.scopeRef !== undefined) {
         const keptIds = scopedSections(config.sections, scope, scopeRef).map(

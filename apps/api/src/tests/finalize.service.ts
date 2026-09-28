@@ -40,6 +40,8 @@ const PAPER_REF_SELECT = {
 
 type PaperRowRef = Prisma.PaperQuestionGetPayload<{ select: typeof PAPER_REF_SELECT }>;
 
+type ReadingClient = Pick<Prisma.TransactionClient, 'questionAssignment' | 'paperQuestion'>;
+
 /** Offers a test: the paper rows already exist, so this freezes them rather than writing them. */
 @Injectable()
 export class FinalizeService {
@@ -51,9 +53,10 @@ export class FinalizeService {
   /** The freeze and the opening are ONE call: a failure between them offered a test to nobody. */
   async offer(testId: string, isSuperAdmin = false): Promise<OfferResult> {
     const test = await this.requireTest(testId);
-    await this.assertAssignmentsRead(testId, isSuperAdmin);
-
-    const offered = test.finalizedAt === null ? await this.freeze(test) : await this.reopen(test);
+    const offered =
+      test.finalizedAt === null
+        ? await this.freeze(test, isSuperAdmin)
+        : await this.reopen(test, isSuperAdmin);
 
     // The series carrying it: the catalog a student reads is cached against it.
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
@@ -61,7 +64,7 @@ export class FinalizeService {
   }
 
   /** The first offer, and the only one that freezes anything. */
-  private async freeze(test: OfferRow): Promise<OfferResult> {
+  private async freeze(test: OfferRow, isSuperAdmin: boolean): Promise<OfferResult> {
     const finalizedAt = new Date();
     const frozen = await this.prisma.$transaction(async (tx) => {
       // The one gate: the request whose `version` still matches wins, the other writes nothing.
@@ -76,6 +79,8 @@ export class FinalizeService {
       });
       if (claimed.count === 0) return null;
 
+      // The claim holds the Test row every paper edit locks first, so the reading is judged on the paper that freezes.
+      await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
       // Behind the gate: a paper counted outside it can be redrawn before the freeze.
       const paper = await this.paperOf(tx, test);
       // Throwing here rolls the claim back, so a paper that is not whole leaves the test a draft.
@@ -84,7 +89,7 @@ export class FinalizeService {
       return paper.length;
     }, FREEZE_LIMITS);
 
-    if (frozen === null) return this.reopen(await this.requireTest(test.id));
+    if (frozen === null) return this.reopen(await this.requireTest(test.id), isSuperAdmin);
 
     return {
       testId: test.id,
@@ -96,8 +101,9 @@ export class FinalizeService {
   }
 
   /** Offered before: the paper never moved after that, so only the status can still change. */
-  private async reopen(test: OfferRow): Promise<OfferResult> {
+  private async reopen(test: OfferRow, isSuperAdmin: boolean): Promise<OfferResult> {
     if (test.finalizedAt === null) throw new AppException(ErrorCodes.CONFLICT, RACED_MESSAGE);
+    await this.assertAssignmentsRead(this.prisma, test.id, isSuperAdmin);
 
     if (test.status !== TEST_STATUS.ACTIVE) {
       await this.prisma.test.update({
@@ -148,11 +154,15 @@ export class FinalizeService {
   }
 
   /** A section still being typed or read is not ready for a student to sit. No rows, no gate. */
-  private async assertAssignmentsRead(testId: string, isSuperAdmin: boolean): Promise<void> {
+  private async assertAssignmentsRead(
+    db: ReadingClient,
+    testId: string,
+    isSuperAdmin: boolean,
+  ): Promise<void> {
     if (isSuperAdmin) return;
 
     // A picked section's typist only fixes what comes back, so theirs is never a job to finish.
-    const outstanding = await this.prisma.questionAssignment.findMany({
+    const outstanding = await db.questionAssignment.findMany({
       where: {
         testId,
         finalizedAt: null,
@@ -172,12 +182,12 @@ export class FinalizeService {
       });
     }
 
-    await this.assertPaperWasRead(testId);
+    await this.assertPaperWasRead(db, testId);
   }
 
   /** Released is not the same as covering the paper: every question on a read section carries its reader's tick. */
-  private async assertPaperWasRead(testId: string): Promise<void> {
-    const unchecked = await this.prisma.paperQuestion.findMany({
+  private async assertPaperWasRead(db: ReadingClient, testId: string): Promise<void> {
+    const unchecked = await db.paperQuestion.findMany({
       where: {
         ...uncheckedOn(testId),
         baseConfigSection: {

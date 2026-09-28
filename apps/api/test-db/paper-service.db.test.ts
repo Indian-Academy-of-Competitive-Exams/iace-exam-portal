@@ -1040,6 +1040,8 @@ describe('PaperService — a released section changed after its reading', () => 
       const { service, releasedAt, rowOf } = await released();
       await service.removeQuestions(TEST, [await rowOf(idFor('q2'))]);
       assert.notEqual(await releasedAt(), null, 'a question taken off leaves nothing to read');
+      // The fill draws at random, and q2 is back in its pool: unchecked, anything it draws is new to the reader.
+      await prisma.questionReview.deleteMany({ where: { questionId: idFor('q2') } });
 
       await refill(service);
 
@@ -1176,7 +1178,56 @@ describe('PaperService — an offered paper no longer moves', () => {
     assert.equal(error.message, OFFERED_TEST_MESSAGE);
     assert.deepEqual(await heldIds(), []);
   });
+
+  /** The failure this prevents: an edit that checked a draft landing on the paper an offer froze meanwhile. */
+  it('refuses an edit whose test was offered between its check and its write', async () => {
+    for (const edit of [
+      (service: PaperService) =>
+        service.addQuestions(TEST, {
+          baseConfigSectionId: idFor('sec_1'),
+          questionIds: [idFor('r4')],
+        }),
+      (service: PaperService) => service.fillSection(TEST, idFor('sec_1')),
+      async (service: PaperService) => {
+        const [row] = await rows();
+        return service.replaceQuestion(TEST, row?.id ?? '', { questionId: idFor('r4') });
+      },
+      async (service: PaperService) => {
+        const [row] = await rows();
+        return service.removeQuestions(TEST, [row?.id ?? '']);
+      },
+    ]) {
+      await resetDatabase(prisma);
+      const midway = { armed: false };
+      const service = await serviceWith({ client: offeredMidway(midway) });
+      await pickWholePaper(service);
+      await prisma.paperQuestion.deleteMany({ where: { questionId: idFor('r3') } });
+      const before = await heldIds();
+      midway.armed = true;
+
+      const error = await refused(edit(service));
+
+      assert.equal(error.code, ErrorCodes.CONFLICT);
+      assert.equal(error.message, OFFERED_TEST_MESSAGE);
+      assert.deepEqual(await heldIds(), before);
+    }
+  });
 });
+
+/** The real client, with an offer landing on the test just before each transaction it opens once armed. */
+function offeredMidway(midway: { armed: boolean }): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return async (...args: Parameters<PrismaService['$transaction']>) => {
+        if (midway.armed) {
+          await target.test.update({ where: { id: TEST }, data: { finalizedAt: new Date() } });
+        }
+        return target.$transaction(...args);
+      };
+    },
+  });
+}
 
 /** The real client, naming every model read it is asked for so a per-row check cannot hide. */
 function countingReads(client: PrismaService, into: string[]): PrismaService {

@@ -11,9 +11,11 @@ import {
 } from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { FakeEventBus } from '../test/support/fakes';
+import type { PrismaService } from '../src/prisma/prisma.service';
 import {
   makeAdmin,
   makePaper,
+  makeQuestion,
   resetDatabase,
   testPrisma,
   uid,
@@ -121,6 +123,39 @@ describe('FinalizeService — a reading covers the paper, not just the section',
       error.message,
       /Reasoning has 1 question on the paper its proof-reader has not checked/,
     );
+  });
+
+  /** The failure this prevents: a question swapped in after the gate read the paper, offered unchecked. */
+  it('reads the paper for the gate behind its own claim, not before it', async () => {
+    const paper = await draft();
+    await readSection(paper, 0);
+    await readSection(paper, 1);
+    const [row] = await prisma.paperQuestion.findMany({ where: { testId: paper.testId } });
+    const { subjectId } = await prisma.question.findUniqueOrThrow({
+      where: { id: row?.questionId ?? '' },
+    });
+    const unread = await makeQuestion(prisma, { subjectId });
+    const swappedMidway = new Proxy(prisma, {
+      get(target, key) {
+        if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+        return async (...args: Parameters<PrismaService['$transaction']>) => {
+          await target.paperQuestion.update({
+            where: { id: row?.id ?? '' },
+            data: { questionId: unread.id, questionVersionId: unread.versionId },
+          });
+          return target.$transaction(...args);
+        };
+      },
+    });
+
+    const error = await new FinalizeService(swappedMidway, new FakeEventBus().asService())
+      .offer(paper.testId)
+      .then(() => null)
+      .catch((thrown: unknown) => thrown);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.message, /has not checked/);
+    assert.equal((await testRow(paper)).finalizedAt, null);
   });
 
   it('offers a paper whose every question its reader checked', async () => {

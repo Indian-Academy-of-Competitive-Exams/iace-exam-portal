@@ -37,7 +37,7 @@ import {
   type DrawSection,
 } from './draw-engine';
 import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from './test-rules';
-import { beginPaperEdit } from './begin-paper-edit';
+import { beginDraftPaperEdit, beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
 import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
@@ -188,7 +188,7 @@ export class PaperService {
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, testId);
+      await beginDraftPaperEdit(tx, testId);
       await tx.paperQuestion.createMany({
         data: questions.map((question, index) => ({
           testId,
@@ -234,7 +234,7 @@ export class PaperService {
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, testId);
+      await beginDraftPaperEdit(tx, testId);
       await tx.paperQuestion.createMany({
         data: added.map((row, index) => ({
           ...row,
@@ -330,7 +330,7 @@ export class PaperService {
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, testId);
+      await beginDraftPaperEdit(tx, testId);
       await tx.paperQuestion.update({
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
@@ -374,7 +374,7 @@ export class PaperService {
     const selected = await this.assertTypedSelection(testId, typed, section, body, test);
 
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, testId);
+      await beginDraftPaperEdit(tx, testId);
       const done = await tx.questionAssignment.updateMany({
         where: { id: assignmentId, finalizedAt: null },
         data: { finalizedAt: new Date() },
@@ -535,7 +535,7 @@ export class PaperService {
     await this.assertWithOwner(testId, [...sectionIds], editor);
 
     await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, testId);
+      await beginDraftPaperEdit(tx, testId);
       await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
     }, TX_LIMITS.SHORT);
 
