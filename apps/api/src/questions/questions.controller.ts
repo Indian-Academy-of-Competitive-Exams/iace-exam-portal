@@ -62,7 +62,10 @@ interface UploadedFileLike {
   mimetype: string;
 }
 
-/** The question bank itself. Every route is gated on QUESTION_MANAGEMENT. */
+/** A test owner picks a paper from the bank, so the two reads the picker makes are theirs as well. */
+const PICKER_READERS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.TEST_MANAGEMENT] as const;
+
+/** The question bank itself, gated on QUESTION_MANAGEMENT but for the picker's two reads. */
 @Controller('admin/questions')
 @Actors(ActorTypes.ADMIN)
 export class QuestionsController {
@@ -71,7 +74,7 @@ export class QuestionsController {
     private readonly auditContext: AuditContext,
   ) {}
 
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(PICKER_READERS, PERMISSION_LEVELS.READ)
   @Get()
   list(
     @Query(new ZodQuery(questionListQuerySchema)) query: QuestionListQuery,
@@ -118,7 +121,7 @@ export class QuestionsController {
   }
 
   /** Before `:id`, or the word "availability" is read as a question's id. */
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(PICKER_READERS, PERMISSION_LEVELS.READ)
   @Get('availability')
   availability(
     @Query(new ZodQuery(questionAvailabilityQuerySchema)) query: QuestionAvailabilityQuery,

@@ -26,10 +26,12 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { TaxonomyService } from './taxonomy.service';
 
-/** Both the bank's own screens and the authoring header choose from these lists. */
+/** The bank, the authoring header, a reader's window and a test owner's draw spec all choose from these. */
 const TAXONOMY_READERS = [
   FEATURE_KEYS.QUESTION_MANAGEMENT,
   FEATURE_KEYS.QUESTION_AUTHORING,
+  FEATURE_KEYS.QUESTION_PROOFREAD,
+  FEATURE_KEYS.TEST_MANAGEMENT,
 ] as const;
 
 /** Reading is open to anyone filing a question; writing stays the question bank's. */
