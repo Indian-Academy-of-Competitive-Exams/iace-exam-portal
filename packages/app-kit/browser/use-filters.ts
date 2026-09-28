@@ -1,13 +1,9 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { type FilterStore } from './use-local-filters';
 
 /** Filters live in the URL so a link into a screen and its own controls share state; PAGE is excluded since a filter change must reset it, which belongs with page state. */
-export function useFilters<K extends string>(): {
-  get: (key: K) => string;
-  set: (changes: Partial<Record<K, string | undefined>>) => void;
-  clear: (except?: readonly K[]) => void;
-  activeCount: (keys: readonly K[]) => number;
-} {
+export function useFilters<K extends string>(): FilterStore<K> {
   const [params, setParams] = useSearchParams();
 
   const get = useCallback((key: K) => params.get(key) ?? '', [params]);
