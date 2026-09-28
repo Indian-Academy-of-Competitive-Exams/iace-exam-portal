@@ -6,7 +6,8 @@ const SECONDS_PER_MINUTE = 60;
 /** Every duration the API takes is seconds; a paper is written and read in minutes. */
 export function minutesFieldOf(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined) return '';
-  return String(Math.round(seconds / SECONDS_PER_MINUTE));
+  // Two decimals sit within 0.3s of the seconds, so a save rounds back to exactly them.
+  return String(Number((seconds / SECONDS_PER_MINUTE).toFixed(2)));
 }
 
 export function secondsFromMinutes(minutes: string): number | null {
