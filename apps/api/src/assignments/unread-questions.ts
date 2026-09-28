@@ -6,12 +6,20 @@ export function uncheckedOn(testId: string): Prisma.PaperQuestionWhereInput {
   return { testId, question: { reviews: { none: { testId, checkedAt: { not: null } } } } };
 }
 
-/** A paper change a released reader has not checked sends the section back to them, or nobody could offer it. */
+/** A whole section holding a question its released reader has not checked goes back to them, or nobody could offer it. */
 export async function reopenReadingIfUnchecked(
   tx: Prisma.TransactionClient,
   testId: string,
   baseConfigSectionId: string,
 ): Promise<void> {
+  const { questionCount } = await tx.baseConfigSection.findUniqueOrThrow({
+    where: { id: baseConfigSectionId },
+    select: { questionCount: true },
+  });
+  const onPaper = await tx.paperQuestion.count({ where: { testId, baseConfigSectionId } });
+  // Short, it stays with the owner to finish: a reader can only release a whole section.
+  if (onPaper < questionCount) return;
+
   const unchecked = await tx.paperQuestion.count({
     where: { ...uncheckedOn(testId), baseConfigSectionId },
   });

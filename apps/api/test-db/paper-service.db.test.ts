@@ -1049,6 +1049,23 @@ describe('PaperService — a released section changed after its reading', () => 
     }
   });
 
+  /** The failure this prevents: a short section with its reader, who cannot release it, and an owner locked out. */
+  it('stays with its owner while the section is short, and goes back once it is whole', async () => {
+    const { service, releasedAt, rowOf } = await released();
+    await service.removeQuestions(TEST, [await rowOf(idFor('q1')), await rowOf(idFor('q2'))]);
+    const add = (questionId: string) =>
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_2'),
+        questionIds: [questionId],
+      });
+
+    await add(idFor('q3'));
+    assert.notEqual(await releasedAt(), null);
+
+    await add(idFor('q4'));
+    assert.equal(await releasedAt(), null);
+  });
+
   it('stays released when the question put back is one its reader already checked', async () => {
     const { service, releasedAt, rowOf } = await released();
     await service.removeQuestions(TEST, [await rowOf(idFor('q2'))]);
