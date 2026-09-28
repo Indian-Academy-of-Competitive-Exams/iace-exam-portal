@@ -137,17 +137,20 @@ function todayWhereTheUserIs(): string {
   return LOCAL_CIVIL_DATE.format(new Date());
 }
 
-const MONTH_LABEL = new Intl.DateTimeFormat(undefined, {
+/** The institute's style, `1 Sept 2026`, whatever language the device is set to. */
+const LOCALE = 'en-IN';
+
+const MONTH_LABEL = new Intl.DateTimeFormat(LOCALE, {
   timeZone: 'UTC',
   month: 'long',
   year: 'numeric',
 });
-const MONTH_NAME = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', month: 'short' });
-const WEEKDAY_LABEL = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', weekday: 'short' });
-const FULL_LABEL = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', dateStyle: 'full' });
-const TRIGGER_LABEL = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', dateStyle: 'medium' });
+const MONTH_NAME = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', month: 'short' });
+const WEEKDAY_LABEL = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', weekday: 'short' });
+const FULL_LABEL = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', dateStyle: 'full' });
+const TRIGGER_LABEL = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', dateStyle: 'medium' });
 
-/** Sunday-first headings, named by the runtime locale rather than hardcoded English. */
+/** Sunday-first headings, named by Intl rather than a hardcoded list. */
 const WEEKDAYS = Array.from({ length: DAYS_IN_WEEK }, (_, index) =>
   WEEKDAY_LABEL.format(new Date(Date.UTC(2024, 0, 7 + index))),
 );
