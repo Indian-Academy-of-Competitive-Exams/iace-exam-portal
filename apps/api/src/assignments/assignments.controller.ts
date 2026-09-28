@@ -14,6 +14,7 @@ import {
   ActorTypes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  satisfiesLevel,
   assignableQuerySchema,
   assignmentSectionsQuerySchema,
   assignmentTestsQuerySchema,
@@ -157,14 +158,22 @@ export class AssignmentsController {
   }
 
   /** Who a role can be given to — the same key `assign` itself requires, never the admin directory. */
-  /** The whole thread, unpaged — everyone who can see the section reads it. */
+  /** The whole thread, unpaged — for the section's own assignees, test owners and a super admin. */
   @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
   @Get('tests/:testId/sections/:sectionId/comments')
   comments(
     @Param('testId') testId: string,
     @Param('sectionId') sectionId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<SectionComment[]> {
-    return this.thread.forSection(testId, sectionId);
+    return this.thread.forSection(testId, sectionId, {
+      id: user.id,
+      isSuperAdmin: user.isSuperAdmin,
+      managesTests: satisfiesLevel(
+        user.permissions[FEATURE_KEYS.TEST_MANAGEMENT],
+        PERMISSION_LEVELS.READ,
+      ),
+    });
   }
 
   /** The guard only says they work here; the service says whether this section is theirs. */

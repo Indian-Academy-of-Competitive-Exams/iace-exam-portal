@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ADMIN_ROLES, ASSIGNMENT_ROLES, AppException, ErrorCodes } from '@iace/contracts';
-import { SectionThreadService } from '../src/assignments/section-thread.service';
+import { SectionThreadService, type ThreadReader } from '../src/assignments/section-thread.service';
 import { FakeStorage } from '../test/support/fakes';
 import {
   makeCatalog,
@@ -26,6 +26,14 @@ after(() => prisma.$disconnect());
 
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
+
+/** A reader by who they are and what they hold; nobody manages tests unless a case says so. */
+const reader = (id: string, over: Partial<ThreadReader> = {}): ThreadReader => ({
+  id,
+  isSuperAdmin: false,
+  managesTests: false,
+  ...over,
+});
 
 /** One staffed section: a typist, a proof-reader, and two people with no part in it. */
 async function aSection() {
@@ -83,7 +91,7 @@ describe('SectionThreadService', () => {
       TYPIST,
     );
 
-    const rows = await thread.forSection(testId, sectionId);
+    const rows = await thread.forSection(testId, sectionId, reader(TYPIST));
 
     assert.deepEqual(
       rows.map((row) => [row.authorName, row.authorRole, row.body]),
@@ -143,7 +151,7 @@ describe('SectionThreadService', () => {
       () => thread.comment(testId, sectionId, { body: 'Passing through.', images: [] }, STRANGER),
       refusedWith(ErrorCodes.FORBIDDEN),
     );
-    assert.deepEqual(await thread.forSection(testId, sectionId), []);
+    assert.deepEqual(await thread.forSection(testId, sectionId, reader(READER)), []);
   });
 
   it('takes a comment from a super admin who holds no assignment at all', async () => {
@@ -159,7 +167,9 @@ describe('SectionThreadService', () => {
 
     assert.equal(said.authorName, 'The Boss');
     assert.deepEqual(
-      (await thread.forSection(testId, sectionId)).map((row) => row.body),
+      (await thread.forSection(testId, sectionId, reader(BOSS, { isSuperAdmin: true }))).map(
+        (row) => row.body,
+      ),
       ['Ship it.'],
     );
   });
@@ -170,6 +180,71 @@ describe('SectionThreadService', () => {
 
     await assert.rejects(
       () => thread.comment(testId, uid(), { body: 'Into the void.', images: [] }, BOSS, true),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+});
+
+describe('SectionThreadService — who reads a thread', () => {
+  async function discussed() {
+    const staffed = await aSection();
+    await staffed.thread.comment(
+      staffed.testId,
+      staffed.sectionId,
+      { body: 'Question 7 reads oddly.', images: [] },
+      READER,
+    );
+    return staffed;
+  }
+
+  it('reads it to either assignee, a test owner and a super admin', async () => {
+    const { thread, testId, sectionId } = await discussed();
+
+    for (const allowed of [
+      reader(TYPIST),
+      reader(READER),
+      reader(STRANGER, { managesTests: true }),
+      reader(BOSS, { isSuperAdmin: true }),
+    ]) {
+      const rows = await thread.forSection(testId, sectionId, allowed);
+      assert.deepEqual(
+        rows.map((row) => row.body),
+        ['Question 7 reads oddly.'],
+      );
+    }
+  });
+
+  /** The failure this prevents: a typist reading the discussion on a section somebody else holds. */
+  it('reads as not there to an admin holding no seat on the section', async () => {
+    const { thread, testId, sectionId } = await discussed();
+
+    await assert.rejects(
+      () => thread.forSection(testId, sectionId, reader(STRANGER)),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+
+  it('does not lend one section’s seat to another section of the same test', async () => {
+    const { thread, testId } = await discussed();
+    const catalog = await prisma.test.findUniqueOrThrow({
+      where: { id: testId },
+      select: { baseConfigId: true },
+    });
+    const other = await prisma.baseConfigSection.create({
+      data: {
+        id: uid(),
+        baseConfigId: catalog.baseConfigId,
+        name: 'Quant',
+        order: 2,
+        questionCount: 10,
+        marksPerQuestion: 2,
+        negativeMarks: 0.5,
+      },
+      select: { id: true },
+    });
+
+    await assert.rejects(
+      () => thread.forSection(testId, other.id, reader(TYPIST)),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });

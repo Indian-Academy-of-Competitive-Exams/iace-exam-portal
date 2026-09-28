@@ -383,6 +383,10 @@ and needs no mapping at all.
 - **A reader may send a typed section back** before marking it read. It returns the WHOLE section:
   the typist's `finalizedAt` clears, and they type, import and press Done again. What to fix is
   said in the section thread.
+- **A section's thread belongs to its section.** Its typist and proof-reader read and write it; a
+  test owner (TEST_MANAGEMENT) and a super admin read it, and a super admin may write. Anyone
+  else is told there is no such section — holding a typist's or reader's key is not a seat on it.
+  A comment is reworded only by its own author.
 - **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion` or
   `TestQuestionStat` references may be deleted; every served question is a paper row a sat test
   cannot lose, and the rule counts those two tables before it allows the move, so it refuses before

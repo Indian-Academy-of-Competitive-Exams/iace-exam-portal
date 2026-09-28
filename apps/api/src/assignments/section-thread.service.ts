@@ -20,7 +20,15 @@ type CommentRow = Prisma.SectionCommentGetPayload<{ include: typeof COMMENT_INCL
 const NOT_YOURS_TO_WRITE = 'Only this section’s typist and proof-reader can add to its thread.';
 const NOT_YOURS_TO_REWORD = 'You can only reword what you wrote yourself.';
 
-/** The discussion on one (test, section) — spec §9. Both assignees and a super admin write; everyone reads. */
+/** Who asks to read a thread: the controller knows their grants, the service knows the section. */
+export interface ThreadReader {
+  id: string;
+  isSuperAdmin: boolean;
+  /** Holds TEST_MANAGEMENT, so reads every section of every test it builds. */
+  managesTests: boolean;
+}
+
+/** The discussion on one (test, section) — spec §9. Its assignees and a super admin write; they and test owners read. */
 @Injectable()
 export class SectionThreadService {
   constructor(
@@ -29,7 +37,12 @@ export class SectionThreadService {
   ) {}
 
   /** Oldest first: a discussion is read in the order it was said, never paged. */
-  async forSection(testId: string, baseConfigSectionId: string): Promise<SectionComment[]> {
+  async forSection(
+    testId: string,
+    baseConfigSectionId: string,
+    reader: ThreadReader,
+  ): Promise<SectionComment[]> {
+    await this.assertMayRead(testId, baseConfigSectionId, reader);
     const rows = await this.prisma.sectionComment.findMany({
       where: { testId, baseConfigSectionId },
       include: COMMENT_INCLUDE,
@@ -97,6 +110,19 @@ export class SectionThreadService {
     const keys = new Set(rows.flatMap((row) => row.images));
     const urls = new Map([...keys].map((key) => [key, this.storage.publicUrl(key)]));
     return rows.map((row) => toComment(row, urls));
+  }
+
+  /** Not theirs reads as not there: a feature key is not a seat on this section. */
+  private async assertMayRead(
+    testId: string,
+    baseConfigSectionId: string,
+    reader: ThreadReader,
+  ): Promise<void> {
+    if (reader.isSuperAdmin || reader.managesTests) return;
+    const held = await this.prisma.questionAssignment.count({
+      where: { testId, baseConfigSectionId, assigneeId: reader.id },
+    });
+    if (held === 0) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section');
   }
 
   /** An assignment row on the pair is both the authority and the proof that the pair is real. */
