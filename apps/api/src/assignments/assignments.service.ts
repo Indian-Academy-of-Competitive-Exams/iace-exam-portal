@@ -248,21 +248,25 @@ export class AssignmentsService {
     await this.assertNotTheOtherRole(testId, section.id, body.assigneeId, body.role);
 
     const pair = { testId, baseConfigSectionId: section.id };
-    const holding = await this.prisma.questionAssignment.findFirst({
-      where: { ...pair, role: body.role, replacedAt: null },
-    });
-    if (holding?.assigneeId === body.assigneeId) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, ALREADY_HOLDS_MESSAGE, {
-        fieldErrors: { assigneeId: [ALREADY_HOLDS_MESSAGE] },
-      });
-    }
-    // The section's progress belongs to the role, not the person: it carries over to whoever takes it.
-    const handedAt = holding ? holding.handedAt : await this.handedOnArrival(pair, body.role);
 
     try {
       const row = await this.prisma.$transaction(async (tx) => {
         // Test before its rows, the app's one lock order: an edit reopening this holder took the test first.
-        await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" = ${testId}::uuid FOR UPDATE`;
+        const [locked] = await tx.$queryRaw<{ offered: boolean }[]>`
+          SELECT "finalizedAt" IS NOT NULL AS offered FROM "Test" WHERE "id" = ${testId}::uuid FOR UPDATE`;
+        if (locked?.offered) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
+
+        // Read under the lock, so a reopen or a Done that landed since the checks carries over as it is now.
+        const holding = await tx.questionAssignment.findFirst({
+          where: { ...pair, role: body.role, replacedAt: null },
+        });
+        if (holding?.assigneeId === body.assigneeId) {
+          throw new AppException(ErrorCodes.VALIDATION_ERROR, ALREADY_HOLDS_MESSAGE, {
+            fieldErrors: { assigneeId: [ALREADY_HOLDS_MESSAGE] },
+          });
+        }
+        // The section's progress belongs to the role, not the person: it carries over to whoever takes it.
+        const handedAt = holding ? holding.handedAt : await handedOnArrival(tx, pair, body.role);
         if (holding) {
           await tx.questionAssignment.update({
             where: { id: holding.id },
@@ -343,25 +347,6 @@ export class AssignmentsService {
       }),
     ]);
     return typed + reviewed + said + edited === 0;
-  }
-
-  /** A reader given a typed section its typist has already finished starts with it in hand. */
-  private async handedOnArrival(
-    pair: { testId: string; baseConfigSectionId: string },
-    role: AssignmentRole,
-  ): Promise<Date | null> {
-    if (role !== ASSIGNMENT_ROLES.PROOFREADER) return null;
-    const typing = await this.prisma.questionAssignment.findFirst({
-      where: {
-        ...pair,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        replacedAt: null,
-        finalizedAt: { not: null },
-        test: { paperSource: PAPER_SOURCES.FRAMED },
-      },
-      select: { finalizedAt: true },
-    });
-    return typing ? new Date() : null;
   }
 
   /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
@@ -789,4 +774,24 @@ function toAssignmentWithTest(
   counts: SectionCounts,
 ): AssignmentWithTest {
   return { ...toAssignment(row, counts), testTitle: row.test.title };
+}
+
+/** A reader given a typed section its typist has already finished starts with it in hand. */
+async function handedOnArrival(
+  db: Pick<Prisma.TransactionClient, 'questionAssignment'>,
+  pair: { testId: string; baseConfigSectionId: string },
+  role: AssignmentRole,
+): Promise<Date | null> {
+  if (role !== ASSIGNMENT_ROLES.PROOFREADER) return null;
+  const typing = await db.questionAssignment.findFirst({
+    where: {
+      ...pair,
+      role: ASSIGNMENT_ROLES.TYPIST,
+      replacedAt: null,
+      finalizedAt: { not: null },
+      test: { paperSource: PAPER_SOURCES.FRAMED },
+    },
+    select: { finalizedAt: true },
+  });
+  return typing ? new Date() : null;
 }

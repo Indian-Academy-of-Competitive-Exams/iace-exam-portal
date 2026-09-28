@@ -359,6 +359,44 @@ describe('AssignmentsService — one lock order, Test before its rows', () => {
   });
 });
 
+describe('AssignmentsService — a hand-over reads the role as it is under the lock', () => {
+  /** The failure this prevents: a new reader created already released, holding a section with an unchecked question. */
+  it('carries over a reopen that landed after the checks, not the release read before it', async () => {
+    const { assignments, admins } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog);
+    const first = await makeAdmin(prisma);
+    const second = await makeAdmin(prisma);
+    await grant(first.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    await grant(second.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const reading = (assigneeId: string) =>
+      body({ baseConfigSectionId: section.id, assigneeId, role: ASSIGNMENT_ROLES.PROOFREADER });
+    const earlier = await assignments.assign(test.id, reading(first.id), first.id);
+    await prisma.questionAssignment.update({
+      where: { id: earlier.id },
+      data: { handedAt: new Date(), finalizedAt: new Date() },
+    });
+    const reopenedMidway = new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+        return async (...args: Parameters<PrismaService['$transaction']>) => {
+          await target.questionAssignment.update({
+            where: { id: earlier.id },
+            data: { finalizedAt: null },
+          });
+          return target.$transaction(...args);
+        };
+      },
+    });
+    const racing = new AssignmentsService(reopenedMidway, new FakeRedis().asService(), admins);
+
+    const next = await racing.assign(test.id, reading(second.id), second.id);
+
+    assert.equal(next.finalizedAt, null);
+  });
+});
+
 describe('AssignmentsService — assignable', () => {
   it('lists an active admin holding the role’s key, not a stranger or a deactivated holder', async () => {
     const { assignments } = build();
