@@ -107,4 +107,21 @@ describe('FormDialog', () => {
     assert.equal(screen.getByRole('button', { name: 'Create' }).hasAttribute('disabled'), true);
     assert.equal(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled'), true);
   });
+
+  /** The failure this prevents: assigning a typist in the test builder moved its stepper to Offer. */
+  it('submits itself and not a form on the page it was opened from', async () => {
+    const outer = mock.fn((event: { preventDefault: () => void }) => event.preventDefault());
+    const inner = mock.fn();
+    render(
+      <form onSubmit={outer}>
+        <Harness onSubmit={inner} />
+      </form>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Branch name'), { target: { value: 'Ameerpet' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => assert.equal(inner.mock.callCount(), 1));
+    assert.equal(outer.mock.callCount(), 0);
+  });
 });

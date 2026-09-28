@@ -49,7 +49,15 @@ export function FormDialog<TValues extends FieldValues>({
   return (
     <Dialog open={open} onOpenChange={change}>
       <DialogContent size={size} closeLabel={`Close ${title}`}>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className={FILLS}>
+        <form
+          // A portal still bubbles React events, so without this the page's own form submits too.
+          onSubmit={(event) => {
+            event.stopPropagation();
+            return form.handleSubmit(onSubmit)(event);
+          }}
+          noValidate
+          className={FILLS}
+        >
           <DialogHeader className="flex-col gap-1">
             <DialogTitle>{title}</DialogTitle>
             {description ? <DialogDescription>{description}</DialogDescription> : null}
