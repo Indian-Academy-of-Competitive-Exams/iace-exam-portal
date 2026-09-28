@@ -570,7 +570,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       <FormSection title="How the paper runs">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormField form={form} name="durationMin" label="Duration (minutes)">
-            {(control) => <Input {...control} inputMode="numeric" placeholder="60" />}
+            {(control) => <Input {...control} inputMode="decimal" placeholder="60" />}
           </FormField>
 
           <FormCombobox
@@ -674,7 +674,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                   label="Minutes"
                   className="w-28"
                 >
-                  {(control) => <Input {...control} inputMode="numeric" />}
+                  {(control) => <Input {...control} inputMode="decimal" />}
                 </FormField>
                 <Button
                   type="button"
@@ -917,7 +917,7 @@ function SectionCard({
             sectionalClocks ? 'Required: this paper has a clock per section' : 'Optional'
           }
         >
-          {(control) => <Input {...control} inputMode="numeric" />}
+          {(control) => <Input {...control} inputMode="decimal" />}
         </FormField>
 
         <FormField
