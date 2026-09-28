@@ -55,6 +55,7 @@ import {
 import { questionOrderBy, questionWhere, reachableTest } from './question-query';
 import { type AuthoringCount, type ExportedQuestion } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
+import { uncheckReworded } from '../assignments';
 
 const QUESTION_INCLUDE = {
   subject: { select: { id: true, name: true } },
@@ -379,10 +380,13 @@ export class QuestionsService {
 
     // Merged here, so what is compared below is exactly what would be written.
     const options = optionsWithIds(built, currentOptionsOf(question));
+    const version = await this.versionFor(tx, question, built, options, createdById);
+    // A reader's tick was on the old words, which no draft paper serves any more.
+    if (version.reworded) await uncheckReworded(tx, id);
 
     return tx.question.update({
       where: { id },
-      data: { currentVersionId: await this.versionFor(tx, question, built, options, createdById) },
+      data: { currentVersionId: version.id },
       include: QUESTION_INCLUDE,
     });
   }
@@ -394,16 +398,17 @@ export class QuestionsService {
     built: BuiltQuestion,
     options: QuestionOption[],
     createdById: string,
-  ): Promise<string | null> {
+  ): Promise<{ id: string; reworded: boolean }> {
     const says = fingerprint(built.content, options, built.answerKey ?? null);
     if (question.currentVersionId && says === contentHashOf(question)) {
-      return question.currentVersionId;
+      return { id: question.currentVersionId, reworded: false };
     }
 
     const revisable = await this.revisableVersionId(tx, question);
-    return revisable
-      ? this.revise(tx, revisable, built, options, createdById)
-      : this.insertVersion(tx, question, built, options, createdById);
+    const id = revisable
+      ? await this.revise(tx, revisable, built, options, createdById)
+      : await this.insertVersion(tx, question, built, options, createdById);
+    return { id, reworded: true };
   }
 
   /** Rewritable until a test students can already reach pins it — the paper must never move under them. */

@@ -2,4 +2,4 @@
 export { AssignmentsModule } from './assignments.module';
 export { AssignmentsService } from './assignments.service';
 /** What a reader has not checked — the offer gate and the paper's writes in `tests` turn on it. */
-export { reopenReadingIfUnchecked, uncheckedOn } from './unread-questions';
+export { reopenReadingIfUnchecked, uncheckReworded, uncheckedOn } from './unread-questions';

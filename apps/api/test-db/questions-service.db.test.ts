@@ -764,6 +764,69 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   });
 });
 
+describe('QuestionsService.update — reworded words are read again', () => {
+  /** A whole section of one question on a draft, released by a reader who ticked it. */
+  async function readAndReleased() {
+    const { questions } = await build();
+    const created = await questions.create(live(), ADMIN);
+    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { baseConfigId, baseConfigSectionId } = await prisma.paperQuestion.findFirstOrThrow({
+      where: { questionId: created.id },
+    });
+    await prisma.baseConfigSection.update({
+      where: { id: baseConfigSectionId },
+      data: { questionCount: 1 },
+    });
+    const reading = await prisma.questionAssignment.create({
+      data: {
+        id: uid(),
+        testId,
+        baseConfigId,
+        baseConfigSectionId,
+        assigneeId: OTHER_ADMIN,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+        handedAt: new Date(),
+        finalizedAt: new Date(),
+      },
+    });
+    await prisma.questionReview.create({
+      data: {
+        testId,
+        baseConfigSectionId,
+        questionId: created.id,
+        checkedAt: new Date(),
+        checkedById: OTHER_ADMIN,
+      },
+    });
+    const checkedAt = async () =>
+      (await prisma.questionReview.findFirstOrThrow({ where: { questionId: created.id } }))
+        .checkedAt;
+    const releasedAt = async () =>
+      (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } }))
+        .finalizedAt;
+    return { questions, questionId: created.id, checkedAt, releasedAt };
+  }
+
+  /** The failure this prevents: an owner's edit after release reaching students under the reader's old tick. */
+  it('drops the tick and hands a released section back to its reader', async () => {
+    const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
+
+    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(await checkedAt(), null);
+    assert.equal(await releasedAt(), null);
+  });
+
+  it('keeps the tick on a save that changes no words', async () => {
+    const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
+
+    await questions.update(questionId, live({ difficulty: DIFFICULTY_LEVEL.HIGH }), ADMIN);
+
+    assert.notEqual(await checkedAt(), null);
+    assert.notEqual(await releasedAt(), null);
+  });
+});
+
 describe('QuestionsService.versions — the chain, and who sat which wording', () => {
   it('reads newest first, naming the hand behind each link and the papers pinning it', async () => {
     const { questions } = await build();

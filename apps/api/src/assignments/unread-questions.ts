@@ -35,3 +35,22 @@ export async function reopenReadingIfUnchecked(
     data: { finalizedAt: null },
   });
 }
+
+/** A question reworded on a draft paper loses its ticks there, and a whole released section holding it goes back to its reader. */
+export async function uncheckReworded(
+  tx: Prisma.TransactionClient,
+  questionId: string,
+): Promise<void> {
+  const onDrafts = await tx.paperQuestion.findMany({
+    where: { questionId, test: { finalizedAt: null } },
+    select: { testId: true, baseConfigSectionId: true },
+  });
+  if (onDrafts.length === 0) return;
+  await tx.questionReview.updateMany({
+    where: { questionId, testId: { in: onDrafts.map((row) => row.testId) } },
+    data: { checkedAt: null, checkedById: null },
+  });
+  for (const { testId, baseConfigSectionId } of onDrafts) {
+    await reopenReadingIfUnchecked(tx, testId, baseConfigSectionId);
+  }
+}
