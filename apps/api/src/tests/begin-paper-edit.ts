@@ -4,8 +4,9 @@
 // Unconditional, because an INSERT into PaperQuestion takes its FK parents in the order the
 // statement leaves in, and two admins on one unfrozen test deadlocked when the orders disagreed.
 import { Prisma } from '@prisma/client';
-import { AppException, ErrorCodes, FORM_LEVEL_FIELD } from '@iace/contracts';
+import { ErrorCodes } from '@iace/contracts';
 import { OFFERED_TEST_MESSAGE } from './test-rules';
+import { formRefusal } from '../common/form-refusal';
 
 export async function beginPaperEdit(tx: Prisma.TransactionClient, testId: string): Promise<void> {
   await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" = ${testId}::uuid FOR UPDATE`;
@@ -19,7 +20,5 @@ export async function beginDraftPaperEdit(
   const [test] = await tx.$queryRaw<{ offered: boolean }[]>`
     SELECT "finalizedAt" IS NOT NULL AS offered FROM "Test" WHERE "id" = ${testId}::uuid FOR UPDATE`;
   if (!test?.offered) return;
-  throw new AppException(ErrorCodes.CONFLICT, OFFERED_TEST_MESSAGE, {
-    fieldErrors: { [FORM_LEVEL_FIELD]: [OFFERED_TEST_MESSAGE] },
-  });
+  throw formRefusal(ErrorCodes.CONFLICT, OFFERED_TEST_MESSAGE);
 }

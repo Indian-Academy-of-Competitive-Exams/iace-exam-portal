@@ -11,6 +11,8 @@ import { DELIVERY_RETENTION_DAYS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { QueueFailures } from '../common/metrics/queue-failures';
+import { MS_PER_DAY } from '../common/time/units';
+import { pruneInPages } from '../common/prune-in-pages';
 
 /** Literal, not a parameter: a bound enum cannot prove NotificationDelivery_settled_idx's predicate, so the planner skips it. */
 const PENDING = Prisma.raw(`'${DeliveryStatus.PENDING}'`);
@@ -52,27 +54,16 @@ export class NotificationPruneProcessor extends WorkerHost {
 
   /** Settled only: a PENDING row is a send still owed a decision, whatever its age. */
   async prune(now: Date, maxPages: number = DELIVERY_PRUNE_MAX_PAGES): Promise<number> {
-    const queuedBefore = new Date(now.getTime() - DELIVERY_RETENTION_DAYS * MILLISECONDS_PER_DAY);
-    let removed = 0;
-
-    for (let page = 0; page < maxPages; page += 1) {
-      const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+    const queuedBefore = new Date(now.getTime() - DELIVERY_RETENTION_DAYS * MS_PER_DAY);
+    return pruneInPages(
+      { size: DELIVERY_PRUNE_PAGE, max: maxPages },
+      () => this.prisma.$queryRaw<{ id: string }[]>`
         SELECT "id" FROM "NotificationDelivery"
         WHERE "status" <> ${PENDING} AND "queuedAt" < ${queuedBefore}
         ORDER BY "queuedAt" ASC
-        LIMIT ${DELIVERY_PRUNE_PAGE}`;
-      if (rows.length === 0) return removed;
-
-      const gone = await this.prisma.notificationDelivery.deleteMany({
-        where: { id: { in: rows.map((row) => row.id) } },
-      });
-      removed += gone.count;
-      if (rows.length < DELIVERY_PRUNE_PAGE) return removed;
-    }
-
-    this.logger.warn(`Stopped after ${maxPages} pages of pruning; the next run carries on`);
-    return removed;
+        LIMIT ${DELIVERY_PRUNE_PAGE}`,
+      (ids) => this.prisma.notificationDelivery.deleteMany({ where: { id: { in: ids } } }),
+      this.logger,
+    );
   }
 }
-
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;

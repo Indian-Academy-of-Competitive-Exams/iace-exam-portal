@@ -1,4 +1,5 @@
 import { ATTEMPT_STATUS, type AttemptStatus, type FieldDiff } from '@iace/contracts';
+import { MS_PER_SECOND, SECONDS_PER_MINUTE } from '../common/time/units';
 
 /** The rules a support action is judged by — pure, so no database is needed to test them. */
 
@@ -33,7 +34,7 @@ export function resolutionBlocker(action: SupportAction, status: AttemptStatus):
 /** Counted from now once the deadline has gone, or extending a stuck sitting buys nothing. */
 export function extendedEndsAt(endsAt: Date, minutes: number, now: Date): Date {
   const from = Math.max(endsAt.getTime(), now.getTime());
-  return new Date(from + minutes * SECONDS_PER_MINUTE * MILLISECONDS_PER_SECOND);
+  return new Date(from + minutes * SECONDS_PER_MINUTE * MS_PER_SECOND);
 }
 
 /** The audit row's `changed`, with what was done and why beside whatever fields moved. */
@@ -50,6 +51,3 @@ export function supportDiff(
     reason: { from: null, to: reason },
   };
 }
-
-const SECONDS_PER_MINUTE = 60;
-const MILLISECONDS_PER_SECOND = 1000;

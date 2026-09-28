@@ -4,6 +4,7 @@
  */
 import { ANSWERED_STATES, ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { displayOrder } from './attempt-rules';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** A slot's state is its index here. Append only: a stored sheet is read for as long as it exists. */
 export const SLOT_STATES: readonly AnswerState[] = [
@@ -67,18 +68,15 @@ export interface ServedAnswer {
   marksAwarded: number | null;
 }
 
-const MILLISECONDS_PER_SECOND = 1000;
 const ANSWERED = new Set<AnswerState>(ANSWERED_STATES);
 
 export const blankSheet = (size: number): AnswerSheet => Array.from({ length: size }, () => null);
 
 const secondsAfter = (startedAt: Date, at: string | null): number | null =>
-  at === null ? null : Math.floor((Date.parse(at) - startedAt.getTime()) / MILLISECONDS_PER_SECOND);
+  at === null ? null : Math.floor((Date.parse(at) - startedAt.getTime()) / MS_PER_SECOND);
 
 const instantAt = (startedAt: Date, seconds: number | null): string | null =>
-  seconds === null
-    ? null
-    : new Date(startedAt.getTime() + seconds * MILLISECONDS_PER_SECOND).toISOString();
+  seconds === null ? null : new Date(startedAt.getTime() + seconds * MS_PER_SECOND).toISOString();
 
 /** A position into the paper row's options; an id the row does not hold is kept as sent, and scores wrong. */
 function optionOf(selected: string | null, optionIds: readonly string[]): number | string | null {

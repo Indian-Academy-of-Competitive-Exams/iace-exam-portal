@@ -38,6 +38,15 @@ end
 return holder
 `;
 
+/** A stored value that does not parse is no value at all, rather than a crash in whoever read it. */
+export function parseJsonOrNull<T>(raw: string): T | null {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
 /** Reconnect backoff: quick enough for a restart, slow enough not to storm a Redis that is still down. */
 const RETRY_STEP_MS = 200;
 const RETRY_CEILING_MS = 5000;
@@ -102,27 +111,17 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
   async getJson<T>(key: string): Promise<T | null> {
     const raw = await this.client.get(key);
     if (raw === null) return null;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      // A corrupt value is treated as absent rather than crashing the caller.
-      await this.client.del(key);
-      return null;
-    }
+    const parsed = parseJsonOrNull<T>(raw);
+    // A corrupt value is cleared, so the next reader does not trip on it again.
+    if (parsed === null) await this.client.del(key);
+    return parsed;
   }
 
   /** One round trip for many keys. A corrupt value reads as absent and is LEFT: this never evicts. */
   async mgetJson<T>(keys: readonly string[]): Promise<(T | null)[]> {
     if (keys.length === 0) return [];
     const raw = await this.client.mget(...keys);
-    return raw.map((value) => {
-      if (value === null) return null;
-      try {
-        return JSON.parse(value) as T;
-      } catch {
-        return null;
-      }
-    });
+    return raw.map((value) => (value === null ? null : parseJsonOrNull<T>(value)));
   }
 
   async getRaw(key: string): Promise<string | null> {
@@ -151,12 +150,7 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
   /** Reads and removes in ONE command: whatever arrives after it finds nothing, which is the point. */
   async takeJson<T>(key: string): Promise<T | null> {
     const raw = await this.client.getdel(key);
-    if (raw === null) return null;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return null;
-    }
+    return raw === null ? null : parseJsonOrNull<T>(raw);
   }
 
   async del(...keys: string[]): Promise<void> {

@@ -9,6 +9,7 @@ import {
   type TimerTemplate,
   type UpdateBaseConfigBody,
 } from '@iace/contracts';
+import { SECONDS_PER_MINUTE } from '../common/time/units';
 
 /** The rules that keep a blueprint honest — pure, so they are testable without a database. */
 
@@ -83,8 +84,6 @@ export function configShapeIssues(
 
   return issues;
 }
-
-const SECONDS_PER_MINUTE = 60;
 
 /** Said in what the reader set it in: a paper's clock is minutes on the screen, seconds in the row. */
 const minutes = (seconds: number) => `${Math.round(seconds / SECONDS_PER_MINUTE)} minutes`;

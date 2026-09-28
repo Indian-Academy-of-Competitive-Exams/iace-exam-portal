@@ -197,7 +197,7 @@ function percentilesOf(
   if (held.length === 0) return { avgPercentile: null, bestPercentile: null };
   const sum = held.reduce((total, percentile) => total + percentile, 0);
   return {
-    avgPercentile: Math.round((sum / held.length) * 100) / 100,
+    avgPercentile: round2(sum / held.length),
     bestPercentile: Math.max(...held),
   };
 }

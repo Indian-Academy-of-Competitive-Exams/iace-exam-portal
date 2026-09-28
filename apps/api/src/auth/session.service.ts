@@ -9,7 +9,7 @@ import {
   type DeviceSession,
 } from '@iace/contracts';
 import { sameHex } from '../common/same-hex';
-import { RedisService } from '../redis/redis.service';
+import { parseJsonOrNull, RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import {
   type DeviceContext,
@@ -89,7 +89,7 @@ export class SessionService {
 
     for (let tried = 0; tried < ROTATE_TRIES; tried += 1) {
       const raw = await this.redis.getRaw(key);
-      const session = raw ? parsedSession(raw) : null;
+      const session = raw ? parseJsonOrNull<StoredSession>(raw) : null;
       if (!session) return this.throwEnded(actor, subjectId, sessionId);
 
       const next = rotated(session, presented, nextHash, new Date());
@@ -253,13 +253,4 @@ function rotated(
     siblingRefreshTokenHashes: [...siblings, session.refreshTokenHash].slice(-MAX_SIBLING_TOKENS),
     lastSeenAt,
   };
-}
-
-/** A value that does not parse is no session at all, as getJson treats one. */
-function parsedSession(raw: string): StoredSession | null {
-  try {
-    return JSON.parse(raw) as StoredSession;
-  } catch {
-    return null;
-  }
 }

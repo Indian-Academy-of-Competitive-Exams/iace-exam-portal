@@ -12,6 +12,7 @@ import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { MetricsService } from '../common/metrics/metrics.service';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** Ends the sittings nobody ended, and hands on the scoring and counting nobody enqueued. */
 @Processor(QUEUE_NAMES.ATTEMPT_SWEEP, {
@@ -184,15 +185,13 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
   /** The same grace a save gets, so the sweeper never ends a sitting a save could still reach. */
   private async expired(now: Date = new Date()) {
-    const cutoff = new Date(now.getTime() - SAVE_GRACE_SEC * MILLISECONDS_PER_SECOND);
+    const cutoff = new Date(now.getTime() - SAVE_GRACE_SEC * MS_PER_SECOND);
     return this.prisma.$queryRaw<{ id: string }[]>`
       SELECT "id" FROM "Attempt"
       WHERE "status" = ${IN_PROGRESS} AND "endsAt" < ${cutoff}
       LIMIT ${SWEEP_BATCH}`;
   }
 }
-
-const MILLISECONDS_PER_SECOND = 1000;
 
 /** Literal, not a parameter: a bound enum cannot prove Attempt_unscored_idx's predicate, so the planner skips it. */
 const UNSCORED = Prisma.raw(`"status" = '${ATTEMPT_STATUS.SUBMITTED}' AND "score" IS NULL`);

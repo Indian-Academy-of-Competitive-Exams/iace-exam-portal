@@ -8,7 +8,6 @@ import {
   ErrorCodes,
   FEATURES,
   FEATURE_KEYS,
-  FORM_LEVEL_FIELD,
   PAPER_SOURCES,
   PERMISSION_LEVELS,
   satisfiesLevel,
@@ -43,6 +42,7 @@ import { isUniqueViolation } from '../common/prisma-errors';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { uncheckedOn } from './unread-questions';
+import { formRefusal } from '../common/form-refusal';
 
 const CHOOSE_WITH_DONE_MESSAGE =
   'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
@@ -55,8 +55,7 @@ const HAS_WORKED_MESSAGE =
   'Work has been done under this assignment, so it stays on the record. Give the role to somebody else instead.';
 const REPLACED_MESSAGE = 'This assignment has passed to somebody else and stays on the record.';
 
-const notWhole = (issue: string) =>
-  new AppException(ErrorCodes.CONFLICT, issue, { fieldErrors: { [FORM_LEVEL_FIELD]: [issue] } });
+const notWhole = (issue: string) => formRefusal(ErrorCodes.CONFLICT, issue);
 
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: { select: { name: true, questionCount: true, subjectId: true } },
@@ -695,9 +694,7 @@ const heldBy = (
 /** Nobody is handed a section until the test says where its questions come from. */
 function assertSourceChosen(paperSource: PaperSource | null): void {
   if (paperSource === null) {
-    throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [SOURCE_UNCHOSEN_MESSAGE] },
-    });
+    throw formRefusal(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE);
   }
 }
 

@@ -1,4 +1,5 @@
 /** Normalises whatever shape a spreadsheet put a date in; validity is judged after, by the schema. */
+import { MS_PER_DAY } from '../time/units';
 
 const MONTH_NAMES = [
   'jan',
@@ -19,8 +20,6 @@ const MONTH_NAMES = [
 const EARLIEST_SERIAL = 61;
 
 const SERIAL_EPOCH_UTC = Date.UTC(1899, 11, 30);
-const MS_PER_DAY = 86_400_000;
-
 const pad = (value: number): string => String(value).padStart(2, '0');
 
 const assemble = (year: number, month: number, day: number): string =>

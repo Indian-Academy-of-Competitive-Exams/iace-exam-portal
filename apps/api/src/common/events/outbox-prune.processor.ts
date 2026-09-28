@@ -9,6 +9,8 @@ import { type Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../../queue/queues';
 import { QueueFailures } from '../metrics/queue-failures';
+import { MS_PER_DAY } from '../time/units';
+import { pruneInPages } from '../prune-in-pages';
 
 /** Long enough to answer "was this attempt's scoring ever asked for?" and no longer. */
 export const OUTBOX_RETENTION_DAYS = 7;
@@ -50,28 +52,18 @@ export class OutboxPruneProcessor extends WorkerHost {
 
   /** Relayed rows only: a pending one is a scoring request nobody has handed on yet. */
   async prune(now: Date, maxPages: number = OUTBOX_PRUNE_MAX_PAGES): Promise<number> {
-    const relayedBefore = new Date(now.getTime() - OUTBOX_RETENTION_DAYS * MILLISECONDS_PER_DAY);
-    let removed = 0;
-
-    for (let page = 0; page < maxPages; page += 1) {
-      const stale = await this.prisma.outboxEvent.findMany({
-        where: { processedAt: { not: null, lt: relayedBefore } },
-        orderBy: { processedAt: 'asc' },
-        take: OUTBOX_PRUNE_PAGE,
-        select: { id: true },
-      });
-      if (stale.length === 0) return removed;
-
-      const gone = await this.prisma.outboxEvent.deleteMany({
-        where: { id: { in: stale.map((row) => row.id) } },
-      });
-      removed += gone.count;
-      if (stale.length < OUTBOX_PRUNE_PAGE) return removed;
-    }
-
-    this.logger.warn(`Stopped after ${maxPages} pages of pruning; the next run carries on`);
-    return removed;
+    const relayedBefore = new Date(now.getTime() - OUTBOX_RETENTION_DAYS * MS_PER_DAY);
+    return pruneInPages(
+      { size: OUTBOX_PRUNE_PAGE, max: maxPages },
+      () =>
+        this.prisma.outboxEvent.findMany({
+          where: { processedAt: { not: null, lt: relayedBefore } },
+          orderBy: { processedAt: 'asc' },
+          take: OUTBOX_PRUNE_PAGE,
+          select: { id: true },
+        }),
+      (ids) => this.prisma.outboxEvent.deleteMany({ where: { id: { in: ids } } }),
+      this.logger,
+    );
   }
 }
-
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;

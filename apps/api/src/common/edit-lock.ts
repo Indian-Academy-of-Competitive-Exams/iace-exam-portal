@@ -8,6 +8,7 @@ import { AppException, ErrorCodes, FORM_LEVEL_FIELD, type EditLockHolder } from 
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { EDIT_LOCK_TTL_SEC, redisKeys } from '../redis/redis.keys';
+import { formRefusal } from './form-refusal';
 
 /** The caller of a mutation that edits a record. Without an id there is nobody to claim it for. */
 export type Editor = { id?: string; isSuperAdmin?: boolean };
@@ -43,9 +44,7 @@ export async function takeEditLock(
   if (held === null) return;
 
   const message = heldMessage(await fullNameOf(prisma, held), subject);
-  throw new AppException(ErrorCodes.CONFLICT, message, {
-    fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
-  });
+  throw formRefusal(ErrorCodes.CONFLICT, message);
 }
 
 /** Whoever holds it, named, so a screen warns before the work rather than at the save. */

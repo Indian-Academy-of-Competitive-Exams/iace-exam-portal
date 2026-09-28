@@ -1,6 +1,7 @@
 /** What a finished sitting is worth to the student who sat it, worked out without a database. */
 import { type Prisma } from '@prisma/client';
-import { type AttemptSectionScore, type ScoreCardSection } from '@iace/contracts';
+import { round2, type AttemptSectionScore, type ScoreCardSection } from '@iace/contracts';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** A `Decimal?` column on its way into JSON. Never let the Decimal itself reach a payload. */
 export const numberOrNull = (value: Prisma.Decimal | null): number | null =>
@@ -34,7 +35,7 @@ export function elapsedSeconds(from: Date, to: Date): number {
 /** Marks over what the paper was worth. Negative when negative marking took them under. */
 export function percentageOf(score: number, maxMarks: number): number {
   if (maxMarks <= 0) return 0;
-  return Math.round((score / maxMarks) * 100 * HUNDREDTHS) / HUNDREDTHS;
+  return round2((score / maxMarks) * 100);
 }
 
 /** The blueprint's sections with this sitting's marks laid over them, in the paper's own order. */
@@ -53,7 +54,7 @@ export function sectionsWithScores(
       order: section.order,
       questionCount: section.questionCount,
       // The paper's own marks, not the blueprint's: a per-question mark makes the two differ.
-      maxMarks: roundHundredths(
+      maxMarks: round2(
         paperMarks.get(section.id) ?? section.questionCount * section.marksPerQuestion,
       ),
       score: byId.get(section.id)?.score ?? 0,
@@ -64,12 +65,6 @@ export function sectionsWithScores(
     }));
 }
 
-const HUNDREDTHS = 100;
-const MS_PER_SECOND = 1000;
-
-/** Marks, seconds and averages all go out to two places. */
-export const roundHundredths = (value: number) => Math.round(value * HUNDREDTHS) / HUNDREDTHS;
-
 /** Nothing counted is not a zero: an average over no sittings is a dash, never a nought. */
 export const perSitting = (total: number, sittings: number): number | null =>
-  sittings === 0 ? null : roundHundredths(total / sittings);
+  sittings === 0 ? null : round2(total / sittings);

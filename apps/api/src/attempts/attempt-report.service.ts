@@ -22,6 +22,7 @@ import {
   type TestScopeRef,
   scopedQuestionCount,
   scopedDurationSec,
+  round2 as round,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -32,13 +33,7 @@ import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import {
-  elapsedSeconds,
-  marksBySection,
-  roundHundredths as round,
-  percentageOf,
-  sectionsWithScores,
-} from './attempt-report';
+import { elapsedSeconds, marksBySection, percentageOf, sectionsWithScores } from './attempt-report';
 
 const NOT_YOURS = 'No such sitting';
 

@@ -7,6 +7,7 @@ import {
   type TestStatus,
 } from '@iace/contracts';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** The rules that decide whether a sitting may begin — pure, so no database is needed to test them. */
 
@@ -80,7 +81,5 @@ export function displayOrder<T extends { baseConfigSectionId: string }>(
 
 /** The deadline is the server's, computed once at start and never recomputed. */
 export function deadlineFrom(startedAt: Date, durationSec: number): Date {
-  return new Date(startedAt.getTime() + durationSec * MILLISECONDS_PER_SECOND);
+  return new Date(startedAt.getTime() + durationSec * MS_PER_SECOND);
 }
-
-const MILLISECONDS_PER_SECOND = 1000;

@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AttemptStateService } from './attempt-state.service';
 import { numberOrNull } from './attempt-report';
 import { SITTING_SELECT, sittingsFrom, watchableTestsWhere } from './live-ops';
+import { MS_PER_MINUTE } from '../common/time/units';
 
 const SUBMISSION_SELECT = {
   id: true,
@@ -31,8 +32,6 @@ const SUBMISSION_SELECT = {
   score: true,
   student: { select: { fullName: true, mobile: true } },
 } as const satisfies Prisma.AttemptSelect;
-
-const MS_PER_MINUTE = 60 * 1000;
 
 @Injectable()
 export class LiveOpsService {

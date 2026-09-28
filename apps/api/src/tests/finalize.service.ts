@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { uncheckedOn } from '../assignments';
 import { paperCompletenessIssues, scopeRefOf } from './test-rules';
+import { formRefusal } from '../common/form-refusal';
 
 const OFFER_SELECT = {
   id: true,
@@ -177,9 +178,7 @@ export class FinalizeService {
     if (outstanding.length > 0) {
       const names = [...new Set(outstanding.map((row) => row.baseConfigSection.name))];
       const message = `${names.length} section${names.length === 1 ? ' is' : 's are'} still being proof-read: ${names.join(', ')}`;
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
-      });
+      throw formRefusal(ErrorCodes.VALIDATION_ERROR, message);
     }
 
     await this.assertPaperWasRead(db, testId);

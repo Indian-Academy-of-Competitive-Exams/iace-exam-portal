@@ -4,7 +4,7 @@
  * on each question — plus the question's own subject and difficulty.
  */
 import { type AnswerState, type DifficultyLevel, type TimeUse } from '@iace/contracts';
-import { roundHundredths as round } from './attempt-report';
+import { round2 as round } from '@iace/contracts';
 
 /** One answered question, with the little the analytics needs to know about it. */
 export interface AnalysedQuestion {

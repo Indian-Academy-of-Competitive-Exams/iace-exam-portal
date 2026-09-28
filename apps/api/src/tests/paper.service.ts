@@ -43,6 +43,7 @@ import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { reopenReadingIfUnchecked } from '../assignments';
 import { AuditContext } from '../audit';
+import { formRefusal } from '../common/form-refusal';
 
 const NOT_DRAWABLE_MESSAGE =
   'That question is archived, or has no version to pin, so no paper can serve it.';
@@ -497,9 +498,7 @@ export class PaperService {
     const held = await this.prisma.paperQuestion.count({ where: pair });
     if (held < section.questionCount) {
       const short = `${section.name} holds ${held} of its ${section.questionCount} questions. Fill it before handing it over.`;
-      throw new AppException(ErrorCodes.CONFLICT, short, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [short] },
-      });
+      throw formRefusal(ErrorCodes.CONFLICT, short);
     }
     const handed = await this.prisma.questionAssignment.updateMany({
       where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null, handedAt: null },
@@ -710,17 +709,13 @@ export class PaperService {
     });
     if (!reading) return;
     const issue = `${reading.baseConfigSection.name} is with its proof-reader until they release it.`;
-    throw new AppException(ErrorCodes.CONFLICT, issue, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [issue] },
-    });
+    throw formRefusal(ErrorCodes.CONFLICT, issue);
   }
 
   /** A typed section is placed by its typist's Done and changed only by its reader's send-back. */
   private assertNotTyped(test: { paperSource: PaperSource | null }, editor: Editor): void {
     if (test.paperSource !== PAPER_SOURCES.FRAMED || editor.isSuperAdmin) return;
-    throw new AppException(ErrorCodes.CONFLICT, TYPED_SECTION_MESSAGE, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [TYPED_SECTION_MESSAGE] },
-    });
+    throw formRefusal(ErrorCodes.CONFLICT, TYPED_SECTION_MESSAGE);
   }
 
   /** A paper stops moving when it is offered, and stops for good once somebody has sat it. */
@@ -730,9 +725,7 @@ export class PaperService {
   }): void {
     if (test._count.attempts === 0 && test.finalizedAt === null) return;
     const refusal = test._count.attempts > 0 ? SAT_TEST_MESSAGE : OFFERED_TEST_MESSAGE;
-    throw new AppException(ErrorCodes.CONFLICT, refusal, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [refusal] },
-    });
+    throw formRefusal(ErrorCodes.CONFLICT, refusal);
   }
 
   private async paperOf(
@@ -812,9 +805,7 @@ export class PaperService {
 /** Picking IS choosing where questions come from, so it waits on the decision — a super admin makes it, not skips it. */
 function assertSourceChosen(test: { paperSource: PaperSource | null }): void {
   if (test.paperSource !== null) return;
-  throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE, {
-    fieldErrors: { [FORM_LEVEL_FIELD]: [SOURCE_UNCHOSEN_MESSAGE] },
-  });
+  throw formRefusal(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE);
 }
 
 function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId: string } {

@@ -13,7 +13,7 @@ import {
   type SectionalStanding,
 } from '@iace/contracts';
 import { type AnalysedQuestion } from './attempt-analytics';
-import { roundHundredths as round } from './attempt-report';
+import { round2 as round } from '@iace/contracts';
 
 /** A served question with the paper's own terms for it, which is where the leaked marks live. */
 export interface ReportedQuestion extends AnalysedQuestion {

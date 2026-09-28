@@ -17,6 +17,7 @@ import {
   scoringJobId,
   type ScoringJobData,
 } from '../queue/queues';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** What one attempt's scoring request is called in `OutboxEvent`. */
 export const SCORING_REQUEST = {
@@ -93,7 +94,7 @@ export class ScoringOutbox {
   }
 
   private async pending(eventId?: string): Promise<PendingRequest[]> {
-    const settling = new Date(Date.now() - RELAY_GRACE_SEC * MILLISECONDS_PER_SECOND);
+    const settling = new Date(Date.now() - RELAY_GRACE_SEC * MS_PER_SECOND);
     return this.prisma.outboxEvent.findMany({
       where: {
         eventType: SCORING_REQUEST.EVENT_TYPE,
@@ -140,5 +141,3 @@ function testIdOf(payload: Prisma.JsonValue | null): string | null {
   const testId = payload.testId;
   return typeof testId === 'string' ? testId : null;
 }
-
-const MILLISECONDS_PER_SECOND = 1000;

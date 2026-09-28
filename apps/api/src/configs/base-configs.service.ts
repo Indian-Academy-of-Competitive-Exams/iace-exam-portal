@@ -4,7 +4,6 @@ import {
   AppException,
   ErrorCodes,
   EXAM_TEMPLATE,
-  FORM_LEVEL_FIELD,
   MERIT_TYPE,
   TEST_UI,
   TIMER_TEMPLATE,
@@ -45,6 +44,7 @@ import {
   BUILT_ON_CONFIG_MESSAGE,
   LOCKED_CONFIG_MESSAGE,
 } from './base-config-rules';
+import { formRefusal } from '../common/form-refusal';
 
 const CONFIG_INCLUDE = {
   examStage: {
@@ -158,9 +158,7 @@ export class BaseConfigsService {
     const config = await this.requireDetail(id);
 
     if (config.locked && locksOutEdit(input)) {
-      throw new AppException(ErrorCodes.CONFLICT, LOCKED_CONFIG_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [LOCKED_CONFIG_MESSAGE] },
-      });
+      throw formRefusal(ErrorCodes.CONFLICT, LOCKED_CONFIG_MESSAGE);
     }
     assertScreenIsCurrent(config, input.expectedUpdatedAt);
 
@@ -173,9 +171,7 @@ export class BaseConfigsService {
       postedPaperKey(timerTemplate, sections, modules ?? []) !== storedPaperKey(config);
     // A test's paper rows, assignments, scope and draw spec all name these sections by id, and a rewrite mints new ones.
     if (rewritesPaper && config._count.tests > 0) {
-      throw new AppException(ErrorCodes.CONFLICT, BUILT_ON_CONFIG_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [BUILT_ON_CONFIG_MESSAGE] },
-      });
+      throw formRefusal(ErrorCodes.CONFLICT, BUILT_ON_CONFIG_MESSAGE);
     }
     // Judged against what the config WILL hold: switching the timer alone can leave the sections in a shape the new template forbids, and the database would refuse that with a raw error.
     this.assertShape(

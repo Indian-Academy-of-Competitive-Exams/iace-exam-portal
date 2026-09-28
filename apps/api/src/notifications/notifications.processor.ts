@@ -30,8 +30,7 @@ import {
   type NotificationIntent,
 } from './notification-outbox';
 import { QueueFailures } from '../common/metrics/queue-failures';
-
-const MILLISECONDS_PER_SECOND = 1000;
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** A bound on one pass, so a backlog is drained by several jobs rather than one that never ends. */
 const WRITE_PAGES_PER_PASS = 25;
@@ -177,7 +176,7 @@ export class NotificationsProcessor extends WorkerHost {
         // Keyed on the row, so a redelivered write schedules the same job rather than a second buy.
         {
           ...keyedJob(notificationDeliveryJobId(row.id)),
-          delay: plan.deferSec * MILLISECONDS_PER_SECOND,
+          delay: plan.deferSec * MS_PER_SECOND,
         },
       );
     }

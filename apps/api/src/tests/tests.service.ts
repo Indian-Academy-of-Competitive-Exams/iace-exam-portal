@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
-  FORM_LEVEL_FIELD,
   scopedSections,
   TEST_SCOPE,
   fieldDiff,
@@ -39,6 +38,7 @@ import {
 } from './test-rules';
 import { beginDraftPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
+import { formRefusal } from '../common/form-refusal';
 
 const TEST_INCLUDE = {
   baseConfig: {
@@ -178,14 +178,10 @@ export class TestsService {
 
     const shapeChange = locksOutTestEdit(input);
     if (test._count.attempts > 0 && shapeChange) {
-      throw new AppException(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
-      });
+      throw formRefusal(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE);
     }
     if (test.finalizedAt !== null && movesThePaper(input)) {
-      throw new AppException(ErrorCodes.CONFLICT, OFFERED_TEST_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [OFFERED_TEST_MESSAGE] },
-      });
+      throw formRefusal(ErrorCodes.CONFLICT, OFFERED_TEST_MESSAGE);
     }
 
     if (input.title !== undefined) {

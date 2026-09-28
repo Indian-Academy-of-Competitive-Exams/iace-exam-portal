@@ -26,6 +26,7 @@ import {
   SERIES_GONE_MESSAGE,
   testShapeOf,
 } from './test-rules';
+import { formRefusal } from '../common/form-refusal';
 
 const OFFERING_SELECT = {
   id: true,
@@ -228,9 +229,7 @@ export class OfferingService {
     if (status === TEST_STATUS.ACTIVE) {
       const blocker = activationBlocker(test);
       if (blocker) {
-        throw new AppException(ErrorCodes.CONFLICT, blocker, {
-          fieldErrors: { [FORM_LEVEL_FIELD]: [blocker] },
-        });
+        throw formRefusal(ErrorCodes.CONFLICT, blocker);
       }
     }
 
@@ -411,9 +410,7 @@ export class OfferingService {
     if (test._count.attempts === 0) return;
 
     const message = `This test has ${attemptsLabel(test._count.attempts)} on it, so ${consequence}.`;
-    throw new AppException(ErrorCodes.CONFLICT, message, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
-    });
+    throw formRefusal(ErrorCodes.CONFLICT, message);
   }
 
   private async requireTest(id: string): Promise<OfferingRow> {

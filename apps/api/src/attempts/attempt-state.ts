@@ -10,6 +10,7 @@ import {
   type SectionProgress,
 } from '@iace/contracts';
 import { decodeAnswer, encodeAnswer, type AnswerSlot } from './answer-sheet';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** The rules a live sitting merges by. Pure: handed the held state and a batch, it returns the next. */
 
@@ -245,7 +246,7 @@ export function pendingAfter(
 
 /** Whether a save arriving now is still in time. Past the deadline and its grace, it is not. */
 export function isInTime(held: HeldState, now: Date): boolean {
-  return now.getTime() <= Date.parse(held.endsAt) + SAVE_GRACE_SEC * MILLISECONDS_PER_SECOND;
+  return now.getTime() <= Date.parse(held.endsAt) + SAVE_GRACE_SEC * MS_PER_SECOND;
 }
 
 /** Away time, in ms: how long since the server last heard from this sitting. */
@@ -256,8 +257,8 @@ export function awayMs(held: HeldState, now: Date): number {
 
 /** What a resume gives back: the grace comes off the WHOLE gap, capped at what the sitting has left to bank. */
 export function creditMs(held: HeldState, now: Date): number {
-  const raw = awayMs(held, now) - PRESENT_GRACE_SEC * MILLISECONDS_PER_SECOND;
-  const room = PAUSE_CREDIT_CAP_SEC * MILLISECONDS_PER_SECOND - (held.creditedMs ?? 0);
+  const raw = awayMs(held, now) - PRESENT_GRACE_SEC * MS_PER_SECOND;
+  const room = PAUSE_CREDIT_CAP_SEC * MS_PER_SECOND - (held.creditedMs ?? 0);
   return Math.max(0, Math.min(raw, room));
 }
 
@@ -283,15 +284,13 @@ export function creditedSections(held: HeldState, now: Date): Record<string, Sec
 
 /** Nothing left to bank: past this a reload buys no clock, so holding the sitting open buys nothing. */
 export function creditSpent(held: HeldState): boolean {
-  return (held.creditedMs ?? 0) >= PAUSE_CREDIT_CAP_SEC * MILLISECONDS_PER_SECOND;
+  return (held.creditedMs ?? 0) >= PAUSE_CREDIT_CAP_SEC * MS_PER_SECOND;
 }
 
 /** Too long away to come back to, or out of credit to come back on. What Postgres judges by. */
 export function isAbandoned(held: HeldState, now: Date): boolean {
-  return awayMs(held, now) > PAUSE_LIMIT_SEC * MILLISECONDS_PER_SECOND || creditSpent(held);
+  return awayMs(held, now) > PAUSE_LIMIT_SEC * MS_PER_SECOND || creditSpent(held);
 }
-
-const MILLISECONDS_PER_SECOND = 1000;
 
 /** The first of two instants, either of which may be absent. A missing one never wins. */
 function earliest(a: string | null | undefined, b: string | null | undefined): string | null {
