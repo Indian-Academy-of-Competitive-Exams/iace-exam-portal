@@ -5,7 +5,6 @@
  */
 import {
   PAPER_QUESTION_STATUS,
-  scoreHistogramSchema,
   type CohortBand,
   type CohortCurveBand,
   type MarkComposition,
@@ -59,17 +58,6 @@ export function compositionOf(rows: readonly ReportedQuestion[]): MarkCompositio
     penalty: round(penalty),
     net: round(earned - penalty),
   };
-}
-
-/** The cohort's curve with this student's column flagged. Empty in, empty out — never a flat line. */
-export function curveBandsOf(histogram: unknown, score: number): CohortCurveBand[] {
-  return flagYours(bandsIn(histogram), score);
-}
-
-/** The `Json?` column read back. Anything that is not a curve reads as no curve at all. */
-export function bandsIn(stored: unknown): CohortBand[] {
-  const parsed = scoreHistogramSchema.safeParse(stored);
-  return parsed.success ? parsed.data : [];
 }
 
 /** Exactly one column is theirs: a score off either end takes the end band nearest it. */

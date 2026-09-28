@@ -19,7 +19,7 @@ import { AdminPerformanceController } from '../src/attempts/performance.controll
 import {
   cohortShapeOf,
   compositionOf,
-  curveBandsOf,
+  flagYours,
   sectionalStandingOf,
   type ReportedQuestion,
 } from '../src/attempts/performance-analytics';
@@ -95,7 +95,7 @@ describe('compositionOf', () => {
 // --------------------------------------------------------------------------- difficulty vs cohort
 // ---------------------------------------------------------------------------
 
-describe('curveBandsOf', () => {
+describe('flagYours', () => {
   const histogram = [
     { from: 0, to: 10, count: 4 },
     { from: 10, to: 20, count: 9 },
@@ -103,7 +103,7 @@ describe('curveBandsOf', () => {
   ];
 
   it('flags exactly one column, the one this score falls in', () => {
-    const bands = curveBandsOf(histogram, 12);
+    const bands = flagYours(histogram, 12);
 
     assert.deepEqual(
       bands.map((band) => band.isYours),
@@ -112,22 +112,21 @@ describe('curveBandsOf', () => {
   });
 
   it('keeps the top scorer inside the top band rather than off the end of the chart', () => {
-    assert.equal(curveBandsOf(histogram, 30).at(-1)?.isYours, true);
-    assert.equal(curveBandsOf(histogram, 44).at(-1)?.isYours, true);
+    assert.equal(flagYours(histogram, 30).at(-1)?.isYours, true);
+    assert.equal(flagYours(histogram, 44).at(-1)?.isYours, true);
   });
 
   /** Negative marking puts a score under the curve's floor, and a screen still needs a marker. */
   it('holds a score below the first band in the first band', () => {
-    const bands = curveBandsOf(histogram, -4);
+    const bands = flagYours(histogram, -4);
 
     assert.equal(bands.at(0)?.isYours, true);
     assert.equal(bands.filter((band) => band.isYours).length, 1);
   });
 
-  /** No histogram is not a flat distribution: an empty curve is how a screen knows to say so. */
-  it('reads a column nothing has written yet as no curve at all', () => {
-    assert.deepEqual(curveBandsOf(null, 12), []);
-    assert.deepEqual(curveBandsOf({ buckets: 3 }, 12), []);
+  /** No curve is not a flat distribution: an empty one is how a screen knows to say so. */
+  it('flags nothing on a curve with no bands', () => {
+    assert.deepEqual(flagYours([], 12), []);
   });
 });
 

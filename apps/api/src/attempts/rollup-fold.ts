@@ -7,11 +7,9 @@ import { type Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   type AttemptSectionScore,
-  type CohortBand,
   type QuestionOption,
   type TestScope,
 } from '@iace/contracts';
-import { bandIndexOf, type ScoreCount } from './performance-analytics';
 
 /** The sittings a test's cohort rollups describe: `Attempt_graded_per_test_key` makes these one per student. */
 export const cohortSittingsOf = (testId: string) =>
@@ -67,13 +65,6 @@ export interface StudentTotals {
   subjects: Map<string, SubjectTotals>;
 }
 
-export interface SectionTotals {
-  baseConfigSectionId: string;
-  attempted: number;
-  sumScore: number;
-  sumTimeSec: number;
-}
-
 export interface QuestionTotals {
   paperQuestionId: string;
   questionId: string;
@@ -83,18 +74,6 @@ export interface QuestionTotals {
   skippedCount: number;
   sumTimeSec: number;
   optionCounts: Record<string, number>;
-}
-
-export interface CohortTotals {
-  attempts: number;
-  sumScore: number;
-  maxScore: number | null;
-  minScore: number | null;
-  sumTimeSec: number;
-  topperAttemptId: string | null;
-  scores: Map<number, number>;
-  sections: Map<string, SectionTotals>;
-  questions: Map<string, QuestionTotals>;
 }
 
 export function emptyStudentTotals(): StudentTotals {
@@ -110,20 +89,6 @@ export function emptyStudentTotals(): StudentTotals {
     retakeCount: 0,
     lastAttemptAt: null,
     subjects: new Map(),
-  };
-}
-
-export function emptyCohortTotals(): CohortTotals {
-  return {
-    attempts: 0,
-    sumScore: 0,
-    maxScore: null,
-    minScore: null,
-    sumTimeSec: 0,
-    topperAttemptId: null,
-    scores: new Map(),
-    sections: new Map(),
-    questions: new Map(),
   };
 }
 
@@ -150,78 +115,10 @@ export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttem
   return totals;
 }
 
-/** Graded first sittings only: the cohort is one row per student, never per retake. */
-export function addToCohortTotals(totals: CohortTotals, attempt: FoldableAttempt): CohortTotals {
-  totals.attempts += 1;
-  totals.sumScore += attempt.score;
-  totals.sumTimeSec += timeSpentOn(attempt);
-  totals.minScore =
-    totals.minScore === null ? attempt.score : Math.min(totals.minScore, attempt.score);
-  if (totals.maxScore === null || attempt.score > totals.maxScore) {
-    totals.maxScore = attempt.score;
-    totals.topperAttemptId = attempt.id;
-  }
-  totals.scores.set(attempt.score, (totals.scores.get(attempt.score) ?? 0) + 1);
-
-  for (const section of attempt.sections) {
-    const held = totals.sections.get(section.baseConfigSectionId) ?? {
-      baseConfigSectionId: section.baseConfigSectionId,
-      attempted: 0,
-      sumScore: 0,
-      sumTimeSec: 0,
-    };
-    held.attempted += 1;
-    held.sumScore += section.score;
-    held.sumTimeSec += section.timeSpentSec;
-    totals.sections.set(section.baseConfigSectionId, held);
-  }
-
-  for (const question of attempt.questions) {
-    addToQuestion(totals.questions, question);
-  }
-  return totals;
-}
-
-/** The distinct scores behind the curve, in the shape `cohortShapeOf` bands. */
-export function scoreCountsOf(totals: CohortTotals): ScoreCount[] {
-  return [...totals.scores].map(([score, count]) => ({ score, count }));
-}
-
 /** How often each question was got right, to four places. Nothing measured is not a zero. */
 export function pValueOf(correctCount: number, attemptedCount: number): number | null {
   if (attemptedCount === 0) return null;
   return Math.round((correctCount / attemptedCount) * P_VALUE_STEPS) / P_VALUE_STEPS;
-}
-
-/** Inside the range the bands were cut for, a count moves; outside it, every edge has to move. */
-export function bandsHolding(
-  bands: readonly CohortBand[],
-  minScore: number | null,
-  maxScore: number | null,
-  score: number,
-): CohortBand[] | null {
-  if (bands.length === 0 || minScore === null || maxScore === null) return null;
-  if (Math.floor(score) < Math.floor(minScore) || Math.ceil(score) > Math.ceil(maxScore)) {
-    return null;
-  }
-  const index = bandIndexOf(bands, score);
-  return bands.map((band, at) => (at === index ? { ...band, count: band.count + 1 } : band));
-}
-
-/** Null the moment one score leaves the range, which is the caller's cue to re-cut the curve. */
-export function bandsAfterBatch(
-  bands: readonly CohortBand[],
-  minScore: number | null,
-  maxScore: number | null,
-  scores: readonly number[],
-): CohortBand[] | null {
-  let held: CohortBand[] = [...bands];
-  for (const score of scores) {
-    const moved = bandsHolding(held, minScore, maxScore, score);
-    if (moved === null) return null;
-    held = moved;
-  }
-  return held;
 }
 
 /** The `Json?` column read back as counts. Anything that is not a count is not one. */
@@ -237,25 +134,6 @@ export function optionCountsIn(stored: unknown): Record<string, number> {
 /** A `questionVersion`'s options read back off its `Json` column. Anything else has none at all. */
 export function optionsIn(stored: unknown): QuestionOption[] {
   return Array.isArray(stored) ? (stored as QuestionOption[]) : [];
-}
-
-/** The stored row plus this sitting's delta, written whole under the test's row lock. */
-export function mergedQuestion(held: QuestionTotals | null, delta: QuestionTotals): QuestionTotals {
-  if (held === null) return delta;
-  const optionCounts = { ...held.optionCounts };
-  for (const [option, count] of Object.entries(delta.optionCounts)) {
-    optionCounts[option] = (optionCounts[option] ?? 0) + count;
-  }
-  return {
-    paperQuestionId: delta.paperQuestionId,
-    questionId: delta.questionId,
-    attemptedCount: held.attemptedCount + delta.attemptedCount,
-    correctCount: held.correctCount + delta.correctCount,
-    wrongCount: held.wrongCount + delta.wrongCount,
-    skippedCount: held.skippedCount + delta.skippedCount,
-    sumTimeSec: held.sumTimeSec + delta.sumTimeSec,
-    optionCounts,
-  };
 }
 
 /** Whatever `StudentSubjectStat` is keyed by, minus the student a whole totals map already is. */
@@ -284,7 +162,10 @@ function addToSubject(
 }
 
 /** A question nobody pinned to a paper row cannot be item-analysed: two papers are not one. */
-function addToQuestion(questions: Map<string, QuestionTotals>, question: FoldableQuestion): void {
+export function addToQuestion(
+  questions: Map<string, QuestionTotals>,
+  question: FoldableQuestion,
+): void {
   if (question.paperQuestionId === null) return;
   const held = questions.get(question.paperQuestionId) ?? {
     paperQuestionId: question.paperQuestionId,

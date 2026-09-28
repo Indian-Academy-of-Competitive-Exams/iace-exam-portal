@@ -25,16 +25,17 @@ export class RollupQueue {
 
   /** Asks for a pass. The pass finds its own tests, so a burst of evaluations is one job. */
   async sweep(): Promise<void> {
-    await this.rollup.add(
-      ROLLUP_JOBS.SWEEP_COHORTS,
-      {},
-      { ...keyedJob(COHORT_SWEEP_JOB_ID), delay: ROLLUP_SWEEP_DELAY_MS, removeOnComplete: true },
-    );
+    await this.enqueue(ROLLUP_JOBS.SWEEP_COHORTS, {}, COHORT_SWEEP_JOB_ID, ROLLUP_SWEEP_DELAY_MS);
   }
 
   /** One id per test: a retained one, done or dead, would swallow the next hour's rebuild. */
   async rebuild(testId: string): Promise<void> {
-    await this.rebuildLater(ROLLUP_JOBS.REBUILD_TEST, { testId }, rollupRebuildJobId(testId));
+    await this.enqueue(
+      ROLLUP_JOBS.REBUILD_TEST,
+      { testId },
+      rollupRebuildJobId(testId),
+      ROLLUP_REBUILD_DELAY_MS,
+    );
   }
 
   /** Now, not after the debounce: a rebuild writes its answer outright, so running it twice is safe. */
@@ -44,15 +45,12 @@ export class RollupQueue {
 
   /** One student's two tables, for a void that took a sitting out of their own history. */
   async rebuildStudent(studentId: string): Promise<void> {
-    await this.rebuildLater(
+    await this.enqueue(
       ROLLUP_JOBS.REBUILD_STUDENT,
       { studentId },
       rollupRebuildStudentJobId(studentId),
+      ROLLUP_REBUILD_DELAY_MS,
     );
-  }
-
-  private async rebuildLater(name: string, data: RollupJobData, jobId: string): Promise<void> {
-    await this.enqueue(name, data, jobId, ROLLUP_REBUILD_DELAY_MS);
   }
 
   private async enqueue(

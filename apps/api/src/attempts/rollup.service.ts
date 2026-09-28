@@ -11,13 +11,11 @@ import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 import {
-  addToCohortTotals,
+  addToQuestion,
   addToStudentTotals,
   cohortSittingsOf,
-  emptyCohortTotals,
   emptyStudentTotals,
   pValueOf,
-  type CohortTotals,
   type FoldableAttempt,
   type QuestionTotals,
   type StudentTotals,
@@ -266,9 +264,11 @@ export class RollupService {
       async (tx) => {
         const now = new Date();
         const ids = (await this.firstSittings(tx, testId)).map((row) => row.id);
-        const totals = emptyCohortTotals();
-        await this.replay(tx, ids, (attempt) => addToCohortTotals(totals, attempt));
-        await this.writeItemTotals(tx, testId, totals, now);
+        const questions = new Map<string, QuestionTotals>();
+        await this.replay(tx, ids, (attempt) => {
+          for (const question of attempt.questions) addToQuestion(questions, question);
+        });
+        await this.writeItemTotals(tx, testId, questions, now);
       },
       { timeout: REBUILD_TIMEOUT_MS },
     );
@@ -277,12 +277,12 @@ export class RollupService {
   private async writeItemTotals(
     tx: Prisma.TransactionClient,
     testId: string,
-    totals: CohortTotals,
+    questions: ReadonlyMap<string, QuestionTotals>,
     now: Date,
   ): Promise<void> {
     await tx.testQuestionStat.deleteMany({ where: { testId } });
     await tx.testQuestionStat.createMany({
-      data: [...totals.questions.values()].map((question) => ({
+      data: [...questions.values()].map((question) => ({
         testId,
         ...questionColumns(question, now),
       })),

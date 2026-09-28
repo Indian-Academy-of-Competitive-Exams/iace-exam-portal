@@ -349,11 +349,6 @@ export class AssignmentsService {
     return typed + reviewed + said + edited === 0;
   }
 
-  /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
-  mine(adminId: string, query: MineAssignmentsQuery): Promise<Paginated<AssignmentWithTest>> {
-    return this.assignedTo(adminId, query);
-  }
-
   /** One row by id. Not theirs reads as not there, unless they own the institute. */
   async one(id: string, adminId: string, isSuperAdmin: boolean): Promise<AssignmentWithTest> {
     const row = await this.prisma.questionAssignment.findUnique({
@@ -367,10 +362,8 @@ export class AssignmentsService {
     return toAssignmentWithTest(row, written.get(sectionKey(row)) ?? NO_COUNTS);
   }
 
-  private async assignedTo(
-    adminId: string,
-    query: MineAssignmentsQuery,
-  ): Promise<Paginated<AssignmentWithTest>> {
+  /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
+  async mine(adminId: string, query: MineAssignmentsQuery): Promise<Paginated<AssignmentWithTest>> {
     const due = dueBounds(query);
     const where: Prisma.QuestionAssignmentWhereInput = {
       assigneeId: adminId,
