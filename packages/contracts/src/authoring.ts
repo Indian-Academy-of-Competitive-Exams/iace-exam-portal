@@ -70,11 +70,8 @@ export type AuthoringStats = z.infer<typeof authoringStatsSchema>;
 
 const duplicateRefSchema = z.object({ id: z.string(), stemPreview: z.string() }).nullable();
 
-/** The save refuses a duplicate now, so this says which question it was refused against. */
-export const authoringSaveResultSchema = z.object({
-  question: questionDetailSchema,
-  duplicateOf: duplicateRefSchema.default(null),
-});
+/** A duplicate never gets this far: the save refuses it, naming the question, as a CONFLICT. */
+export const authoringSaveResultSchema = z.object({ question: questionDetailSchema });
 export type AuthoringSaveResult = z.infer<typeof authoringSaveResultSchema>;
 
 /** Asked while the question is still being typed, so the answer arrives before the Save. */

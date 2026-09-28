@@ -71,13 +71,9 @@ const QUESTION_INCLUDE = {
     },
   },
   currentVersion: true,
-  // Counted in the row's own query, so a page of questions costs one round trip, not one each.
-  _count: {
-    select: {
-      paperQuestions: true,
-      questionStats: true,
-    },
-  },
+  // One row each answers "in use"; a `_count` here grouped both whole tables on every page.
+  paperQuestions: { take: 1, select: { id: true } },
+  questionStats: { take: 1, select: { testId: true } },
 } as const satisfies Prisma.QuestionInclude;
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
@@ -113,10 +109,8 @@ export const AUDITED_QUESTION_FIELDS = [
   'answerKey',
 ] as const;
 
-/** What a caller may relax. The bank refuses a duplicate; the authoring editor reports it. */
+/** Which assignment a freshly created question was written for — ownership is the caller's job. */
 export interface WriteOptions {
-  allowDuplicate?: boolean;
-  /** Which assignment a freshly created question was written for — ownership is the caller's job. */
   assignmentId?: string | null;
 }
 
@@ -304,7 +298,7 @@ export class QuestionsService {
   ): Promise<QuestionDetail> {
     assertIntakeStatus(draft.status);
     const built = await this.validated(draft);
-    if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, null);
+    await this.assertNotDuplicate(built.stemHash, null);
 
     const row = await this.prisma.$transaction(async (tx) => {
       const question = await tx.question.create({
@@ -334,17 +328,12 @@ export class QuestionsService {
   }
 
   /** Rewritten in place while nothing reachable pins the version; anything else gains one. */
-  async update(
-    id: string,
-    draft: QuestionDraft,
-    createdById: string,
-    options: WriteOptions = {},
-  ): Promise<QuestionDetail> {
+  async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
     const question = await this.require(id);
     assertScreenIsCurrent(question, draft);
     await this.assertIdentitySettled(this.prisma, question, draft);
     const built = await this.validated(draft);
-    if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, id);
+    await this.assertNotDuplicate(built.stemHash, id);
 
     const row = await this.prisma.$transaction(
       (tx) => this.writeEdit(tx, id, draft, built, createdById),
@@ -843,8 +832,7 @@ function toSummary(row: QuestionRow): QuestionSummary {
 
 /** What the lifecycle turns on, said once for the screen as well as for the rules. */
 function isReferenced(row: QuestionRow): boolean {
-  const counts = row._count;
-  return counts.paperQuestions + counts.questionStats > 0;
+  return row.paperQuestions.length + row.questionStats.length > 0;
 }
 
 function toDetail(row: QuestionRow): QuestionDetail {

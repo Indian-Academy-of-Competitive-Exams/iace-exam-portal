@@ -45,7 +45,7 @@ export class AuthoringService {
       await this.claimSection(section, adminId, isSuperAdmin);
     }
     const question = await this.questions.create(draft, adminId, { assignmentId });
-    return { question, duplicateOf: await this.duplicateFor(draft, question.id) };
+    return { question };
   }
 
   async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
@@ -53,7 +53,7 @@ export class AuthoringService {
     if (section) await assertTypistMayEdit(this.prisma, section, id);
     await this.claimSection(section, adminId, false);
     const question = await this.questions.update(id, draft, adminId);
-    return { question, duplicateOf: await this.duplicateFor(draft, id) };
+    return { question };
   }
 
   async detail(id: string, adminId: string) {
@@ -138,7 +138,7 @@ export class AuthoringService {
     return new Map(rows.map((row) => [row.day, Number(row.written)]));
   }
 
-  /** Asked twice: once while the question is typed, and once by the save that refuses it. */
+  /** Asked while the question is typed; the save itself refuses one. */
   async duplicateFor(draft: QuestionDraft, exceptId: string | null) {
     return this.questions.duplicateOf(computeStemHash(draft), exceptId);
   }

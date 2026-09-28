@@ -141,12 +141,6 @@ describe('AuthoringService.create', () => {
     assert.equal(found, null);
   });
 
-  it('says nothing about a duplicate when there is not one', async () => {
-    const authoring = await build();
-
-    assert.equal((await authoring.create(draft(), MINE)).duplicateOf, null);
-  });
-
   it('refuses a question the shared rules refuse, on the same codes', async () => {
     const authoring = await build();
 
