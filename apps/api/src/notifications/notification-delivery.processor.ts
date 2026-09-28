@@ -123,6 +123,13 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       return;
     }
 
+    // Claimed before the send, not after: a retry that still found it PENDING would pay twice.
+    const claimed = await this.prisma.notificationDelivery.updateMany({
+      where: { id: deliveryId, status: DeliveryStatus.PENDING },
+      data: { status: DeliveryStatus.SENT, sentAt: new Date(), attempts: attempt },
+    });
+    if (claimed.count === 0) return;
+
     try {
       await this.sender.send({
         channel: OUTBOUND_CHANNEL[channel],
@@ -132,11 +139,6 @@ export class NotificationDeliveryProcessor extends WorkerHost {
         subject: row.notification.title,
         body: row.notification.body ?? row.notification.title,
         data: variablesOf(row.notification.data),
-      });
-
-      await this.prisma.notificationDelivery.update({
-        where: { id: deliveryId },
-        data: { status: DeliveryStatus.SENT, sentAt: new Date(), attempts: attempt },
       });
     } catch (error) {
       // Nothing was sent and nothing will be: retrying a template that does not exist buys nothing.
@@ -179,7 +181,7 @@ export class NotificationDeliveryProcessor extends WorkerHost {
   private async skip(deliveryId: string, skipReason: SkipReason): Promise<void> {
     await this.prisma.notificationDelivery.update({
       where: { id: deliveryId },
-      data: { status: DeliveryStatus.SKIPPED, skipReason },
+      data: { status: DeliveryStatus.SKIPPED, skipReason, sentAt: null },
     });
   }
 
@@ -192,7 +194,9 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       data: {
         attempts: attempt,
         lastError,
-        ...(spent ? { status: DeliveryStatus.FAILED, failedAt: new Date() } : {}),
+        sentAt: null,
+        status: spent ? DeliveryStatus.FAILED : DeliveryStatus.PENDING,
+        ...(spent ? { failedAt: new Date() } : {}),
       },
     });
   }

@@ -109,6 +109,34 @@ describe('Spending on a notification', () => {
     assert.equal(row.skipReason, 'NO_CONTACT');
   });
 
+  /** The provider took the money and the worker died before it wrote so: the retry buys nothing. */
+  it('never pays twice when the ledger cannot be written after the send', async () => {
+    const { processor, queue, sender, deliveryId } = await build();
+    const deadAfterSend = new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== 'notificationDelivery' || sender.sent.length === 0) {
+          return Reflect.get(target, key) as unknown;
+        }
+        return new Proxy(target.notificationDelivery, {
+          get: () => () => Promise.reject(new Error('connection lost')),
+        });
+      },
+    });
+    const dying = new NotificationDeliveryProcessor(
+      deadAfterSend,
+      service,
+      sender,
+      queue.asQueue(),
+      fakeQueueFailures(),
+    );
+
+    await dying.deliver(deliveryId, 1).catch(() => undefined);
+    await processor.deliver(deliveryId, 2);
+
+    assert.equal(sender.sent.length, 1);
+    assert.equal((await deliveryRow(deliveryId)).status, DeliveryStatus.SENT);
+  });
+
   /** Already sent or already skipped: a re-run must not buy the same message twice. */
   it('does nothing for a delivery that is no longer pending', async () => {
     const { processor, sender, deliveryId } = await build();
