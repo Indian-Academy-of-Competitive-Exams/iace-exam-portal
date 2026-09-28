@@ -585,6 +585,18 @@ Never during an event window, and never a migration that moves data without the 
   the traffic a save moves. The figures that used to sit here were taken under the answer shape
   before `AttemptSheet` and are gone. Revisit above ~100 Mbps sustained.
 - **Archiving old answer sheets** and pruning read notifications, when the database passes ~200 GB.
+- **PgBouncer, when connections rather than load become the limit.** Not needed on one box: the
+  §6 pools fit `db.t4g.small` even at `t4g.2xlarge`. It arrives with Fargate autoscaling (§3), a
+  second API box, or pools past ~80% of `max_connections`, and runs beside the API containers.
+  Measured 28 September 2026 with PgBouncer 1.25.2 in transaction mode: all of `pnpm test:db`
+  passes through it unchanged, and the scoring bench runs ~1,390 a second against ~1,360 direct.
+  Three settings make that true. `max_prepared_statements = 200` (above Prisma's per-connection
+  cache of 100) and **no** `pgbouncer=true` on the url — the flag drops the statement cache, and
+  scoring fell to ~730 a second at twice the database CPU. `search_path` in
+  `track_extra_parameters`, or PgBouncer refuses Prisma's startup. And the migrate container keeps
+  a direct url: `migrate deploy` through the pooler left its advisory lock held on an idle server
+  connection, so the next one would time out. RDS Proxy is not the alternative — Prisma's
+  statements pin every connection, so it pools nothing.
 
 ## 16. Figures that have not been re-measured
 
