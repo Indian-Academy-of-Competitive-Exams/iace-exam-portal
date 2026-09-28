@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, X } from 'lucide-react';
 import { Alert, Spinner } from '@iace/ui';
 import { api } from '../lib/api';
+import { SYSTEM_CHECK_QUERY_KEY } from '../lib/constants';
 
 /** The slim version of ThinkExam's four-step check: three facts, so a student learns them here. */
 
@@ -13,7 +14,7 @@ const browserIsSupported = (): boolean =>
 export function SystemCheck() {
   // The session is proven by the call succeeding, which is also the reachability check.
   const reachable = useQuery({
-    queryKey: ['me', 'system-check'],
+    queryKey: SYSTEM_CHECK_QUERY_KEY,
     queryFn: () => api.auth.me(),
     retry: false,
     staleTime: 0,

@@ -26,8 +26,7 @@ import {
   type QuestionReportRow,
 } from '@iace/contracts';
 import { QUESTION_REPORT_FILTERS } from '@iace/app-kit';
-import { api } from '../lib/api';
-import { questionReportQueryKey } from '../lib/constants';
+import { questionReportQuery } from '../lib/queries';
 import { ReportSkeleton, StatBand } from '../components/ui';
 
 const DASH = '—';
@@ -44,10 +43,7 @@ const RESULTS = {
 export function QuestionReportPanel() {
   const { attemptId = '' } = useParams();
   const [filter, setFilter] = useState<QuestionFilter>(QUESTION_FILTERS.ALL);
-  const report = useQuery({
-    queryKey: questionReportQueryKey(attemptId),
-    queryFn: () => api.me.questionReport(attemptId),
-  });
+  const report = useQuery(questionReportQuery(attemptId));
 
   return (
     <>

@@ -56,6 +56,32 @@ export {
   type NavItem,
   type NavLayout,
 } from './nav';
+export {
+  ME_QUERY_KEY,
+  PROFILE_QUERY_KEY,
+  CATALOG_QUERY_KEY,
+  TEST_DAYS_QUERY_KEY,
+  UNREAD_QUERY_KEY,
+  NOTIFICATIONS_QUERY_KEY,
+  notificationsQueryKey,
+  savedQueryKey,
+  savedFacetsQueryKey,
+  bookmarksInAttemptQueryKey,
+  scoreCardQueryKey,
+  solutionsQueryKey,
+  questionReportQueryKey,
+  PERFORMANCE_QUERY_KEY,
+  OVERVIEW_QUERY_KEY,
+  PERFORMANCE_SERIES_QUERY_KEY,
+  performanceReportQueryKey,
+  leaderboardQueryKey,
+  briefQueryKey,
+  ACTIVE_DEVICES_QUERY_KEY,
+  SYSTEM_CHECK_QUERY_KEY,
+  startedAttemptQueryKey,
+  attemptPaperQueryKey,
+  createStudentQueries,
+} from './student-queries';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
 export {
   ANY_CHOICE,
