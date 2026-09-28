@@ -467,9 +467,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   // A bubble sheet is the default template's affordance; no other skin draws one.
   const omrNeedsDefault = defaultTestUi === TEST_UI.OMR && examTemplate !== EXAM_TEMPLATE.DEFAULT;
   const timerTemplate = useWatch({ control: form.control, name: 'timerTemplate' });
-  const watchedSections = useWatch({ control: form.control, name: 'sections' }) ?? [];
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
-  const watchedModules = useWatch({ control: form.control, name: 'modules' }) ?? [];
 
   /** A new config has nowhere to fall back to, so Cancel leaves; a saved one returns to itself. */
   const cancel = () => {
@@ -480,7 +478,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 
   const issues = sectionIssuesOf(save.error);
   const banner = bannerMessage(save.error, [
-    ...serverFields(watchedSections.length).map(String),
+    ...serverFields(sections.fields.length).map(String),
     ...BANNER_HANDLED_ELSEWHERE,
   ]);
 
@@ -720,7 +718,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               form={form}
               index={index}
               sectionalClocks={timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED}
-              moduleNames={sessionPaper ? watchedModules.map((module) => module.name) : []}
+              sessionPaper={sessionPaper}
               canRemove={sections.fields.length > 1}
               onRemove={() => sections.remove(index)}
             />
@@ -740,7 +738,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </div>
       </FormSection>
 
-      <Totals sections={watchedSections} />
+      <Totals form={form} />
 
       {detail ? (
         <ConfirmDialog
@@ -833,20 +831,22 @@ function SectionCard({
   form,
   index,
   sectionalClocks,
-  moduleNames,
+  sessionPaper,
   canRemove,
   onRemove,
 }: Readonly<{
   form: UseFormReturn<ConfigFormValues>;
   index: number;
   sectionalClocks: boolean;
-  moduleNames: readonly string[];
+  sessionPaper: boolean;
   canRemove: boolean;
   onRemove: () => void;
 }>) {
   const subjectId = useWatch({ control: form.control, name: `sections.${index}.subjectId` });
   const merit = useWatch({ control: form.control, name: `sections.${index}.meritOrQualifying` });
   const mandatory = useWatch({ control: form.control, name: `sections.${index}.mandatory` });
+  const modules = useWatch({ control: form.control, name: 'modules' }) ?? [];
+  const moduleNames = sessionPaper ? modules.map((module) => module.name) : [];
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
@@ -977,7 +977,8 @@ function SectionCard({
 }
 
 /** The cache the server keeps on the config, summed live so it is never typed. */
-function Totals({ sections }: Readonly<{ sections: readonly SectionValues[] }>) {
+function Totals({ form }: Readonly<{ form: UseFormReturn<ConfigFormValues> }>) {
+  const sections = useWatch({ control: form.control, name: 'sections' }) ?? [];
   const totals = configTotalsOf(sections.map((section, index) => toSectionDraft(section, index)));
 
   return (

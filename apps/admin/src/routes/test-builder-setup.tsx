@@ -47,26 +47,10 @@ export function SetupStep({
   config: BaseConfigDetail | null;
   sat: boolean;
 }>) {
-  const values = useWatch({ control: form.control }) as TestFormValues;
-  const suggested = useSuggestedTestName({
-    examCode: config?.examStage.exam.code,
-    stageName: config?.examStage.name,
-    configName: config?.name,
-    examStageId: config?.examStageId,
-    scope: values.scope,
-    scopeName: scopeNameOf(values, config),
-  });
-
   return (
     <>
       <FormSection title="Paper">
-        <Blueprint
-          form={form}
-          detail={detail}
-          fromSeries={fromSeries}
-          config={config}
-          suggestion={values.title?.trim() === '' ? suggested : undefined}
-        />
+        <Blueprint form={form} detail={detail} fromSeries={fromSeries} config={config} />
       </FormSection>
 
       <FormSection title="Scoring">
@@ -77,7 +61,10 @@ export function SetupStep({
 }
 
 /** A topic's name lives on the taxonomy rather than the config, so a topic test keeps the fallback. */
-function scopeNameOf(values: TestFormValues, config: BaseConfigDetail | null): string | null {
+function scopeNameOf(
+  values: Pick<TestFormValues, 'scope' | 'sectionId' | 'moduleId'>,
+  config: BaseConfigDetail | null,
+): string | null {
   if (!config) return null;
   if (values.scope === TEST_SCOPE.SECTIONAL) {
     return config.sections.find((section) => section.id === values.sectionId)?.name ?? null;
@@ -93,13 +80,11 @@ function Blueprint({
   detail,
   fromSeries,
   config,
-  suggestion,
 }: Readonly<{
   form: TestForm;
   detail: TestDetail | null;
   fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
-  suggestion?: string;
 }>) {
   const examId = useWatch({ control: form.control, name: 'examId' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
@@ -228,18 +213,7 @@ function Blueprint({
         </>
       )}
 
-      <FormField form={form} name="title" label="Name">
-        {(control) => (
-          <Input
-            {...control}
-            placeholder="SSC CGL Tier 1 Standard, Mock 01"
-            suggestion={suggestion}
-            onAcceptSuggestion={(name) =>
-              form.setValue('title', name, { shouldDirty: true, shouldValidate: true })
-            }
-          />
-        )}
-      </FormField>
+      <NameField form={form} config={config} />
 
       <FormField form={form} name="examTemplate" label="Exam template" className="sm:col-span-2">
         {(control) => (
@@ -269,6 +243,40 @@ function Blueprint({
         )}
       </FormField>
     </FieldRow>
+  );
+}
+
+/** The one field that follows every keystroke, so it alone watches what its suggestion is built from. */
+function NameField({
+  form,
+  config,
+}: Readonly<{ form: TestForm; config: BaseConfigDetail | null }>) {
+  const [title, scope, sectionId, moduleId] = useWatch({
+    control: form.control,
+    name: ['title', 'scope', 'sectionId', 'moduleId'],
+  });
+  const suggested = useSuggestedTestName({
+    examCode: config?.examStage.exam.code,
+    stageName: config?.examStage.name,
+    configName: config?.name,
+    examStageId: config?.examStageId,
+    scope,
+    scopeName: scopeNameOf({ scope, sectionId, moduleId }, config),
+  });
+
+  return (
+    <FormField form={form} name="title" label="Name">
+      {(control) => (
+        <Input
+          {...control}
+          placeholder="SSC CGL Tier 1 Standard, Mock 01"
+          suggestion={title?.trim() === '' ? suggested : undefined}
+          onAcceptSuggestion={(name) =>
+            form.setValue('title', name, { shouldDirty: true, shouldValidate: true })
+          }
+        />
+      )}
+    </FormField>
   );
 }
 
