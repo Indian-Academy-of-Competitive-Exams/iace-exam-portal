@@ -1,5 +1,13 @@
 import * as React from 'react';
-import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap/react';
+import {
+  EditorContent,
+  useEditor,
+  type Content,
+  type Editor,
+  type Extensions,
+  type JSONContent,
+} from '@tiptap/react';
+import type { EditorProps } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { Superscript } from '@tiptap/extension-superscript';
@@ -57,6 +65,73 @@ const OFF = 'cursor-not-allowed border-disabled-border bg-disabled text-disabled
 /** ProseMirror owns the inner element, so its own classes go on through `editorProps`. */
 const CONTENT = 'rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
 
+interface QuestionEditorOptions {
+  editable: boolean;
+  /** The kit and the box's own nodes; the marks, images and maths every box shares follow them. */
+  extensions: Extensions;
+  content: Content;
+  onUpdate: (editor: Editor) => void;
+  onUploadImage?: UploadImage;
+  imageLimits?: ImageLimits;
+  editorProps?: EditorProps;
+}
+
+/** What every question box shares, so the paste guard and the maths live in one place. */
+export function useQuestionEditor({
+  editable,
+  extensions,
+  content,
+  onUpdate,
+  onUploadImage,
+  imageLimits,
+  editorProps,
+}: QuestionEditorOptions) {
+  const [math, setMath] = React.useState<MathDraft | null>(null);
+  // The editor emits an update for its INITIAL content, which is a load and not a keystroke.
+  const settled = React.useRef(false);
+
+  const editor = useEditor({
+    editable,
+    extensions: [
+      ...extensions,
+      Superscript,
+      Subscript,
+      TextSizeMark,
+      ...(onUploadImage ? [QuestionImage] : []),
+      // A half-typed formula shows in red rather than taking the editor down with it.
+      BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
+      InlineMathAtDollar.configure({
+        katexOptions: { throwOnError: false },
+        onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
+      }),
+    ],
+    content,
+    onUpdate: ({ editor: current }: { editor: Editor }) => {
+      if (settled.current) onUpdate(current);
+    },
+    editorProps: {
+      ...editorProps,
+      // Without these a pasted image becomes a base64 `data:` uri inside the question row.
+      handlePaste: (view, event) =>
+        takeImages(view, event.clipboardData, onUploadImage, imageLimits),
+      handleDrop: (view, event) =>
+        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage, imageLimits),
+    },
+  });
+
+  // After the editor exists, so its creation update has already been and gone.
+  React.useEffect(() => {
+    if (editor) settled.current = true;
+  }, [editor]);
+
+  // `false`: it defaults to re-emitting the CURRENT document, which reads as the user typing it.
+  React.useEffect(() => {
+    editor?.setEditable(editable, false);
+  }, [editor, editable]);
+
+  return { editor, math, setMath };
+}
+
 export function RichText({
   value,
   onChange,
@@ -71,39 +146,20 @@ export function RichText({
   className,
 }: Readonly<RichTextProps>) {
   const off = useFormDisabled() || (disabled ?? false);
-  const [math, setMath] = React.useState<MathDraft | null>(null);
-  // The editor emits an update for its INITIAL content, which is a load and not a keystroke.
-  const settled = React.useRef(false);
 
-  const editor = useEditor({
+  const { editor, math, setMath } = useQuestionEditor({
     editable: !off,
     extensions: [
       StarterKit.configure(
         singleLine ? { heading: false, bulletList: false, orderedList: false } : {},
       ),
-      Superscript,
-      Subscript,
-      TextSizeMark,
       ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } }), TableTools]),
-      ...(onUploadImage ? [QuestionImage] : []),
-      // A half-typed formula shows in red rather than taking the editor down with it.
-      BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
-      InlineMathAtDollar.configure({
-        katexOptions: { throwOnError: false },
-        onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
-      }),
     ],
     content: documentFrom(value),
-    onUpdate: ({ editor: current }: { editor: Editor }) => {
-      if (!settled.current) return;
-      onChange(current.getHTML());
-    },
+    onUpdate: (current) => onChange(current.getHTML()),
+    onUploadImage,
+    imageLimits,
     editorProps: {
-      // Without these a pasted image becomes a base64 `data:` uri inside the question row.
-      handlePaste: (view, event) =>
-        takeImages(view, event.clipboardData, onUploadImage, imageLimits),
-      handleDrop: (view, event) =>
-        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage, imageLimits),
       attributes: {
         class: cn(CONTENT, singleLine && 'whitespace-nowrap'),
         ...(id ? { id } : {}),
@@ -113,16 +169,6 @@ export function RichText({
       },
     },
   });
-
-  // `false`: it defaults to re-emitting the CURRENT document, which reads as the user typing it.
-  React.useEffect(() => {
-    editor?.setEditable(!off, false);
-  }, [editor, off]);
-
-  // After the editor exists, so its creation update has already been and gone.
-  React.useEffect(() => {
-    if (editor) settled.current = true;
-  }, [editor]);
 
   // Only when the two genuinely differ, or every keystroke would reset the caret to the start.
   React.useEffect(() => {

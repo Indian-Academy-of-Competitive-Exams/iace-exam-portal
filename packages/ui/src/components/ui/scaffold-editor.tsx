@@ -1,8 +1,6 @@
 import * as React from 'react';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Superscript } from '@tiptap/extension-superscript';
-import { Subscript } from '@tiptap/extension-subscript';
 import { TableKit } from '@tiptap/extension-table';
 import { DOMSerializer, type Node as ProseNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
@@ -10,10 +8,9 @@ import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
 import { TableTools } from './rich-text-table';
 import { Transliterate, writeIn, type IndicScript } from './rich-text-transliterate';
-import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
-import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
-import { TextSizeMark } from './rich-text-size';
-import { QuestionImage, takeImages, type ImageLimits, type UploadImage } from './rich-text-image';
+import { RichTextToolbar } from './rich-text-toolbar';
+import type { ImageLimits, UploadImage } from './rich-text-image';
+import { useQuestionEditor } from './rich-text';
 import {
   REGION_KIND,
   REGION_NODE,
@@ -147,9 +144,6 @@ export function ScaffoldEditor({
   'aria-label': label,
   className,
 }: Readonly<ScaffoldEditorProps>) {
-  const [math, setMath] = React.useState<MathDraft | null>(null);
-  // The editor emits an update for its INITIAL content, which is a load and not a keystroke.
-  const settled = React.useRef(false);
   // Created once, so its handlers read these rather than closing over the first render's props.
   const emit = React.useRef(onChange);
   const run = React.useRef<KeyContext>({ onSave, onCycleLanguage });
@@ -158,38 +152,22 @@ export function ScaffoldEditor({
     run.current = { onSave, onCycleLanguage };
   });
 
-  const editor = useEditor({
+  const { editor, math, setMath } = useQuestionEditor({
     editable: !disabled,
     extensions: [
       StarterKit.configure({ document: false, heading: false, horizontalRule: false }),
       ScaffoldDocument,
       ScaffoldRegionNode,
-      Superscript,
-      Subscript,
-      TextSizeMark,
       TableKit.configure({ table: { resizable: true } }),
       TableTools,
       Transliterate,
-      ...(onUploadImage ? [QuestionImage] : []),
-      // A half-typed formula shows in red rather than taking the editor down with it.
-      BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
-      InlineMathAtDollar.configure({
-        katexOptions: { throwOnError: false },
-        onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
-      }),
     ],
     content: docFrom(regions),
-    onUpdate: ({ editor: current }: { editor: Editor }) => {
-      if (!settled.current) return;
-      emit.current(regionsOf(current));
-    },
+    onUpdate: (current) => emit.current(regionsOf(current)),
+    onUploadImage,
+    imageLimits,
     editorProps: {
       handleKeyDown: (view, event) => handleKey(view, event, run.current),
-      // Without these a pasted image becomes a base64 `data:` uri inside the question row.
-      handlePaste: (view, event) =>
-        takeImages(view, event.clipboardData, onUploadImage, imageLimits),
-      handleDrop: (view, event) =>
-        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage, imageLimits),
       attributes: {
         class: CONTENT,
         role: 'textbox',
@@ -198,15 +176,6 @@ export function ScaffoldEditor({
       },
     },
   });
-
-  // After the editor exists, so its creation update has already been and gone.
-  React.useEffect(() => {
-    if (editor) settled.current = true;
-  }, [editor]);
-
-  React.useEffect(() => {
-    editor?.setEditable(!disabled, false);
-  }, [editor, disabled]);
 
   // A transaction, not a ref: the plugin carries the script and the editor is built once.
   React.useEffect(() => {
