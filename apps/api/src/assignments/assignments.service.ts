@@ -42,6 +42,15 @@ import { isUniqueViolation } from '../common/prisma-errors';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
+const CHOOSE_WITH_DONE_MESSAGE =
+  'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
+const ALREADY_READ_MESSAGE = 'You have marked this section read, so it can no longer be sent back.';
+const NOTHING_TO_SEND_BACK =
+  'Its typist has not marked this section done, so there is nothing to send back.';
+
+const notWhole = (issue: string) =>
+  new AppException(ErrorCodes.CONFLICT, issue, { fieldErrors: { [FORM_LEVEL_FIELD]: [issue] } });
+
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: { select: { name: true, questionCount: true, subjectId: true } },
   assignee: { select: { fullName: true, email: true } },
@@ -335,7 +344,10 @@ export class AssignmentsService {
     const written = await this.sectionWrittenCounts(items);
     return paged(
       query,
-      items.map((row) => ({ ...row, ...(written.get(sectionKey(row)) ?? NO_COUNTS) })),
+      items.map((row) => ({
+        ...row,
+        writtenCount: (written.get(sectionKey(row)) ?? NO_COUNTS).writtenCount,
+      })),
       rows.length,
     );
   }
@@ -396,26 +408,13 @@ export class AssignmentsService {
     return { editingBy };
   }
 
-  /** Idempotent: finalising twice hands back the same row rather than erroring on the second call. */
+  /** A reader's "I've read this". Idempotent: a repeat restamps rather than erroring. A typist uses Done. */
   async finalize(id: string, adminId: string, isSuperAdmin = false): Promise<Assignment> {
-    const row = await this.prisma.questionAssignment.findUnique({
-      where: { id },
-      include: ASSIGNMENT_INCLUDE,
-    });
-    // Not theirs reads as not there — the same guard authoring.service.ts uses for a draft.
-    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    }
-    // Written means written: anything still held back goes with it, or the reader gets an empty section.
+    const row = await this.requireOwn(id, adminId, isSuperAdmin);
     if (row.role === ASSIGNMENT_ROLES.TYPIST) {
-      await this.prisma.question.updateMany({
-        where: {
-          assignment: { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId },
-          releasedAt: null,
-        },
-        data: { releasedAt: new Date() },
-      });
+      throw new AppException(ErrorCodes.CONFLICT, CHOOSE_WITH_DONE_MESSAGE);
     }
+    await this.assertSectionWhole(row);
 
     // Re-reading is the same fact restated: the stamp moves, so a section read again is covered again.
     const updated = await this.prisma.questionAssignment.update({
@@ -424,6 +423,60 @@ export class AssignmentsService {
       include: ASSIGNMENT_INCLUDE,
     });
     return this.withWrittenCount(updated);
+  }
+
+  /** A reader hands the WHOLE section back to its typist; why is said in the section thread. */
+  async sendBack(id: string, adminId: string, isSuperAdmin = false): Promise<Assignment> {
+    const reading = await this.requireOwn(id, adminId, isSuperAdmin);
+    if (reading.role !== ASSIGNMENT_ROLES.PROOFREADER) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+    }
+    if (reading.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_READ_MESSAGE);
+
+    // The write is the gate: only a typist who is done can be sent back, and only once.
+    const reopened = await this.prisma.questionAssignment.updateMany({
+      where: {
+        testId: reading.testId,
+        baseConfigSectionId: reading.baseConfigSectionId,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        finalizedAt: { not: null },
+      },
+      data: { finalizedAt: null },
+    });
+    if (reopened.count === 0) throw new AppException(ErrorCodes.CONFLICT, NOTHING_TO_SEND_BACK);
+    return this.withWrittenCount(reading);
+  }
+
+  /** A reader always gets a whole section: typed ones at the typist's Done, and every one at its count. */
+  private async assertSectionWhole(row: AssignmentRow): Promise<void> {
+    const section = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
+    const [typing, onPaper] = await Promise.all([
+      this.prisma.questionAssignment.count({
+        where: { ...section, role: ASSIGNMENT_ROLES.TYPIST, finalizedAt: null },
+      }),
+      this.prisma.paperQuestion.count({ where: section }),
+    ]);
+    const needed = row.baseConfigSection.questionCount;
+    if (typing > 0) throw notWhole('Its typist has not marked this section done yet.');
+    if (onPaper < needed) {
+      throw notWhole(`The paper holds ${onPaper} of the ${needed} questions this section needs.`);
+    }
+  }
+
+  /** Not theirs reads as not there. */
+  private async requireOwn(
+    id: string,
+    adminId: string,
+    isSuperAdmin: boolean,
+  ): Promise<AssignmentRow> {
+    const row = await this.prisma.questionAssignment.findUnique({
+      where: { id },
+      include: ASSIGNMENT_INCLUDE,
+    });
+    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+    }
+    return row;
   }
 
   /** Every assignment on a row's own (test, section), not just the row's — the typist's work counts for the reader. */
@@ -437,26 +490,18 @@ export class AssignmentsService {
       where: {
         OR: sections.map(({ testId, baseConfigSectionId }) => ({ testId, baseConfigSectionId })),
       },
-      select: { id: true, testId: true, baseConfigSectionId: true },
+      select: { id: true, testId: true, baseConfigSectionId: true, role: true, finalizedAt: true },
     });
     const ids = held.map((row) => row.id);
-    const [written, released] =
+    const written =
       ids.length === 0
-        ? [[], []]
-        : await Promise.all([
-            this.prisma.question.groupBy({
-              by: ['assignmentId'],
-              where: { assignmentId: { in: ids } },
-              _count: { _all: true },
-            }),
-            this.prisma.question.groupBy({
-              by: ['assignmentId'],
-              where: { assignmentId: { in: ids }, releasedAt: { not: null } },
-              _count: { _all: true },
-            }),
-          ]);
+        ? []
+        : await this.prisma.question.groupBy({
+            by: ['assignmentId'],
+            where: { assignmentId: { in: ids } },
+            _count: { _all: true },
+          });
     const writtenBy = new Map(written.map((row) => [row.assignmentId, row._count._all]));
-    const releasedBy = new Map(released.map((row) => [row.assignmentId, row._count._all]));
 
     const bySection = new Map(sections.map((row) => [sectionKey(row), NO_COUNTS]));
     for (const row of held) {
@@ -465,7 +510,8 @@ export class AssignmentsService {
       if (!so_far) continue;
       bySection.set(key, {
         writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0),
-        releasedCount: so_far.releasedCount + (releasedBy.get(row.id) ?? 0),
+        typistDone:
+          row.role === ASSIGNMENT_ROLES.TYPIST ? row.finalizedAt !== null : so_far.typistDone,
       });
     }
     return bySection;
@@ -592,13 +638,13 @@ function sectionRow(test: QueueTest, section: QueueSection): SectionProgressRow 
 const sectionKey = (row: { testId: string; baseConfigSectionId: string }): string =>
   `${row.testId}:${row.baseConfigSectionId}`;
 
-/** What a section holds and how much of it has reached its reader — two facts, never one. */
+/** What a section holds, counted across every assignment on it. */
 export interface SectionCounts {
   writtenCount: number;
-  releasedCount: number;
+  typistDone: boolean | null;
 }
 
-const NO_COUNTS: SectionCounts = { writtenCount: 0, releasedCount: 0 };
+const NO_COUNTS: SectionCounts = { writtenCount: 0, typistDone: null };
 
 function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
   return {
@@ -612,7 +658,7 @@ function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
     dueAt: row.dueAt?.toISOString() ?? null,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     writtenCount: counts.writtenCount,
-    releasedCount: counts.releasedCount,
+    typistDone: counts.typistDone,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
     sectionSubjectId: row.baseConfigSection.subjectId,

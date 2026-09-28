@@ -461,8 +461,6 @@ model Question {
   // The fold stemHash was made with; the worker rehashes any row below the code's STEM_HASH_VERSION.
   stemHashVersion  Int             @default(1)
   assignmentId     String?         @db.Uuid
-  // Set when its typist hands the section's work so far to the proof-reader. Never cleared.
-  releasedAt       DateTime?       @db.Timestamptz(3)
   createdById      String?         @db.Uuid
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)

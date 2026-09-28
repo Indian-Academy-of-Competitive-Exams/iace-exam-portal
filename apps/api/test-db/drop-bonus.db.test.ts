@@ -12,8 +12,9 @@ import { AuditContext } from '../src/audit';
 import { SCORING_REQUEST, ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { QuestionsService } from '../src/questions/questions.service';
 import { PaperService } from '../src/tests/paper.service';
-import { FakeQueue, FakeRedis } from '../test/support/fakes';
+import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   makePaper,
   makeStudent,
@@ -63,6 +64,7 @@ async function bench({ offered = true, sat = true } = {}) {
     new ScoringOutbox(prisma, queue.asQueue()),
     audit,
     new FakeRedis().asService(),
+    new QuestionsService(prisma, audit, new FakeStorage() as never),
   );
   const [dropped, kept] = paper.items.map((item) => item.paperQuestionId);
   const set = (status: PaperQuestionStatus, row = dropped ?? '') =>

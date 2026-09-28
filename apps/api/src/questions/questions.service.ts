@@ -516,6 +516,15 @@ export class QuestionsService {
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
 
+  /** A typist's leftover, loose in the bank from now on: an ordinary question nothing is waiting on. */
+  async detachFromSection(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.prisma.question.updateMany({
+      where: { id: { in: [...ids] } },
+      data: { assignmentId: null },
+    });
+  }
+
   /** Being depended on settles what a question IS, not being published — a drawn row carries none of it. */
   private async assertIdentitySettled(
     tx: Prisma.TransactionClient,
@@ -816,7 +825,6 @@ function toSummary(row: QuestionRow): QuestionSummary {
           sectionName: row.assignment.baseConfigSection.name,
         }
       : null,
-    releasedAt: row.releasedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

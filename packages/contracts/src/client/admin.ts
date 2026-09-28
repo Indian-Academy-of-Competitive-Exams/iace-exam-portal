@@ -7,12 +7,10 @@ import {
 import {
   ADMIN_AUTHORING_ROUTES,
   authoringDuplicateSchema,
-  authoringReleaseSchema,
   authoringSaveResultSchema,
   authoringStatsSchema,
   type AuthoringCreateInput,
   type AuthoringHistoryQueryInput,
-  type AuthoringRelease,
   type AuthoringDuplicate,
   type AuthoringSaveResult,
   type AuthoringStats,
@@ -267,6 +265,7 @@ import {
   type SectionEditLock,
   type SectionProgressQueryInput,
   type SectionProgressRow,
+  type TypistDoneInput,
 } from '../assignments';
 import { queryString, type ApiCore } from './core';
 
@@ -672,10 +671,6 @@ export function adminClient(core: ApiCore) {
       remove: (id: string): Promise<NoContent> =>
         write('DELETE', ADMIN_AUTHORING_ROUTES.remove(id), noContentSchema),
 
-      /** Hands the section's work so far to its proof-reader. */
-      release: (assignmentId: string): Promise<AuthoringRelease> =>
-        write('POST', ADMIN_AUTHORING_ROUTES.release(assignmentId), authoringReleaseSchema),
-
       previewImport: (assignmentId: string, file: File): Promise<QuestionImportPlan> =>
         write(
           'POST',
@@ -855,6 +850,12 @@ export function adminClient(core: ApiCore) {
 
       finalize: (id: string): Promise<Assignment> =>
         write('PATCH', ADMIN_ASSIGNMENTS_ROUTES.finalize(id), assignmentSchema),
+
+      done: (id: string, input: TypistDoneInput): Promise<Assignment> =>
+        write('POST', ADMIN_ASSIGNMENTS_ROUTES.done(id), assignmentSchema, input),
+
+      sendBack: (id: string): Promise<Assignment> =>
+        write('POST', ADMIN_ASSIGNMENTS_ROUTES.sendBack(id), assignmentSchema),
 
       assignable: (query: AssignableQueryInput): Promise<AssignableAdmin[]> =>
         get(

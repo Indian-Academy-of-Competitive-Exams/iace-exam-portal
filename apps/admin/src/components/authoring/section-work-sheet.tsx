@@ -1,12 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ListChecks, Send, Upload, X } from 'lucide-react';
-import {
-  type AssignmentWithTest,
-  type AuthoringRelease,
-  type QuestionSummary,
-} from '@iace/contracts';
+import { CheckCheck, ListChecks, Upload, X } from 'lucide-react';
+import { type AssignmentWithTest, type QuestionSummary } from '@iace/contracts';
 import { useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
@@ -22,17 +18,16 @@ import {
   TruncatedText,
   cn,
   linkVariants,
-  plural,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { TypistDoneDialog } from './typist-done-dialog';
 
 /** Everything the typist has written for one section, and the three things they do to it. */
 
 /** Same shape the bank's own question prompts take, so both confirms read alike. */
 const PROMPTS = {
-  RELEASE: { title: 'Hand over what is written?', confirmLabel: 'Hand over' },
   DELETE: { title: 'Delete this question?', confirmLabel: 'Delete' },
 } as const;
 
@@ -72,15 +67,6 @@ function columnsOf(
         <span className="text-sm text-muted-foreground">
           {question.languages.map((code) => code.toUpperCase()).join(' · ')}
         </span>
-      ),
-    },
-    {
-      key: 'released',
-      header: 'Handed over',
-      cell: (question) => (
-        <Badge variant={question.releasedAt ? 'success' : 'neutral'}>
-          {question.releasedAt ? 'Yes' : 'Not yet'}
-        </Badge>
       ),
     },
     {
@@ -149,7 +135,7 @@ function SectionWork({
 }>) {
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState<QuestionSummary | null>(null);
-  const [releasing, setReleasing] = useState(false);
+  const [finishing, setFinishing] = useState(false);
 
   const written = useListScreen({
     queryKey: sectionWorkKey(assignment.id),
@@ -169,17 +155,21 @@ function SectionWork({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <Button type="button" size="sm" onClick={() => setReleasing(true)}>
-          <Send aria-hidden />
-          Hand over
-        </Button>
+        {assignment.finalizedAt ? null : (
+          <>
+            <Button type="button" size="sm" onClick={() => setFinishing(true)}>
+              <CheckCheck aria-hidden />
+              Mark done
+            </Button>
 
-        <Button asChild type="button" size="sm" variant="outline">
-          <Link to={ROUTES.AUTHORING_IMPORT(assignment.id)}>
-            <Upload aria-hidden />
-            Import a file
-          </Link>
-        </Button>
+            <Button asChild type="button" size="sm" variant="outline">
+              <Link to={ROUTES.AUTHORING_IMPORT(assignment.id)}>
+                <Upload aria-hidden />
+                Import a file
+              </Link>
+            </Button>
+          </>
+        )}
       </div>
 
       <ListView
@@ -189,10 +179,9 @@ function SectionWork({
         empty="Nothing written for this section yet"
       />
 
-      <ReleaseDialog
-        assignment={releasing ? assignment : null}
-        onClose={() => setReleasing(false)}
-        onReleased={settle}
+      <TypistDoneDialog
+        assignment={finishing ? assignment : null}
+        onClose={() => setFinishing(false)}
       />
 
       <DeleteQuestionDialog
@@ -201,41 +190,6 @@ function SectionWork({
         onDeleted={settle}
       />
     </div>
-  );
-}
-
-function ReleaseDialog({
-  assignment,
-  onClose,
-  onReleased,
-}: Readonly<{
-  assignment: AssignmentWithTest | null;
-  onClose: () => void;
-  onReleased: () => Promise<unknown>;
-}>) {
-  // Counted by the server: the rows on screen are one page, and a long section has more.
-  const release = useMutation({
-    meta: {
-      success: (result: AuthoringRelease) =>
-        `${plural(result.handedOver, 'question')} handed over.`,
-    },
-    mutationFn: (id: string) => api.admin.authoring.release(id),
-    onSuccess: async () => {
-      await onReleased();
-      onClose();
-    },
-  });
-
-  return (
-    <ConfirmDialog
-      open={assignment !== null}
-      onOpenChange={(open) => !open && onClose()}
-      title={PROMPTS.RELEASE.title}
-      description="Everything you have written and not yet handed over moves to the proof-reader. You can keep editing it afterwards, and they will see your changes."
-      confirmLabel={PROMPTS.RELEASE.confirmLabel}
-      loading={release.isPending}
-      onConfirm={() => assignment && release.mutate(assignment.id)}
-    />
   );
 }
 

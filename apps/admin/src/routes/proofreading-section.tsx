@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
-  ASSIGNMENT_ROLES,
   DEFAULT_LANGUAGE,
   FEATURE_KEYS,
   LANGUAGE_LABELS,
@@ -30,7 +29,7 @@ import { useAuth } from '../providers/auth';
 import { ProofreadQuestionBlock } from '../components/proofread-question';
 import { SectionThreadButton } from '../components/section-thread';
 import { SuperAdminOnly } from '../components/super-admin-only';
-import { FinalizeAssignmentDialog } from './assignment-queue';
+import { FinalizeAssignmentDialog, SendBackDialog } from './assignment-queue';
 
 /** One section of one test, read top to bottom, with the fix in the reader's own hands. */
 
@@ -140,6 +139,12 @@ function ReadingNotices({ section }: Readonly<{ section: SectionUnderReview }>) 
         </Alert>
       ) : null}
 
+      {assignment?.typistDone === false ? (
+        <Alert variant="info">
+          Its typist has not marked this section done. It reaches you whole when they do.
+        </Alert>
+      ) : null}
+
       {assignment?.finalizedAt ? (
         <Alert variant="info">
           {`You marked this section read on ${instituteDayLabel(assignment.finalizedAt)}. Its questions are no longer yours to change.`}
@@ -159,6 +164,8 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
   const { can } = useAuth();
   const queryClient = useQueryClient();
   const [finalizing, setFinalizing] = useState(false);
+  const [sendingBack, setSendingBack] = useState(false);
+  const settle = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
 
   const section = useSectionUnderReview(sectionKey);
   const { byAssignment, assignment, testId, sectionId, scoped, questions } = section;
@@ -169,6 +176,7 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
   const canEdit = byAssignment
     ? assignment !== null && assignment.finalizedAt === null && canWrite
     : scoped;
+  const canRead = canEdit && byAssignment && assignment?.typistDone !== false;
 
   const header = (
     <PageHeader
@@ -180,7 +188,12 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
           {scoped ? (
             <SectionThreadButton testId={testId} sectionId={sectionId} canWrite={canWrite} />
           ) : null}
-          {canEdit && byAssignment ? (
+          {canRead && assignment?.typistDone ? (
+            <Button size="sm" variant="outline" onClick={() => setSendingBack(true)}>
+              Send back to typist
+            </Button>
+          ) : null}
+          {canRead ? (
             <Button size="sm" onClick={() => setFinalizing(true)}>
               Mark read
             </Button>
@@ -252,11 +265,15 @@ function SectionReading({ sectionKey }: Readonly<{ sectionKey: SectionKey }>) {
       </section>
 
       <FinalizeAssignmentDialog
-        role={ASSIGNMENT_ROLES.PROOFREADER}
         assignment={finalizing ? assignment : null}
         covering={rows.length}
         onClose={() => setFinalizing(false)}
-        onFinalized={() => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS })}
+        onFinalized={settle}
+      />
+      <SendBackDialog
+        assignment={sendingBack ? assignment : null}
+        onClose={() => setSendingBack(false)}
+        onSentBack={settle}
       />
     </PageFrame>
   );

@@ -16,11 +16,12 @@ import { AuditContext } from '../src/audit';
 import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { QuestionsService } from '../src/questions/questions.service';
 import { PaperService } from '../src/tests/paper.service';
 import { type Editor } from '../src/tests/edit-lock';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from '../src/tests/test-rules';
-import { FakeQueue, FakeRedis } from '../test/support/fakes';
+import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BUILDER,
   makeAdmin,
@@ -128,6 +129,7 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
     redis,
+    new QuestionsService(prisma, audit, new FakeStorage() as never),
   );
 }
 
@@ -791,20 +793,19 @@ describe('PaperService — where the questions come from', () => {
   });
 });
 
-describe('PaperService — a framed section is made of what its own typist wrote', () => {
-  /** The failure this prevents: the typist writes the section, and the draw ignores every word of it. */
-  async function framed(written: readonly string[]) {
-    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
-    const assignee = await makeAdmin(prisma, { fullName: 'Priya' });
+describe("PaperService — a typed section is placed by its typist's Done", () => {
+  /** A framed test whose Quant section (two questions) is Priya's, holding what she has typed. */
+  async function typed(written: readonly string[], test: Bench['test'] = {}) {
+    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED, ...test } });
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
     const assignment = await prisma.questionAssignment.create({
       data: {
         id: randomUUID(),
         testId: TEST,
         baseConfigId: BUILDER.CONFIG,
         baseConfigSectionId: idFor('sec_2'),
-        assigneeId: assignee.id,
+        assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        finalizedAt: new Date(),
       },
       select: { id: true },
     });
@@ -812,117 +813,88 @@ describe('PaperService — a framed section is made of what its own typist wrote
       where: { id: { in: written.map(idFor) } },
       data: { assignmentId: assignment.id },
     });
-    return service;
+    const done = (selected: string[], discard: string[] = []) =>
+      service.typistDone(
+        assignment.id,
+        { selected: selected.map(idFor), discard: discard.map(idFor) },
+        { id: typist.id },
+      );
+    const typingDone = async () =>
+      (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: assignment.id } }))
+        .finalizedAt;
+    return { service, assignment, done, typingDone };
   }
 
-  it('fills the section from its own authoring and leaves the bank alone', async () => {
-    const service = await framed(['q1', 'q2']);
+  it('places exactly the chosen, sends the rest to the bank, and deletes what was discarded', async () => {
+    const { done, typingDone } = await typed(['q1', 'q2', 'q3', 'q4']);
 
-    const paper = await service.fillSection(TEST, idFor('sec_2'));
+    await done(['q1', 'q2'], ['q3']);
 
-    assert.deepEqual(
-      idsOf(paper, idFor('sec_2')).sort(),
-      [idFor('q1'), idFor('q2')].sort(),
-      'the other four quant questions in the bank are not this section to draw from',
+    assert.deepEqual((await heldIds()).sort(), [idFor('q1'), idFor('q2')].sort());
+    assert.ok(await typingDone(), 'Done is the hand-over');
+    assert.equal(await prisma.question.count({ where: { id: idFor('q3') } }), 0);
+    const leftover = await prisma.question.findUniqueOrThrow({ where: { id: idFor('q4') } });
+    assert.equal(leftover.assignmentId, null, 'an unticked question is an ordinary bank question');
+  });
+
+  /** The failure this prevents: a reader handed a section short of its count. */
+  it('refuses a choice short of the section’s count, and writes nothing', async () => {
+    const { done, typingDone } = await typed(['q1', 'q2']);
+
+    const error = await refused(done(['q1']));
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(await typingDone(), null);
+    assert.deepEqual(await heldIds(), []);
+  });
+
+  it('refuses a question not written for the section', async () => {
+    const { done } = await typed(['q1']);
+
+    const error = await refused(done(['q1', 'q2']));
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  it('refuses a choice outside the section’s difficulty split, naming the gap', async () => {
+    const mix = { sections: { [idFor('sec_2')]: { mix: { LOW: 1, MEDIUM: 1, HIGH: 0 } } } };
+    const { done } = await typed(['q1', 'q2'], { questionPoolFilter: mix });
+
+    const error = await refused(done(['q1', 'q2']));
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.match(error.message, /Low 0 of 1/);
+  });
+
+  it('swaps the rows when the typist chooses again after a send back', async () => {
+    const { assignment, done } = await typed(['q1', 'q2', 'q3']);
+    await done(['q1', 'q2']);
+    await prisma.question.update({
+      where: { id: idFor('q3') },
+      data: { assignmentId: assignment.id },
+    });
+    await prisma.questionAssignment.update({
+      where: { id: assignment.id },
+      data: { finalizedAt: null },
+    });
+
+    await done(['q1', 'q3']);
+
+    assert.deepEqual((await heldIds()).sort(), [idFor('q1'), idFor('q3')].sort());
+  });
+
+  /** The failure this prevents: an owner changing a paper under the reader who read the typist's choice. */
+  it('refuses an owner’s pick or fill on a typed test, but not a super admin’s', async () => {
+    const { service } = await typed(['q1', 'q2']);
+    const pick = { baseConfigSectionId: idFor('sec_2'), questionIds: [idFor('q1')] };
+
+    assert.equal((await refused(service.addQuestions(TEST, pick))).code, ErrorCodes.CONFLICT);
+    assert.equal(
+      (await refused(service.fillSection(TEST, idFor('sec_2')))).code,
+      ErrorCodes.CONFLICT,
     );
-  });
-
-  it('says the typist is short rather than blaming the bank', async () => {
-    const service = await framed(['q1']);
-
-    const error = await refused(service.fillSection(TEST, idFor('sec_2')));
-
-    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
-    assert.match(error.message, /typist/);
-  });
-});
-
-describe("PaperService — a section that is its typist's job", () => {
-  /** The failure this prevents: two people filling one section, each unaware of the other. */
-  async function assigned(finalized: Date | null, role: 'TYPIST' | 'PROOFREADER' = 'TYPIST') {
-    const service = await serviceWith();
-    const assignee = await makeAdmin(prisma, { fullName: 'Priya' });
-    await prisma.questionAssignment.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_2'),
-        assigneeId: assignee.id,
-        role,
-        finalizedAt: finalized,
-      },
-    });
-    return service;
-  }
-
-  it('refuses a pick while the section is still with its typist, and names who has it', async () => {
-    const service = await assigned(null);
-
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('q1')],
-      }),
-    );
-
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.match(error.message, /Priya/);
-  });
-
-  /** The override: a typist who has left the institute cannot hold a section hostage. */
-  it('lets a super admin pick into the very section it just refused', async () => {
-    const service = await assigned(null);
-
-    const paper = await service.addQuestions(
-      TEST,
-      { baseConfigSectionId: idFor('sec_2'), questionIds: [idFor('q1')] },
-      { isSuperAdmin: true },
-    );
-
-    assert.ok(paper.sections.some((section) => section.questions.length > 0));
-  });
-
-  it('refuses filling it from the spec too', async () => {
-    const service = await assigned(null);
-
-    const error = await refused(service.fillSection(TEST, idFor('sec_2')));
-
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-  });
-
-  it('lets the pick through once the section has been marked done', async () => {
-    const service = await assigned(new Date());
-
-    const paper = await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1')],
-    });
-
-    assert.ok(paper.sections.some((section) => section.questions.length > 0));
-  });
-
-  /** What makes a PICKED test work at all: its reader must not block the picking they are to read. */
-  it('lets the pick through while only its proof-reader is outstanding', async () => {
-    const service = await assigned(null, 'PROOFREADER');
-
-    const paper = await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1')],
-    });
-
-    assert.ok(paper.sections.some((section) => section.questions.length > 0));
-  });
-
-  it('leaves a section nobody was assigned alone', async () => {
-    const service = await assigned(null);
-
-    const paper = await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1')],
-    });
-
-    assert.ok(paper.sections.some((section) => section.questions.length > 0));
+    const paper = await service.addQuestions(TEST, pick, { isSuperAdmin: true });
+    assert.deepEqual(idsOf(paper, idFor('sec_2')), [idFor('q1')]);
   });
 });
 

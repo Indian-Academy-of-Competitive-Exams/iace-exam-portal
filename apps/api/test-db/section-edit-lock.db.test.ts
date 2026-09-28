@@ -102,6 +102,27 @@ async function aSection({ withReader = true } = {}) {
   };
 }
 
+/** The typist's Done, reduced to its effect: the question on the paper and the section handed over. */
+async function markDone(section: Awaited<ReturnType<typeof aSection>>, question: { id: string }) {
+  const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
+  await prisma.paperQuestion.create({
+    data: {
+      testId: section.testId,
+      baseConfigId: section.catalog.baseConfigId,
+      baseConfigSectionId: section.sectionId,
+      questionId: question.id,
+      questionVersionId: row.currentVersionId ?? '',
+      order: 1,
+      marks: 2,
+      negativeMarks: 0.5,
+    },
+  });
+  await prisma.questionAssignment.update({
+    where: { id: section.typing.id },
+    data: { finalizedAt: new Date() },
+  });
+}
+
 const conflictSaying = (words: string) => (error: unknown) =>
   AppException.is(error) && error.code === ErrorCodes.CONFLICT && error.message.includes(words);
 
@@ -144,6 +165,7 @@ describe('the section edit lock', () => {
     const { authoring, proofreading } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    await markDone(section, written.question);
 
     const stolen = await proofreading.editQuestion(
       section.reading?.id ?? '',
@@ -164,7 +186,7 @@ describe('the section edit lock', () => {
     const { authoring, proofreading, redis } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
-    await authoring.release(section.typing.id, TYPIST);
+    await markDone(section, written.question);
 
     redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
 
@@ -183,6 +205,7 @@ describe('ProofreadingService.forSection', () => {
     const { authoring, proofreading } = await build();
     const section = await aSection({ withReader: false });
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    await markDone(section, written.question);
 
     const rows = await proofreading.forSection(section.testId, section.sectionId);
 
@@ -196,6 +219,7 @@ describe('ProofreadingService.forSection', () => {
     const { authoring, proofreading } = await build();
     const section = await aSection({ withReader: false });
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    await markDone(section, written.question);
 
     const fixed = await proofreading.editSectionQuestion(
       section.testId,

@@ -117,26 +117,6 @@ describe('FinalizeService — a reading covers the paper, not just the section',
 
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
   });
-
-  /** A question handed over before the reading counts, even if it reached the paper afterwards. */
-  it('accepts one picked onto the paper later that was handed over before the reading', async () => {
-    const paper = await draft();
-    const readingAt = new Date();
-    await readAt(paper, 0, readingAt);
-    await readAt(paper, 1, readingAt);
-    await prisma.paperQuestion.updateMany({
-      where: { testId: paper.testId, baseConfigSectionId: paper.sectionIds[0] ?? '' },
-      data: { createdAt: new Date(readingAt.getTime() + 60_000) },
-    });
-    await prisma.question.updateMany({
-      where: { paperQuestions: { some: { testId: paper.testId } } },
-      data: { releasedAt: new Date(readingAt.getTime() - 60_000) },
-    });
-
-    await service.offer(paper.testId);
-
-    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
-  });
 });
 
 describe('FinalizeService — the offer freezes the paper', () => {

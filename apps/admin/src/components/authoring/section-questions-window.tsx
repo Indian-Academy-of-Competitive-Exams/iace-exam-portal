@@ -1,25 +1,11 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PAGE_SIZE_MAX, type AssignmentWithTest, type QuestionSummary } from '@iace/contracts';
-import { Badge } from '@iace/ui';
+import { type AssignmentWithTest } from '@iace/contracts';
 import { api } from '../../lib/api';
 import { QUERY_KEYS } from '../../lib/constants';
 import { QuestionsWindow, type Held, type QuestionsSource } from './questions-window';
 import { headerOf, stateOf, toDraft } from './question-scaffold';
-
-/** Every question written for a section, oldest first, however many pages that takes. */
-async function sectionQuestions(assignmentId: string): Promise<QuestionSummary[]> {
-  const all: QuestionSummary[] = [];
-  for (let page = 1; ; page += 1) {
-    const read = await api.admin.authoring.history({
-      assignmentId: [assignmentId],
-      page,
-      pageSize: PAGE_SIZE_MAX,
-    });
-    all.push(...read.items);
-    if (all.length >= read.total || read.items.length === 0) return all.reverse();
-  }
-}
+import { sectionQuestions } from './section-questions';
 
 /** A section's written questions in the scrolling window, each saved as the section editor saves it. */
 export function SectionQuestionsWindow({
@@ -61,7 +47,6 @@ export function SectionQuestionsWindow({
           <span className="text-sm font-semibold tabular-nums">
             {`Question ${index + 1} of ${questions.length}`}
           </span>
-          {questions[index]?.releasedAt ? <Badge variant="success">Handed over</Badge> : null}
         </>
       ),
       subjectLocked: assignment.sectionSubjectId !== null,

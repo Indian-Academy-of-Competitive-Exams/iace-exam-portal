@@ -22,28 +22,14 @@ export async function unreadBySection(
 
   const rows = await prisma.paperQuestion.findMany({
     where: { testId, baseConfigSectionId: { in: [...readAt.keys()] } },
-    select: {
-      baseConfigSectionId: true,
-      createdAt: true,
-      question: { select: { releasedAt: true } },
-    },
+    select: { baseConfigSectionId: true, createdAt: true },
   });
 
   const unread = new Map<string, number>();
   for (const row of rows) {
     const read = readAt.get(row.baseConfigSectionId);
-    if (!read || covered(row, read)) continue;
+    if (!read || row.createdAt <= read) continue;
     unread.set(row.baseConfigSectionId, (unread.get(row.baseConfigSectionId) ?? 0) + 1);
   }
   return unread;
-}
-
-/** Either way it reached the reader: handed over before the reading, or on the paper before it. */
-function covered(
-  row: { createdAt: Date; question: { releasedAt: Date | null } },
-  readAt: Date,
-): boolean {
-  if (row.createdAt <= readAt) return true;
-  const released = row.question.releasedAt;
-  return released !== null && released <= readAt;
 }

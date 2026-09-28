@@ -23,14 +23,14 @@ export class ProofreadingService {
     private readonly questions: QuestionsService,
   ) {}
 
-  /** The section this reader was handed: what its typist wrote, and what the paper picked into it. */
+  /** The section this reader was handed: its paper, typed and picked alike. */
   async forAssignment(
     assignmentId: string,
     adminId: string,
     isSuperAdmin = false,
   ): Promise<QuestionDetail[]> {
     const assignment = await this.requireOwnSection(assignmentId, adminId, isSuperAdmin);
-    return this.questions.allIn(sectionScope(assignment, isSuperAdmin));
+    return this.questions.allIn(await this.scopeOf(assignment, isSuperAdmin));
   }
 
   /** One question of that section, for the screen that edits it — the list is not the authority, this is. */
@@ -58,9 +58,8 @@ export class ProofreadingService {
 
   /** The same section reached by its own pair, so a section nobody holds still opens for a super admin. */
   async forSection(testId: string, baseConfigSectionId: string): Promise<QuestionDetail[]> {
-    return this.questions.allIn(
-      sectionScope(await this.requireSection(testId, baseConfigSectionId), true),
-    );
+    const section = await this.requireSection(testId, baseConfigSectionId);
+    return this.questions.allIn(await this.scopeOf(section, true));
   }
 
   /** The reader FIXES what they find, over the one service that owns the tables — never a second path. */
@@ -99,7 +98,7 @@ export class ProofreadingService {
     await takeSectionEditLock(this.redis, this.prisma, section, { id: adminId, isSuperAdmin });
 
     const question = await this.prisma.question.findFirst({
-      where: { id: questionId, ...sectionScope(section, isSuperAdmin) },
+      where: { id: questionId, ...(await this.scopeOf(section, isSuperAdmin)) },
       select: { status: true },
     });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
@@ -132,9 +131,9 @@ export class ProofreadingService {
   private async otherTestsIn(
     assignment: SectionRef,
     questionId: string,
-    unreleasedToo: boolean,
+    anyMoment: boolean,
   ): Promise<QuestionOnOtherTest[]> {
-    await this.requireInSection(assignment, questionId, unreleasedToo);
+    await this.requireInSection(assignment, questionId, anyMoment);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { questionId, testId: { not: assignment.testId } },
@@ -174,10 +173,10 @@ export class ProofreadingService {
   private async requireInSection(
     assignment: SectionRef,
     questionId: string,
-    unreleasedToo: boolean,
+    anyMoment: boolean,
   ): Promise<void> {
     const question = await this.prisma.question.findFirst({
-      where: { id: questionId, ...sectionScope(assignment, unreleasedToo) },
+      where: { id: questionId, ...(await this.scopeOf(assignment, anyMoment)) },
       select: { id: true },
     });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
@@ -202,6 +201,21 @@ export class ProofreadingService {
       select: { finalizedAt: true },
     });
     return { testId, baseConfigSectionId, finalizedAt: reading?.finalizedAt ?? null };
+  }
+
+  /** A typed section reaches its reader whole, at the typist's Done; a super admin sees it at any moment. */
+  private async scopeOf(
+    section: SectionRef,
+    anyMoment: boolean,
+  ): Promise<Prisma.QuestionWhereInput> {
+    const { testId, baseConfigSectionId } = section;
+    if (!anyMoment) {
+      const typing = await this.prisma.questionAssignment.count({
+        where: { testId, baseConfigSectionId, role: ASSIGNMENT_ROLES.TYPIST, finalizedAt: null },
+      });
+      if (typing > 0) return NOTHING;
+    }
+    return { paperQuestions: { some: { testId, baseConfigSectionId } } };
   }
 
   /** Not theirs reads as not there — unless a super admin, who is refused no section of their own institute. */
@@ -240,17 +254,4 @@ interface SectionRef {
   finalizedAt: Date | null;
 }
 
-/** Spec §7.1, held to the SECTION the assignment is: what was written for it, and what was picked into it. */
-const sectionScope = (section: SectionRef, unreleasedToo: boolean): Prisma.QuestionWhereInput => {
-  const { testId, baseConfigSectionId } = section;
-  return {
-    OR: [
-      // A picked question has no typist and so nothing to wait for; only authored work is handed over.
-      {
-        assignment: { testId, baseConfigSectionId },
-        ...(unreleasedToo ? {} : { releasedAt: { not: null } }),
-      },
-      { paperQuestions: { some: { testId, baseConfigSectionId } } },
-    ],
-  };
-};
+const NOTHING: Prisma.QuestionWhereInput = { id: { in: [] } };

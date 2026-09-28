@@ -48,6 +48,9 @@ import {
   removePaperQuestionsSchema,
   type SetPaperQuestionStatusBody,
   type RemovePaperQuestionsQuery,
+  typistDoneSchema,
+  type Assignment,
+  type TypistDoneBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
@@ -56,6 +59,7 @@ import { TestsService } from './tests.service';
 import { PaperService } from './paper.service';
 import { FinalizeService } from './finalize.service';
 import { OfferingService } from './offering.service';
+import { AssignmentsService } from '../assignments';
 
 /** The tests built from a stage's blueprints. Gated on TEST_MANAGEMENT, like the configs are. */
 @Controller('admin/tests')
@@ -258,5 +262,28 @@ export class SeriesTestsController {
     @Body(new ZodBody(setSeriesTestUnlockSchema)) body: SetSeriesTestUnlockBody,
   ): Promise<SeriesTestRow[]> {
     return this.offering.setUnlock(seriesId, testId, body);
+  }
+}
+
+/** A typist's Done lands here because its effect is the paper, which this module owns. */
+@Controller('admin/assignments')
+@Actors(ActorTypes.ADMIN)
+export class TypistDoneController {
+  constructor(
+    private readonly paper: PaperService,
+    private readonly assignments: AssignmentsService,
+  ) {}
+
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
+  @Post(':id/done')
+  @HttpCode(HttpStatus.OK)
+  async done(
+    @Param('id') id: string,
+    @Body(new ZodBody(typistDoneSchema)) body: TypistDoneBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Assignment> {
+    await this.paper.typistDone(id, body, user);
+    return this.assignments.one(id, user.id, user.isSuperAdmin);
   }
 }

@@ -122,6 +122,33 @@ const sayFramed = (testId: string) =>
     select: { id: true },
   });
 
+/** Done or read, reduced to its stamp, for a case about something else. */
+const finalizedNow = (id: string) =>
+  prisma.questionAssignment.update({ where: { id }, data: { finalizedAt: new Date() } });
+
+/** A section's paper at its count, so a reader has a whole section to mark read. */
+async function wholePaper(catalog: Catalog, testId: string, baseConfigSectionId: string) {
+  const subject = await makeSubject(prisma);
+  const { questionCount } = await prisma.baseConfigSection.findUniqueOrThrow({
+    where: { id: baseConfigSectionId },
+  });
+  for (let order = 1; order <= questionCount; order++) {
+    const question = await makeQuestion(prisma, { subjectId: subject.id });
+    await prisma.paperQuestion.create({
+      data: {
+        testId,
+        baseConfigId: catalog.baseConfigId,
+        baseConfigSectionId,
+        questionId: question.id,
+        questionVersionId: question.versionId,
+        order,
+        marks: 2,
+        negativeMarks: 0.5,
+      },
+    });
+  }
+}
+
 describe('AssignmentsService — assigning', () => {
   it('takes one typist and one proof-reader, and lists both with names and counts', async () => {
     const { assignments } = build();
@@ -401,15 +428,15 @@ describe('AssignmentsService — removing', () => {
       }),
       reader.id,
     );
-    await assignments.finalize(created.id, reader.id);
+    await finalizedNow(created.id);
 
     await assert.rejects(() => assignments.remove(created.id), refusedWith(ErrorCodes.CONFLICT));
   });
 });
 
-describe('AssignmentsService — marking written hands the work over', () => {
-  /** The failure this prevents: a reader opening a section its typist called done, and finding it empty. */
-  it('releases everything still held back when its typist finalizes', async () => {
+describe('AssignmentsService — a typist hands over with Done, not finalize', () => {
+  /** The failure this prevents: a typist marking a section written without choosing its paper. */
+  it('refuses to finalize a typing job', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog);
@@ -425,19 +452,11 @@ describe('AssignmentsService — marking written hands the work over', () => {
       }),
       typist.id,
     );
-    const subject = await makeSubject(prisma);
-    const written = await makeQuestion(prisma, { subjectId: subject.id });
-    await prisma.question.update({
-      where: { id: written.id },
-      data: { assignmentId: created.id, releasedAt: null },
-    });
 
-    const done = await assignments.finalize(created.id, typist.id);
-
-    const row = await prisma.question.findUniqueOrThrow({ where: { id: written.id } });
-    assert.notEqual(row.releasedAt, null, 'marking written hands over what is still in hand');
-    assert.equal(done.releasedCount, 1);
-    assert.equal(done.writtenCount, 1);
+    await assert.rejects(
+      () => assignments.finalize(created.id, typist.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
   });
 });
 
@@ -599,7 +618,7 @@ describe('AssignmentsService — mine', () => {
       }),
       reader.id,
     );
-    await assignments.finalize(done.id, reader.id);
+    await finalizedNow(done.id);
 
     const outstanding = await queue(assignments, reader.id, { outstanding: 'true' });
 
@@ -743,8 +762,8 @@ describe('AssignmentsService — section progress', () => {
       }),
       reader.id,
     );
-    await assignments.finalize(typing.id, typist.id);
-    await assignments.finalize(reading.id, reader.id);
+    await finalizedNow(typing.id);
+    await finalizedNow(reading.id);
 
     const rows = await progress(assignments);
 
@@ -1093,6 +1112,7 @@ describe('AssignmentsService — finalizing', () => {
       reader.id,
     );
 
+    await wholePaper(catalog, test.id, section.id);
     const first = await assignments.finalize(created.id, reader.id);
     const second = await assignments.finalize(created.id, reader.id);
 
@@ -1102,29 +1122,6 @@ describe('AssignmentsService — finalizing', () => {
       new Date(second.finalizedAt) >= new Date(first.finalizedAt),
       'a second reading never predates the first',
     );
-  });
-
-  /** "I have written this section" — its own fact, independent of whether anyone has read it. */
-  it('a typist finalises their own row too', async () => {
-    const { assignments } = build();
-    const catalog = await makeCatalog(prisma);
-    const test = await framed(catalog);
-    const section = await makeSection(prisma, catalog);
-    const typist = await makeAdmin(prisma);
-    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const created = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-
-    const finalized = await assignments.finalize(created.id, typist.id);
-
-    assert.ok(finalized.finalizedAt);
   });
 
   /** Not theirs reads as not there: the same guard authoring.service.ts uses for a draft. */
@@ -1171,6 +1168,7 @@ describe('AssignmentsService — finalizing', () => {
       reader.id,
     );
 
+    await wholePaper(catalog, test.id, section.id);
     const finalized = await assignments.finalize(created.id, superAdmin.id, true);
 
     assert.ok(finalized.finalizedAt);
@@ -1246,7 +1244,7 @@ describe('the offer gate', () => {
       reader.id,
     );
 
-    await assignments.finalize(typistRow.id, typist.id);
+    await finalizedNow(typistRow.id);
 
     await assert.rejects(
       () => finalizer.offer(paper.testId),
@@ -1392,6 +1390,94 @@ describe('AssignmentsService — what a section has written so far', () => {
         [ASSIGNMENT_ROLES.TYPIST, 3],
       ].sort(),
       'the reader waits on the same section the typist is filling',
+    );
+  });
+});
+
+describe('AssignmentsService — a reader gets a whole section', () => {
+  async function bothRoles() {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    const reader = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const typing = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      }),
+      typist.id,
+    );
+    const reading = await assignments.assign(
+      test.id,
+      body({
+        baseConfigSectionId: section.id,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+    return { assignments, catalog, test, section, typing, reading, reader };
+  }
+
+  /** The failure this prevents: a section marked read before its typist had handed it over. */
+  it('refuses Mark read while the typist is not done, and while the paper is short', async () => {
+    const { assignments, catalog, test, section, typing, reading, reader } = await bothRoles();
+
+    await assert.rejects(
+      () => assignments.finalize(reading.id, reader.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await finalizedNow(typing.id);
+    await assert.rejects(
+      () => assignments.finalize(reading.id, reader.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+
+    await wholePaper(catalog, test.id, section.id);
+    const read = await assignments.finalize(reading.id, reader.id);
+
+    assert.ok(read.finalizedAt);
+  });
+
+  it('sends the whole section back to a typist who is done, and only before it is read', async () => {
+    const { assignments, catalog, test, section, typing, reading, reader } = await bothRoles();
+    await finalizedNow(typing.id);
+
+    await assignments.sendBack(reading.id, reader.id);
+
+    const reopened = await prisma.questionAssignment.findUniqueOrThrow({
+      where: { id: typing.id },
+    });
+    assert.equal(reopened.finalizedAt, null, 'the typist is typing again');
+    await assert.rejects(
+      () => assignments.sendBack(reading.id, reader.id),
+      refusedWith(ErrorCodes.CONFLICT),
+      'a typist still typing has nothing to send back',
+    );
+
+    await finalizedNow(typing.id);
+    await wholePaper(catalog, test.id, section.id);
+    await assignments.finalize(reading.id, reader.id);
+    await assert.rejects(
+      () => assignments.sendBack(reading.id, reader.id),
+      refusedWith(ErrorCodes.CONFLICT),
+      'a section already read stays read',
+    );
+  });
+
+  it('refuses send back from a typist’s own row', async () => {
+    const { assignments, typing } = await bothRoles();
+    const row = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: typing.id } });
+
+    await assert.rejects(
+      () => assignments.sendBack(typing.id, row.assigneeId),
+      refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
 });

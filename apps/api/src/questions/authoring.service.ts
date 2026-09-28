@@ -9,7 +9,6 @@ import {
   QUESTION_SORTS,
   todayISO,
   type AuthoringHistoryQuery,
-  type AuthoringRelease,
   type AuthoringSaveResult,
   type AuthoringStats,
   type Paginated,
@@ -21,7 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { takeSectionEditLock } from '../common/edit-lock';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
-import { requireOwnAssignment, type SectionRef } from './assignment-guard';
+import { assertNotRead, requireOwnAssignment, type SectionRef } from './assignment-guard';
 import { computeStemHash } from './question-core';
 import { writtenBetween } from './question-query';
 import { QuestionsService } from './questions.service';
@@ -50,7 +49,9 @@ export class AuthoringService {
   }
 
   async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
-    await this.claimSection(await this.assertTheirs(id, adminId), adminId, false);
+    const section = await this.assertTheirs(id, adminId);
+    if (section) await assertNotRead(this.prisma, section);
+    await this.claimSection(section, adminId, false);
     const question = await this.questions.update(id, draft, adminId);
     return { question, duplicateOf: await this.duplicateFor(draft, id) };
   }
@@ -58,24 +59,6 @@ export class AuthoringService {
   async detail(id: string, adminId: string) {
     await this.assertTheirs(id, adminId);
     return this.questions.detail(id);
-  }
-
-  /** Hands the section's work so far to its reader. Released stays released; editing goes on. */
-  async release(
-    assignmentId: string,
-    adminId: string,
-    isSuperAdmin = false,
-  ): Promise<AuthoringRelease> {
-    const section = await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
-
-    const handed = await this.prisma.question.updateMany({
-      where: { assignment: section, releasedAt: null },
-      data: { releasedAt: new Date() },
-    });
-    const released = await this.prisma.question.count({
-      where: { assignment: section, releasedAt: { not: null } },
-    });
-    return { handedOver: handed.count, released };
   }
 
   /** A typist's own mistake, taken back the moment they see it — the bank never hears about it. */

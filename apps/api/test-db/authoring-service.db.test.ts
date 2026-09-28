@@ -193,38 +193,47 @@ describe('AuthoringService.create — assignment provenance', () => {
   });
 });
 
-describe('AuthoringService.release', () => {
-  /** The failure this prevents: a reader given every keystroke as it lands, with no way to tell. */
-  it('hands over everything not yet handed over, and counts only what moved', async () => {
+describe('AuthoringService — after Done', () => {
+  /** The failure this prevents: a question typed after Done slipping into a paper the reader has. */
+  it('refuses a new question into a section already marked done', async () => {
     const authoring = await build();
     const assignment = await makeAssignment(MINE);
-    const first = await authoring.create(draft(), MINE, assignment.id);
-
-    const once = await authoring.release(assignment.id, MINE);
-    const second = await authoring.create(
-      draft({ stem: { en: 'Written after the hand-over' } }),
-      MINE,
-      assignment.id,
-    );
-    const twice = await authoring.release(assignment.id, MINE);
-
-    assert.deepEqual(once, { handedOver: 1, released: 1 });
-    assert.deepEqual(twice, { handedOver: 1, released: 2 }, 'the first one does not move again');
-
-    const rows = await prisma.question.findMany({
-      where: { id: { in: [first.question.id, second.question.id] } },
-      select: { releasedAt: true },
+    await prisma.questionAssignment.update({
+      where: { id: assignment.id },
+      data: { finalizedAt: new Date() },
     });
-    assert.ok(rows.every((row) => row.releasedAt !== null));
-  });
-
-  it('refuses an assignment that is not the caller’s own', async () => {
-    const authoring = await build();
-    const assignment = await makeAssignment(THEIRS);
 
     await assert.rejects(
-      () => authoring.release(assignment.id, MINE),
-      refusedWith(ErrorCodes.NOT_FOUND),
+      () => authoring.create(draft(), MINE, assignment.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+  });
+
+  it('still lets the typist fix what they wrote until the section is read', async () => {
+    const authoring = await build();
+    const assignment = await makeAssignment(MINE);
+    const { question } = await authoring.create(draft(), MINE, assignment.id);
+    const typing = await prisma.questionAssignment.update({
+      where: { id: assignment.id },
+      data: { finalizedAt: new Date() },
+    });
+
+    await authoring.update(question.id, draft({ stem: { en: 'Fixed after Done' } }), MINE);
+
+    await prisma.questionAssignment.create({
+      data: {
+        id: uid(),
+        testId: typing.testId,
+        baseConfigId: typing.baseConfigId,
+        baseConfigSectionId: typing.baseConfigSectionId,
+        assigneeId: THEIRS,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+        finalizedAt: new Date(),
+      },
+    });
+    await assert.rejects(
+      () => authoring.update(question.id, draft({ stem: { en: 'Too late' } }), MINE),
+      refusedWith(ErrorCodes.CONFLICT),
     );
   });
 });

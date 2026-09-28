@@ -131,16 +131,23 @@ async function aSection() {
   };
 }
 
-/** Written and handed to the reader, which is the only state a reader sees a question in. */
+let paperOrder = 100;
+
+/** Written, chosen onto the paper and the section marked done — the only way a reader sees one. */
 async function handedOver(
   questions: QuestionsService,
-  assignmentId: string,
+  section: Awaited<ReturnType<typeof aSection>>,
   over: Parameters<typeof draft>[0] = {},
 ) {
-  const written = await questions.create(draft(over), AUTHOR, { assignmentId });
-  await prisma.question.update({
-    where: { id: written.id },
-    data: { releasedAt: new Date() },
+  const written = await questions.create(draft(over), AUTHOR, {
+    assignmentId: section.typing.id,
+  });
+  const row = await prisma.question.findUniqueOrThrow({ where: { id: written.id } });
+  const version = { id: written.id, versionId: row.currentVersionId ?? '' };
+  await pickOntoPaper(section.catalog, section.testId, section.sectionId, version, paperOrder++);
+  await prisma.questionAssignment.update({
+    where: { id: section.typing.id },
+    data: { finalizedAt: new Date() },
   });
   return written;
 }
@@ -150,7 +157,7 @@ describe('ProofreadingService.forAssignment', () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
 
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
     const picked = await makeQuestion(prisma, {
       subjectId: BANK.QUANT,
       stem: 'Picked from the bank',
@@ -171,30 +178,25 @@ describe('ProofreadingService.forAssignment', () => {
     assert.deepEqual(rows.map((row) => row.id).sort(), [written.id, picked.id].sort());
   });
 
-  /** The failure this prevents: a reader opening a section mid-morning and reading half-typed work. */
-  it('holds back what its typist has not handed over yet', async () => {
+  /** The failure this prevents: a reader reading a section its typist has taken back to fix. */
+  it('holds the whole section back while its typist is not done', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const handed = await handedOver(questions, section.typing.id);
-    const stillTyping = await questions.create(
-      draft({ stem: { en: 'Half written', hi: 'आधा लिखा' } }),
-      AUTHOR,
-      { assignmentId: section.typing.id },
-    );
+    await handedOver(questions, section);
+    await questions.create(draft({ stem: { en: 'Written after', hi: 'बाद में लिखा' } }), AUTHOR, {
+      assignmentId: section.typing.id,
+    });
+    await prisma.questionAssignment.update({
+      where: { id: section.typing.id },
+      data: { finalizedAt: null },
+    });
 
-    const rows = await proofreading.forAssignment(section.reading.id, REVIEWER);
-
-    assert.deepEqual(
-      rows.map((row) => row.id),
-      [handed.id],
-      'the unreleased one is not the reader’s to see yet',
-    );
+    assert.deepEqual(await proofreading.forAssignment(section.reading.id, REVIEWER), []);
     assert.equal(
       (await proofreading.forAssignment(section.reading.id, STRANGER, true)).length,
-      2,
-      'a super admin sees the section whole, handed over or not',
+      1,
+      'a super admin sees the paper at any moment, and only the paper',
     );
-    assert.ok(stillTyping.id);
   });
 
   it("refuses another reader's assignment", async () => {
@@ -211,7 +213,7 @@ describe('ProofreadingService.forAssignment', () => {
   it('hands a super admin the section it just refused a stranger', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
 
     const rows = await proofreading.forAssignment(section.reading.id, STRANGER, true);
 
@@ -238,7 +240,7 @@ describe('ProofreadingService.oneFor', () => {
   it('hands back one question of the section it was opened on', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
 
     const one = await proofreading.oneFor(section.reading.id, written.id, REVIEWER);
 
@@ -259,7 +261,7 @@ describe('ProofreadingService.oneFor', () => {
   it('reads the same question by the section’s own pair, for a super admin', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
 
     const one = await proofreading.oneInSection(section.testId, section.sectionId, written.id);
 
@@ -271,7 +273,7 @@ describe('ProofreadingService.editQuestion', () => {
   it('rewrites the version in place while no student can reach the test', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
     const before = await prisma.question.findUniqueOrThrow({ where: { id: written.id } });
 
     const saved = await proofreading.editQuestion(
@@ -292,7 +294,7 @@ describe('ProofreadingService.editQuestion', () => {
   it('refuses the edit once the reader has marked the section read', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
     await prisma.questionAssignment.update({
       where: { id: section.reading.id },
       data: { finalizedAt: new Date() },
@@ -331,7 +333,7 @@ describe('ProofreadingService.editQuestion', () => {
   it('leaves the status where it found it', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
     await questions.archive(written.id);
 
     const saved = await proofreading.editQuestion(
@@ -361,7 +363,7 @@ describe('ProofreadingService.otherTests', () => {
   it('names the other test holding the question, its review state and that it has opened', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
+    const written = await handedOver(questions, section);
 
     const opened = new Date(Date.now() - 60_000);
     const live = await makeTest(prisma, section.catalog, {
@@ -401,14 +403,7 @@ describe('ProofreadingService.otherTests', () => {
   it('leaves out the reader’s own test and says nothing when no other holds it', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();
-    const written = await handedOver(questions, section.typing.id);
-    await pickOntoPaper(
-      section.catalog,
-      section.testId,
-      section.sectionId,
-      await currentVersionOf(written.id),
-      1,
-    );
+    const written = await handedOver(questions, section);
 
     assert.deepEqual(await proofreading.otherTests(section.reading.id, written.id, REVIEWER), []);
   });

@@ -31,6 +31,7 @@ import {
   AssignmentTestPicker,
 } from '../components/assignment-scope-picker';
 import { chooseTest } from '../lib/assignment-filters';
+import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 
 /** One section handed to one admin, from either side of it, and the screen a row of it opens. */
 
@@ -41,13 +42,6 @@ const rowHref = (row: AssignmentWithTest): string =>
     ? ROUTES.AUTHORING_FOR_ASSIGNMENT(row.id)
     : ROUTES.PROOFREADING_SECTION(row.id);
 
-/** Two jobs, two verbs — "I wrote this" and "I read this", with no ordering between them. */
-const finalizeLabel = (role: AssignmentRole) => (isTypist(role) ? 'Mark written' : 'Mark read');
-
-/** Written but still the typist's — what "mark written" is about to hand over. */
-const heldBack = (row: AssignmentWithTest): number =>
-  Math.max(row.writtenCount - row.releasedCount, 0);
-
 function progressVariant(written: number, target: number): BadgeProps['variant'] {
   if (written === 0) return 'neutral';
   return written < target ? 'warning' : 'success';
@@ -55,23 +49,45 @@ function progressVariant(written: number, target: number): BadgeProps['variant']
 
 /** Written against the section's own target — the same fact the editor shows while writing. */
 function SectionProgress({ row }: Readonly<{ row: AssignmentWithTest }>) {
-  const { writtenCount, releasedCount, sectionQuestionCount } = row;
-  const held = writtenCount - releasedCount;
+  const { writtenCount, sectionQuestionCount } = row;
 
   return (
-    <span className="flex items-center gap-2">
-      <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
-        {`${writtenCount}/${sectionQuestionCount}`}
-      </Badge>
-      {held > 0 ? <Badge variant="warning">{`${held} not handed over`}</Badge> : null}
-    </span>
+    <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
+      {`${writtenCount}/${sectionQuestionCount}`}
+    </Badge>
   );
 }
 
-function columnsOf(
-  role: AssignmentRole,
-  onFinalize: (row: AssignmentWithTest) => void,
-): DataTableColumn<AssignmentWithTest>[] {
+interface RowMoves {
+  onDone: (row: AssignmentWithTest) => void;
+  onRead: (row: AssignmentWithTest) => void;
+  onSendBack: (row: AssignmentWithTest) => void;
+}
+
+/** What an outstanding row can do next: a typist marks done; a reader, once the typist has, reads or sends back. */
+function RowMenu({ row, moves }: Readonly<{ row: AssignmentWithTest; moves: RowMoves }>) {
+  if (row.finalizedAt) return null;
+  if (isTypist(row.role)) {
+    return (
+      <RowActions label={`Actions for ${row.sectionName}`}>
+        <DropdownMenuItem onSelect={() => moves.onDone(row)}>Mark done</DropdownMenuItem>
+      </RowActions>
+    );
+  }
+  if (row.typistDone === false) return null;
+  return (
+    <RowActions label={`Actions for ${row.sectionName}`}>
+      <DropdownMenuItem onSelect={() => moves.onRead(row)}>Mark read</DropdownMenuItem>
+      {row.typistDone ? (
+        <DropdownMenuItem onSelect={() => moves.onSendBack(row)}>
+          Send back to typist
+        </DropdownMenuItem>
+      ) : null}
+    </RowActions>
+  );
+}
+
+function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
   return [
     {
       key: 'test',
@@ -116,14 +132,7 @@ function columnsOf(
     {
       key: 'actions',
       className: 'text-right',
-      cell: (row) =>
-        row.finalizedAt ? null : (
-          <RowActions label={`Actions for ${row.sectionName}`}>
-            <DropdownMenuItem onSelect={() => onFinalize(row)}>
-              {finalizeLabel(role)}
-            </DropdownMenuItem>
-          </RowActions>
-        ),
+      cell: (row) => <RowMenu row={row} moves={moves} />,
     },
   ];
 }
@@ -131,7 +140,9 @@ function columnsOf(
 /** Every section handed to this admin in one role, and the screen a row of it opens. */
 export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>) {
   const queryClient = useQueryClient();
-  const [finalizing, setFinalizing] = useState<AssignmentWithTest | null>(null);
+  const [finishing, setFinishing] = useState<AssignmentWithTest | null>(null);
+  const [reading, setReading] = useState<AssignmentWithTest | null>(null);
+  const [sendingBack, setSendingBack] = useState<AssignmentWithTest | null>(null);
 
   // Held outside the spec: choosing another test also has to drop the section under the old one.
   const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
@@ -190,7 +201,11 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
     fetchPage: (params) => api.admin.assignments.mine(params),
   });
 
-  const columns = useMemo(() => columnsOf(role, setFinalizing), [role]);
+  const columns = useMemo(
+    () => columnsOf({ onDone: setFinishing, onRead: setReading, onSendBack: setSendingBack }),
+    [],
+  );
+  const settle = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
 
   const header = <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="My sections" />;
 
@@ -205,58 +220,39 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
         emptyFiltered="No sections match those filters"
       />
 
+      <TypistDoneDialog assignment={finishing} onClose={() => setFinishing(null)} />
       <FinalizeAssignmentDialog
-        role={role}
-        assignment={finalizing}
-        onClose={() => setFinalizing(null)}
-        onFinalized={() => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS })}
+        assignment={reading}
+        onClose={() => setReading(null)}
+        onFinalized={settle}
+      />
+      <SendBackDialog
+        assignment={sendingBack}
+        onClose={() => setSendingBack(null)}
+        onSentBack={settle}
       />
     </TableFrame>
   );
 }
 
-function promptFor(role: AssignmentRole, assignment: AssignmentWithTest, covering: number) {
-  const test = assignment.testTitle ?? 'this test';
-
-  if (isTypist(role)) {
-    return {
-      title: `Mark ${assignment.sectionName} written?`,
-      description: heldBack(assignment)
-        ? `You have written ${assignment.writtenCount} of ${assignment.sectionQuestionCount} questions for this section in ${test}. The ${plural(heldBack(assignment), 'question')} you have not handed over yet will go to the proof-reader with this.`
-        : `You have written ${assignment.writtenCount} of ${assignment.sectionQuestionCount} questions for this section in ${test}. This tells the proof-reader it is ready to check.`,
-      confirmLabel: 'Mark written',
-      success: `${assignment.sectionName} marked written.`,
-    };
-  }
-
-  return {
-    title: `Mark ${assignment.sectionName} read?`,
-    description: `This covers ${plural(covering, 'question')} in ${test}. You cannot edit them afterwards, and the test is one section closer to being offered.`,
-    confirmLabel: 'Mark read',
-    success: `${assignment.sectionName} marked read.`,
-  };
-}
-
+/** A reader's "I have read this"; the typist's hand-over is the Done dialog, which chooses the paper. */
 export function FinalizeAssignmentDialog({
-  role,
   assignment,
   covering,
   onClose,
   onFinalized,
 }: Readonly<{
-  role: AssignmentRole;
   assignment: AssignmentWithTest | null;
-  /** What the section actually holds — the queue knows the typed ones, the section screen all of them. */
+  /** What the section actually holds — the section screen knows it; the queue reads the section's count. */
   covering?: number;
   onClose: () => void;
   onFinalized: () => void;
 }>) {
-  const prompt = assignment
-    ? promptFor(role, assignment, covering ?? assignment.writtenCount)
-    : null;
+  const count = covering ?? assignment?.sectionQuestionCount ?? 0;
+  const test = assignment?.testTitle ?? 'this test';
 
   const finalize = useMutation({
-    meta: { success: prompt?.success },
+    meta: { success: `${assignment?.sectionName ?? 'Section'} marked read.` },
     mutationFn: (id: string) => api.admin.assignments.finalize(id),
     onSuccess: () => {
       onFinalized();
@@ -268,11 +264,43 @@ export function FinalizeAssignmentDialog({
     <ConfirmDialog
       open={assignment !== null}
       onOpenChange={(open) => !open && onClose()}
-      title={prompt?.title ?? ''}
-      description={prompt?.description ?? ''}
-      confirmLabel={prompt?.confirmLabel ?? finalizeLabel(role)}
+      title={`Mark ${assignment?.sectionName ?? 'this section'} read?`}
+      description={`This covers ${plural(count, 'question')} in ${test}. You cannot edit them afterwards, and the test is one section closer to being offered.`}
+      confirmLabel="Mark read"
       loading={finalize.isPending}
       onConfirm={() => assignment?.id && finalize.mutate(assignment.id)}
+    />
+  );
+}
+
+/** The whole section goes back to its typist; what to fix is said in the section thread. */
+export function SendBackDialog({
+  assignment,
+  onClose,
+  onSentBack,
+}: Readonly<{
+  assignment: AssignmentWithTest | null;
+  onClose: () => void;
+  onSentBack: () => void;
+}>) {
+  const sendBack = useMutation({
+    meta: { success: `${assignment?.sectionName ?? 'Section'} sent back to its typist.` },
+    mutationFn: (id: string) => api.admin.assignments.sendBack(id),
+    onSuccess: () => {
+      onSentBack();
+      onClose();
+    },
+  });
+
+  return (
+    <ConfirmDialog
+      open={assignment !== null}
+      onOpenChange={(open) => !open && onClose()}
+      title={`Send ${assignment?.sectionName ?? 'this section'} back?`}
+      description={`All ${plural(assignment?.sectionQuestionCount ?? 0, 'question')} go back to the typist, and the section leaves your reading until they mark it done again. Say what to fix in the section thread.`}
+      confirmLabel="Send back"
+      loading={sendBack.isPending}
+      onConfirm={() => assignment?.id && sendBack.mutate(assignment.id)}
     />
   );
 }

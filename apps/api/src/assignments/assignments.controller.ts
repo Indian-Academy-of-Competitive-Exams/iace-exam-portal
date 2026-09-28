@@ -135,11 +135,18 @@ export class AssignmentsController {
     return this.assignments.sectionLock(testId, sectionId);
   }
 
-  /** Either role finalises their own row — "I've written this" and "I've read this" are independent. */
-  @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.WRITE)
+  /** A reader's "I've read this". A typist's hand-over is Done, which chooses the paper. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)
   @Patch(':id/finalize')
   finalize(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Assignment> {
     return this.assignments.finalize(id, user.id, user.isSuperAdmin);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/send-back')
+  sendBack(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Assignment> {
+    return this.assignments.sendBack(id, user.id, user.isSuperAdmin);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)

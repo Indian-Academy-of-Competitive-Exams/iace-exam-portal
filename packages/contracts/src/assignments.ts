@@ -32,8 +32,8 @@ export const assignmentSchema = z.object({
   finalizedAt: z.string().nullable(),
   /** Questions written under ANY assignment on this section — a section fact, not this row's own. */
   writtenCount: z.number().int(),
-  /** How many of those its typist has handed to the reader. Below `writtenCount` means work in hand. */
-  releasedCount: z.number().int(),
+  /** Whether the section's typist has pressed Done. Null where nobody types it — a picked paper. */
+  typistDone: z.boolean().nullable(),
   /** The section's own target — a section fact, same as `writtenCount`. */
   sectionQuestionCount: z.number().int(),
   /** The test's own draw spec for this section. Absent means every difficulty, not zero of each. */
@@ -73,6 +73,14 @@ export const mineAssignmentsQuerySchema = paginationQuerySchema.extend({
 export type MineAssignmentsQuery = z.infer<typeof mineAssignmentsQuerySchema>;
 export type MineAssignmentsQueryInput = z.input<typeof mineAssignmentsQuerySchema>;
 
+/** A typist's Done: exactly the section's questions for the paper; the rest go to the bank unless discarded. */
+export const typistDoneSchema = z.object({
+  selected: z.array(z.string()).min(1, 'Choose the questions for this section'),
+  discard: z.array(z.string()).default([]),
+});
+export type TypistDoneInput = z.input<typeof typistDoneSchema>;
+export type TypistDoneBody = z.infer<typeof typistDoneSchema>;
+
 // ============================================================================
 // Section progress. A super admin's read-only view of how the institute's
 // typing and proof-reading are going: one row per (test, section) whether or
@@ -97,8 +105,6 @@ export const sectionProgressRowSchema = z.object({
   sectionName: z.string(),
   /** Questions written under ANY assignment on this section, against the section's own target. */
   writtenCount: z.number().int(),
-  /** How many have reached the reader. A gap here is why a reader's screen can look empty. */
-  releasedCount: z.number().int(),
   sectionQuestionCount: z.number().int(),
   /** Null where the paper's source gives the role nothing to do — a PICKED test is never typed. */
   typing: sectionRoleProgressSchema.nullable(),
@@ -263,6 +269,10 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** One row by id, for the screen a queue row opens — a super admin reaches anybody's. */
   one: (id: string) => `/admin/assignments/${id}`,
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,
+  /** A typist's one hand-over: the chosen questions become the section's paper. */
+  done: (id: string) => `/admin/assignments/${id}/done`,
+  /** A reader returns the whole section to its typist; the reason goes in the section thread. */
+  sendBack: (id: string) => `/admin/assignments/${id}/send-back`,
   /** Who a role can be given to — active admins already holding the feature key it needs. */
   assignable: '/admin/assignments/assignable',
   /** GET reads the section thread; POST to the same path adds to it. */

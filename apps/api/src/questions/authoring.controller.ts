@@ -31,7 +31,6 @@ import {
   type AuthoringDuplicate,
   type AuthoringDuplicateQuery,
   type AuthoringHistoryQuery,
-  type AuthoringRelease,
   type QuestionImportCommitBody,
   type QuestionImportPlan,
   type QuestionImportResult,
@@ -187,15 +186,5 @@ export class AuthoringController {
       user.id,
       user.isSuperAdmin,
     );
-  }
-
-  @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
-  @HttpCode(HttpStatus.OK)
-  @Post('assignments/:assignmentId/release')
-  release(
-    @Param('assignmentId') assignmentId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<AuthoringRelease> {
-    return this.authoring.release(assignmentId, user.id, user.isSuperAdmin);
   }
 }

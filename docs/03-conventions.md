@@ -164,6 +164,9 @@ owns the sitting owns the derivation.
 - `tests` moves a `Question` in-use counter on the offer, once per question served. Being depended
   on is what freezes a question, and only the offer knows; `finalizedAt` is the watermark that keeps
   a re-offer from counting twice.
+- `tests` stamps a typist's `QuestionAssignment.finalizedAt` on Done. The stamp and the paper rows
+  it places are one fact and commit in one transaction; the leftover questions go to the bank
+  through `QuestionsService`, not by a write of `tests`' own.
 - `tests` deletes a section's unfinalized `QuestionAssignment` rows when a super admin moves a test
   from FRAMED to PICKED. Only the source change knows the work has been stood down, and an
   assignment nobody can finish is not a row `assignments` would delete on its own.

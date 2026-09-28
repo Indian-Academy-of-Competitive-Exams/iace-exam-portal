@@ -77,6 +77,13 @@ Setup, then paper, then offer. There is no certificate step.
   version, so there has to be one; nothing else gates the draw, because a paper is built before its
   questions are finished and what stops an unfinished one reaching students is the offer, which
   refuses while any assignment on the test is unfinalized.
+- **A typed (FRAMED) section's paper is its typist's Done.** One action per section: the typist
+  chooses exactly the section's count, inside its difficulty split, and Done is refused while the
+  choice is short — so a reader always gets a whole section. The chosen become the section's
+  paper rows; each question left out goes to the bank as an ordinary question, or is deleted if
+  the typist says so. Nobody but a super admin picks, fills or removes on a FRAMED paper; changing
+  it means sending the section back. After Done the typist may still fix what they wrote until the
+  section is read, and anything new they write goes to the bank, not this paper.
 - **A test's paper is frozen iff it has been offered**, which is the whole of the rule: `finalizedAt`
   is set by the first offer and never cleared, and there is no separate flag and no unfreezing.
 - The offer freezes rows that already exist and draws nothing. The paper must hold every section at
@@ -366,10 +373,16 @@ and needs no mapping at all.
   before it claims the question row, because the version guard reaches those tests anyway on the way
   out. Nothing enforces this but the rule: two admins crossing on one order deadlock, and Postgres
   kills one of them with a save the admin never asked to lose.
-- **Proof-reading is per test, per section.** A reader opens the assignment they hold and sees what
-  its typist wrote for that section plus what the paper picked into it — nothing else, and no
-  bank-wide document. They fix what they find by editing it directly; there are no per-question
-  flags. Marking the section read sets `finalizedAt` and ends their authority over it.
+- **Proof-reading is per test, per section, and a reader always gets the section whole.** A reader
+  opens the assignment they hold and sees that section's paper — typed and picked alike — nothing
+  else, and no bank-wide document. A typed section reaches them only once its typist is done, and
+  Mark read is refused until the paper holds the section's count. They fix what they find by
+  editing it directly; there are no per-question flags. Marking the section read sets `finalizedAt`
+  and ends their authority over it. A paper row that joins after the reading is unread until the
+  section is read again.
+- **A reader may send a typed section back** before marking it read. It returns the WHOLE section:
+  the typist's `finalizedAt` clears, and they type, import and press Done again. What to fix is
+  said in the section thread.
 - **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion` or
   `TestQuestionStat` references may be deleted; every served question is a paper row a sat test
   cannot lose, and the rule counts those two tables before it allows the move, so it refuses before

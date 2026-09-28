@@ -375,7 +375,6 @@ Table Question {
   stemHash text
   stemHashVersion integer [not null, default: 1]
   assignmentId uuid
-  releasedAt timestamptz(3)
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]

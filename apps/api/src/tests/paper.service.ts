@@ -4,6 +4,7 @@ import { Prisma, type Question } from '@prisma/client';
 import {
   AppException,
   ASSIGNMENT_ROLES,
+  DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
@@ -22,6 +23,7 @@ import {
   type PaperSource,
   type TestScope,
   type TestScopeRef,
+  type TypistDoneBody,
   scopedSections,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
@@ -37,7 +39,7 @@ import {
 import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from './test-rules';
 import { beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
-import { drawableFor, stemPreviewOf } from '../questions';
+import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
@@ -54,6 +56,10 @@ const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
 const SECTION_UNDER_TYPED_MESSAGE =
   'Its typist has not written enough questions to fill the rest of this section yet.';
+const TYPED_SECTION_MESSAGE =
+  "A typed section's paper is what its typist chose at Done. Send the section back to change it.";
+const ALREADY_DONE_MESSAGE = 'This section is already marked done.';
+const NOT_WRITTEN_HERE_MESSAGE = 'Choose only questions written for this section.';
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -100,6 +106,7 @@ export class PaperService {
     private readonly outbox: ScoringOutbox,
     private readonly auditContext: AuditContext,
     private readonly redis: RedisService,
+    private readonly questions: QuestionsService,
   ) {}
 
   async read(testId: string): Promise<TestPaper> {
@@ -122,7 +129,7 @@ export class PaperService {
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    await this.assertSectionsNotAssigned(testId, [section.id], editor.isSuperAdmin ?? false);
+    this.assertNotTyped(test, editor);
 
     this.assertNoRepeats(input.questionIds);
 
@@ -208,7 +215,7 @@ export class PaperService {
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    await this.assertSectionsNotAssigned(testId, [section.id], editor.isSuperAdmin ?? false);
+    this.assertNotTyped(test, editor);
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
@@ -309,11 +316,7 @@ export class PaperService {
     assertSourceChosen(test);
 
     const row = await this.requireRow(testId, rowId);
-    await this.assertSectionsNotAssigned(
-      testId,
-      [row.baseConfigSectionId],
-      editor.isSuperAdmin ?? false,
-    );
+    this.assertNotTyped(test, editor);
     const question = await this.requireDrawable(testId, input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
@@ -326,6 +329,131 @@ export class PaperService {
     }, TX_LIMITS.SHORT);
 
     return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+  }
+
+  /** A typist's one hand-over: exactly the section's count, inside its mix, becomes its paper. */
+  async typistDone(assignmentId: string, body: TypistDoneBody, editor: Editor): Promise<void> {
+    const typing = await this.prisma.questionAssignment.findUnique({
+      where: { id: assignmentId },
+      select: {
+        role: true,
+        assigneeId: true,
+        finalizedAt: true,
+        testId: true,
+        baseConfigSectionId: true,
+      },
+    });
+    const theirs = typing?.assigneeId === editor.id || (editor.isSuperAdmin ?? false);
+    if (typing?.role !== ASSIGNMENT_ROLES.TYPIST || !theirs) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+    }
+    if (typing.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_DONE_MESSAGE);
+
+    const { testId } = typing;
+    const test = await this.requireTest(testId);
+    this.assertAssemblable(test);
+    const config = await this.configs.detail(test.baseConfigId);
+    const section = this.scopedOf(test, config).find(
+      (row) => row.id === typing.baseConfigSectionId,
+    );
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
+
+    const typed = (await this.typedFor(assignmentId)).map((question) => question.id);
+    const selected = await this.assertTypedSelection(testId, typed, section, body, test);
+
+    await this.prisma.$transaction(async (tx) => {
+      await beginPaperEdit(tx, testId);
+      const done = await tx.questionAssignment.updateMany({
+        where: { id: assignmentId, finalizedAt: null },
+        data: { finalizedAt: new Date() },
+      });
+      if (done.count === 0) throw new AppException(ErrorCodes.CONFLICT, ALREADY_DONE_MESSAGE);
+      await this.placeTyped(tx, test, section, selected);
+    }, TX_LIMITS.SHORT);
+
+    // After the paper lets go of them: a question still on it cannot be deleted.
+    for (const id of body.discard) await this.questions.remove(id);
+    const chosen = new Set([...body.selected, ...body.discard]);
+    await this.questions.detachFromSection(typed.filter((id) => !chosen.has(id)));
+  }
+
+  /** The section's rows become exactly the choice: unticked rows go, new ones join after the highest. */
+  private async placeTyped(
+    tx: Prisma.TransactionClient,
+    { id: testId, baseConfigId }: { id: string; baseConfigId: string },
+    section: BaseConfigDetail['sections'][number],
+    selected: readonly (DrawableQuestion & { currentVersionId: string })[],
+  ): Promise<void> {
+    const chosen = new Set(selected.map((question) => question.id));
+    const held = await tx.paperQuestion.findMany({
+      where: { testId, baseConfigSectionId: section.id },
+      select: { id: true, questionId: true },
+    });
+    await tx.paperQuestion.deleteMany({
+      where: { id: { in: held.filter((row) => !chosen.has(row.questionId)).map((row) => row.id) } },
+    });
+
+    const kept = new Set(held.map((row) => row.questionId));
+    const highest = await tx.paperQuestion.aggregate({ where: { testId }, _max: { order: true } });
+    await tx.paperQuestion.createMany({
+      data: selected
+        .filter((question) => !kept.has(question.id))
+        .map((question, index) => ({
+          testId,
+          baseConfigId,
+          baseConfigSectionId: section.id,
+          questionId: question.id,
+          questionVersionId: question.currentVersionId,
+          order: (highest._max.order ?? 0) + index + 1,
+          marks: section.marksPerQuestion,
+          negativeMarks: section.negativeMarks,
+        })),
+    });
+  }
+
+  /** Every refusal before any write: the choice is the typist's own, whole, drawable and inside the mix. */
+  private async assertTypedSelection(
+    testId: string,
+    typed: readonly string[],
+    section: BaseConfigDetail['sections'][number],
+    { selected, discard }: TypistDoneBody,
+    test: { questionPoolFilter: Prisma.JsonValue },
+  ): Promise<(DrawableQuestion & { currentVersionId: string })[]> {
+    this.assertNoRepeats(selected);
+    if (selected.length !== section.questionCount) {
+      throw selectionRefused(
+        `${section.name} needs exactly ${section.questionCount} questions; ${selected.length} are chosen.`,
+      );
+    }
+
+    const own = new Set(typed);
+    const stray = [...selected, ...discard].some((id) => !own.has(id));
+    if (stray || discard.some((id) => selected.includes(id))) {
+      throw selectionRefused(NOT_WRITTEN_HERE_MESSAGE);
+    }
+
+    const drawable = await this.drawableContext(testId, selected, section.id);
+    const questions = selected.map((id) => assertDrawableIn(drawable, id));
+    const mix = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id]?.mix;
+    const quota = sectionQuota(
+      mix,
+      questions.map((question) => question.difficulty),
+    );
+    const off = DIFFICULTY_LEVELS.filter((level) => {
+      const { chosen, allowed } = quota[level];
+      return allowed !== null && chosen !== allowed;
+    });
+    if (off.length > 0) {
+      const counts = off.map(
+        (level) => `${DIFFICULTY_LABELS[level]} ${quota[level].chosen} of ${quota[level].allowed}`,
+      );
+      throw selectionRefused(`${section.name} needs its difficulty split: ${counts.join(', ')}.`);
+    }
+    return questions;
+  }
+
+  private typedFor(assignmentId: string) {
+    return this.prisma.question.findMany({ where: { assignmentId }, select: { id: true } });
   }
 
   /** Dropped, leaving its section short of the count its config asks for until one is drawn. */
@@ -341,11 +469,7 @@ export class PaperService {
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
     const rows = [];
     for (const rowId of rowIds) rows.push(await this.requireRow(testId, rowId));
-    await this.assertSectionsNotAssigned(
-      testId,
-      [...new Set(rows.map((row) => row.baseConfigSectionId))],
-      editor.isSuperAdmin ?? false,
-    );
+    this.assertNotTyped(test, editor);
 
     await this.prisma.$transaction(async (tx) => {
       await beginPaperEdit(tx, testId);
@@ -503,36 +627,11 @@ export class PaperService {
     return rows.filter(hasVersion);
   }
 
-  /** A section is its TYPIST's until they are done — nobody but a super admin fills it underneath. */
-  private async assertSectionsNotAssigned(
-    testId: string,
-    baseConfigSectionIds: readonly string[],
-    isSuperAdmin: boolean,
-  ): Promise<void> {
-    if (isSuperAdmin) return;
-
-    const outstanding = await this.prisma.questionAssignment.findMany({
-      where: {
-        testId,
-        // A reader reads what is already there, so only an outstanding typist holds the section.
-        role: ASSIGNMENT_ROLES.TYPIST,
-        finalizedAt: null,
-        baseConfigSectionId: { in: [...baseConfigSectionIds] },
-      },
-      select: {
-        baseConfigSection: { select: { name: true } },
-        assignee: { select: { fullName: true } },
-      },
-    });
-    if (outstanding.length === 0) return;
-
-    const issues = outstanding.map(
-      (row) =>
-        `${row.baseConfigSection.name} is with ${row.assignee.fullName ?? 'its assignee'} until they mark it done.`,
-    );
-    const [first] = issues;
-    throw new AppException(ErrorCodes.CONFLICT, first ?? '', {
-      fieldErrors: { [FORM_LEVEL_FIELD]: issues },
+  /** A typed section is placed by its typist's Done and changed only by sending it back. */
+  private assertNotTyped(test: { paperSource: PaperSource | null }, editor: Editor): void {
+    if (test.paperSource !== PAPER_SOURCES.FRAMED || editor.isSuperAdmin) return;
+    throw new AppException(ErrorCodes.CONFLICT, TYPED_SECTION_MESSAGE, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [TYPED_SECTION_MESSAGE] },
     });
   }
 
@@ -652,6 +751,9 @@ const SEED_CEILING = 2 ** 31;
 function freshSeed(): number {
   return randomInt(SEED_CEILING);
 }
+
+const selectionRefused = (issue: string) =>
+  new AppException(ErrorCodes.VALIDATION_ERROR, issue, { fieldErrors: { selected: [issue] } });
 
 /** Every question the request named, with what its drawability turns on, read once. */
 interface DrawableContext {

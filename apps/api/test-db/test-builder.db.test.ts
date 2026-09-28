@@ -9,9 +9,10 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { OfferingService } from '../src/tests/offering.service';
+import { QuestionsService } from '../src/questions/questions.service';
 import { PaperService } from '../src/tests/paper.service';
 import { TestsService } from '../src/tests/tests.service';
-import { FakeEventBus, FakeQueue, FakeRedis } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BUILDER,
   makeBankQuestion,
@@ -71,6 +72,7 @@ async function builder() {
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
     redis,
+    new QuestionsService(prisma, audit, new FakeStorage() as never),
   );
   const created = await tests.create(
     { baseConfigId: BUILDER.CONFIG, title: 'Mock 1', testSeriesId: seriesId },
