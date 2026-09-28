@@ -6,6 +6,7 @@ import {
   sectionQuota,
   type Assignment,
   type QuestionSummary,
+  PAGE_SIZE_MAX,
 } from '@iace/contracts';
 import {
   Alert,
@@ -26,7 +27,20 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { QUERY_KEYS } from '../../lib/constants';
-import { sectionQuestions } from './section-questions';
+
+/** Every question written for a section, oldest first, however many pages that takes. */
+async function sectionQuestions(assignmentId: string): Promise<QuestionSummary[]> {
+  const all: QuestionSummary[] = [];
+  for (let page = 1; ; page += 1) {
+    const read = await api.admin.authoring.history({
+      assignmentId: [assignmentId],
+      page,
+      pageSize: PAGE_SIZE_MAX,
+    });
+    all.push(...read.items);
+    if (all.length >= read.total || read.items.length === 0) return all.reverse();
+  }
+}
 
 /** A typist's Done: exactly the section's questions onto its paper, the rest to the bank or deleted. */
 export function TypistDoneDialog({

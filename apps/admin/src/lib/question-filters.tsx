@@ -52,18 +52,3 @@ export function questionFacetFilters(filters: SubjectCascade, subjectIds: string
     },
   ] as const;
 }
-
-/** Both are free text: a tag is free text already, and there is no list of authors to offer. */
-export const QUESTION_TAG_FILTER = {
-  key: 'tag',
-  kind: 'search',
-  label: 'Tag',
-  placeholder: 'Exactly one tag',
-} as const;
-
-export const QUESTION_AUTHOR_FILTER = {
-  key: 'author',
-  kind: 'search',
-  label: 'Written by',
-  placeholder: 'A name or an email',
-} as const;

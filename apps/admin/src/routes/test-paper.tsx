@@ -256,7 +256,7 @@ function TestPaperScreen({
             />
           )}
 
-          <SectionWorkspace
+          <PaperSection
             testId={detail.id}
             paperSource={detail.paperSource}
             section={section}
@@ -396,7 +396,7 @@ function refusalMessage(error: unknown, ...keys: readonly string[]): string | nu
 }
 
 /** The bank and the paper side by side, and the two ways a section is filled from one. */
-function SectionWorkspace({
+function PaperSection({
   testId,
   paperSource,
   section,
@@ -534,12 +534,10 @@ function SectionWorkspace({
           editable={picking}
           disposition={disposable ? { attemptCount, onRescoring } : undefined}
           action={
-            fillAction || handOver ? (
-              <>
-                {fillAction}
-                {handOver}
-              </>
-            ) : null
+            <>
+              {fillAction}
+              {handOver}
+            </>
           }
           banner={shortfallBanner}
           onChanged={onChanged}

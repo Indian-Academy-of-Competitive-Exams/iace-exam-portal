@@ -52,7 +52,7 @@ export function DrawSpecEditor({
 
   const held = available.data?.byDifficulty ?? {};
 
-  const issue = spec.mix ? mixIssue(spec.mix, { ...section, id: section.id }) : null;
+  const issue = spec.mix ? mixIssue(spec.mix, section) : null;
 
   return (
     <div className="flex flex-col gap-4">

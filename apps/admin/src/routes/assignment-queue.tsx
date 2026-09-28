@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
   instituteDayLabel,
@@ -10,7 +10,6 @@ import {
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
-  ConfirmDialog,
   DropdownMenuItem,
   ListView,
   PageHeader,
@@ -18,7 +17,6 @@ import {
   TableFrame,
   TruncatedText,
   linkVariants,
-  plural,
   type BadgeProps,
   type DataTableColumn,
   type ListFilter,
@@ -27,6 +25,7 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useTestSectionFilters } from '../lib/use-test-section-filters';
 import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
+import { FinalizeAssignmentDialog } from '../components/authoring/finalize-assignment-dialog';
 
 /** One section handed to one admin, from either side of it, and the screen a row of it opens. */
 
@@ -203,43 +202,5 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
         onFinalized={settle}
       />
     </TableFrame>
-  );
-}
-
-/** A reader's "I have read this"; the typist's hand-over is the Done dialog, which chooses the paper. */
-export function FinalizeAssignmentDialog({
-  assignment,
-  covering,
-  onClose,
-  onFinalized,
-}: Readonly<{
-  assignment: AssignmentWithTest | null;
-  /** What the section actually holds — the section screen knows it; the queue reads the section's count. */
-  covering?: number;
-  onClose: () => void;
-  onFinalized: () => void;
-}>) {
-  const count = covering ?? assignment?.sectionQuestionCount ?? 0;
-  const test = assignment?.testTitle ?? 'this test';
-
-  const finalize = useMutation({
-    meta: { success: `${assignment?.sectionName ?? 'Section'} marked read.` },
-    mutationFn: (id: string) => api.admin.assignments.finalize(id),
-    onSuccess: () => {
-      onFinalized();
-      onClose();
-    },
-  });
-
-  return (
-    <ConfirmDialog
-      open={assignment !== null}
-      onOpenChange={(open) => !open && onClose()}
-      title={`Mark ${assignment?.sectionName ?? 'this section'} read?`}
-      description={`This covers ${plural(count, 'question')} in ${test}. You cannot edit them afterwards, and the test is one section closer to being offered.`}
-      confirmLabel="Mark read"
-      loading={finalize.isPending}
-      onConfirm={() => assignment?.id && finalize.mutate(assignment.id)}
-    />
   );
 }

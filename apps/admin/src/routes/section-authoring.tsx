@@ -62,7 +62,7 @@ import {
   type WorkspaceSource,
 } from '../components/authoring/authoring-workspace';
 import { headerOf, stateOf, toDraft } from '../components/authoring/question-scaffold';
-import { FinalizeAssignmentDialog } from './assignment-queue';
+import { FinalizeAssignmentDialog } from '../components/authoring/finalize-assignment-dialog';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
