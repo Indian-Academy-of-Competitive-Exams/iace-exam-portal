@@ -28,7 +28,7 @@ export const importLogStatusSchema = z.enum(IMPORT_LOG_STATUS);
 export type ImportLogStatus = z.infer<typeof importLogStatusSchema>;
 
 /** Every intake previews the same way: its rows, what they add up to, and what is wrong with the file. */
-const importPlanSchema = <Row extends z.ZodType, Summary extends z.ZodType>(
+export const importPlanSchema = <Row extends z.ZodType, Summary extends z.ZodType>(
   row: Row,
   summary: Summary,
 ) =>

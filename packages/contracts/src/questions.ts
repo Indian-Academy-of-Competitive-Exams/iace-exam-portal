@@ -4,6 +4,7 @@ import { dateOnlySchema } from './students';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 import { type LanguageCode } from './exams';
+import { importPlanSchema } from './imports';
 
 // ============================================================================
 // The question bank: the taxonomy a question hangs off, the ONE input shape both
@@ -710,13 +711,12 @@ const questionImportSummarySchema = z.object({
   leftOut: z.number().int(),
 });
 
-export const questionImportPlanSchema = z.object({
+export const questionImportPlanSchema = importPlanSchema(
+  questionImportRowSchema,
+  questionImportSummarySchema,
+).extend({
   /** The run this preview opened. Commit names it rather than re-uploading the file. */
   importLogId: z.string(),
-  rows: z.array(questionImportRowSchema),
-  summary: questionImportSummarySchema,
-  /** Wrong with the FILE rather than a row — a missing column, an empty upload. */
-  fileErrors: z.array(z.string()),
 });
 export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
 

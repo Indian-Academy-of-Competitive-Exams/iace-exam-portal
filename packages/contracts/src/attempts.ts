@@ -10,7 +10,6 @@ import {
 import {
   answerKeySchema,
   localizedContentSchema,
-  localizedRichSchema,
   questionOptionSchema,
   questionTypeSchema,
 } from './questions';
@@ -458,11 +457,7 @@ export type SubmittedAttempt = z.infer<typeof submittedAttemptSchema>;
 // ============================================================================
 
 /** An option as a candidate sees it. `questionOptionSchema` carries `isCorrect`; this cannot. */
-const examOptionSchema = z.object({
-  id: z.string(),
-  position: z.number().int(),
-  text: localizedRichSchema,
-});
+const examOptionSchema = questionOptionSchema.omit({ isCorrect: true });
 export type ExamOption = z.infer<typeof examOptionSchema>;
 
 const examQuestionSchema = z.object({
