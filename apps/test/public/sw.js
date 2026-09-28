@@ -5,7 +5,8 @@
  * paper's key, and an exam that ran from a stale cache would be a result nobody could defend.
  */
 
-const CACHE = 'iace-shell-v1';
+/** Stamped per build by vite.config.ts, so each deploy installs afresh and activate drops the last. */
+const CACHE = 'iace-shell-dev';
 
 const SHELL = '/';
 
