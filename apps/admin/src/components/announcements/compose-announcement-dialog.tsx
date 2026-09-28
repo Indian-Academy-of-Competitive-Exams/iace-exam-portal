@@ -21,6 +21,8 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
+import { QUERY_KEYS } from '../../lib/constants';
+import { useBranches } from '../../lib/use-branches';
 
 const COURSE_ITEMS = EXAM_COURSES.map((course) => ({
   value: course,
@@ -88,11 +90,7 @@ export function ComposeAnnouncementDialog({
     defaultValues: draftForm(draft),
   });
 
-  const branches = useQuery({
-    queryKey: ['admin', 'branches', 'all'],
-    queryFn: () => api.admin.branches.list({ page: 1, pageSize: 100 }),
-    enabled: open,
-  });
+  const branches = useBranches({ enabled: open });
 
   const branchId = useWatch({ control: form.control, name: 'audience.branchId' }) ?? [];
   const course = useWatch({ control: form.control, name: 'audience.course' }) ?? [];
@@ -101,7 +99,7 @@ export function ComposeAnnouncementDialog({
   const audience = { branchId, course };
 
   const preview = useQuery({
-    queryKey: ['admin', 'announcements', 'preview', audience],
+    queryKey: [...QUERY_KEYS.ANNOUNCEMENTS, 'preview', audience],
     queryFn: () =>
       api.admin.announcements.preview({ title: 'x', body: 'x', audience, paidChannels: [] }),
     enabled: open,
@@ -116,7 +114,7 @@ export function ComposeAnnouncementDialog({
     onError: (error) => applyFieldErrors(error, form.setError, COMPOSE_FIELDS),
   });
 
-  const branchItems = (branches.data?.items ?? []).map((branch) => ({
+  const branchItems = branches.map((branch) => ({
     value: branch.id,
     label: branch.name,
   }));

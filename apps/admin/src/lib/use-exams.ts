@@ -4,8 +4,8 @@ import { api } from './api';
 import { QUERY_KEYS } from './constants';
 
 /** The exam list, unpaged and long-cached: a small list that changes a few times a year. */
-export function useExams(options: { activeOnly?: boolean } = {}): Exam[] {
-  const { activeOnly } = options;
+export function useExams(options: { activeOnly?: boolean; enabled?: boolean } = {}): Exam[] {
+  const { activeOnly, enabled } = options;
 
   const query = useQuery({
     queryKey: [...QUERY_KEYS.EXAMS, { activeOnly: activeOnly ?? false }],
@@ -15,6 +15,7 @@ export function useExams(options: { activeOnly?: boolean } = {}): Exam[] {
         ...(activeOnly ? { activeOnly: 'true' as const } : {}),
       }),
     staleTime: 5 * 60_000,
+    enabled,
   });
 
   return query.data?.items ?? [];
