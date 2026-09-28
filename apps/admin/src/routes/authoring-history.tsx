@@ -9,12 +9,12 @@ import {
   LANGUAGE_ORDER,
   QUESTION_STATUSES,
   QUESTION_TYPES,
-  INSTITUTE_TIME_ZONE,
   todayISO,
   type AuthoringStats,
   type QuestionLanguage,
   type QuestionStatus,
   type QuestionSummary,
+  instituteDayLabel,
 } from '@iace/contracts';
 import { asText } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
@@ -131,7 +131,7 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
       className: 'max-w-40',
       cell: (question) => (
         <TruncatedText className="text-muted-foreground">
-          {UPDATED_FORMATTER.format(new Date(question.updatedAt))}
+          {instituteDayLabel(question.updatedAt)}
         </TruncatedText>
       ),
     },
@@ -370,13 +370,6 @@ function Output({ stats }: Readonly<{ stats: AuthoringStats | undefined }>) {
 }
 
 const CHART_HEIGHT = 180;
-
-const UPDATED_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  timeZone: INSTITUTE_TIME_ZONE,
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
 
 /** Day and month only: thirty ticks along an axis have no room for a year nobody is reading. */
 function dayLabel(date: string): string {

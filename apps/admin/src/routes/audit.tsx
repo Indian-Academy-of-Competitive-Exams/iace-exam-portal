@@ -12,6 +12,7 @@ import {
   type ImportLogStatus,
   type ImportLogSummary,
   type RowAction,
+  instituteDateTimeLabel,
 } from '@iace/contracts';
 import {
   Alert,
@@ -30,7 +31,7 @@ import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import { ExportButton } from '../components/export-button';
 import { AdminMultiPicker } from '../components/admin-multi-picker';
 import { ChangedCell } from '../lib/audit-format';
-import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
+import { ACTION_BADGE_VARIANT } from '../lib/audit-vocabulary';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
 import {
@@ -60,7 +61,7 @@ function auditColumns(): DataTableColumn<RowAction>[] {
     {
       key: 'when',
       header: 'When',
-      cell: (row) => WHEN_FORMATTER.format(new Date(row.createdAt)),
+      cell: (row) => instituteDateTimeLabel(row.createdAt),
     },
     {
       key: 'who',
@@ -101,7 +102,7 @@ function importColumns(highlightId: string): DataTableColumn<ImportLogSummary>[]
       header: 'Started',
       cell: (row) => (
         <span className="flex items-center gap-2">
-          {WHEN_FORMATTER.format(new Date(row.startedAt))}
+          {instituteDateTimeLabel(row.startedAt)}
           {row.id === highlightId ? <Badge variant="primary">This run</Badge> : null}
         </span>
       ),
@@ -165,9 +166,7 @@ function ImportFileAction({ run }: Readonly<{ run: ImportLogSummary }>) {
   });
 
   return (
-    <RowActions
-      label={`Actions for the run started ${WHEN_FORMATTER.format(new Date(run.startedAt))}`}
-    >
+    <RowActions label={`Actions for the run started ${instituteDateTimeLabel(run.startedAt)}`}>
       <DropdownMenuItem onSelect={() => download.mutate()}>
         <Download aria-hidden />
         Download the uploaded file

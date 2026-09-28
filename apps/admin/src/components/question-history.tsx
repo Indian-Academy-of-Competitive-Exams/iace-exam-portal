@@ -5,6 +5,7 @@ import {
   type QuestionSummary,
   type QuestionVersionSummary,
   type RowAction,
+  instituteDateTimeLabel,
 } from '@iace/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useListScreen } from '@iace/app-kit/browser';
@@ -26,7 +27,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
 import { ChangedCell } from '../lib/audit-format';
-import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
+import { ACTION_BADGE_VARIANT } from '../lib/audit-vocabulary';
 import { AUDIT_ACTION_LABELS, AUDIT_ACTOR_TYPE_LABELS, QUERY_KEYS } from '../lib/constants';
 
 /** Wider than a nav drawer: a version beside its changes needs the room. */
@@ -41,7 +42,7 @@ function versionColumns(): DataTableColumn<QuestionVersionSummary>[] {
     {
       key: 'written',
       header: 'Written',
-      cell: (row) => WHEN_FORMATTER.format(new Date(row.createdAt)),
+      cell: (row) => instituteDateTimeLabel(row.createdAt),
     },
     {
       key: 'who',
@@ -63,7 +64,7 @@ function editColumns(): DataTableColumn<RowAction>[] {
     {
       key: 'when',
       header: 'When',
-      cell: (row) => WHEN_FORMATTER.format(new Date(row.createdAt)),
+      cell: (row) => instituteDateTimeLabel(row.createdAt),
     },
     {
       key: 'who',

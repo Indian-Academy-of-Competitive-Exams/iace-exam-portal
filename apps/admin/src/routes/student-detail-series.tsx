@@ -5,6 +5,7 @@ import {
   STUDENT_SERIES_SOURCE,
   type StudentDetail,
   type StudentSeriesAccess,
+  instituteDateTimeLabel,
 } from '@iace/contracts';
 import {
   BadgeList,
@@ -20,7 +21,6 @@ import {
 } from '@iace/ui';
 import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { api } from '../lib/api';
-import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { QUERY_KEYS, SERIES_SOURCE_LABELS } from '../lib/constants';
 
 const seriesKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'series'] as const;
@@ -50,7 +50,7 @@ function seriesColumns(
       className: 'max-w-48',
       cell: (row) => (
         <TruncatedText>
-          {row.grantedAt ? WHEN_FORMATTER.format(new Date(row.grantedAt)) : null}
+          {row.grantedAt ? instituteDateTimeLabel(row.grantedAt) : null}
         </TruncatedText>
       ),
     },

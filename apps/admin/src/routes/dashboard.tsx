@@ -13,6 +13,7 @@ import {
   type DashboardWindow,
   type DashboardWindows,
   type RowAction,
+  instituteDateTimeLabel,
 } from '@iace/contracts';
 import {
   Badge,
@@ -32,7 +33,7 @@ import {
   linkVariants,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
+import { ACTION_BADGE_VARIANT } from '../lib/audit-vocabulary';
 import { opensLabel } from '../lib/duration';
 import {
   AUDIT_ACTION_LABELS,
@@ -255,7 +256,7 @@ function ActivityCard({ feed }: Readonly<{ feed: readonly RowAction[] }>) {
                 {`${AUDIT_FEATURE_LABELS[row.feature]} · ${row.actorName ?? AUDIT_ACTOR_TYPE_LABELS[row.actorType]}`}
               </TruncatedText>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {WHEN_FORMATTER.format(new Date(row.createdAt))}
+                {instituteDateTimeLabel(row.createdAt)}
               </span>
             </li>
           ))}
