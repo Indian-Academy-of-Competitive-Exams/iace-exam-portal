@@ -3,14 +3,12 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { z } from 'zod';
 import {
   MOBILE_DIGITS,
   PIN_LENGTH,
-  newPinSchema,
   normaliseMobile,
-  otpCodeSchema,
-  pinSchema,
+  otpCodeFormSchema,
+  setPinFormSchema,
   requestStudentOtpSchema,
   studentLoginSchema,
   type AuthSessionResponse,
@@ -19,7 +17,14 @@ import {
   type RequestStudentOtpBody,
   type StudentLoginBody,
 } from '@iace/contracts';
-import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
+import {
+  applyFieldErrors,
+  LOGIN_FIELDS,
+  OTP_INTENTS,
+  signedOutMessage,
+  type LoginStep,
+  type OtpIntent,
+} from '@iace/app-kit';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { useAuth } from '../src/providers/auth';
@@ -29,29 +34,12 @@ import { Card } from '../src/components/ui/card';
 import { PinField } from '../src/components/ui/pin-field';
 import { TextField } from '../src/components/ui/text-field';
 
-/** Why the student is going through the OTP flow — it only changes the words. */
-const OTP_INTENTS = { SIGNUP: 'SIGNUP', RESET: 'RESET' } as const;
-type OtpIntent = (typeof OTP_INTENTS)[keyof typeof OTP_INTENTS];
-
-// The fields each form owns; the server keys `fieldErrors` by the same names.
-const SIGN_IN_FIELDS = ['mobile', 'pin'] as const;
-const MOBILE_FIELDS = ['mobile'] as const;
-const CODE_FIELDS = ['code'] as const;
-const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
-
-/** Mobile + a 4-digit PIN; an OTP appears twice, for signup and for a forgotten PIN. */
-type Step =
-  | { kind: 'signIn' }
-  | { kind: 'mobile'; intent: OtpIntent }
-  | { kind: 'code'; intent: OtpIntent; mobile: string; challenge: OtpRequestResponse }
-  | { kind: 'pin'; intent: OtpIntent; mobile: string; ticket: PinSetupTicket };
-
 const sanitizeMobile = (raw: string) =>
   normaliseMobile(raw.replace(/\D/g, '')).slice(0, MOBILE_DIGITS);
 
 export default function LoginScreen() {
   const { signIn, signedOutReason } = useAuth();
-  const [step, setStep] = useState<Step>({ kind: 'signIn' });
+  const [step, setStep] = useState<LoginStep>({ kind: 'signIn' });
   const message = signedOutMessage(signedOutReason);
 
   const onSignedIn = (session: AuthSessionResponse) => signIn(session);
@@ -130,11 +118,12 @@ function SignInStep({
 
   const login = useMutation({
     // `fields` keeps the complaint on the input rather than also in a toast.
-    meta: { fields: SIGN_IN_FIELDS },
+    meta: { fields: LOGIN_FIELDS.SIGN_IN },
     mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
     onSuccess: onSignedIn,
     // Explicit type argument: this app's own react-hook-form copy is a separate install from app-kit's.
-    onError: (error) => applyFieldErrors<StudentLoginBody>(error, form.setError, SIGN_IN_FIELDS),
+    onError: (error) =>
+      applyFieldErrors<StudentLoginBody>(error, form.setError, LOGIN_FIELDS.SIGN_IN),
   });
 
   return (
@@ -192,11 +181,11 @@ function MobileStep({
   });
 
   const requestOtp = useMutation({
-    meta: { fields: MOBILE_FIELDS },
+    meta: { fields: LOGIN_FIELDS.MOBILE },
     mutationFn: (values: { mobile: string }) => api.auth.requestStudentOtp(values),
     onSuccess: (response, values) => onSent(values.mobile, response),
     onError: (error) =>
-      applyFieldErrors<RequestStudentOtpBody>(error, form.setError, MOBILE_FIELDS),
+      applyFieldErrors<RequestStudentOtpBody>(error, form.setError, LOGIN_FIELDS.MOBILE),
   });
 
   return (
@@ -230,8 +219,6 @@ function MobileStep({
 
 // ---------------------------------------------------------------------------
 
-const codeFormSchema = z.object({ code: otpCodeSchema });
-
 function CodeStep({
   mobile,
   challenge,
@@ -244,16 +231,16 @@ function CodeStep({
   onVerified: (ticket: PinSetupTicket) => void;
 }>) {
   const form = useForm({
-    resolver: zodResolver(codeFormSchema),
+    resolver: zodResolver(otpCodeFormSchema),
     defaultValues: { code: '' },
   });
 
   const verify = useMutation({
-    meta: { fields: CODE_FIELDS },
+    meta: { fields: LOGIN_FIELDS.CODE },
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
     onSuccess: onVerified,
     // A wrong code comes back as OTP_INVALID with fieldErrors.code, under the input to retype.
-    onError: (error) => applyFieldErrors<{ code: string }>(error, form.setError, CODE_FIELDS),
+    onError: (error) => applyFieldErrors<{ code: string }>(error, form.setError, LOGIN_FIELDS.CODE),
   });
 
   return (
@@ -292,13 +279,6 @@ function CodeStep({
 
 // ---------------------------------------------------------------------------
 
-const setPinFormSchema = z
-  .object({ pin: newPinSchema, confirmPin: pinSchema })
-  .refine((values) => values.pin === values.confirmPin, {
-    message: 'Both PINs must match',
-    path: ['confirmPin'],
-  });
-
 function SetPinStep({
   mobile,
   ticket,
@@ -314,12 +294,16 @@ function SetPinStep({
   });
 
   const setPin = useMutation({
-    meta: { fields: SET_PIN_FIELDS },
+    meta: { fields: LOGIN_FIELDS.SET_PIN },
     mutationFn: (values: { pin: string }) =>
       api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
     onSuccess: onSignedIn,
     onError: (error) =>
-      applyFieldErrors<{ pin: string; confirmPin: string }>(error, form.setError, SET_PIN_FIELDS),
+      applyFieldErrors<{ pin: string; confirmPin: string }>(
+        error,
+        form.setError,
+        LOGIN_FIELDS.SET_PIN,
+      ),
   });
 
   return (

@@ -83,6 +83,7 @@ export {
   createStudentQueries,
 } from './student-queries';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';
+export { LOGIN_FIELDS, OTP_INTENTS, type LoginStep, type OtpIntent } from './login-steps';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
 export {
   ANY_CHOICE,

@@ -104,6 +104,17 @@ export const studentLoginSchema = z.object({
 export type StudentLoginInput = z.input<typeof studentLoginSchema>;
 export type StudentLoginBody = z.infer<typeof studentLoginSchema>;
 
+/** The code step of a student's OTP flow, as both student clients validate it before sending. */
+export const otpCodeFormSchema = z.object({ code: otpCodeSchema });
+
+/** Choosing a PIN: typed twice, and the second must match before anything is sent. */
+export const setPinFormSchema = z
+  .object({ pin: newPinSchema, confirmPin: pinSchema })
+  .refine((values) => values.pin === values.confirmPin, {
+    message: 'Both PINs must match',
+    path: ['confirmPin'],
+  });
+
 // ============================================================================
 // Tokens & identity
 // ============================================================================

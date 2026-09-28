@@ -3,15 +3,13 @@ import { useForm, type FieldValues, type Path, type UseFormReturn } from 'react-
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { z } from 'zod';
 import { ArrowLeft, Info } from 'lucide-react';
 import {
   MOBILE_DIGITS,
   PIN_LENGTH,
-  newPinSchema,
   normaliseMobile,
-  otpCodeSchema,
-  pinSchema,
+  otpCodeFormSchema,
+  setPinFormSchema,
   requestStudentOtpSchema,
   studentLoginSchema,
   type AuthSessionResponse,
@@ -35,34 +33,21 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
+import {
+  applyFieldErrors,
+  LOGIN_FIELDS,
+  OTP_INTENTS,
+  signedOutMessage,
+  type LoginStep,
+  type OtpIntent,
+} from '@iace/app-kit';
 import { useAuth } from '../providers/auth';
-/** Why the student is going through the OTP flow — it only changes the words. */
-const OTP_INTENTS = {
-  SIGNUP: 'SIGNUP',
-  RESET: 'RESET',
-} as const;
-type OtpIntent = (typeof OTP_INTENTS)[keyof typeof OTP_INTENTS];
-
-// The fields each form owns; the server keys `fieldErrors` by the same names.
-const SIGN_IN_FIELDS = ['mobile', 'pin'] as const;
-const MOBILE_FIELDS = ['mobile'] as const;
-const CODE_FIELDS = ['code'] as const;
-const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
-
 const STEP_HEADER = 'items-center pt-4 text-center';
-
-/** Mobile + a 4-digit PIN; OTP appears twice (signup, forgotten PIN). Separate buttons, not a lookup — "does this mobile exist?" is not a question to answer. */
-type Step =
-  | { kind: 'signIn' }
-  | { kind: 'mobile'; intent: OtpIntent }
-  | { kind: 'code'; intent: OtpIntent; mobile: string; challenge: OtpRequestResponse }
-  | { kind: 'pin'; intent: OtpIntent; mobile: string; ticket: PinSetupTicket };
 
 export function LoginPage() {
   const { identity: student, signIn, signedOutReason } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>({ kind: 'signIn' });
+  const [step, setStep] = useState<LoginStep>({ kind: 'signIn' });
 
   if (student) return <Navigate to={ROUTES.HOME} replace />;
 
@@ -145,10 +130,10 @@ function SignInStep({
 
   const login = useMutation({
     // `fields` keeps the complaint on the input rather than also in a toast.
-    meta: { fields: SIGN_IN_FIELDS },
+    meta: { fields: LOGIN_FIELDS.SIGN_IN },
     mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
     onSuccess: onSignedIn,
-    onError: (error) => applyFieldErrors(error, form.setError, SIGN_IN_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.SIGN_IN),
   });
 
   return (
@@ -218,10 +203,10 @@ function MobileStep({
   });
 
   const requestOtp = useMutation({
-    meta: { fields: MOBILE_FIELDS },
+    meta: { fields: LOGIN_FIELDS.MOBILE },
     mutationFn: (values: { mobile: string }) => api.auth.requestStudentOtp(values),
     onSuccess: (response, values) => onSent(values.mobile, response),
-    onError: (error) => applyFieldErrors(error, form.setError, MOBILE_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.MOBILE),
   });
 
   return (
@@ -256,8 +241,6 @@ function MobileStep({
 
 // ---------------------------------------------------------------------------
 
-const codeFormSchema = z.object({ code: otpCodeSchema });
-
 function CodeStep({
   mobile,
   challenge,
@@ -270,16 +253,16 @@ function CodeStep({
   onVerified: (ticket: PinSetupTicket) => void;
 }>) {
   const form = useForm({
-    resolver: zodResolver(codeFormSchema),
+    resolver: zodResolver(otpCodeFormSchema),
     defaultValues: { code: '' },
   });
 
   const verify = useMutation({
-    meta: { fields: CODE_FIELDS },
+    meta: { fields: LOGIN_FIELDS.CODE },
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
     onSuccess: onVerified,
     // A wrong code returns OTP_INVALID with fieldErrors.code — it belongs under the input, not a banner.
-    onError: (error) => applyFieldErrors(error, form.setError, CODE_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.CODE),
   });
 
   return (
@@ -330,13 +313,6 @@ function CodeStep({
 
 // ---------------------------------------------------------------------------
 
-const setPinFormSchema = z
-  .object({ pin: newPinSchema, confirmPin: pinSchema })
-  .refine((values) => values.pin === values.confirmPin, {
-    message: 'Both PINs must match',
-    path: ['confirmPin'],
-  });
-
 function SetPinStep({
   mobile,
   ticket,
@@ -352,11 +328,11 @@ function SetPinStep({
   });
 
   const setPin = useMutation({
-    meta: { fields: SET_PIN_FIELDS },
+    meta: { fields: LOGIN_FIELDS.SET_PIN },
     mutationFn: (values: { pin: string }) =>
       api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
     onSuccess: onSignedIn,
-    onError: (error) => applyFieldErrors(error, form.setError, SET_PIN_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.SET_PIN),
   });
 
   return (
