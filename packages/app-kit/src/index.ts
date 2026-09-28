@@ -36,7 +36,7 @@ export {
   type EndedSitting,
 } from './exam/use-exam-view';
 export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
-export { useCountdown, useAnchoredCountdown } from './exam/use-countdown';
+export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
 export { isMarkingPending } from './marking';
 export { seenTours, useTourRun, type SeenTours, type TourRun, type TourStep } from './tour';

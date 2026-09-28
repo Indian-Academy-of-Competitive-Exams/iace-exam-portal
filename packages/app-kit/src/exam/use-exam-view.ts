@@ -4,7 +4,7 @@
  * finished view. What a sectional clock changes is which sections are open, and
  * that is read from the config rather than branched into a second screen.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
@@ -71,12 +71,14 @@ export function useExamView(
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  // A ref, not `submit.isPending`: the clock and a tap can both end the paper before the next render.
+  const ending = useRef(false);
+  const paperClock = useMemo<ExamClock>(
+    () => ({ endsAt: paper.endsAt, serverNow: paper.serverNow, arrivedAt }),
+    [paper.endsAt, paper.serverNow, arrivedAt],
+  );
   // The paper's clock until a save answers with a newer one — that is how an extension lands.
-  const clock: ExamClock = state.clock ?? {
-    endsAt: paper.endsAt,
-    serverNow: paper.serverNow,
-    arrivedAt,
-  };
+  const clock = state.clock ?? paperClock;
 
   const sectional = paper.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
   const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;
@@ -87,14 +89,15 @@ export function useExamView(
     setSectionId(reachable[0]);
   }
 
+  const firstReachable = reachable[0];
+  const { sectionsSeeded, sections: heldSections, enterSection } = state;
   // Stamps a section's clock the first time it is truly known to have never been opened.
   useEffect(() => {
-    if (!sectional || !state.sectionsSeeded) return;
-    const first = reachable[0];
-    if (first === undefined || state.sections[first] !== undefined) return;
-    const allowed = paper.sections.find((row) => row.id === first)?.durationSec;
-    if (allowed !== null && allowed !== undefined) state.enterSection(first, allowed);
-  }, [sectional, reachable, paper.sections, state]);
+    if (!sectional || !sectionsSeeded) return;
+    if (firstReachable === undefined || heldSections[firstReachable] !== undefined) return;
+    const allowed = paper.sections.find((row) => row.id === firstReachable)?.durationSec;
+    if (allowed !== null && allowed !== undefined) enterSection(firstReachable, allowed);
+  }, [sectional, sectionsSeeded, firstReachable, heldSections, paper.sections, enterSection]);
 
   const section = paper.sections.find((row) => row.id === sectionId);
   const inSection = paper.questions.filter((row) => row.baseConfigSectionId === sectionId);
@@ -122,11 +125,12 @@ export function useExamView(
     retry: shouldRetrySubmit,
     retryDelay: submitRetryDelayMs,
     onError: (error) => {
+      ending.current = false;
       if (isTakenOver(error)) state.standDown();
     },
     onSuccess: async (submitted) => {
-      // The sat test moves from Open now to Done, and the server has already dropped its own copy.
-      await queryClient.invalidateQueries({ queryKey: catalogQueryKey });
+      // The sat test moves from Open now to Done; nothing waits on the refetch.
+      void queryClient.invalidateQueries({ queryKey: catalogQueryKey });
       // The hall gives the screen back before the next one draws; `nagging` is already stood down.
       await focus.exit();
       onEnded({
@@ -141,7 +145,9 @@ export function useExamView(
   });
 
   const end = () => {
-    if (!submit.isPending && !submit.isSuccess && !state.takenOver) submit.mutate();
+    if (ending.current || state.takenOver) return;
+    ending.current = true;
+    submit.mutate();
   };
 
   const move = (to: string | null): void => {

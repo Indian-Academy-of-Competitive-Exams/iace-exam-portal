@@ -1,7 +1,7 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
-import { useAnchoredCountdown, useCountdown } from '../src/exam/use-countdown';
+import { useAnchoredCountdown, useClockCountdown, useCountdown } from '../src/exam/use-countdown';
 
 /** A clock the test moves by hand; the hook re-reads it on each one-second tick. */
 function handClock(start: number) {
@@ -127,4 +127,28 @@ test('a corrected allowance does not have the same elapsed time taken off it twi
       'only the next five seconds come off, not the first 25 again',
     );
   });
+});
+
+/** The failure this prevents: a candidate tapping faster than once a second freezing the paper's clock. */
+test('a clock rebuilt on every render keeps ticking', () => {
+  const start = Date.parse('2026-09-01T05:00:00.000Z');
+  mock.timers.enable({ apis: ['setInterval', 'Date'], now: start });
+  const clockAt = () => ({
+    endsAt: '2026-09-01T06:00:00.000Z',
+    serverNow: '2026-09-01T05:00:00.000Z',
+    arrivedAt: start,
+  });
+  const hook = renderHook(({ clock }) => useClockCountdown(clock, () => {}), {
+    initialProps: { clock: clockAt() },
+  });
+  try {
+    for (let tap = 0; tap < 6; tap += 1) {
+      act(() => mock.timers.tick(500));
+      hook.rerender({ clock: clockAt() });
+    }
+    assert.equal(hook.result.current, 3597, 'three seconds of taps cost three seconds, not none');
+  } finally {
+    hook.unmount();
+    mock.timers.reset();
+  }
 });

@@ -6,7 +6,9 @@ import type { ExamPaper, ExamQuestion, SectionProgress } from '@iace/contracts';
 import { useExamView, type AppApiClient, type ExamEngineDeps, type FullscreenHandle } from '../src';
 import { fakeStorage } from './support/fake-storage';
 
-const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
+const client = new QueryClient({
+  defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { gcTime: 0 } },
+});
 
 const questionFor = (sectionId: string, order: number): ExamQuestion => ({
   questionId: `${sectionId}-q1`,
@@ -149,4 +151,32 @@ test('a fresh sitting stamps its first section on the next save, not only on lea
     'section one was carried in a save, not left to be stamped only when it is left',
   );
   assert.equal(stamped?.sections?.sec1?.closed, false);
+});
+
+/** The failure this prevents: the clock and a tap in the same instant handing the paper in twice. */
+test('ending the paper twice before the next render submits it once', async (t) => {
+  let submitted = 0;
+  const api = {
+    me: {
+      attemptState: async () => ({ answers: {}, sections: {}, revision: 0 }),
+      saveAttemptState: async () => ({ revision: 0 }),
+      submitAttempt: async () => {
+        submitted += 1;
+        return { attemptId: 'attempt-1' };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = mounted(api);
+  t.after(unmount);
+
+  await act(async () => {
+    result.current.outOfTime();
+    result.current.submit.confirm();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await new Promise((settle) => setTimeout(settle, 0));
+  });
+
+  assert.equal(submitted, 1);
 });

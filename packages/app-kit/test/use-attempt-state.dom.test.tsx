@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { ANSWER_STATE, AppException, ErrorCodes, type ExamClock } from '@iace/contracts';
@@ -292,4 +292,101 @@ test('standing down stops saving and says so, the same as a refused save', async
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
   await act(async () => void (await result.current.flush()));
   assert.equal(calls.length, 0, 'a stood-down tab sends nothing more');
+});
+
+/** The failure this prevents: one failed read at load leaving a reloaded paper blank for the whole sitting. */
+test('a seed that failed is asked again until the held answers land', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let asked = 0;
+  const api = {
+    me: {
+      attemptState: async () => {
+        asked += 1;
+        if (asked === 1) throw new AppException(ErrorCodes.INTERNAL, 'down', { httpStatus: 503 });
+        return {
+          answers: { q1: { state: ANSWER_STATE.ANSWERED, selectedOptionId: 'opt-1' } },
+          sections: {},
+          revision: 4,
+        };
+      },
+      saveAttemptState: async () => ({ revision: 0 }),
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  await act(async () => void (await Promise.resolve()));
+  assert.equal(result.current.sectionsSeeded, false, 'not seeded yet');
+
+  await act(async () => {
+    mock.timers.tick(31_000);
+    await Promise.resolve();
+  });
+  assert.equal(asked, 2);
+  assert.equal(result.current.answers.q1?.selectedOptionId, 'opt-1', 'the held answer is drawn');
+  assert.equal(result.current.sectionsSeeded, true);
+});
+
+test('a seed the server refused is not asked again', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let asked = 0;
+  const api = {
+    me: {
+      attemptState: async () => {
+        asked += 1;
+        throw new AppException(ErrorCodes.NOT_FOUND);
+      },
+      saveAttemptState: async () => ({ revision: 0 }),
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  await act(async () => {
+    await Promise.resolve();
+    mock.timers.tick(61_000);
+    await Promise.resolve();
+  });
+  assert.equal(asked, 1);
+});
+
+/** The failure this prevents: a full store killing autosave for the rest of the sitting. */
+test('a store that refuses to write never stops the answers being saved', async (t) => {
+  const sent: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number }) => {
+        sent.push(body);
+        return { revision: body.revision };
+      },
+    },
+  } as unknown as AppApiClient;
+  const full: KeyValueStorage = {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error('QuotaExceededError');
+    },
+    removeItem: () => {
+      throw new Error('QuotaExceededError');
+    },
+  };
+  const deps = depsFor(api, full);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  assert.equal(await act(() => result.current.flush()), true, 'the first save lands');
+
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  assert.equal(await act(() => result.current.flush()), true, 'and so does the next one');
+  assert.equal(sent.length, 2);
 });

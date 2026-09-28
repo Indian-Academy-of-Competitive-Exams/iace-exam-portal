@@ -16,6 +16,7 @@ import {
 } from '@iace/contracts';
 import { type AppApiClient } from '../api-client';
 import { autosaveDelayMs, seedRevision, shouldFlushNow } from '../autosave-policy';
+import { isWorthAskingAgain } from '../query-client';
 import { type KeyValueStorage } from '../token-store';
 
 /** Where unsent answers wait: a synchronous store, so the last answer before the app dies is kept. */
@@ -131,20 +132,29 @@ export function useAttemptState(
     return next;
   };
 
-  // Seeded once from the server: a reloaded tab has answers it cannot otherwise see.
+  // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
     let live = true;
-    void mounted.current.api.me.attemptState(attemptId).then((held) => {
-      if (!live) return;
-      // Merged under, never over: an answer given while this flew is the newer one.
-      setAnswers((mine) => remember({ ...held.answers, ...mine }));
-      setSections((mine) => ({ ...held.sections, ...mine }));
-      setSectionsSeeded(true);
-      // Never backwards: a flush racing this GET may already have moved the counter on.
-      revision.current = seedRevision(revision.current, held.revision);
-    });
+    let again: ReturnType<typeof setTimeout> | undefined;
+    const seed = () =>
+      mounted.current.api.me.attemptState(attemptId).then(
+        (held) => {
+          if (!live) return;
+          // Merged under, never over: an answer given while this flew is the newer one.
+          setAnswers((mine) => remember({ ...held.answers, ...mine }));
+          setSections((mine) => ({ ...held.sections, ...mine }));
+          setSectionsSeeded(true);
+          // Never backwards: a flush racing this GET may already have moved the counter on.
+          revision.current = seedRevision(revision.current, held.revision);
+        },
+        (error: unknown) => {
+          if (live && isWorthAskingAgain(error)) again = setTimeout(seed, autosaveDelayMs());
+        },
+      );
+    void seed();
     return () => {
       live = false;
+      clearTimeout(again);
     };
   }, [attemptId]);
 
@@ -157,8 +167,12 @@ export function useAttemptState(
     const queued = [...pending.current.values()];
     const { answerQueue } = mounted.current;
     const key = queueKeyFor(answerQueue, attemptId);
-    if (queued.length === 0) answerQueue.storage.removeItem(key);
-    else answerQueue.storage.setItem(key, JSON.stringify(queued));
+    try {
+      if (queued.length === 0) answerQueue.storage.removeItem(key);
+      else answerQueue.storage.setItem(key, JSON.stringify(queued));
+    } catch {
+      // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
+    }
   }, [attemptId]);
 
   const sendPending = useCallback(async (): Promise<boolean> => {
@@ -216,9 +230,8 @@ export function useAttemptState(
       await flying;
       if (inFlight.current === flying) inFlight.current = null;
     }
-    if (stopped.current) return true;
-    if (pending.current.size === 0 && Object.keys(pendingSections.current).length === 0)
-      return true;
+    const idle = pending.current.size === 0 && Object.keys(pendingSections.current).length === 0;
+    if (stopped.current || idle) return idle;
 
     const run = sendPending();
     inFlight.current = run;
@@ -255,8 +268,9 @@ export function useAttemptState(
     openedAt.current = now;
 
     pending.current.set(questionId, change);
+    keepQueue();
     setAnswers((held) => remember({ ...held, [questionId]: answerOf(change, held[questionId]) }));
-  }, []);
+  }, [keepQueue]);
 
   const open = useCallback(
     (questionId: string | null) => {

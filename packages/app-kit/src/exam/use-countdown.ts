@@ -5,6 +5,7 @@
  * it every render, and re-firing on each one would resubmit a failed paper in a storm.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { secondsLeft, type ExamClock } from '@iace/contracts';
 
 /** Seconds left, re-read once a second from `secondsLeftNow`. */
 export function useCountdown(secondsLeftNow: () => number, onExpire: () => void): number {
@@ -32,6 +33,18 @@ export function useCountdown(secondsLeftNow: () => number, onExpire: () => void)
   }, [left]);
 
   return left;
+}
+
+/** Counted to the SERVER's deadline, keyed on its values: a clock object rebuilt by a render never resets the tick. */
+export function useClockCountdown(clock: ExamClock, onExpire: () => void): number {
+  const { endsAt, serverNow, arrivedAt } = clock;
+  return useCountdown(
+    useCallback(
+      () => secondsLeft({ endsAt, serverNow, arrivedAt }, Date.now()),
+      [endsAt, serverNow, arrivedAt],
+    ),
+    onExpire,
+  );
 }
 
 /** A count a fresher `allowedSec` re-anchors to now, so its own elapsed time is never subtracted twice. */

@@ -4,10 +4,9 @@
  * background comes back to the true time, and `secondsLeft` clamps at zero so
  * a clock that jumped past it still expires.
  */
-import { useCallback } from 'react';
 import { Text, View } from 'react-native';
-import { clockText, secondsLeft, type ExamClock } from '@iace/contracts';
-import { useAnchoredCountdown, useCountdown } from '@iace/app-kit';
+import { clockText, type ExamClock } from '@iace/contracts';
+import { useAnchoredCountdown, useClockCountdown } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 
 /** Under this the clock turns urgent — five minutes is the warning every exam hall gives. */
@@ -20,15 +19,7 @@ export function ExamTimer({
   clock,
   onExpire,
 }: Readonly<{ clock: ExamClock; onExpire: () => void }>) {
-  // Keyed on the values, not the object the engine rebuilds every render, so a tap never resets the tick.
-  const { endsAt, serverNow, arrivedAt } = clock;
-  const left = useCountdown(
-    useCallback(
-      () => secondsLeft({ endsAt, serverNow, arrivedAt }, Date.now()),
-      [endsAt, serverNow, arrivedAt],
-    ),
-    onExpire,
-  );
+  const left = useClockCountdown(clock, onExpire);
   const urgent = left <= URGENT_SEC;
 
   return (
