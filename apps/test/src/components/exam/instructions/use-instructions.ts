@@ -13,7 +13,7 @@ import {
 } from '@iace/contracts';
 import { ROUTES } from '../../../lib/constants';
 
-export const INSTRUCTION_STEPS = ['GENERAL', 'PAPER'] as const;
+const INSTRUCTION_STEPS = ['GENERAL', 'PAPER'] as const;
 export type InstructionStep = (typeof INSTRUCTION_STEPS)[number];
 
 export interface InstructionsView {

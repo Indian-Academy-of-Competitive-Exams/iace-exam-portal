@@ -1,5 +1,5 @@
 /** The port `pnpm dev` serves the API on, beside Metro on the same machine. */
-export const DEV_API_PORT = 3000;
+const DEV_API_PORT = 3000;
 
 /** How an Android emulator addresses the machine it runs on; its own 127.0.0.1 is itself. */
 const ANDROID_EMULATOR_HOST = '10.0.2.2';

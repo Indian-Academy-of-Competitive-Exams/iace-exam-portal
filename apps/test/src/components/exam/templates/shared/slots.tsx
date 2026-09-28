@@ -84,7 +84,7 @@ export function Header({
 }
 
 /** One clock a sitting: composite counts the paper, sectional counts the section it stands in. */
-export function Timer({ view, config }: Readonly<ExamSlotProps>) {
+function Timer({ view, config }: Readonly<ExamSlotProps>) {
   if (view.sectional && view.sectionSec) {
     return (
       <SectionTimer

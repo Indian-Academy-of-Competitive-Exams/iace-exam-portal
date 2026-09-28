@@ -42,7 +42,6 @@ export function createBrowserTokenStore(storageKey: string): TokenStore {
 }
 
 // --- the web app scaffolding: composes @iace/ui and react-router-dom, hence not in `src/` ------
-export { AppProviders } from './app-providers';
 export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
 export { useWorkspace } from './app-shell/use-workspace';
 export { mountApp } from './mount-app';
@@ -74,7 +73,6 @@ export { useMediaQuery, DESKTOP_QUERY } from './app-shell/use-media-query';
 export { useFilterSpec, type FilterSpecState, type ListValues } from './use-filter-spec';
 export { useImportScreen, type ImportScreenState } from './use-import-screen';
 export { useListScreen } from './use-list-screen';
-export { usePrint } from './use-print';
 export { useScrollList } from './use-scroll-list';
 export { useLocalFilters, type FilterStore } from './use-local-filters';
 export { shrunkForUpload, worthEncoding, drawnSize, webpName } from './shrink-image';

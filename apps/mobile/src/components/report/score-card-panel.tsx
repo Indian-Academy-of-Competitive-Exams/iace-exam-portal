@@ -122,7 +122,7 @@ function beaten(card: ScoreCard): string {
   return `percentile · better than ${card.cohortSize - card.rank} of ${card.cohortSize}`;
 }
 
-export function CardSkeleton() {
+function CardSkeleton() {
   return (
     <View className="gap-4">
       <Skeleton className="h-28 rounded-xl" />

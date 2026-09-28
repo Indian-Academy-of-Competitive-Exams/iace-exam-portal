@@ -70,7 +70,7 @@ const OPTIONS: readonly (readonly string[])[] = [
 
 const rich = (text: string) => [{ type: 'TEXT' as const, text }];
 
-export const PREVIEW_QUESTIONS: readonly ExamQuestion[] = Array.from(
+const PREVIEW_QUESTIONS: readonly ExamQuestion[] = Array.from(
   { length: QUESTION_COUNT },
   (_, index) => ({
     questionId: `q-${index + 1}`,
@@ -98,7 +98,7 @@ const answer = (state: LiveAnswer['state'], selectedOptionId: string | null): Li
 });
 
 /** One question in each state, so the palette shows all five without any clicking. */
-export const PREVIEW_ANSWERS: Readonly<Record<string, LiveAnswer>> = {
+const PREVIEW_ANSWERS: Readonly<Record<string, LiveAnswer>> = {
   'q-1': answer(ANSWER_STATE.ANSWERED, 'q-1-o-0'),
   'q-2': answer(ANSWER_STATE.MARKED_REVIEW, null),
   'q-3': answer(ANSWER_STATE.ANSWERED_MARKED, 'q-3-o-0'),

@@ -24,8 +24,7 @@ const NAV: readonly NavItem[] = [{ to: '/students', label: 'Students' }];
 function renderShell(props: Partial<React.ComponentProps<typeof AppShell>> = {}) {
   return render(
     <MemoryRouter>
-      {/* Both are mounted by AppProviders in the real app: the header's ThemeToggle reads one,
-          and the rail's per-icon tooltip reads the other. */}
+      {/* Both are mounted by mountApp in the real app: the header's theme toggle and the rail's tooltips. */}
       <ThemeProvider>
         <TooltipProvider>
           <AppShell nav={NAV} userLabel="admin@iace.co.in" onSignOut={() => {}} {...props}>

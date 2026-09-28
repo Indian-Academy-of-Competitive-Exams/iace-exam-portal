@@ -101,8 +101,6 @@ export const SAVED_FILTER_FIELDS = {
   TEST: { key: 'testId', label: 'Test', placeholder: 'Any test' },
 } as const;
 
-export type SavedFilterKey = (typeof SAVED_FILTER_FIELDS)[keyof typeof SAVED_FILTER_FIELDS]['key'];
-
 /** Only what their own set spans: a filter must offer no choice that finds nothing. */
 export function savedFilters(facets: SavedFacets | undefined): FilterSpec[] {
   return [

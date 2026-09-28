@@ -121,7 +121,7 @@ export async function unsubscribeFromPush(): Promise<void> {
   await api.me.unsubscribeFromPush({ endpoint });
 }
 
-export function toSubscriptionInput(subscription: PushSubscription): PushSubscriptionInput | null {
+function toSubscriptionInput(subscription: PushSubscription): PushSubscriptionInput | null {
   const json = subscription.toJSON();
   const { p256dh, auth } = json.keys ?? {};
   if (!p256dh || !auth) return null;

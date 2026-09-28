@@ -98,7 +98,6 @@ export {
   testsFilters,
   type FilterItem,
   type FilterValue,
-  type SavedFilterKey,
   type FilterSpec,
 } from './list-filters';
 export {
