@@ -71,6 +71,105 @@ export interface DataTableSelection {
   selectable?: (key: string) => boolean;
 }
 
+/** `selectable` is asked once per row per render: a caller's check may itself be a scan. */
+function rowSelection(keys: readonly string[], selection: DataTableSelection | undefined) {
+  const selected = selection?.selected;
+  const selectable = selection?.selectable;
+  // Only what is on screen and within reach: a box that silently took the rest would be a lie.
+  const reachable = new Set(
+    keys.filter((key) => Boolean(selected?.has(key)) || (selectable?.(key) ?? true)),
+  );
+  const allShown = reachable.size > 0 && [...reachable].every((key) => selected?.has(key));
+
+  const toggle = (touched: Iterable<string>, on: boolean) => {
+    const next = new Set(selected);
+    for (const key of touched) {
+      if (on) next.add(key);
+      else next.delete(key);
+    }
+    selection?.onChange(next);
+  };
+
+  return { reachable, allShown, toggle };
+}
+
+interface DataTableRowProps<TRow> {
+  row: TRow;
+  id: string;
+  columns: readonly DataTableColumn<TRow>[];
+  span: number;
+  className?: string;
+  expand?: DataTableExpand<TRow>;
+  isOpen: boolean;
+  onToggleOpen: (id: string) => void;
+  tick?: { checked: boolean; disabled: boolean; onChange: (id: string, on: boolean) => void };
+}
+
+function DataTableRow<TRow>({
+  row,
+  id,
+  columns,
+  span,
+  className,
+  expand,
+  isOpen,
+  onToggleOpen,
+  tick,
+}: Readonly<DataTableRowProps<TRow>>) {
+  return (
+    <>
+      <TableRow className={className}>
+        {expand ? (
+          <TableCell>
+            <button
+              type="button"
+              aria-label={expand.label(row)}
+              aria-expanded={isOpen}
+              onClick={() => onToggleOpen(id)}
+              className={cn(
+                'flex size-7 items-center justify-center rounded-full text-muted-foreground',
+                'transition-colors hover:bg-muted hover:text-foreground',
+                'focus-visible:shadow-focus focus-visible:outline-none [&_svg]:size-4',
+              )}
+            >
+              <ChevronRight
+                className={cn('transition-transform', isOpen && 'rotate-90')}
+                aria-hidden
+              />
+            </button>
+          </TableCell>
+        ) : null}
+        {tick ? (
+          <TableCell>
+            <Checkbox
+              aria-label={`Select row ${id}`}
+              checked={tick.checked}
+              disabled={tick.disabled}
+              onChange={(event) => tick.onChange(id, event.target.checked)}
+            />
+          </TableCell>
+        ) : null}
+        {columns.map((column) => (
+          <TableCell key={column.key} numeric={column.numeric} className={column.className}>
+            {column.cell(row)}
+          </TableCell>
+        ))}
+      </TableRow>
+
+      {expand && isOpen ? (
+        <TableRow>
+          {/* Capped and scrolling: a long child list must not push the parent rows off screen. */}
+          <TableCell colSpan={span} className="bg-surface-2 p-0">
+            <div className="relative max-h-[26rem] overflow-y-auto px-4 py-3">
+              {expand.render(row)}
+            </div>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
+
 /** Header, three-state body and pagination in one; `colSpan` follows `columns.length`. The `empty` message stays the caller's — only they know whether a filter is set. */
 export function DataTable<TRow>({
   columns,
@@ -96,28 +195,12 @@ export function DataTable<TRow>({
     if (!next.delete(key)) next.add(key);
     setOpen(next);
   };
-  const keys = rows.map(rowKey);
-  const reaches = (key: string) =>
-    Boolean(selection?.selected.has(key)) || (selection?.selectable?.(key) ?? true);
-  // Only what is on screen and within reach: a box that silently took the rest would be a lie.
-  const reachable = keys.filter(reaches);
-  const allShown = reachable.length > 0 && reachable.every((key) => selection?.selected.has(key));
-
-  const toggleAll = (on: boolean) => {
-    const next = new Set(selection?.selected);
-    for (const key of reachable) {
-      if (on) next.add(key);
-      else next.delete(key);
-    }
-    selection?.onChange(next);
-  };
-
-  const toggleOne = (key: string, on: boolean) => {
-    const next = new Set(selection?.selected);
-    if (on) next.add(key);
-    else next.delete(key);
-    selection?.onChange(next);
-  };
+  const keyed = rows.map((row) => ({ row, id: rowKey(row) }));
+  const { reachable, allShown, toggle } = rowSelection(
+    keyed.map(({ id }) => id),
+    selection,
+  );
+  const toggleOne = (key: string, on: boolean) => toggle([key], on);
 
   const span = columns.length + (selection ? 1 : 0) + (expand ? 1 : 0);
   const fills = useInTableFrame();
@@ -137,8 +220,8 @@ export function DataTable<TRow>({
                 <Checkbox
                   aria-label={selection.label ?? 'Select every row shown'}
                   checked={allShown}
-                  disabled={reachable.length === 0}
-                  onChange={(event) => toggleAll(event.target.checked)}
+                  disabled={reachable.size === 0}
+                  onChange={(event) => toggle(reachable, event.target.checked)}
                 />
               </TableHead>
             ) : null}
@@ -162,65 +245,27 @@ export function DataTable<TRow>({
             onRetry={onRetry}
             skeletonRows={skeletonRows}
           >
-            {rows.map((row) => (
-              <React.Fragment key={rowKey(row)}>
-                <TableRow className={rowClassName?.(row)}>
-                  {expand ? (
-                    <TableCell>
-                      <button
-                        type="button"
-                        aria-label={expand.label(row)}
-                        aria-expanded={open.has(rowKey(row))}
-                        onClick={() => toggleOpen(rowKey(row))}
-                        className={cn(
-                          'flex size-7 items-center justify-center rounded-full text-muted-foreground',
-                          'transition-colors hover:bg-muted hover:text-foreground',
-                          'focus-visible:shadow-focus focus-visible:outline-none [&_svg]:size-4',
-                        )}
-                      >
-                        <ChevronRight
-                          className={cn(
-                            'transition-transform',
-                            open.has(rowKey(row)) && 'rotate-90',
-                          )}
-                          aria-hidden
-                        />
-                      </button>
-                    </TableCell>
-                  ) : null}
-                  {selection ? (
-                    <TableCell>
-                      <Checkbox
-                        aria-label={`Select row ${rowKey(row)}`}
-                        checked={selection.selected.has(rowKey(row))}
-                        disabled={!reaches(rowKey(row))}
-                        onChange={(event) => toggleOne(rowKey(row), event.target.checked)}
-                      />
-                    </TableCell>
-                  ) : null}
-                  {columns.map((column) => (
-                    <TableCell
-                      key={column.key}
-                      numeric={column.numeric}
-                      className={column.className}
-                    >
-                      {column.cell(row)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-
-                {expand && open.has(rowKey(row)) ? (
-                  <TableRow>
-                    {/* Its own scrollport, capped: a long child list must not push the parent
-                        rows off the screen the reader is using to navigate them. */}
-                    <TableCell colSpan={span} className="bg-surface-2 p-0">
-                      <div className="relative max-h-[26rem] overflow-y-auto px-4 py-3">
-                        {expand.render(row)}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-              </React.Fragment>
+            {keyed.map(({ row, id }) => (
+              <DataTableRow
+                key={id}
+                row={row}
+                id={id}
+                columns={columns}
+                span={span}
+                className={rowClassName?.(row)}
+                expand={expand}
+                isOpen={open.has(id)}
+                onToggleOpen={toggleOpen}
+                tick={
+                  selection
+                    ? {
+                        checked: selection.selected.has(id),
+                        disabled: !reachable.has(id),
+                        onChange: toggleOne,
+                      }
+                    : undefined
+                }
+              />
             ))}
           </TableState>
         </TableBody>
