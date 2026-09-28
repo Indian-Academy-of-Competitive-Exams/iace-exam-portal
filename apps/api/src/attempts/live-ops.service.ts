@@ -87,8 +87,8 @@ export class LiveOpsService {
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
 
     const since = new Date(now.getTime() - LIVE_OPS_RECENT_MINUTES * MS_PER_MINUTE);
-    // A voided sitting stays HERE, badged: the admin who stood one down has to be able to see it.
-    const landed = { testId, submittedAt: { gte: since } };
+    // Voided ones stay, badged; updatedAt never trails submittedAt, so (testId, updatedAt) finds them.
+    const landed = { testId, submittedAt: { gte: since }, updatedAt: { gte: since } };
     // Read apart, so a hall of stuck sittings cannot fill the window and empty the running list.
     const running = { testId, status: ATTEMPT_STATUS.IN_PROGRESS, endsAt: { gte: now } };
     const overdue = { testId, status: ATTEMPT_STATUS.IN_PROGRESS, endsAt: { lt: now } };

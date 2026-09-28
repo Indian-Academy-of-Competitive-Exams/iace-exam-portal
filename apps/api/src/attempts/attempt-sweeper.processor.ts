@@ -1,5 +1,6 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job } from 'bullmq';
+import { Prisma } from '@prisma/client';
 import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -125,8 +126,9 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
     const requests = await this.prisma.outboxEvent.findMany({
       where: {
-        eventType: SCORING_REQUEST.EVENT_TYPE,
+        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
         aggregateId: { in: candidates.map((attempt) => attempt.id) },
+        eventType: SCORING_REQUEST.EVENT_TYPE,
       },
       select: { aggregateId: true, processedAt: true },
     });
@@ -144,22 +146,22 @@ export class AttemptSweeperProcessor extends WorkerHost {
   }
 
   /** The gauge's own read, and the width of the batch below — both the same predicate, one query. */
-  private unscoredCount(settled: Date): Promise<number> {
-    return this.prisma.attempt.count({
-      where: { status: ATTEMPT_STATUS.SUBMITTED, score: null, submittedAt: { lt: settled } },
-    });
+  private async unscoredCount(settled: Date): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM "Attempt"
+      WHERE ${UNSCORED} AND "submittedAt" < ${settled}`;
+    return row?.count ?? 0;
   }
 
   /** A job that exhausted its retries left an ended sitting with no score, and nothing owned it. */
   private neverScored(settled: Date, backlog: number): Promise<{ id: string; testId: string }[]> {
     if (backlog === 0) return Promise.resolve([]);
-    return this.prisma.attempt.findMany({
-      where: { status: ATTEMPT_STATUS.SUBMITTED, score: null, submittedAt: { lt: settled } },
-      orderBy: { submittedAt: 'asc' },
-      // Caps one sweep's own sequential re-requests, not the scoring queue, which drains at its own pace.
-      take: Math.min(backlog, NEVER_SCORED_BATCH_CEILING),
-      select: { id: true, testId: true },
-    });
+    // Caps one sweep's own sequential re-requests, not the scoring queue, which drains at its own pace.
+    return this.prisma.$queryRaw<{ id: string; testId: string }[]>`
+      SELECT "id", "testId" FROM "Attempt"
+      WHERE ${UNSCORED} AND "submittedAt" < ${settled}
+      ORDER BY "submittedAt" ASC
+      LIMIT ${Math.min(backlog, NEVER_SCORED_BATCH_CEILING)}`;
   }
 
   /** An EVALUATED sitting whose last mark predates its own re-score request: the correction never ran. */
@@ -183,15 +185,20 @@ export class AttemptSweeperProcessor extends WorkerHost {
   /** The same grace a save gets, so the sweeper never ends a sitting a save could still reach. */
   private async expired(now: Date = new Date()) {
     const cutoff = new Date(now.getTime() - SAVE_GRACE_SEC * MILLISECONDS_PER_SECOND);
-    return this.prisma.attempt.findMany({
-      where: { status: ATTEMPT_STATUS.IN_PROGRESS, endsAt: { lt: cutoff } },
-      select: { id: true },
-      take: SWEEP_BATCH,
-    });
+    return this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "Attempt"
+      WHERE "status" = ${IN_PROGRESS} AND "endsAt" < ${cutoff}
+      LIMIT ${SWEEP_BATCH}`;
   }
 }
 
 const MILLISECONDS_PER_SECOND = 1000;
+
+/** Literal, not a parameter: a bound enum cannot prove Attempt_unscored_idx's predicate, so the planner skips it. */
+const UNSCORED = Prisma.raw(`"status" = '${ATTEMPT_STATUS.SUBMITTED}' AND "score" IS NULL`);
+
+/** Literal, not a parameter: a bound enum cannot prove Attempt_expiring_idx's predicate, so the planner skips it. */
+const IN_PROGRESS = Prisma.raw(`'${ATTEMPT_STATUS.IN_PROGRESS}'`);
 
 /** How many stale rescores one sweep asks about — a rare correction path, not a backlog drain. */
 const RESCORE_BATCH = 100;

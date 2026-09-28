@@ -6,7 +6,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job, type Queue } from 'bullmq';
-import { DeliveryStatus, type DeliveryChannel } from '@prisma/client';
+import { DeliveryStatus, Prisma, type DeliveryChannel } from '@prisma/client';
 import { ActorTypes, NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -49,6 +49,9 @@ export const DELIVERY_STALE_AFTER_MS = 20 * 60 * 1000;
 
 /** How many stuck deliveries one sweep repairs; a backlog beyond this waits for the next pass. */
 const REPAIR_BATCH = 25;
+
+/** Literal, not a parameter: a bound enum cannot prove NotificationDelivery_pending_idx's predicate, so the planner skips it. */
+const PENDING = Prisma.raw(`'${DeliveryStatus.PENDING}'`);
 
 interface NotificationWithChain {
   id: string;
@@ -161,16 +164,13 @@ export class NotificationDeliveryProcessor extends WorkerHost {
   /** A PENDING row this stale outlived BullMQ's own stall path, so nothing else will move it. */
   async repairStalled(now: Date = new Date()): Promise<void> {
     const settled = new Date(now.getTime() - DELIVERY_STALE_AFTER_MS);
-    const stuck = await this.prisma.notificationDelivery.findMany({
-      where: {
-        status: DeliveryStatus.PENDING,
-        channel: { in: PAID_CHANNELS },
-        queuedAt: { lt: settled },
-      },
-      orderBy: { queuedAt: 'asc' },
-      take: REPAIR_BATCH,
-      select: { id: true },
-    });
+    const stuck = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "NotificationDelivery"
+      WHERE "status" = ${PENDING}
+        AND "channel" = ANY(${PAID_CHANNELS}::"DeliveryChannel"[])
+        AND "queuedAt" < ${settled}
+      ORDER BY "queuedAt" ASC
+      LIMIT ${REPAIR_BATCH}`;
 
     // ponytail: sequential, not through the queue's rate limiter — repairs are rare and few.
     for (const row of stuck) {

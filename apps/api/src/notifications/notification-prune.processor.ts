@@ -6,19 +6,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job } from 'bullmq';
-import { DeliveryStatus } from '@prisma/client';
+import { DeliveryStatus, Prisma } from '@prisma/client';
 import { DELIVERY_RETENTION_DAYS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
-/** Every status but PENDING: a send that has been decided is what the window is measured against. */
-const SETTLED: DeliveryStatus[] = [
-  DeliveryStatus.SENT,
-  DeliveryStatus.DELIVERED,
-  DeliveryStatus.FAILED,
-  DeliveryStatus.SKIPPED,
-];
+/** Literal, not a parameter: a bound enum cannot prove NotificationDelivery_settled_idx's predicate, so the planner skips it. */
+const PENDING = Prisma.raw(`'${DeliveryStatus.PENDING}'`);
 
 /** Deleted a page at a time, so one run never holds a lock the size of the backlog. */
 export const DELIVERY_PRUNE_PAGE = 1000;
@@ -58,19 +53,14 @@ export class NotificationPruneProcessor extends WorkerHost {
   /** Settled only: a PENDING row is a send still owed a decision, whatever its age. */
   async prune(now: Date, maxPages: number = DELIVERY_PRUNE_MAX_PAGES): Promise<number> {
     const queuedBefore = new Date(now.getTime() - DELIVERY_RETENTION_DAYS * MILLISECONDS_PER_DAY);
-    const stale = {
-      status: { in: SETTLED },
-      queuedAt: { lt: queuedBefore },
-    };
     let removed = 0;
 
     for (let page = 0; page < maxPages; page += 1) {
-      const rows = await this.prisma.notificationDelivery.findMany({
-        where: stale,
-        orderBy: { queuedAt: 'asc' },
-        take: DELIVERY_PRUNE_PAGE,
-        select: { id: true },
-      });
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "NotificationDelivery"
+        WHERE "status" <> ${PENDING} AND "queuedAt" < ${queuedBefore}
+        ORDER BY "queuedAt" ASC
+        LIMIT ${DELIVERY_PRUNE_PAGE}`;
       if (rows.length === 0) return removed;
 
       const gone = await this.prisma.notificationDelivery.deleteMany({

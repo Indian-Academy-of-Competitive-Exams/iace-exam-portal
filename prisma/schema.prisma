@@ -493,6 +493,7 @@ model Question {
   @@index([questionCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "Question_questionCode_trgm_idx")
   // The admin dashboard counts the whole bank by status, which no other index leads on.
   @@index([status])
+  @@index([createdAt, id])
 }
 
 // Immutable once a reachable test pins it; until then an edit rewrites this row in place.
@@ -954,6 +955,7 @@ model EventCandidate {
 
   @@id([eventId, studentId])
   @@index([studentId])
+  @@index([eventId, createdAt])
 }
 
 // Per-program stagger on when one test opens, on top of Test.opensAt.
@@ -1292,4 +1294,5 @@ model SavedQuestion {
   @@index([studentId, createdAt])
   @@index([attemptId])
   @@index([paperQuestionId])
+  @@index([questionId])
 }

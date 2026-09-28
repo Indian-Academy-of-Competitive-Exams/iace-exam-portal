@@ -274,6 +274,10 @@ Rules for what you write next; what already exists is in the schema.
   `Asia/Kolkata` through the existing helpers. Never add a second date helper.
 - **What Prisma cannot express** — composite foreign keys, partial uniques, checks, triggers, GIN —
   is hand-written SQL in the migration.
+- **A partial index on an enum is read with a literal.** Prisma binds an enum as
+  `CAST($1::text AS "Enum")`, and the planner cannot prove a `WHERE "status" = 'X'` index predicate
+  from a cast parameter — the index is silently skipped. The query that should use it is raw SQL with
+  the value as `Prisma.raw` (see `ranking-sql.ts`, the sweeper, the delivery repair and prune).
 - **Canonical names.** Branch names and exam codes are canonical (`canonicalName` in
   `packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. Normalise the
   input, never reject it — a name typed in lower case is the same branch, not a validation error.
