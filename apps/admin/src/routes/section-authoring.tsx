@@ -112,12 +112,12 @@ export function SectionAuthoringPage() {
     retry: false,
   });
 
+  // Only the section is read again now; the queues and duplicate checks wait until they are next opened.
   const settle = useCallback(async () => {
-    await Promise.all(
-      [QUERY_KEYS.PROOFREADING, QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.AUTHORING].map((queryKey) =>
-        queryClient.invalidateQueries({ queryKey }),
-      ),
-    );
+    for (const queryKey of [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.AUTHORING]) {
+      void queryClient.invalidateQueries({ queryKey, refetchType: 'none' });
+    }
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING });
   }, [queryClient]);
   const replace = useCallback(
     (next: SectionWork) => queryClient.setQueryData(workKey(testId, sectionId), next),
@@ -173,7 +173,7 @@ function SectionWorkspace({
   onChanged: (next: SectionWork) => void;
   onSettle: () => Promise<void>;
 }>) {
-  const seat = seatOf(work);
+  const seat = useMemo(() => seatOf(work), [work]);
   const [finishing, setFinishing] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const { testId, baseConfigSectionId: sectionId } = work;
