@@ -25,6 +25,7 @@ import {
   NOTIFICATION_TYPE,
   type Notification,
   type NotificationType,
+  type Paginated,
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import {
@@ -201,8 +202,12 @@ function useMarkRead(notification: Notification) {
 
   const { mutate } = useMutation({
     mutationFn: () => api.me.readNotification(notification.id),
-    // The COUNT only: refetching the list would pull rows out from under the reader who marked them.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY }),
+    // Counted down here, not re-read: a screenful of rows seen at once is otherwise a GET per row.
+    onSuccess: () =>
+      queryClient.setQueryData<Paginated<Notification>>(UNREAD_QUERY_KEY, (count) =>
+        count ? { ...count, total: Math.max(0, count.total - 1) } : count,
+      ),
+    onError: () => void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY }),
   });
 
   return React.useCallback(() => {

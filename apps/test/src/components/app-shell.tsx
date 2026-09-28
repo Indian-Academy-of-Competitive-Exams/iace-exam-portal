@@ -41,14 +41,14 @@ export function AppShell() {
     [queryClient],
   );
 
-  // The poll only ever refreshed the COUNT, so the bell climbed while the list behind it did not.
+  // A rising count is a new notification the lists have not got; a falling one is the reader reading them.
   const total = unread.data?.total ?? null;
   const counted = useRef<number | null>(null);
   useEffect(() => {
     if (total === null) return;
-    const moved = counted.current !== null && total !== counted.current;
+    const rose = counted.current !== null && total > counted.current;
     counted.current = total;
-    if (!moved) return;
+    if (!rose) return;
     for (const unreadOnly of [true, false]) {
       void queryClient.invalidateQueries({ queryKey: notificationsQueryKey(unreadOnly) });
     }

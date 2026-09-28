@@ -6,7 +6,7 @@ import { SAVED_FILTER_FIELDS, useInfinitePages } from '@iace/app-kit';
 import { instituteDayLabel, type SavedQuestion } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
-import { savedFacetsQueryKey, savedQueryKey } from '../../lib/constants';
+import { savedQueryKey } from '../../lib/constants';
 import { asSet, type FilterState } from '../../lib/filters';
 import { useTokenColor } from '../../lib/use-token-color';
 import { Alert } from '../ui/alert';
@@ -50,7 +50,6 @@ export function SavedList({ state }: Readonly<SavedListProps>) {
     onSettled: () => {
       setDropping(null);
       void queryClient.invalidateQueries({ queryKey: savedQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: savedFacetsQueryKey() });
     },
   });
 

@@ -6,7 +6,7 @@ import { NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-ki
 import { instituteDayLabel, type Notification } from '@iace/contracts';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
-import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
+import { NOTIFICATIONS_QUERY_KEY, notificationsQueryKey } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
 import { useTokenColor } from '../src/lib/use-token-color';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
@@ -32,10 +32,7 @@ export default function NotificationsScreen() {
 
   const read = useMutation({
     mutationFn: (id: string) => api.me.readNotification(id),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['me', 'notifications'] });
-      void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY });
-    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY }),
   });
 
   const open = (row: Notification) => {

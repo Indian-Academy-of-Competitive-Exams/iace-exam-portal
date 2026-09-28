@@ -181,7 +181,6 @@ function useBookmarks(attemptId: string) {
         : api.me.removeSavedQuestion(savedId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: bookmarksInAttemptQueryKey(attemptId) });
       void queryClient.invalidateQueries({ queryKey: savedQueryKey() });
     },
   });

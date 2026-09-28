@@ -78,7 +78,6 @@ function useBookmarks(attemptId: string, isOpen: boolean): BookmarkControl | und
         : api.me.removeSavedQuestion(savedId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: bookmarksInAttemptQueryKey(attemptId) });
       void queryClient.invalidateQueries({ queryKey: savedQueryKey() });
     },
   });
