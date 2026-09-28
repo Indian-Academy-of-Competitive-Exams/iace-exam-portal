@@ -5,6 +5,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
+  ASSIGNMENT_ROLES,
   EXAM_TEMPLATE,
   ErrorCodes,
   PAPER_SOURCES,
@@ -20,6 +21,7 @@ import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
   BUILDER,
+  makeAdmin,
   makeBuilder,
   makeQuestion,
   makeSitting,
@@ -296,6 +298,36 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
       remaining.map((row) => row.questionId),
       [inScope.id],
     );
+  });
+
+  /** The failure this prevents: a reader left holding a section the test no longer has, which blocks the offer and strands the section if the scope widens back. */
+  it('stands down whoever holds a section it drops, and keeps the record', async () => {
+    const { service } = await serviceWith({ test: {} });
+    const reader = await makeAdmin(prisma);
+    const holding = async (label: string) =>
+      prisma.questionAssignment.create({
+        data: {
+          id: randomUUID(),
+          testId: TEST,
+          baseConfigId: BUILDER.CONFIG,
+          baseConfigSectionId: idFor(label),
+          assigneeId: reader.id,
+          role: ASSIGNMENT_ROLES.PROOFREADER,
+          handedAt: new Date(),
+        },
+      });
+    const kept = await holding('sec_1');
+    const dropped = await holding('sec_2');
+
+    await service.update(TEST, {
+      scope: TEST_SCOPE.SECTIONAL,
+      scopeRef: { sectionId: idFor('sec_1') },
+    });
+
+    const replacedAt = async (id: string) =>
+      (await prisma.questionAssignment.findUniqueOrThrow({ where: { id } })).replacedAt;
+    assert.equal(await replacedAt(kept.id), null);
+    assert.notEqual(await replacedAt(dropped.id), null);
   });
 });
 

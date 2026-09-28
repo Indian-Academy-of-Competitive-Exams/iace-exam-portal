@@ -209,6 +209,11 @@ export class TestsService {
           await tx.paperQuestion.deleteMany({
             where: { testId: id, baseConfigSectionId: { notIn: keptIds } },
           });
+          // Its holders stand down with the paper, or a dropped section's reader blocks the offer for ever.
+          await tx.questionAssignment.updateMany({
+            where: { testId: id, baseConfigSectionId: { notIn: keptIds }, replacedAt: null },
+            data: { replacedAt: new Date() },
+          });
         }
       }
 

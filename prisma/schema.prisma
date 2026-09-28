@@ -617,7 +617,7 @@ model QuestionAssignment {
   finalizedAt         DateTime?      @db.Timestamptz(3)
   // On a proof-reader's row: when the section reached them — a typist's Done, or an owner's hand-over.
   handedAt            DateTime?      @db.Timestamptz(3)
-  // Set when somebody else took the role over; the row stays as the record of who did what.
+  // Set when somebody else took the role over, or its section left the test's scope; the row stays as the record.
   replacedAt          DateTime?      @db.Timestamptz(3)
   createdById         String?        @db.Uuid
   createdAt           DateTime       @default(now()) @db.Timestamptz(3)
