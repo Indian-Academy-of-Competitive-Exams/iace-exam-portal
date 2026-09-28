@@ -322,15 +322,15 @@ export class AssignmentsService {
     if (row.finalizedAt || row.replacedAt) return false;
     const pair = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
     const who = row.assigneeId;
-    const onSection = await this.prisma.question.findMany({
-      where: {
-        OR: [
-          { paperQuestions: { some: pair } },
-          { assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
-        ],
-      },
-      select: { id: true },
-    });
+    // Two indexed reads: one OR across both relations planned as a scan of the whole bank.
+    const [placed, typedHere] = await Promise.all([
+      this.prisma.paperQuestion.findMany({ where: pair, select: { questionId: true } }),
+      this.prisma.question.findMany({
+        where: { assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
+        select: { id: true },
+      }),
+    ]);
+    const onSection = [...placed.map((row) => row.questionId), ...typedHere.map((row) => row.id)];
     const [typed, reviewed, said, edited] = await Promise.all([
       this.prisma.question.count({ where: { assignmentId: row.id } }),
       this.prisma.questionReview.count({
@@ -342,7 +342,7 @@ export class AssignmentsService {
           actorId: who,
           feature: AUDIT_FEATURE.QUESTION,
           createdAt: { gte: row.createdAt },
-          entityId: { in: onSection.map((question) => question.id) },
+          entityId: { in: onSection },
         },
       }),
     ]);
