@@ -25,7 +25,7 @@ import {
 import { studentCardsOf, type StudentCard } from '../students';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { NotificationOutbox } from '../notifications';
-import { reachableBy } from './access-resolver.service';
+import { REACH_SELECT, reachableBy } from './access-resolver.service';
 
 /** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
 interface ReachPairing {
@@ -161,11 +161,7 @@ export class StudentGrantsService {
   async reachedSeries(studentId: string): Promise<StudentSeriesAccess[]> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null },
-      select: {
-        currentBranchId: true,
-        programs: true,
-        enrolledCourses: true,
-      },
+      select: REACH_SELECT,
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 

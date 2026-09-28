@@ -218,12 +218,7 @@ export class AccessResolverService {
   private async resolve(studentId: string): Promise<ResolvedCatalog> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null, isActive: true },
-      select: {
-        isTestBlocked: true,
-        currentBranchId: true,
-        programs: true,
-        enrolledCourses: true,
-      },
+      select: { isTestBlocked: true, ...REACH_SELECT },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
@@ -247,6 +242,13 @@ function counterOf(raw: string | null | undefined): number {
   const value = Number(raw);
   return Number.isInteger(value) && value >= 0 ? value : 0;
 }
+
+/** The student columns `reachableBy` weighs, so every reader selects exactly what it takes. */
+export const REACH_SELECT = {
+  currentBranchId: true,
+  programs: true,
+  enrolledCourses: true,
+} as const satisfies Prisma.StudentSelect;
 
 /** One where-input for reach, asked by all three readers; a grant overrides every kind but the switch. */
 export function reachableBy(

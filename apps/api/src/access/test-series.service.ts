@@ -18,7 +18,7 @@ import {
 import { matchFilters } from '../common/match-filters';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService, reachableBy } from './access-resolver.service';
+import { AccessResolverService, REACH_SELECT, reachableBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
@@ -82,11 +82,7 @@ export class TestSeriesService {
 
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null },
-      select: {
-        currentBranchId: true,
-        programs: true,
-        enrolledCourses: true,
-      },
+      select: REACH_SELECT,
     });
     if (!student) return [];
 
