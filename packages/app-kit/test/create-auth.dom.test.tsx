@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render } from '@testing-library/react';
-import { type AuthIdentity } from '@iace/contracts';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { AppException, ErrorCodes, type AuthIdentity } from '@iace/contracts';
 import { createAuth } from '../src/create-auth';
 import { createTokenStore } from '../src/token-store';
 import { fakeStorage } from './support/fake-storage';
@@ -45,6 +45,48 @@ describe('createAuth', () => {
 
     assert.equal(client.getQueryData(['me', 'catalog']), undefined);
     assert.equal(tokenStore.get(), null);
+    client.clear();
+  });
+
+  /** The failure this prevents: a blip at boot sending a student with a good token to sign in again. */
+  it('asks for the identity again when the first read never got an answer', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retryDelay: 0 } },
+    });
+    const store = createTokenStore('iace.test.blip', fakeStorage());
+    store.set({ accessToken: 'a', refreshToken: 'r', expiresInSec: 900 });
+    let asked = 0;
+    const blip = createAuth<AuthIdentity>({
+      actor: 'STUDENT',
+      queryKey: ['auth', 'me'],
+      tokenStore: store,
+      signOutSignal: { emit: () => undefined, subscribe: () => () => undefined },
+      endpoints: {
+        me: () => {
+          asked += 1;
+          if (asked === 1) {
+            return Promise.reject(new AppException(ErrorCodes.INTERNAL, 'x', { httpStatus: 503 }));
+          }
+          return Promise.resolve({ actor: 'STUDENT' } as AuthIdentity);
+        },
+        logout: () => Promise.resolve(),
+      },
+    });
+    const seen: Array<AuthIdentity | null> = [];
+    function Probe() {
+      seen.push(blip.useAuth().identity);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <blip.AuthProvider>
+          <Probe />
+        </blip.AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => assert.equal(seen.at(-1)?.actor, 'STUDENT'));
+    assert.equal(asked, 2);
     client.clear();
   });
 });

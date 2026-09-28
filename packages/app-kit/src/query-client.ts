@@ -6,7 +6,16 @@ import { bannerMessage } from './form-errors';
 const isReplaced = (error: unknown): boolean =>
   AppException.is(error) && error.code === ErrorCodes.SESSION_REPLACED;
 
-/** What a mutation declares about itself, for the central handler below. */
+/** A refusal is the server's answer; a throttle, a server fault or a request that never landed is not. */
+export function isWorthAskingAgain(error: unknown): boolean {
+  if (!AppException.is(error)) return true;
+  const { httpStatus } = error;
+  return httpStatus === 0 || httpStatus === THROTTLED || httpStatus >= SERVER_FAULT;
+}
+
+const THROTTLED = 429;
+const SERVER_FAULT = 500;
+
 /** What a query may declare. `silent` opts out of the central reporting. */
 export interface AppQueryMeta {
   silent?: boolean;

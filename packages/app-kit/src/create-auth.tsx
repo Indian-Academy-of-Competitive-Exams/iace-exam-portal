@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { type AuthIdentity, type AuthSessionResponse } from '@iace/contracts';
+import { isWorthAskingAgain } from './query-client';
 import { type TokenStore } from './token-store';
 import { type SignOutReason, type SignOutSignal } from './sign-out-signal';
 
@@ -38,6 +39,8 @@ export interface CreateAuthOptions<TIdentity extends AuthIdentity, TExtra extend
   extend?: (identity: TIdentity | null) => TExtra;
 }
 
+const ME_RETRIES = 3;
+
 /** One session implementation for every SPA, parameterised by the identity type. */
 export function createAuth<TIdentity extends AuthIdentity, TExtra extends object = object>(
   options: CreateAuthOptions<TIdentity, TExtra>,
@@ -61,7 +64,8 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
       queryKey,
       queryFn: () => endpoints.me(),
       enabled: hasToken,
-      retry: false,
+      // A blip at boot must not send a good token to the sign-in screen; a refusal already ended the session.
+      retry: (failures, error) => failures < ME_RETRIES && isWorthAskingAgain(error),
       staleTime: 5 * 60 * 1000,
     });
 
