@@ -16,6 +16,9 @@ const IMAGE_LIMITS = {
   accept: QUESTION_IMAGE_ACCEPTED_TYPES,
 };
 
+/** Each pane scrolls on its own, so a long question never pushes the other out of view. */
+const SCROLLS = 'relative flex min-h-0 flex-1 flex-col overflow-y-auto';
+
 /** The two columns the typist works in: what they are writing, and what it looks like. */
 export function QuestionPanes({
   questionId,
@@ -29,7 +32,6 @@ export function QuestionPanes({
   onCycleLanguage,
   onLanguageChange,
   onSave,
-  flow = false,
   lead,
   previewAction,
 }: Readonly<{
@@ -44,23 +46,15 @@ export function QuestionPanes({
   onCycleLanguage: () => void;
   onLanguageChange: (next: QuestionLanguage) => void;
   onSave: () => void;
-  /** In a window that scrolls as a whole, each pane grows with its question instead. */
-  flow?: boolean;
   /** Ahead of the languages: whose question this is, where there are several. */
   lead?: React.ReactNode;
   /** At the preview's end: what may be done to this question. */
   previewAction?: React.ReactNode;
 }>) {
-  const scrolls = flow ? '' : 'min-h-0 flex-1 overflow-y-auto';
   const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
 
   return (
-    <div
-      className={cn(
-        'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
-        !flow && 'min-h-0 flex-1',
-      )}
-    >
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
         <PanelHeading
           lead={lead}
@@ -77,7 +71,7 @@ export function QuestionPanes({
             />
           }
         />
-        <div className={cn('flex flex-col', scrolls)}>
+        <div className={SCROLLS}>
           <ScaffoldEditor
             aria-label="Question"
             regions={regionsFor(state, language)}
@@ -91,7 +85,8 @@ export function QuestionPanes({
             imageLimits={IMAGE_LIMITS}
             lang={language}
             script={script}
-            className="flex-1 rounded-none border-0 shadow-none"
+            // The card is the frame: the box it fills draws no ring or border of its own.
+            className="flex-1 rounded-none border-0 shadow-none focus-within:border-transparent focus-within:shadow-none"
           />
         </div>
       </section>
@@ -101,7 +96,7 @@ export function QuestionPanes({
           lead={<h2 className="text-sm font-semibold">Preview and validation</h2>}
           action={previewAction}
         />
-        <div className={cn('flex flex-col gap-4 p-4', scrolls)}>
+        <div className={cn(SCROLLS, 'gap-4 p-4')}>
           <AuthoringPreview state={state} language={language} />
           <AuthoringChecks checks={checks} />
         </div>

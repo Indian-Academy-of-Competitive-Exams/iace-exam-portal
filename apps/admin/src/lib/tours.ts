@@ -10,6 +10,7 @@ export const TOUR_IDS = {
   IMPORT_QUESTIONS: 'import-questions',
   LIVE_OPS: 'live-ops',
   STUDENT_DETAIL: 'student-detail',
+  AUTHORING: 'authoring',
 } as const;
 
 /** The `data-tour` values these tours point at, beyond the tabs and filter bar every frame carries. */
@@ -21,7 +22,41 @@ export const TOUR_TARGETS = {
   TAXONOMY_NEW: 'taxonomy-new',
   STUDENT_EDIT: 'student-edit',
   LIVE_PICKER: 'live-picker',
+  AUTHORING_SETTINGS: 'authoring-settings',
+  AUTHORING_CARD: 'authoring-card',
+  AUTHORING_PROGRESS: 'authoring-progress',
+  AUTHORING_KEYS: 'authoring-keys',
+  AUTHORING_ACTIONS: 'authoring-actions',
 } as const;
+
+/** One tour for every authoring page; a stop whose control a page lacks is skipped there. */
+export const AUTHORING_TOUR: readonly TourStep[] = [
+  {
+    target: TOUR_TARGETS.AUTHORING_SETTINGS,
+    title: 'The question’s settings',
+    body: 'Subject, topic, difficulty and type. A new question keeps them from the one before.',
+  },
+  {
+    target: TOUR_TARGETS.AUTHORING_CARD,
+    title: 'One card per question',
+    body: 'Type on the left, check the preview on the right. Scroll, or use the question keys, to move between cards.',
+  },
+  {
+    target: TOUR_TARGETS.AUTHORING_PROGRESS,
+    title: 'Section progress',
+    body: 'Who holds the section, what is checked or sent back, and a tile for every question to jump to.',
+  },
+  {
+    target: TOUR_TARGETS.AUTHORING_KEYS,
+    title: 'Keys',
+    body: 'Everything here works from the keyboard.',
+  },
+  {
+    target: TOUR_TARGETS.AUTHORING_ACTIONS,
+    title: 'Save and hand on',
+    body: 'Save moves to the next question. Comments, Mark done and Release sit beside it when they apply.',
+  },
+];
 
 export const TESTS_AND_SERIES_TOUR: readonly TourStep[] = [
   {

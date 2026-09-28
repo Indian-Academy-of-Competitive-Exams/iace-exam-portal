@@ -82,14 +82,14 @@ function BlurryNotice({ count }: Readonly<{ count: number }>) {
   );
 }
 
+/** Registered only while the sheet is on screen: the authoring page over it registers its own. */
+function SheetTour() {
+  usePageTour({ id: TOUR_IDS.IMPORT_QUESTIONS, steps: IMPORT_QUESTIONS_TOUR, ready: true });
+  return null;
+}
+
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
-  usePageTour({
-    id: TOUR_IDS.IMPORT_QUESTIONS,
-    steps: IMPORT_QUESTIONS_TOUR,
-    ready: true,
-  });
-
   const { assignmentId } = useParams<{ assignmentId?: string }>();
   const queryClient = useQueryClient();
   // The same sheet either way; the section is only where the questions land.
@@ -165,7 +165,12 @@ export function ImportQuestionsPage() {
 
   return (
     <ImportView
-      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import questions" />}
+      header={
+        <>
+          <SheetTour />
+          <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import questions" />
+        </>
+      }
       options={
         <>
           {into ? (
@@ -216,7 +221,6 @@ export function ImportQuestionsPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead numeric>Line</TableHead>
             <TableHead>Question</TableHead>
             <TableHead>Filed under</TableHead>
             <TableHead>Languages</TableHead>
@@ -227,7 +231,7 @@ export function ImportQuestionsPage() {
           <TableState
             isLoading={false}
             isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={5}
+            colSpan={4}
             empty={
               plan === null
                 ? {
@@ -259,9 +263,6 @@ function ImportRow({
 
   return (
     <TableRow>
-      <TableCell numeric className="text-muted-foreground">
-        {row.line}
-      </TableCell>
       <TableCell className="max-w-sm">
         {onOpen ? (
           <button

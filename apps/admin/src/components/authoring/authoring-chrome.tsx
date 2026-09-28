@@ -1,18 +1,18 @@
 import { useState } from 'react';
-import { LANGUAGE_LABELS, type QuestionLanguage } from '@iace/contracts';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
 import { Kbd } from '@iace/ui';
+import { TOUR_TARGETS } from '../../lib/tours';
 
-/** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
-const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
+const IS_MAC = navigator.userAgent.includes('Mac');
+/** A Mac prints Cmd and Option where every other keyboard prints Ctrl and Alt; the editor answers to both. */
+const MOD_KEY = IS_MAC ? 'Cmd' : 'Ctrl';
+const ALT_KEY = IS_MAC ? 'Option' : 'Alt';
 
-/** A keyboard-only tool says which keys, once, where it does not cost the box any room. */
+/** A keyboard-only tool says which keys, once, on one line that costs the box no room. */
 export function Legend({
-  language,
   questions = false,
   actions,
 }: Readonly<{
-  language: QuestionLanguage;
   /** Several questions to move between, not the one box. */
   questions?: boolean;
   /** The page's own buttons, at the bar's right end. */
@@ -20,16 +20,26 @@ export function Legend({
 }>) {
   return (
     <div className="flex flex-none items-center justify-between gap-4 border-t border-border bg-surface px-4 py-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
-        <Shortcut keys={['↑', '↓']}>move</Shortcut>
+      <div
+        data-tour={TOUR_TARGETS.AUTHORING_KEYS}
+        className="flex min-w-0 items-center gap-x-4 overflow-hidden whitespace-nowrap text-xs text-muted-foreground"
+      >
+        <Shortcut keys={['↑↓']}>move</Shortcut>
         <Shortcut keys={['Enter']}>next</Shortcut>
-        <Shortcut keys={[MOD_KEY, 'Enter']}>save and next</Shortcut>
-        {questions ? <Shortcut keys={['Alt', '↑ ↓']}>previous / next question</Shortcut> : null}
+        <Shortcut keys={[MOD_KEY, 'Enter']}>save</Shortcut>
+        {questions ? <Shortcut keys={[ALT_KEY, '↑↓']}>question</Shortcut> : null}
         <Shortcut keys={['$…$']}>maths</Shortcut>
-        <Shortcut keys={[MOD_KEY, 'V']}>paste an image</Shortcut>
-        <Shortcut keys={['Alt', 'L']}>{LANGUAGE_LABELS[language]}</Shortcut>
+        <Shortcut keys={[MOD_KEY, 'V']}>image</Shortcut>
+        <Shortcut keys={[ALT_KEY, 'L']}>language</Shortcut>
       </div>
-      {actions ? <div className="flex flex-none items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div
+          data-tour={TOUR_TARGETS.AUTHORING_ACTIONS}
+          className="flex flex-none items-center gap-2"
+        >
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -39,12 +49,9 @@ function Shortcut({
   children,
 }: Readonly<{ keys: readonly string[]; children: React.ReactNode }>) {
   return (
-    <span className="flex items-center gap-1">
-      {keys.map((key, index) => (
-        <span key={`${key}:${index}`} className="flex items-center gap-1">
-          {index > 0 ? <span aria-hidden>+</span> : null}
-          <Kbd>{key}</Kbd>
-        </span>
+    <span className="flex flex-none items-center gap-1">
+      {keys.map((key) => (
+        <Kbd key={key}>{key}</Kbd>
       ))}
       <span>{children}</span>
     </span>

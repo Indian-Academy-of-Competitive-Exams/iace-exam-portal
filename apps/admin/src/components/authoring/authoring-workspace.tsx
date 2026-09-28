@@ -21,6 +21,8 @@ import {
   mathErrorIn,
 } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
+import { usePageTour } from '@iace/app-kit/browser';
+import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { AuthoringHeaderBar } from './authoring-header-bar';
 import { AuthoringPreview } from './authoring-preview';
 import { Legend, useFocusMode } from './authoring-chrome';
@@ -190,15 +192,7 @@ export function AuthoringWorkspace({
     if (found !== activeKey) setActiveKey(found);
   };
 
-  const jump = useCallback((key: string) => {
-    const card = cardRefs.current.get(key);
-    if (!card) return;
-    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    // Typing follows the card in view, never the one scrolled away.
-    const box = card.querySelector<HTMLElement>('[contenteditable="true"]');
-    if (box) box.focus({ preventScroll: true });
-    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-  }, []);
+  const jump = useCallback((key: string) => scrollToCard(cardRefs.current.get(key)), []);
   const step = useCallback(
     (by: number) => {
       const target = keys[activeIndex + by];
@@ -209,9 +203,8 @@ export function AuthoringWorkspace({
 
   useEffect(() => {
     const move = (event: KeyboardEvent) => {
-      const by = QUESTION_STEP_KEYS[event.key];
-      if (!event.altKey || by === undefined) return;
-      if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
+      const by = questionStepOf(event);
+      if (by === null) return;
       // Captured before the editor, whose own arrows move between the parts of one question.
       event.preventDefault();
       event.stopPropagation();
@@ -290,14 +283,7 @@ export function AuthoringWorkspace({
     />
   );
 
-  useEffect(() => {
-    if (!panelOpen) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPanelOpen(false);
-    };
-    window.addEventListener('keydown', close);
-    return () => window.removeEventListener('keydown', close);
-  }, [panelOpen]);
+  usePageTour({ id: TOUR_IDS.AUTHORING, steps: AUTHORING_TOUR, ready: shown !== null });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
@@ -324,20 +310,12 @@ export function AuthoringWorkspace({
         <div
           ref={scroller}
           onScroll={findActive}
+          data-tour={TOUR_TARGETS.AUTHORING_CARD}
           className="relative min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto bg-muted/40"
         >
           {keys.map((key, index) => {
             const card = source.cards.find((one) => one.key === key);
-            const live = Math.abs(index - Math.max(activeIndex, 0)) <= LIVE_AROUND;
-            const lead = (
-              <CardLead title={title}>
-                {key === NEW_CARD ? (
-                  <span className="text-sm font-semibold">New question</span>
-                ) : (
-                  card?.lead
-                )}
-              </CardLead>
-            );
+            const lead = <CardLead title={title}>{leadOf(key, card)}</CardLead>;
             return (
               <section
                 key={key}
@@ -347,30 +325,29 @@ export function AuthoringWorkspace({
                   else cardRefs.current.delete(key);
                 }}
                 aria-label={key === NEW_CARD ? 'New question' : `Question ${index + 1}`}
-                className="flex min-h-full snap-start p-4"
+                className="flex h-full snap-start p-4"
               >
-                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-                  {live ? card?.notice : null}
-                  {live ? (
-                    <CardBody
-                      questionKey={key}
-                      source={source}
-                      blank={blank}
-                      held={edits[key]}
-                      editable={key === NEW_CARD || (card?.editable ?? false)}
-                      lead={lead}
-                      actions={card?.actions}
-                      view={views[key] ?? FIRST_VIEW}
-                      romanised={romanised}
-                      onEdit={(change) => edit(key, change)}
-                      onView={(change) => view(key, change)}
-                      onSave={saveAndNext}
-                    />
-                  ) : (
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+                  {Math.abs(index - Math.max(activeIndex, 0)) <= LIVE_AROUND ? (
                     <>
-                      <div className={BAR}>{lead}</div>
-                      <div className="min-h-[60vh]" />
+                      {card?.notice}
+                      <CardBody
+                        questionKey={key}
+                        source={source}
+                        blank={blank}
+                        held={edits[key]}
+                        editable={key === NEW_CARD || Boolean(card?.editable)}
+                        lead={lead}
+                        actions={card?.actions}
+                        view={views[key] ?? FIRST_VIEW}
+                        romanised={romanised}
+                        onEdit={(change) => edit(key, change)}
+                        onView={(change) => view(key, change)}
+                        onSave={saveAndNext}
+                      />
                     </>
+                  ) : (
+                    <div className={BAR}>{lead}</div>
                   )}
                 </div>
               </section>
@@ -379,35 +356,17 @@ export function AuthoringWorkspace({
         </div>
 
         {panel ? (
-          <aside
-            aria-label={panel.label}
-            aria-hidden={!panelOpen}
-            className={cn(
-              'absolute inset-y-0 right-0 z-20 flex w-80 max-w-full flex-col border-l border-border bg-surface shadow-lg transition-transform duration-200',
-              panelOpen ? 'translate-x-0' : 'pointer-events-none translate-x-full',
-            )}
-          >
-            <div className="flex flex-none items-center justify-between border-b border-border px-4 py-2">
-              <h2 className="text-sm font-semibold">{panel.label}</h2>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Close ${panel.label}`}
-                onClick={() => setPanelOpen(false)}
-              >
-                <X aria-hidden />
-              </Button>
-            </div>
-            <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
-              <PanelBody panel={panel} activeKey={active} jump={jump} />
-            </div>
-          </aside>
+          <SlideOver
+            panel={panel}
+            open={panelOpen}
+            onClose={() => setPanelOpen(false)}
+            activeKey={active}
+            jump={jump}
+          />
         ) : null}
       </div>
 
       <Legend
-        language={language}
         questions
         actions={
           <>
@@ -439,6 +398,74 @@ function CardLead({
       {title}
       <span className="flex flex-none items-center gap-2">{children}</span>
     </span>
+  );
+}
+
+/** Alt with an arrow, anywhere but inside a dialog, is a move to the previous or next question. */
+function questionStepOf(event: KeyboardEvent): number | null {
+  const by = QUESTION_STEP_KEYS[event.key];
+  if (!event.altKey || by === undefined) return null;
+  const inDialog = event.target instanceof Element && event.target.closest('[role="dialog"]');
+  return inDialog ? null : by;
+}
+
+function scrollToCard(card: HTMLElement | undefined) {
+  if (!card) return;
+  card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const typing = document.activeElement?.closest('[data-card]');
+  if (!typing || typing === card) return;
+  // Typing follows the card in view, never the one scrolled away.
+  const box = card.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (box) box.focus({ preventScroll: true });
+  else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+}
+
+function leadOf(key: string, card: WorkspaceCard | undefined): React.ReactNode {
+  if (key === NEW_CARD) return <span className="text-sm font-semibold">New question</span>;
+  return card?.lead;
+}
+
+/** The progress panel over the cards' right edge, like the app shell's menu: nothing moves under it. */
+function SlideOver({
+  panel,
+  open,
+  onClose,
+  ...position
+}: Readonly<PanelPosition & { panel: WorkspacePanel; open: boolean; onClose: () => void }>) {
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [open, onClose]);
+
+  return (
+    <aside
+      aria-label={panel.label}
+      aria-hidden={!open}
+      className={cn(
+        'absolute inset-y-0 right-0 z-20 flex w-80 max-w-full flex-col border-l border-border bg-surface shadow-lg transition-transform duration-200',
+        open ? 'translate-x-0' : 'pointer-events-none translate-x-full',
+      )}
+    >
+      <div className="flex flex-none items-center justify-between border-b border-border px-4 py-2">
+        <h2 className="text-sm font-semibold">{panel.label}</h2>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Close ${panel.label}`}
+          onClick={onClose}
+        >
+          <X aria-hidden />
+        </Button>
+      </div>
+      <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
+        <PanelBody panel={panel} {...position} />
+      </div>
+    </aside>
   );
 }
 
@@ -543,7 +570,7 @@ function ReadBody({
           />
         </span>
       </div>
-      <div className="p-4">
+      <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
         <AuthoringPreview state={state} language={view.language} />
       </div>
     </>
@@ -578,7 +605,6 @@ function EditBody({
 
   return (
     <QuestionPanes
-      flow
       lead={lead}
       previewAction={actions}
       questionId={questionKey}
@@ -642,9 +668,11 @@ function HeaderTools({
         </IconAction>
       ) : null}
       {panelLabel ? (
-        <IconAction label={panelLabel} pressed={panelOpen} onClick={onPanel}>
-          <ListChecks aria-hidden />
-        </IconAction>
+        <span data-tour={TOUR_TARGETS.AUTHORING_PROGRESS}>
+          <IconAction label={panelLabel} pressed={panelOpen} onClick={onPanel}>
+            <ListChecks aria-hidden />
+          </IconAction>
+        </span>
       ) : null}
       <IconAction label={immersive ? 'Leave full screen' : 'Full screen'} onClick={onFocus}>
         {immersive ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}

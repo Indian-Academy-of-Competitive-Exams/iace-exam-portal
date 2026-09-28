@@ -11,6 +11,7 @@ import {
 } from '@iace/contracts';
 import { Combobox, Input, SegmentedControl, cn } from '@iace/ui';
 import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../../lib/constants';
+import { TOUR_TARGETS } from '../../lib/tours';
 import { SubjectPicker, TopicPicker } from '../taxonomy-picker';
 import {
   OPTION_COUNTS,
@@ -53,7 +54,10 @@ export function AuthoringHeaderBar({
     <div className="flex flex-none items-center gap-x-4 border-b border-border bg-surface px-4 py-2">
       {lead ? <div className="flex flex-none items-center gap-2">{lead}</div> : null}
       {/* The batch's settings give way first; what a typist presses must never leave the row. */}
-      <div className="flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto">
+      <div
+        data-tour={TOUR_TARGETS.AUTHORING_SETTINGS}
+        className="flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto"
+      >
         <Slot caption="Subject">
           <SubjectPicker
             value={header.subjectId}

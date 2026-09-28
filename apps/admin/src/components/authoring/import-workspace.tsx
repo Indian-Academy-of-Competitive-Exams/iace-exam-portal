@@ -41,8 +41,7 @@ function RowLead({
 }: Readonly<{ row: QuestionImportRow; index: number; total: number }>) {
   return (
     <>
-      <span className="text-sm font-semibold tabular-nums">{`Line ${row.line}`}</span>
-      <span className="text-xs tabular-nums text-muted-foreground">{`${index + 1} of ${total}`}</span>
+      <span className="text-sm font-semibold tabular-nums">{`Question ${index + 1} of ${total}`}</span>
       <Outcome row={row} />
       {row.warnings.length > 0 ? (
         <Badge variant="warning">{pictures(row.warnings.length)}</Badge>
@@ -95,7 +94,7 @@ export function ImportWorkspace({
           const found = (await queryClient.fetchQuery(drafts)).find(
             (row) => String(row.line) === line,
           );
-          if (!found) throw new Error(`Line ${line} is not in this preview`);
+          if (!found) throw new Error('This question is not in the preview');
           return { header: headerOfDraft(found.draft), state: stateOfDraft(found.draft) };
         },
       }),
@@ -137,7 +136,7 @@ function ImportedRows({
 }>) {
   return (
     <ol className="flex flex-col gap-1">
-      {rows.map((row) => {
+      {rows.map((row, index) => {
         const key = String(row.line);
         return (
           <li key={key}>
@@ -152,7 +151,7 @@ function ImportedRows({
               )}
             >
               <span className="w-8 flex-none text-xs tabular-nums text-muted-foreground">
-                {row.line}
+                {index + 1}
               </span>
               <TruncatedText className="min-w-0 flex-1">{row.stemPreview || '—'}</TruncatedText>
               <OutcomeBadge row={row} />

@@ -498,7 +498,7 @@ function SectionWorkspace({
   }
 
   const handOver =
-    picking && reader && !reader.handedAt && rows.length >= section.questionCount ? (
+    picking && awaitsHandOver(reader, rows.length, section.questionCount) ? (
       <HandOverButton testId={testId} section={section} onChanged={onChanged} />
     ) : null;
 
@@ -517,20 +517,19 @@ function SectionWorkspace({
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {picking ? (
-          <QuestionChooser
-            testId={testId}
-            paperSource={paperSource}
-            section={section}
-            spec={spec}
-            quota={quota}
-            held={held}
-            picking={{ picked, onPicked: setPicked, action: addAction }}
-          />
-        ) : null}
-
-        {picking ? (
-          // Only where they sit side by side: stacked, the gap already separates them.
-          <Separator orientation="vertical" dashed className="hidden lg:block" />
+          <>
+            <QuestionChooser
+              testId={testId}
+              paperSource={paperSource}
+              section={section}
+              spec={spec}
+              quota={quota}
+              held={held}
+              picking={{ picked, onPicked: setPicked, action: addAction }}
+            />
+            {/* Only where they sit side by side: stacked, the gap already separates them. */}
+            <Separator orientation="vertical" dashed className="hidden lg:block" />
+          </>
         ) : null}
 
         <PaperQuestions
@@ -581,6 +580,10 @@ function FillButton({
     </Tooltip>
   );
 }
+
+/** A full picked section whose reader has not been handed it yet. */
+const awaitsHandOver = (reader: Assignment | null, held: number, wanted: number): boolean =>
+  reader !== null && !reader.handedAt && held >= wanted;
 
 /** Where a typed section stands before its reader releases it to the owner. */
 function whereTypedWorkIs(typist: Assignment | null, reader: Assignment | null): string {

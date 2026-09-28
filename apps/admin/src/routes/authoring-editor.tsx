@@ -15,7 +15,9 @@ import {
 } from '@iace/contracts';
 import { Button, LoadingState, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
+import { usePageTour } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
+import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
@@ -59,6 +61,7 @@ export function AuthoringEditorPage() {
   const focus = useFocusMode();
 
   const editingId = id ?? '';
+  usePageTour({ id: TOUR_IDS.AUTHORING, steps: AUTHORING_TOUR, ready: true });
   const editing = useQuery({
     queryKey: [...QUERY_KEYS.AUTHORING, id],
     queryFn: () => api.admin.authoring.detail(editingId),
@@ -134,7 +137,7 @@ export function AuthoringEditorPage() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 bg-muted/40 p-4">
+      <div data-tour={TOUR_TARGETS.AUTHORING_CARD} className="flex min-h-0 flex-1 bg-muted/40 p-4">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
           {editing.isPending && editingId !== '' ? (
             <LoadingState>Loading the question</LoadingState>
@@ -157,7 +160,6 @@ export function AuthoringEditorPage() {
       </div>
 
       <Legend
-        language={language}
         actions={
           <Button type="button" size="sm" disabled={!canSave} onClick={() => save.mutate()}>
             <Save aria-hidden />
