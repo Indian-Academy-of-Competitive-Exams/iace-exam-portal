@@ -95,6 +95,7 @@ export class ProofreadingService {
   ): Promise<QuestionDetail> {
     // Finalising ends a reader's authority over the section; it never ends a super admin's.
     if (section.finalizedAt && !isSuperAdmin) throw alreadyRead();
+    if (!isSuperAdmin && (await this.offered(section.testId))) throw alreadyOffered();
     await takeSectionEditLock(this.redis, this.prisma, section, { id: adminId, isSuperAdmin });
 
     const question = await this.prisma.question.findFirst({
@@ -203,6 +204,14 @@ export class ProofreadingService {
     return { testId, baseConfigSectionId, finalizedAt: reading?.finalizedAt ?? null };
   }
 
+  private async offered(testId: string): Promise<boolean> {
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: { finalizedAt: true },
+    });
+    return Boolean(test?.finalizedAt);
+  }
+
   /** A typed section reaches its reader whole, at the typist's Done; a super admin sees it at any moment. */
   private async scopeOf(
     section: SectionRef,
@@ -241,6 +250,12 @@ export class ProofreadingService {
     return row;
   }
 }
+
+const alreadyOffered = () =>
+  new AppException(
+    ErrorCodes.CONFLICT,
+    'This test has been offered, so its questions are no longer yours to change here.',
+  );
 
 const alreadyRead = () =>
   new AppException(

@@ -53,6 +53,8 @@ import {
 } from '../components/authoring/section-sources';
 import { FinalizeAssignmentDialog, SendBackDialog } from './assignment-queue';
 
+const ASSIGNEE_KEYS = [FEATURE_KEYS.QUESTION_AUTHORING, FEATURE_KEYS.QUESTION_PROOFREAD] as const;
+
 /** One section of one test, for whoever has it: the same grid, with what they may do beside it. */
 export function SectionWorkPage() {
   const { testId = '', sectionId = '', questionId } = useParams();
@@ -62,11 +64,15 @@ export function SectionWorkPage() {
   const isSuperAdmin = identity?.isSuperAdmin ?? false;
   const section: SectionKey = useMemo(() => ({ testId, sectionId }), [testId, sectionId]);
 
+  // The queue answers only to an assignee's keys; anyone else holds no row here and is not asked.
+  const assignee = ASSIGNEE_KEYS.some((key) => can(key, PERMISSION_LEVELS.READ));
   const mine = useQuery({
     queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', 'section', testId, sectionId],
     queryFn: () => api.admin.assignments.mine({ testId, baseConfigSectionId: sectionId }),
+    enabled: assignee,
   });
-  const seat = mine.data ? seatOf(mine.data.items, search.get('as')) : null;
+  const held = assignee ? mine.data?.items : [];
+  const seat = held ? seatOf(held, search.get('as')) : null;
   const owns = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ);
   const test = useQuery({
     queryKey: [...QUERY_KEYS.TEST, testId],
@@ -77,7 +83,7 @@ export function SectionWorkPage() {
   const rows = useSectionRows(refused ? null : seat, section);
 
   const names = namesOf(seat?.row ?? null, test.data, sectionId);
-  const offered = Boolean(test.data?.finalizedAt);
+  const offered = Boolean(test.data?.finalizedAt) || seat?.row?.testOffered === true;
   const moment = seat ? momentOf(seat, offered) : null;
   const slots = seat && moment ? slotsFor(seat, moment, isSuperAdmin) : null;
 
@@ -92,7 +98,7 @@ export function SectionWorkPage() {
       title={names.section}
       meta={metaOf(names.test, rows.data?.length, seat?.row?.sectionQuestionCount)}
       action={
-        seat && slots ? (
+        seat && slots && !refused ? (
           <SectionActions
             seat={seat}
             slots={slots}
@@ -245,12 +251,17 @@ function SectionActions({
 }>) {
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<'done' | 'read' | 'back' | null>(null);
-  const settle = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
+  const settle = () =>
+    Promise.all(
+      [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.PROOFREADING, QUERY_KEYS.AUTHORING].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
   const row = seat.row;
   const opened = (kind: typeof dialog) => (dialog === kind ? row : null);
 
   return (
-    <>
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <SectionThreadButton
         testId={section.testId}
         sectionId={section.sectionId}
@@ -296,7 +307,7 @@ function SectionActions({
         onClose={() => setDialog(null)}
         onSentBack={settle}
       />
-    </>
+    </div>
   );
 }
 

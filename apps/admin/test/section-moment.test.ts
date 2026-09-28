@@ -27,6 +27,7 @@ const row = (over: Partial<AssignmentWithTest>): AssignmentWithTest => ({
   writtenCount: 0,
   typistDone: false,
   readerDone: false,
+  testOffered: false,
   sectionQuestionCount: 25,
   sectionMix: null,
   sectionSubjectId: null,

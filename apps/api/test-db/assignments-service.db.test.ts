@@ -1471,6 +1471,20 @@ describe('AssignmentsService — a reader gets a whole section', () => {
     );
   });
 
+  /** The failure this prevents: a typist reopened on a paper students may already be sitting. */
+  it('refuses send back once the test has been offered', async () => {
+    const { assignments, test, typing, reading, reader } = await bothRoles();
+    await finalizedNow(typing.id);
+    await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
+
+    await assert.rejects(
+      () => assignments.sendBack(reading.id, reader.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    const still = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: typing.id } });
+    assert.notEqual(still.finalizedAt, null);
+  });
+
   it('refuses send back from a typist’s own row', async () => {
     const { assignments, typing } = await bothRoles();
     const row = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: typing.id } });

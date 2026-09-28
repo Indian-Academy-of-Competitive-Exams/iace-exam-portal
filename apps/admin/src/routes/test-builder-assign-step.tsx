@@ -153,7 +153,7 @@ export function AssignStep({
 
   return (
     <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
-      {outstanding ? (
+      {outstanding && !detail.finalizedAt ? (
         <Alert variant="info">
           A test cannot be offered until every section is
           {detail.paperSource === PAPER_SOURCES.PICKED ? ' read.' : ' typed and read.'}
@@ -166,8 +166,9 @@ export function AssignStep({
           detail.paperSource,
           held,
           mayComment,
-          setAssigning,
-          setRemoving,
+          // An offered paper takes nobody new and loses nobody: there is nothing left to type or read.
+          detail.finalizedAt ? null : setAssigning,
+          detail.finalizedAt ? null : setRemoving,
         )}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
@@ -225,8 +226,8 @@ function columnsOf(
   source: PaperSource,
   held: ReadonlyMap<string, number> | null,
   mayComment: (row: SectionRow) => boolean,
-  onAssign: (target: AssignTarget) => void,
-  onRemove: (assignment: Assignment) => void,
+  onAssign: ((target: AssignTarget) => void) | null,
+  onRemove: ((assignment: Assignment) => void) | null,
 ): DataTableColumn<SectionRow>[] {
   const columns: DataTableColumn<SectionRow>[] = [
     {
@@ -252,7 +253,11 @@ function columnsOf(
         <RoleCell
           assignment={row.typist}
           questionCount={row.section.questionCount}
-          onAssign={() => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.TYPIST })}
+          onAssign={
+            onAssign
+              ? () => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.TYPIST })
+              : undefined
+          }
         />
       ),
     },
@@ -264,7 +269,11 @@ function columnsOf(
         <RoleCell
           assignment={row.proofreader}
           questionCount={row.section.questionCount}
-          onAssign={() => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.PROOFREADER })}
+          onAssign={
+            onAssign
+              ? () => onAssign({ section: row.section, role: ASSIGNMENT_ROLES.PROOFREADER })
+              : undefined
+          }
         />
       ),
     },
@@ -383,7 +392,11 @@ function SectionActions({
   testId,
   row,
   onRemove,
-}: Readonly<{ testId: string; row: SectionRow; onRemove: (assignment: Assignment) => void }>) {
+}: Readonly<{
+  testId: string;
+  row: SectionRow;
+  onRemove: ((assignment: Assignment) => void) | null;
+}>) {
   return (
     <RowActions label={`Actions for ${row.section.name}`}>
       <DropdownMenuItem asChild>
@@ -392,7 +405,7 @@ function SectionActions({
       <DropdownMenuItem asChild>
         <Link to={`${ROUTES.TEST_PAPER(testId)}?section=${row.section.id}`}>Open paper</Link>
       </DropdownMenuItem>
-      {removeItemsFor(row, onRemove)}
+      {onRemove ? removeItemsFor(row, onRemove) : null}
     </RowActions>
   );
 }
@@ -421,8 +434,11 @@ function RoleCell({
 }: Readonly<{
   assignment: Assignment | undefined;
   questionCount: number;
-  onAssign: () => void;
+  onAssign?: () => void;
 }>) {
+  if (!assignment && !onAssign) {
+    return <span className="text-sm text-muted-foreground">Unassigned</span>;
+  }
   if (!assignment) {
     return (
       <span className="flex items-center gap-1">

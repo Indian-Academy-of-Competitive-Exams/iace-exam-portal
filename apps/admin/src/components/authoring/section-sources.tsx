@@ -47,7 +47,7 @@ function channelOf(seat: SectionSeat, { testId, sectionId }: SectionKey): Channe
   const assignmentId = seat.row?.id ?? '';
   if (seat.viewer === SECTION_VIEWERS.TYPIST) {
     return {
-      listKey: [...QUERY_KEYS.AUTHORING, 'section', assignmentId, 'all'],
+      listKey: [...QUERY_KEYS.AUTHORING, 'section', assignmentId, 'rows'],
       list: async () =>
         (await sectionQuestions(assignmentId)).map((question) => ({
           id: question.id,

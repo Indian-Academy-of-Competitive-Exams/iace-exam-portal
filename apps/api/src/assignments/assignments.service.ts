@@ -44,6 +44,7 @@ import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute
 
 const CHOOSE_WITH_DONE_MESSAGE =
   'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
+const OFFERED_MESSAGE = 'This test has been offered, so its sections can no longer be sent back.';
 const ALREADY_READ_MESSAGE = 'You have marked this section read, so it can no longer be sent back.';
 const NOTHING_TO_SEND_BACK =
   'Its typist has not marked this section done, so there is nothing to send back.';
@@ -54,14 +55,14 @@ const notWhole = (issue: string) =>
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: { select: { name: true, questionCount: true, subjectId: true } },
   assignee: { select: { fullName: true, email: true } },
-  test: { select: { questionPoolFilter: true } },
+  test: { select: { questionPoolFilter: true, finalizedAt: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentRow = Prisma.QuestionAssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>;
 
 const WITH_TEST_INCLUDE = {
   ...ASSIGNMENT_INCLUDE,
-  test: { select: { title: true, questionPoolFilter: true } },
+  test: { select: { title: true, questionPoolFilter: true, finalizedAt: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentWithTestRow = Prisma.QuestionAssignmentGetPayload<{
@@ -432,6 +433,7 @@ export class AssignmentsService {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     if (reading.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_READ_MESSAGE);
+    if (reading.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
 
     // The write is the gate: only a typist who is done can be sent back, and only once.
     const reopened = await this.prisma.questionAssignment.updateMany({
@@ -663,6 +665,7 @@ function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
     writtenCount: counts.writtenCount,
     typistDone: counts.typistDone,
     readerDone: counts.readerDone,
+    testOffered: row.test.finalizedAt !== null,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
     sectionSubjectId: row.baseConfigSection.subjectId,

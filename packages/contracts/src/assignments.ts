@@ -36,6 +36,8 @@ export const assignmentSchema = z.object({
   typistDone: z.boolean().nullable(),
   /** Whether the section's reader has marked it read. Null where nobody has been given it to read. */
   readerDone: z.boolean().nullable(),
+  /** The test has been offered: its paper is frozen, and no section of it is anybody's to change. */
+  testOffered: z.boolean(),
   /** The section's own target — a section fact, same as `writtenCount`. */
   sectionQuestionCount: z.number().int(),
   /** The test's own draw spec for this section. Absent means every difficulty, not zero of each. */

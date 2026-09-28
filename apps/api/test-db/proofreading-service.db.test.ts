@@ -291,6 +291,25 @@ describe('ProofreadingService.editQuestion', () => {
   });
 
   /** Finalising is the end of the reader's authority over the section, not a label on it. */
+  /** The failure this prevents: a reader's fix landing as a version the frozen paper never serves. */
+  it('refuses the edit once the test has been offered, though the reading is outstanding', async () => {
+    const { proofreading, questions } = await build();
+    const section = await aSection();
+    const written = await handedOver(questions, section);
+    await prisma.test.update({ where: { id: section.testId }, data: { finalizedAt: new Date() } });
+
+    await assert.rejects(
+      () =>
+        proofreading.editQuestion(
+          section.reading.id,
+          written.id,
+          draft({ stem: { en: 'Too late to say so', hi: 'कहने में बहुत देर' } }),
+          REVIEWER,
+        ),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+  });
+
   it('refuses the edit once the reader has marked the section read', async () => {
     const { proofreading, questions } = await build();
     const section = await aSection();

@@ -120,7 +120,8 @@ export function QuestionsWindow({
   if (!open && landed) setLanded(false);
 
   const activeKey = keys[active] ?? '';
-  const activeBase = useQuery({ ...source.query(activeKey), enabled: activeKey !== '' });
+  // Closed, the window asks for nothing: a question the section has since let go of would 404.
+  const activeBase = useQuery({ ...source.query(activeKey), enabled: open && activeKey !== '' });
   const shown = edits[activeKey] ?? activeBase.data ?? null;
 
   const edit = useCallback(

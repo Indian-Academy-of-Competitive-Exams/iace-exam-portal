@@ -173,7 +173,8 @@ function columnsOf(
 }
 
 function leftoverNotice(leftover: number, deleting: number): string {
-  const kept = `${plural(leftover - deleting, 'question')} not chosen go to the bank for any test to pick.`;
+  const banked = leftover - deleting;
+  const kept = `${plural(banked, 'question')} not chosen ${banked === 1 ? 'goes' : 'go'} to the bank for any test to pick.`;
   return deleting > 0 ? `${kept} ${plural(deleting, 'question')} will be deleted.` : kept;
 }
 
