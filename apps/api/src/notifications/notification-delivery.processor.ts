@@ -116,7 +116,8 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       return;
     }
 
-    const mobile = await this.notifications.mobileOf(row.notification.studentId ?? '');
+    const { studentId } = row.notification;
+    const mobile = studentId ? await this.notifications.mobileOf(studentId) : null;
     if (!mobile) {
       await this.skip(deliveryId, SKIP_REASONS.NO_CONTACT);
       await this.fallBack(row.notification, channel);

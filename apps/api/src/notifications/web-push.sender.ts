@@ -32,6 +32,9 @@ const DEAD_STATUS = new Set([404, 410]);
 /** Long enough to reach a phone that is asleep, short enough that a stale result is not delivered. */
 const TTL_SEC = 6 * 60 * 60;
 
+/** A push service that hangs holds a worker slot a whole fan-out is waiting on. */
+const SEND_TIMEOUT_MS = 5000;
+
 @Injectable()
 export class WebPushSender {
   private readonly logger = new Logger(WebPushSender.name);
@@ -56,7 +59,7 @@ export class WebPushSender {
       await sendNotification(
         { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
         JSON.stringify(payload),
-        { TTL: TTL_SEC },
+        { TTL: TTL_SEC, timeout: SEND_TIMEOUT_MS },
       );
       return PUSH_OUTCOMES.SENT;
     } catch (error) {

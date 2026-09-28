@@ -15,6 +15,9 @@ const JWT_TTL_SEC = 3600;
 /** Renewed early, so a token cannot expire between the check and the send it was fetched for. */
 const RENEW_MARGIN_MS = 60_000;
 
+/** A push service that hangs holds a worker slot a whole fan-out is waiting on. */
+const SEND_TIMEOUT_MS = 5000;
+
 /** Long enough to reach a phone that is asleep, short enough that a stale result is not delivered. */
 const TTL_SEC = 6 * 60 * 60;
 
@@ -60,6 +63,7 @@ export class FcmSender {
       const access = await this.accessToken(this.account);
       const response = await fetch(sendUrl(this.account.projectId), {
         method: 'POST',
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         headers: { authorization: `Bearer ${access}`, 'content-type': 'application/json' },
         body: JSON.stringify(messageFor(token, payload)),
       });
@@ -84,6 +88,7 @@ export class FcmSender {
 
     const response = await fetch(TOKEN_URL, {
       method: 'POST',
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
