@@ -522,6 +522,22 @@ describe('RollupService — the student watermark a re-score can leave behind', 
     assert.equal(num(after?.sumScore), Number(attempt.score));
   });
 
+  /** The failure this prevents: a lost rebuild leaving a voided sitting in the student's totals for ever. */
+  it('recounts a student whose void nobody drained', async () => {
+    const built = build();
+    const paper = await paperOf();
+    const { attemptId, studentId } = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT]);
+    await counted(built, attemptId);
+
+    await prisma.attempt.update({
+      where: { id: attemptId },
+      data: { status: ATTEMPT_STATUS.VOIDED, voidedAt: new Date() },
+    });
+    await built.rollup.sweepCohorts();
+
+    assert.equal((await studentStat(studentId))?.testsAttempted, 0);
+  });
+
   /** Bounded like the cohort arm: a student who is not behind must not be replayed every pass. */
   it('leaves a student whose watermark already covers their last mark alone', async () => {
     const built = build();

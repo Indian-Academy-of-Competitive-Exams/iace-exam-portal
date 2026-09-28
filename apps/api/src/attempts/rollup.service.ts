@@ -98,6 +98,9 @@ const REBUILD_TIMEOUT_MS = 120_000;
 /** How far back a pass looks past its own watermark, for a sitting that committed after it read. */
 const SWEEP_LAG = '2 minutes';
 
+/** Literals, not parameters: a cached generic plan cannot prove Attempt_student_drift_idx's predicate from one. */
+const DRIFT_STATUSES = Prisma.raw(`'${ATTEMPT_STATUS.EVALUATED}', '${ATTEMPT_STATUS.VOIDED}'`);
+
 /** Bounded so one pass cannot run for ever; the next sweep takes whatever is left. */
 const SWEEP_TESTS_PER_PASS = 50;
 
@@ -174,7 +177,7 @@ export class RollupService {
     return rows.map((row) => row.id);
   }
 
-  /** A first evaluation is folded with its marks, so only a sitting that moved after it can be missed. */
+  /** A first evaluation is folded with its marks, so only a re-score or a void after it can be missed. */
   private async driftedStudents(): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ studentId: string }[]>`
       SELECT s."studentId"
@@ -182,7 +185,7 @@ export class RollupService {
       WHERE EXISTS (
         SELECT 1 FROM "Attempt" a
         WHERE a."studentId" = s."studentId"
-          AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
+          AND a."status" IN (${DRIFT_STATUSES})
           AND a."updatedAt" > a."evaluatedAt"
           AND a."updatedAt" > COALESCE(s."computedThrough" - ${SWEEP_LAG}::interval, '-infinity'::timestamptz))
       LIMIT ${SWEEP_STUDENTS_PER_PASS}`;
