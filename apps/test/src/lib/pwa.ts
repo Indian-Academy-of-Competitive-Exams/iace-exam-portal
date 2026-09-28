@@ -5,6 +5,7 @@
  * for good, and the notification-preferences screen is where the student asks for it.
  */
 import { type PushSubscriptionInput } from '@iace/contracts';
+import { api } from './api';
 import { PUSH_RECEIVED } from './constants';
 
 /** Root scope, so the worker controls every route including the one a push deep-links to. */
@@ -110,15 +111,14 @@ export async function subscribeToPush(publicKey: string): Promise<PushSubscripti
   return toSubscriptionInput(subscription);
 }
 
-/** Returns the endpoint that was dropped, so the caller can tell the server which row to delete. */
-export async function unsubscribeFromPush(): Promise<string | null> {
+/** Both sides, and before sign-out too: a row left behind sends this student's bell to the next one. */
+export async function unsubscribeFromPush(): Promise<void> {
   const subscription = await currentPushSubscription();
-  if (!subscription) return null;
+  if (!subscription) return;
 
   const { endpoint } = subscription;
   await subscription.unsubscribe();
-
-  return endpoint;
+  await api.me.unsubscribeFromPush({ endpoint });
 }
 
 export function toSubscriptionInput(subscription: PushSubscription): PushSubscriptionInput | null {

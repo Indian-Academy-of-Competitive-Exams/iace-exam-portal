@@ -18,7 +18,7 @@ import {
   UNREAD_QUERY_KEY,
   USER_MENU_ITEMS,
 } from '../lib/constants';
-import { onPushReceived } from '../lib/pwa';
+import { onPushReceived, unsubscribeFromPush } from '../lib/pwa';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
@@ -61,7 +61,11 @@ export function AppShell() {
         headerEnd={<TourTrigger />}
         width="wide"
         homeTo={ROUTES.HOME}
-        onSignOut={() => void signOut()}
+        onSignOut={() =>
+          void unsubscribeFromPush()
+            .catch(() => undefined)
+            .then(signOut)
+        }
         userMenuItems={USER_MENU_ITEMS}
         navBadges={{ [ROUTES.NOTIFICATIONS]: unread.data?.total ?? 0 }}
         userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}

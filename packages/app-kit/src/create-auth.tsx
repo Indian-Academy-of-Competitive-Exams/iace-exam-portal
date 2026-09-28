@@ -68,7 +68,8 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     const clearSession = useCallback(() => {
       tokenStore.clear();
       setHasToken(false);
-      queryClient.removeQueries({ queryKey });
+      // All of it, not just the identity: the next person on a shared machine must not see this one's data.
+      queryClient.clear();
     }, [queryClient]);
 
     // Raised by the API client when a refresh fails — the session is unrecoverable and nothing else notices.

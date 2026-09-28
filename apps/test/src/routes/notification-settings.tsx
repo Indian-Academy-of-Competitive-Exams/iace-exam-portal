@@ -118,8 +118,7 @@ function usePushChannel(publicKey: string | null) {
   return useMutation({
     mutationFn: async (enabled: boolean) => {
       if (!enabled) {
-        const endpoint = await unsubscribeFromPush();
-        if (endpoint) await api.me.unsubscribeFromPush({ endpoint });
+        await unsubscribeFromPush();
         return true;
       }
 
