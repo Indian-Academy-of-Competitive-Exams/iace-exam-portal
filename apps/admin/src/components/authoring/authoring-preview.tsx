@@ -1,6 +1,6 @@
 import { Check, CircleAlert, CircleDot, Circle, TriangleAlert } from 'lucide-react';
 import { QUESTION_TYPE, previewTextOf, type QuestionLanguage } from '@iace/contracts';
-import { Badge, RichContent, cn } from '@iace/ui';
+import { Accordion, Badge, RichContent, cn, type BadgeProps } from '@iace/ui';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
 
 /** One rule, and how the question stands against it. */
@@ -84,19 +84,30 @@ const STANDING = {
   fail: { label: 'Required', variant: 'danger' },
 } as const;
 
+/** The whole list in one badge, so a closed panel still says whether the question can be saved. */
+function statusOf(checks: readonly Check[]): { variant: BadgeProps['variant']; label: string } {
+  const count = (state: Check['state']) => checks.filter((check) => check.state === state).length;
+  const failing = count('fail');
+  if (failing > 0) return { variant: 'danger', label: `${failing} required` };
+  const warning = count('warn');
+  if (warning > 0) return { variant: 'warning', label: `${warning} optional` };
+  return { variant: 'success', label: 'All clear' };
+}
+
 export function AuthoringChecks({ checks }: Readonly<{ checks: readonly Check[] }>) {
+  const status = statusOf(checks);
   return (
-    <section className="rounded-md border border-border bg-surface">
-      <h2 className="border-b border-border px-5 py-3 text-sm font-semibold">Validation</h2>
-      <ul>
+    <Accordion
+      className="rounded-md"
+      title={<span className="text-sm font-semibold">Validation</span>}
+      meta={<Badge variant={status.variant}>{status.label}</Badge>}
+    >
+      <ul className="flex flex-col gap-2.5">
         {checks.map((check) => {
           const Icon = ICON[check.state];
           const standing = STANDING[check.state];
           return (
-            <li
-              key={check.key}
-              className="flex items-center gap-3 border-b border-border px-5 py-2.5 text-sm last:border-b-0"
-            >
+            <li key={check.key} className="flex items-center gap-3 text-sm">
               <Icon className={cn('size-4 shrink-0', TONE[check.state])} aria-hidden />
               <span className="min-w-0 flex-1">{check.label}</span>
               {standing ? (
@@ -111,6 +122,6 @@ export function AuthoringChecks({ checks }: Readonly<{ checks: readonly Check[] 
           );
         })}
       </ul>
-    </section>
+    </Accordion>
   );
 }
