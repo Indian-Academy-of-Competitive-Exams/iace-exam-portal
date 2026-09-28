@@ -817,6 +817,16 @@ describe('QuestionsService.update — reworded words are read again', () => {
     assert.equal(await releasedAt(), null);
   });
 
+  /** The failure this prevents: a question taken off, reworded, then put back under its old tick. */
+  it('drops the tick on a draft whose paper let the question go before it was reworded', async () => {
+    const { questions, questionId, checkedAt } = await readAndReleased();
+    await prisma.paperQuestion.deleteMany({ where: { questionId } });
+
+    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+
+    assert.equal(await checkedAt(), null);
+  });
+
   it('keeps the tick on a save that changes no words', async () => {
     const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
 
