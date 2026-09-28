@@ -60,6 +60,28 @@ describe('OtpService — request', () => {
     assert.equal((await prod.otp.request(ActorTypes.STUDENT, MOBILE)).devCode, undefined);
   });
 
+  /** A provider outage is a coded refusal the screen can name, and it does not start the cooldown. */
+  it('says a code could not be sent, and lets them ask again at once', async () => {
+    const redis = new FakeRedis();
+    const down = { send: () => Promise.reject(new Error('provider down')) };
+    const otp = new OtpService(
+      redis.asService(),
+      new FakeConfig().asService(),
+      down,
+      new FakeMetrics().asService(),
+    );
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, MOBILE),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SERVICE_UNAVAILABLE,
+    );
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, MOBILE),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SERVICE_UNAVAILABLE,
+      'not RATE_LIMITED: nothing was sent to wait for',
+    );
+  });
+
   it('refuses a resend inside the cooldown, and says how long is left', async () => {
     const { otp } = build();
     await otp.request(ActorTypes.STUDENT, MOBILE);

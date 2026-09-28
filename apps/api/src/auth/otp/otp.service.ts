@@ -68,7 +68,15 @@ export class OtpService {
       await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec);
     }
 
-    await this.deliver(actor, identifier, code, ttlSec);
+    await this.deliver(actor, identifier, code, ttlSec).catch(async (error: unknown) => {
+      // Nothing reached them, so nothing should make them wait before asking again.
+      await this.redis.del(cooldownKey);
+      this.logger.error(`An OTP for ${actor} could not be sent`, error);
+      throw new AppException(
+        ErrorCodes.SERVICE_UNAVAILABLE,
+        'The code could not be sent. Try again in a moment',
+      );
+    });
     if (actor === ActorTypes.STUDENT) this.metrics.countOtpSend('sent');
 
     return {

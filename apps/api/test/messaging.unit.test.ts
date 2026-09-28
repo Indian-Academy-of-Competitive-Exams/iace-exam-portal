@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ActorTypes } from '@iace/contracts';
+import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { ConsoleMessageSender } from '../src/common/messaging/console-message-sender';
 import { SmsMessageSender } from '../src/common/messaging/sms-message-sender';
 import { EmailMessageSender } from '../src/common/messaging/email-message-sender';
@@ -211,11 +211,14 @@ describe('OTP falls back rather than stranding a student', () => {
   });
 
   /** Not a blanket catch: SMS is the last resort, so its failure is still a failed request. */
+  const notSent = (error: unknown) =>
+    AppException.is(error) && error.code === ErrorCodes.SERVICE_UNAVAILABLE;
+
   it('does not swallow a failure on the fallback itself', async () => {
     const failing = new FakeMessageSender([MESSAGE_CHANNELS.WHATSAPP, MESSAGE_CHANNELS.SMS]);
     const { service } = otpService(whatsappFirst(), failing);
 
-    await assert.rejects(service.request(ActorTypes.STUDENT, '9876543210'), /sms is down/);
+    await assert.rejects(service.request(ActorTypes.STUDENT, '9876543210'), notSent);
   });
 
   /** An SMS-first deployment must not quietly send twice when the aggregator is down. */
@@ -223,7 +226,7 @@ describe('OTP falls back rather than stranding a student', () => {
     const failing = new FakeMessageSender([MESSAGE_CHANNELS.SMS]);
     const { service } = otpService(new FakeConfig({ OTP_SENDER: 'sms' }), failing);
 
-    await assert.rejects(service.request(ActorTypes.STUDENT, '9876543210'), /sms is down/);
+    await assert.rejects(service.request(ActorTypes.STUDENT, '9876543210'), notSent);
     assert.equal(failing.sent.length, 0);
   });
 });
