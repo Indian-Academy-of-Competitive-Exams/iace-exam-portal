@@ -5,19 +5,13 @@
  */
 /// <reference types="nativewind/types" />
 import { useEffect, useRef, useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
-import { WebView, type WebViewNavigation } from 'react-native-webview';
+import { View } from 'react-native';
+import { type WebView } from 'react-native-webview';
 import { type LanguageCode, type LanguageMode } from '@iace/contracts';
-import { QUESTION_PAGE_HTML } from '../../../webview/dist/question-page';
 import { showScript } from '../exam/question-protocol';
+import { QuestionPageView } from '../exam/question-page-view';
 import { Skeleton } from '../ui/skeleton';
 import { reviewScreen, type ReviewedQuestion } from './review-protocol';
-
-/** An inline HTML source loads at about:blank on both platforms, and nothing else may load. */
-const PAGE_URL = 'about:blank';
-const PAGE = { html: QUESTION_PAGE_HTML };
-const EVERY_ORIGIN = ['*'];
-const onlyThePage = (request: WebViewNavigation): boolean => request.url === PAGE_URL;
 
 export interface ReviewContentProps {
   question: ReviewedQuestion;
@@ -27,9 +21,7 @@ export interface ReviewContentProps {
 
 export function ReviewContent({ question, languages, languageMode }: Readonly<ReviewContentProps>) {
   const web = useRef<WebView>(null);
-  const { fontScale } = useWindowDimensions();
   const [ready, setReady] = useState(false);
-  const [pageKey, setPageKey] = useState(0);
   const script = showScript(reviewScreen({ question, languages, languageMode }));
 
   useEffect(() => {
@@ -38,20 +30,10 @@ export function ReviewContent({ question, languages, languageMode }: Readonly<Re
 
   return (
     <View className="flex-1">
-      <WebView
-        key={pageKey}
+      <QuestionPageView
         ref={web}
-        source={PAGE}
-        originWhitelist={EVERY_ORIGIN}
-        onShouldStartLoadWithRequest={onlyThePage}
-        setSupportMultipleWindows={false}
-        textZoom={Math.round(fontScale * 100)}
         onMessage={() => setReady(true)}
-        onRenderProcessGone={() => {
-          setReady(false);
-          setPageKey((key) => key + 1);
-        }}
-        onContentProcessDidTerminate={() => web.current?.reload()}
+        onPageLost={() => setReady(false)}
       />
       {ready ? null : <ReviewSkeleton />}
     </View>

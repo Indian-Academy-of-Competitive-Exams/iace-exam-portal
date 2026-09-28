@@ -5,11 +5,11 @@
  * intent that `readPageMessage` has vouched for.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
-import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
+import { View } from 'react-native';
+import { type WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { type ExamQuestion } from '@iace/contracts';
-import { QUESTION_PAGE_HTML } from '../../../webview/dist/question-page';
 import { Skeleton } from '../ui/skeleton';
+import { QuestionPageView } from './question-page-view';
 import { PAGE_MESSAGE, type QuestionScreen } from './question-bridge';
 import {
   preloadHtmlOf,
@@ -19,13 +19,6 @@ import {
   showScript,
   type ScreenInput,
 } from './question-protocol';
-
-/** An inline HTML source loads at about:blank on both platforms, and nothing else may load. */
-const PAGE_URL = 'about:blank';
-const PAGE = { html: QUESTION_PAGE_HTML };
-// `*` sends every URL to the refusal below; a narrower list hands the rest to Linking.openURL instead.
-const EVERY_ORIGIN = ['*'];
-const onlyThePage = (request: WebViewNavigation): boolean => request.url === PAGE_URL;
 
 /** Before the paper lands there is nothing to choose, so only the page's READY gets through. */
 const NOTHING_ON_SCREEN: QuestionScreen = {
@@ -54,12 +47,10 @@ export function QuestionContent({
   ...input
 }: Readonly<QuestionContentProps>) {
   const web = useRef<WebView>(null);
-  const { fontScale } = useWindowDimensions();
   // Bumped when the page says it is ready and after every intent, so the page redraws native's truth.
   const [echo, setEcho] = useState(0);
   // Bumped only on READY, since a full re-send belongs to a fresh page, not to every tap.
   const [readyTick, setReadyTick] = useState(0);
-  const [pageKey, setPageKey] = useState(0);
   const screen = question ? questionScreen({ ...input, question }) : NOTHING_ON_SCREEN;
   const script = question ? showScript(screen) : null;
   const preload = useMemo(
@@ -89,18 +80,7 @@ export function QuestionContent({
 
   return (
     <View className="flex-1">
-      <WebView
-        key={pageKey}
-        ref={web}
-        source={PAGE}
-        originWhitelist={EVERY_ORIGIN}
-        onShouldStartLoadWithRequest={onlyThePage}
-        setSupportMultipleWindows={false}
-        textZoom={Math.round(fontScale * 100)}
-        onMessage={onMessage}
-        onRenderProcessGone={() => setPageKey((key) => key + 1)}
-        onContentProcessDidTerminate={() => web.current?.reload()}
-      />
+      <QuestionPageView ref={web} onMessage={onMessage} onPageLost={() => setEcho(0)} />
       {echo === 0 || !question ? <QuestionSkeleton /> : null}
     </View>
   );
