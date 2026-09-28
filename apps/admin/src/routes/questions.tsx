@@ -10,6 +10,7 @@ import {
   QUESTION_STATUS,
   QUESTION_STATUSES,
   type QuestionSummary,
+  DIFFICULTY_LABELS,
 } from '@iace/contracts';
 import { PageCrumbs, useFilters, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import {
@@ -27,7 +28,14 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { DIFFICULTY_VARIANT, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import {
+  DIFFICULTY_VARIANT,
+  NAV_ITEMS,
+  QUERY_KEYS,
+  QUESTION_STATUS_LABELS,
+  QUESTION_STATUS_VARIANT,
+  ROUTES,
+} from '../lib/constants';
 import { QUESTIONS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { questionFacetFilters } from '../lib/question-filters';
@@ -35,11 +43,6 @@ import { QuestionHistorySheet } from '../components/question-history';
 import { ExportButton } from '../components/export-button';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
-
-const STATUS_VARIANT = {
-  [QUESTION_STATUS.ACTIVE]: 'success',
-  [QUESTION_STATUS.ARCHIVED]: 'warning',
-} as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function questionColumns(): DataTableColumn<QuestionSummary>[] {
@@ -57,10 +60,11 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
     {
       key: 'taxonomy',
       header: 'Filed under',
+      className: 'max-w-xs',
       cell: (question) => (
-        <span className="text-muted-foreground">
+        <TruncatedText className="text-muted-foreground">
           {[question.subject.name, question.topic?.name].filter(Boolean).join(' / ')}
-        </span>
+        </TruncatedText>
       ),
     },
     {
@@ -78,14 +82,18 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
       key: 'difficulty',
       header: 'Difficulty',
       cell: (question) => (
-        <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
+        <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>
+          {DIFFICULTY_LABELS[question.difficulty]}
+        </Badge>
       ),
     },
     {
       key: 'status',
       header: 'Status',
       cell: (question) => (
-        <Badge variant={STATUS_VARIANT[question.status]}>{question.status}</Badge>
+        <Badge variant={QUESTION_STATUS_VARIANT[question.status]}>
+          {QUESTION_STATUS_LABELS[question.status]}
+        </Badge>
       ),
     },
     {

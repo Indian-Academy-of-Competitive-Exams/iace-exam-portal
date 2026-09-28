@@ -85,14 +85,14 @@ export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
   );
 }
 
+/** A FILTER, so it reaches retired stages too, for the same reason as the exams beside it. */
 export function ExamStageMultiPicker({
   examIds,
   ...props
 }: Readonly<MultiPickerProps & { examIds: readonly string[] }>) {
   const stages = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EXAM_STAGES, QUERY_SCOPES.PICKER, [...examIds].join(',')],
-    fetchPage: (params) =>
-      api.admin.examStages.list({ ...params, examId: [...examIds], activeOnly: 'true' }),
+    queryKey: [...QUERY_KEYS.EXAM_STAGES, QUERY_SCOPES.FILTER, [...examIds].join(',')],
+    fetchPage: (params) => api.admin.examStages.list({ ...params, examId: [...examIds] }),
   });
 
   return (
