@@ -79,8 +79,13 @@ export class AttemptsService {
   ) {}
 
   async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
+    // One read of their sittings here serves both the resume below and the slot count after it.
+    const sittings = await this.prisma.attempt.findMany({
+      where: { testId, studentId },
+      orderBy: { attemptNo: 'desc' },
+    });
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
-    const live = await this.liveAttempt(studentId, testId);
+    const live = sittings.find((row) => row.status === LIVE) ?? null;
     if (live && (input.resume === undefined || live.id === input.resume)) {
       const test = await this.requireTest(testId);
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
@@ -99,11 +104,7 @@ export class AttemptsService {
     const test = this.assertSittable(await this.requireTest(testId));
 
     // Read, not counted: a paper may be sat any number of times, and the VOID ones still matter.
-    const ended = await this.prisma.attempt.findMany({
-      where: { testId, studentId, status: { not: LIVE } },
-      select: { status: true, isGraded: true },
-    });
-    const slots = slotsAfter(ended);
+    const slots = slotsAfter(sittings.filter((row) => row.status !== LIVE));
 
     try {
       const started = await this.create(studentId, test, slots, input.languages);
