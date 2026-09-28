@@ -95,11 +95,22 @@ echo "sonar: generating coverage…"
 pnpm test:coverage >/dev/null
 
 echo "sonar: scanning (quality gate is enforced)…"
+# The JS analyser outgrew its 4 GB default; out of memory it aborts, and the gate below would then
+# report the PREVIOUS analysis. So the scanner's own exit decides too, not only the server's word.
+scan_log=$(mktemp)
+scanned=0
 node_modules/.bin/sonar-scanner-npm \
-  -Dsonar.host.url="$host" -Dsonar.token="$token" 2>&1 \
-  | grep -E 'QUALITY GATE|ERROR|WARN.*coverage' || true
+  -Dsonar.host.url="$host" -Dsonar.token="$token" \
+  -Dsonar.javascript.node.maxspace="${SONAR_NODE_MAXSPACE:-8192}" >"$scan_log" 2>&1 || scanned=$?
+grep -E 'QUALITY GATE|ERROR|WARN.*coverage' "$scan_log" || true
+rm -f "$scan_log"
+if [ "$scanned" != "0" ]; then
+  echo "" >&2
+  echo "sonar: the scan did not pass (exit $scanned) — $host/dashboard?id=iace-platform" >&2
+  echo "       A crashed analysis leaves the last gate standing, so it is not read as a pass." >&2
+  exit 1
+fi
 
-# grep swallows the scanner's exit code, so ask the server directly.
 gate=$(curl -fsS -u "$token:" "$host/api/qualitygates/project_status?projectKey=iace-platform" 2>/dev/null \
   | sed -n 's/.*"status":"\([A-Z]*\)".*/\1/p' | head -1)
 
