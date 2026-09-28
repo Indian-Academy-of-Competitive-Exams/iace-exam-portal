@@ -504,6 +504,13 @@ export class FakeQueue {
     return Promise.resolve();
   }
 
+  /** Armed with failNext, the whole page is refused, as a Redis error refuses BullMQ's. */
+  async addBulk(
+    jobs: { name: string; data: unknown; opts?: Parameters<FakeQueue['add']>[2] }[],
+  ): Promise<void> {
+    for (const job of jobs) await this.add(job.name, job.data, job.opts);
+  }
+
   asQueue<T>(): T {
     return this as unknown as T;
   }

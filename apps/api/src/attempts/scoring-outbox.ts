@@ -27,11 +27,6 @@ export const SCORING_REQUEST = {
 /** Sittings a re-score can still reach. One still in progress will be scored when it ends. */
 const ENDED: readonly AttemptStatus[] = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];
 
-/** What a pass did with one request: handed it on, gave up on it, or left it for the next sweep. */
-const HANDLED = { SENT: 'sent', DROPPED: 'dropped', LEFT: 'left' } as const;
-
-type Handled = (typeof HANDLED)[keyof typeof HANDLED];
-
 interface PendingRequest {
   id: string;
   aggregateId: string;
@@ -89,15 +84,11 @@ export class ScoringOutbox {
     let handed = 0;
     for (;;) {
       const pending = await this.pending(eventId);
-      const outcomes: Handled[] = [];
-      for (const row of pending) {
-        outcomes.push(await this.deliver(row));
-      }
-      handed += outcomes.filter((outcome) => outcome === HANDLED.SENT).length;
-
+      const sent = await this.deliver(pending);
       // Drains a backlog rather than 200 of it a sweep, and stops on a queue nobody can reach.
-      const stuck = outcomes.every((outcome) => outcome === HANDLED.LEFT);
-      if (pending.length < RELAY_BATCH || stuck) return handed;
+      if (sent === null) return handed;
+      handed += sent;
+      if (pending.length < RELAY_BATCH) return handed;
     }
   }
 
@@ -116,29 +107,30 @@ export class ScoringOutbox {
     });
   }
 
-  /** Queued BEFORE it is marked, so a crash between the two redelivers rather than loses. */
-  private async deliver(row: PendingRequest): Promise<Handled> {
-    const testId = testIdOf(row.payload);
-    try {
+  /** Queued BEFORE they are marked, so a crash between the two redelivers rather than loses. */
+  private async deliver(rows: PendingRequest[]): Promise<number | null> {
+    if (rows.length === 0) return 0;
+    const jobs = rows.flatMap((row) => {
+      const testId = testIdOf(row.payload);
+      // Marked with the rest: left pending, a request nothing can act on blocks every one behind it.
       if (testId === null) {
-        // Left pending, a request nothing can ever act on blocks every request behind it.
         this.logger.error(`Scoring request ${row.id} names no test, so nothing can score it`);
-      } else {
-        await this.scoring.add(
-          QUEUE_NAMES.SCORING,
-          { attemptId: row.aggregateId, testId },
-          keyedJob(scoringJobId(row.id)),
-        );
+        return [];
       }
-      await this.prisma.outboxEvent.update({
-        where: { id: row.id },
+      const data = { attemptId: row.aggregateId, testId };
+      return [{ name: QUEUE_NAMES.SCORING, data, opts: keyedJob(scoringJobId(row.id)) }];
+    });
+    try {
+      if (jobs.length > 0) await this.scoring.addBulk(jobs);
+      await this.prisma.outboxEvent.updateMany({
+        where: { id: { in: rows.map((row) => row.id) } },
         data: { processedAt: new Date() },
       });
-      return testId === null ? HANDLED.DROPPED : HANDLED.SENT;
+      return jobs.length;
     } catch (error) {
-      // One request's failure is its own: it stays pending, and the next sweep hands it on again.
-      this.logger.error(`Handing scoring request ${row.id} to the queue failed`, error);
-      return HANDLED.LEFT;
+      // The page stays pending, and the next sweep hands it on again.
+      this.logger.error(`Handing ${rows.length} scoring requests to the queue failed`, error);
+      return null;
     }
   }
 }
