@@ -119,6 +119,19 @@ describe('SessionService', () => {
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), true);
   });
 
+  /** Asked again by the client, where UNAUTHENTICATED would sign a live session out on the spot. */
+  it('answers a refresh that keeps losing its race as a conflict, not an ended session', async () => {
+    const { sessions, redis } = build();
+    const sessionId = await openSession(sessions, 'refresh-1');
+    redis.replaceJson = () => Promise.resolve(false);
+
+    await assert.rejects(
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.CONFLICT,
+    );
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), true);
+  });
+
   it('still revokes a token it never issued, inside the retry window too', async () => {
     const { sessions } = build();
     const sessionId = await openSession(sessions, 'refresh-1');

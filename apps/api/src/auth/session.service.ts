@@ -111,7 +111,11 @@ export class SessionService {
         return;
       }
     }
-    return this.throwEnded(actor, subjectId, sessionId);
+    // Not UNAUTHENTICATED: the session is alive, and the client asks a conflict again after a pause.
+    throw new AppException(
+      ErrorCodes.CONFLICT,
+      'Another refresh landed at the same moment. Try again.',
+    );
   }
 
   /** A session that is gone: replaced says so, anything else is an ordinary end. */
