@@ -53,7 +53,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
 import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS, ROUTES, testQueryKey } from '../lib/constants';
-import { sectionFullness, sectionTally } from './test-paper-view';
+import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
 import { SectionThreadButton } from '../components/section-thread';
 
 /** Sits beside the paper it staffs: who types and reads each section, before the paper is judged. */
@@ -71,12 +71,6 @@ const SOURCE_CHOICES = {
 } as const;
 
 const SOURCE_ORDER = [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED] as const;
-
-/** The holder a role has now; an earlier one stays on the record but no longer acts. */
-const holding = (rows: readonly Assignment[], section: string, role: AssignmentRole) =>
-  rows.find(
-    (row) => row.baseConfigSectionId === section && row.role === role && row.replacedAt === null,
-  );
 
 const earlier = (rows: readonly Assignment[], section: string, role: AssignmentRole) =>
   rows.filter(
@@ -148,8 +142,8 @@ export function AssignStep({
   const all = assignments.data ?? [];
   const rowOf = (section: BaseConfigSection): SectionRow => ({
     section,
-    typist: holding(all, section.id, ASSIGNMENT_ROLES.TYPIST),
-    proofreader: holding(all, section.id, ASSIGNMENT_ROLES.PROOFREADER),
+    typist: holderOf(all, section.id, ASSIGNMENT_ROLES.TYPIST),
+    proofreader: holderOf(all, section.id, ASSIGNMENT_ROLES.PROOFREADER),
     earlierTypists: earlier(all, section.id, ASSIGNMENT_ROLES.TYPIST),
     earlierReaders: earlier(all, section.id, ASSIGNMENT_ROLES.PROOFREADER),
   });
@@ -218,13 +212,6 @@ export function AssignStep({
   );
 }
 
-/** Amber only where work has started and stalled: an untouched section is not a warning. */
-const CHIP_VARIANT = {
-  EMPTY: 'neutral',
-  SHORT: 'warning',
-  FULL: 'success',
-} as const;
-
 function heldBySection(paper: {
   sections: readonly { baseConfigSectionId: string; questions: readonly unknown[] }[];
 }): ReadonlyMap<string, number> {
@@ -238,7 +225,7 @@ function PaperCell({
   const fullness = sectionFullness(section, held);
   const tally = sectionTally(section, held);
   if (!fullness || !tally) return <Badge variant="neutral">{section.questionCount}</Badge>;
-  return <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge>;
+  return <Badge variant={FULLNESS_VARIANT[fullness]}>{tally}</Badge>;
 }
 
 interface ColumnsInput {

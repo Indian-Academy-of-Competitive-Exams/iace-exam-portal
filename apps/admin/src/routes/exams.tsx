@@ -8,7 +8,6 @@ import {
   DEFAULT_EXAM_COURSE,
   DEFAULT_EXAM_MODE,
   DEFAULT_STAGE_DISPOSITION,
-  EXAM_COURSES,
   EXAM_MODES,
   STAGE_DISPOSITIONS,
   createExamSchema,
@@ -41,7 +40,7 @@ import {
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { NAV_ITEMS, NEW_RECORD, QUERY_KEYS } from '../lib/constants';
+import { NAV_ITEMS, NEW_RECORD, QUERY_KEYS, COURSE_ITEMS } from '../lib/constants';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
@@ -110,8 +109,6 @@ function examColumns(
     },
   ];
 }
-
-const COURSE_ITEMS = EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) }));
 
 /** Every filter the bar can clear. Two controls, so nothing folds. */
 const EXAM_FILTERS = [

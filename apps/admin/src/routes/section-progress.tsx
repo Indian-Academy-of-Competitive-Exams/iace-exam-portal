@@ -4,7 +4,7 @@ import {
   type SectionProgressRow,
   type SectionRoleProgress,
 } from '@iace/contracts';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ListView,
@@ -16,17 +16,12 @@ import {
   type BadgeProps,
   type DataTableColumn,
   type ListFilter,
-  type ListFilterControl,
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import {
-  AssignmentSectionPicker,
-  AssignmentTestPicker,
-} from '../components/assignment-scope-picker';
-import { chooseTest } from '../lib/assignment-filters';
+import { useTestSectionFilters } from '../lib/use-test-section-filters';
 import { AdminMultiPicker } from '../components/admin-multi-picker';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
@@ -155,35 +150,11 @@ export function SectionProgressPage() {
   const { identity } = useAuth();
   const adminId = identity?.id ?? '';
 
-  // Held outside the spec: choosing another test also has to drop the section under the old one.
-  const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
-  const testId = urlFilters.get('testId');
-  const sectionId = urlFilters.get('baseConfigSectionId');
+  const cascade = useTestSectionFilters(EVERY_SECTION);
 
   const buildFilters = (selectedAssigneeLabels: Record<string, string>) =>
     [
-      {
-        key: 'testId',
-        kind: 'custom',
-        label: 'Test',
-        primary: true,
-        render: (control: ListFilterControl) => (
-          <AssignmentTestPicker
-            {...control}
-            scope={EVERY_SECTION}
-            onChange={(value) => urlFilters.set(chooseTest(value, testId, sectionId))}
-          />
-        ),
-      },
-      {
-        key: 'baseConfigSectionId',
-        kind: 'custom',
-        label: 'Section',
-        primary: true,
-        render: (control: ListFilterControl) => (
-          <AssignmentSectionPicker {...control} scope={EVERY_SECTION} testId={testId} />
-        ),
-      },
+      ...cascade,
       {
         key: 'assigneeId',
         kind: 'customMulti',

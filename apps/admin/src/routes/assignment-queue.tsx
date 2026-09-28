@@ -7,7 +7,7 @@ import {
   type AssignmentRole,
   type AssignmentWithTest,
 } from '@iace/contracts';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ConfirmDialog,
@@ -22,15 +22,10 @@ import {
   type BadgeProps,
   type DataTableColumn,
   type ListFilter,
-  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
-import {
-  AssignmentSectionPicker,
-  AssignmentTestPicker,
-} from '../components/assignment-scope-picker';
-import { chooseTest } from '../lib/assignment-filters';
+import { useTestSectionFilters } from '../lib/use-test-section-filters';
 import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 
 /** One section handed to one admin, from either side of it, and the screen a row of it opens. */
@@ -153,35 +148,10 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   const [finishing, setFinishing] = useState<AssignmentWithTest | null>(null);
   const [reading, setReading] = useState<AssignmentWithTest | null>(null);
 
-  // Held outside the spec: choosing another test also has to drop the section under the old one.
-  const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
-  const testId = urlFilters.get('testId');
-  const sectionId = urlFilters.get('baseConfigSectionId');
-  const scope = { role, mine: true };
+  const cascade = useTestSectionFilters({ role, mine: true });
 
   const filters = [
-    {
-      key: 'testId',
-      kind: 'custom',
-      label: 'Test',
-      primary: true,
-      render: (control: ListFilterControl) => (
-        <AssignmentTestPicker
-          {...control}
-          scope={scope}
-          onChange={(value) => urlFilters.set(chooseTest(value, testId, sectionId))}
-        />
-      ),
-    },
-    {
-      key: 'baseConfigSectionId',
-      kind: 'custom',
-      label: 'Section',
-      primary: true,
-      render: (control: ListFilterControl) => (
-        <AssignmentSectionPicker {...control} scope={scope} testId={testId} />
-      ),
-    },
+    ...cascade,
     {
       key: 'outstanding',
       kind: 'choice',

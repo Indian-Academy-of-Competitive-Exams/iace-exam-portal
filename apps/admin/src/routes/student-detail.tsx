@@ -5,9 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { FileText, Pencil, Save } from 'lucide-react';
 import {
-  courseLabel,
   EARLIEST_BIRTH_DATE,
-  EXAM_COURSES,
   examsInCourses,
   GENDERS,
   STUDENT_TYPE,
@@ -42,7 +40,13 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { GENDER_LABELS, NAV_ITEMS, QUERY_KEYS, STUDENT_TYPE_LABELS } from '../lib/constants';
+import {
+  GENDER_LABELS,
+  NAV_ITEMS,
+  QUERY_KEYS,
+  STUDENT_TYPE_LABELS,
+  COURSE_ITEMS,
+} from '../lib/constants';
 import { STUDENT_DETAIL_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
@@ -215,10 +219,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               onChange={(next) =>
                 form.setValue('enrolledCourses', next as ExamCourse[], { shouldDirty: true })
               }
-              items={EXAM_COURSES.map((course) => ({
-                value: course,
-                label: courseLabel(course),
-              }))}
+              items={COURSE_ITEMS}
               chips={false}
               placeholder="No courses yet"
               emptyLabel="No course matches that"

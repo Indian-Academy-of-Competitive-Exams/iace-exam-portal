@@ -28,7 +28,9 @@ import {
   type AuditFeature,
   BRANCH_TYPE,
   type BranchType,
+  courseLabel,
   type DifficultyLevel,
+  EXAM_COURSES,
   type ExamTemplate,
   FEATURE_KEYS,
   type Gender,
@@ -170,6 +172,12 @@ export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
   SINGLE_MCQ: 'Multiple choice',
   TEXT_FIELD: 'Typed answer',
 };
+
+/** Every exam course as a choice, written the way the institute says it. */
+export const COURSE_ITEMS = EXAM_COURSES.map((course) => ({
+  value: course,
+  label: courseLabel(course),
+}));
 
 /** What a question's state is called on screen. */
 export const QUESTION_STATUS_LABELS: Readonly<Record<QuestionStatus, string>> = {

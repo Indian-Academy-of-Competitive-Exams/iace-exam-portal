@@ -5,9 +5,10 @@ import { useForm, useWatch } from 'react-hook-form';
 import {
   ANNOUNCEMENT_BODY_MAX,
   ANNOUNCEMENT_TITLE_MAX,
-  EXAM_COURSES,
+  createAnnouncementSchema,
   examCourseSchema,
   type AnnouncementAudience,
+  type AnnouncementPreview,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
@@ -21,18 +22,11 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { COURSE_ITEMS, QUERY_KEYS } from '../../lib/constants';
 import { useBranches } from '../../lib/use-branches';
 
-const COURSE_ITEMS = EXAM_COURSES.map((course) => ({
-  value: course,
-  label: course.replaceAll('_', '/'),
-}));
-
 /** The two cohort dimensions this dialog offers; the server validates the whole filter for real. */
-const composeSchema = z.object({
-  title: z.string().trim().min(1, 'Required').max(ANNOUNCEMENT_TITLE_MAX),
-  body: z.string().trim().min(1, 'Required').max(ANNOUNCEMENT_BODY_MAX),
+const composeSchema = createAnnouncementSchema.pick({ title: true, body: true }).extend({
   audience: z.object({
     branchId: z.array(z.string()),
     course: z.array(examCourseSchema),
@@ -172,7 +166,10 @@ export function ComposeAnnouncementDialog({
 }
 
 /** The consequence that is invisible until too late: how many students this reaches. */
-function Reach({ preview, loading }: Readonly<{ preview?: Preview; loading: boolean }>) {
+function Reach({
+  preview,
+  loading,
+}: Readonly<{ preview?: AnnouncementPreview; loading: boolean }>) {
   if (loading || !preview) return <Skeleton variant="row" className="h-12" />;
 
   /* ui-copy-ok: consequence */
@@ -182,13 +179,7 @@ function Reach({ preview, loading }: Readonly<{ preview?: Preview; loading: bool
   return <Alert variant="info">{plural(preview.recipientCount, 'student')}, in the app.</Alert>;
 }
 
-interface Preview {
-  recipientCount: number;
-  overCap: boolean;
-  cap: number;
-}
-
-function overCap(preview: Preview): string {
+function overCap(preview: AnnouncementPreview): string {
   const reaches = preview.recipientCount.toLocaleString('en-IN');
   const cap = preview.cap.toLocaleString('en-IN');
 

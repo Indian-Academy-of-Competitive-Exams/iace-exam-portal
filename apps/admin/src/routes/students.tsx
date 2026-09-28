@@ -5,9 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Upload, UserPlus } from 'lucide-react';
 import {
-  courseLabel,
   BRANCH_TYPE,
-  EXAM_COURSES,
   EXPORT_KINDS,
   STUDENT_EXPORT_VIEWS,
   examsInCourses,
@@ -52,7 +50,7 @@ import {
 import { EventMultiPicker, ProgramMultiPicker } from '../components/access-picker';
 import { ExportButton, type ExportChoice } from '../components/export-button';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS, COURSE_ITEMS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
@@ -204,7 +202,7 @@ export function StudentsPage() {
       kind: 'multi',
       label: 'Course',
       placeholder: 'Any course',
-      items: EXAM_COURSES.map((course) => ({ value: course, label: courseLabel(course) })),
+      items: COURSE_ITEMS,
     },
     {
       key: 'programCode',
@@ -503,10 +501,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
             onChange={(next) =>
               form.setValue('enrolledCourses', next as ExamCourse[], { shouldDirty: true })
             }
-            items={EXAM_COURSES.map((course) => ({
-              value: course,
-              label: courseLabel(course),
-            }))}
+            items={COURSE_ITEMS}
             placeholder="None yet"
             emptyLabel="No course matches that"
           />

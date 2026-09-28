@@ -12,7 +12,6 @@ import {
   sectionQuota,
   scopedSections,
   type Assignment,
-  type AssignmentRole,
   type BaseConfigSection,
   type DrawSpec,
   type PaperRow,
@@ -48,7 +47,7 @@ import { useAuth } from '../providers/auth';
 import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
-import { sectionFullness, sectionTally } from './test-paper-view';
+import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, testQueryKey } from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
@@ -136,11 +135,6 @@ function TestPaperScreen({
   // Sticky for the life of the screen: the rebuild is delayed and deduped, so there is nothing to poll.
   const [rescoring, setRescoring] = useState(false);
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const holderOf = (sectionId: string, role: AssignmentRole) =>
-    assignments.find(
-      (row) =>
-        row.baseConfigSectionId === sectionId && row.role === role && row.replacedAt === null,
-    ) ?? null;
 
   const held = useMemo(() => {
     const counts = new Map<string, number>();
@@ -273,8 +267,8 @@ function TestPaperScreen({
             held={onThePaper}
             editable={canEditPaper && !framed}
             disposable={canDispose}
-            typist={holderOf(section.id, ASSIGNMENT_ROLES.TYPIST)}
-            reader={holderOf(section.id, ASSIGNMENT_ROLES.PROOFREADER)}
+            typist={holderOf(assignments, section.id, ASSIGNMENT_ROLES.TYPIST) ?? null}
+            reader={holderOf(assignments, section.id, ASSIGNMENT_ROLES.PROOFREADER) ?? null}
             attemptCount={detail.attemptCount}
             onRescoring={() => setRescoring(true)}
             poolDirty={draft !== null}
@@ -287,13 +281,6 @@ function TestPaperScreen({
 
   return <PanelFrame fills header={header} toolbar={banners} tabs={tabs} />;
 }
-
-/** Amber only where work has started and stalled: an untouched section is not a warning. */
-const CHIP_VARIANT = {
-  EMPTY: 'neutral',
-  SHORT: 'warning',
-  FULL: 'success',
-} as const;
 
 /** What the screen says about the paper as a whole, above the section strip. */
 function PaperBanners({ frozen, rescoring }: Readonly<{ frozen: boolean; rescoring: boolean }>) {
@@ -316,7 +303,7 @@ function SectionTab({
   return (
     <span className="flex items-center gap-2">
       {section.name}
-      {fullness && tally ? <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge> : null}
+      {fullness && tally ? <Badge variant={FULLNESS_VARIANT[fullness]}>{tally}</Badge> : null}
     </span>
   );
 }

@@ -9,6 +9,7 @@ import {
   XLSX_CONTENT_TYPE,
   type QuestionImportPlan,
   type QuestionImportRow,
+  type QuestionImportResult,
 } from '@iace/contracts';
 import {
   Alert,
@@ -51,19 +52,15 @@ function intakeFor(into: string | null) {
   };
 }
 
-interface ImportCounts {
-  created: number;
-  duplicates: number;
-  invalid: number;
-  leftOut: number;
-}
-
-function importedText({ created, duplicates, invalid, leftOut }: ImportCounts): string {
+function importedText({ created, duplicates, invalid, leftOut }: QuestionImportResult): string {
   const setAside = leftOut > 0 ? `, ${leftOut} left out` : '';
   return `Imported: ${created} created, ${duplicates} already in the bank, ${invalid} skipped${setAside}.`;
 }
 
-function ImportOutcome({ result, into }: Readonly<{ result: ImportCounts; into: string | null }>) {
+function ImportOutcome({
+  result,
+  into,
+}: Readonly<{ result: QuestionImportResult; into: string | null }>) {
   return (
     <>
       {importedText(result)}{' '}
@@ -107,7 +104,7 @@ export function ImportQuestionsPage() {
   const intake = useImportScreen({
     ...intakeFor(into),
     writes: (plan) => plan.summary.willCreate,
-    success: (data) => importedText(data as ImportCounts),
+    success: (data) => importedText(data as QuestionImportResult),
     onCommitted: () =>
       queryClient.invalidateQueries({
         queryKey: into ? QUERY_KEYS.AUTHORING : QUERY_KEYS.QUESTIONS,

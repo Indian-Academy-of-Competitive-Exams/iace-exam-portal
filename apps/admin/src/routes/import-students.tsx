@@ -5,6 +5,7 @@ import {
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type StudentImportRow,
+  type StudentImportResult,
 } from '@iace/contracts';
 import {
   Badge,
@@ -38,7 +39,7 @@ export function ImportStudentsPage() {
     commit: (file) => api.admin.imports.commitStudents(file as File),
     writes: (plan) => plan.summary.willCreate + plan.summary.willUpdate,
     success: (data) => {
-      const result = data as { created: number; updated: number; skipped: number };
+      const result = data as StudentImportResult;
       return `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`;
     },
   });

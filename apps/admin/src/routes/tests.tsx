@@ -161,10 +161,10 @@ function deleteDescription(test: Test): string {
 }
 
 /** `a, b and c` — a list read as a sentence, because that is what the dialog is. */
+const AND_LIST = new Intl.ListFormat('en-IN', { type: 'conjunction' });
+
 function sentenceOf(parts: readonly string[]): string {
-  const lead = parts.slice(0, -1).join(', ');
-  const last = parts.at(-1) ?? '';
-  const joined = lead === '' ? last : `${lead} and ${last}`;
+  const joined = AND_LIST.format(parts);
   return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 

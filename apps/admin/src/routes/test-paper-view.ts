@@ -1,5 +1,10 @@
-import { MERIT_TYPE, type BaseConfigSection } from '@iace/contracts';
-import { plural } from '@iace/ui';
+import {
+  MERIT_TYPE,
+  type Assignment,
+  type AssignmentRole,
+  type BaseConfigSection,
+} from '@iace/contracts';
+import { plural, type BadgeProps } from '@iace/ui';
 
 /** What the paper screens read off a section: how full it is, and how its configuration framed it. */
 
@@ -10,6 +15,19 @@ export const SECTION_FULLNESS = {
   FULL: 'FULL',
 } as const;
 export type SectionFullness = (typeof SECTION_FULLNESS)[keyof typeof SECTION_FULLNESS];
+
+/** Amber only where work has started and stalled: an untouched section is not a warning. */
+export const FULLNESS_VARIANT = {
+  [SECTION_FULLNESS.EMPTY]: 'neutral',
+  [SECTION_FULLNESS.SHORT]: 'warning',
+  [SECTION_FULLNESS.FULL]: 'success',
+} as const satisfies Record<SectionFullness, BadgeProps['variant']>;
+
+/** The holder a role has now; an earlier one stays on the record but no longer acts. */
+export const holderOf = (rows: readonly Assignment[], sectionId: string, role: AssignmentRole) =>
+  rows.find(
+    (row) => row.baseConfigSectionId === sectionId && row.role === role && row.replacedAt === null,
+  );
 
 /** Untouched reads apart from part-built: five amber chips on a fresh test single nothing out. */
 export function sectionFullness(
