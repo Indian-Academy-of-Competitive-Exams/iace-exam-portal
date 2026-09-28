@@ -368,8 +368,14 @@ export class QuestionsService {
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
     await this.assertIdentitySettled(tx, question, draft);
 
-    // One order everywhere, Test before Question: finalize and thaw take the test first too.
-    await tx.$queryRaw`SELECT 1 FROM "Test" WHERE "id" IN (SELECT "testId" FROM "PaperQuestion" WHERE "questionId" = ${id}::uuid) ORDER BY "id" FOR UPDATE`;
+    // One order everywhere, Test before Question; drafts holding only its tick too, so a put-back cannot race the uncheck.
+    await tx.$queryRaw`
+      SELECT 1 FROM "Test" WHERE "id" IN (
+        SELECT "testId" FROM "PaperQuestion" WHERE "questionId" = ${id}::uuid
+        UNION
+        SELECT r."testId" FROM "QuestionReview" r JOIN "Test" t ON t."id" = r."testId"
+        WHERE r."questionId" = ${id}::uuid AND t."finalizedAt" IS NULL
+      ) ORDER BY "id" FOR UPDATE`;
 
     // Pinned to the row as read, so the version and content this rests on cannot be out of date.
     const claimed = await tx.question.updateMany({

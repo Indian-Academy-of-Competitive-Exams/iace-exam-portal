@@ -21,11 +21,13 @@ import {
   type QuestionDraftInput,
   type QuestionListQueryInput,
 } from '@iace/contracts';
+import { AdminsService } from '../src/admins/admins.service';
+import { AssignmentsService } from '../src/assignments/assignments.service';
 import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
-import { FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   fourOptions,
@@ -804,7 +806,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
     const releasedAt = async () =>
       (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } }))
         .finalizedAt;
-    return { questions, questionId: created.id, checkedAt, releasedAt };
+    return { questions, questionId: created.id, readingId: reading.id, checkedAt, releasedAt };
   }
 
   /** The failure this prevents: an owner's edit after release reaching students under the reader's old tick. */
@@ -825,6 +827,20 @@ describe('QuestionsService.update — reworded words are read again', () => {
     await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
 
     assert.equal(await checkedAt(), null);
+  });
+
+  /** Undone by the edit, not unmade: the reader did the work, so their seat is not one nobody used. */
+  it('keeps the record of who checked it, so that reader cannot be removed as unused', async () => {
+    const { questions, questionId, readingId } = await readAndReleased();
+    const assignments = new AssignmentsService(
+      prisma,
+      new FakeRedis().asService(),
+      new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
+    );
+
+    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+
+    await assert.rejects(() => assignments.remove(readingId), conflict);
   });
 
   it('keeps the tick on a save that changes no words', async () => {

@@ -44,7 +44,8 @@ export async function uncheckReworded(
   // Off the paper too: a question taken off and put back must not return under the old words' tick.
   await tx.questionReview.updateMany({
     where: { questionId, test: { finalizedAt: null }, checkedAt: { not: null } },
-    data: { checkedAt: null, checkedById: null },
+    // checkedById stays: who read the old words did the work, and removing their seat asks that.
+    data: { checkedAt: null },
   });
   const onDrafts = await tx.paperQuestion.findMany({
     where: { questionId, test: { finalizedAt: null } },
