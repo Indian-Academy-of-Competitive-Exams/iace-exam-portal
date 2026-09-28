@@ -25,6 +25,7 @@ import { planCandidateImport } from './candidate-import';
 import { planProgramImport } from './program-import';
 import { EventsService } from '../events';
 import { ProgramsService } from '../access';
+import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 
 import { isPreTestReady } from '../students';
 import {
@@ -55,6 +56,7 @@ export class ImportsService {
     private readonly audit: AuditService,
     private readonly events: EventsService,
     private readonly programs: ProgramsService,
+    private readonly domainEvents: DomainEventBus,
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
@@ -100,7 +102,10 @@ export class ImportsService {
 
           const done = await this.writeRow(row, startingPin);
           if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
-          else outcome.counts.updated += 1;
+          else {
+            outcome.counts.updated += 1;
+            this.accessChanged(done.entityId);
+          }
           outcome.rowActions.push(done);
 
           const pin = row.willReceiveDefaultPin ? minted.get(row.mobile) : undefined;
@@ -233,12 +238,18 @@ export class ImportsService {
         RETURNING "id"`;
 
       outcome.counts.updated = enrolled.length;
+      for (const row of enrolled) this.accessChanged(row.id);
       outcome.rowActions.push(
         ...enrolled.map((row) => ({ entityId: row.id, action: AUDIT_ACTION.UPDATE })),
       );
     });
 
     return { ...plan.summary, enrolled: run.counts.updated, skipped: plan.summary.invalid };
+  }
+
+  /** Per student, like an event intake: a roster must not throw away every other catalog. */
+  private accessChanged(studentId: string): void {
+    this.domainEvents.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
   /** One row's write, and what the audit trail should call it. */

@@ -37,10 +37,11 @@ import { buildStudentExport } from '../src/students/student-export';
 import { StudentsController } from '../src/students/students.controller';
 import { StudentsService } from '../src/students/students.service';
 import {
+  FakeEventBus,
   FakeEventsService,
   FakeProgramsService,
-  FakeStorage,
   fakeStartingPins,
+  FakeStorage,
 } from '../test/support/fakes';
 import {
   makeAdmin,
@@ -75,6 +76,7 @@ const imports = new ImportsService(
   new AuditService(prisma, new FakeStorage() as never),
   new FakeEventsService().asService(),
   new FakeProgramsService().asService(),
+  new FakeEventBus().asService(),
 );
 
 let caller: AuthenticatedUser;

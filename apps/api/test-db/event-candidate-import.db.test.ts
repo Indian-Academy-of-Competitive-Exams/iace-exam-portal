@@ -5,11 +5,12 @@ import { AppException, ErrorCodes, STUDENT_TYPE } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
 import {
+  FakeEventBus,
   FakeEventsService,
   FakeMessageSender,
   FakeProgramsService,
-  FakeStorage,
   fakeStartingPins,
+  FakeStorage,
   roster,
 } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
@@ -30,6 +31,7 @@ function build(events = new FakeEventsService()) {
     new AuditService(prisma, new FakeStorage() as never),
     events.asService(),
     new FakeProgramsService().asService(),
+    new FakeEventBus().asService(),
   );
   return { storage, events, service };
 }

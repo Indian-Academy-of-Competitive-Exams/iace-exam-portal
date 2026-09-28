@@ -457,7 +457,7 @@ describe('the student writes that bust the catalog cache', () => {
     for (const write of [
       (service: StudentsService) => service.setTestBlocked(STUDENT, true),
       (service: StudentsService) => service.setActive(STUDENT, false),
-      (service: StudentsService) => service.update(STUDENT, { enrolledExams: ['SSC CGL'] }),
+      (service: StudentsService) => service.update(STUDENT, { enrolledCourses: ['SSC'] }),
     ]) {
       await resetDatabase(prisma);
       const { service, events } = await serviceWith();

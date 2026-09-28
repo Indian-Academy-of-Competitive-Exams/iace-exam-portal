@@ -62,7 +62,7 @@ const AUDITED_TEST_BLOCKED_FIELDS = ['isTestBlocked'] as const;
 
 /** The columns a student's catalog is resolved from — moving one makes their cached answer wrong. */
 const ACCESS_STUDENT_FIELDS = [
-  'enrolledExams',
+  'enrolledCourses',
   'programs',
   'currentBranchId',
   'isTestBlocked',
