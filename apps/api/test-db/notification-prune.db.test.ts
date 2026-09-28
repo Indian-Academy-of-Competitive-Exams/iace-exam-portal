@@ -103,7 +103,8 @@ describe('NotificationPruneProcessor — what a settled delivery is kept for', (
 
     const first = await pruner.prune(NOW, 1);
 
-    assert.ok(first > 0 && first <= DELIVERY_PRUNE_PAGE);
+    assert.ok(first > 0, 'a page of old deliveries is pruned');
+    assert.ok(first <= DELIVERY_PRUNE_PAGE, 'never more than one page at a time');
     assert.equal((await remaining()).length, 3 - first);
   });
 });

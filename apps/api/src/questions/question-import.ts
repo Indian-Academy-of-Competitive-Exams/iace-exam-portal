@@ -141,7 +141,7 @@ function rowContent(row: CsvRow, issues: ValidationIssue[], warnings: ImportWarn
       if (judged.height <= FORMULA_PICTURE_MAX_HEIGHT) {
         warnings.push({
           column: key,
-          message: `${LABEL_BY_KEY.get(key)}: this picture looks like a formula saved at text size (${judged.width}×${judged.height} px), so it will look blurry. Type it as \\( … \\) to make it a real equation.`,
+          message: String.raw`${LABEL_BY_KEY.get(key)}: this picture looks like a formula saved at text size (${judged.width}×${judged.height} px), so it will look blurry. Type it as \( … \) to make it a real equation.`,
         });
       }
       const stored = importedImageKey(judged);

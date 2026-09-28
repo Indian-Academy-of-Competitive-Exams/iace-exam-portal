@@ -14,12 +14,36 @@ function Outcome({ row }: Readonly<{ row: QuestionImportRow }>) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0}>
+        <button
+          type="button"
+          className="rounded-full focus-visible:shadow-focus focus-visible:outline-none"
+        >
           <Badge variant="danger">Skip</Badge>
-        </span>
+        </button>
       </TooltipTrigger>
       <TooltipContent>{row.issues.map((issue) => issue.message).join('; ')}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Where the row in view stands: its line, its place, and what Import will do with it. */
+function importLead(rows: readonly QuestionImportRow[], index: number) {
+  const row = rows[index];
+  if (!row) return null;
+  return (
+    <>
+      <span className="text-sm font-semibold tabular-nums">{`Line ${row.line}`}</span>
+      <span className="text-xs tabular-nums text-muted-foreground">
+        {`${index + 1} of ${rows.length}`}
+      </span>
+      <Outcome row={row} />
+      {row.warnings.length > 0 ? (
+        <Badge variant="warning">
+          {`${row.warnings.length} blurry ${row.warnings.length === 1 ? 'picture' : 'pictures'}`}
+        </Badge>
+      ) : null}
+      {row.edited ? <Badge variant="neutral">Edited</Badge> : null}
+    </>
   );
 }
 
@@ -69,25 +93,7 @@ export function ImportQuestionsWindow({
           return { header: headerOfDraft(found.draft), state: stateOfDraft(found.draft) };
         },
       }),
-      lead: (index) => {
-        const row = rows[index];
-        if (!row) return null;
-        return (
-          <>
-            <span className="text-sm font-semibold tabular-nums">{`Line ${row.line}`}</span>
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {`${index + 1} of ${rows.length}`}
-            </span>
-            <Outcome row={row} />
-            {row.warnings.length > 0 ? (
-              <Badge variant="warning">
-                {`${row.warnings.length} blurry ${row.warnings.length === 1 ? 'picture' : 'pictures'}`}
-              </Badge>
-            ) : null}
-            {row.edited ? <Badge variant="neutral">Edited</Badge> : null}
-          </>
-        );
-      },
+      lead: (index) => importLead(rows, index),
       subjectLocked: false,
       checkDuplicates: false,
       save: async (line, held) => {

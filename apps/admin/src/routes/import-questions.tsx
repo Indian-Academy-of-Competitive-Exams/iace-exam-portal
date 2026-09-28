@@ -7,6 +7,7 @@ import {
   LANGUAGE_LABELS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
+  type QuestionImportPlan,
   type QuestionImportRow,
 } from '@iace/contracts';
 import {
@@ -37,6 +38,50 @@ import { saveBlob } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { ImportQuestionsWindow } from '../components/authoring/import-questions-window';
 
+/** The same sheet either way; a section's typist previews and commits through authoring. */
+function intakeFor(into: string | null) {
+  return {
+    preview: (file: File) =>
+      into
+        ? api.admin.authoring.previewImport(into, file)
+        : api.admin.imports.previewQuestions(file),
+    commit: (_file: File | null, plan: QuestionImportPlan) =>
+      into
+        ? api.admin.authoring.commitImport(into, plan.importLogId)
+        : api.admin.imports.commitQuestions(plan.importLogId),
+  };
+}
+
+function ImportOutcome({
+  result,
+  into,
+}: Readonly<{
+  result: { created: number; duplicates: number; invalid: number };
+  into: string | null;
+}>) {
+  return (
+    <>
+      Imported: {result.created} created, {result.duplicates} already in the bank, {result.invalid}{' '}
+      skipped.{' '}
+      <Link
+        to={into ? ROUTES.AUTHORING_FOR_ASSIGNMENT(into) : ROUTES.QUESTIONS}
+        className={linkVariants({ variant: 'inline' })}
+      >
+        {into ? 'Back to the section' : 'View questions'}
+      </Link>
+    </>
+  );
+}
+
+function BlurryNotice({ count }: Readonly<{ count: number }>) {
+  if (count === 0) return null;
+  return (
+    <Alert variant="warning">
+      {String.raw`${count} ${count === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \( … \) in the sheet to make it a real equation.`}
+    </Alert>
+  );
+}
+
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
   usePageTour({
@@ -56,14 +101,7 @@ export function ImportQuestionsPage() {
   });
 
   const intake = useImportScreen({
-    preview: (file) =>
-      into
-        ? api.admin.authoring.previewImport(into, file)
-        : api.admin.imports.previewQuestions(file),
-    commit: (_file, plan) =>
-      into
-        ? api.admin.authoring.commitImport(into, plan.importLogId)
-        : api.admin.imports.commitQuestions(plan.importLogId),
+    ...intakeFor(into),
     writes: (plan) => plan.summary.willCreate,
     success: (data) => {
       const result = data as { created: number; duplicates: number; invalid: number };
@@ -120,20 +158,7 @@ export function ImportQuestionsPage() {
         onClick: intake.commit,
       }}
       fileErrors={plan?.fileErrors}
-      outcome={
-        intake.result ? (
-          <>
-            Imported: {intake.result.created} created, {intake.result.duplicates} already in the
-            bank, {intake.result.invalid} skipped.{' '}
-            <Link
-              to={into ? ROUTES.AUTHORING_FOR_ASSIGNMENT(into) : ROUTES.QUESTIONS}
-              className={linkVariants({ variant: 'inline' })}
-            >
-              {into ? 'Back to the section' : 'View questions'}
-            </Link>
-          </>
-        ) : null
-      }
+      outcome={intake.result ? <ImportOutcome result={intake.result} into={into} /> : null}
       errorRows={errorRows}
       stats={
         plan
@@ -146,11 +171,7 @@ export function ImportQuestionsPage() {
           : undefined
       }
     >
-      {blurry > 0 ? (
-        <Alert variant="warning">
-          {`${blurry} ${blurry === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \\( … \\) in the sheet to make it a real equation.`}
-        </Alert>
-      ) : null}
+      <BlurryNotice count={blurry} />
 
       <Table>
         <TableHeader>
@@ -245,9 +266,12 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
         {row.warnings.length > 0 ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span tabIndex={0} className="text-xs text-warning-ink">
+              <button
+                type="button"
+                className="rounded-sm text-xs text-warning-ink focus-visible:shadow-focus focus-visible:outline-none"
+              >
                 {`${row.warnings.length} blurry ${row.warnings.length === 1 ? 'picture' : 'pictures'}`}
-              </span>
+              </button>
             </TooltipTrigger>
             <TooltipContent>
               {row.warnings.map((warning) => warning.message).join(' ')}

@@ -105,7 +105,8 @@ describe('QuestionImportService — correcting a previewed row', () => {
   it('judges a correction against the rest of the sheet, as a duplicate of an earlier line', async () => {
     const { imports, importLogId } = await previewed();
     const [first, second] = await imports.drafts(importLogId, ADMIN);
-    assert.ok(first && second);
+    assert.ok(first, 'the first line has a draft');
+    assert.ok(second, 'the second line has a draft');
 
     const plan = await imports.saveRow(importLogId, 3, first.draft, ADMIN);
 

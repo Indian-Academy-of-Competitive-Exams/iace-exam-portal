@@ -467,8 +467,7 @@ export class PaperService {
     this.assertAssemblable(test);
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
-    const rows = [];
-    for (const rowId of rowIds) rows.push(await this.requireRow(testId, rowId));
+    for (const rowId of rowIds) await this.requireRow(testId, rowId);
     this.assertNotTyped(test, editor);
 
     await this.prisma.$transaction(async (tx) => {

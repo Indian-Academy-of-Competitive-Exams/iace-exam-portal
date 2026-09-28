@@ -7,6 +7,10 @@ import { QuestionsWindow, type Held, type QuestionsSource } from './questions-wi
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 import { sectionQuestions } from './section-questions';
 
+const positionLead = (index: number, count: number) => (
+  <span className="text-sm font-semibold tabular-nums">{`Question ${index + 1} of ${count}`}</span>
+);
+
 /** A section's written questions in the scrolling window, each saved as the section editor saves it. */
 export function SectionQuestionsWindow({
   assignment,
@@ -42,13 +46,7 @@ export function SectionQuestionsWindow({
           };
         },
       }),
-      lead: (index) => (
-        <>
-          <span className="text-sm font-semibold tabular-nums">
-            {`Question ${index + 1} of ${questions.length}`}
-          </span>
-        </>
-      ),
+      lead: (index) => positionLead(index, questions.length),
       subjectLocked: assignment.sectionSubjectId !== null,
       checkDuplicates: true,
       save: async (id, held) => {

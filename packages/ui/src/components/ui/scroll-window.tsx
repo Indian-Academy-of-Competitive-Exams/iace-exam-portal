@@ -90,9 +90,17 @@ export function ScrollWindow({
     landed.current = landing;
     settle();
   });
-  const letGo = () => {
-    if (landing !== null) setLanding(null);
-  };
+  // Listened for rather than bound as props: the scroller is not a control, only its content is.
+  React.useEffect(() => {
+    const view = scroller.current;
+    if (!view || landing === null) return;
+    const letGo = () => setLanding(null);
+    const events = ['wheel', 'touchmove', 'keydown'] as const;
+    for (const event of events) view.addEventListener(event, letGo, { passive: true });
+    return () => {
+      for (const event of events) view.removeEventListener(event, letGo);
+    };
+  }, [landing, open]);
 
   const settleRef = React.useRef(settle);
   React.useLayoutEffect(() => {
@@ -132,9 +140,6 @@ export function ScrollWindow({
         <div
           ref={scroller}
           onScroll={findActive}
-          onWheel={letGo}
-          onTouchMove={letGo}
-          onKeyDown={letGo}
           className="relative min-h-0 flex-1 overflow-y-auto rounded-b-[--modal-radius]"
         >
           {itemKeys.map((key, index) => {

@@ -100,9 +100,7 @@ function DoneDialog({
           ) : null}
 
           {leftover.length > 0 && chosen.size > 0 ? (
-            <Alert variant="info">
-              {`${plural(leftover.length - deleting, 'question')} not chosen go to the bank for any test to pick.${deleting > 0 ? ` ${plural(deleting, 'question')} will be deleted.` : ''}`}
-            </Alert>
+            <Alert variant="info">{leftoverNotice(leftover.length, deleting)}</Alert>
           ) : null}
 
           <DataTable
@@ -174,6 +172,11 @@ function columnsOf(
   ];
 }
 
+function leftoverNotice(leftover: number, deleting: number): string {
+  const kept = `${plural(leftover - deleting, 'question')} not chosen go to the bank for any test to pick.`;
+  return deleting > 0 ? `${kept} ${plural(deleting, 'question')} will be deleted.` : kept;
+}
+
 const chosenLevels = (rows: readonly QuestionSummary[], chosen: ReadonlySet<string>) =>
   rows.filter((row) => chosen.has(row.id)).map((row) => row.difficulty);
 
@@ -193,9 +196,10 @@ function selectionGaps(
     (level) => quota[level].allowed !== null && quota[level].chosen !== quota[level].allowed,
   );
   if (off.length > 0 && chosen.size === needed) {
-    gaps.push(
-      `The split is ${off.map((level) => `${DIFFICULTY_LABELS[level]} ${quota[level].chosen} of ${quota[level].allowed}`).join(', ')}.`,
+    const counts = off.map(
+      (level) => `${DIFFICULTY_LABELS[level]} ${quota[level].chosen} of ${quota[level].allowed}`,
     );
+    gaps.push(`The split is ${counts.join(', ')}.`);
   }
   return gaps;
 }
