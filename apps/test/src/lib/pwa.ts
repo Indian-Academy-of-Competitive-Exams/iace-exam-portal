@@ -91,8 +91,9 @@ export function pushIsSupported(): boolean {
 export async function currentPushSubscription(): Promise<PushSubscription | null> {
   if (!pushIsSupported()) return null;
 
-  const registration = await navigator.serviceWorker.ready;
-  return registration.pushManager.getSubscription();
+  // Not `ready`: that never settles on a page whose worker never installed, and sign-out waits on this.
+  const registration = await navigator.serviceWorker.getRegistration();
+  return registration ? registration.pushManager.getSubscription() : null;
 }
 
 /** Null when they declined: a refused permission is an answer, not an error to throw at them. */
