@@ -191,6 +191,13 @@ export function createApiCore(options: ApiClientOptions) {
     const response = await send(path, method, body, getAccessToken());
     if (response.status !== 401) return parse(response, schema);
 
+    const retried = await send(path, method, body, await tokenAfter(response));
+    if (retried.status === 401) onUnauthorized?.(await failureOf(retried));
+    return parse(retried, schema);
+  }
+
+  /** A 401 either throws here or hands back the token to retry with; every caller shares the one refresh. */
+  async function tokenAfter(response: Response): Promise<string> {
     const peeked = await peekFailure(response);
 
     // A replaced session is over for good; refreshing would only be refused the same way.
@@ -214,10 +221,7 @@ export function createApiCore(options: ApiClientOptions) {
       if (sessionIsOver()) onUnauthorized?.(refreshFailure);
       throw endedBy(refreshFailure, peeked);
     }
-
-    const retried = await send(path, method, body, refreshed.accessToken);
-    if (retried.status === 401) onUnauthorized?.(await failureOf(retried));
-    return parse(retried, schema);
+    return refreshed.accessToken;
   }
 
   /** The everyday call: returns `data`, throws `AppException`. */
@@ -251,14 +255,8 @@ export function createApiCore(options: ApiClientOptions) {
 
   async function blobOf(url: string, method: 'GET' | 'POST', body?: FormData): Promise<Blob> {
     let response = await send(url, method, body, getAccessToken());
-
     if (response.status === 401) {
-      const refreshed = await refreshTokens();
-      if (!refreshed) {
-        if (sessionIsOver()) onUnauthorized?.();
-        throw endedBy(refreshFailure, await peekFailure(response));
-      }
-      response = await send(url, method, body, refreshed.accessToken);
+      response = await send(url, method, body, await tokenAfter(response));
     }
 
     if (!response.ok) {

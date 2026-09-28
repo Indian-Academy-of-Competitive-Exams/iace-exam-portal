@@ -11,6 +11,7 @@ import {
   type Meta,
 } from '../src/index';
 import { lazyGroup } from '../src/client';
+import { createApiCore } from '../src/client/core';
 
 /** Callers get unwrapped `data` or a typed throw — never an envelope or a raw Response. */
 
@@ -358,6 +359,64 @@ describe('typed client — 401 handling', () => {
 
     await assert.rejects(api.request('/thing', { schema }));
     assert.equal((causes[0] as AppException | undefined)?.code, 'SESSION_REPLACED');
+  });
+});
+
+describe('typed client — a download racing a request', () => {
+  /** The bug this prevents: two refreshes spend the same token, and the second is refused as a reuse. */
+  it('shares the one refresh, so a token is never spent twice', async () => {
+    let accessToken = 'stale';
+    const refreshedWith: unknown[] = [];
+    const core = createApiCore({
+      baseUrl: 'https://api.test',
+      getAccessToken: () => accessToken,
+      getRefreshToken: () => 'r1',
+      onTokensRefreshed: (next) => {
+        accessToken = next.accessToken;
+      },
+      fetchImpl: ((url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshedWith.push(init?.body);
+          return Promise.resolve(
+            success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
+          );
+        }
+        const fresh = new Headers(init?.headers).get('Authorization') === 'Bearer fresh';
+        if (!fresh) return Promise.resolve(failure(401, { code: 'UNAUTHENTICATED', message: 'x' }));
+        return Promise.resolve(
+          url.endsWith('/file') ? new Response('bytes') : success({ id: 'a' }),
+        );
+      }) as unknown as typeof fetch,
+    });
+
+    const [data, file] = await Promise.all([
+      core.request('/thing', { schema }),
+      core.requestBlob('/file'),
+    ]);
+
+    assert.deepEqual(data, { id: 'a' });
+    assert.equal(await file.text(), 'bytes');
+    assert.equal(refreshedWith.length, 1);
+  });
+
+  it('signs out without refreshing when a download finds the session replaced', async () => {
+    const causes: unknown[] = [];
+    const core = createApiCore({
+      baseUrl: 'https://api.test',
+      getAccessToken: () => 'valid',
+      getRefreshToken: () => 'r1',
+      onUnauthorized: (cause) => causes.push(cause),
+      fetchImpl: (() =>
+        Promise.resolve(
+          failure(401, { code: 'SESSION_REPLACED', message: 'Replaced' }),
+        )) as unknown as typeof fetch,
+    });
+
+    await assert.rejects(
+      core.requestBlob('/file'),
+      (e: unknown) => AppException.is(e) && e.code === 'SESSION_REPLACED',
+    );
+    assert.equal((causes[0] as AppException).code, 'SESSION_REPLACED');
   });
 });
 
