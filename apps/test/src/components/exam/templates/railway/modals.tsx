@@ -10,7 +10,7 @@ function Panel({
   children,
 }: Readonly<{ title: string; onClose: () => void; children: React.ReactNode }>) {
   return (
-    <div className="rw-panel absolute inset-x-8 bottom-16 top-16 flex flex-col border border-[#3272b9] bg-white shadow-lg">
+    <div className="rw-panel absolute inset-x-8 bottom-16 top-16 flex flex-col shadow-lg">
       <div className="rw-modal-head flex items-center justify-between">
         <span>{title}</span>
         <button type="button" className="rw-modal-close" onClick={onClose}>
@@ -31,11 +31,8 @@ export function PaperModal({ view, onClose }: Readonly<{ view: ExamView; onClose
       <h2 className="text-xl font-bold">{view.title}</h2>
       <ol className="flex flex-col">
         {view.questions.map((question, index) => (
-          <li
-            key={question.questionId}
-            className="flex gap-4 border-b border-[#e0e0e0] py-3 text-sm"
-          >
-            <span className="w-10 shrink-0 text-[#666]">{`Q.${index + 1}`}</span>
+          <li key={question.questionId} className="rw-paper-row flex gap-4 py-3 text-sm">
+            <span className="rw-paper-no w-10 shrink-0">{`Q.${index + 1}`}</span>
             {language ? (
               <RichContent
                 lang={language.toLowerCase()}
@@ -52,7 +49,7 @@ export function PaperModal({ view, onClose }: Readonly<{ view: ExamView; onClose
 export function InstructionsModal({ onClose }: Readonly<{ onClose: () => void }>) {
   return (
     <Panel title="Instructions" onClose={onClose}>
-      <h2 className="text-center text-base font-bold text-[#3272b9]">Instructions</h2>
+      <h2 className="rw-rules-title text-center text-base font-bold">Instructions</h2>
       <div className="flex flex-col gap-3 text-sm leading-relaxed">
         <p className="font-bold">General Instructions:</p>
         <p>

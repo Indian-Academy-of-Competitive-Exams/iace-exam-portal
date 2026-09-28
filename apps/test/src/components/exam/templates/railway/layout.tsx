@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { isReviewState, type ExamClock } from '@iace/contracts';
 import { useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
-import { cn } from '@iace/ui';
+import { Alert, Badge, Button, cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
 import { type ExamSlotProps } from '../shared/slots';
@@ -30,6 +30,7 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
       </div>
 
       <div className="rw-utilitybar flex items-center justify-end gap-6 px-4">
+        {view.hasUnsaved ? <Badge variant="warning">Not saved yet</Badge> : null}
         <button
           type="button"
           className="flex items-center gap-2"
@@ -86,10 +87,12 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
 
           <div className="new-tab-second flex shrink-0 items-center justify-between">
             <span className="rw-qtype">Question Type : Multiple Choice Question</span>
-            <span className="rw-marks">
-              Marks For Correct Answer: <em>1</em> | Negative Mark:{' '}
-              <em className="rw-penalty">0.33</em>
-            </span>
+            {view.question ? (
+              <span className="rw-marks">
+                Marks For Correct Answer: <em>{view.question.marks}</em> | Negative Mark:{' '}
+                <em className="rw-penalty">{view.question.negativeMarks}</em>
+              </span>
+            ) : null}
           </div>
 
           <div className="questn flex shrink-0 items-center justify-between">
@@ -102,6 +105,15 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           <ScrollPane className="min-h-0 flex-1">
             {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
           </ScrollPane>
+
+          {view.submit.failed ? (
+            <Alert variant="danger" className="flex shrink-0 items-center justify-between gap-2">
+              Could not submit this paper.
+              <Button type="button" variant="outline" size="sm" onClick={view.submit.retry}>
+                Try again
+              </Button>
+            </Alert>
+          ) : null}
 
           <div className={cn('rw-buttons flex items-center gap-2', asking && 'hidden')}>
             {view.forwardOnly ? null : (

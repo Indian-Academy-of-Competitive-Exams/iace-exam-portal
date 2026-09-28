@@ -500,6 +500,20 @@
 /* Above the palette's toggle, which otherwise pokes through an open panel. */
 [data-exam-template='ssc_railways'] .rw-panel {
   z-index: 100;
+  background: #fff;
+  border: 1px solid var(--rw-header-from);
+}
+
+[data-exam-template='ssc_railways'] .rw-paper-row {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+[data-exam-template='ssc_railways'] .rw-paper-no {
+  color: #666;
+}
+
+[data-exam-template='ssc_railways'] .rw-rules-title {
+  color: var(--rw-header-from);
 }
 
 [data-exam-template='ssc_railways'] .rw-modal-head {
