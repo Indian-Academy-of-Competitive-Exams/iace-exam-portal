@@ -234,6 +234,14 @@ describe('an image the field will not take', () => {
     assert.ok(await screen.findByText(/larger than 2MB/));
   });
 
+  /** A blank toast is dropped, so a refusal with no words of its own must still say something. */
+  it('says so even when the refusal carries no message', async () => {
+    render(<Toaster />);
+    insertUploaded(stubView, file(10), () => Promise.reject(new Error('')));
+
+    assert.ok(await screen.findByText(/could not be uploaded/));
+  });
+
   /** Refused here, so ten megabytes are never put on the wire to be refused there. */
   it('refuses an oversized file without uploading it at all', async () => {
     render(<Toaster />);

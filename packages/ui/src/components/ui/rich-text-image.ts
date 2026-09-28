@@ -137,7 +137,7 @@ export function insertUploaded(
       view.dispatch(view.state.tr.replaceSelectionWith(type.create({ src: url, 'data-key': key })));
     })
     .catch((error: unknown) =>
-      toast.error(error instanceof Error ? error.message : 'That image could not be uploaded'),
+      toast.error((error instanceof Error && error.message) || 'That image could not be uploaded'),
     );
 }
 
