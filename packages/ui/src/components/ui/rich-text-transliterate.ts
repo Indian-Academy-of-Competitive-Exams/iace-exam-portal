@@ -69,7 +69,7 @@ const IDLE: TypingState = { script: null, word: null };
 const OPEN_WORD = 'transliterateOpenWord';
 
 /** The script lives in plugin state, so switching language is a transaction and not a ref. */
-export const transliterateKey = new PluginKey<TypingState>('transliterate');
+const transliterateKey = new PluginKey<TypingState>('transliterate');
 
 /** Tells the editor which script to write from now on; null types every key through. */
 export function writeIn(view: EditorView, script: IndicScript | null): void {

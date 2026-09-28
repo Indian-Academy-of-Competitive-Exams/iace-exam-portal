@@ -9,8 +9,8 @@ export { MetricGroup } from './components/ui/metric-group';
 export { Stepper, STEPPER_STATES, type StepperStep } from './components/ui/stepper';
 export { Kbd } from './components/ui/kbd';
 export { Label } from './components/ui/label';
-export { Field, FieldRow } from './components/ui/field';
-export { FormCombobox, FormField, type FieldControl } from './components/ui/form-field';
+export { Field, FieldRow, type FieldControl } from './components/ui/field';
+export { FormCombobox, FormField } from './components/ui/form-field';
 export { Accordion } from './components/ui/accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 export { Alert } from './components/ui/alert';
@@ -103,7 +103,6 @@ export { TruncatedText, useTruncation } from './components/ui/truncated-text';
 export {
   Table,
   CAPPED_VIEWPORT,
-  TableHeader,
   TableBody,
   TableRow,
   TableHead,

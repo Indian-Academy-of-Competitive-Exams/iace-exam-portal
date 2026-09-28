@@ -39,12 +39,6 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
 );
 Table.displayName = 'Table';
 
-const TableHeader = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => <thead ref={ref} className={cn(className)} {...props} />);
-TableHeader.displayName = 'TableHeader';
-
 /** Owns the hover, scoped to `&>tr` so it cannot reach a `thead` however rows are composed; the last body row draws no rule — `Pagination` under it has its own `border-t`. */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
@@ -142,7 +136,7 @@ function TableEmpty({
   );
 }
 
-export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmpty };
+export { Table, TableBody, TableRow, TableHead, TableCell };
 
 /** Placeholder rows have no identity of their own, so their keys are fixed. */
 const PLACEHOLDER_KEYS = Array.from({ length: 12 }, (_, index) => `placeholder-${index}`);

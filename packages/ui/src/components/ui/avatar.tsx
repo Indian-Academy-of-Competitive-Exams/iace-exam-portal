@@ -49,7 +49,7 @@ export function Avatar({ src, name, fallback, size = 'md', className }: Readonly
 }
 
 /** First letter of the first and last word: "Kandukuri Venkata Ramana Murthy" is KM. */
-export function initialsOf(name?: string | null, fallback?: string | null): string {
+function initialsOf(name?: string | null, fallback?: string | null): string {
   const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
 
   if (words.length === 0) {

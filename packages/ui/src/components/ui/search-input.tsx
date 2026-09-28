@@ -3,7 +3,7 @@ import { Search, X } from 'lucide-react';
 import { Input } from './input';
 
 /** How long the typing has to stop before the search runs. */
-export const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export interface Debouncer {
   /** Replaces any pending call and starts the clock again. */

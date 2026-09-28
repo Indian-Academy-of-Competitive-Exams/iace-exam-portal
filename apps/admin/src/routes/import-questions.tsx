@@ -20,7 +20,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableHeader,
   TableRow,
   TableState,
   Tooltip,
@@ -224,14 +223,14 @@ export function ImportQuestionsPage() {
       <BlurryNotice count={blurry} />
 
       <Table>
-        <TableHeader>
+        <thead>
           <TableRow>
             <TableHead>Question</TableHead>
             <TableHead>Filed under</TableHead>
             <TableHead>Languages</TableHead>
             <TableHead>What happens</TableHead>
           </TableRow>
-        </TableHeader>
+        </thead>
         <TableBody>
           <TableState
             isLoading={false}

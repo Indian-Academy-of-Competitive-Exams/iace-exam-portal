@@ -15,7 +15,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableHeader,
   TableRow,
   TableState,
   TruncatedText,
@@ -97,7 +96,7 @@ export function ImportStudentsPage() {
       }
     >
       <Table>
-        <TableHeader>
+        <thead>
           <TableRow>
             <TableHead numeric>Line</TableHead>
             <TableHead>Mobile</TableHead>
@@ -106,7 +105,7 @@ export function ImportStudentsPage() {
             <TableHead>Reaches</TableHead>
             <TableHead>What happens</TableHead>
           </TableRow>
-        </TableHeader>
+        </thead>
         <TableBody>
           <TableState
             isLoading={false}

@@ -22,7 +22,7 @@ export interface ChartTipCardProps {
 }
 
 /** The one hover card: Recharts positions it for a plot, the composition bar places its own. */
-export function ChartTipCard({ title, rows }: Readonly<ChartTipCardProps>) {
+function ChartTipCard({ title, rows }: Readonly<ChartTipCardProps>) {
   return (
     <div
       role="tooltip"

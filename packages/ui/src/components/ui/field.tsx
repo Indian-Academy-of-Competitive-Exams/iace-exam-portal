@@ -2,6 +2,13 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Label } from './label';
 
+/** Everything a control needs to be labelled, described and marked invalid. */
+export type FieldControl = {
+  id: string;
+  'aria-describedby': string | undefined;
+  'aria-invalid': true | undefined;
+};
+
 export interface FieldProps {
   /** Must match the control's `id`, so clicking the label focuses the control. */
   htmlFor: string;
@@ -9,12 +16,7 @@ export interface FieldProps {
   /** Standing guidance — shown until an error replaces it. */
   hint?: React.ReactNode;
   error?: string;
-  /** Receives the wiring it needs: aria-describedby, aria-invalid. */
-  children: (control: {
-    id: string;
-    'aria-describedby': string | undefined;
-    'aria-invalid': true | undefined;
-  }) => React.ReactNode;
+  children: (control: FieldControl) => React.ReactNode;
   className?: string;
 }
 

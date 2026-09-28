@@ -3,7 +3,7 @@ import { AlertTriangle, Check, Info, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /** Transient messages, a module-level store so it works from a QueryClient callback; never a field error — those stay on the field (see applyFieldErrors). */
-export const TOAST_VARIANTS = {
+const TOAST_VARIANTS = {
   SUCCESS: 'success',
   DANGER: 'danger',
   INFO: 'info',
@@ -45,7 +45,7 @@ function show(message: string, variant: ToastVariant): number {
   return id;
 }
 
-export function dismissToast(id: number): void {
+function dismissToast(id: number): void {
   toasts = toasts.filter((toast) => toast.id !== id);
   publish();
 }

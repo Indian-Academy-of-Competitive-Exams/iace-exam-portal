@@ -10,14 +10,7 @@ import {
   type UseFormReturn,
 } from 'react-hook-form';
 import { Combobox, type ComboboxProps } from './combobox';
-import { Field } from './field';
-
-/** Everything a control needs to be labelled, described and marked invalid. */
-export type FieldControl = {
-  id: string;
-  'aria-describedby': string | undefined;
-  'aria-invalid': true | undefined;
-};
+import { Field, type FieldControl } from './field';
 
 export interface FormFieldProps<TValues extends FieldValues> {
   form: UseFormReturn<TValues>;

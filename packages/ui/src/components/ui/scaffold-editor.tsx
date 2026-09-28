@@ -88,7 +88,7 @@ function docFrom(regions: readonly ScaffoldRegion[]): string {
 }
 
 /** Every slot, in document order, with its body serialised back to html. */
-export function regionsOf(editor: Editor): ScaffoldRegion[] {
+function regionsOf(editor: Editor): ScaffoldRegion[] {
   const serializer = DOMSerializer.fromSchema(editor.schema);
   const out: ScaffoldRegion[] = [];
 

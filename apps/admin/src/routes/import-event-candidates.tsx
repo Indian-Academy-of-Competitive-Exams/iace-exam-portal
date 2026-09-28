@@ -14,7 +14,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableHeader,
   TableRow,
   TableState,
   TruncatedText,
@@ -100,14 +99,14 @@ export function ImportEventCandidatesPage() {
       }
     >
       <Table>
-        <TableHeader>
+        <thead>
           <TableRow>
             <TableHead numeric>Line</TableHead>
             <TableHead>Mobile</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>What happens</TableHead>
           </TableRow>
-        </TableHeader>
+        </thead>
         <TableBody>
           <TableState
             isLoading={false}

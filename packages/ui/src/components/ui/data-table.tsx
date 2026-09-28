@@ -6,7 +6,7 @@ import { Checkbox } from './checkbox';
 import { useInTableFrame } from './table-frame';
 import { Spinner } from './spinner';
 import { EMPTY_STATE_KINDS, type EmptyMessage, type EmptyStateKind } from './empty-state';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableState } from './table';
+import { Table, TableBody, TableCell, TableHead, TableRow, TableState } from './table';
 
 export interface DataTableColumn<TRow> {
   /** Stable identity for the column. Also the React key for its cells. */
@@ -213,7 +213,7 @@ export function DataTable<TRow>({
   const body = (
     <>
       <Table scroll={scroll ? { onScroll } : undefined}>
-        <TableHeader>
+        <thead>
           <TableRow>
             {selection ? (
               <TableHead className="w-10">
@@ -232,7 +232,7 @@ export function DataTable<TRow>({
               </TableHead>
             ))}
           </TableRow>
-        </TableHeader>
+        </thead>
         <TableBody>
           <TableState
             isLoading={isLoading}
