@@ -29,6 +29,7 @@ export default function ChangePinScreen() {
   });
 
   const change = useMutation({
+    meta: { fields: FORM_FIELDS },
     mutationFn: (values: ChangePinBody) => api.me.changePin(values),
     onSuccess: (session) => {
       form.reset();

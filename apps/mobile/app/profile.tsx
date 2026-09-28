@@ -64,6 +64,7 @@ export default function ProfileScreen() {
   }, [me.data, reset]);
 
   const save = useMutation({
+    meta: { fields: FORM_FIELDS },
     mutationFn: (values: UpdateMeInput) => api.me.update(values),
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
