@@ -56,21 +56,7 @@ export function QuestionPanes({
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
-        <PanelHeading
-          lead={lead}
-          action={
-            <SegmentedControl
-              value={language}
-              onChange={(value) => onLanguageChange(value as QuestionLanguage)}
-              aria-label="Language"
-              items={LANGUAGE_ORDER.map((code) => ({
-                value: code,
-                label: code.toUpperCase(),
-                name: LANGUAGE_LABELS[code],
-              }))}
-            />
-          }
-        />
+        {lead ? <PanelHeading lead={lead} /> : null}
         <div className={SCROLLS}>
           <ScaffoldEditor
             aria-label="Question"
@@ -85,6 +71,18 @@ export function QuestionPanes({
             imageLimits={IMAGE_LIMITS}
             lang={language}
             script={script}
+            toolbarEnd={
+              <SegmentedControl
+                value={language}
+                onChange={(value) => onLanguageChange(value as QuestionLanguage)}
+                aria-label="Language"
+                items={LANGUAGE_ORDER.map((code) => ({
+                  value: code,
+                  label: code.toUpperCase(),
+                  name: LANGUAGE_LABELS[code],
+                }))}
+              />
+            }
             // The card is the frame: the box it fills draws no ring or border of its own.
             className="flex-1 rounded-none border-0 shadow-none focus-within:border-transparent focus-within:shadow-none"
           />
@@ -105,7 +103,7 @@ export function QuestionPanes({
   );
 }
 
-/** A pane whose content names itself takes no lead; the bar stays so both panes line up. */
+/** What a pane shows, and what may be done to it, in one bar above it. */
 function PanelHeading({
   lead,
   action,

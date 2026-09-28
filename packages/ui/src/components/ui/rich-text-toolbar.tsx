@@ -174,6 +174,8 @@ export interface RichTextToolbarProps {
   /** Absent means this field takes no images, so no button offers one. */
   onUploadImage?: UploadImage;
   imageLimits?: ImageLimits;
+  /** At the bar's right end: a control over the whole box rather than the text in it. */
+  end?: React.ReactNode;
   className?: string;
 }
 
@@ -187,6 +189,7 @@ export function RichTextToolbar({
   onMathChange,
   onUploadImage,
   imageLimits,
+  end,
   className,
 }: Readonly<RichTextToolbarProps>) {
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -291,6 +294,13 @@ export function RichTextToolbar({
               choose(file);
             }}
           />
+        </>
+      ) : null}
+
+      {end ? (
+        <>
+          <span className="flex-1" />
+          {end}
         </>
       ) : null}
 

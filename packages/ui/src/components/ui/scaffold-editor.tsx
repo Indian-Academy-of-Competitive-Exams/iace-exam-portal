@@ -48,6 +48,8 @@ export interface ScaffoldEditorProps {
   script?: IndicScript | null;
   onUploadImage?: UploadImage;
   imageLimits?: ImageLimits;
+  /** At the toolbar's right end, for a control over the whole box. */
+  toolbarEnd?: React.ReactNode;
   disabled?: boolean;
   lang?: string;
   'aria-label': string;
@@ -138,6 +140,7 @@ export function ScaffoldEditor({
   onCycleLanguage,
   onUploadImage,
   imageLimits,
+  toolbarEnd,
   script = null,
   disabled = false,
   lang,
@@ -231,6 +234,7 @@ export function ScaffoldEditor({
           onMathChange={setMath}
           onUploadImage={onUploadImage}
           imageLimits={imageLimits}
+          end={toolbarEnd}
         />
       ) : null}
       {/* No scroller of its own: the panel scrolls, so a long question never strands the box. */}
