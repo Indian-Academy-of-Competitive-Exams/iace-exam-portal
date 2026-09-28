@@ -62,7 +62,7 @@ export function LiveOpsPage() {
   const canResolve = can(FEATURE_KEYS.TEST_OPERATIONS, PERMISSION_LEVELS.WRITE);
 
   const board = useQuery({
-    queryKey: [...QUERY_KEYS.LIVE_OPS, testId],
+    queryKey: [...QUERY_KEYS.LIVE_OPS_BOARD, testId],
     queryFn: () => api.admin.liveOps.board(testId),
     enabled: testId !== '',
     refetchInterval: LIVE_OPS_POLL_MS,

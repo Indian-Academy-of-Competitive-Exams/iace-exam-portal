@@ -531,6 +531,7 @@ export const QUERY_KEYS = {
   EXAMS: [ADMIN, 'exams'],
   FEATURES: [ADMIN, 'features'],
   LIVE_OPS: [ADMIN, 'live-ops'],
+  LIVE_OPS_BOARD: [ADMIN, 'live-ops', 'board'],
   ME: ['auth', 'me'],
   PROGRAMS: [ADMIN, 'programs'],
   PROOFREADING: [ADMIN, 'proofreading'],

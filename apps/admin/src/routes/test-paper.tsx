@@ -86,6 +86,12 @@ export function TestPaperPage() {
     enabled: testId !== '',
   });
 
+  const assignments = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, testId],
+    queryFn: () => api.admin.assignments.forTest(testId),
+    enabled: testId !== '',
+  });
+
   if (test.isLoading || paper.isLoading) {
     // Both have a known shape, so the screen is drawn and held rather than spun at.
     return (
@@ -108,10 +114,16 @@ export function TestPaperPage() {
   }
 
   // Mounted only once both are here, so a refetch cannot throw away a half-edited pool.
-  return <TestPaperScreen detail={test.data} paper={paper.data} />;
+  return (
+    <TestPaperScreen detail={test.data} paper={paper.data} assignments={assignments.data ?? []} />
+  );
 }
 
-function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper: TestPaper }>) {
+function TestPaperScreen({
+  detail,
+  paper,
+  assignments,
+}: Readonly<{ detail: TestDetail; paper: TestPaper; assignments: readonly Assignment[] }>) {
   const queryClient = useQueryClient();
   // The scope decides which sections this test has a paper for; the rest belong to other tests.
   const sections = scopedSections(detail.baseConfig.sections, detail.scope, detail.scopeRef);
@@ -124,12 +136,8 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
   // Sticky for the life of the screen: the rebuild is delayed and deduped, so there is nothing to poll.
   const [rescoring, setRescoring] = useState(false);
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, detail.id],
-    queryFn: () => api.admin.assignments.forTest(detail.id),
-  });
   const holderOf = (sectionId: string, role: AssignmentRole) =>
-    assignments.data?.find(
+    assignments.find(
       (row) =>
         row.baseConfigSectionId === sectionId && row.role === role && row.replacedAt === null,
     ) ?? null;

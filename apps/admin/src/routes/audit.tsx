@@ -18,7 +18,6 @@ import {
   Badge,
   DropdownMenuItem,
   ListView,
-  MultiCombobox,
   PageHeader,
   RowActions,
   TableFrame,
@@ -27,9 +26,9 @@ import {
   type ListFilter,
   type ListFilterMultiControl,
 } from '@iace/ui';
-import { usePagedPicker } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import { ExportButton } from '../components/export-button';
+import { AdminMultiPicker } from '../components/admin-multi-picker';
 import { ChangedCell } from '../lib/audit-format';
 import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { api } from '../lib/api';
@@ -181,13 +180,6 @@ export function AuditActivityPage() {
   const { identity } = useAuth();
   const isSuperAdmin = identity?.isSuperAdmin ?? false;
 
-  // The server ignores the actor filter for anyone but a super admin, so only one fetches it.
-  const actors = usePagedPicker({
-    queryKey: [...QUERY_KEYS.ADMINS, 'filter'],
-    fetchPage: (params) => api.admin.admins.list(params),
-    enabled: isSuperAdmin,
-  });
-
   const buildFilters = (selectedActorLabels: Record<string, string>) =>
     [
       {
@@ -212,6 +204,7 @@ export function AuditActivityPage() {
           label: AUDIT_ACTION_LABELS[value],
         })),
       },
+      // The server ignores the actor filter for anyone but a super admin, so only one is offered it.
       ...(isSuperAdmin
         ? ([
             {
@@ -220,19 +213,10 @@ export function AuditActivityPage() {
               label: 'Filter by actor',
               primary: true,
               render: (control: ListFilterMultiControl) => (
-                <MultiCombobox
+                <AdminMultiPicker
                   {...control}
-                  {...actors.paging}
-                  chips={false}
                   selectedLabels={selectedActorLabels}
-                  items={actors.items.map((admin) => ({
-                    value: admin.id,
-                    label: admin.fullName ?? admin.email,
-                    hint: admin.fullName ? admin.email : undefined,
-                  }))}
                   placeholder="Any admin"
-                  searchPlaceholder="Search admins"
-                  emptyLabel="No admin matches that"
                 />
               ),
             },

@@ -126,7 +126,10 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
         ? api.admin.testSeries.update(detail.id, bodyOf(values))
         : api.admin.testSeries.create(bodyOf(values)),
     onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
+      await queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.TEST_SERIES,
+        refetchType: 'none',
+      });
       queryClient.setQueryData(seriesKey(saved.id), saved);
       if (!existing) return navigate(ROUTES.TEST_SERIES_DETAIL(saved.id));
       setIsEditing(false);

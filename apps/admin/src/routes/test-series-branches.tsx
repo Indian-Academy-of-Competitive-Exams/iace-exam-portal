@@ -43,10 +43,7 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
     enabled: canRead && byBranch,
   });
 
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: branchesKey(series.id) });
-    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
-  };
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
 
   const enableEverywhere = useMutation({
     meta: { success: 'Switched on at every branch.' },

@@ -4,12 +4,10 @@ import {
   type SectionProgressRow,
   type SectionRoleProgress,
 } from '@iace/contracts';
-import { usePagedPicker } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   ListView,
-  MultiCombobox,
   PageHeader,
   TableFrame,
   TruncatedText,
@@ -29,6 +27,7 @@ import {
   AssignmentTestPicker,
 } from '../components/assignment-scope-picker';
 import { chooseTest } from '../lib/assignment-filters';
+import { AdminMultiPicker } from '../components/admin-multi-picker';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
 
@@ -161,11 +160,6 @@ export function SectionProgressPage() {
   const testId = urlFilters.get('testId');
   const sectionId = urlFilters.get('baseConfigSectionId');
 
-  const assignees = usePagedPicker({
-    queryKey: [...QUERY_KEYS.ADMINS, 'section-progress-filter'],
-    fetchPage: (params) => api.admin.admins.list(params),
-  });
-
   const buildFilters = (selectedAssigneeLabels: Record<string, string>) =>
     [
       {
@@ -196,19 +190,10 @@ export function SectionProgressPage() {
         label: 'Assignee',
         primary: true,
         render: (control: ListFilterMultiControl) => (
-          <MultiCombobox
+          <AdminMultiPicker
             {...control}
-            {...assignees.paging}
-            chips={false}
             selectedLabels={selectedAssigneeLabels}
-            items={assignees.items.map((admin) => ({
-              value: admin.id,
-              label: admin.fullName ?? admin.email,
-              hint: admin.fullName ? admin.email : undefined,
-            }))}
             placeholder="Any assignee"
-            searchPlaceholder="Search admins"
-            emptyLabel="No admin matches that"
           />
         ),
       },

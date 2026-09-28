@@ -114,7 +114,7 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
       if (resolved.rankedRegranted)
         toast.info('The ranked attempt is back for their next sitting.');
       close();
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.LIVE_OPS });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.LIVE_OPS_BOARD });
     },
     onError: (error) => applyFieldErrors(error, form.setError, FIELDS),
   });

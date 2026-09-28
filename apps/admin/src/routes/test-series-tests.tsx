@@ -45,8 +45,9 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
     queryFn: () => api.admin.testSeries.tests(series.id),
   });
 
-  const held = (next: SeriesTestRow[]) => {
-    queryClient.setQueryData(testsKey(series.id), next);
+  // Both series' lists and counts move, and the test's own record names its new series.
+  const moved = () => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 
@@ -81,7 +82,7 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
           series={series}
           row={moving}
           onClose={() => setMoving(null)}
-          onMoved={held}
+          onMoved={moved}
         />
       ) : null}
     </FormSection>
@@ -179,9 +180,8 @@ function MoveDialog({
   series: TestSeriesSummary;
   row: SeriesTestRow;
   onClose: () => void;
-  onMoved: (next: SeriesTestRow[]) => void;
+  onMoved: () => void;
 }>) {
-  const queryClient = useQueryClient();
   const form = useForm<MoveFormValues>({ defaultValues: { testSeriesId: '' } });
   const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES);
   // Picked, not yet moved: choosing a series and agreeing to lose the old one are two questions.
@@ -191,10 +191,9 @@ function MoveDialog({
     meta: { success: 'Test moved.' },
     mutationFn: (testSeriesId: string) =>
       api.admin.tests.moveToSeries(row.testId, { testSeriesId }),
-    onSuccess: async () => {
+    onSuccess: () => {
       onClose();
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
-      onMoved(await api.admin.testSeries.tests(series.id));
+      onMoved();
     },
     onError: (error) => {
       setConfirming(null);

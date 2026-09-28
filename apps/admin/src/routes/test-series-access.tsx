@@ -156,8 +156,8 @@ export function SeriesSwitch({ series }: Readonly<{ series: TestSeriesSummary }>
     mutationFn: (isEnabled: boolean) => api.admin.testSeries.update(series.id, { isEnabled }),
     onSuccess: (saved) => {
       setAsking(null);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES, refetchType: 'none' });
       queryClient.setQueryData(seriesKey(saved.id), saved);
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
     },
     // Drop out of the confirm on failure, or the row is left asking a question already answered.
     onError: () => setAsking(null),
