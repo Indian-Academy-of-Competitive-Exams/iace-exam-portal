@@ -116,7 +116,7 @@ export class DashboardService {
 
   /** "Under review" is derived, never stored: an assignment nobody has finalised is work still owed. */
   private openAssignments(): Promise<number> {
-    return this.prisma.questionAssignment.count({ where: { finalizedAt: null } });
+    return this.prisma.questionAssignment.count({ where: { finalizedAt: null, replacedAt: null } });
   }
 
   private async coverage(): Promise<DashboardCoverage[]> {

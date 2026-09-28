@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
-  ASSIGNMENT_ROLES,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  PAPER_SOURCES,
   scopedSections,
   TEST_SCOPE,
   fieldDiff,
@@ -175,7 +173,7 @@ export class TestsService {
     const test = await this.requireTest(id);
     await takeTestEditLock(this.redis, this.prisma, id, editor);
     if (input.paperSource !== undefined) {
-      this.assertPaperSourceOpen(test, editor.isSuperAdmin ?? false);
+      this.assertPaperSourceOpen(test);
     }
 
     const shapeChange = locksOutTestEdit(input);
@@ -212,12 +210,6 @@ export class TestsService {
             where: { testId: id, baseConfigSectionId: { notIn: keptIds } },
           });
         }
-      }
-      // A picked test has no typist, and a row nobody will finalize would hold `offer` shut forever.
-      if (input.paperSource === PAPER_SOURCES.PICKED) {
-        await tx.questionAssignment.deleteMany({
-          where: { testId: id, role: ASSIGNMENT_ROLES.TYPIST, finalizedAt: null },
-        });
       }
 
       return tx.test.update({
@@ -264,9 +256,9 @@ export class TestsService {
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
   }
 
-  /** A one-way door: the choice is made once, and only a super admin can correct a wrong one. */
-  private assertPaperSourceOpen(test: TestRow, isSuperAdmin: boolean): void {
-    if (test.paperSource === null || isSuperAdmin) return;
+  /** Chosen once and never again, super admin included: every assignment on the test rests on it. */
+  private assertPaperSourceOpen(test: TestRow): void {
+    if (test.paperSource === null) return;
     throw new AppException(ErrorCodes.CONFLICT, PAPER_SOURCE_FIXED_MESSAGE, {
       fieldErrors: { paperSource: [PAPER_SOURCE_FIXED_MESSAGE] },
     });

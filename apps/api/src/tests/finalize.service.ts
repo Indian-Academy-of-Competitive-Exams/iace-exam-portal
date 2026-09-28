@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ASSIGNMENT_ROLES,
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  PAPER_SOURCES,
   scopedSections,
   TEST_STATUS,
   type OfferResult,
@@ -149,8 +151,17 @@ export class FinalizeService {
   private async assertAssignmentsRead(testId: string, isSuperAdmin: boolean): Promise<void> {
     if (isSuperAdmin) return;
 
+    // A picked section's typist only fixes what comes back, so theirs is never a job to finish.
     const outstanding = await this.prisma.questionAssignment.findMany({
-      where: { testId, finalizedAt: null },
+      where: {
+        testId,
+        finalizedAt: null,
+        replacedAt: null,
+        OR: [
+          { role: ASSIGNMENT_ROLES.PROOFREADER },
+          { role: ASSIGNMENT_ROLES.TYPIST, test: { paperSource: PAPER_SOURCES.FRAMED } },
+        ],
+      },
       select: { baseConfigSection: { select: { name: true } } },
     });
     if (outstanding.length > 0) {

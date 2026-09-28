@@ -20,7 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { takeSectionEditLock } from '../common/edit-lock';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
-import { assertNotRead, requireOwnAssignment, type SectionRef } from './assignment-guard';
+import { assertTypistMayEdit, requireOwnAssignment, type SectionRef } from './assignment-guard';
 import { computeStemHash } from './question-core';
 import { writtenBetween } from './question-query';
 import { QuestionsService } from './questions.service';
@@ -50,7 +50,7 @@ export class AuthoringService {
 
   async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
     const section = await this.assertTheirs(id, adminId);
-    if (section) await assertNotRead(this.prisma, section);
+    if (section) await assertTypistMayEdit(this.prisma, section, id);
     await this.claimSection(section, adminId, false);
     const question = await this.questions.update(id, draft, adminId);
     return { question, duplicateOf: await this.duplicateFor(draft, id) };

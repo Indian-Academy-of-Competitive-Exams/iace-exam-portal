@@ -173,6 +173,19 @@ export class TestsController {
     return this.paper.fillSection(id, sectionId, user);
   }
 
+  /** A picked section, full, handed to its proof-reader; a typed one is handed at its typist's Done. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/paper/sections/:sectionId/hand-over')
+  @HttpCode(HttpStatus.OK)
+  handOverSection(
+    @Param('id') id: string,
+    @Param('sectionId') sectionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<TestPaper> {
+    return this.paper.handOver(id, sectionId, user);
+  }
+
   /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)

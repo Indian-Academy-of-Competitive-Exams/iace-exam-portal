@@ -4,6 +4,8 @@ import { after, beforeEach, describe, it } from 'node:test';
 import {
   ASSIGNMENT_ROLES,
   AppException,
+  PAPER_SOURCES,
+  SEND_BACK_REASONS,
   DIFFICULTY_LEVEL,
   ErrorCodes,
   plainTextOf,
@@ -13,10 +15,12 @@ import {
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { AuthoringService } from '../src/questions/authoring.service';
-import { ProofreadingService } from '../src/questions/proofreading.service';
+import { AdminsService } from '../src/admins/admins.service';
+import { AssignmentsService } from '../src/assignments/assignments.service';
+import { SectionWorkService, type SectionViewer } from '../src/questions/section-work.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
-import { FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   makeCatalog,
@@ -45,13 +49,16 @@ async function build() {
     [READER]: 'Bhaskar',
     [CHIEF]: 'Chandra',
   });
-  const questions = new QuestionsService(prisma, new AuditContext(), new FakeStorage() as never);
+  const audit = new AuditContext();
+  const questions = new QuestionsService(prisma, audit, new FakeStorage() as never);
   const redis = new FakeRedis();
+  const admins = new AdminsService(prisma, audit, new FakeEventBus().asService());
+  const assignments = new AssignmentsService(prisma, redis.asService(), admins);
   return {
     redis,
     questions,
     authoring: new AuthoringService(prisma, redis.asService(), questions),
-    proofreading: new ProofreadingService(prisma, redis.asService(), questions),
+    work: new SectionWorkService(prisma, redis.asService(), questions, assignments),
   };
 }
 
@@ -70,6 +77,17 @@ const draft = (over: Partial<QuestionDraftInput> = {}) =>
     ...over,
   });
 
+const viewer = (id: string, isSuperAdmin = false): SectionViewer => ({
+  id,
+  isSuperAdmin,
+  permissions: {},
+});
+
+const pairOf = (section: { testId: string; sectionId: string }) => ({
+  testId: section.testId,
+  baseConfigSectionId: section.sectionId,
+});
+
 const assign = (
   catalog: Catalog,
   testId: string,
@@ -85,7 +103,7 @@ const assign = (
 /** A Reasoning section with a typist on it, and a reader only where the case calls for one. */
 async function aSection({ withReader = true } = {}) {
   const catalog = await makeCatalog(prisma);
-  const test = await makeTest(prisma, catalog);
+  const test = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.FRAMED });
   const reasoning = await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
   const quant = await makeSection(prisma, catalog, { name: 'Quant', order: 2 });
   const typing = await assign(catalog, test.id, reasoning.id, TYPIST, ASSIGNMENT_ROLES.TYPIST);
@@ -121,7 +139,25 @@ async function markDone(section: Awaited<ReturnType<typeof aSection>>, question:
     where: { id: section.typing.id },
     data: { finalizedAt: new Date() },
   });
+  if (section.reading) {
+    await prisma.questionAssignment.update({
+      where: { id: section.reading.id },
+      data: { handedAt: new Date() },
+    });
+  }
 }
+
+/** The reader's send-back, reduced to its row: the one thing that reopens a question to its typist. */
+const sentBack = (section: Awaited<ReturnType<typeof aSection>>, questionId: string) =>
+  prisma.questionReview.create({
+    data: {
+      testId: section.testId,
+      baseConfigSectionId: section.sectionId,
+      questionId,
+      sentBackAt: new Date(),
+      reason: SEND_BACK_REASONS.SPELLING,
+    },
+  });
 
 const conflictSaying = (words: string) => (error: unknown) =>
   AppException.is(error) && error.code === ErrorCodes.CONFLICT && error.message.includes(words);
@@ -131,17 +167,18 @@ const refusedWith = (code: string) => (error: unknown) =>
 
 describe('the section edit lock', () => {
   it('names whoever is already in the section rather than just refusing', async () => {
-    const { authoring, proofreading } = await build();
+    const { authoring, work } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    await markDone(section, written.question);
 
     await assert.rejects(
       () =>
-        proofreading.editQuestion(
-          section.reading?.id ?? '',
+        work.edit(
+          pairOf(section),
           written.question.id,
           draft({ stem: { en: 'The reader’s fix' } }),
-          READER,
+          viewer(READER),
         ),
       conflictSaying('Anita'),
     );
@@ -162,17 +199,17 @@ describe('the section edit lock', () => {
   });
 
   it('hands it to a super admin, who then holds it against the admin who had it', async () => {
-    const { authoring, proofreading } = await build();
+    const { authoring, work } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
     await markDone(section, written.question);
+    await sentBack(section, written.question.id);
 
-    const stolen = await proofreading.editQuestion(
-      section.reading?.id ?? '',
+    const stolen = await work.edit(
+      pairOf(section),
       written.question.id,
       draft({ stem: { en: 'A super admin’s fix' } }),
-      CHIEF,
-      true,
+      viewer(CHIEF, true),
     );
     assert.equal(stolen.id, written.question.id);
 
@@ -183,83 +220,82 @@ describe('the section edit lock', () => {
   });
 
   it('lapses once nobody has written in the section for fifteen minutes', async () => {
-    const { authoring, proofreading, redis } = await build();
+    const { authoring, work, redis } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
     await markDone(section, written.question);
 
     redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
 
-    const fixed = await proofreading.editQuestion(
-      section.reading?.id ?? '',
+    const fixed = await work.edit(
+      pairOf(section),
       written.question.id,
       draft({ stem: { en: 'The reader’s fix' } }),
-      READER,
+      viewer(READER),
     );
     assert.equal(fixed.id, written.question.id);
   });
 });
 
-describe('ProofreadingService.forSection', () => {
-  it('opens a section nobody was given to proof-read', async () => {
-    const { authoring, proofreading } = await build();
+describe('SectionWorkService — a section nobody was given to read', () => {
+  it('opens to a super admin', async () => {
+    const { authoring, work } = await build();
     const section = await aSection({ withReader: false });
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
     await markDone(section, written.question);
 
-    const rows = await proofreading.forSection(section.testId, section.sectionId);
+    const opened = await work.one(pairOf(section), viewer(CHIEF, true));
 
     assert.deepEqual(
-      rows.map((row) => row.id),
+      opened.questions.map((row) => row.questionId),
       [written.question.id],
     );
   });
 
   it('fixes a question through that section, and keeps its status', async () => {
-    const { authoring, proofreading } = await build();
+    const { authoring, work } = await build();
     const section = await aSection({ withReader: false });
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
     await markDone(section, written.question);
 
-    const fixed = await proofreading.editSectionQuestion(
-      section.testId,
-      section.sectionId,
+    const fixed = await work.edit(
+      pairOf(section),
       written.question.id,
       draft({ stem: { en: 'What is 25% of 200?' } }),
-      CHIEF,
+      viewer(CHIEF, true),
     );
 
     assert.equal(fixed.status, written.question.status);
     assert.match(plainTextOf(fixed.content.en?.stem), /25% of 200/);
   });
 
-  /** The section is no licence to reach the bank through it: the scope is the same one an assignment gets. */
+  /** The section is no licence to reach the bank through it. */
   it('refuses a question that is not in the section named', async () => {
-    const { authoring, proofreading } = await build();
+    const { authoring, work } = await build();
     const section = await aSection({ withReader: false });
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
 
     await assert.rejects(
       () =>
-        proofreading.editSectionQuestion(
-          section.testId,
-          section.otherSectionId,
+        work.edit(
+          { testId: section.testId, baseConfigSectionId: section.otherSectionId },
           written.question.id,
           draft(),
-          CHIEF,
+          viewer(CHIEF, true),
         ),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
 
   it('refuses a section that is not on the test named', async () => {
-    const { proofreading } = await build();
+    const { work } = await build();
     const section = await aSection({ withReader: false });
     const elsewhere = await makeCatalog(prisma);
     const stray = await makeSection(prisma, elsewhere, { name: 'Stray', order: 1 });
 
     await assert.rejects(
-      () => proofreading.forSection(section.testId, stray.id),
+      () =>
+        work.one({ testId: section.testId, baseConfigSectionId: stray.id }, viewer(CHIEF, true)),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });

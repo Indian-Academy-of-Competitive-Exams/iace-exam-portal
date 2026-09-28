@@ -6,7 +6,9 @@ import {
   ASSIGNMENT_ROLES,
   DIFFICULTY_LEVEL,
   ErrorCodes,
+  PAPER_SOURCES,
   QUESTION_STATUS,
+  SEND_BACK_REASONS,
   authoringHistoryQuerySchema,
   questionDraftSchema,
   type AuthoringHistoryQueryInput,
@@ -70,7 +72,7 @@ const query = (over: AuthoringHistoryQueryInput = {}) => authoringHistoryQuerySc
 
 async function makeAssignment(assigneeId: string) {
   const catalog = await makeCatalog(prisma);
-  const test = await makeTest(prisma, catalog);
+  const test = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.FRAMED });
   const section = await makeSection(prisma, catalog);
   return prisma.questionAssignment.create({
     data: {
@@ -209,7 +211,8 @@ describe('AuthoringService — after Done', () => {
     );
   });
 
-  it('still lets the typist fix what they wrote until the section is read', async () => {
+  /** The failure this prevents: a typist rewriting what the reader is already reading. */
+  it('lets a typist change only what was sent back to them once they are done', async () => {
     const authoring = await build();
     const assignment = await makeAssignment(MINE);
     const { question } = await authoring.create(draft(), MINE, assignment.id);
@@ -218,23 +221,26 @@ describe('AuthoringService — after Done', () => {
       data: { finalizedAt: new Date() },
     });
 
-    await authoring.update(question.id, draft({ stem: { en: 'Fixed after Done' } }), MINE);
-
-    await prisma.questionAssignment.create({
-      data: {
-        id: uid(),
-        testId: typing.testId,
-        baseConfigId: typing.baseConfigId,
-        baseConfigSectionId: typing.baseConfigSectionId,
-        assigneeId: THEIRS,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-        finalizedAt: new Date(),
-      },
-    });
     await assert.rejects(
-      () => authoring.update(question.id, draft({ stem: { en: 'Too late' } }), MINE),
+      () => authoring.update(question.id, draft({ stem: { en: 'Changed after Done' } }), MINE),
       refusedWith(ErrorCodes.CONFLICT),
     );
+
+    await prisma.questionReview.create({
+      data: {
+        testId: typing.testId,
+        baseConfigSectionId: typing.baseConfigSectionId,
+        questionId: question.id,
+        sentBackAt: new Date(),
+        reason: SEND_BACK_REASONS.SPELLING,
+      },
+    });
+    const fixed = await authoring.update(
+      question.id,
+      draft({ stem: { en: 'Fixed as asked' } }),
+      MINE,
+    );
+    assert.equal(fixed.question.id, question.id);
   });
 });
 

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   ADMIN_ROLES,
   ASSIGNMENT_ROLES,
+  AUDIT_FEATURE,
   AppException,
   ErrorCodes,
   FEATURES,
@@ -44,10 +45,14 @@ import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute
 
 const CHOOSE_WITH_DONE_MESSAGE =
   'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
-const OFFERED_MESSAGE = 'This test has been offered, so its sections can no longer be sent back.';
-const ALREADY_READ_MESSAGE = 'You have marked this section read, so it can no longer be sent back.';
-const NOTHING_TO_SEND_BACK =
-  'Its typist has not marked this section done, so there is nothing to send back.';
+const OFFERED_MESSAGE = 'This test has been offered, so nobody new can be given its sections.';
+const PASSED_ON_MESSAGE =
+  'This section has passed to somebody else, so it is no longer yours to release.';
+const NOT_HANDED_MESSAGE = 'This section has not reached you yet.';
+const ALREADY_HOLDS_MESSAGE = 'This admin already holds that role on this section.';
+const HAS_WORKED_MESSAGE =
+  'Work has been done under this assignment, so it stays on the record. Give the role to somebody else instead.';
+const REPLACED_MESSAGE = 'This assignment has passed to somebody else and stays on the record.';
 
 const notWhole = (issue: string) =>
   new AppException(ErrorCodes.CONFLICT, issue, { fieldErrors: { [FORM_LEVEL_FIELD]: [issue] } });
@@ -55,14 +60,14 @@ const notWhole = (issue: string) =>
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: { select: { name: true, questionCount: true, subjectId: true } },
   assignee: { select: { fullName: true, email: true } },
-  test: { select: { questionPoolFilter: true, finalizedAt: true } },
+  test: { select: { questionPoolFilter: true, finalizedAt: true, paperSource: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentRow = Prisma.QuestionAssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>;
 
 const WITH_TEST_INCLUDE = {
   ...ASSIGNMENT_INCLUDE,
-  test: { select: { title: true, questionPoolFilter: true, finalizedAt: true } },
+  test: { select: { title: true, questionPoolFilter: true, finalizedAt: true, paperSource: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentWithTestRow = Prisma.QuestionAssignmentGetPayload<{
@@ -81,9 +86,9 @@ const ADMIN_ROLE_FOR_ROLE: Record<AssignmentRole, AdminRole> = {
   [ASSIGNMENT_ROLES.PROOFREADER]: ADMIN_ROLES.PROOFREADER,
 };
 
-/** A picked paper is drawn from the bank, so it has nothing to type — it still has everything to read. */
+/** Both sources take both roles: on a picked paper the typist fixes what its reader sends back. */
 const SOURCES_FOR_ROLE: Record<AssignmentRole, readonly PaperSource[]> = {
-  [ASSIGNMENT_ROLES.TYPIST]: [PAPER_SOURCES.FRAMED],
+  [ASSIGNMENT_ROLES.TYPIST]: [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED],
   [ASSIGNMENT_ROLES.PROOFREADER]: [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED],
 };
 
@@ -103,6 +108,7 @@ const TEST_QUEUE_SELECT = {
     },
   },
   assignments: {
+    where: { replacedAt: null },
     select: {
       id: true,
       role: true,
@@ -182,9 +188,6 @@ const dueWithin = (row: SectionProgressRow, bounds: DueBounds): boolean =>
 const SOURCE_UNCHOSEN_MESSAGE =
   'Say where this test gets its questions before handing a section to anybody.';
 
-const PICKED_NEEDS_NO_TYPIST_MESSAGE =
-  'This test is picked from the bank, so its sections take a proof-reader and no typist.';
-
 const otherRole = (role: AssignmentRole): AssignmentRole =>
   role === ASSIGNMENT_ROLES.TYPIST ? ASSIGNMENT_ROLES.PROOFREADER : ASSIGNMENT_ROLES.TYPIST;
 
@@ -208,6 +211,20 @@ export class AssignmentsService {
       orderBy: [{ baseConfigSection: { order: 'asc' } }, { role: 'asc' }],
     });
     const written = await this.sectionWrittenCounts(rows);
+    const removable = await Promise.all(rows.map((row) => this.removable(row)));
+    return rows.map((row, index) =>
+      toAssignment(row, written.get(sectionKey(row)) ?? NO_COUNTS, removable[index] ?? false),
+    );
+  }
+
+  /** Every row on one section, the replaced ones included, oldest first — the section's own record. */
+  async sectionAssignments(testId: string, baseConfigSectionId: string): Promise<Assignment[]> {
+    const rows = await this.prisma.questionAssignment.findMany({
+      where: { testId, baseConfigSectionId },
+      include: ASSIGNMENT_INCLUDE,
+      orderBy: { createdAt: 'asc' },
+    });
+    const written = await this.sectionWrittenCounts(rows);
     return rows.map((row) => toAssignment(row, written.get(sectionKey(row)) ?? NO_COUNTS));
   }
 
@@ -219,26 +236,49 @@ export class AssignmentsService {
     return holders.sort((a, b) => Number(b.role === called) - Number(a.role === called));
   }
 
+  /** A role already held passes to the new admin: the earlier row stays, marked replaced, as the record. */
   async assign(testId: string, body: CreateAssignmentBody, actorId: string): Promise<Assignment> {
     const test = await this.requireTest(testId);
-    assertRoleFits(test.paperSource, body.role);
+    if (test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
+    assertSourceChosen(test.paperSource);
     const section = await this.requireSection(test.baseConfigId, body.baseConfigSectionId);
     const assignee = await this.requireAssignee(body.assigneeId);
     await this.assertHoldsFeature(assignee, body.role);
     await this.assertNotTheOtherRole(testId, section.id, body.assigneeId, body.role);
 
+    const pair = { testId, baseConfigSectionId: section.id };
+    const holding = await this.prisma.questionAssignment.findFirst({
+      where: { ...pair, role: body.role, replacedAt: null },
+    });
+    if (holding?.assigneeId === body.assigneeId) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, ALREADY_HOLDS_MESSAGE, {
+        fieldErrors: { assigneeId: [ALREADY_HOLDS_MESSAGE] },
+      });
+    }
+    // The section's progress belongs to the role, not the person: it carries over to whoever takes it.
+    const handedAt = holding ? holding.handedAt : await this.handedOnArrival(pair, body.role);
+
     try {
-      const row = await this.prisma.questionAssignment.create({
-        data: {
-          testId,
-          baseConfigId: test.baseConfigId,
-          baseConfigSectionId: section.id,
-          assigneeId: body.assigneeId,
-          role: body.role,
-          dueAt: body.dueAt ? new Date(body.dueAt) : null,
-          createdById: actorId,
-        },
-        include: ASSIGNMENT_INCLUDE,
+      const row = await this.prisma.$transaction(async (tx) => {
+        if (holding) {
+          await tx.questionAssignment.update({
+            where: { id: holding.id },
+            data: { replacedAt: new Date() },
+          });
+        }
+        return tx.questionAssignment.create({
+          data: {
+            ...pair,
+            baseConfigId: test.baseConfigId,
+            assigneeId: body.assigneeId,
+            role: body.role,
+            dueAt: body.dueAt ? new Date(body.dueAt) : null,
+            finalizedAt: holding?.finalizedAt ?? null,
+            handedAt,
+            createdById: actorId,
+          },
+          include: ASSIGNMENT_INCLUDE,
+        });
       });
       return this.withWrittenCount(row);
     } catch (error) {
@@ -251,20 +291,74 @@ export class AssignmentsService {
     }
   }
 
-  /** A finished job is a record: only an unfinalized row can be taken back. */
+  /** Work done is a record: only a row nothing has been done under can be taken back. */
   async remove(id: string): Promise<void> {
-    const row = await this.prisma.questionAssignment.findUnique({
-      where: { id },
-      select: { finalizedAt: true },
-    });
+    const row = await this.prisma.questionAssignment.findUnique({ where: { id } });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    if (row.finalizedAt) {
-      throw new AppException(
-        ErrorCodes.CONFLICT,
-        'This section has already been proof-read, so its record stays. It cannot be removed.',
-      );
+    if (row.replacedAt) throw new AppException(ErrorCodes.CONFLICT, REPLACED_MESSAGE);
+    if (!(await this.removable(row))) {
+      throw new AppException(ErrorCodes.CONFLICT, HAS_WORKED_MESSAGE);
     }
     await this.prisma.questionAssignment.delete({ where: { id } });
+  }
+
+  /** Typed, edited, reviewed, commented or finished anything on the section: then it is a record. */
+  private async removable(row: {
+    id: string;
+    testId: string;
+    baseConfigSectionId: string;
+    assigneeId: string;
+    finalizedAt: Date | null;
+    replacedAt: Date | null;
+    createdAt: Date;
+  }): Promise<boolean> {
+    if (row.finalizedAt || row.replacedAt) return false;
+    const pair = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
+    const who = row.assigneeId;
+    const onSection = await this.prisma.question.findMany({
+      where: {
+        OR: [
+          { paperQuestions: { some: pair } },
+          { assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
+        ],
+      },
+      select: { id: true },
+    });
+    const [typed, reviewed, said, edited] = await Promise.all([
+      this.prisma.question.count({ where: { assignmentId: row.id } }),
+      this.prisma.questionReview.count({
+        where: { ...pair, OR: [{ checkedById: who }, { sentBackById: who }, { fixedById: who }] },
+      }),
+      this.prisma.sectionComment.count({ where: { ...pair, authorId: who } }),
+      this.prisma.rowActionLog.count({
+        where: {
+          actorId: who,
+          feature: AUDIT_FEATURE.QUESTION,
+          createdAt: { gte: row.createdAt },
+          entityId: { in: onSection.map((question) => question.id) },
+        },
+      }),
+    ]);
+    return typed + reviewed + said + edited === 0;
+  }
+
+  /** A reader given a typed section its typist has already finished starts with it in hand. */
+  private async handedOnArrival(
+    pair: { testId: string; baseConfigSectionId: string },
+    role: AssignmentRole,
+  ): Promise<Date | null> {
+    if (role !== ASSIGNMENT_ROLES.PROOFREADER) return null;
+    const typing = await this.prisma.questionAssignment.findFirst({
+      where: {
+        ...pair,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        replacedAt: null,
+        finalizedAt: { not: null },
+        test: { paperSource: PAPER_SOURCES.FRAMED },
+      },
+      select: { finalizedAt: true },
+    });
+    return typing ? new Date() : null;
   }
 
   /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
@@ -292,7 +386,7 @@ export class AssignmentsService {
     const due = dueBounds(query);
     const where: Prisma.QuestionAssignmentWhereInput = {
       assigneeId: adminId,
-      ...(query.outstanding ? { finalizedAt: null } : {}),
+      ...(query.outstanding ? { finalizedAt: null, replacedAt: null } : {}),
       ...(query.role ? { role: query.role } : {}),
       ...(query.testId ? { testId: query.testId } : {}),
       ...(query.baseConfigSectionId ? { baseConfigSectionId: query.baseConfigSectionId } : {}),
@@ -409,13 +503,16 @@ export class AssignmentsService {
     return { editingBy };
   }
 
-  /** A reader's "I've read this". Idempotent: a repeat restamps rather than erroring. A typist uses Done. */
+  /** A reader's release. Idempotent: a repeat restamps rather than erroring. A typist uses Done. */
   async finalize(id: string, adminId: string, isSuperAdmin = false): Promise<Assignment> {
     const row = await this.requireOwn(id, adminId, isSuperAdmin);
     if (row.role === ASSIGNMENT_ROLES.TYPIST) {
       throw new AppException(ErrorCodes.CONFLICT, CHOOSE_WITH_DONE_MESSAGE);
     }
+    if (row.replacedAt) throw new AppException(ErrorCodes.CONFLICT, PASSED_ON_MESSAGE);
+    if (!row.handedAt) throw notWhole(NOT_HANDED_MESSAGE);
     await this.assertSectionWhole(row);
+    await this.assertEveryQuestionChecked(row);
 
     // Re-reading is the same fact restated: the stamp moves, so a section read again is covered again.
     const updated = await this.prisma.questionAssignment.update({
@@ -426,42 +523,42 @@ export class AssignmentsService {
     return this.withWrittenCount(updated);
   }
 
-  /** A reader hands the WHOLE section back to its typist; why is said in the section thread. */
-  async sendBack(id: string, adminId: string, isSuperAdmin = false): Promise<Assignment> {
-    const reading = await this.requireOwn(id, adminId, isSuperAdmin);
-    if (reading.role !== ASSIGNMENT_ROLES.PROOFREADER) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    }
-    if (reading.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_READ_MESSAGE);
-    if (reading.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
-
-    // The write is the gate: only a typist who is done can be sent back, and only once.
-    const reopened = await this.prisma.questionAssignment.updateMany({
-      where: {
-        testId: reading.testId,
-        baseConfigSectionId: reading.baseConfigSectionId,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        finalizedAt: { not: null },
-      },
-      data: { finalizedAt: null },
-    });
-    if (reopened.count === 0) throw new AppException(ErrorCodes.CONFLICT, NOTHING_TO_SEND_BACK);
-    return this.withWrittenCount(reading);
-  }
-
   /** A reader always gets a whole section: typed ones at the typist's Done, and every one at its count. */
   private async assertSectionWhole(row: AssignmentRow): Promise<void> {
     const section = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
+    // A picked section's typist only fixes what comes back, so it never finishes the section.
+    const typed = row.test.paperSource === PAPER_SOURCES.FRAMED;
     const [typing, onPaper] = await Promise.all([
-      this.prisma.questionAssignment.count({
-        where: { ...section, role: ASSIGNMENT_ROLES.TYPIST, finalizedAt: null },
-      }),
+      typed
+        ? this.prisma.questionAssignment.count({
+            where: {
+              ...section,
+              role: ASSIGNMENT_ROLES.TYPIST,
+              finalizedAt: null,
+              replacedAt: null,
+            },
+          })
+        : 0,
       this.prisma.paperQuestion.count({ where: section }),
     ]);
     const needed = row.baseConfigSection.questionCount;
     if (typing > 0) throw notWhole('Its typist has not marked this section done yet.');
     if (onPaper < needed) {
       throw notWhole(`The paper holds ${onPaper} of the ${needed} questions this section needs.`);
+    }
+  }
+
+  /** Released means every question on the paper was looked at and passed, not only most of them. */
+  private async assertEveryQuestionChecked(row: AssignmentRow): Promise<void> {
+    const unchecked = await this.prisma.paperQuestion.count({
+      where: {
+        testId: row.testId,
+        baseConfigSectionId: row.baseConfigSectionId,
+        question: { reviews: { none: { testId: row.testId, checkedAt: { not: null } } } },
+      },
+    });
+    if (unchecked > 0) {
+      throw notWhole(`${unchecked} of this section's questions are not checked yet.`);
     }
   }
 
@@ -492,7 +589,14 @@ export class AssignmentsService {
       where: {
         OR: sections.map(({ testId, baseConfigSectionId }) => ({ testId, baseConfigSectionId })),
       },
-      select: { id: true, testId: true, baseConfigSectionId: true, role: true, finalizedAt: true },
+      select: {
+        id: true,
+        testId: true,
+        baseConfigSectionId: true,
+        role: true,
+        finalizedAt: true,
+        replacedAt: true,
+      },
     });
     const ids = held.map((row) => row.id);
     const written =
@@ -513,9 +617,13 @@ export class AssignmentsService {
       bySection.set(key, {
         writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0),
         typistDone:
-          row.role === ASSIGNMENT_ROLES.TYPIST ? row.finalizedAt !== null : so_far.typistDone,
+          row.role === ASSIGNMENT_ROLES.TYPIST && !row.replacedAt
+            ? row.finalizedAt !== null
+            : so_far.typistDone,
         readerDone:
-          row.role === ASSIGNMENT_ROLES.PROOFREADER ? row.finalizedAt !== null : so_far.readerDone,
+          row.role === ASSIGNMENT_ROLES.PROOFREADER && !row.replacedAt
+            ? row.finalizedAt !== null
+            : so_far.readerDone,
       });
     }
     return bySection;
@@ -526,12 +634,15 @@ export class AssignmentsService {
     return toAssignment(row, counts.get(sectionKey(row)) ?? NO_COUNTS);
   }
 
-  private async requireTest(
-    id: string,
-  ): Promise<{ id: string; baseConfigId: string; paperSource: PaperSource | null }> {
+  private async requireTest(id: string): Promise<{
+    id: string;
+    baseConfigId: string;
+    paperSource: PaperSource | null;
+    finalizedAt: Date | null;
+  }> {
     const test = await this.prisma.test.findUnique({
       where: { id },
-      select: { id: true, baseConfigId: true, paperSource: true },
+      select: { id: true, baseConfigId: true, paperSource: true, finalizedAt: true },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
@@ -576,14 +687,8 @@ export class AssignmentsService {
     assigneeId: string,
     role: AssignmentRole,
   ): Promise<void> {
-    const clash = await this.prisma.questionAssignment.findUnique({
-      where: {
-        testId_baseConfigSectionId_role: {
-          testId,
-          baseConfigSectionId: sectionId,
-          role: otherRole(role),
-        },
-      },
+    const clash = await this.prisma.questionAssignment.findFirst({
+      where: { testId, baseConfigSectionId: sectionId, role: otherRole(role), replacedAt: null },
       select: { assigneeId: true },
     });
     if (clash?.assigneeId !== assigneeId) return;
@@ -610,16 +715,11 @@ const heldBy = (
   ...(query.role ? { role: query.role } : {}),
 });
 
-/** Nobody is handed a section until the test says where its questions come from, and PICKED needs no typist. */
-function assertRoleFits(paperSource: PaperSource | null, role: AssignmentRole): void {
+/** Nobody is handed a section until the test says where its questions come from. */
+function assertSourceChosen(paperSource: PaperSource | null): void {
   if (paperSource === null) {
     throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE, {
       fieldErrors: { [FORM_LEVEL_FIELD]: [SOURCE_UNCHOSEN_MESSAGE] },
-    });
-  }
-  if (paperSource === PAPER_SOURCES.PICKED && role === ASSIGNMENT_ROLES.TYPIST) {
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, PICKED_NEEDS_NO_TYPIST_MESSAGE, {
-      fieldErrors: { role: [PICKED_NEEDS_NO_TYPIST_MESSAGE] },
     });
   }
 }
@@ -651,7 +751,11 @@ export interface SectionCounts {
 
 const NO_COUNTS: SectionCounts = { writtenCount: 0, typistDone: null, readerDone: null };
 
-function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
+function toAssignment(
+  row: AssignmentRow,
+  counts: SectionCounts,
+  removable: boolean | null = null,
+): Assignment {
   return {
     id: row.id,
     testId: row.testId,
@@ -666,6 +770,9 @@ function toAssignment(row: AssignmentRow, counts: SectionCounts): Assignment {
     typistDone: counts.typistDone,
     readerDone: counts.readerDone,
     testOffered: row.test.finalizedAt !== null,
+    handedAt: row.handedAt?.toISOString() ?? null,
+    replacedAt: row.replacedAt?.toISOString() ?? null,
+    removable,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
     sectionSubjectId: row.baseConfigSection.subjectId,

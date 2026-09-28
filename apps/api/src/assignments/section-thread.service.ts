@@ -132,8 +132,9 @@ export class SectionThreadService {
     authorId: string,
     isSuperAdmin: boolean,
   ): Promise<void> {
+    // Whoever the role has passed from still reads the thread, but writes nothing more to it.
     const assignments = await this.prisma.questionAssignment.findMany({
-      where: { testId, baseConfigSectionId },
+      where: { testId, baseConfigSectionId, replacedAt: null },
       select: { assigneeId: true },
     });
     if (assignments.some((row) => row.assigneeId === authorId)) return;

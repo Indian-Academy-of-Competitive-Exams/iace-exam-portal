@@ -28,6 +28,9 @@ const row = (over: Partial<AssignmentWithTest>): AssignmentWithTest => ({
   typistDone: false,
   readerDone: false,
   testOffered: false,
+  handedAt: null,
+  replacedAt: null,
+  removable: null,
   sectionQuestionCount: 25,
   sectionMix: null,
   sectionSubjectId: null,
@@ -70,7 +73,7 @@ describe('the section a typist opens', () => {
 });
 
 describe('the section a reader opens', () => {
-  it('waits for the typist, then reads, with send back only on a typed section', () => {
+  it('waits for the typist, then reads', () => {
     const waiting = seatOf([reading], null);
     assert.equal(momentOf(waiting, false), SECTION_MOMENTS.WAITING);
     assert.equal(slotsFor(waiting, SECTION_MOMENTS.WAITING, false).primary, null);
@@ -78,10 +81,6 @@ describe('the section a reader opens', () => {
     const typed = seatOf([row({ role: ASSIGNMENT_ROLES.PROOFREADER, typistDone: true })], null);
     const slots = slotsFor(typed, momentOf(typed, false), false);
     assert.equal(slots.primary, SECTION_PRIMARY.READ);
-    assert.equal(slots.sendBack, true);
-
-    const picked = seatOf([row({ role: ASSIGNMENT_ROLES.PROOFREADER, typistDone: null })], null);
-    assert.equal(slotsFor(picked, momentOf(picked, false), false).sendBack, false);
   });
 });
 

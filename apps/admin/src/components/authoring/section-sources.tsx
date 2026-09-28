@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
-  plainTextOf,
-  previewTextOf,
   type DifficultyLevel,
   type QuestionDetail,
   type QuestionDraftInput,
@@ -14,7 +12,6 @@ import { OtherTestsNotice } from '../cross-test-warning';
 import { type Held, type QuestionsSource } from './questions-window';
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 import { SECTION_VIEWERS, type SectionSeat } from './section-moment';
-import { sectionQuestions } from './section-questions';
 
 /** One line of the section's grid, whichever list it came from. */
 export interface SectionRow {
@@ -37,43 +34,19 @@ interface Channel {
   otherTests: ((id: string) => Promise<QuestionOnOtherTest[]>) | null;
 }
 
-const rowOfDetail = (question: QuestionDetail): SectionRow => ({
-  id: question.id,
-  preview: previewTextOf(plainTextOf(question.content.en?.stem)),
-  difficulty: question.difficulty,
-});
-
-function channelOf(seat: SectionSeat, { testId, sectionId }: SectionKey): Channel {
-  const assignmentId = seat.row?.id ?? '';
-  if (seat.viewer === SECTION_VIEWERS.TYPIST) {
-    return {
-      listKey: [...QUERY_KEYS.AUTHORING, 'section', assignmentId, 'rows'],
-      list: async () =>
-        (await sectionQuestions(assignmentId)).map((question) => ({
-          id: question.id,
-          preview: question.stemPreview,
-          difficulty: question.difficulty,
-        })),
-      one: (id) => api.admin.authoring.detail(id),
-      save: (id, draft) => api.admin.authoring.update(id, draft),
-      otherTests: null,
-    };
-  }
-  if (seat.viewer === SECTION_VIEWERS.READER) {
-    return {
-      listKey: [...QUERY_KEYS.PROOFREADING, 'section', testId, sectionId],
-      list: async () => (await api.admin.proofreading.forAssignment(assignmentId)).map(rowOfDetail),
-      one: (id) => api.admin.proofreading.oneQuestion(assignmentId, id),
-      save: (id, draft) => api.admin.proofreading.editQuestion(assignmentId, id, draft),
-      otherTests: (id) => api.admin.proofreading.otherTests(assignmentId, id),
-    };
-  }
+/** Every seat reaches a question through the section itself; the server decides what each may do. */
+function channelOf(_seat: SectionSeat, { testId, sectionId }: SectionKey): Channel {
   return {
     listKey: [...QUERY_KEYS.PROOFREADING, 'section', testId, sectionId],
-    list: async () => (await api.admin.proofreading.forSection(testId, sectionId)).map(rowOfDetail),
-    one: (id) => api.admin.proofreading.oneSectionQuestion(testId, sectionId, id),
-    save: (id, draft) => api.admin.proofreading.editSectionQuestion(testId, sectionId, id, draft),
-    otherTests: (id) => api.admin.proofreading.sectionOtherTests(testId, sectionId, id),
+    list: async () =>
+      (await api.admin.sectionWork.one(testId, sectionId)).questions.map((question) => ({
+        id: question.questionId,
+        preview: question.preview,
+        difficulty: question.difficulty,
+      })),
+    one: (id) => api.admin.sectionWork.question(testId, sectionId, id),
+    save: (id, draft) => api.admin.sectionWork.edit(testId, sectionId, id, draft),
+    otherTests: (id) => api.admin.sectionWork.otherTests(testId, sectionId, id),
   };
 }
 

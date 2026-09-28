@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, FilePlus2, Layers, Send, Undo2, Upload } from 'lucide-react';
+import { CheckCheck, FilePlus2, Layers, Send, Upload } from 'lucide-react';
 import {
   DIFFICULTY_LABELS,
   FEATURE_KEYS,
@@ -51,7 +51,7 @@ import {
   type SectionKey,
   type SectionRow,
 } from '../components/authoring/section-sources';
-import { FinalizeAssignmentDialog, SendBackDialog } from './assignment-queue';
+import { FinalizeAssignmentDialog } from './assignment-queue';
 
 const ASSIGNEE_KEYS = [FEATURE_KEYS.QUESTION_AUTHORING, FEATURE_KEYS.QUESTION_PROOFREAD] as const;
 
@@ -250,7 +250,7 @@ function SectionActions({
   canOpenPaper: boolean;
 }>) {
   const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<'done' | 'read' | 'back' | null>(null);
+  const [dialog, setDialog] = useState<'done' | 'read' | null>(null);
   const settle = () =>
     Promise.all(
       [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.PROOFREADING, QUERY_KEYS.AUTHORING].map((queryKey) =>
@@ -276,12 +276,6 @@ function SectionActions({
         </Button>
       ) : null}
       {row ? <AddTools slots={slots} assignmentId={row.id} /> : null}
-      {slots.sendBack ? (
-        <Button size="sm" variant="outline" onClick={() => setDialog('back')}>
-          <Undo2 aria-hidden />
-          Send back to typist
-        </Button>
-      ) : null}
       {slots.primary === SECTION_PRIMARY.DONE ? (
         <Button size="sm" onClick={() => setDialog('done')}>
           <CheckCheck aria-hidden />
@@ -301,11 +295,6 @@ function SectionActions({
         covering={covering}
         onClose={() => setDialog(null)}
         onFinalized={settle}
-      />
-      <SendBackDialog
-        assignment={opened('back')}
-        onClose={() => setDialog(null)}
-        onSentBack={settle}
       />
     </div>
   );

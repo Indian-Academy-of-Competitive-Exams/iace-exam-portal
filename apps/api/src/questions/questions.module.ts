@@ -8,8 +8,9 @@ import { AuthoringService } from './authoring.service';
 import { QuestionImportController } from './question-import.controller';
 import { StemRehashService } from './stem-rehash.service';
 import { QuestionImportService } from './question-import.service';
-import { ProofreadingController } from './proofreading.controller';
-import { ProofreadingService } from './proofreading.service';
+import { SectionWorkController } from './section-work.controller';
+import { SectionWorkService } from './section-work.service';
+import { AssignmentsModule } from '../assignments';
 import { QuestionsController } from './questions.controller';
 import { QuestionsService } from './questions.service';
 import { TaxonomyController } from './taxonomy.controller';
@@ -23,6 +24,8 @@ import { API_ROLES, onRole } from '../config/api-role';
     // The uploaded sheet is kept, so a commit re-reads exactly what was previewed.
     StorageModule,
     AppConfigModule,
+    // A section's work reads who holds it through the module that owns the assignments.
+    AssignmentsModule,
     uploadLimit,
   ],
   controllers: onRole(
@@ -32,7 +35,7 @@ import { API_ROLES, onRole } from '../config/api-role';
       TaxonomyController,
       QuestionImportController,
       AuthoringController,
-      ProofreadingController,
+      SectionWorkController,
     ],
   ),
   providers: [
@@ -40,7 +43,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     TaxonomyService,
     QuestionImportService,
     AuthoringService,
-    ProofreadingService,
+    SectionWorkService,
     StemRehashService,
   ],
   exports: [QuestionsService, TaxonomyService],

@@ -67,7 +67,6 @@ function SectionProgress({ row }: Readonly<{ row: AssignmentWithTest }>) {
 interface RowMoves {
   onDone: (row: AssignmentWithTest) => void;
   onRead: (row: AssignmentWithTest) => void;
-  onSendBack: (row: AssignmentWithTest) => void;
 }
 
 /** What an outstanding row can do next: a typist marks done; a reader, once the typist has, reads or sends back. */
@@ -84,11 +83,6 @@ function RowMenu({ row, moves }: Readonly<{ row: AssignmentWithTest; moves: RowM
   return (
     <RowActions label={`Actions for ${row.sectionName}`}>
       <DropdownMenuItem onSelect={() => moves.onRead(row)}>Mark read</DropdownMenuItem>
-      {row.typistDone ? (
-        <DropdownMenuItem onSelect={() => moves.onSendBack(row)}>
-          Send back to typist
-        </DropdownMenuItem>
-      ) : null}
     </RowActions>
   );
 }
@@ -153,7 +147,6 @@ export function AssignmentQueuePage() {
   const queryClient = useQueryClient();
   const [finishing, setFinishing] = useState<AssignmentWithTest | null>(null);
   const [reading, setReading] = useState<AssignmentWithTest | null>(null);
-  const [sendingBack, setSendingBack] = useState<AssignmentWithTest | null>(null);
 
   // Held outside the spec: choosing another test also has to drop the section under the old one.
   const urlFilters = useFilters<'testId' | 'baseConfigSectionId'>();
@@ -222,10 +215,7 @@ export function AssignmentQueuePage() {
     fetchPage: (params) => api.admin.assignments.mine(params),
   });
 
-  const columns = useMemo(
-    () => columnsOf({ onDone: setFinishing, onRead: setReading, onSendBack: setSendingBack }),
-    [],
-  );
+  const columns = useMemo(() => columnsOf({ onDone: setFinishing, onRead: setReading }), []);
   const settle = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
 
   const header = <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="My sections" />;
@@ -246,11 +236,6 @@ export function AssignmentQueuePage() {
         assignment={reading}
         onClose={() => setReading(null)}
         onFinalized={settle}
-      />
-      <SendBackDialog
-        assignment={sendingBack}
-        onClose={() => setSendingBack(null)}
-        onSentBack={settle}
       />
     </TableFrame>
   );
@@ -290,38 +275,6 @@ export function FinalizeAssignmentDialog({
       confirmLabel="Mark read"
       loading={finalize.isPending}
       onConfirm={() => assignment?.id && finalize.mutate(assignment.id)}
-    />
-  );
-}
-
-/** The whole section goes back to its typist; what to fix is said in the section thread. */
-export function SendBackDialog({
-  assignment,
-  onClose,
-  onSentBack,
-}: Readonly<{
-  assignment: AssignmentWithTest | null;
-  onClose: () => void;
-  onSentBack: () => void;
-}>) {
-  const sendBack = useMutation({
-    meta: { success: `${assignment?.sectionName ?? 'Section'} sent back to its typist.` },
-    mutationFn: (id: string) => api.admin.assignments.sendBack(id),
-    onSuccess: () => {
-      onSentBack();
-      onClose();
-    },
-  });
-
-  return (
-    <ConfirmDialog
-      open={assignment !== null}
-      onOpenChange={(open) => !open && onClose()}
-      title={`Send ${assignment?.sectionName ?? 'this section'} back?`}
-      description={`All ${plural(assignment?.sectionQuestionCount ?? 0, 'question')} go back to the typist, and the section leaves your reading until they mark it done again. Say what to fix in the section thread.`}
-      confirmLabel="Send back"
-      loading={sendBack.isPending}
-      onConfirm={() => assignment?.id && sendBack.mutate(assignment.id)}
     />
   );
 }

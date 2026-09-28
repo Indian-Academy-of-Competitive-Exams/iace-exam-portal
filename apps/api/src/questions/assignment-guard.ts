@@ -1,4 +1,4 @@
-import { ASSIGNMENT_ROLES, AppException, ErrorCodes } from '@iace/contracts';
+import { ASSIGNMENT_ROLES, AppException, ErrorCodes, PAPER_SOURCES } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** The pair a section lock keys on — a question outside an assignment has none. */
@@ -9,8 +9,10 @@ export interface SectionRef {
 
 const SECTION_HANDED_OVER_MESSAGE =
   'You have marked this section done. New questions go to the bank, not this paper.';
-const SECTION_READ_MESSAGE =
-  'This section has been read, so its questions are no longer yours to change.';
+const NOTHING_TO_TYPE_MESSAGE =
+  'This test is picked from the bank, so its sections are not typed. Fix what is sent back to you.';
+const SENT_BACK_ONLY_MESSAGE =
+  'You have marked this section done, so only a question sent back to you can change now.';
 
 /** A typing job the caller still holds open — unless a super admin, who takes up a section nobody holds. */
 export async function requireOwnAssignment(
@@ -25,21 +27,36 @@ export async function requireOwnAssignment(
       assigneeId: true,
       role: true,
       finalizedAt: true,
+      replacedAt: true,
       testId: true,
       baseConfigSectionId: true,
+      test: { select: { paperSource: true } },
     },
   });
-  if (row?.role !== ASSIGNMENT_ROLES.TYPIST || (row.assigneeId !== adminId && !isSuperAdmin)) {
+  const theirs = row?.assigneeId === adminId || isSuperAdmin;
+  if (row?.role !== ASSIGNMENT_ROLES.TYPIST || row.replacedAt || !theirs) {
     throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+  }
+  if (row.test.paperSource !== PAPER_SOURCES.FRAMED) {
+    throw new AppException(ErrorCodes.CONFLICT, NOTHING_TO_TYPE_MESSAGE);
   }
   if (row.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, SECTION_HANDED_OVER_MESSAGE);
   return { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
 }
 
-/** A typist fixes what they wrote until the reader is done with it, and not after. */
-export async function assertNotRead(prisma: PrismaService, section: SectionRef): Promise<void> {
-  const read = await prisma.questionAssignment.count({
-    where: { ...section, role: ASSIGNMENT_ROLES.PROOFREADER, finalizedAt: { not: null } },
+/** Before Done a typist fixes anything they wrote; after it, only what the reader sent back. */
+export async function assertTypistMayEdit(
+  prisma: PrismaService,
+  section: SectionRef,
+  questionId: string,
+): Promise<void> {
+  const typing = await prisma.questionAssignment.findFirst({
+    where: { ...section, role: ASSIGNMENT_ROLES.TYPIST, replacedAt: null },
+    select: { finalizedAt: true },
   });
-  if (read > 0) throw new AppException(ErrorCodes.CONFLICT, SECTION_READ_MESSAGE);
+  if (!typing?.finalizedAt) return;
+  const sentBack = await prisma.questionReview.count({
+    where: { testId: section.testId, questionId, sentBackAt: { not: null }, fixedAt: null },
+  });
+  if (sentBack === 0) throw new AppException(ErrorCodes.CONFLICT, SENT_BACK_ONLY_MESSAGE);
 }

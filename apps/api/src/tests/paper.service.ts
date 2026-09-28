@@ -59,6 +59,9 @@ const SECTION_UNDER_TYPED_MESSAGE =
 const TYPED_SECTION_MESSAGE =
   "A typed section's paper is what its typist chose at Done. Send the section back to change it.";
 const ALREADY_DONE_MESSAGE = 'This section is already marked done.';
+const HANDED_AT_DONE_MESSAGE = "A typed section reaches its proof-reader at its typist's Done.";
+const NO_READER_MESSAGE = 'Give this section a proof-reader before handing it over.';
+const ALREADY_HANDED_MESSAGE = 'This section is already with its proof-reader.';
 const NOT_WRITTEN_HERE_MESSAGE = 'Choose only questions written for this section.';
 
 const CANDIDATE_SELECT = {
@@ -339,12 +342,13 @@ export class PaperService {
         role: true,
         assigneeId: true,
         finalizedAt: true,
+        replacedAt: true,
         testId: true,
         baseConfigSectionId: true,
       },
     });
     const theirs = typing?.assigneeId === editor.id || (editor.isSuperAdmin ?? false);
-    if (typing?.role !== ASSIGNMENT_ROLES.TYPIST || !theirs) {
+    if (typing?.role !== ASSIGNMENT_ROLES.TYPIST || typing.replacedAt || !theirs) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     if (typing.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_DONE_MESSAGE);
@@ -358,7 +362,8 @@ export class PaperService {
     );
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
-    const typed = (await this.typedFor(assignmentId)).map((question) => question.id);
+    const pair = { testId, baseConfigSectionId: section.id };
+    const typed = (await this.typedFor(pair)).map((question) => question.id);
     const selected = await this.assertTypedSelection(testId, typed, section, body, test);
 
     await this.prisma.$transaction(async (tx) => {
@@ -369,6 +374,11 @@ export class PaperService {
       });
       if (done.count === 0) throw new AppException(ErrorCodes.CONFLICT, ALREADY_DONE_MESSAGE);
       await this.placeTyped(tx, test, section, selected);
+      // The same fact from the reader's side: the section has reached them.
+      await tx.questionAssignment.updateMany({
+        where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null, handedAt: null },
+        data: { handedAt: new Date() },
+      });
     }, TX_LIMITS.SHORT);
 
     // After the paper lets go of them: a question still on it cannot be deleted.
@@ -452,8 +462,52 @@ export class PaperService {
     return questions;
   }
 
-  private typedFor(assignmentId: string) {
-    return this.prisma.question.findMany({ where: { assignmentId }, select: { id: true } });
+  /** Whatever any typist of the section wrote for it: the role's work, not one person's. */
+  private typedFor(pair: { testId: string; baseConfigSectionId: string }) {
+    return this.prisma.question.findMany({
+      where: { assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
+      select: { id: true },
+    });
+  }
+
+  /** A picked section, full, handed to its proof-reader: from here it is theirs to review. */
+  async handOver(
+    testId: string,
+    baseConfigSectionId: string,
+    editor: Editor = {},
+  ): Promise<TestPaper> {
+    const test = await this.requireTest(testId);
+    await takeTestEditLock(this.redis, this.prisma, testId, editor);
+    this.assertAssemblable(test);
+    if (test.paperSource !== PAPER_SOURCES.PICKED) {
+      throw new AppException(ErrorCodes.CONFLICT, HANDED_AT_DONE_MESSAGE);
+    }
+    const config = await this.configs.detail(test.baseConfigId);
+    const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
+
+    const pair = { testId, baseConfigSectionId };
+    const held = await this.prisma.paperQuestion.count({ where: pair });
+    if (held < section.questionCount) {
+      const short = `${section.name} holds ${held} of its ${section.questionCount} questions. Fill it before handing it over.`;
+      throw new AppException(ErrorCodes.CONFLICT, short, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [short] },
+      });
+    }
+    const handed = await this.prisma.questionAssignment.updateMany({
+      where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null, handedAt: null },
+      data: { handedAt: new Date() },
+    });
+    if (handed.count === 0) {
+      const reading = await this.prisma.questionAssignment.count({
+        where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null },
+      });
+      throw new AppException(
+        ErrorCodes.CONFLICT,
+        reading === 0 ? NO_READER_MESSAGE : ALREADY_HANDED_MESSAGE,
+      );
+    }
+    return this.paperOf(testId, this.scopedOf(test, config));
   }
 
   /** Dropped, leaving its section short of the count its config asks for until one is drawn. */

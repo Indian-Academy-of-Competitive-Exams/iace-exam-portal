@@ -77,13 +77,21 @@ Setup, then paper, then offer. There is no certificate step.
   version, so there has to be one; nothing else gates the draw, because a paper is built before its
   questions are finished and what stops an unfinished one reaching students is the offer, which
   refuses while any assignment on the test is unfinalized.
-- **A typed (FRAMED) section's paper is its typist's Done.** One action per section: the typist
-  chooses exactly the section's count, inside its difficulty split, and Done is refused while the
-  choice is short — so a reader always gets a whole section. The chosen become the section's
-  paper rows; each question left out goes to the bank as an ordinary question, or is deleted if
-  the typist says so. Nobody but a super admin picks, fills or removes on a FRAMED paper; changing
-  it means sending the section back. After Done the typist may still fix what they wrote until the
-  section is read, and anything new they write goes to the bank, not this paper.
+- **Where a test's questions come from is chosen once, by anyone, and then by nobody** — not a
+  super admin either: every assignment on the test rests on it. Both sources take a typist and a
+  proof-reader per section; a role can pass to somebody new, and the earlier holder stays on the
+  record (`replacedAt`) reading but no longer acting. A holder can be taken off only while nothing
+  has been done under them — typed, edited, reviewed, commented or finished.
+- **A typed (FRAMED) section's paper is its typist's Done**, which also hands it to its
+  proof-reader (`handedAt`). One action per section: the typist chooses exactly the section's
+  count, inside its difficulty split, and Done is refused while the choice is short — so a reader
+  always gets a whole section. The chosen become the section's paper rows; each question left out
+  goes to the bank as an ordinary question, or is deleted if the typist says so. Nobody but a super
+  admin picks, fills or removes on a FRAMED paper. After Done the typist changes only a question
+  the reader sent back to them, and anything new they write goes to the bank, not this paper.
+- **A picked (PICKED) section reaches its proof-reader when its owner hands it over**, which is
+  refused until the paper holds the section's count. Its typist types nothing: they fix what the
+  reader sends back.
 - **A test's paper is frozen iff it has been offered**, which is the whole of the rule: `finalizedAt`
   is set by the first offer and never cleared, and there is no separate flag and no unfreezing.
 - The offer freezes rows that already exist and draws nothing. The paper must hold every section at
@@ -373,16 +381,18 @@ and needs no mapping at all.
   before it claims the question row, because the version guard reaches those tests anyway on the way
   out. Nothing enforces this but the rule: two admins crossing on one order deadlock, and Postgres
   kills one of them with a save the admin never asked to lose.
-- **Proof-reading is per test, per section, and a reader always gets the section whole.** A reader
-  opens the assignment they hold and sees that section's paper — typed and picked alike — nothing
-  else, and no bank-wide document. A typed section reaches them only once its typist is done, and
-  Mark read is refused until the paper holds the section's count. They fix what they find by
-  editing it directly; there are no per-question flags. Marking the section read sets `finalizedAt`
-  and ends their authority over it. A paper row that joins after the reading is unread until the
-  section is read again.
-- **A reader may send a typed section back** before marking it read. It returns the WHOLE section:
-  the typist's `finalizedAt` clears, and they type, import and press Done again. What to fix is
-  said in the section thread.
+- **Proof-reading is per test, per section, question by question.** A reader sees the section's
+  paper — typed and picked alike — once it has been handed to them, and nothing before. Each
+  question is checked (`QuestionReview.checkedAt`) or sent back to the typist with a reason — a
+  spelling mistake, a data correction, or no suitable option as the answer — and an optional note.
+  Only the sent-back questions go back; the rest stay with the reader. The typist fixes one and
+  marks it fixed, and it returns to be checked again. A minor fix the reader makes directly.
+- **Releasing a section needs every question on its paper checked** and none still with the
+  typist. It sets the reader's `finalizedAt` and ends their authority over it. A paper row that
+  joins after the release is unread until the section is released again.
+- **A test owner changes a question only when the section is back with them**: a picked section
+  before it is handed over, or any section once its reader has released it — and never once the
+  test is offered.
 - **A section's thread belongs to its section.** Its typist and proof-reader read and write it; a
   test owner (TEST_MANAGEMENT) and a super admin read it, and a super admin may write. Anyone
   else is told there is no such section — holding a typist's or reader's key is not a seat on it.

@@ -61,7 +61,6 @@ export type SectionPrimary = (typeof SECTION_PRIMARY)[keyof typeof SECTION_PRIMA
 /** The five things that change with the viewer and the moment; the screen around them never does. */
 export interface SectionSlots {
   primary: SectionPrimary | null;
-  sendBack: boolean;
   add: SectionAdd | null;
   importSheet: boolean;
   editable: boolean;
@@ -70,7 +69,6 @@ export interface SectionSlots {
 
 const LOCKED: SectionSlots = {
   primary: null,
-  sendBack: false,
   add: null,
   importSheet: false,
   editable: false,
@@ -116,7 +114,7 @@ function typistSlots(moment: SectionMoment): SectionSlots {
   }
 }
 
-function readerSlots(moment: SectionMoment, row: AssignmentWithTest | null): SectionSlots {
+function readerSlots(moment: SectionMoment): SectionSlots {
   switch (moment) {
     case SECTION_MOMENTS.WAITING:
       return {
@@ -130,7 +128,6 @@ function readerSlots(moment: SectionMoment, row: AssignmentWithTest | null): Sec
       return {
         ...LOCKED,
         primary: SECTION_PRIMARY.READ,
-        sendBack: row?.typistDone === true,
         editable: true,
       };
     case SECTION_MOMENTS.READ:
@@ -152,7 +149,7 @@ export function slotsFor(
   isSuperAdmin: boolean,
 ): SectionSlots {
   if (seat.viewer === SECTION_VIEWERS.TYPIST) return typistSlots(moment);
-  if (seat.viewer === SECTION_VIEWERS.READER) return readerSlots(moment, seat.row);
+  if (seat.viewer === SECTION_VIEWERS.READER) return readerSlots(moment);
   if (moment === SECTION_MOMENTS.OFFERED) return { ...LOCKED, alert: FROZEN };
   return { ...LOCKED, editable: isSuperAdmin };
 }

@@ -238,7 +238,6 @@ import {
 } from '../questions';
 import {
   ADMIN_ASSIGNMENTS_ROUTES,
-  ADMIN_PROOFREADING_ROUTES,
   assignableAdminSchema,
   assignmentSchema,
   assignmentSectionSchema,
@@ -267,6 +266,12 @@ import {
   type SectionProgressRow,
   type TypistDoneInput,
 } from '../assignments';
+import {
+  ADMIN_SECTION_WORK_ROUTES,
+  sectionWorkSchema,
+  type SectionWork,
+  type SendBackInput,
+} from '../section-work';
 import { queryString, type ApiCore } from './core';
 
 /** One field, named once, so the server knows what to look for. */
@@ -593,6 +598,10 @@ export function adminClient(core: ApiCore) {
       fillPaperSection: (id: string, sectionId: string): Promise<TestPaper> =>
         write('POST', ADMIN_TEST_PAPER_ROUTES.fillSection(id, sectionId), testPaperSchema),
 
+      /** A picked section, full, handed to its proof-reader. */
+      handOverSection: (id: string, sectionId: string): Promise<TestPaper> =>
+        write('POST', ADMIN_TEST_PAPER_ROUTES.handOver(id, sectionId), testPaperSchema),
+
       /** Drops a question or makes it a bonus, and re-scores every sitting that served it. */
       setPaperQuestionStatus: (
         id: string,
@@ -760,69 +769,73 @@ export function adminClient(core: ApiCore) {
     },
 
     /** The proof-reading document, and the flags raised on it. */
-    proofreading: {
-      /** A section reads in full: the typist's own questions and the bank picks beside them. */
-      forAssignment: (assignmentId: string): Promise<QuestionDetail[]> =>
-        get(ADMIN_PROOFREADING_ROUTES.forAssignment(assignmentId), questionDetailSchema.array()),
+    /** One section of one test, as its typist, proof-reader or test owner works on it. */
+    sectionWork: {
+      one: (testId: string, sectionId: string): Promise<SectionWork> =>
+        get(ADMIN_SECTION_WORK_ROUTES.one(testId, sectionId), sectionWorkSchema),
 
-      /** One question of it, which is what the screen that edits it opens on. */
-      oneQuestion: (assignmentId: string, questionId: string): Promise<QuestionDetail> =>
-        get(ADMIN_PROOFREADING_ROUTES.oneQuestion(assignmentId, questionId), questionDetailSchema),
+      question: (testId: string, sectionId: string, questionId: string): Promise<QuestionDetail> =>
+        get(
+          ADMIN_SECTION_WORK_ROUTES.question(testId, sectionId, questionId),
+          questionDetailSchema,
+        ),
 
-      editQuestion: (
-        assignmentId: string,
+      edit: (
+        testId: string,
+        sectionId: string,
         questionId: string,
         input: QuestionDraftInput,
       ): Promise<QuestionDetail> =>
         write(
           'PATCH',
-          ADMIN_PROOFREADING_ROUTES.editQuestion(assignmentId, questionId),
+          ADMIN_SECTION_WORK_ROUTES.question(testId, sectionId, questionId),
           questionDetailSchema,
           input,
         ),
 
       /** The cross-test warning, read before the edit rather than reported after it. */
-      otherTests: (assignmentId: string, questionId: string): Promise<QuestionOnOtherTest[]> =>
-        get(
-          ADMIN_PROOFREADING_ROUTES.otherTests(assignmentId, questionId),
-          questionOnOtherTestSchema.array(),
-        ),
-
-      /** The same three reads, keyed on the section itself — a super admin needs no assignment. */
-      forSection: (testId: string, sectionId: string): Promise<QuestionDetail[]> =>
-        get(ADMIN_PROOFREADING_ROUTES.forSection(testId, sectionId), questionDetailSchema.array()),
-
-      oneSectionQuestion: (
-        testId: string,
-        sectionId: string,
-        questionId: string,
-      ): Promise<QuestionDetail> =>
-        get(
-          ADMIN_PROOFREADING_ROUTES.oneSectionQuestion(testId, sectionId, questionId),
-          questionDetailSchema,
-        ),
-
-      editSectionQuestion: (
-        testId: string,
-        sectionId: string,
-        questionId: string,
-        input: QuestionDraftInput,
-      ): Promise<QuestionDetail> =>
-        write(
-          'PATCH',
-          ADMIN_PROOFREADING_ROUTES.editSectionQuestion(testId, sectionId, questionId),
-          questionDetailSchema,
-          input,
-        ),
-
-      sectionOtherTests: (
+      otherTests: (
         testId: string,
         sectionId: string,
         questionId: string,
       ): Promise<QuestionOnOtherTest[]> =>
         get(
-          ADMIN_PROOFREADING_ROUTES.sectionOtherTests(testId, sectionId, questionId),
+          ADMIN_SECTION_WORK_ROUTES.otherTests(testId, sectionId, questionId),
           questionOnOtherTestSchema.array(),
+        ),
+
+      check: (testId: string, sectionId: string, questionId: string): Promise<SectionWork> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.check(testId, sectionId, questionId),
+          sectionWorkSchema,
+        ),
+
+      uncheck: (testId: string, sectionId: string, questionId: string): Promise<SectionWork> =>
+        write(
+          'DELETE',
+          ADMIN_SECTION_WORK_ROUTES.check(testId, sectionId, questionId),
+          sectionWorkSchema,
+        ),
+
+      sendBack: (
+        testId: string,
+        sectionId: string,
+        questionId: string,
+        input: SendBackInput,
+      ): Promise<SectionWork> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.sendBack(testId, sectionId, questionId),
+          sectionWorkSchema,
+          input,
+        ),
+
+      fixed: (testId: string, sectionId: string, questionId: string): Promise<SectionWork> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.fixed(testId, sectionId, questionId),
+          sectionWorkSchema,
         ),
     },
 
@@ -853,9 +866,6 @@ export function adminClient(core: ApiCore) {
 
       done: (id: string, input: TypistDoneInput): Promise<Assignment> =>
         write('POST', ADMIN_ASSIGNMENTS_ROUTES.done(id), assignmentSchema, input),
-
-      sendBack: (id: string): Promise<Assignment> =>
-        write('POST', ADMIN_ASSIGNMENTS_ROUTES.sendBack(id), assignmentSchema),
 
       assignable: (query: AssignableQueryInput): Promise<AssignableAdmin[]> =>
         get(

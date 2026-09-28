@@ -143,13 +143,6 @@ export class AssignmentsController {
     return this.assignments.finalize(id, user.id, user.isSuperAdmin);
   }
 
-  @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)
-  @HttpCode(HttpStatus.OK)
-  @Post(':id/send-back')
-  sendBack(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Assignment> {
-    return this.assignments.sendBack(id, user.id, user.isSuperAdmin);
-  }
-
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @HttpCode(HttpStatus.OK)
   @Delete(':id')

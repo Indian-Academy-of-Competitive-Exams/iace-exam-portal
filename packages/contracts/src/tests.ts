@@ -651,6 +651,9 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   /** Draws the rest of one section from its own spec, around the rows already on it. */
   fillSection: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/fill`,
+  /** A picked section, full, handed to its proof-reader. */
+  handOver: (id: string, sectionId: string) =>
+    `/admin/tests/${id}/paper/sections/${sectionId}/hand-over`,
   /** The ONE change an offered paper still allows: withdrawing a question, or paying it to all. */
   questionStatus: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}/status`,
   offer: (id: string) => `/admin/tests/${id}/offer`,

@@ -898,6 +898,85 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
   });
 });
 
+describe('PaperService — a section reaches its proof-reader', () => {
+  const reader = async () => {
+    const admin = await makeAdmin(prisma, { fullName: 'Ravi' });
+    return prisma.questionAssignment.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_2'),
+        assigneeId: admin.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      },
+    });
+  };
+  const handedAt = async (id: string) =>
+    (await prisma.questionAssignment.findUniqueOrThrow({ where: { id } })).handedAt;
+
+  it('at the typist’s Done, on a typed section', async () => {
+    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+    const reading = await reader();
+    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+    const typing = await prisma.questionAssignment.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_2'),
+        assigneeId: typist.id,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      },
+    });
+    await prisma.question.updateMany({
+      where: { id: { in: [idFor('q1'), idFor('q2')] } },
+      data: { assignmentId: typing.id },
+    });
+
+    assert.equal(await handedAt(reading.id), null);
+    await service.typistDone(
+      typing.id,
+      { selected: [idFor('q1'), idFor('q2')], discard: [] },
+      { id: typist.id },
+    );
+
+    assert.notEqual(await handedAt(reading.id), null);
+  });
+
+  /** The failure this prevents: a reader handed a picked section the owner has not finished picking. */
+  it('at the owner’s hand-over, on a picked section, and only once it is full', async () => {
+    const service = await serviceWith();
+    const reading = await reader();
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q1')],
+    });
+
+    assert.equal((await refused(service.handOver(TEST, idFor('sec_2')))).code, ErrorCodes.CONFLICT);
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q2')],
+    });
+    await service.handOver(TEST, idFor('sec_2'));
+
+    assert.notEqual(await handedAt(reading.id), null);
+    assert.equal(
+      (await refused(service.handOver(TEST, idFor('sec_2')))).code,
+      ErrorCodes.CONFLICT,
+      'a section already with its reader is not handed over twice',
+    );
+  });
+
+  it('never by the owner on a typed section, or to nobody', async () => {
+    const typedTest = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+    assert.equal(
+      (await refused(typedTest.handOver(TEST, idFor('sec_2')))).code,
+      ErrorCodes.CONFLICT,
+    );
+  });
+});
+
 describe('PaperService — two admins on one paper', () => {
   const pick = (service: PaperService, questionId: string, editor: Editor) =>
     service.addQuestions(

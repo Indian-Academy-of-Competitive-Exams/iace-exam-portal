@@ -9,7 +9,12 @@ export async function unreadBySection(
   testId: string,
 ): Promise<Map<string, number>> {
   const readings = await prisma.questionAssignment.findMany({
-    where: { testId, role: ASSIGNMENT_ROLES.PROOFREADER, finalizedAt: { not: null } },
+    where: {
+      testId,
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+      finalizedAt: { not: null },
+      replacedAt: null,
+    },
     select: { baseConfigSectionId: true, finalizedAt: true },
   });
   if (readings.length === 0) return new Map();

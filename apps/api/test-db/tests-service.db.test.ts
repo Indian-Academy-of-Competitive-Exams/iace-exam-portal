@@ -5,7 +5,6 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
-  ASSIGNMENT_ROLES,
   EXAM_TEMPLATE,
   ErrorCodes,
   PAPER_SOURCES,
@@ -21,7 +20,6 @@ import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
   BUILDER,
-  makeAdmin,
   makeBuilder,
   makeQuestion,
   makeSitting,
@@ -105,22 +103,6 @@ const testRow = () => prisma.test.findUnique({ where: { id: TEST } });
 
 const sat = async () =>
   makeSitting(prisma, { testId: TEST, studentId: (await makeStudent(prisma)).id, score: 0 });
-
-const assignTypist = async (assigneeId: string, sectionId: string, finalizedAt: Date | null) => {
-  const row = await prisma.questionAssignment.create({
-    data: {
-      id: randomUUID(),
-      testId: TEST,
-      baseConfigId: BUILDER.CONFIG,
-      baseConfigSectionId: sectionId,
-      assigneeId,
-      role: ASSIGNMENT_ROLES.TYPIST,
-      finalizedAt,
-    },
-    select: { id: true },
-  });
-  return row.id;
-};
 
 const refused = async (attempt: Promise<unknown>) => {
   const error = await attempt.catch((caught: unknown) => caught);
@@ -365,34 +347,16 @@ describe('TestsService — where a test gets its questions', () => {
     assert.equal((await testRow())?.paperSource, PAPER_SOURCES.FRAMED);
   });
 
-  /** The override: a wrong choice on day one must not cost the institute the whole test. */
-  it('lets a super admin move the very choice it just refused', async () => {
+  /** Every assignment on the test rests on the choice, so a super admin is refused it too. */
+  it('refuses a super admin the second choice as well', async () => {
     const { service } = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
 
-    const moved = await service.update(
-      TEST,
-      { paperSource: PAPER_SOURCES.PICKED },
-      { isSuperAdmin: true },
+    const error = await refused(
+      service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, { isSuperAdmin: true }),
     );
 
-    assert.equal(moved.paperSource, PAPER_SOURCES.PICKED);
-  });
-
-  /** The deadlock this prevents: a typist row nobody will ever finalize, holding `offer` shut for good. */
-  it('takes an outstanding typist off the test, and leaves a finalised one', async () => {
-    const { service } = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
-    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
-    const outstanding = await assignTypist(typist.id, idFor('sec_1'), null);
-    const done = await assignTypist(typist.id, idFor('sec_2'), new Date());
-
-    await service.update(TEST, { paperSource: PAPER_SOURCES.PICKED }, { isSuperAdmin: true });
-
-    const left = await prisma.questionAssignment.findMany({ select: { id: true } });
-    assert.deepEqual(
-      left.map((row) => row.id),
-      [done],
-    );
-    assert.equal(await prisma.questionAssignment.count({ where: { id: outstanding } }), 0);
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal((await testRow())?.paperSource, PAPER_SOURCES.FRAMED);
   });
 
   /** Choosing it moves no question, so an offered test must not be refused the choice. */

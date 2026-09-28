@@ -233,6 +233,12 @@ Enum AssignmentRole {
   PROOFREADER
 }
 
+Enum SendBackReason {
+  SPELLING
+  DATA_CORRECTION
+  ANSWER_OPTION
+}
+
 Enum AdminRole {
   TYPIST
   PROOFREADER
@@ -466,12 +472,35 @@ Table QuestionAssignment {
   role AssignmentRole [not null]
   dueAt timestamptz(3)
   finalizedAt timestamptz(3)
+  handedAt timestamptz(3)
+  replacedAt timestamptz(3)
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
-    (testId, baseConfigSectionId, role) [unique]
+    (testId, baseConfigSectionId, role)
     (assigneeId, finalizedAt)
+  }
+}
+
+Table QuestionReview {
+  id uuid [pk, default: `uuid(7)`]
+  testId uuid [not null]
+  baseConfigSectionId uuid [not null]
+  questionId uuid [not null]
+  checkedAt timestamptz(3)
+  checkedById uuid
+  sentBackAt timestamptz(3)
+  reason SendBackReason
+  note text
+  sentBackById uuid
+  fixedAt timestamptz(3)
+  fixedById uuid
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (testId, questionId) [unique]
+    (testId, baseConfigSectionId)
+    (questionId)
   }
 }
 
@@ -951,6 +980,8 @@ Ref: PaperQuestion.(questionId, questionVersionId) > QuestionVersion.(questionId
 Ref: QuestionAssignment.(testId, baseConfigId) > Test.(id, baseConfigId) [delete: cascade]
 Ref: QuestionAssignment.(baseConfigId, baseConfigSectionId) > BaseConfigSection.(baseConfigId, id) [delete: restrict]
 Ref: QuestionAssignment.assigneeId > Admin.id [delete: restrict]
+Ref: QuestionReview.testId > Test.id [delete: cascade]
+Ref: QuestionReview.questionId > Question.id [delete: cascade]
 Ref: SectionComment.testId > Test.id [delete: cascade]
 Ref: SectionComment.authorId > Admin.id [delete: restrict]
 Ref: Attempt.testId > Test.id

@@ -36,6 +36,12 @@ export const assignmentSchema = z.object({
   typistDone: z.boolean().nullable(),
   /** Whether the section's reader has marked it read. Null where nobody has been given it to read. */
   readerDone: z.boolean().nullable(),
+  /** On a proof-reader's row: when the section reached them. Null while it is still with others. */
+  handedAt: z.string().nullable(),
+  /** Set once somebody else took the role over; the row stays as the record. */
+  replacedAt: z.string().nullable(),
+  /** Nothing has been done under it yet, so it can still be taken back. Null where not asked. */
+  removable: z.boolean().nullable(),
   /** The test has been offered: its paper is frozen, and no section of it is anybody's to change. */
   testOffered: z.boolean(),
   /** The section's own target — a section fact, same as `writtenCount`. */
@@ -275,8 +281,6 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   finalize: (id: string) => `/admin/assignments/${id}/finalize`,
   /** A typist's one hand-over: the chosen questions become the section's paper. */
   done: (id: string) => `/admin/assignments/${id}/done`,
-  /** A reader returns the whole section to its typist; the reason goes in the section thread. */
-  sendBack: (id: string) => `/admin/assignments/${id}/send-back`,
   /** Who a role can be given to — active admins already holding the feature key it needs. */
   assignable: '/admin/assignments/assignable',
   /** GET reads the section thread; POST to the same path adds to it. */
@@ -285,28 +289,4 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** Rewording one, which only its own author does. */
   editComment: (testId: string, baseConfigSectionId: string, commentId: string) =>
     `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/comments/${commentId}`,
-} as const;
-
-export const ADMIN_PROOFREADING_ROUTES = {
-  /** One section of one test, as the reader assigned to it sees it. */
-  forAssignment: (assignmentId: string) =>
-    `/admin/proofreading/assignments/${assignmentId}/questions`,
-  /** One question of that section, for the screen that edits it — GET reads, PATCH saves. */
-  oneQuestion: (assignmentId: string, questionId: string) =>
-    `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}`,
-  /** The assignment is in the path because it is the authority the edit rests on. */
-  editQuestion: (assignmentId: string, questionId: string) =>
-    `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}`,
-  /** Read before the edit: which other tests hold this question, and which of them have opened. */
-  otherTests: (assignmentId: string, questionId: string) =>
-    `/admin/proofreading/assignments/${assignmentId}/questions/${questionId}/other-tests`,
-  /** The same section, reached by the pair an assignment keys on. Super admin only, and unassigned. */
-  forSection: (testId: string, baseConfigSectionId: string) =>
-    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions`,
-  oneSectionQuestion: (testId: string, baseConfigSectionId: string, questionId: string) =>
-    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}`,
-  editSectionQuestion: (testId: string, baseConfigSectionId: string, questionId: string) =>
-    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}`,
-  sectionOtherTests: (testId: string, baseConfigSectionId: string, questionId: string) =>
-    `/admin/proofreading/tests/${testId}/sections/${baseConfigSectionId}/questions/${questionId}/other-tests`,
 } as const;

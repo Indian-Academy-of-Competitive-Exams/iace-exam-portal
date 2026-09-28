@@ -141,7 +141,7 @@ erodes.
 | branches      | `Branch`                                                                                                                         |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                                          |
 | events        | `Event`, `EventCandidate`                                                                                                        |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `ImportRowEdit`                                                               |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `ImportRowEdit`, `QuestionReview`                                             |
 | assignments   | `QuestionAssignment`, `SectionComment`                                                                                           |
 | configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                       |
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                     |
@@ -164,12 +164,10 @@ owns the sitting owns the derivation.
 - `tests` moves a `Question` in-use counter on the offer, once per question served. Being depended
   on is what freezes a question, and only the offer knows; `finalizedAt` is the watermark that keeps
   a re-offer from counting twice.
-- `tests` stamps a typist's `QuestionAssignment.finalizedAt` on Done. The stamp and the paper rows
-  it places are one fact and commit in one transaction; the leftover questions go to the bank
-  through `QuestionsService`, not by a write of `tests`' own.
-- `tests` deletes a section's unfinalized `QuestionAssignment` rows when a super admin moves a test
-  from FRAMED to PICKED. Only the source change knows the work has been stood down, and an
-  assignment nobody can finish is not a row `assignments` would delete on its own.
+- `tests` stamps a typist's `QuestionAssignment.finalizedAt` on Done, and the section's reader's
+  `handedAt` with it; on a picked section it stamps `handedAt` at the owner's hand-over. The stamps
+  and the paper rows they rest on are one fact and commit together; the leftover questions go to
+  the bank through `QuestionsService`, not by a write of `tests`' own.
 - the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
   the one crossing that is infra rather than domain: retention is a property of the buffer, not of
   the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.

@@ -272,6 +272,13 @@ enum AssignmentRole {
   PROOFREADER
 }
 
+// Why a proof-reader returned a question to its typist.
+enum SendBackReason {
+  SPELLING
+  DATA_CORRECTION
+  ANSWER_OPTION
+}
+
 // What an admin is CALLED and the preset their grants start from; isSuperAdmin derives from it.
 enum AdminRole {
   TYPIST
@@ -473,6 +480,7 @@ model Question {
   paperQuestions PaperQuestion[]
   questionStats  TestQuestionStat[]
   savedBy        SavedQuestion[]
+  reviews        QuestionReview[]
   assignment     QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   @@index([subjectId, difficulty, status])
@@ -547,6 +555,7 @@ model Test {
   paperQuestions  PaperQuestion[]
   assignments     QuestionAssignment[]
   sectionComments SectionComment[]
+  questionReviews QuestionReview[]
   attempts        Attempt[]
   notifications   Notification[]
   stat            TestStat?
@@ -606,6 +615,10 @@ model QuestionAssignment {
   dueAt               DateTime?      @db.Timestamptz(3)
   // The whole state: null is outstanding, set is done. No status enum to keep in step.
   finalizedAt         DateTime?      @db.Timestamptz(3)
+  // On a proof-reader's row: when the section reached them — a typist's Done, or an owner's hand-over.
+  handedAt            DateTime?      @db.Timestamptz(3)
+  // Set when somebody else took the role over; the row stays as the record of who did what.
+  replacedAt          DateTime?      @db.Timestamptz(3)
   createdById         String?        @db.Uuid
   createdAt           DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -615,8 +628,34 @@ model QuestionAssignment {
   assignee          Admin             @relation("AssignmentAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
   questions         Question[]
 
-  @@unique([testId, baseConfigSectionId, role])
+  // One ACTIVE holder per role: the partial unique (WHERE "replacedAt" IS NULL) is in the migration.
+  @@index([testId, baseConfigSectionId, role])
   @@index([assigneeId, finalizedAt])
+}
+
+// A proof-reader's verdict on one question of one test: checked, or sent back with a reason until fixed.
+model QuestionReview {
+  id                  String          @id @default(uuid(7)) @db.Uuid
+  testId              String          @db.Uuid
+  baseConfigSectionId String          @db.Uuid
+  questionId          String          @db.Uuid
+  checkedAt           DateTime?       @db.Timestamptz(3)
+  // Actor ids without a foreign key, as in RowActionLog: the verdict outlives whoever gave it.
+  checkedById         String?         @db.Uuid
+  sentBackAt          DateTime?       @db.Timestamptz(3)
+  reason              SendBackReason?
+  note                String?
+  sentBackById        String?         @db.Uuid
+  fixedAt             DateTime?       @db.Timestamptz(3)
+  fixedById           String?         @db.Uuid
+  updatedAt           DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+
+  test     Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, questionId])
+  @@index([testId, baseConfigSectionId])
+  @@index([questionId])
 }
 
 // The discussion on one section of one test, at the pair an assignment keys on.

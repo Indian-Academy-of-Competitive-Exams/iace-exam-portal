@@ -163,6 +163,6 @@ export const drawableFor = (testId?: string): Prisma.QuestionWhereInput => ({
   OR: [
     { assignmentId: null },
     ...(testId ? [{ assignment: { testId } }] : []),
-    { assignment: { test: { assignments: { none: { finalizedAt: null } } } } },
+    { assignment: { test: { assignments: { none: { finalizedAt: null, replacedAt: null } } } } },
   ],
 });
