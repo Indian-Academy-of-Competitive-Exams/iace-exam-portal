@@ -32,10 +32,8 @@ export function MultiCombobox({
   const toggle = (item: string) =>
     onChange(value.includes(item) ? value.filter((chosen) => chosen !== item) : [...value, item]);
 
-  const chosenLabels = value.map(labelFor);
-
   /** Named, not counted: "2 selected" makes the reader open the list to learn what they chose. */
-  const triggerLabel = () => (value.length === 0 ? placeholder : chosenLabels.join(', '));
+  const chosen = value.map(labelFor).join(', ');
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -44,10 +42,10 @@ export function MultiCombobox({
         multiple
         open={open}
         onOpenChange={setOpen}
-        triggerLabel={triggerLabel()}
+        triggerLabel={value.length === 0 ? placeholder : chosen}
         triggerMuted={value.length === 0}
         // One choice already reads in full; several are what the trigger has to cut.
-        triggerTooltip={value.length > 1 ? chosenLabels.join(', ') : undefined}
+        triggerTooltip={value.length > 1 ? chosen : undefined}
       >
         {list.items.map((item) => (
           <ComboboxOption
