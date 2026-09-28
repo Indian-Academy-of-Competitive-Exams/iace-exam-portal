@@ -1,12 +1,8 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  LEADERBOARD_SCOPES,
-  testsSat,
-  type LeaderboardQueryInput,
-  type LeaderboardScope,
-} from '@iace/contracts';
+import { boardQueryFor, isBoardAsked, LEADERBOARD_SCOPE_LABELS, scopeIdFor } from '@iace/app-kit';
+import { LEADERBOARD_SCOPES, testsSat, type LeaderboardScope } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { leaderboardQueryKey, PERFORMANCE_SERIES_QUERY_KEY } from '../../lib/constants';
@@ -22,11 +18,9 @@ import { Podium, Standings } from './board';
 const UNTITLED = 'Untitled test';
 
 /** One paper, a series, or every paper they have sat — marks rank one, percentile the rest. */
-const SCOPES: readonly ChipOption[] = [
-  { value: LEADERBOARD_SCOPES.TEST, label: 'This test' },
-  { value: LEADERBOARD_SCOPES.SERIES, label: 'Series points' },
-  { value: LEADERBOARD_SCOPES.ALL_TIME, label: 'All time' },
-];
+const SCOPES: readonly ChipOption[] = Object.entries(LEADERBOARD_SCOPE_LABELS).map(
+  ([value, label]) => ({ value, label }),
+);
 
 export function LeaderboardPanel() {
   const trend = useQuery(performanceQuery);
@@ -45,11 +39,11 @@ export function LeaderboardPanel() {
   const paper = testId || (sat[0]?.testId ?? '');
   const inSeries = seriesId || (series.data?.[0]?.id ?? '');
   const scopeId = scopeIdFor(scope as LeaderboardScope, paper, inSeries);
-  const asked = scope === LEADERBOARD_SCOPES.ALL_TIME || scopeId !== '';
+  const asked = isBoardAsked(scope as LeaderboardScope, scopeId, sat.length);
 
   const board = useQuery({
     queryKey: leaderboardQueryKey(scope as LeaderboardScope, scopeId),
-    queryFn: () => api.me.leaderboard(queryFor(scope as LeaderboardScope, scopeId)),
+    queryFn: () => api.me.leaderboard(boardQueryFor(scope as LeaderboardScope, scopeId)),
     enabled: asked,
   });
 
@@ -99,16 +93,4 @@ export function LeaderboardPanel() {
       ) : null}
     </RefreshScroll>
   );
-}
-
-function scopeIdFor(scope: LeaderboardScope, testId: string, seriesId: string): string {
-  if (scope === LEADERBOARD_SCOPES.TEST) return testId;
-  if (scope === LEADERBOARD_SCOPES.SERIES) return seriesId;
-  return '';
-}
-
-function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInput {
-  if (scope === LEADERBOARD_SCOPES.TEST) return { scope, testId: scopeId };
-  if (scope === LEADERBOARD_SCOPES.SERIES) return { scope, seriesId: scopeId };
-  return { scope: LEADERBOARD_SCOPES.ALL_TIME };
 }

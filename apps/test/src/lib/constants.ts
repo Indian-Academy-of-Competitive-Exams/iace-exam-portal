@@ -1,13 +1,6 @@
 import { BarChart3, Bell, Bookmark, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import {
-  ANSWER_STATE,
-  LEADERBOARD_MEASURES,
-  LEADERBOARD_SCOPES,
-  type AnswerState,
-  type LeaderboardMeasure,
-  type LeaderboardScope,
-} from '@iace/contracts';
+import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
 /** Route paths. Referenced by the router, the guards and every navigate(). */
@@ -101,25 +94,6 @@ export {
 
 /** The subject filter choosing no scope means every scope, the way a `choice` filter's blank does. */
 export const ANY_SCOPE = '';
-
-/** Marks rank one paper; across papers only a percentile does. Both are "the number" on a row. */
-export const LEADERBOARD_MEASURE_LABELS: Readonly<Record<LeaderboardMeasure, string>> = {
-  [LEADERBOARD_MEASURES.MARKS]: 'Marks',
-  [LEADERBOARD_MEASURES.PERCENTILE_POINTS]: 'Points',
-};
-
-export const LEADERBOARD_SCOPE_LABELS: Readonly<Record<LeaderboardScope, string>> = {
-  [LEADERBOARD_SCOPES.TEST]: 'This test',
-  [LEADERBOARD_SCOPES.SERIES]: 'Series points',
-  [LEADERBOARD_SCOPES.ALL_TIME]: 'All time',
-};
-
-/** What the three podium seats are called. Nobody says "1st" about a topper. */
-export const PODIUM_LABELS: Readonly<Record<number, string>> = {
-  1: 'Topper',
-  2: '2nd',
-  3: '3rd',
-};
 
 /** The five states a question can be in, and the colour the palette draws each one. */
 export const PALETTE_LEGEND: readonly {

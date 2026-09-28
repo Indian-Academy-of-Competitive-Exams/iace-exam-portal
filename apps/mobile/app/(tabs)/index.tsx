@@ -90,8 +90,8 @@ function PreTest({ ready }: Readonly<{ ready: boolean }>) {
 
   return (
     <Alert variant="warning">
-      Before your first test we need your mother&rsquo;s name, father&rsquo;s name and date of birth
-      They go on your hall ticket.
+      Before your first test we need your mother&rsquo;s name, father&rsquo;s name and date of
+      birth. They go on your hall ticket.
       {'\n'}
       <Text className="font-medium" onPress={() => router.navigate(ACCOUNT_ROUTES.PROFILE)}>
         Add them

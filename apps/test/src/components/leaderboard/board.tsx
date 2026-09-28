@@ -14,7 +14,7 @@ import {
   type Leaderboard,
   type LeaderboardRow,
 } from '@iace/contracts';
-import { LEADERBOARD_MEASURE_LABELS, PODIUM_LABELS } from '../../lib/constants';
+import { LEADERBOARD_MEASURE_LABELS, PODIUM_LABELS } from '@iace/app-kit';
 
 /** The topper takes the middle seat from `sm` up, so the shape reads as a podium. */
 const PODIUM_ORDER: Readonly<Record<number, string>> = {

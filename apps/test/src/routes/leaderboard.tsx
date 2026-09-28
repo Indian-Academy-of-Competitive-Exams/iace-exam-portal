@@ -11,20 +11,18 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
+import { boardQueryFor, isBoardAsked, LEADERBOARD_SCOPE_LABELS, scopeIdFor } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
 import {
   LEADERBOARD_SCOPES,
   leaderboardScopeSchema,
   testsSat,
   type Leaderboard,
-  type LeaderboardQueryInput,
-  type LeaderboardScope,
   type SatTest,
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceQuery } from '../lib/queries';
 import {
-  LEADERBOARD_SCOPE_LABELS,
   NAV_ITEMS,
   PERFORMANCE_SERIES_QUERY_KEY,
   ROUTES,
@@ -43,18 +41,6 @@ const SCOPE_ITEMS = [
 ];
 
 const UNTITLED = 'Untitled test';
-
-function scopeIdFor(scope: LeaderboardScope, testId: string, seriesId: string): string {
-  if (scope === LEADERBOARD_SCOPES.TEST) return testId;
-  if (scope === LEADERBOARD_SCOPES.SERIES) return seriesId;
-  return '';
-}
-
-function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInput {
-  if (scope === LEADERBOARD_SCOPES.TEST) return { scope, testId: scopeId };
-  if (scope === LEADERBOARD_SCOPES.SERIES) return { scope, seriesId: scopeId };
-  return { scope: LEADERBOARD_SCOPES.ALL_TIME };
-}
 
 export function LeaderboardPage() {
   const trend = useQuery(performanceQuery);
@@ -117,9 +103,8 @@ export function LeaderboardPage() {
   const scopeId = scopeIdFor(scope, testId, seriesId);
   const board = useQuery({
     queryKey: leaderboardQueryKey(scope, scopeId),
-    queryFn: () => api.me.leaderboard(queryFor(scope, scopeId)),
-    // No ranked sitting means no board at ANY scope, all-time included — so nothing is asked for.
-    enabled: sat.length > 0 && (scope === LEADERBOARD_SCOPES.ALL_TIME || scopeId !== ''),
+    queryFn: () => api.me.leaderboard(boardQueryFor(scope, scopeId)),
+    enabled: isBoardAsked(scope, scopeId, sat.length),
   });
 
   // The podium and the ranks live inside the board's own query, so `trend` landing is too early to point at them.

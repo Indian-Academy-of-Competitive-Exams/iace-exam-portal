@@ -1,19 +1,11 @@
 /// <reference types="nativewind/types" />
 import { View } from 'react-native';
-import { LEADERBOARD_MEASURES, type Leaderboard, type LeaderboardRow } from '@iace/contracts';
+import { LEADERBOARD_MEASURE_LABELS, PODIUM_LABELS } from '@iace/app-kit';
+import { type Leaderboard, type LeaderboardRow } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { cn } from '../../lib/cn';
 import { Card } from '../ui/card';
 import { EmptyState } from '../ui/empty-state';
-
-/** What the three seats are called. Nobody says "1st" about a topper. */
-const PODIUM_LABELS: Readonly<Record<number, string>> = { 1: 'Topper', 2: '2nd', 3: '3rd' };
-
-/** Marks rank one paper; across papers only a percentile does. Both are "the number" on a row. */
-const MEASURE_LABELS: Readonly<Record<string, string>> = {
-  [LEADERBOARD_MEASURES.MARKS]: 'Marks',
-  [LEADERBOARD_MEASURES.PERCENTILE_POINTS]: 'Points',
-};
 
 export function Podium({ rows }: Readonly<{ rows: readonly LeaderboardRow[] }>) {
   if (rows.length === 0) return null;
@@ -59,7 +51,7 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
 
   return (
     <View className="gap-3">
-      <Text variant="section">{MEASURE_LABELS[board.measure] ?? 'Standing'}</Text>
+      <Text variant="section">{LEADERBOARD_MEASURE_LABELS[board.measure]}</Text>
       <Card>
         {rows.map((row, index) => (
           <View
