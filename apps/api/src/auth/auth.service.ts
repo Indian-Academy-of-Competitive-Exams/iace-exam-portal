@@ -246,7 +246,7 @@ export class AuthService {
   // Session lifecycle
   // ==========================================================================
 
-  /** Rotating refresh: every use mints a new pair and invalidates the old one. */
+  /** Rotating refresh: every use mints a new pair, and the old token only answers a retry inside the grace window. */
   async refresh(refreshToken: string): Promise<AuthTokens> {
     const claims = await this.tokens.verifyRefresh(refreshToken);
     const identity = await this.loadIdentity(claims.actor, claims.sub);

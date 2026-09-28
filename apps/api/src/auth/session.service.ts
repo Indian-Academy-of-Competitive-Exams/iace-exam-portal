@@ -18,6 +18,15 @@ import {
   type StoredSession,
 } from './auth.types';
 
+/** How long the token a rotation consumed still reads as a retry: longer than the client's whole retry schedule. */
+export const REFRESH_RETRY_GRACE_SEC = 60;
+
+/** A two-tab burst mints a handful; the cap only stops a holder of the old token growing the value. */
+const MAX_SIBLING_TOKENS = 8;
+
+/** A lost compare-and-swap means another refresh landed first; reading again decides this one against it. */
+const ROTATE_TRIES = 3;
+
 /** Sessions and device binding — Redis only, never Postgres. A session's TTL is the refresh-token lifetime, so expiry is automatic and there is no sweeper. */
 @Injectable()
 export class SessionService {
@@ -65,7 +74,7 @@ export class SessionService {
     return (await this.redis.client.exists(redisKeys.session(actor, subjectId, sessionId))) === 1;
   }
 
-  /** Verifies the presented refresh token against the stored hash and swaps in the new one. Any mismatch revokes the session outright: either the token was replayed after rotation, or it leaked. */
+  /** Swaps in the new refresh token. A token this session never held, or one replaced longer ago than the grace window, revokes it outright: it was replayed or it leaked. */
   async rotate(
     actor: ActorType,
     subjectId: string,
@@ -75,32 +84,34 @@ export class SessionService {
     ttlSec: number,
   ): Promise<void> {
     const key = redisKeys.session(actor, subjectId, sessionId);
-    const raw = await this.redis.getRaw(key);
-    const session = raw ? parsedSession(raw) : null;
-    if (!session) return this.throwEnded(actor, subjectId, sessionId);
+    const presented = this.hash(presentedToken);
+    const nextHash = this.hash(nextToken);
 
-    if (!sameHex(this.hash(presentedToken), session.refreshTokenHash)) {
-      await this.revoke(actor, subjectId, sessionId);
-      this.logger.warn(`Refresh token reuse detected for ${actor} ${subjectId}; session revoked`);
-      throw new AppException(
-        ErrorCodes.UNAUTHENTICATED,
-        'Session is no longer valid. Sign in again',
-      );
-    }
+    for (let tried = 0; tried < ROTATE_TRIES; tried += 1) {
+      const raw = await this.redis.getRaw(key);
+      const session = raw ? parsedSession(raw) : null;
+      if (!session) return this.throwEnded(actor, subjectId, sessionId);
 
-    const next = {
-      ...session,
-      refreshTokenHash: this.hash(nextToken),
-      lastSeenAt: new Date().toISOString(),
-    } satisfies StoredSession;
-    // Lands only on the bytes read: a replacement or sign-out racing this refresh wins.
-    if (!(await this.redis.replaceJson(key, raw, next, ttlSec))) {
-      return this.throwEnded(actor, subjectId, sessionId);
+      const next = rotated(session, presented, nextHash, new Date());
+      if (!next) {
+        await this.revoke(actor, subjectId, sessionId);
+        this.logger.warn(`Refresh token reuse detected for ${actor} ${subjectId}; session revoked`);
+        throw new AppException(
+          ErrorCodes.UNAUTHENTICATED,
+          'Session is no longer valid. Sign in again',
+        );
+      }
+
+      // Lands only on the bytes read: a sign-out racing this wins, and a refresh racing it is read again.
+      if (await this.redis.replaceJson(key, raw, next, ttlSec)) {
+        // A refreshing session keeps its place in the index, or revokeAll and the one-per-kind rule lose it.
+        const indexKey = redisKeys.sessionIndex(actor, subjectId);
+        await this.redis.client.sadd(indexKey, sessionId);
+        await this.redis.client.expire(indexKey, ttlSec);
+        return;
+      }
     }
-    // A refreshing session keeps its place in the index, or revokeAll and the one-per-kind rule lose it.
-    const indexKey = redisKeys.sessionIndex(actor, subjectId);
-    await this.redis.client.sadd(indexKey, sessionId);
-    await this.redis.client.expire(indexKey, ttlSec);
+    return this.throwEnded(actor, subjectId, sessionId);
   }
 
   /** A session that is gone: replaced says so, anything else is an ordinary end. */
@@ -202,6 +213,42 @@ export class SessionService {
     // The token is already a high-entropy signed JWT, so a plain digest is the right tool here — this is theft detection, not password storage.
     return createHash('sha256').update(token).digest('hex');
   }
+}
+
+/** The session after `presented` is spent, or null when presenting it is a replay. */
+function rotated(
+  session: StoredSession,
+  presented: string,
+  nextHash: string,
+  now: Date,
+): StoredSession | null {
+  const siblings = session.siblingRefreshTokenHashes ?? [];
+  const lastSeenAt = now.toISOString();
+
+  if ([session.refreshTokenHash, ...siblings].some((held) => sameHex(presented, held))) {
+    return {
+      ...session,
+      refreshTokenHash: nextHash,
+      siblingRefreshTokenHashes: [],
+      previousRefreshTokenHash: presented,
+      rotatedAt: lastSeenAt,
+      lastSeenAt,
+    };
+  }
+
+  const graceEndsAt = Date.parse(session.rotatedAt ?? '') + REFRESH_RETRY_GRACE_SEC * 1000;
+  const retried =
+    session.previousRefreshTokenHash !== undefined &&
+    sameHex(presented, session.previousRefreshTokenHash) &&
+    now.getTime() <= graceEndsAt;
+  if (!retried) return null;
+
+  return {
+    ...session,
+    refreshTokenHash: nextHash,
+    siblingRefreshTokenHashes: [...siblings, session.refreshTokenHash].slice(-MAX_SIBLING_TOKENS),
+    lastSeenAt,
+  };
 }
 
 /** A value that does not parse is no session at all, as getJson treats one. */

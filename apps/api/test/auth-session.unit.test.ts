@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import {
   ActorTypes,
   type ActorType,
@@ -7,7 +7,7 @@ import {
   CLIENT_KINDS,
   ErrorCodes,
 } from '@iace/contracts';
-import { SessionService } from '../src/auth/session.service';
+import { REFRESH_RETRY_GRACE_SEC, SessionService } from '../src/auth/session.service';
 import { FakeRedis, NO_DEVICE } from './support/fakes';
 
 /** Sessions live only in Redis. Two properties earn that: logout takes effect at once, and a replayed refresh token is detectable because tokens rotate. */
@@ -61,17 +61,73 @@ describe('SessionService', () => {
   });
 
   it('detects a replayed refresh token and kills the session', async () => {
+    mock.timers.enable({ apis: ['Date'] });
+    try {
+      const { sessions } = build();
+      const sessionId = await openSession(sessions, 'refresh-1');
+      await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL);
+      mock.timers.tick(REFRESH_RETRY_GRACE_SEC * 1000 + 1);
+
+      // Someone presenting the pre-rotation token either stole it or is a stale client; either way the safe reading is that it leaked.
+      await assert.rejects(
+        () =>
+          sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-9', TTL),
+        (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
+      );
+
+      // And the whole session goes, not just that one request — the thief and the victim are both signed out, which is the point.
+      assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  /** The failure this prevents: a refresh that landed but whose answer was lost signing the student out mid-sitting. */
+  it('answers a retry of the token it just replaced, and the retry’s token works on', async () => {
     const { sessions } = build();
     const sessionId = await openSession(sessions, 'refresh-1');
     await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL);
 
-    // Someone presenting the pre-rotation token either stole it or is a stale client; either way the safe reading is that it leaked.
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-3', TTL);
+
+    await assert.doesNotReject(() =>
+      sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-3', 'refresh-4', TTL),
+    );
+  });
+
+  /** Two tabs share one stored token; whichever of the two answers was stored last must still refresh. */
+  it('keeps the token a raced retry replaced usable until the next rotation', async () => {
+    const { sessions } = build();
+    const sessionId = await openSession(sessions, 'refresh-1');
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL);
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-3', TTL);
+
+    await assert.doesNotReject(() =>
+      sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-2', 'refresh-4', TTL),
+    );
+  });
+
+  it('answers two refreshes of one token that arrive together', async () => {
+    const { sessions } = build();
+    const sessionId = await openSession(sessions, 'refresh-1');
+
+    await Promise.all([
+      sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL),
+      sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-3', TTL),
+    ]);
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), true);
+  });
+
+  it('still revokes a token it never issued, inside the retry window too', async () => {
+    const { sessions } = build();
+    const sessionId = await openSession(sessions, 'refresh-1');
+    await sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-2', TTL);
+
     await assert.rejects(
-      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', 'refresh-9', TTL),
+      () => sessions.rotate(ActorTypes.STUDENT, SUBJECT, sessionId, 'forged', 'refresh-9', TTL),
       (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
     );
-
-    // And the whole session goes, not just that one request — the thief and the victim are both signed out, which is the point.
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
   });
 

@@ -5,6 +5,11 @@ import { type ClientKind } from '@iace/contracts';
 /** The Redis-resident half of a session. Never written to Postgres. */
 export interface StoredSession {
   refreshTokenHash: string;
+  /** Minted by a retry of the token before this one, and good until the next rotation, since a tab may have stored it. */
+  siblingRefreshTokenHashes?: string[];
+  /** What the last rotation consumed, and when: presented again inside the grace window it is a retry, not a replay. */
+  previousRefreshTokenHash?: string;
+  rotatedAt?: string;
   deviceName: string | null;
   ip: string | null;
   userAgent: string | null;
