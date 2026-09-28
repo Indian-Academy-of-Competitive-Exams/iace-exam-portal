@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { API_ROLES } from './api-role';
+import { DURATION_PATTERN } from '../common/duration';
 
 /** `"true"`/`"1"` → true. `z.coerce.boolean()` is wrong here: it makes the string "false" truthy. */
 const boolFromEnv = (fallback: boolean) =>
@@ -33,6 +34,9 @@ const secondsLadder = (fallback: number[]) =>
 
 /** One slash, not `\/+$`: the quantified form backtracks quadratically on a run of them. */
 const TRAILING_SLASH = /\/$/;
+
+/** A bad token lifetime fails at boot, not at the first sign-in that reads it. */
+const DURATION_HINT = 'must be a duration like 15m, 24h or 30d';
 
 /** An unset variable and one set to nothing mean the same thing: not configured. */
 const optional = z
@@ -88,8 +92,8 @@ export const envSchema = z.object({
   // Auth. Length here, and the dev_only_ refusal below, are what keep a placeholder out of production.
   JWT_ACCESS_SECRET: z.string().min(24, 'JWT_ACCESS_SECRET must be at least 24 characters'),
   JWT_REFRESH_SECRET: z.string().min(24, 'JWT_REFRESH_SECRET must be at least 24 characters'),
-  JWT_ACCESS_TTL: z.string().default('15m'),
-  JWT_REFRESH_TTL: z.string().default('30d'),
+  JWT_ACCESS_TTL: z.string().trim().regex(DURATION_PATTERN, DURATION_HINT).default('15m'),
+  JWT_REFRESH_TTL: z.string().trim().regex(DURATION_PATTERN, DURATION_HINT).default('30d'),
 
   // OTP policy. Every byte of OTP state lives in Redis, never Postgres.
   OTP_LENGTH: z.coerce.number().int().min(4).max(8).default(6),
