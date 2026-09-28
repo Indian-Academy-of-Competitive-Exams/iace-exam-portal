@@ -42,6 +42,11 @@ export interface CreateAuthOptions<TIdentity extends AuthIdentity, TExtra extend
 const ME_RETRIES = 1;
 const ME_RETRY_BASE_MS = 1000;
 
+/** One to two seconds, drawn per student, as the autosave spreads its own. */
+function meRetryDelayMs(random: () => number = Math.random): number {
+  return ME_RETRY_BASE_MS * (1 + random());
+}
+
 /** One session implementation for every SPA, parameterised by the identity type. */
 export function createAuth<TIdentity extends AuthIdentity, TExtra extends object = object>(
   options: CreateAuthOptions<TIdentity, TExtra>,
@@ -68,7 +73,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
       // A blip at boot must not send a good token to the sign-in screen; a refusal already ended the session.
       retry: (failures, error) => failures < ME_RETRIES && isWorthAskingAgain(error),
       // Once, and spread: the refresh under it already backed off, and a hall must not ask in step.
-      retryDelay: () => ME_RETRY_BASE_MS + Math.random() * ME_RETRY_BASE_MS,
+      retryDelay: () => meRetryDelayMs(),
       staleTime: 5 * 60 * 1000,
     });
 

@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { boardQueryFor, isBoardAsked, LEADERBOARD_SCOPE_LABELS, scopeIdFor } from '@iace/app-kit';
 import { LEADERBOARD_SCOPES, testsSat, type LeaderboardScope } from '@iace/contracts';
 import { Text } from '../ui/text';
@@ -71,15 +71,7 @@ export function LeaderboardPanel() {
         />
       ) : null}
 
-      {!asked && trend.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
-      {!asked && trend.isError ? (
-        <EmptyState
-          kind={EMPTY_STATE_KINDS.FAILURE}
-          title="Your tests did not load"
-          onRetry={() => void trend.refetch()}
-        />
-      ) : null}
-      {!asked && trend.isSuccess ? <EmptyState title="No tests sat yet" /> : null}
+      {asked ? null : <NotAskedYet trend={trend} />}
       {asked && board.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
       {asked && board.isError ? (
         <EmptyState
@@ -101,4 +93,19 @@ export function LeaderboardPanel() {
       ) : null}
     </RefreshScroll>
   );
+}
+
+/** No board is asked for until the tests it would list are known, and "none" only once they are. */
+function NotAskedYet({ trend }: Readonly<{ trend: UseQueryResult<unknown> }>) {
+  if (trend.isLoading) return <Skeleton className="h-64 rounded-xl" />;
+  if (trend.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your tests did not load"
+        onRetry={() => void trend.refetch()}
+      />
+    );
+  }
+  return <EmptyState title="No tests sat yet" />;
 }
