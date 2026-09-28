@@ -186,7 +186,7 @@ export function AuthoringWorkspace({
     if (active) onActive?.(active);
   }, [active, onActive]);
 
-  const findActive = () => {
+  const findActive = useCallback(() => {
     const view = scroller.current;
     if (!view) return;
     const line = view.scrollTop + view.clientHeight / 2;
@@ -196,7 +196,12 @@ export function AuthoringWorkspace({
       if (card && card.offsetTop <= line) found = key;
     }
     if (found !== activeKey) setActiveKey(found);
-  };
+  }, [keys, activeKey]);
+
+  // A deleted question's card is gone: whichever card slid into its place is the one in view.
+  useEffect(() => {
+    if (activeKey && !keys.includes(activeKey)) findActive();
+  }, [keys, activeKey, findActive]);
 
   const jump = useCallback((key: string) => scrollToCard(cardRefs.current.get(key)), []);
   const step = useCallback(

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, Send, Upload } from 'lucide-react';
+import { CheckCheck, Send, Trash2, Upload } from 'lucide-react';
 import {
   AppException,
   DIFFICULTY_LEVEL,
@@ -20,6 +20,7 @@ import {
   Alert,
   Badge,
   Button,
+  ConfirmDialog,
   Dialog,
   DialogBody,
   DialogClose,
@@ -499,7 +500,58 @@ function CardActions({
       </Button>
     );
   }
+  if (seat.typing && question.order === null) {
+    return <DeleteQuestion work={work} question={question} />;
+  }
   return null;
+}
+
+/** Same shape the bank's own question prompts take, so both confirms read alike. */
+const DELETE_PROMPT = { title: 'Delete this question?', confirmLabel: 'Delete' } as const;
+
+/** A typist's own mistake, taken back while it is still off the paper. */
+function DeleteQuestion({
+  work,
+  question,
+}: Readonly<{ work: SectionWork; question: SectionQuestion }>) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const remove = useMutation({
+    meta: { success: 'Question deleted.' },
+    mutationFn: () => api.admin.authoring.remove(question.questionId),
+    onSuccess: async () => {
+      await Promise.all([
+        // Exact: the deleted question's own read sits under this key, and refetching it would 404.
+        queryClient.invalidateQueries({
+          queryKey: workKey(work.testId, work.baseConfigSectionId),
+          exact: true,
+        }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING }),
+      ]);
+      setAsking(false);
+    },
+  });
+  const named = question.preview ? `“${question.preview}”` : 'This question';
+
+  return (
+    <>
+      <Button type="button" size="sm" variant="outline" onClick={() => setAsking(true)}>
+        <Trash2 aria-hidden />
+        Delete
+      </Button>
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title={DELETE_PROMPT.title}
+        description={`${named} is removed for good.`}
+        confirmLabel={DELETE_PROMPT.confirmLabel}
+        destructive
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
+  );
 }
 
 /** One question back to its typist, with the reason and what to change. */
