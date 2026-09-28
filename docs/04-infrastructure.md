@@ -4,9 +4,25 @@ What runs this platform on AWS, what each piece costs, and why it is that size r
 larger one. `docs/01-architecture.md` §6 names the services; this file is the sizing, the money
 and the runbook.
 
-Every price is US dollars per month in **ap-south-1 (Mumbai)**, pulled from the AWS Price List API
-on 22 September 2026, at 730 hours, and **not re-pulled since** — check the Pricing Calculator
-before committing money. Figures that came from a measurement say where it was taken.
+Every price is US dollars per month in **ap-south-1 (Mumbai)** at 730 hours, from the AWS Price
+List bulk files, **re-pulled 28 September 2026 against list version 20260925 and unchanged** —
+every instance, volume, address, database and transfer rate below came back identical to the
+22 September pull. Figures that came from a measurement say where it was taken.
+
+**To re-pull them**, no credentials needed, the bulk files are public:
+
+```
+https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/ap-south-1/index.json
+                                                       AmazonRDS/current/ap-south-1/index.json
+                                                       AmazonS3/current/ap-south-1/index.json
+                                                       AmazonVPC/current/ap-south-1/index.json
+                                                       AmazonCloudFront/current/index.json
+                                                       AmazonRoute53/current/index.json
+```
+
+The EC2 one is **313 MB** and has to be streamed rather than parsed whole. And the trap: the
+**public IPv4 charge is not in the EC2 file** — it is `APS3-PublicIPv4:InUseAddress` under
+**AmazonVPC**, which is why it looks missing when you go hunting for it.
 
 **The load this is sized for is `CLAUDE.md`'s, and nowhere else's: ~3K concurrent normally, 6K
 handled, 8K with minor additions, 10K inside these limits.** Every derived figure below is worked
@@ -583,7 +599,6 @@ not to build on it. Each line says what to run to replace it with something real
 | Redis per sitting — 10.2 KB JSON, 12.1 KB stored                                     | Undated                                                                                     | `MEMORY USAGE` on a live sitting key                                           |
 | SPA first load — 817 KB raw, 238 KB brotli                                           | True at `3fca444`; the SPAs have moved                                                      | `pnpm --filter @iace/test build` and read the output                           |
 | Graviton is 3–4× slower than the measuring machine                                   | An assertion, never benchmarked — and every "on AWS" figure here rests on it                | Run `scripts/bench-scoring.mjs` on the staging box once                        |
-| Every AWS price                                                                      | Price List API, 22 September 2026, not re-pulled                                            | The Pricing Calculator, before committing money                                |
 
-**The last two matter most.** The Graviton multiplier sits underneath every projection in this
-file, and it is replaced by one command on the first box that exists.
+**The Graviton multiplier matters most.** It sits underneath every projection in this file, it was
+never anything but an assertion, and it is replaced by one command on the first box that exists.
