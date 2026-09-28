@@ -20,7 +20,7 @@ const PREVIEW_DEBOUNCE_MS = 600;
 const DUPLICATE_DEBOUNCE_MS = 900;
 
 /** Asked of the draft on screen, not of the row a save would otherwise have left behind. */
-export function useDuplicate(draft: QuestionDraft, editingId: string): string | null {
+export function useDuplicate(draft: QuestionDraft | null, editingId: string): string | null {
   const [asked, setAsked] = useState<QuestionDraft | null>(null);
 
   useEffect(() => {

@@ -154,7 +154,6 @@ export function AuthoringWorkspace({
 
   const active = activeKey || keys[0] || '';
   const activeIndex = keys.indexOf(active);
-  const activeCard = source.cards.find((card) => card.key === active) ?? null;
   const isNew = active === NEW_CARD;
   const language = (views[active] ?? FIRST_VIEW).language;
 
@@ -164,7 +163,7 @@ export function AuthoringWorkspace({
   });
   const base = isNew ? blank : (activeBase.data ?? null);
   const shown = edits[active] ?? base;
-  const editable = isNew || (activeCard?.editable ?? false);
+  const editable = isNew || Boolean(source.cards.find((card) => card.key === active)?.editable);
 
   const held = useRef(active);
   useEffect(() => {
@@ -263,10 +262,7 @@ export function AuthoringWorkspace({
   });
 
   const draft = useMemo(() => (shown ? toDraft(shown.state, shown.header) : null), [shown]);
-  const duplicate = useDuplicate(
-    source.checkDuplicates && draft ? draft : toDraft(emptyState(), BLANK_HEADER),
-    isNew ? '' : active,
-  );
+  const duplicate = useDuplicate(source.checkDuplicates ? draft : null, isNew ? '' : active);
   const issues = useMemo(
     () => (draft && shown ? validateQuestion(draft, taxonomyFor(shown.header), mathErrorIn) : []),
     [draft, shown],
@@ -352,6 +348,7 @@ export function AuthoringWorkspace({
                         actions={card?.actions}
                         view={views[key] ?? FIRST_VIEW}
                         romanised={romanised}
+                        duplicate={key === active ? duplicate : null}
                         onEdit={(change) => edit(key, change)}
                         onView={(change) => view(key, change)}
                         onSave={saveAndNext}
@@ -494,6 +491,7 @@ function CardBody({
   actions,
   view,
   romanised,
+  duplicate,
   onEdit,
   onView,
   onSave,
@@ -507,6 +505,7 @@ function CardBody({
   actions: React.ReactNode;
   view: View;
   romanised: boolean;
+  duplicate: string | null;
   onEdit: (change: (current: Held) => Held) => void;
   onView: (change: (current: View) => View) => void;
   onSave: () => void;
@@ -540,6 +539,7 @@ function CardBody({
       actions={actions}
       view={view}
       romanised={romanised}
+      duplicate={duplicate}
       onEdit={onEdit}
       onView={onView}
       onSave={onSave}
@@ -595,6 +595,7 @@ function EditBody({
   actions,
   view,
   romanised,
+  duplicate,
   onEdit,
   onView,
   onSave,
@@ -605,12 +606,13 @@ function EditBody({
   actions: React.ReactNode;
   view: View;
   romanised: boolean;
+  duplicate: string | null;
   onEdit: (change: (current: Held) => Held) => void;
   onView: (change: (current: View) => View) => void;
   onSave: () => void;
 }>) {
   const draft = useMemo(() => toDraft(shown.state, shown.header), [shown]);
-  const { checks } = useChecked(draft, shown.header, shown.state, null);
+  const { checks } = useChecked(draft, shown.header, shown.state, duplicate);
   const switchTo = (language: QuestionLanguage) =>
     onView((current) => ({ language, box: current.box + 1 }));
 
