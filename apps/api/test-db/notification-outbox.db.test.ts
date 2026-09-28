@@ -175,6 +175,10 @@ describe('Acting on a relayed request', () => {
         calls.push(input.notificationId);
         return Promise.resolve();
       },
+      deliverAll: (inputs: { notificationId: string }[]) => {
+        calls.push(...inputs.map((input) => input.notificationId));
+        return Promise.resolve();
+      },
     } as unknown as PushService;
     const access = { studentsReaching: () => Promise.resolve([]) } as never;
     const processor = new NotificationsProcessor(

@@ -79,6 +79,10 @@ function build(rows: Row[]) {
       pushed.push(input.notificationId);
       return Promise.resolve();
     },
+    deliverAll: (inputs: { notificationId: string }[]) => {
+      pushed.push(...inputs.map((input) => input.notificationId));
+      return Promise.resolve();
+    },
   } as unknown as PushService;
 
   const processor = new NotificationsProcessor(

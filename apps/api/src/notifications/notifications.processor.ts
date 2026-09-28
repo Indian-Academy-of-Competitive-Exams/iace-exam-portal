@@ -33,9 +33,6 @@ import { QueueFailures } from '../common/metrics/queue-failures';
 
 const MILLISECONDS_PER_SECOND = 1000;
 
-/** How many pushes are in flight at once. Each is an HTTP call, not a database round trip. */
-const PUSH_LANES = 8;
-
 /** A bound on one pass, so a backlog is drained by several jobs rather than one that never ends. */
 const WRITE_PAGES_PER_PASS = 25;
 
@@ -144,22 +141,21 @@ export class NotificationsProcessor extends WorkerHost {
     await this.schedule(written.id, intent);
   }
 
-  /** Lanes, because a push is an HTTP call each and a hall's worth of them is not a loop to await. */
   private async pushAll(written: readonly WrittenNotification[]): Promise<void> {
-    const pushable = written.filter((row) => row.studentId !== null);
-
-    for (let at = 0; at < pushable.length; at += PUSH_LANES) {
-      await Promise.all(
-        pushable.slice(at, at + PUSH_LANES).map((row) =>
-          this.push.deliver({
-            notificationId: row.id,
-            studentId: row.studentId ?? '',
-            type: row.type,
-            title: row.title,
-          }),
-        ),
-      );
-    }
+    await this.push.deliverAll(
+      written.flatMap((row) =>
+        row.studentId === null
+          ? []
+          : [
+              {
+                notificationId: row.id,
+                studentId: row.studentId,
+                type: row.type,
+                title: row.title,
+              },
+            ],
+      ),
+    );
   }
 
   /** The grace window: the free channels get this long before a paid one is bought. */
