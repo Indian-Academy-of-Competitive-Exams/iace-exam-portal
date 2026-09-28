@@ -5,6 +5,8 @@ import {
   Alert,
   Button,
   DataTable,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   Metric,
   PageFrame,
   PageHeader,
@@ -15,7 +17,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
-import { shutReason } from '@iace/app-kit';
+import { isBriefRefused, shutReason } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
   LANGUAGE_LABELS,
@@ -61,6 +63,19 @@ const PAST_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
   },
 ];
 
+/** A refusal names whose test it is not; a failure carries its retry. */
+function BriefAbsence({ error, onRetry }: Readonly<{ error: unknown; onRetry: () => void }>) {
+  return isBriefRefused(error) ? (
+    <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This test is not open to you" />
+  ) : (
+    <EmptyState
+      kind={EMPTY_STATE_KINDS.FAILURE}
+      title="Could not load this test"
+      onRetry={onRetry}
+    />
+  );
+}
+
 /** What a student reads BEFORE the clock starts. Nothing here is timed and nothing here is a paper. */
 export function TestAboutPage() {
   const { testId = '' } = useParams();
@@ -99,6 +114,10 @@ export function TestAboutPage() {
             <BandSkeleton />
             <BlockPairSkeleton />
           </>
+        ) : null}
+
+        {brief.isError ? (
+          <BriefAbsence error={brief.error} onRetry={() => void brief.refetch()} />
         ) : null}
 
         {brief.data ? (

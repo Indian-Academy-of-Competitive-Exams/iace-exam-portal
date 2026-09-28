@@ -6,7 +6,7 @@ import { Fragment } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { shutReason } from '@iace/app-kit';
+import { isBriefRefused, shutReason } from '@iace/app-kit';
 import {
   contentLanguageOf,
   instituteDateTimeLabel,
@@ -33,11 +33,11 @@ import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { plural } from '../../../src/lib/plural';
 
-type Phase = 'LOADING' | 'ERROR' | 'READY';
+type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
-function phaseOf(brief: { isLoading: boolean; isError: boolean }): Phase {
+function phaseOf(brief: { isLoading: boolean; isError: boolean; error: unknown }): Phase {
   if (brief.isLoading) return 'LOADING';
-  if (brief.isError) return 'ERROR';
+  if (brief.isError) return isBriefRefused(brief.error) ? 'REFUSED' : 'ERROR';
   return 'READY';
 }
 
@@ -99,6 +99,10 @@ function AboutContent({
         <Skeleton className="h-40 rounded-xl" />
       </View>
     );
+  }
+
+  if (phase === 'REFUSED') {
+    return <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This test is not open to you" />;
   }
 
   if (phase === 'ERROR' || !brief) {

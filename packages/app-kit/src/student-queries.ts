@@ -2,6 +2,8 @@
 import { queryOptions } from '@tanstack/react-query';
 import { PERFORMANCE_SCOPES, type LeaderboardScope, type PerformanceScope } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
+import { isBriefRefused } from './catalog';
+import { isMarkingPending, isSolutionsShut } from './marking';
 
 /** The signed-in student's identity. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
@@ -74,7 +76,7 @@ export const startedAttemptQueryKey = (testId: string) => ['me', 'attempt', test
 export const attemptPaperQueryKey = (attemptId: string) =>
   ['me', 'attempt-paper', attemptId] as const;
 
-/** The reads several screens share, over whichever client the app built. */
+/** The reads several screens share, over whichever client the app built; each screen draws its own expected refusal. */
 export function createStudentQueries(api: AppApiClient) {
   return {
     catalogQuery: queryOptions({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() }),
@@ -84,16 +86,22 @@ export function createStudentQueries(api: AppApiClient) {
       queryFn: () => api.me.performance(),
     }),
     briefQuery: (testId: string) =>
-      queryOptions({ queryKey: briefQueryKey(testId), queryFn: () => api.me.testBrief(testId) }),
+      queryOptions({
+        queryKey: briefQueryKey(testId),
+        queryFn: () => api.me.testBrief(testId),
+        meta: { silent: isBriefRefused },
+      }),
     scoreCardQuery: (attemptId: string) =>
       queryOptions({
         queryKey: scoreCardQueryKey(attemptId),
         queryFn: () => api.me.scoreCard(attemptId),
+        meta: { silent: isMarkingPending },
       }),
     solutionsQuery: (attemptId: string) =>
       queryOptions({
         queryKey: solutionsQueryKey(attemptId),
         queryFn: () => api.me.solutions(attemptId),
+        meta: { silent: isSolutionsShut },
       }),
     questionReportQuery: (attemptId: string) =>
       queryOptions({

@@ -16,9 +16,9 @@ export function isWorthAskingAgain(error: unknown): boolean {
 const THROTTLED = 429;
 const SERVER_FAULT = 500;
 
-/** What a query may declare. `silent` opts out of the central reporting. */
+/** What a query may declare. `silent` opts out of the central reporting, or only for the failures its screen draws itself. */
 export interface AppQueryMeta {
-  silent?: boolean;
+  silent?: boolean | ((error: unknown) => boolean);
 }
 
 export interface AppMutationMeta {
@@ -30,7 +30,7 @@ export interface AppMutationMeta {
   silent?: boolean;
 }
 
-/** The fetching policy every SPA runs on: retry once, no refetch on focus — students sit timed tests on flaky mobile; also catches every mutation failure in one place. */
+/** The fetching policy every SPA runs on: retry what a refusal did not answer once, no refetch on focus — students sit timed tests on flaky mobile; also catches every mutation failure in one place. */
 export function createAppQueryClient(options: { notify?: Notifier } = {}): QueryClient {
   const { notify } = options;
 
@@ -38,8 +38,9 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
     /** Failed reads are announced here too, once, after the retries are exhausted. */
     queryCache: new QueryCache({
       onError: (error, query) => {
-        const meta = (query.meta ?? {}) as AppQueryMeta;
-        if (!notify || meta.silent || isReplaced(error)) return;
+        const { silent } = (query.meta ?? {}) as AppQueryMeta;
+        const quiet = typeof silent === 'function' ? silent(error) : silent;
+        if (!notify || quiet || isReplaced(error)) return;
 
         const message = bannerMessage(error);
         if (message) notify.error(message);
@@ -66,7 +67,7 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
 
     defaultOptions: {
       queries: {
-        retry: 1,
+        retry: (failures, error) => failures < 1 && isWorthAskingAgain(error),
         staleTime: 30_000,
         refetchOnWindowFocus: false,
       },

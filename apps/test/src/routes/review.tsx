@@ -1,10 +1,9 @@
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert } from '@iace/ui';
+import { isMarkingPending, isSolutionsShut } from '@iace/app-kit';
+import { Alert, EmptyState, EMPTY_STATE_KINDS } from '@iace/ui';
 import { BlockSkeleton } from '../components/ui';
 import {
-  AppException,
-  ErrorCodes,
   LANGUAGE_MODE,
   type ExamSection,
   type ScoreCard,
@@ -23,20 +22,16 @@ export function SolutionPanel() {
   const { attemptId = '' } = useParams();
 
   const card = useQuery(scoreCardQuery(attemptId));
-  // Refused until the gate opens, which is an ANSWER about this paper, not a failure to retry.
-  const solutions = useQuery({
-    ...solutionsQuery(attemptId),
-    retry: false,
-  });
+  const solutions = useQuery(solutionsQuery(attemptId));
 
-  const refusal = AppException.is(solutions.error) ? solutions.error : null;
-  const shut = refusal?.code === ErrorCodes.FORBIDDEN;
+  const refusal = isSolutionsShut(solutions.error) ? solutions.error : null;
   // Only past the gate: the star rides the same rule the answer key does.
   const bookmark = useBookmarks(attemptId, solutions.data !== undefined);
 
   return (
     <>
       {card.isLoading || solutions.isLoading ? <BlockSkeleton className="h-96" /> : null}
+      {card.isError ? <CardAbsence error={card.error} onRetry={() => void card.refetch()} /> : null}
       {card.data ? (
         <ReviewPaper
           sections={sectionsOf(card.data, solutions.data)}
@@ -45,7 +40,7 @@ export function SolutionPanel() {
           languageMode={LANGUAGE_MODE.SINGLE}
           bookmark={bookmark}
           notice={
-            shut ? (
+            refusal ? (
               /* ui-copy-ok: consequence */
               <Alert variant="info">{refusal.message}</Alert>
             ) : null
@@ -53,6 +48,19 @@ export function SolutionPanel() {
         />
       ) : null}
     </>
+  );
+}
+
+/** No card, no paper to draw: marking still queued is not a failure, and a failure carries its retry. */
+function CardAbsence({ error, onRetry }: Readonly<{ error: unknown; onRetry: () => void }>) {
+  return isMarkingPending(error) ? (
+    <EmptyState title="No marks yet" onRetry={onRetry} />
+  ) : (
+    <EmptyState
+      kind={EMPTY_STATE_KINDS.FAILURE}
+      title="Your paper did not load"
+      onRetry={onRetry}
+    />
   );
 }
 

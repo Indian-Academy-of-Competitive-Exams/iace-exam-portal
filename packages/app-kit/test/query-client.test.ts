@@ -40,3 +40,40 @@ test('any other failure is still announced', async () => {
 
   assert.deepEqual(errors, ['That already exists']);
 });
+
+/** The failure this prevents: every expected refusal costing a second request before the screen can draw it. */
+test('a refusal is answered once; a request that never landed is asked again', () => {
+  const retry = createAppQueryClient().getDefaultOptions().queries?.retry as (
+    failures: number,
+    error: unknown,
+  ) => boolean;
+  const offline = new AppException(ErrorCodes.INTERNAL, 'offline', { httpStatus: 0 });
+
+  assert.equal(retry(0, new AppException(ErrorCodes.CONFLICT)), false);
+  assert.equal(retry(0, new AppException(ErrorCodes.FORBIDDEN)), false);
+  assert.equal(retry(0, offline), true);
+  assert.equal(retry(0, new AppException(ErrorCodes.RATE_LIMITED)), true);
+  assert.equal(retry(1, offline), false, 'still only once');
+});
+
+test('a refusal the screen draws itself is not announced over it; any other failure still is', async () => {
+  const { client, errors } = recordingClient();
+  const meta = { silent: (error: unknown) => AppException.is(error) && error.httpStatus === 409 };
+
+  await assert.rejects(
+    client.fetchQuery({
+      queryKey: ['c'],
+      queryFn: () => Promise.reject(new AppException(ErrorCodes.CONFLICT, 'Marking pending')),
+      meta,
+    }),
+  );
+  await assert.rejects(
+    client.fetchQuery({
+      queryKey: ['d'],
+      queryFn: () => Promise.reject(new AppException(ErrorCodes.INTERNAL, 'Server down')),
+      meta,
+    }),
+  );
+
+  assert.deepEqual(errors, ['Server down']);
+});

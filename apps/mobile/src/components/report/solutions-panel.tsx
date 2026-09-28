@@ -2,9 +2,8 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { isMarkingPending, isSolutionsShut } from '@iace/app-kit';
 import {
-  AppException,
-  ErrorCodes,
   LANGUAGE_MODE,
   type ExamSection,
   type ScoreCard,
@@ -25,10 +24,9 @@ import { verdictOf, type ReviewedQuestion } from '../review/review-protocol';
 /** The paper again, once it is marked: their own answer beside the key, question by question. */
 export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const card = useQuery(scoreCardQuery(attemptId));
-  // Refused until the gate opens, which is an ANSWER about this paper, not a failure to retry.
-  const solutions = useQuery({ ...solutionsQuery(attemptId), retry: false });
+  const solutions = useQuery(solutionsQuery(attemptId));
 
-  const refusal = AppException.is(solutions.error) ? solutions.error : null;
+  const refusal = isSolutionsShut(solutions.error) ? solutions.error : null;
 
   if (card.isLoading || solutions.isLoading) {
     return (
@@ -39,7 +37,7 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
     );
   }
 
-  if (refusal?.code === ErrorCodes.FORBIDDEN) {
+  if (refusal) {
     return (
       <View className="flex-1 justify-center px-6">
         <EmptyState
@@ -48,6 +46,14 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
           // ui-copy-ok: rule — the server owns when the key opens, and says so
           hint={refusal.message}
         />
+      </View>
+    );
+  }
+
+  if (isMarkingPending(card.error)) {
+    return (
+      <View className="flex-1 justify-center px-6">
+        <EmptyState title="No marks yet" onRetry={() => void card.refetch()} />
       </View>
     );
   }
