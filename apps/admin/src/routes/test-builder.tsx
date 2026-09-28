@@ -29,6 +29,7 @@ import {
   STEPPER_STATES,
   Stepper,
   plural,
+  toast,
   type StepperStep,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -56,6 +57,13 @@ import { OfferSaveDialog, OfferStep } from './test-builder-offering';
 import { useOfferDraft, type OfferHold } from './use-offer-draft';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
+
+/** Counted by the server: a narrower scope can drop rows the old one held. */
+function savedMessage(saved: TestDetail, before: TestDetail | null): string {
+  const base = before ? 'Test saved.' : 'Draft test created.';
+  const dropped = (before?.paperQuestionCount ?? 0) - saved.paperQuestionCount;
+  return dropped > 0 ? `${base} ${plural(dropped, 'question')} dropped, now outside scope.` : base;
+}
 
 /** Each step is done when the thing it exists to produce is there, not when it has been walked past. */
 function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
@@ -144,17 +152,9 @@ function TestBuilder({
 
   usePageTour({ id: TOUR_IDS.TEST_BUILDER, steps: TEST_BUILDER_TOUR, ready: config !== null });
 
+  // Silent: the form's own banner and fields say what went wrong, so a toast would say it twice.
   const save = useMutation({
-    meta: {
-      // Counted by the server: a narrower scope can drop rows the old one held.
-      success: (saved: TestDetail): string => {
-        const base = existing ? 'Test saved.' : 'Draft test created.';
-        const dropped = (detail?.paperQuestionCount ?? 0) - saved.paperQuestionCount;
-        return dropped > 0
-          ? `${base} ${plural(dropped, 'question')} dropped, now outside scope.`
-          : base;
-      },
-    },
+    meta: { silent: true },
     mutationFn: ({ values }: { values: TestFormValues; target: TestBuilderStep }) => {
       const title = values.title.trim();
       // A sat test refuses everything else, so a rename must not carry the rest along with it.
@@ -176,6 +176,7 @@ function TestBuilder({
           });
     },
     onSuccess: async (saved, { target }) => {
+      toast.success(savedMessage(saved, detail));
       // The server's copy is already here, so the lists go stale without this one being fetched again.
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS, refetchType: 'none' });
       queryClient.setQueryData(testQueryKey(saved.id), saved);

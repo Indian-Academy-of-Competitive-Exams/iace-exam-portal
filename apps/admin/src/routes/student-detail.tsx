@@ -47,7 +47,7 @@ import { STUDENT_DETAIL_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
 import { StudentPerformancePanel } from '../components/student-performance';
 import { ActionsTab } from './student-detail-actions';
@@ -495,7 +495,7 @@ export function StudentDetailPage() {
       footer={
         isEditing ? (
           <>
-            {save.error ? (
+            {save.error && bannerMessage(save.error, FORM_FIELDS) === null ? (
               <Alert variant="danger">Check the highlighted fields above.</Alert>
             ) : null}
             {/* Cancel is neutral grey, never red — it destroys nothing. */}

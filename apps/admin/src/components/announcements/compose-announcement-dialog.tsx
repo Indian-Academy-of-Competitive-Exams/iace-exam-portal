@@ -106,6 +106,7 @@ export function ComposeAnnouncementDialog({
   });
 
   const send = useMutation({
+    meta: { fields: COMPOSE_FIELDS },
     mutationFn: (values: ComposeForm) => api.admin.announcements.send(values),
     onSuccess: () => {
       form.reset(draftForm(draft));

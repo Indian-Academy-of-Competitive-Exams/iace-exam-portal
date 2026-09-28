@@ -16,6 +16,7 @@ import {
   PageHeader,
   Skeleton,
   SkeletonParagraph,
+  toast,
   type FormPanelTab,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -120,12 +121,14 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
   const form = useForm<SeriesFormValues>({ defaultValues: valuesOf(detail) });
 
   const save = useMutation({
-    meta: { success: existing ? 'Series saved.' : 'Series created.', fields: SERVER_FIELDS },
+    // Silent: the form's own banner and fields say what went wrong, so a toast would say it twice.
+    meta: { silent: true },
     mutationFn: (values: SeriesFormValues) =>
       detail
         ? api.admin.testSeries.update(detail.id, bodyOf(values))
         : api.admin.testSeries.create(bodyOf(values)),
     onSuccess: async (saved) => {
+      toast.success(existing ? 'Series saved.' : 'Series created.');
       await queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.TEST_SERIES,
         refetchType: 'none',

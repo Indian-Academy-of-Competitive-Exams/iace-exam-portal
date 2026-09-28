@@ -202,6 +202,9 @@ function SubjectsList() {
   );
 }
 
+const SUBJECT_FIELDS = ['name', 'code'] as const;
+const TOPIC_FIELDS = ['name', 'subjectId'] as const;
+
 function NewSubjectDialog({
   open,
   onOpenChange,
@@ -213,11 +216,11 @@ function NewSubjectDialog({
   });
 
   const create = useMutation({
-    meta: { success: 'Subject added.' },
+    meta: { success: 'Subject added.', fields: SUBJECT_FIELDS },
     mutationFn: (input: CreateSubjectInput) =>
       api.admin.taxonomy.createSubject({ name: input.name, code: input.code || undefined }),
     onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, ['name', 'code']),
+    onError: (error) => applyFieldErrors(error, form.setError, SUBJECT_FIELDS),
   });
 
   return (
@@ -317,10 +320,10 @@ function NewTopicDialog({
   const chosenSubject = useWatch({ control: form.control, name: 'subjectId' }) ?? '';
 
   const create = useMutation({
-    meta: { success: 'Topic added.' },
+    meta: { success: 'Topic added.', fields: TOPIC_FIELDS },
     mutationFn: (input: CreateTopicInput) => api.admin.taxonomy.createTopic(input),
     onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, ['name', 'subjectId']),
+    onError: (error) => applyFieldErrors(error, form.setError, TOPIC_FIELDS),
   });
 
   return (

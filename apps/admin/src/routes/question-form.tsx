@@ -4,7 +4,15 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import { Button, FormPanel, PageHeader, Skeleton, SkeletonParagraph } from '@iace/ui';
+import {
+  Button,
+  EMPTY_STATE_KINDS,
+  EmptyState,
+  FormPanel,
+  PageHeader,
+  Skeleton,
+  SkeletonParagraph,
+} from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { QuestionFields } from '../components/question-fields';
@@ -34,6 +42,16 @@ export function QuestionFormPage() {
         <Skeleton variant="title" />
         <SkeletonParagraph lines={6} />
       </div>
+    );
+  }
+
+  if (question.error || !loaded) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load this question"
+        onRetry={question.refetch}
+      />
     );
   }
 

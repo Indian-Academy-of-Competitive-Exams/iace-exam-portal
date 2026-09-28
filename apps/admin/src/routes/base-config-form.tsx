@@ -52,6 +52,7 @@ import {
   Skeleton,
   SkeletonParagraph,
   StatRow,
+  toast,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import {
@@ -430,8 +431,9 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   const sections = useFieldArray({ control: form.control, name: 'sections' });
   const modules = useFieldArray({ control: form.control, name: 'modules' });
 
+  // Silent: the form's own banner and fields say what went wrong, so a toast would say it twice.
   const save = useMutation({
-    meta: { success: existing ? 'Configuration saved.' : 'Configuration created.' },
+    meta: { silent: true },
     mutationFn: (values: ConfigFormValues) =>
       detail
         ? api.admin.baseConfigs.update(detail.id, {
@@ -448,6 +450,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             ...shapeOf(values),
           }),
     onSuccess: async () => {
+      toast.success(existing ? 'Configuration saved.' : 'Configuration created.');
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
       navigate(ROUTES.BASE_CONFIGS);
     },
