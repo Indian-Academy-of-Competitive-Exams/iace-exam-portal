@@ -5,7 +5,9 @@
  * paper is read mid-test where nothing can be taken back.
  */
 import katex from 'katex';
-import { SIZE_ATTR } from '../components/ui/rich-text-size';
+
+/** A data attribute, so it survives the sanitizer on the way in without widening the allow-list. */
+export const SIZE_ATTR = 'data-size';
 
 /** What a question may say. An element outside this keeps its text and loses its tag. */
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {

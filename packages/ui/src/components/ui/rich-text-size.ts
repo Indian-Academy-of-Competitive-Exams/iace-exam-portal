@@ -3,15 +3,13 @@
  * what that means, so a question cannot carry a px that fights the skin it will be printed in.
  */
 import { Mark, mergeAttributes } from '@tiptap/core';
+import { SIZE_ATTR } from '../../lib/rich-html';
 
 export const TEXT_SIZES = {
   SMALL: 'small',
   LARGE: 'large',
 } as const;
 export type TextSize = (typeof TEXT_SIZES)[keyof typeof TEXT_SIZES];
-
-/** A data attribute, so it survives the sanitizer on the way in without widening the allow-list. */
-export const SIZE_ATTR = 'data-size';
 
 export const TEXT_SIZE_MARK = 'textSize';
 
