@@ -169,10 +169,10 @@ export function verdictsOf(
 }
 
 /** `paper` in paper order; the rows come back in the order this sitting was shown them. */
-export function servedSheet<P extends ServedRow>(
+/** Each paper row carrying this sitting's answer, in PAPER order — `servedQuestions` orders it. */
+export function answeredRows<P extends ServedRow>(
   paper: readonly P[],
   sitting: SheetSitting,
-  shuffleQuestions: boolean,
 ): (P & ServedAnswer)[] {
   const sheet = sheetIn(sitting.sheet?.answers);
   const verdicts = verdictsIn(sitting.sheet?.verdicts);
@@ -192,10 +192,18 @@ export function servedSheet<P extends ServedRow>(
       marksAwarded: verdict === undefined ? null : verdict[1],
     };
   });
-  return displayOrder(rows, sitting.shuffleSeed, shuffleQuestions).map((row, index) => ({
-    ...row,
-    order: index + 1,
-  }));
+  return rows;
+}
+
+/** The order the student sat, for a reader that shows no options — the score card wants only this. */
+export function servedSheet<P extends ServedRow>(
+  paper: readonly P[],
+  sitting: SheetSitting,
+  shuffleQuestions: boolean,
+): (P & ServedAnswer)[] {
+  return displayOrder(answeredRows(paper, sitting), sitting.shuffleSeed, shuffleQuestions).map(
+    (row, index) => ({ ...row, order: index + 1 }),
+  );
 }
 
 export const timeSpentIn = (stored: unknown): number =>

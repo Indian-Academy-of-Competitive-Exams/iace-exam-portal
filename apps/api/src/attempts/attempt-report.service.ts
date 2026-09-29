@@ -23,12 +23,11 @@ import {
   scopedQuestionCount,
   scopedDurationSec,
   round2 as round,
-  seededRandom,
-  shuffle,
+  servedQuestions,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { servedSheet, type ServedAnswer } from './answer-sheet';
+import { answeredRows, servedSheet, type ServedAnswer } from './answer-sheet';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
@@ -272,16 +271,18 @@ export class AttemptReportService {
     });
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
 
-    // The same seed the exam used, so the option they remember as "C" is "C" in the review too.
-    const random = seededRandom(attempt.shuffleSeed);
-    const shuffleOptions = attempt.test.baseConfig.shuffleOptions;
+    const config = attempt.test.baseConfig;
     const paper = await this.prisma.paperQuestion.findMany({
       where: { testId: attempt.testId },
       orderBy: { order: 'asc' },
       select: SOLUTION_ROW_SELECT,
     });
-    const questions = servedSheet(paper, attempt, attempt.test.baseConfig.shuffleQuestions).map(
-      (row) => toSolutionQuestion(row, attempt.languages, shuffleOptions, random),
+    // The same sequencer the paper was served through, so the option they remember as "C" is "C" here.
+    const questions = servedQuestions(
+      answeredRows(paper, attempt).map((row) => toSolutionQuestion(row, attempt.languages)),
+      attempt.shuffleSeed,
+      config.shuffleQuestions,
+      config.shuffleOptions,
     );
     const urls = imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
 
@@ -344,17 +345,14 @@ function toScoreCardQuestion(row: PricedRow): ScoreCardQuestion {
 function toSolutionQuestion(
   row: SolutionRow,
   languages: readonly LanguageCode[],
-  shuffleOptions: boolean,
-  random: () => number,
 ): SolutionQuestion {
   const stored = optionsIn(row.questionVersion.options);
-  const options = stored.map((option) => ({ ...option, text: narrowTo(option.text, languages) }));
   return {
     ...toScoreCardQuestion(row),
     type: row.question.type,
     // Stem AND solution, unlike the exam paper — explaining the answer is the whole point here.
     content: narrowTo(row.questionVersion.content as LocalizedContent | null, languages),
-    options: shuffleOptions ? shuffle(options, random) : options,
+    options: stored.map((option) => ({ ...option, text: narrowTo(option.text, languages) })),
     answerKey: (row.questionVersion.answerKey as AnswerKey | null) ?? null,
   };
 }

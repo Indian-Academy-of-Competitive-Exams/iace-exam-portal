@@ -3,8 +3,6 @@
  * ordered wherever it is assembled — the server for a reload or a report, the browser for a
  * prefetched paper — and two implementations would be two answers to "same seed, same order".
  */
-import { type ExamQuestion } from './attempts';
-
 const PRNG_INCREMENT = 0x6d2b79f5;
 const UINT32 = 4294967296;
 
@@ -52,12 +50,15 @@ export function displayOrder<T extends { baseConfigSectionId: string }>(
 }
 
 /** Options draw from their own generator, spent across the questions in DISPLAY order, not paper order. */
-export function servedQuestions(
-  questions: readonly ExamQuestion[],
+export function servedQuestions<
+  Option,
+  Question extends { baseConfigSectionId: string; order: number; options: readonly Option[] },
+>(
+  questions: readonly Question[],
   seed: number,
   shuffleQuestions: boolean,
   shuffleOptions: boolean,
-): ExamQuestion[] {
+): Question[] {
   const ordered = displayOrder(questions, seed, shuffleQuestions);
   const random = seededRandom(seed);
 
