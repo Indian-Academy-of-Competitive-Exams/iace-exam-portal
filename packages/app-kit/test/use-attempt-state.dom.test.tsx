@@ -29,6 +29,133 @@ function apiThatFails(calls: unknown[]): AppApiClient {
   } as unknown as AppApiClient;
 }
 
+type SentAnswers = { answers: Array<{ questionId: string; selectedOptionId: string | null }> };
+
+function apiThatSaves(sent: SentAnswers[]): AppApiClient {
+  return {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
+        sent.push(body);
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+}
+
+/** The failure this prevents: a full bubble or Mark & Next banking the visit from the copy before the tap. */
+test('an answer and a move in one tap keep the answer, on screen and in the next save', async (t) => {
+  const sent: SentAnswers[] = [];
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(apiThatSaves(sent))),
+  );
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+
+  act(() => result.current.open('q1'));
+  act(() => {
+    result.current.answer('q1', { selectedOptionId: 'opt-1' });
+    result.current.open('q2');
+  });
+  assert.equal(result.current.answers.q1?.selectedOptionId, 'opt-1', 'still on screen');
+
+  act(() => result.current.open('q1'));
+  act(() => result.current.open('q2'));
+  await act(async () => void (await result.current.flush()));
+  const saved = sent.at(-1)?.answers.find((row) => row.questionId === 'q1');
+  assert.equal(saved?.selectedOptionId, 'opt-1', 'leaving it again does not save a blank over it');
+});
+
+/** The failure this prevents: the ack for the old copy taking the newer one out of the queue with it. */
+test('an answer changed while its save is in the air goes up in the next save', async (t) => {
+  const sent: SentAnswers[] = [];
+  let release = () => {};
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
+        sent.push(body);
+        if (sent.length === 1) await new Promise<void>((resolve) => (release = resolve));
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  let flying: Promise<boolean> = Promise.resolve(false);
+  act(() => void (flying = result.current.flush()));
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-2' }));
+  await act(async () => {
+    release();
+    await flying;
+  });
+
+  assert.equal(result.current.hasUnsent(), true, 'the ack for opt-1 does not settle opt-2');
+  await act(async () => void (await result.current.flush()));
+  const resent = sent[1]?.answers.find((row) => row.questionId === 'q1');
+  assert.equal(resent?.selectedOptionId, 'opt-2');
+});
+
+test('a failed save loses nothing, and the next save carries all of it', async (t) => {
+  const bodies: SentAnswers[] = [];
+  let online = false;
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
+        bodies.push(body);
+        if (!online) throw new Error('offline');
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  await act(async () => void (await result.current.flush()));
+  assert.equal(result.current.answers.q2?.selectedOptionId, 'opt-2', 'still on screen');
+
+  online = true;
+  assert.equal(await act(() => result.current.flush()), true);
+  const retried = Object.fromEntries(
+    (bodies[1]?.answers ?? []).map((row) => [row.questionId, row.selectedOptionId]),
+  );
+  assert.deepEqual(retried, { q1: 'opt-1', q2: 'opt-2' });
+  assert.equal(result.current.hasUnsent(), false);
+});
+
+/** The failure this prevents: the tab reloading with a save in the air and a newer answer behind it. */
+test('a reload draws and sends the newest unsent copy of every answer', async (t) => {
+  const storage = fakeStorage();
+  const hung = {
+    me: { attemptState: attemptStateStub, saveAttemptState: () => new Promise(() => undefined) },
+  } as unknown as AppApiClient;
+  const before = renderHook(() => useAttemptState('attempt-1', depsFor(hung, storage)));
+  act(() => before.result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void before.result.current.flush());
+  act(() => before.result.current.answer('q1', { selectedOptionId: 'opt-2' }));
+  act(() => before.result.current.answer('q2', { selectedOptionId: 'opt-3' }));
+  before.unmount();
+
+  const sent: SentAnswers[] = [];
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(apiThatSaves(sent), storage)),
+  );
+  t.after(unmount);
+
+  assert.equal(result.current.answers.q1?.selectedOptionId, 'opt-2');
+  assert.equal(result.current.answers.q2?.selectedOptionId, 'opt-3');
+  await act(async () => void (await result.current.flush()));
+  const resent = Object.fromEntries(
+    (sent[0]?.answers ?? []).map((row) => [row.questionId, row.selectedOptionId]),
+  );
+  assert.deepEqual(resent, { q1: 'opt-2', q2: 'opt-3' });
+});
+
 test('a flush that succeeds clears pending and advances the revision', async (t) => {
   const sent: Array<{ revision: number; answers: unknown[]; tab?: string }> = [];
   const api = {

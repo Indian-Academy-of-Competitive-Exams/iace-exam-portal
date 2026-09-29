@@ -130,31 +130,21 @@ export function useAttemptState(
   const [takenOver, setTakenOver] = useState(false);
   const stopped = useRef(false);
 
-  // Refs, not state: the timer closes over them once and must still see the latest edit.
+  // Everything the server has not acknowledged, in the air or not; an ack takes out only the copy it carried.
   const pending = useRef(new Map<string, AnswerChange>(queued.map((c) => [c.questionId, c])));
-  const pendingSections = useRef<Record<string, SectionProgress>>({});
+  const pendingSections = useRef(new Map<string, SectionProgress>());
+  // What the screen draws, current mid-handler: a state updater may not have run when the next write reads it.
+  const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const openedAt = useRef(0);
   const openQuestion = useRef<string | null>(null);
   const revision = useRef(0);
   const inFlight = useRef<Promise<boolean> | null>(null);
-  const finishing = useRef(false);
-  // The batch in the air: kept on the device too, or a reload before its answer loses it.
-  const flying = useRef<AnswerChange[]>([]);
   const seeded = useRef(false);
 
-  // The batch in the air under whatever changed since, which is the newer copy of any question in both.
-  const unsent = useCallback((): AnswerChange[] => {
-    const byQuestion = new Map(flying.current.map((change) => [change.questionId, change]));
-    for (const change of pending.current.values()) byQuestion.set(change.questionId, change);
-    return [...byQuestion.values()];
-  }, []);
-
-  // Starts from the queue, then kept level with the state by every writer below, so banking never waits.
-  const answersNow = useRef<Record<string, LiveAnswer>>(answers);
-  const remember = (next: Record<string, LiveAnswer>): Record<string, LiveAnswer> => {
+  const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
-    return next;
-  };
+    setAnswers(next);
+  }, []);
 
   // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
@@ -165,7 +155,7 @@ export function useAttemptState(
         (held) => {
           if (!live) return;
           // Merged under, never over: an answer given while this flew is the newer one.
-          setAnswers((mine) => remember({ ...held.answers, ...mine }));
+          commit({ ...held.answers, ...answersNow.current });
           setSections((mine) => ({ ...held.sections, ...mine }));
           setSectionsSeeded(true);
           seeded.current = true;
@@ -181,144 +171,135 @@ export function useAttemptState(
       live = false;
       clearTimeout(again);
     };
-  }, [attemptId]);
+  }, [attemptId, commit]);
 
   const standDown = useCallback(() => {
     stopped.current = true;
     setTakenOver(true);
   }, []);
 
-  const keepQueue = useCallback(() => {
-    const queued = unsent();
-    const { answerQueue } = mounted.current;
-    const key = queueKeyFor(answerQueue, attemptId);
-    try {
-      if (queued.length === 0) answerQueue.storage.removeItem(key);
-      else answerQueue.storage.setItem(key, JSON.stringify(queued));
-    } catch {
-      // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
-    }
-  }, [attemptId, unsent]);
-
-  const isIdle = () =>
-    pending.current.size === 0 && Object.keys(pendingSections.current).length === 0;
-
-  // Cleared BEFORE the request, so an edit made while it flies belongs to the next batch.
-  const take = useCallback(() => {
-    const changes = [...pending.current.values()];
-    const movedSections = pendingSections.current;
-    pending.current = new Map();
-    pendingSections.current = {};
-    flying.current = changes;
-    // Under whatever arrived while this flew, never over it: that copy is the newer one.
-    const requeue = () => {
-      for (const change of changes) {
-        if (!pending.current.has(change.questionId)) pending.current.set(change.questionId, change);
-      }
-      pendingSections.current = { ...movedSections, ...pendingSections.current };
-    };
-    return { changes, movedSections, requeue };
-  }, []);
-
-  const sendPending = useCallback(async (): Promise<boolean> => {
-    if (isIdle()) return true;
-    const { changes, movedSections, requeue } = take();
-    revision.current += 1;
-    const sent = revision.current;
-    setIsSaving(true);
-
-    try {
-      const { api, tab } = mounted.current;
-      const saved = await api.me.saveAttemptState(attemptId, {
-        revision: sent,
-        answers: changes,
-        sections: movedSections,
-        tab,
-      });
-      // The server says so itself: a drop answers 200 too, and an equal revision hides in the echo.
-      const dropped = saved.applied === false || saved.revision > sent;
-      revision.current = seedRevision(revision.current, saved.revision);
-      // Answering is also a clock check: the deadline it answers with is the one that counts.
-      setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
-      if (dropped) requeue();
-      setHasUnsaved(dropped);
-      return !dropped;
-    } catch (error: unknown) {
-      requeue();
+  const failed = useCallback(
+    (error: unknown) => {
       setHasUnsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
       if (isTakenOver(error)) standDown();
-      return false;
-    } finally {
-      flying.current = [];
-      keepQueue();
-      setIsSaving(false);
-    }
-  }, [attemptId, keepQueue, standDown, take]);
+    },
+    [standDown],
+  );
 
-  // Behind the batch in the air, so what it could not carry goes next and the last call really is last.
-  const waitTurn = useCallback(async () => {
-    while (inFlight.current) {
-      const flying = inFlight.current;
-      await flying;
-      if (inFlight.current === flying) inFlight.current = null;
+  const keepQueue = useCallback(() => {
+    const { answerQueue } = mounted.current;
+    const key = queueKeyFor(answerQueue, attemptId);
+    try {
+      if (pending.current.size === 0) answerQueue.storage.removeItem(key);
+      else answerQueue.storage.setItem(key, JSON.stringify([...pending.current.values()]));
+    } catch {
+      // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
     }
+  }, [attemptId]);
+
+  const hasUnsent = useCallback(
+    () => pending.current.size > 0 || pendingSections.current.size > 0,
+    [],
+  );
+
+  const unsentBatch = useCallback(
+    (): LastBatch => ({
+      revision: revision.current,
+      answers: [...pending.current.values()],
+      sections: Object.fromEntries(pendingSections.current),
+    }),
+    [],
+  );
+
+  const acknowledge = useCallback(
+    (batch: LastBatch) => {
+      for (const change of batch.answers) {
+        if (pending.current.get(change.questionId) === change) {
+          pending.current.delete(change.questionId);
+        }
+      }
+      for (const [sectionId, progress] of Object.entries(batch.sections)) {
+        if (pendingSections.current.get(sectionId) === progress) {
+          pendingSections.current.delete(sectionId);
+        }
+      }
+      keepQueue();
+    },
+    [keepQueue],
+  );
+
+  // In the air until it settles, so whatever comes next waits behind it and the last call really is last.
+  const inAir = useCallback((run: Promise<boolean>): Promise<boolean> => {
+    const marked = run.finally(() => {
+      if (inFlight.current === marked) inFlight.current = null;
+    });
+    inFlight.current = marked;
+    return marked;
   }, []);
 
-  const flush = useCallback(async (): Promise<boolean> => {
-    // Re-checked after every wait, with nothing awaited between the last check and the take.
-    while (inFlight.current) await waitTurn();
-    const idle = isIdle();
-    if (stopped.current || idle) return idle;
+  const save = useCallback(async (): Promise<boolean> => {
+    revision.current += 1;
+    const batch = unsentBatch();
+    setIsSaving(true);
+    try {
+      const { api, tab } = mounted.current;
+      const saved = await api.me.saveAttemptState(attemptId, { ...batch, tab });
+      revision.current = seedRevision(revision.current, saved.revision);
+      // Answering is also a clock check: the deadline it answers with is the one that counts.
+      setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
+      // A batch behind the one the server holds answers 200 too; only `applied` says it landed.
+      const applied = saved.applied !== false;
+      if (applied) acknowledge(batch);
+      setHasUnsaved(!applied);
+      return applied;
+    } catch (error: unknown) {
+      failed(error);
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [acknowledge, attemptId, failed, unsentBatch]);
 
-    const run = sendPending();
-    inFlight.current = run;
-    const delivered = await run;
-    if (inFlight.current === run) inFlight.current = null;
-    return delivered;
-  }, [sendPending, waitTurn]);
+  const flush = useCallback(async (): Promise<boolean> => {
+    // Nothing awaited between the last check and the send, so two saves never fly side by side.
+    while (inFlight.current) await inFlight.current;
+    const idle = !hasUnsent();
+    if (stopped.current || idle) return idle;
+    return inAir(save());
+  }, [hasUnsent, inAir, save]);
 
   const finish = useCallback(
     async <T>(send: (batch: LastBatch | null) => Promise<T>): Promise<T> => {
-      while (inFlight.current) await waitTurn();
-      const idle = isIdle();
-      const { changes, movedSections, requeue } = take();
+      while (inFlight.current) await inFlight.current;
+      const wasStopped = stopped.current;
+      // Nothing is saved beside the paper going in, nor after it went.
+      stopped.current = true;
+      const idle = !hasUnsent();
       if (!idle) revision.current += 1;
-      finishing.current = true;
       const going = (async () => {
         try {
-          const done = await send(
-            idle ? null : { revision: revision.current, answers: changes, sections: movedSections },
-          );
-          // The paper is in: nothing more is saved, and the device's copy has nothing left to keep.
-          stopped.current = true;
-          pending.current = new Map();
-          pendingSections.current = {};
+          const done = await send(idle ? null : unsentBatch());
+          // The paper is in: the device's copy has nothing left to keep.
+          pending.current.clear();
+          pendingSections.current.clear();
+          keepQueue();
           return done;
         } catch (error: unknown) {
-          requeue();
-          setHasUnsaved(true);
-          if (isTakenOver(error)) standDown();
+          stopped.current = wasStopped;
+          failed(error);
           throw error;
-        } finally {
-          finishing.current = false;
-          flying.current = [];
-          keepQueue();
         }
       })();
-      // In the air like a save, so a flush meanwhile waits behind the paper and then finds it stopped.
-      const settled = going.then(
-        () => true,
-        () => false,
+      void inAir(
+        going.then(
+          () => true,
+          () => false,
+        ),
       );
-      inFlight.current = settled;
-      try {
-        return await going;
-      } finally {
-        if (inFlight.current === settled) inFlight.current = null;
-      }
+      return going;
     },
-    [keepQueue, standDown, take, waitTurn],
+    [failed, hasUnsent, inAir, keepQueue, unsentBatch],
   );
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
@@ -337,26 +318,34 @@ export function useAttemptState(
     openedAt.current = Date.now();
   }, []);
 
+  const record = useCallback(
+    (change: AnswerChange) => {
+      pending.current.set(change.questionId, change);
+      keepQueue();
+      const held = answersNow.current;
+      commit({ ...held, [change.questionId]: answerOf(change, held[change.questionId]) });
+    },
+    [commit, keepQueue],
+  );
+
   /** Banks the seconds the open question has cost so far, and starts its clock again from now. */
   const bankOpen = useCallback(() => {
     const questionId = openQuestion.current;
     if (questionId === null) return;
 
     const now = Date.now();
+    const held = answersNow.current[questionId];
     // Unseeded, a bare visit reads as "no answer" and would clear one the server holds.
-    if (!seeded.current && answersNow.current[questionId] === undefined) {
+    if (!seeded.current && held === undefined) {
       openedAt.current = now;
       return;
     }
     const spent = Math.max(0, Math.round((now - openedAt.current) / 1000));
     // The instant it came on screen, not the instant it left: that is what "first" means.
-    const change = visitFor(questionId, answersNow.current[questionId], spent, seenAtOf(openedAt));
+    const change = visitFor(questionId, held, spent, seenAtOf(openedAt));
     openedAt.current = now;
-
-    pending.current.set(questionId, change);
-    keepQueue();
-    setAnswers((held) => remember({ ...held, [questionId]: answerOf(change, held[questionId]) }));
-  }, [keepQueue]);
+    record(change);
+  }, [record]);
 
   const open = useCallback(
     (questionId: string | null) => {
@@ -372,21 +361,16 @@ export function useAttemptState(
       const spent = Math.max(0, Math.round((Date.now() - openedAt.current) / 1000));
       const seenAt = seenAtOf(openedAt);
       openedAt.current = Date.now();
-
-      setAnswers((held) => {
-        const change = changeFor(questionId, held[questionId], next, spent, seenAt);
-        pending.current.set(questionId, change);
-        keepQueue();
-        if (shouldFlushNow(pending.current.size)) void flush();
-        return remember({ ...held, [questionId]: answerOf(change, held[questionId]) });
-      });
+      record(changeFor(questionId, answersNow.current[questionId], next, spent, seenAt));
+      // Between saves only: one in the air already carries the batch, and the next waits behind it.
+      if (!inFlight.current && shouldFlushNow(pending.current.size)) void flush();
     },
-    [flush, keepQueue],
+    [flush, record],
   );
 
   const markSection = useCallback((sectionId: string, progress: SectionProgress) => {
     setSections((held) => ({ ...held, [sectionId]: { ...held[sectionId], ...progress } }));
-    pendingSections.current = { ...pendingSections.current, [sectionId]: progress };
+    pendingSections.current.set(sectionId, progress);
   }, []);
 
   const enterSection = useCallback(
@@ -401,27 +385,18 @@ export function useAttemptState(
     [markSection],
   );
 
-  const hasUnsent = useCallback(
-    () => unsent().length > 0 || Object.keys(pendingSections.current).length > 0,
-    [unsent],
-  );
-
   // Fire and forget, on keepalive: the page is gone before any answer could be read.
   const leave = useCallback(() => {
     // The paper going in carries everything unsent itself; a keepalive save beside it is one more write.
-    if (stopped.current || finishing.current) return;
+    if (stopped.current) return;
     bankOpen();
     if (!hasUnsent()) return;
     revision.current += 1;
     const { api, tab } = mounted.current;
     void api.me
-      .saveAttemptState(
-        attemptId,
-        { revision: revision.current, answers: unsent(), sections: pendingSections.current, tab },
-        { keepalive: true },
-      )
+      .saveAttemptState(attemptId, { ...unsentBatch(), tab }, { keepalive: true })
       .catch(() => undefined);
-  }, [attemptId, bankOpen, hasUnsent, unsent]);
+  }, [attemptId, bankOpen, hasUnsent, unsentBatch]);
 
   return {
     answers,
