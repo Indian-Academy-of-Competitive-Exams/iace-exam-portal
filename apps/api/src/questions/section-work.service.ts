@@ -585,7 +585,7 @@ const heldNow = (context: Context): Assignment | null =>
 function typingOrHeld(context: Context): Assignment | null {
   const held = heldNow(context);
   if (held || context.typist) return held;
-  const last = context.rows.filter((row) => row.role === ASSIGNMENT_ROLES.TYPIST).at(-1);
+  const last = context.rows.findLast((row) => row.role === ASSIGNMENT_ROLES.TYPIST);
   return last && last.id === context.mine?.id ? last : null;
 }
 
