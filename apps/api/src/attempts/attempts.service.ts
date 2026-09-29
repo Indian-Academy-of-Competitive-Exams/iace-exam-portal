@@ -11,6 +11,7 @@ import {
   scopedDurationSec,
   scopedQuestionCount,
   type TestScopeRef,
+  languagesFor,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -18,13 +19,7 @@ import { AttemptStateService } from './attempt-state.service';
 import { forwardOrderOf } from './attempt-state';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { isUniqueViolation } from '../common/prisma-errors';
-import {
-  deadlineFrom,
-  languagesFor,
-  slotsAfter,
-  testStartBlocker,
-  type SittingSlots,
-} from './attempt-rules';
+import { deadlineFrom, slotsAfter, testStartBlocker, type SittingSlots } from './attempt-rules';
 import { numberOrNull } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 

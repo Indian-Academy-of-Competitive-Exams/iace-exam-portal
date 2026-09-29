@@ -80,8 +80,10 @@ export {
   SYSTEM_CHECK_QUERY_KEY,
   startedAttemptQueryKey,
   attemptPaperQueryKey,
+  testPaperQueryKey,
   createStudentQueries,
 } from './student-queries';
+export { paperFor } from './exam/served-paper';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';
 export { LOGIN_FIELDS, OTP_INTENTS, type LoginStep, type OtpIntent } from './login-steps';
 export {

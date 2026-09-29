@@ -2,20 +2,21 @@
  * What a student reads before the clock starts — ported from the web's `test-instructions.tsx`.
  * It never starts the attempt: the exam screen calls `startAttempt` on arrival at `/exam/[testId]`.
  */
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   contentLanguageOf,
   LANGUAGE_LABELS,
   LANGUAGE_MODE,
+  languagesFor,
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
 import { isBriefRefused } from '@iace/app-kit';
 import { Text } from '../../../src/components/ui/text';
-import { briefQuery } from '../../../src/lib/queries';
+import { briefQuery, testPaperQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
 import { Button } from '../../../src/components/ui/button';
 import { Card } from '../../../src/components/ui/card';
@@ -41,7 +42,18 @@ export default function TestInstructionsScreen() {
   const [declared, setDeclared] = useState(false);
   const [language, setLanguage] = useState<LanguageCode | ''>('');
 
+  const queryClient = useQueryClient();
+
   const brief = useQuery(briefQuery(testId));
+
+  // Held while they read, so beginning is a small request and not a paper download at the same instant.
+  const offered = brief.data;
+  useEffect(() => {
+    if (!offered) return;
+    void queryClient.prefetchQuery(
+      testPaperQuery(testId, languagesFor(offered.languageMode, offered.languages, undefined)),
+    );
+  }, [offered, testId, queryClient]);
 
   return (
     <Fragment>

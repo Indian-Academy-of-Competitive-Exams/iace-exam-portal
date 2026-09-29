@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
+import { languagesFor } from '@iace/contracts';
 import { isBriefRefused } from '@iace/app-kit';
 import { useFullscreen } from '@iace/app-kit/browser';
-import { briefQuery } from '../lib/queries';
+import { briefQuery, testPaperQuery } from '../lib/queries';
 import { ROUTES } from '../lib/constants';
 import { InstructionsShell } from '../components/exam/instructions/instructions-shell';
 
@@ -14,6 +15,7 @@ export function TestInstructionsPage() {
   const { testId = '' } = useParams();
   const navigate = useNavigate();
   const fullscreen = useFullscreen();
+  const queryClient = useQueryClient();
 
   // Both are fetched while they read: pressing begin, and handing in on a failing network, never wait on a download.
   useEffect(() => {
@@ -25,6 +27,15 @@ export function TestInstructionsPage() {
     ...briefQuery(testId),
     enabled: testId !== '',
   });
+
+  // Held while they read, so beginning is a small request and not a paper download at the same instant.
+  const offered = brief.data;
+  useEffect(() => {
+    if (!offered) return;
+    void queryClient.prefetchQuery(
+      testPaperQuery(testId, languagesFor(offered.languageMode, offered.languages, undefined)),
+    );
+  }, [offered, testId, queryClient]);
 
   // A skeleton would have to guess the shape, and which skin draws these screens arrives with the brief.
   if (brief.isLoading) {

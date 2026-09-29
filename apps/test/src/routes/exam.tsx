@@ -12,10 +12,10 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
-import { useExamView, type EndedSitting } from '@iace/app-kit';
+import { paperFor, useExamView, type EndedSitting } from '@iace/app-kit';
 import { browserSessionStorage, useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import {
@@ -39,6 +39,7 @@ export function ExamPage() {
   const navigate = useNavigate();
   const { identity: student } = useAuth();
   const began = (useLocation().state ?? {}) as BeganWith;
+  const queryClient = useQueryClient();
   const resume = useSearchParams()[0].get(RESUME_PARAM) ?? undefined;
 
   const attempt = useQuery({
@@ -51,14 +52,15 @@ export function ExamPage() {
     retry: false,
   });
 
-  const attemptId = attempt.data?.id ?? '';
-  // Sent with the start, so the clock does not run while a second request queues for the paper.
-  const served = attempt.data?.paper ?? null;
+  const started = attempt.data ?? null;
+  const attemptId = started?.id ?? '';
   const paper = useQuery({
     queryKey: attemptPaperQueryKey(attemptId),
     // Stamped where the payload LANDS, never in a render: that instant is the clock's anchor.
     queryFn: async () => ({
-      paper: served ?? (await api.me.attemptPaper(attemptId)),
+      paper: started
+        ? await paperFor(started, queryClient, api.me.attemptPaper)
+        : await api.me.attemptPaper(attemptId),
       arrivedAt: Date.now(),
     }),
     enabled: attemptId !== '',

@@ -1,11 +1,4 @@
-import {
-  LANGUAGE_MODE,
-  TEST_STATUS,
-  type AttemptStatus,
-  type LanguageCode,
-  type LanguageMode,
-  type TestStatus,
-} from '@iace/contracts';
+import { TEST_STATUS, type AttemptStatus, type TestStatus } from '@iace/contracts';
 import { MS_PER_SECOND } from '../common/time/units';
 
 /** The rules that decide whether a sitting may begin — pure, so no database is needed to test them. */
@@ -47,17 +40,6 @@ export function slotsAfter(ended: readonly EndedSitting[]): SittingSlots {
     // Spent unless a void handed it back: the slot is held by whichever sitting still carries it.
     ranksAgain: !ended.some((row) => row.isGraded),
   };
-}
-
-/** DUAL sits every language offered; SINGLE the one picked, narrowed to what actually exists. */
-export function languagesFor(
-  mode: LanguageMode,
-  offered: readonly LanguageCode[],
-  picked: readonly LanguageCode[] | undefined,
-): LanguageCode[] {
-  if (mode === LANGUAGE_MODE.DUAL) return [...offered];
-  const first = (picked ?? []).find((language) => offered.includes(language));
-  return first === undefined ? offered.slice(0, 1) : [first];
 }
 
 /** The deadline is the server's, computed once at start and never recomputed. */

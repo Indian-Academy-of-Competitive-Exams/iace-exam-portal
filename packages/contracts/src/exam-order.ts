@@ -3,6 +3,9 @@
  * ordered wherever it is assembled — the server for a reload or a report, the browser for a
  * prefetched paper — and two implementations would be two answers to "same seed, same order".
  */
+import { LANGUAGE_MODE, type LanguageMode } from './configs';
+import { type LanguageCode } from './exams';
+
 const PRNG_INCREMENT = 0x6d2b79f5;
 const UINT32 = 4294967296;
 
@@ -67,4 +70,15 @@ export function servedQuestions<
     order: index + 1,
     options: shuffleOptions ? shuffle(question.options, random) : question.options,
   }));
+}
+
+/** DUAL sits every language offered; SINGLE the one picked, narrowed to what actually exists. */
+export function languagesFor(
+  mode: LanguageMode,
+  offered: readonly LanguageCode[],
+  picked: readonly LanguageCode[] | undefined,
+): LanguageCode[] {
+  if (mode === LANGUAGE_MODE.DUAL) return [...offered];
+  const first = (picked ?? []).find((language) => offered.includes(language));
+  return first === undefined ? offered.slice(0, 1) : [first];
 }

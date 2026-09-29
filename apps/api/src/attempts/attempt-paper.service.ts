@@ -16,10 +16,10 @@ import {
   type LocalizedContent,
   type QuestionOption,
   type TestScopeRef,
+  languagesFor,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { languagesFor } from './attempt-rules';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';

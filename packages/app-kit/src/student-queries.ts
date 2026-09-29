@@ -1,6 +1,11 @@
 /** Every read both student clients cache, keyed once, so web and mobile can never cache one read twice. */
 import { queryOptions } from '@tanstack/react-query';
-import { PERFORMANCE_SCOPES, type LeaderboardScope, type PerformanceScope } from '@iace/contracts';
+import {
+  PERFORMANCE_SCOPES,
+  type LanguageCode,
+  type LeaderboardScope,
+  type PerformanceScope,
+} from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
 import { isMarkingPending } from './marking';
@@ -76,6 +81,10 @@ export const startedAttemptQueryKey = (testId: string) => ['me', 'attempt', test
 export const attemptPaperQueryKey = (attemptId: string) =>
   ['me', 'attempt-paper', attemptId] as const;
 
+/** One test's shared paper, keyed by the resolved languages — it is held before any sitting exists. */
+export const testPaperQueryKey = (testId: string, languages: readonly string[]) =>
+  ['me', 'test-paper', testId, [...languages].sort().join(',')] as const;
+
 /** The reads several screens share, over whichever client the app built; each screen draws its own expected refusal. */
 export function createStudentQueries(api: AppApiClient) {
   return {
@@ -85,6 +94,13 @@ export function createStudentQueries(api: AppApiClient) {
       queryKey: PERFORMANCE_QUERY_KEY,
       queryFn: () => api.me.performance(),
     }),
+    testPaperQuery: (testId: string, languages: readonly LanguageCode[]) =>
+      queryOptions({
+        queryKey: testPaperQueryKey(testId, languages),
+        queryFn: () => api.me.testPaper(testId, languages),
+        // A sat paper cannot change, so what was held while they read is what they sit.
+        staleTime: Infinity,
+      }),
     briefQuery: (testId: string) =>
       queryOptions({
         queryKey: briefQueryKey(testId),
