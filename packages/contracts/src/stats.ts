@@ -847,7 +847,7 @@ export type TestTopper = z.infer<typeof testTopperSchema>;
 export const testAnalyticsSummarySchema = z.object({
   /** Everyone its series reaches — the denominator `attemptCount` is a turnout against. */
   reachedCount: z.number().int(),
-  /** Every sitting, ranked or not. `evaluatedCount` is the cohort the rest of this describes. */
+  /** Every sitting, ranked or not. `liveEvaluatedCount` is the cohort the spread describes. */
   attemptCount: z.number().int(),
   evaluatedCount: z.number().int(),
   meanScore: z.number().nullable(),

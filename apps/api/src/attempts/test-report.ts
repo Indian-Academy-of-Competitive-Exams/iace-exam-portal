@@ -214,7 +214,7 @@ function summaryRows({ title, summary }: TestAnalytics): SummaryRow[] {
     { label: 'Test', value: title },
     { label: 'Students reached', value: summary.reachedCount },
     { label: 'Sittings', value: summary.attemptCount },
-    { label: 'Ranked sittings', value: summary.evaluatedCount },
+    { label: 'Ranked sittings', value: summary.liveEvaluatedCount },
     { label: 'Mean score', value: summary.meanScore },
     { label: 'Median (approximate)', value: summary.medianScore },
     { label: 'Highest', value: summary.maxScore },

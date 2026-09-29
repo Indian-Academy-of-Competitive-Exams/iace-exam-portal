@@ -152,7 +152,7 @@ export function TestAnalyticsPage() {
           title={title}
           meta={
             <>
-              {`${plural(report.summary.evaluatedCount, 'ranked sitting')} of ${plural(
+              {`${plural(report.summary.liveEvaluatedCount, 'ranked sitting')} of ${plural(
                 report.summary.attemptCount,
                 'sitting',
               )} · ${plural(report.summary.reachedCount, 'student')} reached`}
@@ -279,7 +279,7 @@ function Spread({ summary }: Readonly<{ summary: TestAnalytics['summary'] }>) {
   return (
     <ChartFigure
       title="Score spread"
-      meta={plural(summary.evaluatedCount, 'ranked sitting')}
+      meta={plural(summary.liveEvaluatedCount, 'ranked sitting')}
       figure={<Metric size="md" label="Mean" value={summary.meanScore ?? DASH} unit="marks" />}
     >
       <DistributionPlot
