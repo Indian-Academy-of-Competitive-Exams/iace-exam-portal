@@ -69,11 +69,13 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StartedAttempt> {
     const attempt = await this.attempts.start(user.id, testId, body);
-    // The clock is already running, so a paper that will not build is the screen's to ask for again.
-    const paper = await this.papers.paper(user.id, attempt.id).catch((error: unknown) => {
-      this.logger.error(`Paper for sitting ${attempt.id} did not build with its start`, error);
-      return null;
-    });
+    // A screen holding the paper already would throw this copy away; one that cannot build it asks again.
+    const paper = body.holdsPaper
+      ? null
+      : await this.papers.paper(user.id, attempt.id).catch((error: unknown) => {
+          this.logger.error(`Paper for sitting ${attempt.id} did not build with its start`, error);
+          return null;
+        });
 
     return { ...attempt, paper, serverNow: new Date().toISOString() };
   }

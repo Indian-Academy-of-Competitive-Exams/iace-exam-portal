@@ -9,7 +9,11 @@ import {
   type StartAttemptInput,
 } from '@iace/contracts';
 import { type AppApiClient } from '../api-client';
-import { attemptPaperQueryKey, startedAttemptQueryKey } from '../student-queries';
+import {
+  attemptPaperQueryKey,
+  startedAttemptQueryKey,
+  testPaperQueryKey,
+} from '../student-queries';
 import { paperFor } from './served-paper';
 
 export interface BeginChoice {
@@ -53,7 +57,13 @@ export function useStartedSitting(api: AppApiClient, testId: string, start: Star
   const queryClient = useQueryClient();
   const attempt = useQuery({
     queryKey: startedAttemptQueryKey(testId),
-    queryFn: () => api.me.startAttempt(testId, start),
+    queryFn: () =>
+      api.me.startAttempt(testId, {
+        ...start,
+        // Held while they read the instructions: a second copy per student is the bell's most expensive answer.
+        holdsPaper:
+          queryClient.getQueryData(testPaperQueryKey(testId, start.languages ?? [])) !== undefined,
+      }),
     enabled: testId !== '',
     // The sitting is started once; a refetch would be a second start, which the server resumes.
     staleTime: Infinity,

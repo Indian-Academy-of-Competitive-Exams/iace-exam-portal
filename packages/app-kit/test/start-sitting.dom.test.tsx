@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LANGUAGE_CODE, LANGUAGE_MODE, type LanguageCode } from '@iace/contracts';
 import { beginChoice, useStartedSitting } from '../src/exam/start-sitting';
 import type { AppApiClient } from '../src';
-import { startedAttemptQueryKey } from '../src/student-queries';
+import { startedAttemptQueryKey, testPaperQueryKey } from '../src/student-queries';
 
 const { EN, HI } = LANGUAGE_CODE;
 const single = (languages: LanguageCode[]) => ({ languageMode: LANGUAGE_MODE.SINGLE, languages });
@@ -82,6 +82,40 @@ test('a sitting that started is dropped when its screen goes, so a re-sit starts
   unmount();
   await nextTick();
   assert.equal(client.getQueryData(startedAttemptQueryKey('test-1')), undefined);
+});
+
+/** The cost this prevents: a paper built and shipped per student at the bell that the screen already holds. */
+test('a start says whether the paper is already held', async (t) => {
+  const asked: (boolean | undefined)[] = [];
+  const api = {
+    me: {
+      startAttempt: async (_testId: string, input: { holdsPaper?: boolean }) => {
+        asked.push(input.holdsPaper);
+        return { id: 'attempt-1', testId: 'test-1', languages: [], paper: null };
+      },
+      attemptPaper: () => new Promise(() => undefined),
+    },
+  } as unknown as AppApiClient;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => client.clear());
+  const mount = () =>
+    renderHook(() => useStartedSitting(api, 'test-1', { tab: 'tab-1' }), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+  const first = mount();
+  await act(nextTick);
+  first.unmount();
+  await nextTick();
+  assert.deepEqual(asked, [false], 'nothing held, so the start carries the paper');
+
+  client.setQueryData(testPaperQueryKey('test-1', []), { questions: [] });
+  const second = mount();
+  t.after(second.unmount);
+  await act(nextTick);
+  assert.deepEqual(asked, [false, true], 'held, so the start carries none');
 });
 
 /** The failure this prevents: a start that lands after its screen went, reused on re-entry with a stale clock. */

@@ -118,6 +118,8 @@ export const startAttemptSchema = z.object({
   tab: z.string().min(1).optional(),
   /** The sitting this start continues, and only that one: never a new sitting if it has ended. */
   resume: z.string().optional(),
+  /** The screen already holds this test's paper, so the start answers without building a second copy. */
+  holdsPaper: z.boolean().optional(),
 });
 export type StartAttemptInput = z.input<typeof startAttemptSchema>;
 export type StartAttemptBody = z.infer<typeof startAttemptSchema>;
