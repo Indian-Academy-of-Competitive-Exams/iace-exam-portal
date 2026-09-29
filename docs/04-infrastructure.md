@@ -206,12 +206,8 @@ is the whole of scaling out and Caddy needs no config change.
 resizing the box before `opensAt` rather than raising an autoscaling minimum — deliberate, not
 automatic, and it must be on the release calendar.
 
-**No catalog edits during a start window.** Any test or series write busts the whole catalog cache
-in one epoch bump, so an admin fixing a title at T0 turns every start in the hall into a cold
-resolve — three Postgres queries each, one of them the heavy nested series read, on the exam pool
-of eight. The cache is 15 minutes; a start storm is minutes. This is an ops rule because it is
-free, and the code alternative (serving a seconds-stale catalog while one request rebuilds) has not
-been built.
+**A catalog edit during a start window is safe.** Any test or series write bumps one counter, and
+each API process rebuilds its held series once — one read per container, not one per student.
 
 **Settled: production is EC2, and a second box is bought for availability rather than capacity.**
 The question this section used to leave open — whether production returns to Fargate — is closed,
@@ -366,7 +362,7 @@ can push RSS toward double the dataset while writes are landing.
 | Stage                                 | Box B              | Disk  | Why                                                                 |
 | ------------------------------------- | ------------------ | ----- | ------------------------------------------------------------------- |
 | Now, one tester                       | `t4g.micro`, 1 GB  | 10 GB | Valkey ~300 MB + OS ~350 MB                                         |
-| Before the first full-scale load test | `t4g.small`, 2 GB  | 10 GB | 8,000 sittings is a ~280 MB dataset; the rewrite fork can double it |
+| Before the first full-scale load test | `t4g.small`, 2 GB  | 10 GB | 8,000 sittings is a ~100 MB dataset; the rewrite fork can double it |
 | Production at 8,000 live sittings     | `t4g.medium`, 4 GB | 20 GB | Both processes, both with headroom                                  |
 
 **The disk is sized by the AOF, not the OS.** Valkey lets the log grow to roughly twice the dataset
@@ -375,7 +371,7 @@ three times the dataset plus ~3 GB of OS. Ten gigabytes carries staging and a lo
 holding 1.2 GB of live sittings wants twenty. gp3 gives 3,000 IOPS and 125 MB/s at **any** size, so
 a small volume costs nothing in speed — only headroom.
 
-That ~280 MB is 97 MB of sitting state plus ~184 MB of catalog cache — and the per-sitting figures
+That ~100 MB is sitting state — the catalog keeps one key in Valkey — and the per-sitting figures
 behind it (10.2 KB of JSON, 12.1 KB stored) predate the recent work and are unverified (§16).
 Scaled to 8,000 candidates they would put an event at roughly 64–120 Mbps and ~57 GB of traffic.
 

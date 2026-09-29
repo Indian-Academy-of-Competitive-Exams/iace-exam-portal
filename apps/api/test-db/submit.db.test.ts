@@ -99,23 +99,9 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const queue = new FakeQueue();
-  const busts: string[] = [];
-  const access = {
-    invalidateStudent: (studentId: string) => {
-      busts.push(studentId);
-      return Promise.resolve();
-    },
-  } as never;
   const outbox = new ScoringOutbox(prisma, queue.asQueue());
   const sheets = new AttemptSheetService(client, new PaperSheetService(client));
-  const submit = new SubmitService(
-    client,
-    state,
-    access,
-    outbox,
-    new FakeMetrics().asService(),
-    sheets,
-  );
+  const submit = new SubmitService(client, state, outbox, new FakeMetrics().asService(), sheets);
   const change = (questionId = q1): AnswerChange => ({
     questionId,
     state: ANSWER_STATE.ANSWERED,
@@ -132,7 +118,6 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     hooks,
     state,
     queue,
-    busts,
     outbox,
     sheets,
     submit,
@@ -282,17 +267,6 @@ describe('SubmitService', () => {
 
     assert.equal(second.submittedByThisCall, false);
     assert.equal(second.submittedAt, first.submittedAt);
-  });
-
-  /** The catalog caches where the student got to, so a submitted test must leave the Open tab. */
-  it('busts the student catalog exactly once', async () => {
-    const built = await build();
-    await answered(built);
-
-    await built.submit.submit(built.student, built.attemptId);
-    await built.submit.submit(built.student, built.attemptId);
-
-    assert.deepEqual(built.busts, [built.student]);
   });
 
   /** The failure this prevents: a double-click scoring one sitting twice. */

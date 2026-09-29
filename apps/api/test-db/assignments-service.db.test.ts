@@ -59,6 +59,7 @@ function build() {
     new ExamStagesService(prisma, audit),
     audit,
     redis,
+    new FakeEventBus().asService(),
   );
   return {
     assignments: new AssignmentsService(prisma, new FakeRedis().asService(), admins),

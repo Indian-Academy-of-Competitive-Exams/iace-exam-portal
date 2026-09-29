@@ -64,6 +64,7 @@ async function builder() {
     new ExamStagesService(prisma, audit),
     audit,
     redis,
+    events.asService(),
   );
   const tests = new TestsService(prisma, configs, audit, events.asService(), redis);
   const paper = new PaperService(

@@ -95,6 +95,7 @@ async function serviceWith(over: Bench = {}) {
     new ExamStagesService(prisma, audit),
     audit,
     redis,
+    events.asService(),
   );
   return { events, service: new TestsService(prisma, configs, audit, events.asService(), redis) };
 }
@@ -495,6 +496,18 @@ describe('TestsService — editing and removing', () => {
     const { service, events } = await serviceWith({ test: {} });
 
     await service.update(TEST, { title: 'Mock 1 (revised)' });
+
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
+      [idFor('srs_1')],
+    );
+  });
+
+  /** The failure this prevents: an offered test re-skinned while its brief still names the old screen. */
+  it('tells the series about a re-skin, which the brief carries', async () => {
+    const { service, events } = await serviceWith({ test: {} });
+
+    await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
 
     assert.deepEqual(
       events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),

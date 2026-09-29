@@ -96,7 +96,6 @@ async function hall(questionCount = 2) {
     submit: new SubmitService(
       prisma,
       state,
-      access,
       new ScoringOutbox(prisma, queue.asQueue()),
       new FakeMetrics().asService(),
       sheets,

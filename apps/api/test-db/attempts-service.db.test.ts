@@ -46,7 +46,6 @@ function resolver(permitted = true): AccessResolverService {
         : Promise.reject(
             new AppException(ErrorCodes.FORBIDDEN, 'This test is not open to you right now'),
           ),
-    invalidateStudent: () => Promise.resolve(),
   } as unknown as AccessResolverService;
 }
 

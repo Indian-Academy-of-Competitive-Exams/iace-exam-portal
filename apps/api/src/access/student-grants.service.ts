@@ -3,15 +3,10 @@ import {
   AUDIT_ACTOR_TYPE,
   AppException,
   ErrorCodes,
-  type ExamCourse,
   NOTIFICATION_TYPE,
   type GrantSeriesBody,
-  STUDENT_SERIES_SOURCE,
   type StudentGrantRow,
   type StudentSeriesAccess,
-  type StudentSeriesSource,
-  TEST_SERIES_KIND,
-  type TestSeriesKind,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AuditContext, AuditService } from '../audit';
@@ -25,52 +20,7 @@ import {
 import { studentCardsOf, type StudentCard } from '../students';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { NotificationsService } from '../notifications';
-import { REACH_SELECT, reachableBy } from './access-resolver.service';
-
-/** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
-interface ReachPairing {
-  series: Readonly<{
-    kind: TestSeriesKind;
-    programCode: string | null;
-    course: ExamCourse | null;
-    branchIds: readonly string[];
-    granted: boolean;
-    isCandidate: boolean;
-  }>;
-  student: Readonly<{
-    currentBranchId: string | null;
-    programs: readonly string[];
-    enrolledCourses: readonly ExamCourse[];
-  }>;
-}
-
-/** Mirrors `reachableBy` arm for arm: a kind decides the automatic route, and a grant adds one. */
-export function seriesSources({ series, student }: ReachPairing): StudentSeriesSource[] {
-  const automatic: Partial<Record<TestSeriesKind, boolean>> = {
-    [TEST_SERIES_KIND.FREE]: true,
-    [TEST_SERIES_KIND.STANDARD]:
-      student.currentBranchId !== null &&
-      series.branchIds.includes(student.currentBranchId) &&
-      series.course !== null &&
-      student.enrolledCourses.includes(series.course),
-    [TEST_SERIES_KIND.PROGRAM]:
-      series.programCode !== null && student.programs.includes(series.programCode),
-    [TEST_SERIES_KIND.EVENT]: series.isCandidate,
-  };
-
-  return [
-    ...(automatic[series.kind] ? [SOURCE_OF_KIND[series.kind]] : []),
-    ...(series.granted ? [STUDENT_SERIES_SOURCE.GRANT] : []),
-  ];
-}
-
-/** The source a kind is reached by when its own arm matches. A grant is not a kind, so it is not here. */
-const SOURCE_OF_KIND: Readonly<Record<TestSeriesKind, StudentSeriesSource>> = {
-  [TEST_SERIES_KIND.STANDARD]: STUDENT_SERIES_SOURCE.COURSE,
-  [TEST_SERIES_KIND.FREE]: STUDENT_SERIES_SOURCE.FREE,
-  [TEST_SERIES_KIND.PROGRAM]: STUDENT_SERIES_SOURCE.PROGRAM,
-  [TEST_SERIES_KIND.EVENT]: STUDENT_SERIES_SOURCE.EVENT,
-};
+import { REACH_SELECT, reachableBy, seriesSources } from './access-resolver.service';
 
 interface GrantRow {
   student: StudentCard;

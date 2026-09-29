@@ -236,8 +236,8 @@ export class TestsService {
 
     this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));
 
-    // The catalog caches the title, so a rename must bust it like any offering change.
-    if (updated.title !== test.title) {
+    // The catalog and the brief hold both, and an offered test may still be renamed or re-skinned.
+    if (updated.title !== test.title || updated.examTemplate !== test.examTemplate) {
       this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
     }
 

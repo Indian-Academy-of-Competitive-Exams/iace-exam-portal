@@ -17,6 +17,7 @@ import {
 import { AccessCacheListener } from '../src/access/access-cache.listener';
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { redisKeys } from '../src/redis/redis.keys';
 import { FakeRedis } from '../test/support/fakes';
 import {
   makeBranch,
@@ -117,6 +118,10 @@ const resolverOn = (client: PrismaService = prisma) =>
   new AccessResolverService(client, new FakeRedis().asService());
 
 const seriesIds = (catalog: StudentCatalog) => catalog.series.map((row) => row.id);
+
+/** How many times the shared copy was built: the one read that is not per student. */
+const builds = (calls: readonly string[]) =>
+  calls.filter((call) => call === 'testSeries.findMany').length;
 
 const reached = async (student: string) => seriesIds(await resolverOn().catalog(student, NOW));
 
@@ -398,8 +403,8 @@ describe('AccessResolverService.assertCanStart', () => {
     await refused(resolverOn().assertCanStart(elsewhere, testId, NOW), ErrorCodes.FORBIDDEN);
   });
 
-  /** THE failure this prevents: a Redis blip leaving a just-blocked student starting tests on a stale entry. */
-  it('refuses the moment a block or a deactivation lands, on a cache entry nothing busted', async () => {
+  /** THE failure this prevents: a just-blocked student starting tests because a bump went missing. */
+  it('refuses the moment a block or a deactivation lands, with nothing bumped', async () => {
     const { student, testId } = await reachable();
     const resolver = resolverOn();
     await resolver.assertCanStart(student, testId, NOW);
@@ -427,39 +432,41 @@ describe('AccessResolverService — the read path', () => {
   });
 });
 
-describe('AccessResolverService — the cache', () => {
-  it('answers a second read without touching Postgres', async () => {
-    const { student } = await reachable();
+describe('AccessResolverService — the shared copy', () => {
+  it('reads the series once, however many students and reads follow', async () => {
+    const { at, student } = await reachable();
+    const other = await studentAt(at);
     const { calls, resolver } = watched();
 
     await resolver.catalog(student, NOW);
-    const afterFirst = calls.length;
     await resolver.catalog(student, NOW);
+    await resolver.catalog(other, NOW);
 
-    assert.ok(afterFirst > 0);
-    assert.equal(calls.length, afterFirst);
+    assert.equal(builds(calls), 1);
   });
 
-  it('recomputes one student after their own access changes', async () => {
-    const { student } = await reachable();
+  /** A series-wide change is one INCR: the next read rebuilds once for every student, not once each. */
+  it('rebuilds once after a bump, not once per student', async () => {
+    const { at, student } = await reachable();
+    const other = await studentAt(at);
     const { calls, resolver } = watched();
     await resolver.catalog(student, NOW);
-    const afterFirst = calls.length;
 
-    await resolver.invalidateStudent(student);
+    await resolver.invalidateAll();
     await resolver.catalog(student, NOW);
+    await resolver.catalog(other, NOW);
 
-    assert.ok(calls.length > afterFirst);
+    assert.equal(builds(calls), 2);
   });
 
-  /** THE race a DEL cannot survive: a bust between the miss and the write would re-pin the old answer for the TTL. */
-  it('honours a bust that lands mid-resolve, instead of re-pinning the old answer', async () => {
+  /** THE race a held copy must survive: a bump landing mid-build must not leave that build in charge. */
+  it('honours a bump that lands while the copy is being built', async () => {
     const { student, seriesId } = await reachable();
     const { hook, resolver } = watched();
     hook.before = async (call) => {
       if (call !== 'testSeries.findMany') return;
       hook.before = null;
-      await resolver.invalidateStudent(student);
+      await resolver.invalidateAll();
     };
 
     assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), [seriesId]);
@@ -468,40 +475,67 @@ describe('AccessResolverService — the cache', () => {
     assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), []);
   });
 
-  it('leaves every other student’s entry alone when one student is busted', async () => {
-    const { at, student } = await reachable();
-    const other = await studentAt(at);
-    const { calls, resolver } = watched();
+  /** THE failure this prevents: a Valkey reset leaving every process on its old copy through the next bump. */
+  it('rebuilds after a bump even when the counter went backwards', async () => {
+    const { student, seriesId } = await reachable();
+    const redis = new FakeRedis();
+    const resolver = new AccessResolverService(prisma, redis.asService());
+    await redis.client.set(redisKeys.catalogEpoch, '42');
     await resolver.catalog(student, NOW);
-    await resolver.catalog(other, NOW);
-    const afterBoth = calls.length;
 
-    await resolver.invalidateStudent(student);
-    await resolver.catalog(other, NOW);
-
-    assert.equal(calls.length, afterBoth);
-  });
-
-  /** A series-wide change is one INCR, not a scan: every student falls out of cache at once. */
-  it('recomputes for everyone when the catalog itself changes', async () => {
-    const { at, student } = await reachable();
-    const other = await studentAt(at);
-    const { calls, resolver } = watched();
-    await resolver.catalog(student, NOW);
-    await resolver.catalog(other, NOW);
-    const afterBoth = calls.length;
-
+    await redis.client.del(redisKeys.catalogEpoch);
+    await prisma.testSeries.update({ where: { id: seriesId }, data: { isEnabled: false } });
     await resolver.invalidateAll();
-    await resolver.catalog(student, NOW);
-    const afterFirstRecompute = calls.length;
-    await resolver.catalog(other, NOW);
 
-    assert.ok(afterFirstRecompute > afterBoth);
-    assert.ok(calls.length > afterFirstRecompute);
+    assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), []);
   });
 
-  /** WHY the window is not cached: one entry must answer UPCOMING before the opening time and ACTIVE after it. */
-  it('crosses an opening time on a cache entry that never changed', async () => {
+  /** Nothing per student is held, so nothing per student has to be bumped. */
+  it('shows a student’s own grant and sitting on the next read, with nothing bumped', async () => {
+    const { at, student, testId } = await reachable();
+    const elsewhere = await series(at, { name: 'Granted series', branchIds: [uid()] });
+    const resolver = resolverOn();
+    await resolver.catalog(student, NOW);
+
+    await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: elsewhere } });
+    await prisma.attempt.create({
+      data: {
+        id: uid(),
+        testId,
+        studentId: student,
+        attemptNo: 1,
+        status: ATTEMPT_STATUS.SUBMITTED,
+        startedAt: NOW,
+        endsAt: new Date(NOW.getTime() + HOUR_MS),
+        submittedAt: NOW,
+        shuffleSeed: 1,
+      },
+    });
+    const catalog = await resolver.catalog(student, NOW);
+
+    assert.ok(seriesIds(catalog).includes(elsewhere));
+    const sat = catalog.series.flatMap((row) => row.tests).find((test) => test.id === testId);
+    assert.equal(sat?.attemptStatus, ATTEMPT_STATUS.SUBMITTED);
+  });
+
+  /** The safety net: a write that changes a held field without bumping lasts one max age, not forever. */
+  it('rebuilds a copy older than its max age, bump or no bump', async (context) => {
+    context.mock.timers.enable({ apis: ['Date'], now: NOW.getTime() });
+    const { student, seriesId } = await reachable();
+    const resolver = resolverOn();
+    await resolver.catalog(student, NOW);
+    await prisma.testSeries.update({ where: { id: seriesId }, data: { name: 'Renamed' } });
+
+    const held = await resolver.catalog(student, NOW);
+    context.mock.timers.tick(15 * 60 * 1000);
+    const rebuilt = await resolver.catalog(student, NOW);
+
+    assert.equal(held.series[0]?.name, 'STANDARD series');
+    assert.equal(rebuilt.series[0]?.name, 'Renamed');
+  });
+
+  /** WHY the clock is not held: one copy must answer not-yet before the opening time and open after it. */
+  it('crosses an opening time on a copy that never changed', async () => {
     const at = await place();
     const opensAt = new Date('2026-06-15T00:00:00.000Z');
     await testIn(at, await series(at), 1, { opensAt });
@@ -509,45 +543,25 @@ describe('AccessResolverService — the cache', () => {
     const { calls, resolver } = watched();
 
     const before = await resolver.catalog(student, new Date(opensAt.getTime() - HOUR_MS));
-    const afterFirst = calls.length;
     const later = await resolver.catalog(student, new Date(opensAt.getTime() + HOUR_MS));
 
     assert.equal(before.series[0]?.tests[0]?.canStart, false);
     assert.equal(later.series[0]?.tests[0]?.canStart, true);
-    assert.equal(calls.length, afterFirst);
+    assert.equal(builds(calls), 1);
   });
 });
 
 describe('AccessCacheListener', () => {
-  it('busts one student on student.access_changed', async () => {
-    const { at, student } = await reachable();
-    const other = await studentAt(at);
-    const { calls, resolver } = watched();
-    const listener = new AccessCacheListener(resolver);
-    await resolver.catalog(student, NOW);
-    await resolver.catalog(other, NOW);
-    const afterBoth = calls.length;
-
-    await listener.onStudentAccessChanged({ studentId: student });
-    await resolver.catalog(other, NOW);
-    const afterOther = calls.length;
-    await resolver.catalog(student, NOW);
-
-    assert.equal(afterOther, afterBoth);
-    assert.ok(calls.length > afterOther);
-  });
-
-  it('busts everyone on access.catalog_changed', async () => {
+  it('bumps every process on access.catalog_changed', async () => {
     const { student, seriesId } = await reachable();
     const { calls, resolver } = watched();
     const listener = new AccessCacheListener(resolver);
     await resolver.catalog(student, NOW);
-    const afterFirst = calls.length;
 
     await listener.onCatalogChanged({ testSeriesId: seriesId });
     await resolver.catalog(student, NOW);
 
-    assert.ok(calls.length > afterFirst);
+    assert.equal(builds(calls), 2);
   });
 });
 
@@ -630,7 +644,7 @@ describe('reading about a test', () => {
   it('opens a test in a series the student reaches', async () => {
     const { student, testId } = await reachable();
 
-    await assert.doesNotReject(resolverOn().assertReachable(student, testId));
+    await assert.doesNotReject(resolverOn().reachableTest(student, testId));
   });
 
   /** Reachable is not startable: the brief is what a student reads BEFORE a test opens. */
@@ -640,7 +654,7 @@ describe('reading about a test', () => {
     const later = await testIn(at, seriesId, 1, { opensAt: new Date(NOW.getTime() + HOUR_MS) });
     const student = await studentAt(at);
 
-    await resolverOn().assertReachable(student, later);
+    await resolverOn().reachableTest(student, later);
     await refused(resolverOn().assertCanStart(student, later, NOW), ErrorCodes.FORBIDDEN);
   });
 
@@ -650,7 +664,7 @@ describe('reading about a test', () => {
     const testId = await testIn(at, elsewhere, 1);
     const student = await studentAt(at);
 
-    await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
+    await refused(resolverOn().reachableTest(student, testId), ErrorCodes.NOT_FOUND);
   });
 
   /** The bug this prevents: a drafted paper readable because only the catalog filtered on status. */
@@ -660,7 +674,7 @@ describe('reading about a test', () => {
     const drafted = await testIn(at, seriesId, 1, { status: TEST_STATUS.DRAFT });
     const student = await studentAt(at);
 
-    await refused(resolverOn().assertReachable(student, drafted), ErrorCodes.NOT_FOUND);
+    await refused(resolverOn().reachableTest(student, drafted), ErrorCodes.NOT_FOUND);
   });
 
   it('reads everything in a switched-off series as missing', async () => {
@@ -669,7 +683,7 @@ describe('reading about a test', () => {
     const testId = await testIn(at, off, 1);
     const student = await studentAt(at);
 
-    await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
+    await refused(resolverOn().reachableTest(student, testId), ErrorCodes.NOT_FOUND);
   });
 
   /** A grant overrides the kind, reading about a test exactly as it does sitting one. */
@@ -680,14 +694,14 @@ describe('reading about a test', () => {
     const student = await studentAt(at);
     await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: elsewhere } });
 
-    await assert.doesNotReject(resolverOn().assertReachable(student, testId));
+    await assert.doesNotReject(resolverOn().reachableTest(student, testId));
   });
 
   it('reads everything as missing for a student who is no longer active', async () => {
     const { student, testId } = await reachable();
     await prisma.student.update({ where: { id: student }, data: { isActive: false } });
 
-    await refused(resolverOn().assertReachable(student, testId), ErrorCodes.NOT_FOUND);
+    await refused(resolverOn().reachableTest(student, testId), ErrorCodes.NOT_FOUND);
   });
 });
 

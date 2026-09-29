@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EXAM_COURSE, STUDENT_SERIES_SOURCE, TEST_SERIES_KIND } from '@iace/contracts';
-import { seriesSources } from '../src/access/student-grants.service';
+import { seriesSources } from '../src/access/access-resolver.service';
 
 const student = {
   currentBranchId: 'br_1',

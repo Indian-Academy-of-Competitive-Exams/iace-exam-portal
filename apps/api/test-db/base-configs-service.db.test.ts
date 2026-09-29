@@ -13,7 +13,8 @@ import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
 import { EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
 import { type Editor } from '../src/common/edit-lock';
-import { FakeRedis } from '../test/support/fakes';
+import { DOMAIN_EVENTS } from '../src/common/events';
+import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
   makeAdmin,
   makePaper,
@@ -27,11 +28,13 @@ const ADMIN = uid();
 
 const prisma = testPrisma();
 const redis = new FakeRedis();
+const events = new FakeEventBus();
 const service = new BaseConfigsService(
   prisma,
   new ExamStagesService(prisma, new AuditContext()),
   new AuditContext(),
   redis.asService(),
+  events.asService(),
 );
 
 beforeEach(() => resetDatabase(prisma));
@@ -438,6 +441,19 @@ describe('BaseConfigsService — a config a test is built on', () => {
     assert.deepEqual(
       kept.map((section) => section.id),
       paper.sectionIds,
+    );
+  });
+
+  /** The failure this prevents: an offered test's brief still showing a duration its config no longer has. */
+  it('tells the catalog about an edit, once for each series carrying one of its tests', async () => {
+    const { catalog } = await makePaper(prisma, { questions: [] });
+    events.forget();
+
+    await service.update(catalog.baseConfigId, { durationSec: 5400 });
+
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
+      [catalog.testSeriesId],
     );
   });
 });

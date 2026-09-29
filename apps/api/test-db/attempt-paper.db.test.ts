@@ -35,7 +35,7 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 /** The paper is served on the ATTEMPT's own ownership; reach is the brief's gate, not this one. */
-const reachAll = () => ({ assertReachable: () => Promise.resolve() }) as never;
+const reachAll = () => ({ reachableTest: () => Promise.resolve() }) as never;
 
 /** No image is resolved in these fixtures; a call would mean the paper started carrying one. */
 const noStorage = () =>

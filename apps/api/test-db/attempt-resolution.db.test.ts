@@ -36,9 +36,8 @@ const studentStat = (studentId: string) => prisma.studentStat.findUnique({ where
 /** Doubles for everything a void touches besides the row and the rollup: irrelevant to this race. */
 function support() {
   const state = { take: () => Promise.resolve(null) } as never;
-  const access = { invalidateStudent: () => Promise.resolve() } as never;
   const audit = { setEntityId: () => undefined, setChanged: () => undefined } as never;
-  return { state, access, audit };
+  return { state, audit };
 }
 
 /** The real client, held open right after the scorer's last write until the test lets it commit. */
@@ -113,13 +112,12 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
       new RollupService(prisma),
     );
     const rollupQueue = new FakeQueue();
-    const { state, access, audit } = support();
+    const { state, audit } = support();
     const resolution = new AttemptResolutionService(
       prisma,
       state,
       {} as never,
       new RollupQueue(rollupQueue.asQueue()),
-      access,
       audit,
     );
 

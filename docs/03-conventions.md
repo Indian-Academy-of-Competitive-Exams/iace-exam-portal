@@ -119,7 +119,7 @@ A module is a **bounded context**. Six rules make it extraction-ready:
   every student — route it through `StudentsService`.
 - `access` reads `Test` to resolve a student's catalog and to block deleting a series that still
   holds tests. `tests` is the only writer, and it emits `access.catalog_changed` on every offering
-  write, so the cache cannot go stale behind it; the read is what still wants a facade.
+  write, so the held copy cannot go stale behind it; the read is what still wants a facade.
 - `tests` reads `TestSeries` to take the mode a test is judged by — the series decides it, and it is
   denormalised onto `Test` so the composite foreign key holds the two together. Only the read
   crosses; the copy lands on the test's own row.
@@ -200,12 +200,12 @@ producer, and the event is there for whatever wants to hear about it later. A na
 not declared ahead of its producer — the producer adds it, so the catalog never lists a path that
 does not run.
 
-| Event                    | Producer                                                                                                      | Consumers                                    | State     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------- |
-| `student.signed_up`      | auth, on the signup that created the row                                                                      | students (records the platform consent)      | wired     |
-| `student.pin_reset`      | auth, both reset paths                                                                                        | —                                            | announced |
-| `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired     |
-| `access.catalog_changed` | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired     |
+| Event                    | Producer                                                                                                                                | Consumers                                           | State     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | --------- |
+| `student.signed_up`      | auth, on the signup that created the row                                                                                                | students (records the platform consent)             | wired     |
+| `student.pin_reset`      | auth, both reset paths                                                                                                                  | —                                                   | announced |
+| `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change)                           | —                                                   | announced |
+| `access.catalog_changed` | access (series write), tests (finalize, every offering write, a rename or re-skin), configs (an edit to a blueprint a test is built on) | access (every API process rebuilds its held series) | wired     |
 
 Submit and scoring do not go through the bus: a submitted sitting goes to the BullMQ scoring queue
 under its own id, and its unscored state is what the sweeper finds if that was lost; a re-score,

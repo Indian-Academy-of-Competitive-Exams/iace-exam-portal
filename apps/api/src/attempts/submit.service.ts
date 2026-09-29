@@ -14,7 +14,6 @@ import {
   type SubmittedAttempt,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { answeredIn, type AnswerSheet } from './answer-sheet';
@@ -43,7 +42,6 @@ export class SubmitService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
-    private readonly access: AccessResolverService,
     private readonly outbox: ScoringOutbox,
     private readonly metrics: MetricsService,
     private readonly sheets: AttemptSheetService,
@@ -124,8 +122,6 @@ export class SubmitService {
 
     // After the last write, so the scorer reads the sheet as it will stay.
     await this.queue(attempt);
-    // The catalog caches where this student has got to; ending a sitting is what moves it last.
-    await this.access.invalidateStudent(attempt.studentId);
 
     return {
       attemptId: attempt.id,

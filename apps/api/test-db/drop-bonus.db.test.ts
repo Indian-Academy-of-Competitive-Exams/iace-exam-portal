@@ -14,7 +14,7 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { PaperService } from '../src/tests/paper.service';
-import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   makePaper,
   makeStudent,
@@ -60,7 +60,13 @@ async function bench({ offered = true, sat = true } = {}) {
   const queue = new FakeQueue();
   const service = new PaperService(
     prisma,
-    new BaseConfigsService(prisma, stages, audit, new FakeRedis().asService()),
+    new BaseConfigsService(
+      prisma,
+      stages,
+      audit,
+      new FakeRedis().asService(),
+      new FakeEventBus().asService(),
+    ),
     new ScoringOutbox(prisma, queue.asQueue()),
     audit,
     new FakeRedis().asService(),

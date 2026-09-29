@@ -34,6 +34,7 @@ import {
   type Editor,
 } from '../common/edit-lock';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from './exam-stages.service';
 import {
   configDeletionBlocker,
@@ -88,6 +89,7 @@ export class BaseConfigsService {
     private readonly stages: ExamStagesService,
     private readonly auditContext: AuditContext,
     private readonly redis: RedisService,
+    private readonly events: DomainEventBus,
   ) {}
 
   async list(query: BaseConfigListQuery): Promise<Paginated<BaseConfig>> {
@@ -220,8 +222,21 @@ export class BaseConfigsService {
 
     const updated = await this.requireDetail(id);
     this.auditContext.setChanged(fieldDiff(config, updated, AUDITED_CONFIG_FIELDS));
+    if (config._count.tests > 0) await this.announceToSeries(id);
 
     return toDetail(updated, await this.editingBy(id));
+  }
+
+  /** The catalog and the brief hold a config's duration, languages and navigation, and an offered test's config moves until its first sitting. */
+  private async announceToSeries(baseConfigId: string): Promise<void> {
+    const carriers = await this.prisma.test.findMany({
+      where: { baseConfigId },
+      select: { testSeriesId: true },
+      distinct: ['testSeriesId'],
+    });
+    for (const { testSeriesId } of carriers) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    }
   }
 
   /** Clone-to-evolve: the copy carries the whole paper, points back at its origin, and starts unlocked and not the default. It is the only way a locked config changes. */

@@ -21,7 +21,7 @@ import { PaperService } from '../src/tests/paper.service';
 import { type Editor } from '../src/tests/edit-lock';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from '../src/tests/test-rules';
-import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BUILDER,
   makeAdmin,
@@ -125,7 +125,13 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
   const redis = new FakeRedis().asService();
   return new PaperService(
     over.client ?? prisma,
-    new BaseConfigsService(prisma, new ExamStagesService(prisma, audit), audit, redis),
+    new BaseConfigsService(
+      prisma,
+      new ExamStagesService(prisma, audit),
+      audit,
+      redis,
+      new FakeEventBus().asService(),
+    ),
     new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
     redis,

@@ -6,9 +6,11 @@ import {
   type AttemptStatus,
   ErrorCodes,
   type ExamCourse,
+  STUDENT_SERIES_SOURCE,
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
+  type StudentSeriesSource,
   TEST_SERIES_KIND,
   TEST_STATUS,
   type TestSeriesKind,
@@ -24,63 +26,113 @@ import { redisKeys } from '../redis/redis.keys';
 /** A sitting that counts as done — for the series that unlocks in order, and for the test list. */
 const FINISHED = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
-/** A safety net under the event-driven busts, never the mechanism that keeps the catalog right. */
-const CATALOG_TTL_SEC = 15 * 60;
+/** The safety net under the counter: a write that changes a held field without bumping it lasts this long at most. */
+const CATALOG_MAX_AGE_MS = 15 * 60 * 1000;
 
-/** Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a payload the previous build wrote is read back as the new shape until its TTL runs out. */
-const CATALOG_SHAPE = 'v12';
-
-const catalogInclude = (programs: string[]) =>
-  ({
-    examStage: { select: { id: true, name: true, exam: { select: { code: true, course: true } } } },
-    tests: {
-      where: { status: TEST_STATUS.ACTIVE },
-      select: {
-        id: true,
-        title: true,
-        seriesOrder: true,
-        opensAt: true,
-        scope: true,
-        scopeRef: true,
-        baseConfig: {
-          select: {
-            durationSec: true,
-            totalQuestions: true,
-            // A scoped test is its own sections' worth, and the catalog is what a student reads first.
-            sections: {
-              select: {
-                id: true,
-                moduleId: true,
-                questionCount: true,
-                durationSec: true,
-                perQuestionSec: true,
-              },
+/** Every enabled series and its ACTIVE tests: the same for every student, so one copy per process. */
+const SHARED_SELECT = {
+  id: true,
+  name: true,
+  kind: true,
+  sequentialTests: true,
+  programCode: true,
+  branchIds: true,
+  eventId: true,
+  examStage: { select: { id: true, name: true, exam: { select: { code: true, course: true } } } },
+  tests: {
+    where: { status: TEST_STATUS.ACTIVE },
+    select: {
+      id: true,
+      title: true,
+      seriesOrder: true,
+      opensAt: true,
+      examTemplate: true,
+      scope: true,
+      scopeRef: true,
+      programUnlocks: { select: { programCode: true, opensAt: true } },
+      baseConfig: {
+        select: {
+          durationSec: true,
+          totalQuestions: true,
+          languageMode: true,
+          languages: true,
+          navigation: true,
+          sections: {
+            select: {
+              id: true,
+              moduleId: true,
+              name: true,
+              questionCount: true,
+              durationSec: true,
+              perQuestionSec: true,
+              marksPerQuestion: true,
+              negativeMarks: true,
             },
+            orderBy: { order: 'asc' },
           },
         },
-        // No program, no row, which is already what "no row" means: the test's own opening.
-        programUnlocks: { where: { programCode: { in: programs } }, select: { opensAt: true } },
       },
     },
-  }) as const satisfies Prisma.TestSeriesInclude;
+  },
+} as const satisfies Prisma.TestSeriesSelect;
 
-type CatalogRow = Prisma.TestSeriesGetPayload<{ include: ReturnType<typeof catalogInclude> }>;
+type SharedSeries = Prisma.TestSeriesGetPayload<{ select: typeof SHARED_SELECT }>;
+
+/** One test as every student reaching it sees it, before their own programs and sittings are applied. */
+export type ReachableTest = SharedSeries['tests'][number];
+
+interface HeldCatalog {
+  epoch: number;
+  builtAt: number;
+  series: Promise<SharedSeries[]>;
+}
+
+/** What a student reaches by, read live on every call: nothing per student is cached, so nothing per student is busted. */
+const REACH_FACTS = {
+  isActive: true,
+  deletedAt: true,
+  isTestBlocked: true,
+  currentBranchId: true,
+  programs: true,
+  enrolledCourses: true,
+  grants: { select: { testSeriesId: true } },
+  eventCandidacies: { select: { eventId: true } },
+} as const satisfies Prisma.StudentSelect;
+
+const STANDING_FACTS = {
+  ...REACH_FACTS,
+  // A voided sitting did not happen: it must not hide the real one under it.
+  attempts: {
+    where: { status: { not: ATTEMPT_STATUS.VOIDED } },
+    select: { testId: true, status: true },
+    orderBy: { attemptNo: 'asc' },
+  },
+} as const satisfies Prisma.StudentSelect;
+
+interface Reach {
+  isTestBlocked: boolean;
+  currentBranchId: string | null;
+  programs: string[];
+  enrolledCourses: ExamCourse[];
+  grantedSeries: ReadonlySet<string>;
+  events: ReadonlySet<string>;
+}
+
+interface Standing extends Reach {
+  sittings: ReadonlyMap<string, AttemptStatus>;
+}
 
 interface ResolvedTest {
   id: string;
   title: string | null;
-  /** What the paper IS, not what this student may do with it — static, so it caches safely. */
   durationSec: number;
   sectionCount: number;
   totalQuestions: number;
   order: number | null;
-  /** The opening, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
   opensAt: string | null;
-  /** Where this student got to. Cached, and busted when a sitting starts or ends. */
   attemptStatus: AttemptStatus | null;
 }
 
-/** What is cached: everything the clock does NOT decide. */
 interface ResolvedSeries {
   id: string;
   name: string;
@@ -90,14 +142,11 @@ interface ResolvedSeries {
   tests: ResolvedTest[];
 }
 
-interface ResolvedCatalog {
-  testBlocked: boolean;
-  series: ResolvedSeries[];
-}
-
 /** The one place "can this student reach this?" is answered: by the series' kind, or by a grant. */
 @Injectable()
 export class AccessResolverService {
+  private held: HeldCatalog | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -105,47 +154,40 @@ export class AccessResolverService {
 
   /** The catalog as of `now` — availability and `canStart` are derived here on every read. */
   async catalog(studentId: string, now: Date = new Date()): Promise<StudentCatalog> {
-    const resolved = await this.resolved(studentId);
+    const [standing, series] = await Promise.all([this.standingOf(studentId), this.shared()]);
+    if (!standing) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    return {
-      testBlocked: resolved.testBlocked,
-      series: resolved.series.map((series) => project(series, resolved.testBlocked, now)),
-    };
+    return catalogOf(series, standing, now);
   }
 
-  /** Cached WITH the catalog, not read per request: starting and submitting are what bust it. */
-  private async sittings(studentId: string): Promise<ReadonlyMap<string, AttemptStatus>> {
-    const attempts = await this.prisma.attempt.findMany({
-      // A voided sitting did not happen: it must not hide the real one under it.
-      where: { studentId, status: { not: ATTEMPT_STATUS.VOIDED } },
-      select: { testId: true, status: true },
-      orderBy: { attemptNo: 'asc' },
-    });
-    // They arrive in attempt order and the last write wins, so the latest sitting is what shows.
-    return new Map(attempts.map((row) => [row.testId, row.status]));
-  }
-
-  /** The attempt-start guard: the catalog's own resolution, so the two cannot disagree, plus a live re-read of the switches the cache cannot be trusted to have caught up with. */
+  /** The attempt-start guard: the catalog's own resolution, so the two cannot disagree. */
   async assertCanStart(studentId: string, testId: string, now: Date = new Date()): Promise<void> {
-    const [permitted, { series }] = await Promise.all([
-      this.stillPermitted(studentId),
-      this.catalog(studentId, now),
-    ]);
+    const [standing, series] = await Promise.all([this.standingOf(studentId), this.shared()]);
 
-    const test = permitted
-      ? series.flatMap((row) => row.tests).find((row) => row.id === testId)
-      : undefined;
+    // A block refuses as "not open to you", never as "not opened yet": no opening will ever let them in.
+    const test =
+      standing && !standing.isTestBlocked
+        ? catalogOf(series, standing, now)
+            .series.flatMap((row) => row.tests)
+            .find((row) => row.id === testId)
+        : undefined;
     if (test?.canStart) return;
 
     throw new AppException(ErrorCodes.FORBIDDEN, refusalFor(test, now));
   }
 
-  /** Reachable is not startable, and reading about a test needs no live re-read: the cached catalog answers. */
-  async assertReachable(studentId: string, testId: string): Promise<void> {
-    const { series } = await this.resolved(studentId);
-    if (!series.some((row) => row.tests.some((test) => test.id === testId))) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-    }
+  /** Reachable is not startable: the test a student may read about, or NOT_FOUND so an id is never confirmed. */
+  async reachableTest(studentId: string, testId: string): Promise<ReachableTest> {
+    const [reach, series] = await Promise.all([this.reachOf(studentId), this.shared()]);
+
+    const test = reach
+      ? reachedBy(series, reach)
+          .flatMap((row) => row.tests)
+          .find((row) => row.id === testId)
+      : undefined;
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+
+    return test;
   }
 
   /** Everyone one series reaches, which is the catalog read backwards. Ids only: the caller fans out. */
@@ -174,70 +216,102 @@ export class AccessResolverService {
     return this.prisma.student.count({ where: audienceOf(series) });
   }
 
-  async invalidateStudent(studentId: string): Promise<void> {
-    await this.redis.client.incr(redisKeys.catalogStudentEpoch(studentId));
-  }
-
+  /** One INCR however many students there are: every process rebuilds its copy on its next read. */
   async invalidateAll(): Promise<void> {
     await this.redis.client.incr(redisKeys.catalogEpoch);
   }
 
-  /** A block or a deactivation must bite now, not when the entry expires — the cache bust is best-effort, and this is an authorization answer, not the live-test hot path. */
-  private async stillPermitted(studentId: string): Promise<boolean> {
+  /** Concurrent readers share one build; a build that started before a bump carries the old counter, so it is replaced. */
+  private async shared(): Promise<SharedSeries[]> {
+    const epoch = counterOf(await this.redis.client.get(redisKeys.catalogEpoch));
+    const held = this.held;
+    // Any difference, not only a higher counter: a Valkey reset sends it backwards, and the bumps after it must still bite.
+    if (held?.epoch === epoch && Date.now() - held.builtAt < CATALOG_MAX_AGE_MS) {
+      return held.series;
+    }
+
+    const next: HeldCatalog = {
+      epoch,
+      builtAt: Date.now(),
+      series: this.prisma.testSeries.findMany({
+        where: { isEnabled: true },
+        select: SHARED_SELECT,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      }),
+    };
+    this.held = next;
+    // Not held once it fails, so the next reader retries instead of inheriting the failure.
+    next.series.catch(() => {
+      if (this.held === next) this.held = null;
+    });
+    return next.series;
+  }
+
+  /** Deleted and deactivated read as absent, which each caller turns into its own refusal. */
+  private async reachOf(studentId: string): Promise<Reach | null> {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
-      select: { isActive: true, isTestBlocked: true, deletedAt: true },
+      select: REACH_FACTS,
     });
-    return student?.isActive === true && !student.isTestBlocked && student.deletedAt === null;
+    return student && isPresent(student) ? reachFrom(student) : null;
   }
 
-  private async resolved(studentId: string): Promise<ResolvedCatalog> {
-    const key = await this.catalogKey(studentId);
-
-    const cached = await this.redis.getJson<ResolvedCatalog>(key);
-    if (cached) return cached;
-
-    const catalog = await this.resolve(studentId);
-    await this.redis.setJson(key, catalog, CATALOG_TTL_SEC);
-    return catalog;
-  }
-
-  private async catalogKey(studentId: string): Promise<string> {
-    const [epoch, studentEpoch] = await this.redis.client.mget(
-      redisKeys.catalogEpoch,
-      redisKeys.catalogStudentEpoch(studentId),
-    );
-    return redisKeys.studentCatalog(
-      studentId,
-      CATALOG_SHAPE,
-      counterOf(epoch),
-      counterOf(studentEpoch),
-    );
-  }
-
-  private async resolve(studentId: string): Promise<ResolvedCatalog> {
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null, isActive: true },
-      select: { isTestBlocked: true, ...REACH_SELECT },
+  private async standingOf(studentId: string): Promise<Standing | null> {
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      select: STANDING_FACTS,
     });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
-    const rows = await this.prisma.testSeries.findMany({
-      where: reachableBy(studentId, student),
-      include: catalogInclude(student.programs),
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    });
-
-    const sittings = await this.sittings(studentId);
+    if (!student || !isPresent(student)) return null;
 
     return {
-      testBlocked: student.isTestBlocked,
-      series: rows.map((row) => toResolved(row, sittings)),
+      ...reachFrom(student),
+      // They arrive in attempt order and the last write wins, so the latest sitting is what shows.
+      sittings: new Map(student.attempts.map((row) => [row.testId, row.status])),
     };
   }
 }
 
-/** A corrupt counter would otherwise make the key NaN — stable, so every later bust is a no-op. */
+const isPresent = (student: { isActive: boolean; deletedAt: Date | null }): boolean =>
+  student.isActive && student.deletedAt === null;
+
+function reachFrom(student: Prisma.StudentGetPayload<{ select: typeof REACH_FACTS }>): Reach {
+  return {
+    isTestBlocked: student.isTestBlocked,
+    currentBranchId: student.currentBranchId,
+    programs: student.programs,
+    enrolledCourses: student.enrolledCourses,
+    grantedSeries: new Set(student.grants.map((grant) => grant.testSeriesId)),
+    events: new Set(student.eventCandidacies.map((candidacy) => candidacy.eventId)),
+  };
+}
+
+function reachedBy(series: readonly SharedSeries[], reach: Reach): SharedSeries[] {
+  return series.filter(
+    (row) =>
+      seriesSources({
+        series: {
+          kind: row.kind,
+          programCode: row.programCode,
+          course: row.examStage?.exam.course ?? null,
+          branchIds: row.branchIds,
+          granted: reach.grantedSeries.has(row.id),
+          isCandidate: row.eventId !== null && reach.events.has(row.eventId),
+        },
+        student: reach,
+      }).length > 0,
+  );
+}
+
+function catalogOf(series: readonly SharedSeries[], standing: Standing, now: Date): StudentCatalog {
+  return {
+    testBlocked: standing.isTestBlocked,
+    series: reachedBy(series, standing).map((row) =>
+      project(toResolved(row, standing), standing.isTestBlocked, now),
+    ),
+  };
+}
+
+/** A corrupt counter would otherwise read as NaN, which no bump could ever move past. */
 function counterOf(raw: string | null | undefined): number {
   const value = Number(raw);
   return Number.isInteger(value) && value >= 0 ? value : 0;
@@ -250,7 +324,7 @@ export const REACH_SELECT = {
   enrolledCourses: true,
 } as const satisfies Prisma.StudentSelect;
 
-/** One where-input for reach, asked by all three readers; a grant overrides every kind but the switch. */
+/** One where-input for reach, asked by the admin readers; a grant overrides every kind but the switch. */
 export function reachableBy(
   studentId: string,
   student: Readonly<{
@@ -278,6 +352,51 @@ export function reachableBy(
 
   return { isEnabled: true, OR: [{ grants: { some: { studentId } } }, ...automatic] };
 }
+
+/** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
+interface ReachPairing {
+  series: Readonly<{
+    kind: TestSeriesKind;
+    programCode: string | null;
+    course: ExamCourse | null;
+    branchIds: readonly string[];
+    granted: boolean;
+    isCandidate: boolean;
+  }>;
+  student: Readonly<{
+    currentBranchId: string | null;
+    programs: readonly string[];
+    enrolledCourses: readonly ExamCourse[];
+  }>;
+}
+
+/** Mirrors `reachableBy` arm for arm, in memory: a kind decides the automatic route, and a grant adds one. */
+export function seriesSources({ series, student }: ReachPairing): StudentSeriesSource[] {
+  const automatic: Partial<Record<TestSeriesKind, boolean>> = {
+    [TEST_SERIES_KIND.FREE]: true,
+    [TEST_SERIES_KIND.STANDARD]:
+      student.currentBranchId !== null &&
+      series.branchIds.includes(student.currentBranchId) &&
+      series.course !== null &&
+      student.enrolledCourses.includes(series.course),
+    [TEST_SERIES_KIND.PROGRAM]:
+      series.programCode !== null && student.programs.includes(series.programCode),
+    [TEST_SERIES_KIND.EVENT]: series.isCandidate,
+  };
+
+  return [
+    ...(automatic[series.kind] ? [SOURCE_OF_KIND[series.kind]] : []),
+    ...(series.granted ? [STUDENT_SERIES_SOURCE.GRANT] : []),
+  ];
+}
+
+/** The source a kind is reached by when its own arm matches. A grant is not a kind, so it is not here. */
+const SOURCE_OF_KIND: Readonly<Record<TestSeriesKind, StudentSeriesSource>> = {
+  [TEST_SERIES_KIND.STANDARD]: STUDENT_SERIES_SOURCE.COURSE,
+  [TEST_SERIES_KIND.FREE]: STUDENT_SERIES_SOURCE.FREE,
+  [TEST_SERIES_KIND.PROGRAM]: STUDENT_SERIES_SOURCE.PROGRAM,
+  [TEST_SERIES_KIND.EVENT]: STUDENT_SERIES_SOURCE.EVENT,
+};
 
 /** What a series reaches, as a STUDENT filter. The mirror of `reachableBy`; edit the two together. */
 function audienceOf(
@@ -327,7 +446,7 @@ const AUDIENCE_SELECT = {
   examStage: { select: { exam: { select: { course: true } } } },
 } as const;
 
-function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus>): ResolvedSeries {
+function toResolved(row: SharedSeries, standing: Standing): ResolvedSeries {
   return {
     id: row.id,
     name: row.name,
@@ -341,46 +460,35 @@ function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus
       : null,
     kind: row.kind,
     sequentialTests: row.sequentialTests,
-    tests: row.tests.map((test) => toResolvedTest(test, sittings)).sort(byOrderThenId),
+    tests: row.tests.map((test) => toResolvedTest(test, standing)).sort(byOrderThenId),
   };
 }
 
-/** Earliest, because a student in two programs is not held back by the slower one. */
-function opensFor(test: {
-  opensAt: Date | null;
-  programUnlocks: readonly { opensAt: Date }[];
-}): Date | null {
-  const earliest = test.programUnlocks.reduce<Date | null>(
-    (best, row) => (best === null || row.opensAt < best ? row.opensAt : best),
-    null,
-  );
+/** Earliest of THIS student's program openings, because one in two programs is not held back by the slower one. */
+function opensFor(test: ReachableTest, programs: readonly string[]): Date | null {
+  const earliest = test.programUnlocks
+    .filter((row) => programs.includes(row.programCode))
+    .reduce<Date | null>(
+      (best, row) => (best === null || row.opensAt < best ? row.opensAt : best),
+      null,
+    );
   return earliest ?? test.opensAt;
 }
 
-function toResolvedTest(
-  test: CatalogRow['tests'][number],
-  sittings: ReadonlyMap<string, AttemptStatus>,
-): ResolvedTest {
-  const scoped = scopedSections(
-    test.baseConfig.sections,
-    test.scope,
-    (test.scopeRef as TestScopeRef | null) ?? null,
-  );
+function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
+  const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+  // A scoped test is its own sections' worth, and the catalog is what a student reads first.
+  const scoped = scopedSections(test.baseConfig.sections, test.scope, scopeRef);
 
   return {
     id: test.id,
     title: test.title,
-    durationSec: scopedDurationSec(
-      test.baseConfig.sections,
-      test.baseConfig,
-      test.scope,
-      (test.scopeRef as TestScopeRef | null) ?? null,
-    ),
+    durationSec: scopedDurationSec(test.baseConfig.sections, test.baseConfig, test.scope, scopeRef),
     sectionCount: scoped.length,
     totalQuestions: scoped.reduce((total, section) => total + section.questionCount, 0),
     order: test.seriesOrder,
-    opensAt: opensFor(test)?.toISOString() ?? null,
-    attemptStatus: sittings.get(test.id) ?? null,
+    opensAt: opensFor(test, standing.programs)?.toISOString() ?? null,
+    attemptStatus: standing.sittings.get(test.id) ?? null,
   };
 }
 
@@ -404,7 +512,7 @@ function project(series: ResolvedSeries, testBlocked: boolean, now: Date): Stude
 /** `findIndex` returns -1 when every test is sat, which is also "nothing is waiting its turn". */
 const NONE_WAITING = -1;
 
-/** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
+/** The clock is read HERE and never held, so a test opens on time without anything bumping a counter. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
   // A sat test stays startable: a paper may always be sat again, and Done is only where it sorts.
   return { ...test, canStart: reachable && testIsOpen(test.opensAt, now) };

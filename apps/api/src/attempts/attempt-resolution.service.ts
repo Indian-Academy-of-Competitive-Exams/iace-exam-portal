@@ -18,7 +18,6 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
-import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { RollupQueue } from './rollup-queue';
 import { SubmitService } from './submit.service';
@@ -54,7 +53,6 @@ export class AttemptResolutionService {
     private readonly state: AttemptStateService,
     private readonly submit: SubmitService,
     private readonly rollup: RollupQueue,
-    private readonly access: AccessResolverService,
     private readonly audit: AuditContext,
   ) {}
 
@@ -124,7 +122,6 @@ export class AttemptResolutionService {
     });
     // Nothing more may be saved to it, and the fallback in Postgres now refuses this sitting too.
     await this.state.take(attemptId);
-    await this.access.invalidateStudent(attempt.studentId);
     await this.reverse(attempt);
 
     this.record(SUPPORT_ACTIONS.VOID, body.reason, attempt, {

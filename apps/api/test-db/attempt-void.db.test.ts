@@ -60,20 +60,12 @@ async function sitting(over: { status?: AttemptStatus; isGraded?: boolean } = {}
     });
   }
   const rollupQueue = new FakeQueue();
-  const busted: string[] = [];
-  const access = {
-    invalidateStudent: (id: string) => {
-      busted.push(id);
-      return Promise.resolve();
-    },
-  } as never;
   const audit = new AuditContext();
   const service = new AttemptResolutionService(
     prisma,
     state,
     {} as never,
     new RollupQueue(rollupQueue.asQueue()),
-    access,
     audit,
   );
   const voiding = (regrantRanked = false) =>
@@ -85,7 +77,6 @@ async function sitting(over: { status?: AttemptStatus; isGraded?: boolean } = {}
     adminId,
     state,
     rollupQueue,
-    busted,
     audit,
     voiding,
   };
@@ -135,14 +126,13 @@ describe('voiding a sitting — archived, and taken out of everything that count
     assert.equal(rollupQueue.jobs.length, 2);
   });
 
-  it('leaves the ranked slot spent unless the regrant was asked for, and busts the student’s catalog', async () => {
-    const { attemptId, studentId, busted, voiding } = await sitting();
+  it('leaves the ranked slot spent unless the regrant was asked for', async () => {
+    const { attemptId, voiding } = await sitting();
 
     const resolved = await voiding();
 
     assert.equal((await row(attemptId)).isGraded, true);
     assert.equal(resolved.rankedRegranted, false);
-    assert.deepEqual(busted, [studentId]);
   });
 
   /** Clearing `isGraded` on the void IS the regrant: no sitting holds the slot, so the next one ranks. */

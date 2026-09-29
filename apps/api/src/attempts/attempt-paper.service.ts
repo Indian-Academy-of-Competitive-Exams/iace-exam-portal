@@ -76,41 +76,7 @@ export class AttemptPaperService {
 
   /** Gated on REACH, not on the window: a test they cannot sit yet is one they may read about. */
   async brief(studentId: string, testId: string): Promise<ExamBrief> {
-    await this.access.assertReachable(studentId, testId);
-
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      select: {
-        id: true,
-        title: true,
-        examTemplate: true,
-        scope: true,
-        scopeRef: true,
-        baseConfig: {
-          select: {
-            durationSec: true,
-            totalQuestions: true,
-            languageMode: true,
-            languages: true,
-            navigation: true,
-            sections: {
-              select: {
-                id: true,
-                moduleId: true,
-                name: true,
-                questionCount: true,
-                durationSec: true,
-                perQuestionSec: true,
-                marksPerQuestion: true,
-                negativeMarks: true,
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-        },
-      },
-    });
-    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    const test = await this.access.reachableTest(studentId, testId);
 
     // A scoped test sits its own sections; the rest belong to other tests on the same configuration.
     const covered = scopedSections(
