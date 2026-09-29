@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { type Student } from '@prisma/client';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
@@ -37,6 +38,8 @@ import {
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
 import { toDateColumn } from '../common/time/institute-day';
+
+type HeldAccess = Pick<Student, 'enrolledCourses' | 'enrolledExams' | 'programs'>;
 
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
@@ -92,6 +95,7 @@ export class ImportsService {
           ),
         );
 
+        const held = await this.heldAccess(plan.rows);
         for (const row of plan.rows) {
           if (row.action === 'skip' || !row.mobile) continue;
 
@@ -100,7 +104,7 @@ export class ImportsService {
             ? { pinHash: minted.get(row.mobile)?.hash, pinIsDefault: true }
             : {};
 
-          const done = await this.writeRow(row, startingPin);
+          const done = await this.writeRow(row, startingPin, held.get(row.existingStudentId ?? ''));
           if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
           else {
             outcome.counts.updated += 1;
@@ -253,9 +257,21 @@ export class ImportsService {
   }
 
   /** One row's write, and what the audit trail should call it. */
+  /** What each existing student already reaches through, in one read for the whole sheet. */
+  private async heldAccess(rows: readonly StudentImportRow[]): Promise<Map<string, HeldAccess>> {
+    const ids = rows.flatMap((row) => (row.existingStudentId ? [row.existingStudentId] : []));
+    if (ids.length === 0) return new Map();
+    const students = await this.prisma.student.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, enrolledCourses: true, enrolledExams: true, programs: true },
+    });
+    return new Map(students.map(({ id, ...access }) => [id, access]));
+  }
+
   private async writeRow(
     row: StudentImportRow,
     startingPin: { pinHash?: string; pinIsDefault?: boolean },
+    held?: HeldAccess,
   ): Promise<{ entityId: string; action: AuditAction }> {
     const { mobile, studentType } = row;
     if (mobile === null || studentType === null) {
@@ -265,7 +281,7 @@ export class ImportsService {
     const profile = profileData(row);
     // Never downgraded: a row not carrying all three leaves whatever was already true.
     const readiness = isPreTestReady(row.profile) ? { preTestReady: true } : {};
-    const access = accessOf(row, studentType);
+    const access = accessOf(row, studentType, held);
 
     if (row.existingStudentId) {
       await this.prisma.student.update({
@@ -489,15 +505,20 @@ function rosterErrorRows(
 }
 
 /** By relation, not the raw FK: Prisma refuses an unchecked id beside the nested profile write. */
-function accessOf(row: StudentImportRow, studentType: StudentType) {
+/** A re-import adds: what a student already holds stays, and the admin screen is where access is taken away. */
+function accessOf(row: StudentImportRow, studentType: StudentType, held?: HeldAccess) {
   return {
     studentType,
     ...(row.currentBranchId ? { currentBranch: { connect: { id: row.currentBranchId } } } : {}),
-    enrolledCourses: row.enrolledCourses,
-    enrolledExams: row.enrolledExams,
-    programs: row.programs,
+    enrolledCourses: union(held?.enrolledCourses, row.enrolledCourses),
+    enrolledExams: union(held?.enrolledExams, row.enrolledExams),
+    programs: union(held?.programs, row.programs),
   };
 }
+
+const union = <T>(held: readonly T[] = [], added: readonly T[]): T[] => [
+  ...new Set([...held, ...added]),
+];
 
 /** The profile columns this row filled in, or null when it filled in none. */
 function profileData(row: StudentImportRow) {

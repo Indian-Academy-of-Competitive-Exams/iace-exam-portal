@@ -267,6 +267,26 @@ describe('ImportsService.commitStudents — what an import run actually left beh
   });
 });
 
+describe('ImportsService.commitStudents — a re-import adds access, never takes it', () => {
+  /** The failure this prevents: last term's sheet, uploaded again with a blank Programs cell, wiping the programs added since. */
+  it('keeps what a student already holds and adds what the row brings', async () => {
+    await onlineBranch();
+    const existing = await makeStudent(prisma, {
+      mobile: '9000000001',
+      programs: ['SSC FOUNDATION'],
+      enrolledCourses: ['RRB'],
+      enrolledExams: ['SSC CGL'],
+    });
+
+    await importsOn(prisma).commitStudents(Buffer.from(roster('mobile\n9000000001')), ADMIN);
+
+    const row = await prisma.student.findUniqueOrThrow({ where: { id: existing.id } });
+    assert.deepEqual(row.programs, ['SSC FOUNDATION']);
+    assert.deepEqual([...row.enrolledCourses].sort(), ['RRB', 'SSC']);
+    assert.deepEqual(row.enrolledExams, ['SSC CGL']);
+  });
+});
+
 /** A catalog is cached against the access columns; an import that moves them silently serves the old one. */
 describe('ImportsService — the catalogs an import makes stale', () => {
   const busted = (bus: FakeEventBus) => bus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED);

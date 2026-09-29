@@ -163,6 +163,10 @@ public rollout unchanged.
 - The resolved catalog is cached under an epoch key, but a block, a deactivation or a deletion is
   re-read live at the start gate — an authorization answer must bite now, not when an entry expires.
 - A `Notification` on assignment carries the series as its deep link.
+- **An import only adds access.** A roster uploaded again merges its courses, exams and programs
+  into what each existing student already holds, as the program import appends its code; a blank
+  cell takes nothing away. Access is removed on the student's own screen. Branch and student type
+  are single values and follow the sheet.
 
 ## 6. Scheduling
 
