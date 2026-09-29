@@ -400,8 +400,10 @@ and needs no mapping at all.
   owner to finish, since a reader only releases a whole one), and the offer refuses any question on
   a read section without its tick — one definition of read, the tick, for release and offer alike.
   Rewording a question — its content, options or key, from any screen — drops its ticks on every
-  draft, whether its paper holds the question now or it was taken off and may come back, and sends
-  a released whole section holding it back to its reader the same way.
+  draft that will serve the new words, whether its paper holds the question now or it was taken off
+  and may come back, and sends a released whole section holding it back to its reader the same way.
+  A draft whose paper still pins an earlier version (the edit appended one, because a test students
+  can reach pins it) serves the words its reader ticked and keeps the tick.
 - **A test owner changes a question only when the section is back with them**: a picked section
   before it is handed over, or any section once its reader has released it — and never once the
   test is offered.

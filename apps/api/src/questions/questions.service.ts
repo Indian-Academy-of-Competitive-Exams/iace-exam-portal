@@ -366,7 +366,7 @@ export class QuestionsService {
     const options = optionsWithIds(built, currentOptionsOf(question));
     const version = await this.versionFor(tx, question, built, options, createdById);
     // A reader's tick was on the old words, which no draft paper serves any more.
-    if (version.reworded) await uncheckReworded(tx, id);
+    if (version.reworded) await uncheckReworded(tx, id, version.id);
 
     return tx.question.update({
       where: { id },

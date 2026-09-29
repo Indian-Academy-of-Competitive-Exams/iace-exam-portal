@@ -843,6 +843,18 @@ describe('QuestionsService.update — reworded words are read again', () => {
     await assert.rejects(() => assignments.remove(readingId), conflict);
   });
 
+  /** A live test pins the version, so the edit appends one, and the draft still serves the words its reader ticked. */
+  it('keeps the tick on a draft whose paper still pins the earlier words', async () => {
+    const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
+    const reached = await pinnedOn(questionId, await currentVersionOf(questionId));
+    await openedAgo(reached.testId);
+
+    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+
+    assert.notEqual(await checkedAt(), null);
+    assert.notEqual(await releasedAt(), null);
+  });
+
   it('keeps the tick on a save that changes no words', async () => {
     const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
 
