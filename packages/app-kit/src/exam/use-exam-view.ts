@@ -75,6 +75,8 @@ export function useExamView(
   const sectional = paper.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
   const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;
   const reachable = openSections(paper.sections, sectional, state.sections);
+  // Drawn but inert until the server says which section is open: the one on screen may already be closed.
+  const inert = sectional && !state.sectionsSeeded;
 
   // A reload must land where the sitting really is, not the paper's first section.
   if (sectional && reachable[0] !== undefined && reachable[0] !== sectionId) {
@@ -142,6 +144,7 @@ export function useExamView(
   };
 
   const move = (to: string | null): void => {
+    if (inert) return;
     state.open(to);
     setQuestionId(to);
   };
@@ -151,6 +154,7 @@ export function useExamView(
 
   // Moving between sections is a save point: a batch left behind is a section's worth of answers.
   const openSection = (next: string) => {
+    if (inert) return;
     state.bankOpen();
     const allowed = paper.sections.find((row) => row.id === next)?.durationSec;
     // Told, not asked: the server stamps when this clock started, so a reload cannot restart it.
@@ -173,7 +177,8 @@ export function useExamView(
 
   // A flag asks for a second look, which a forward-only paper cannot grant — so it never takes one.
   const record = (next: AnswerIntent): void => {
-    if (current) state.answer(current.questionId, forwardOnly ? { ...next, marked: false } : next);
+    if (current && !inert)
+      state.answer(current.questionId, forwardOnly ? { ...next, marked: false } : next);
   };
 
   // Null is "no clock of its own" and falls to the paper's; a section spent to 0 still counts, and closes.

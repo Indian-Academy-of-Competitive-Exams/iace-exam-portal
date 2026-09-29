@@ -318,3 +318,56 @@ test('a reload into a later section banks nothing on the closed one it drew firs
   assert.equal(result.current.sectionId, 'sec2');
   assert.equal(result.current.answers['sec1-q1'], undefined);
 });
+
+/** A seed held back until the test lets it land, so a tap can come first. */
+function apiSeededLater() {
+  let seed: (held: unknown) => void = () => {};
+  const api = {
+    me: {
+      attemptState: () => new Promise((resolve) => (seed = resolve)),
+      saveAttemptState: async (_id: string, body: SaveCall) => ({
+        revision: body.revision,
+        applied: true,
+        endsAt: paper().endsAt,
+        serverNow: paper().serverNow,
+      }),
+    },
+  } as unknown as AppApiClient;
+  return { api, land: (held: unknown) => seed(held) };
+}
+
+/** The failure this prevents: a choice made in the first instant landing on a section the server has closed. */
+test('a sectional paper takes no answer until the server says which section is open', async (t) => {
+  const { api, land } = apiSeededLater();
+  const { result, unmount } = mounted(api);
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-early'));
+  await act(async () => {
+    land({
+      answers: {},
+      sections: {
+        sec1: { remainingSec: 0, closed: true },
+        sec2: { remainingSec: 900, closed: false, openedAt: '2026-09-01T04:50:00.000Z' },
+      },
+      revision: 3,
+    });
+    await Promise.resolve();
+  });
+
+  assert.equal(result.current.answers['sec1-q1'], undefined);
+  assert.equal(result.current.hasUnsent(), false);
+});
+
+test('a paper under one clock takes an answer at once, before the server has answered', (t) => {
+  const { api } = apiSeededLater();
+  const { result, unmount } = mounted(api, {
+    ...paper(),
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+  });
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-early'));
+
+  assert.equal(result.current.answers['sec1-q1']?.selectedOptionId, 'opt-early');
+});
