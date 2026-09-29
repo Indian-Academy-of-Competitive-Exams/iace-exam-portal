@@ -65,7 +65,7 @@ describe('what Done sends', () => {
   });
 });
 
-describe('an opening Done would write that has already passed', () => {
+describe('an opening Done would write that is not far enough ahead', () => {
   // 18:00 on 11 September at the institute.
   const NOW = new Date('2026-09-11T12:30:00.000Z');
   const opening = (opensAt: string, programs: readonly ProgramOpening[] = []) =>
@@ -78,8 +78,13 @@ describe('an opening Done would write that has already passed', () => {
     assert.equal(anyPassed(passed), true);
   });
 
-  it('lets a time ahead of now through', () => {
-    assert.equal(anyPassed(passedOpenings(draftTest(), opening('2026-09-11T18:01'), NOW)), false);
+  /** A sitting may begin five minutes early, so an opening four minutes out is already open. */
+  it('is caught when the time given lands inside the start grace', () => {
+    assert.equal(anyPassed(passedOpenings(draftTest(), opening('2026-09-11T18:04'), NOW)), true);
+  });
+
+  it('lets a time past the grace through', () => {
+    assert.equal(anyPassed(passedOpenings(draftTest(), opening('2026-09-11T18:06'), NOW)), false);
   });
 
   it('does not judge again an opening that was saved and has since passed', () => {

@@ -377,14 +377,17 @@ export type DropPushDeviceBody = z.infer<typeof dropPushDeviceSchema>;
 // opens at `opensAt` and never shuts, so a student sits it whenever they reach it.
 // ============================================================================
 
-/** Whether a sitting may BEGIN. Nothing shuts a test, so this is the opening and nothing else. */
+/** A hall does not fill on the stroke of the hour, so a sitting may begin this far before it. */
+export const START_GRACE_MS = 5 * 60 * 1000;
+
+/** Whether a sitting may BEGIN — the opening less the grace, which is the ONE answer everything wants. */
 export function testIsOpen(opensAt: string | null, now: Date): boolean {
-  return opensAt === null || Date.parse(opensAt) <= now.getTime();
+  return opensAt === null || Date.parse(opensAt) - START_GRACE_MS <= now.getTime();
 }
 
 /** A new opening `testIsOpen` already calls open would open the test the moment it saved. */
 export const OPENING_HAS_PASSED =
-  'That time has already passed. An opening has to be in the future.';
+  'That time is too close. An opening has to be more than five minutes ahead.';
 
 // ============================================================================
 // The student's catalog — every series they reach, resolved from exam, program,

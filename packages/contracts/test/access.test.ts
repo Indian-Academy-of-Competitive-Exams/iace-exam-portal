@@ -10,6 +10,7 @@ import {
   studentCatalogSeriesSchema,
   testAction,
   testBucket,
+  START_GRACE_MS,
   testIsOpen,
   type StudentCatalogTest,
 } from '../src/access';
@@ -70,9 +71,17 @@ describe('testIsOpen', () => {
   const at = (iso: string) => new Date(iso);
   const OPENS = '2026-09-01T04:30:00.000Z';
 
-  it('is shut a millisecond before it opens and open at the instant it does', () => {
-    assert.equal(testIsOpen(OPENS, at('2026-09-01T04:29:59.999Z')), false);
+  /** The grace is the rule, not a rounding error: a hall does not fill on the stroke of the hour. */
+  it('opens a grace before its time, to the millisecond', () => {
+    assert.equal(testIsOpen(OPENS, at('2026-09-01T04:24:59.999Z')), false);
+    assert.equal(testIsOpen(OPENS, at('2026-09-01T04:25:00.000Z')), true);
     assert.equal(testIsOpen(OPENS, at('2026-09-01T04:30:00.000Z')), true);
+  });
+
+  /** The bug this prevents: an opening set inside the grace is a test that opened as it saved. */
+  it('already calls an opening inside the grace open, which is what refuses one being set there', () => {
+    const soon = new Date(at('2026-09-01T04:30:00.000Z').getTime() - START_GRACE_MS + 1_000);
+    assert.equal(testIsOpen(soon.toISOString(), at('2026-09-01T04:30:00.000Z')), true);
   });
 
   /** The guarantee the whole model now rests on: nothing shuts a test once it has opened. */

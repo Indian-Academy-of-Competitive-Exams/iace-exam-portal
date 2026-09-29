@@ -193,10 +193,16 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   A refusal anywhere leaves the test exactly as it was. A program opening the admin set is judged
   and refused; one they left alone and the new opening overtook is dropped, as the Offer step warns.
   Offering is the only road to ACTIVE, and retiring is the save with `offered` false.
-- **An opening being set lies ahead of now**, for the test and for a program alike. A time already
-  passed would open the test the moment it saved, so `OfferingService` refuses it
-  (`OPENING_HAS_PASSED`, judged by the same `testIsOpen` the catalog reads) and the Offer step says
-  so under the field before Done asks. Only a NEW time is judged: an opening that has since passed
+- **A sitting may begin `START_GRACE_MS` before the opening** — five minutes. A hall does not fill on
+  the stroke of the hour, and a student held at the door is a student losing exam time to a queue.
+  The grace lives inside `testIsOpen`, which is the ONE predicate everything asks: the catalog's
+  `canStart`, the start gate's refusal, and the offering validation below. Two predicates would let
+  the student side and the admin side disagree about when a test is open, which is the bug the single
+  function exists to prevent.
+- **An opening being set lies more than the grace ahead of now**, for the test and for a program
+  alike. A time inside the grace is a test that opens the moment it saves — which is what
+  `OPENING_HAS_PASSED` exists to refuse — so `OfferingService` refuses it and the Offer step says so
+  under the field before Done asks. Only a NEW time is judged: an opening that has since passed
   is history, and saving anything else on the test never asks it again. Blank stays allowed on the
   test's own opening, and opens it as soon as a student reaches it.
 - `canStart` is derived from the clock on **every read** and never stored, so a test opens on time
