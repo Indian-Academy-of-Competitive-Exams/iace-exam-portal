@@ -226,3 +226,30 @@ test('the engine picks the one clock: the section while it has time allowed, els
     'a section with its time spent keeps its own clock, which expires on arrival',
   );
 });
+
+/** The failure this prevents: an acknowledged exit nagging on, or a second exit never asked about. */
+test('leaving the paper nags until acknowledged, and again on the next exit', (t) => {
+  const deps = depsFor(apiWith({}));
+  const { result, rerender, unmount } = renderHook(
+    ({ exits }) =>
+      useExamView(
+        { paper: paper(), arrivedAt: Date.now(), title: null, watermark: '', onEnded: () => {} },
+        { ...deps, focus: { ...focus, isSupported: true, exits } },
+      ),
+    {
+      initialProps: { exits: 0 },
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    },
+  );
+  t.after(unmount);
+
+  assert.equal(result.current.fullscreen.nagging, false);
+  rerender({ exits: 1 });
+  assert.equal(result.current.fullscreen.nagging, true);
+  act(() => result.current.fullscreen.ignore());
+  assert.equal(result.current.fullscreen.nagging, false);
+  rerender({ exits: 2 });
+  assert.equal(result.current.fullscreen.nagging, true);
+});

@@ -315,13 +315,13 @@ function SittingFoot({
         transparent
         visible={fullscreen.nagging}
         animationType="fade"
-        onRequestClose={fullscreen.enter}
+        onRequestClose={fullscreen.ignore}
       >
         <View className="flex-1 justify-center gap-4 bg-exam-surface p-6">
           <Alert variant="danger">
             {`${leftTheApp(fullscreen.exits)} Your paper is still running and the clock has not stopped.`}
           </Alert>
-          <Button onPress={fullscreen.enter}>Return to the paper</Button>
+          <Button onPress={fullscreen.ignore}>Return to the paper</Button>
         </View>
       </Modal>
     </Fragment>

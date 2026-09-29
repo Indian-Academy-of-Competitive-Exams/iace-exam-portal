@@ -4,7 +4,7 @@
  * finished view. What a sectional clock changes is which sections are open, and
  * that is read from the config rather than branched into a second screen.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
@@ -62,6 +62,7 @@ export function useExamView(
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const ask = useCallback(() => setAsking(true), []);
   // A ref, not `submit.isPending`: the clock and a tap can both end the paper before the next render.
   const ending = useRef(false);
   const paperClock = useMemo<ExamClock>(
@@ -249,7 +250,7 @@ export function useExamView(
       retry: end,
       unanswered,
       markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
-      ask: () => setAsking(true),
+      ask,
       cancel: () => setAsking(false),
       confirm: () => {
         setAsking(false);

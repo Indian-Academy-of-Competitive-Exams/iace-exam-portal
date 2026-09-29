@@ -23,7 +23,7 @@ import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
 import { endedSittingQuery } from '../../src/lib/queries';
 import { useAuth } from '../../src/providers/auth';
-import { appStateSource, useAppFocus } from '../../src/components/exam/use-app-focus';
+import { appFocus, onBackground } from '../../src/components/exam/app-focus';
 import { ExamSkin } from '../../src/components/exam/exam-skin';
 import { Button } from '../../src/components/ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
@@ -74,14 +74,15 @@ export default function ExamScreen() {
   }, [forget, startedId]);
 
   // Android's Back would drop a running paper; in a sitting the only way out is handing it in.
+  const askToSubmit = view?.takenOver === false ? view.submit.ask : undefined;
   useEffect(() => {
-    if (!view || view.takenOver) return;
+    if (!askToSubmit) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      view.submit.ask();
+      askToSubmit();
       return true;
     });
     return () => subscription.remove();
-  }, [view]);
+  }, [askToSubmit]);
 
   if (attempt.isError) {
     const { error } = attempt;
@@ -151,17 +152,24 @@ const SittingEngine = memo(function SittingEngine({
   tab,
   ...sitting
 }: Readonly<ExamSitting & { onView: (view: ExamView) => void; tab: string }>) {
-  const focus = useAppFocus(appStateSource);
+  const [exits, setExits] = useState(0);
   const view = useExamView(sitting, {
     api,
-    focus,
+    focus: appFocus(exits),
     catalogQueryKey: CATALOG_QUERY_KEY,
     tab,
     answerQueue: { storage: sittingStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
   });
-  // Backgrounded is when the OS may kill the app, so what is unsent goes now rather than at the next tick.
+  // Backgrounded is leaving the paper, and when the OS may kill the app: what is unsent goes now.
   const { leave } = view;
-  useEffect(() => appStateSource.subscribe(leave), [leave]);
+  useEffect(
+    () =>
+      onBackground(() => {
+        setExits((count) => count + 1);
+        leave();
+      }),
+    [leave],
+  );
 
   // Before paint, so the skin never shows a view the engine has already moved past.
   useLayoutEffect(() => {
