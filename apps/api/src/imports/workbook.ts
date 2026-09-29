@@ -129,6 +129,7 @@ const STUDENT_IMPORT_EXAMPLES = [
   ],
   ['9876543211', 'Ravi Teja', 'ONLINE', 'ONLINE', '', 'RRB JE', '', '', '', '', '', '', ''],
   ['9876543212', '', 'OFFLINE', 'KUKATPALLY', 'BANKING', '', '', '', '', '', '', '', ''],
+  ['9876543213', 'Priya Sharma', 'NON-IACE', '', '', 'SSC CGL', '', '', '', '', '', '', ''],
 ];
 
 const STUDENT_IMPORT_NOTES = [
@@ -146,9 +147,10 @@ const STUDENT_IMPORT_NOTES = [
   [''],
   ['Student Type: required. ONLINE, OFFLINE or NON-IACE.'],
   [''],
-  ['Branch Name: required. The centre’s NAME as it appears on the Branches screen,'],
-  ['not an id. Case and extra spaces do not matter. An ONLINE student belongs to the'],
-  ['ONLINE branch; an OFFLINE student belongs to a physical centre.'],
+  ['Branch Name: the centre’s NAME as it appears on the Branches screen, not an id.'],
+  ['Case and extra spaces do not matter. An ONLINE student belongs to the ONLINE branch;'],
+  ['an OFFLINE student belongs to a physical centre. Leave it blank for a NON-IACE'],
+  ['student: they sit at no branch of ours.'],
   [''],
   ['WHAT A STUDENT CAN REACH'],
   [''],

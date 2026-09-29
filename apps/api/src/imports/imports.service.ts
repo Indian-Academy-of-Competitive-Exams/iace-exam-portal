@@ -274,6 +274,8 @@ export class ImportsService {
           // An empty name column means "no opinion", not "clear the name".
           ...(row.fullName === null ? {} : { fullName: row.fullName }),
           ...access,
+          // The branch follows the sheet, and only a NON_IACE row reaches here without one.
+          ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
           ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
           ...readiness,
           ...startingPin,

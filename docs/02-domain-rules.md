@@ -169,7 +169,8 @@ public rollout unchanged.
 - **An import only adds access.** A roster uploaded again merges its courses, exams and programs
   into what each existing student already holds, as the program import appends its code; a blank
   cell takes nothing away. Access is removed on the student's own screen. Branch and student type
-  are single values and follow the sheet.
+  are single values and follow the sheet; a NON-IACE row may leave the branch blank, and then holds
+  none.
 
 ## 6. Scheduling
 

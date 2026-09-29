@@ -385,6 +385,28 @@ describe('the columns an admin actually writes', () => {
     assert.match(plan.rows[0]?.errors.join(' ') ?? '', /online student sits in the online branch/);
   });
 
+  it('takes a NON-IACE row with no branch, and still refuses a blank one for anyone else', () => {
+    const plan = planStudentImport(
+      readCsvTable(
+        [
+          ALL_HEADERS,
+          '9876543210,NON-IACE,,,SSC CGL,',
+          '9876543211,OFFLINE,,,SSC CGL,',
+          '9876543212,ONLINE,,,SSC CGL,',
+        ].join('\n'),
+      ),
+      context(),
+    );
+
+    const [outsider, ...institute] = plan.rows;
+    assert.deepEqual(outsider?.errors, []);
+    assert.equal(outsider?.currentBranchId, null);
+    for (const row of institute) {
+      assert.equal(row.action, 'skip');
+      assert.match(row.errors.join(' '), /No branch in this row/);
+    }
+  });
+
   it('reads the profile columns, taking a date written either way round', () => {
     const plan = planStudentImport(
       readCsvTable(

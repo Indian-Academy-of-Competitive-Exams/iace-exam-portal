@@ -5,6 +5,7 @@ import {
   IMPORT_MAX_ROWS,
   NO_ACCESS_ROUTE_MESSAGE,
   STUDENT_IMPORT_COLUMNS,
+  STUDENT_TYPE,
   STUDENT_TYPES,
   canonicalName,
   dobSchema,
@@ -247,8 +248,11 @@ function readBranch(
   studentType: StudentType | null,
 ): { branchName: string | null; currentBranchId: string | null; error?: string } {
   const raw = columnValue(row, 'branchName').trim();
-  if (raw === '')
+  if (raw === '') {
+    // Outside the institute, so no branch of ours is theirs; every other type sits at one.
+    if (studentType === STUDENT_TYPE.NON_IACE) return { branchName: null, currentBranchId: null };
     return { branchName: null, currentBranchId: null, error: 'No branch in this row' };
+  }
 
   const name = canonicalName(raw);
   const branch = context.branchByName.get(name);
