@@ -86,6 +86,7 @@ export interface ScoreCount {
 /** The curve counted off the sittings themselves, in the shape a rollup would have written. */
 export interface CohortShape {
   topperScore: number | null;
+  lowestScore: number | null;
   averageScore: number | null;
   size: number;
   bands: CohortBand[];
@@ -107,10 +108,13 @@ export function cohortShapeOf(counted: readonly ScoreCount[]): CohortShape {
     lowest = Math.min(lowest, row.score);
     highest = Math.max(highest, row.score);
   }
-  if (size === 0) return { topperScore: null, averageScore: null, size: 0, bands: [] };
+  if (size === 0) {
+    return { topperScore: null, lowestScore: null, averageScore: null, size: 0, bands: [] };
+  }
 
   return {
     topperScore: highest,
+    lowestScore: lowest,
     averageScore: round(total / size),
     size,
     bands: bandsOf(counted, Math.floor(lowest), Math.ceil(highest)),

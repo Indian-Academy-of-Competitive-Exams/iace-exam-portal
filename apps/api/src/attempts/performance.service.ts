@@ -32,14 +32,7 @@ import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { requireStudent } from './require-student';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import {
-  elapsedSeconds,
-  marksBySection,
-  numberOrNull,
-  percentageOf,
-  perSitting,
-  sectionsWithScores,
-} from './attempt-report';
+import { elapsedSeconds, marksBySection, percentageOf, sectionsWithScores } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
 import { NO_TOPPER, topperOf } from './topper';
@@ -272,7 +265,7 @@ export class PerformanceAnalyticsService {
           }),
       this.sectionCohort(anchor),
       anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
-      this.curveOf(query, anchor, standing, testStats),
+      this.curveOf(query, anchor, standing),
     ]);
     const rows =
       anchor === null
@@ -295,26 +288,20 @@ export class PerformanceAnalyticsService {
     query: PerformanceReportQuery,
     anchor: ReportRow | null,
     standing: Standing | null,
-    testStats: ReadonlyMap<string, TestStatRow>,
   ): Promise<CohortCurve | null> {
     if (anchor === null || query.scope !== PERFORMANCE_SCOPES.ATTEMPT) return null;
 
-    const rolled = testStats.get(anchor.testId) ?? null;
     const score = Number(anchor.score ?? 0);
-    // The curve is counted, never stored: `TestStat` keeps the totals, the distribution is derived.
     const live = await cohortCurveOf(this.prisma, anchor.testId);
-    const counted = rolled?.evaluatedCount ?? 0;
 
     return {
       testId: anchor.testId,
       score,
-      topperScore: numberOrNull(rolled?.maxScore ?? null) ?? live.topperScore,
-      averageScore:
-        (rolled === null ? null : perSitting(Number(rolled.sumScore), rolled.evaluatedCount)) ??
-        live.averageScore,
+      topperScore: live.topperScore,
+      averageScore: live.averageScore,
       rank: standing?.rank ?? null,
       percentile: standing?.percentile ?? null,
-      cohortSize: standing?.cohortSize ?? (counted === 0 ? live.size : counted),
+      cohortSize: standing?.cohortSize ?? live.size,
       bands: flagYours(live.bands, score),
     };
   }
@@ -387,9 +374,7 @@ export class PerformanceAnalyticsService {
 const TEST_STAT_SELECT = {
   testId: true,
   evaluatedCount: true,
-  sumScore: true,
   sumTimeSec: true,
-  maxScore: true,
 } as const satisfies Prisma.TestStatSelect;
 
 type TestStatRow = Prisma.TestStatGetPayload<{ select: typeof TEST_STAT_SELECT }>;

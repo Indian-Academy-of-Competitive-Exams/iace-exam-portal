@@ -873,9 +873,6 @@ Table StudentSubjectStat {
 Table TestStat {
   testId uuid [pk]
   evaluatedCount integer [not null, default: 0]
-  sumScore decimal(18, 2) [not null, default: 0]
-  maxScore decimal(8, 2)
-  minScore decimal(8, 2)
   sumTimeSec bigint [not null, default: 0]
   topperAttemptId uuid
   computedAt timestamptz(3) [not null]

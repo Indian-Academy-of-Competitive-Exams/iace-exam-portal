@@ -1,8 +1,7 @@
 /**
- * One test's cohort, read off the three rollup tables. Every query is a `testId`-keyed read of a
- * pre-folded row — no `groupBy`, no attempt scan, no new rollup — plus one indexed count of the
- * sittings those rows should hold, so a fold still catching up reads as settling. Only ranked first
- * sittings ever fold, so what comes back describes the ranked cohort by construction.
+ * One test's cohort: the spread counted live off the sittings in one grouped read, and the time,
+ * section and item figures read off the rollup rows the sweep recounts. Only ranked sittings are in
+ * either, so what comes back describes the ranked cohort by construction.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -21,7 +20,7 @@ import { timeSpentIn } from './answer-sheet';
 import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
 import { cohortCurveOf } from './cohort-curve';
-import { cohortSittingsOf, optionCountsIn, optionsIn } from './rollup-fold';
+import { optionCountsIn, optionsIn } from './rollup-fold';
 import { RollupQueue } from './rollup-queue';
 import {
   itemsOf,
@@ -29,7 +28,6 @@ import {
   summaryOf,
   type ItemTotals,
   type SectionTotals,
-  type StatTotals,
 } from './test-analytics';
 
 const NO_TEST = 'No such test';
@@ -56,6 +54,13 @@ const ITEM_SELECT = {
 
 type ItemRow = Prisma.TestQuestionStatGetPayload<{ select: typeof ITEM_SELECT }>;
 
+const STAT_SELECT = {
+  evaluatedCount: true,
+  sumTimeSec: true,
+  computedAt: true,
+  topperAttemptId: true,
+} as const satisfies Prisma.TestStatSelect;
+
 @Injectable()
 export class TestAnalyticsService {
   constructor(
@@ -67,12 +72,12 @@ export class TestAnalyticsService {
   async forTest(testId: string): Promise<TestAnalytics> {
     const test = await this.requireTest(testId);
 
-    const [stat, sections, items, evaluatedCount, attemptCount, reachedCount] = await Promise.all([
-      this.statOf(testId),
+    const [stat, live, sections, items, attemptCount, reachedCount] = await Promise.all([
+      this.prisma.testStat.findUnique({ where: { testId }, select: STAT_SELECT }),
+      cohortCurveOf(this.prisma, testId),
       this.sectionsOf(testId),
       this.itemsOf(testId),
-      // The live reads here: both counts on [testId, status], so neither costs an attempt scan.
-      this.prisma.attempt.count({ where: cohortSittingsOf(testId) }),
+      // Every sitting, ranked or not, on [testId, status]: the rollup holds only the ranked cohort.
       this.prisma.attempt.count({ where: { testId } }),
       this.access.audienceCount(test.testSeriesId),
     ]);
@@ -81,10 +86,10 @@ export class TestAnalyticsService {
       testId: test.id,
       title: test.title,
       summary: summaryOf(
-        stat,
+        stat && { ...stat, sumTimeSec: Number(stat.sumTimeSec) },
+        live,
         await this.topperOf(stat?.topperAttemptId ?? null),
-        { evaluatedCount, attemptCount },
-        reachedCount,
+        { attemptCount, reachedCount },
       ),
       sections: sectionsOf(sections),
       items: itemsOf(items),
@@ -106,24 +111,6 @@ export class TestAnalyticsService {
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NO_TEST);
     return test;
-  }
-
-  private async statOf(
-    testId: string,
-  ): Promise<(StatTotals & { topperAttemptId: string | null }) | null> {
-    const row = await this.prisma.testStat.findUnique({ where: { testId } });
-    if (row === null) return null;
-    const curve = await cohortCurveOf(this.prisma, testId);
-    return {
-      evaluatedCount: row.evaluatedCount,
-      sumScore: Number(row.sumScore),
-      maxScore: numberOrNull(row.maxScore),
-      minScore: numberOrNull(row.minScore),
-      sumTimeSec: Number(row.sumTimeSec),
-      bands: curve.bands,
-      computedAt: row.computedAt,
-      topperAttemptId: row.topperAttemptId,
-    };
   }
 
   private async sectionsOf(testId: string): Promise<SectionTotals[]> {

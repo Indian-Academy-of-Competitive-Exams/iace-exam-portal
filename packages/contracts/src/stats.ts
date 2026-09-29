@@ -828,9 +828,9 @@ export const PERFORMANCE_ROUTES = {
 } as const;
 
 // ============================================================================
-// The test's own view of its cohort. One read of each of the three rollups
-// above, keyed by `testId` — nothing here scans attempts, and nothing new is
-// folded for it. Only graded first sittings fold at all, so every figure below
+// The test's own view of its cohort: the spread counted live off its ranked
+// sittings, and the time, sections and items read off the rollups the sweep
+// recounts. Only graded sittings are in either, so every figure below
 // describes the ranked cohort by construction.
 // ============================================================================
 
@@ -856,7 +856,7 @@ export const testAnalyticsSummarySchema = z.object({
   maxScore: z.number().nullable(),
   minScore: z.number().nullable(),
   averageTimeSec: z.number().nullable(),
-  /** `TestStat.scoreHistogram` as stored. Empty means no rollup has run, not a flat curve. */
+  /** Counted live off the ranked sittings. Empty means nobody is ranked yet, not a flat curve. */
   bands: z.array(cohortBandSchema),
   topper: testTopperSchema.nullable(),
   computedAt: z.string().nullable(),

@@ -106,6 +106,27 @@ describe('TestAnalyticsService — how fresh the counted figures are', () => {
     assert.equal(caughtUp.isSettling, false);
   });
 
+  /** The failure this prevents: a spread taken off a recount a pass behind the marks it describes. */
+  it('takes the mean, highest and lowest off the sittings, not off the last recount', async () => {
+    const world = build();
+    const paper = await makePaper(prisma, { questions: ['Reasoning', 'Maths'] });
+    const top = await sat(paper);
+    const low = await sat(paper);
+    for (const { attemptId } of [top, low]) await counted(world, attemptId);
+    const full = Number(
+      (await prisma.attempt.findUniqueOrThrow({ where: { id: top.attemptId } })).score,
+    );
+
+    // A re-score the recount has not reached yet: the stored totals still describe the old marks.
+    await prisma.attempt.update({ where: { id: low.attemptId }, data: { score: -0.5 } });
+
+    const { summary } = await world.analytics.forTest(paper.testId);
+    assert.deepEqual(
+      [summary.maxScore, summary.minScore, summary.meanScore],
+      [full, -0.5, (full - 0.5) / 2],
+    );
+  });
+
   it('queues an immediate rebuild for a test that exists, and refuses one that does not', async () => {
     const world = build();
     const paper = await makePaper(prisma, { questions: ['Reasoning'] });

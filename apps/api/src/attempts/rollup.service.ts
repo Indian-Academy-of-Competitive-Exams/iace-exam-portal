@@ -215,19 +215,14 @@ export class RollupService {
         WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
       )
       INSERT INTO "TestStat" (
-        "testId", "evaluatedCount", "sumScore", "maxScore", "minScore",
-        "sumTimeSec", "topperAttemptId", "computedAt")
-      SELECT ${testId}::uuid, count(*)::int, COALESCE(sum("score"), 0),
-             max("score"), min("score"), COALESCE(sum("timeSec"), 0)::bigint,
+        "testId", "evaluatedCount", "sumTimeSec", "topperAttemptId", "computedAt")
+      SELECT ${testId}::uuid, count(*)::int, COALESCE(sum("timeSec"), 0)::bigint,
              -- The board's rank 1, so the topper an admin reads is the one students see first.
              (SELECT "id" FROM sat ORDER BY ${RANK_ORDER} LIMIT 1),
              ${now}
       FROM sat
       ON CONFLICT ("testId") DO UPDATE SET
         "evaluatedCount" = EXCLUDED."evaluatedCount",
-        "sumScore" = EXCLUDED."sumScore",
-        "maxScore" = EXCLUDED."maxScore",
-        "minScore" = EXCLUDED."minScore",
         "sumTimeSec" = EXCLUDED."sumTimeSec",
         "topperAttemptId" = EXCLUDED."topperAttemptId",
         "computedAt" = EXCLUDED."computedAt"`;

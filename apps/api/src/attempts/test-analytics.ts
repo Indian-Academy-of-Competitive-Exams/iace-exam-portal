@@ -1,12 +1,11 @@
 /**
- * The rollup rows a test folded, turned into the admin's read of them. Sums and counts go in,
- * averages come out — the same derivation the student report does for one row, done for the paper.
- * Nothing in here reaches a database, and nothing needs an attempt.
+ * The rollup rows a test folded, and its live curve, turned into the admin's read of them. Sums and
+ * counts go in, averages come out — the same derivation the student report does for one row, done
+ * for the paper. Nothing in here reaches a database.
  */
 import {
   itemSignalsOf,
   medianInBands,
-  type CohortBand,
   type QuestionOption,
   type TestAnalyticsSummary,
   type TestItemAnalytics,
@@ -14,15 +13,12 @@ import {
   type TestTopper,
 } from '@iace/contracts';
 import { perSitting } from './attempt-report';
+import { type CohortShape } from './performance-analytics';
 import { sharesOf } from './question-report';
 
 export interface StatTotals {
   evaluatedCount: number;
-  sumScore: number;
-  maxScore: number | null;
-  minScore: number | null;
   sumTimeSec: number;
-  bands: CohortBand[];
   computedAt: Date;
 }
 
@@ -71,27 +67,25 @@ const EMPTY_SUMMARY: TestAnalyticsSummary = {
 
 export function summaryOf(
   stat: StatTotals | null,
+  live: CohortShape,
   topper: TestTopper | null,
-  live: { evaluatedCount: number; attemptCount: number },
-  reachedCount: number,
+  counts: { attemptCount: number; reachedCount: number },
 ): TestAnalyticsSummary {
   const freshness = {
-    reachedCount,
-    // Every sitting, ranked or not: counted live, because the rollup holds only the ranked cohort.
-    attemptCount: live.attemptCount,
-    liveEvaluatedCount: live.evaluatedCount,
-    isSettling: live.evaluatedCount !== (stat?.evaluatedCount ?? 0),
+    ...counts,
+    liveEvaluatedCount: live.size,
+    isSettling: live.size !== (stat?.evaluatedCount ?? 0),
   };
   if (stat === null) return { ...EMPTY_SUMMARY, ...freshness };
   return {
     ...freshness,
     evaluatedCount: stat.evaluatedCount,
-    meanScore: perSitting(stat.sumScore, stat.evaluatedCount),
-    medianScore: medianInBands(stat.bands),
-    maxScore: stat.maxScore,
-    minScore: stat.minScore,
+    meanScore: live.averageScore,
+    medianScore: medianInBands(live.bands),
+    maxScore: live.topperScore,
+    minScore: live.lowestScore,
     averageTimeSec: perSitting(stat.sumTimeSec, stat.evaluatedCount),
-    bands: stat.bands,
+    bands: live.bands,
     topper,
     computedAt: stat.computedAt.toISOString(),
   };

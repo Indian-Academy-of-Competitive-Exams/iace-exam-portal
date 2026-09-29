@@ -119,8 +119,6 @@ const rolled = (
   testId: string,
   stat: {
     evaluatedCount: number;
-    sumScore: number;
-    maxScore: number;
   },
 ) => prisma.testStat.create({ data: { testId, computedAt: new Date(), ...stat } });
 
@@ -170,16 +168,17 @@ describe('the performance report — one sitting', () => {
     assert.equal(cohort?.bands.filter((band) => band.isYours).length, 1);
   });
 
-  /** The split this pins: the rollup owns the totals, and the curve is counted off the sittings. */
-  it('takes the totals from the rollup and counts the curve itself', async () => {
+  /** The failure this prevents: a topper and an average a recount behind the curve drawn beside them. */
+  it('counts the whole curve off the sittings, whatever the rollup last wrote', async () => {
     const { first, student, older } = await world();
-    await rolled(first.testId, { evaluatedCount: 40, sumScore: 120, maxScore: 5.5 });
+    await rolled(first.testId, { evaluatedCount: 40 });
 
     const report = await ofAttempt(student, older);
 
     assert.equal(performanceReportSchema.safeParse(report).success, true);
-    assert.equal(report.cohort?.topperScore, 5.5);
-    assert.equal(report.cohort?.averageScore, 3);
+    assert.equal(report.cohort?.topperScore, 6);
+    assert.equal(report.cohort?.averageScore, 3.75);
+    assert.equal(report.cohort?.cohortSize, 2);
     assert.equal(
       report.cohort?.bands.reduce((sum, band) => sum + band.count, 0),
       2,
@@ -189,7 +188,7 @@ describe('the performance report — one sitting', () => {
 
   it('names the cohort the live rank was counted in, however far behind the rollup is', async () => {
     const { first, student, older } = await world();
-    await rolled(first.testId, { evaluatedCount: 1, sumScore: 6, maxScore: 6 });
+    await rolled(first.testId, { evaluatedCount: 1 });
 
     const { cohort } = await ofAttempt(student, older);
 
@@ -282,10 +281,10 @@ describe('the performance report — a career with a retake in it', () => {
     assert.deepEqual([cohort?.rank, cohort?.percentile], [null, null]);
   });
 
-  it('keeps the rollup’s n for a retake, which no live count ranks', async () => {
+  it('keeps the rollup’s n for a retake on the trajectory, and the curve’s own beside its curve', async () => {
     const sat = await world();
     const retake = await retakeOf(sat);
-    await rolled(sat.first.testId, { evaluatedCount: 40, sumScore: 120, maxScore: 6 });
+    await rolled(sat.first.testId, { evaluatedCount: 40 });
 
     const career = await ofCareer(sat.student);
     const retaken = await ofAttempt(sat.student, retake);
@@ -298,7 +297,7 @@ describe('the performance report — a career with a retake in it', () => {
         [sat.newer, 1],
       ],
     );
-    assert.equal(retaken.cohort?.cohortSize, 40);
+    assert.equal(retaken.cohort?.cohortSize, 2);
   });
 
   /** Postgres puts NULLs first on a descending sort, which made an unsubmitted sitting the newest. */
@@ -334,7 +333,7 @@ describe('the performance report — the wider scopes', () => {
 
   it('carries the live n behind each ranked percentile, never a lagging rollup’s', async () => {
     const { first, student } = await world();
-    await rolled(first.testId, { evaluatedCount: 1, sumScore: 6, maxScore: 6 });
+    await rolled(first.testId, { evaluatedCount: 1 });
 
     const report = await ofCareer(student);
 

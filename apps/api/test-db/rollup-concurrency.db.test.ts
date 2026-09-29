@@ -177,7 +177,7 @@ describe('RollupService — a rebuild that lands before the fold it overtakes', 
 
     const after = await testStat(paper.testId);
     assert.equal(after?.evaluatedCount, 3);
-    assert.equal(Number(after?.sumScore), Number(rebuilt?.sumScore));
+    assert.equal(Number(after?.sumTimeSec), Number(rebuilt?.sumTimeSec));
   });
 
   it('counts each student once when their rebuild runs first', async () => {

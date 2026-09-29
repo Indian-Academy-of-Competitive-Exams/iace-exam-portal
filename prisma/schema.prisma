@@ -1182,13 +1182,11 @@ model StudentSubjectStat {
   @@id([studentId, subjectId, scope])
 }
 
+// The spread (mean, highest, lowest) is counted live off the ranked sittings, never stored here.
 model TestStat {
   testId          String   @id @db.Uuid
   // The ranked cohort: one sitting a student, and every figure below is over exactly these.
   evaluatedCount  Int      @default(0)
-  sumScore        Decimal  @default(0) @db.Decimal(18, 2)
-  maxScore        Decimal? @db.Decimal(8, 2)
-  minScore        Decimal? @db.Decimal(8, 2)
   sumTimeSec      BigInt   @default(0)
   topperAttemptId String?  @db.Uuid
   computedAt      DateTime @db.Timestamptz(3)

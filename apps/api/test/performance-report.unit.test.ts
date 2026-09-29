@@ -137,6 +137,7 @@ describe('cohortShapeOf', () => {
 
     assert.equal(shape.size, 6);
     assert.equal(shape.topperScore, 100);
+    assert.equal(shape.lowestScore, 0);
     assert.equal(shape.averageScore, 65.17);
     assert.equal(shape.bands.at(0)?.from, 0);
     assert.equal(shape.bands.at(-1)?.to, 100);
@@ -157,6 +158,7 @@ describe('cohortShapeOf', () => {
       { score: 12, count: 1 },
     ]);
 
+    assert.equal(shape.lowestScore, -3.5);
     assert.equal(shape.bands.at(0)?.from, -4);
     assert.equal(shape.bands.at(0)?.count, 2);
     assert.equal(
@@ -168,6 +170,7 @@ describe('cohortShapeOf', () => {
   it('counts no cohort at all where nobody has sat the paper', () => {
     assert.deepEqual(cohortShapeOf([]), {
       topperScore: null,
+      lowestScore: null,
       averageScore: null,
       size: 0,
       bands: [],

@@ -124,6 +124,12 @@ async function attemptedOn(testId: string): Promise<number> {
 const ageTheItems = (testId: string) =>
   prisma.testQuestionStat.updateMany({ where: { testId }, data: { computedAt: new Date(0) } });
 const studentStat = (studentId: string) => prisma.studentStat.findUnique({ where: { studentId } });
+
+/** The cohort's marks as its section rows hold them, which a re-score must move with the sittings. */
+async function sectionMarksOn(testId: string): Promise<number> {
+  const rows = await prisma.testSectionStat.findMany({ where: { testId } });
+  return rows.reduce((total, row) => total + Number(row.sumScore), 0);
+}
 const num = (value: unknown) => (value === null || value === undefined ? value : Number(value));
 
 async function cohortRows(testId: string) {
@@ -154,7 +160,7 @@ describe('RollupService — counting one sitting in', () => {
 
     const rolled = await testStat(paper.testId);
     assert.equal(rolled?.evaluatedCount, 1);
-    assert.equal(num(rolled?.sumScore), 3.5);
+    assert.equal(await sectionMarksOn(paper.testId), 3.5);
     assert.equal((await studentStat(studentId))?.testsAttempted, 1);
   });
 
@@ -375,12 +381,12 @@ describe('RollupService — the curve it draws', () => {
     assert.equal(bands.filter((band) => band.isYours).length, 1);
   });
 
-  it('keeps the extremes and the topper the curve is cut between', async () => {
+  it('cuts the curve between the extremes the sittings hold, beside the topper', async () => {
     const { paper, top } = await cohort();
     const rolled = await testStat(paper.testId);
+    const curve = await cohortCurveOf(prisma, paper.testId);
 
-    assert.equal(num(rolled?.maxScore), 8);
-    assert.equal(num(rolled?.minScore), -1.5);
+    assert.deepEqual([curve.topperScore, curve.lowestScore], [8, -1.5]);
     assert.equal(rolled?.topperAttemptId, top.attemptId);
     assert.equal(rolled?.evaluatedCount, 3);
   });
@@ -410,7 +416,7 @@ describe('RollupService — rebuilding a scope', () => {
     const first = await sat(paper, [WRONG, RIGHT, RIGHT, RIGHT]);
     const second = await sat(paper, [WRONG, WRONG, null, null]);
     for (const { attemptId } of [first, second]) await counted(built, attemptId);
-    assert.equal(num((await testStat(paper.testId))?.sumScore), 4.5);
+    assert.equal(await sectionMarksOn(paper.testId), 4.5);
 
     // What a drop does: the question pays everyone who attempted it, and every sitting is re-scored.
     await disposeQuestion(prisma, paper, 0, PAPER_QUESTION_STATUS.DROPPED);
@@ -420,9 +426,9 @@ describe('RollupService — rebuilding a scope', () => {
     const rolled = await testStat(paper.testId);
     const sittings = await prisma.attempt.findMany({ where: { testId: paper.testId } });
     assert.equal(rolled?.evaluatedCount, 2);
-    assert.equal(num(rolled?.sumScore), 9.5);
+    assert.equal(await sectionMarksOn(paper.testId), 9.5);
     assert.equal(
-      num(rolled?.sumScore),
+      await sectionMarksOn(paper.testId),
       sittings.reduce((total, row) => total + Number(row.score ?? 0), 0),
     );
     const scored = new Map(sittings.map((row) => [row.studentId, Number(row.score ?? 0)]));
@@ -487,7 +493,7 @@ describe('RollupService — rebuilding a scope', () => {
     const scored = await prisma.attempt.findMany({ where: { testId: paper.testId } });
     assert.equal(rolled?.evaluatedCount, 3);
     assert.equal(
-      num(rolled?.sumScore),
+      await sectionMarksOn(paper.testId),
       scored.reduce((total, row) => total + Number(row.score ?? 0), 0),
     );
     assert.equal(await prisma.testQuestionStat.count(), 4);

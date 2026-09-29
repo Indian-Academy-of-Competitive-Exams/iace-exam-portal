@@ -82,8 +82,6 @@ async function sittings() {
       testId: paper.testId,
       // The item rows below describe ten sittings, so the cohort is open to compare against.
       evaluatedCount: 10,
-      sumScore: 7.5,
-      maxScore: 6,
       sumTimeSec: 1250,
       topperAttemptId: topper.attemptId,
       computedAt,

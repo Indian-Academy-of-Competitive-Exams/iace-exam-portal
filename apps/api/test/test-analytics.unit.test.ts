@@ -16,6 +16,7 @@ import {
   type SectionTotals,
   type StatTotals,
 } from '../src/attempts/test-analytics';
+import { type CohortShape } from '../src/attempts/performance-analytics';
 
 const COMPUTED_AT = new Date('2026-09-09T04:30:00.000Z');
 
@@ -30,19 +31,36 @@ const TOPPER: TestTopper = {
 function stat(overrides: Partial<StatTotals> = {}): StatTotals {
   return {
     evaluatedCount: 100,
-    sumScore: 5400,
-    maxScore: 96,
-    minScore: -4,
     sumTimeSec: 330_000,
+    computedAt: COMPUTED_AT,
+    ...overrides,
+  };
+}
+
+function curve(overrides: Partial<CohortShape> = {}): CohortShape {
+  return {
+    topperScore: 96,
+    lowestScore: -4,
+    averageScore: 54,
+    size: 100,
     bands: [
       { from: 0, to: 40, count: 20 },
       { from: 40, to: 80, count: 60 },
       { from: 80, to: 120, count: 20 },
     ],
-    computedAt: COMPUTED_AT,
     ...overrides,
   };
 }
+
+const NO_CURVE = curve({
+  topperScore: null,
+  lowestScore: null,
+  averageScore: null,
+  size: 0,
+  bands: [],
+});
+
+const COUNTS = { attemptCount: 120, reachedCount: 150 };
 
 function section(overrides: Partial<SectionTotals> = {}): SectionTotals {
   return {
@@ -85,8 +103,8 @@ function item(overrides: Partial<ItemTotals> = {}): ItemTotals {
 }
 
 describe('summaryOf', () => {
-  it('derives the averages off the sums the recount already wrote', () => {
-    const summary = summaryOf(stat(), TOPPER, { evaluatedCount: 100, attemptCount: 120 }, 150);
+  it('takes the spread off the live curve and the time off the sums the recount wrote', () => {
+    const summary = summaryOf(stat(), curve(), TOPPER, COUNTS);
 
     assert.equal(summary.meanScore, 54);
     assert.equal(summary.averageTimeSec, 3300);
@@ -97,12 +115,12 @@ describe('summaryOf', () => {
     assert.equal(summary.attemptCount, 120);
     assert.equal(summary.topper?.name, 'Anitha R');
     assert.equal(summary.computedAt, COMPUTED_AT.toISOString());
-    assert.deepEqual(summary.bands, stat().bands);
+    assert.deepEqual(summary.bands, curve().bands);
     testAnalyticsSummarySchema.parse(summary);
   });
 
   it('reads an uncounted paper as unmeasured, never as a cohort that scored zero', () => {
-    const summary = summaryOf(null, null, { evaluatedCount: 0, attemptCount: 0 }, 0);
+    const summary = summaryOf(null, NO_CURVE, null, { attemptCount: 0, reachedCount: 0 });
 
     assert.equal(summary.meanScore, null);
     assert.equal(summary.medianScore, null);
@@ -114,12 +132,7 @@ describe('summaryOf', () => {
   });
 
   it('holds the same line on a row counted before any sitting was evaluated', () => {
-    const summary = summaryOf(
-      stat({ evaluatedCount: 0, sumScore: 0, sumTimeSec: 0, maxScore: null, minScore: null }),
-      null,
-      { evaluatedCount: 0, attemptCount: 0 },
-      0,
-    );
+    const summary = summaryOf(stat({ evaluatedCount: 0, sumTimeSec: 0 }), NO_CURVE, null, COUNTS);
 
     assert.equal(summary.meanScore, null);
     assert.equal(summary.averageTimeSec, null);
@@ -127,18 +140,17 @@ describe('summaryOf', () => {
 
   /** The pass runs on a clock, so a close burst or a re-sync leaves the rows behind the sittings. */
   it('reads a count behind the live sittings as settling, and a caught-up one as not', () => {
-    const live = (evaluatedCount: number) => ({ evaluatedCount, attemptCount: 120 });
-    assert.equal(summaryOf(stat(), TOPPER, live(100), 150).isSettling, false);
+    assert.equal(summaryOf(stat(), curve(), TOPPER, COUNTS).isSettling, false);
 
-    const behind = summaryOf(stat(), TOPPER, live(104), 150);
+    const behind = summaryOf(stat(), curve({ size: 104 }), TOPPER, COUNTS);
     assert.equal(behind.isSettling, true);
     assert.equal(behind.liveEvaluatedCount, 104);
     assert.equal(behind.evaluatedCount, 100);
 
-    const uncounted = summaryOf(null, null, live(3), 0);
+    const uncounted = summaryOf(null, curve({ size: 3 }), null, COUNTS);
     assert.equal(uncounted.isSettling, true);
     assert.equal(uncounted.evaluatedCount, 0);
-    assert.equal(summaryOf(null, null, live(0), 0).isSettling, false);
+    assert.equal(summaryOf(null, NO_CURVE, null, COUNTS).isSettling, false);
   });
 });
 
