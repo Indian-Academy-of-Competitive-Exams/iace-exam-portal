@@ -127,7 +127,12 @@ function Blueprint({
             form={form}
             name="testSeriesId"
             label="Series"
-            /* ui-copy-ok: rule */ hint="Changed on the Offer step, where a move is confirmed"
+            // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
+            hint={
+              detail.attemptCount > 0
+                ? 'A test stops moving once anybody has sat it.'
+                : 'A test moves to another series from its series page.'
+            }
           >
             {(control) => (
               <TestSeriesPicker
