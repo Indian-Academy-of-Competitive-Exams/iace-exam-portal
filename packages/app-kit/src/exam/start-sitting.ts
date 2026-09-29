@@ -1,5 +1,5 @@
 /** Getting from the instructions to a paper on screen: the same rule and the same start on web and mobile. */
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   LANGUAGE_MODE,
@@ -48,7 +48,7 @@ function forgetSitting(queryClient: QueryClient, testId: string): void {
   queryClient.removeQueries({ queryKey: startedAttemptQueryKey(testId), exact: true });
 }
 
-/** Starts the sitting once; its paper is the one held while they read, else the start's, else a fetch. */
+/** Starts the sitting once; its paper is held, else the start's, else fetched; `forget` drops both while mounted. */
 export function useStartedSitting(api: AppApiClient, testId: string, start: StartAttemptInput) {
   const queryClient = useQueryClient();
   const attempt = useQuery({
@@ -57,6 +57,8 @@ export function useStartedSitting(api: AppApiClient, testId: string, start: Star
     enabled: testId !== '',
     // The sitting is started once; a refetch would be a second start, which the server resumes.
     staleTime: Infinity,
+    // Gone with its screen, or a later entry reuses a start with a stale clock; StrictMode re-subscribes first.
+    gcTime: 0,
     retry: false,
   });
 
@@ -73,16 +75,10 @@ export function useStartedSitting(api: AppApiClient, testId: string, start: Star
     }),
     enabled: attemptId !== '',
     staleTime: Infinity,
+    gcTime: 0,
   });
 
   const forget = useCallback(() => forgetSitting(queryClient, testId), [queryClient, testId]);
-  // On unmount, and only once it answered: a start forgotten mid-flight is fetched again, and that fetch IS a second start.
-  useEffect(
-    () => () => {
-      if (queryClient.getQueryData(startedAttemptQueryKey(testId)) !== undefined) forget();
-    },
-    [forget, queryClient, testId],
-  );
 
   return { attempt, paper, forget };
 }

@@ -35,9 +35,23 @@ test('nothing begins before the declaration', () => {
   assert.equal(beginChoice(single([EN]), EN, false).ready, false);
 });
 
-/** The failure this prevents: StrictMode's rehearsal unmount forgetting a start in the air, so it is sent twice. */
+/** The app's own cache lifetime, so what is dropped at unmount is dropped by the hook, not by the test's client. */
+function mountedStart(api: AppApiClient, t: { after: (fn: () => void) => void }, strict = false) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => client.clear());
+  const mounted = renderHook(() => useStartedSitting(api, 'test-1', { tab: 'tab-1' }), {
+    reactStrictMode: strict,
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  return { client, ...mounted };
+}
+
+const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** The failure this prevents: StrictMode's rehearsal unmount dropping a start in the air, so it is sent twice. */
 test('a sitting is started once, though StrictMode unmounts and remounts the screen', async (t) => {
-  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
   let starts = 0;
   const api = {
     me: {
@@ -47,38 +61,43 @@ test('a sitting is started once, though StrictMode unmounts and remounts the scr
       },
     },
   } as unknown as AppApiClient;
-  const { unmount } = renderHook(() => useStartedSitting(api, 'test-1', { tab: 'tab-1' }), {
-    reactStrictMode: true,
-    wrapper: ({ children }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    ),
-  });
+  const { unmount } = mountedStart(api, t, true);
   t.after(unmount);
-  await act(async () => {
-    await Promise.resolve();
-  });
+  await act(nextTick);
 
   assert.equal(starts, 1);
 });
 
-test('a sitting that started is forgotten when its screen goes, so a re-sit starts afresh', async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
+test('a sitting that started is dropped when its screen goes, so a re-sit starts afresh', async (t) => {
   const api = {
     me: {
       startAttempt: async () => ({ id: 'attempt-1', paper: null }),
       attemptPaper: () => new Promise(() => undefined),
     },
   } as unknown as AppApiClient;
-  const { unmount } = renderHook(() => useStartedSitting(api, 'test-1', { tab: 'tab-1' }), {
-    wrapper: ({ children }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    ),
-  });
-  await act(async () => {
-    await Promise.resolve();
-  });
+  const { client, unmount } = mountedStart(api, t);
+  await act(nextTick);
   assert.notEqual(client.getQueryData(startedAttemptQueryKey('test-1')), undefined);
 
   unmount();
+  await nextTick();
+  assert.equal(client.getQueryData(startedAttemptQueryKey('test-1')), undefined);
+});
+
+/** The failure this prevents: a start that lands after its screen went, reused on re-entry with a stale clock. */
+test('a start still in the air when its screen goes is not kept for the next entry', async (t) => {
+  let land: (attempt: unknown) => void = () => {};
+  const api = {
+    me: {
+      startAttempt: () => new Promise((resolve) => (land = resolve)),
+    },
+  } as unknown as AppApiClient;
+  const { client, unmount } = mountedStart(api, t);
+  await act(nextTick);
+
+  unmount();
+  land({ id: 'attempt-1', paper: null });
+  await nextTick();
+  await nextTick();
   assert.equal(client.getQueryData(startedAttemptQueryKey('test-1')), undefined);
 });
