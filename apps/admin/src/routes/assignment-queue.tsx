@@ -78,13 +78,13 @@ function StateBadge({ row }: Readonly<{ row: AssignmentWithTest }>) {
 }
 
 function RowMenu({ row, moves }: Readonly<{ row: AssignmentWithTest; moves: RowMoves }>) {
-  if (!row.canMarkDone && !row.canMarkRead) return null;
+  if (!row.canMarkDone && !row.canRelease) return null;
   return (
     <RowActions label={`Actions for ${row.sectionName}`}>
       {row.canMarkDone ? (
         <DropdownMenuItem onSelect={() => moves.onDone(row)}>Mark done</DropdownMenuItem>
       ) : null}
-      {row.canMarkRead ? (
+      {row.canRelease ? (
         <DropdownMenuItem onSelect={() => moves.onRead(row)}>Mark read</DropdownMenuItem>
       ) : null}
     </RowActions>
@@ -177,7 +177,12 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   });
 
   const columns = useMemo(() => columnsOf({ onDone: setFinishing, onRead: setReading }), []);
-  const settle = () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS });
+  // No card holds a section's read here, so its whole prefix can go: the section page must not show it unreleased.
+  const settle = () => {
+    for (const queryKey of [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.PROOFREADING]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  };
 
   const header = <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="My sections" />;
 

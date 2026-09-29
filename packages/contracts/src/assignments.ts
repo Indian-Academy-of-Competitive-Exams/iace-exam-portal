@@ -67,6 +67,8 @@ export type CreateAssignmentBody = z.infer<typeof createAssignmentSchema>;
 /** One row plus the test it is on — a work queue needs that; a section's own list already knows it. */
 export const assignmentWithTestSchema = assignmentSchema.extend({
   testTitle: z.string().nullable(),
+  /** The reader's release would be taken now: reading open, the section whole and every question checked. */
+  canRelease: z.boolean(),
 });
 export type AssignmentWithTest = z.infer<typeof assignmentWithTestSchema>;
 

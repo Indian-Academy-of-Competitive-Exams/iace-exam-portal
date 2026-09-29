@@ -389,12 +389,33 @@ export class AssignmentsService {
       }),
       this.prisma.questionAssignment.count({ where }),
     ]);
-    const written = await this.sectionWrittenCounts(rows);
+    const [written, releasable] = await Promise.all([
+      this.sectionWrittenCounts(rows),
+      Promise.all(rows.map((row) => this.releasable(row))),
+    ]);
     return paged(
       query,
-      rows.map((row) => toAssignmentWithTest(row, written.get(sectionKey(row)) ?? NO_COUNTS)),
+      rows.map((row, index) =>
+        toAssignmentWithTest(
+          row,
+          written.get(sectionKey(row)) ?? NO_COUNTS,
+          releasable[index] ?? false,
+        ),
+      ),
       total,
     );
+  }
+
+  /** The queue's Mark read is the release itself: the reading open, and nothing in the gap. */
+  private async releasable(row: AssignmentRow): Promise<boolean> {
+    if (!readOpen(row)) return false;
+    const section = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
+    const gap = await this.releaseGap(
+      section,
+      row.test.paperSource,
+      row.baseConfigSection.questionCount,
+    );
+    return gap === null;
   }
 
   /** Expanded in memory: the cross of unfrozen tests and their sections is thousands of rows here, not millions. */
@@ -745,8 +766,9 @@ function sectionMixOf(questionPoolFilter: unknown, sectionId: string): Difficult
 function toAssignmentWithTest(
   row: AssignmentWithTestRow,
   counts: SectionCounts,
+  canRelease: boolean,
 ): AssignmentWithTest {
-  return { ...toAssignment(row, counts), testTitle: row.test.title };
+  return { ...toAssignment(row, counts), testTitle: row.test.title, canRelease };
 }
 
 /** A reader given a typed section its typist has already finished starts with it in hand. */

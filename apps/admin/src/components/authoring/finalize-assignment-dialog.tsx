@@ -1,5 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
-import { type AssignmentWithTest } from '@iace/contracts';
+import { type Assignment, type AssignmentWithTest } from '@iace/contracts';
+
+/** The row a release names: the section's own, from the queue or the section page alike. */
+type Releasing = Assignment & Pick<AssignmentWithTest, 'testTitle'>;
 import { ConfirmDialog, plural } from '@iace/ui';
 import { api } from '../../lib/api';
 
@@ -10,7 +13,7 @@ export function FinalizeAssignmentDialog({
   onClose,
   onFinalized,
 }: Readonly<{
-  assignment: AssignmentWithTest | null;
+  assignment: Releasing | null;
   /** What the section actually holds — the section screen knows it; the queue reads the section's count. */
   covering?: number;
   onClose: () => void;
@@ -21,7 +24,7 @@ export function FinalizeAssignmentDialog({
 
   const finalize = useMutation({
     meta: { success: `${assignment?.sectionName ?? 'Section'} marked read.` },
-    mutationFn: (row: AssignmentWithTest) =>
+    mutationFn: (row: Releasing) =>
       api.admin.sectionWork.release(row.testId, row.baseConfigSectionId),
     onSuccess: () => {
       onFinalized();

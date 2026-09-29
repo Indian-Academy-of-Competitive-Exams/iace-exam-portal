@@ -789,6 +789,44 @@ describe('AssignmentsService — mine', () => {
     assert.deepEqual(reading.get(picked.id), { done: false, read: true });
   });
 
+  /** The failure this prevents: Mark read offered on a queue row whose release the server then refuses. */
+  it('offers the release on a reader’s row only once the section is whole and every question checked', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
+    const section = await makeSection(prisma, catalog);
+    const reader = await makeAdmin(prisma);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const reading = body({
+      baseConfigSectionId: section.id,
+      assigneeId: reader.id,
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+    });
+    await assignments.assign(test.id, reading, reader.id);
+    await prisma.questionAssignment.updateMany({
+      where: { testId: test.id },
+      data: { handedAt: new Date() },
+    });
+    const offered = async () => (await queue(assignments, reader.id))[0]?.canRelease;
+
+    assert.equal(await offered(), false, 'the paper is short');
+    await fillPaper(catalog, test.id, section.id);
+    assert.equal(await offered(), false, 'nothing is checked');
+    const onPaper = await prisma.paperQuestion.findMany({
+      where: { testId: test.id },
+      select: { questionId: true },
+    });
+    await prisma.questionReview.createMany({
+      data: onPaper.map(({ questionId }) => ({
+        testId: test.id,
+        baseConfigSectionId: section.id,
+        questionId,
+        checkedAt: new Date(),
+      })),
+    });
+    assert.equal(await offered(), true);
+  });
+
   /** The queue is per-assignee for everybody but a super admin: another's row and an unheld section are both absent. */
   it('shows an ordinary admin their own rows and nothing else', async () => {
     const { assignments } = build();
