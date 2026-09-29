@@ -76,8 +76,13 @@ export function useStartedSitting(api: AppApiClient, testId: string, start: Star
   });
 
   const forget = useCallback(() => forgetSitting(queryClient, testId), [queryClient, testId]);
-  // On unmount, never on ending: a still-mounted query rebuilds what was removed, and that fetch IS a second start.
-  useEffect(() => forget, [forget]);
+  // On unmount, and only once it answered: a start forgotten mid-flight is fetched again, and that fetch IS a second start.
+  useEffect(
+    () => () => {
+      if (queryClient.getQueryData(startedAttemptQueryKey(testId)) !== undefined) forget();
+    },
+    [forget, queryClient, testId],
+  );
 
   return { attempt, paper, forget };
 }
