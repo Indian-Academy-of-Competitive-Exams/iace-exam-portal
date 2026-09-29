@@ -5,6 +5,7 @@ import {
   ErrorCodes,
   scopedSections,
   scopedDurationSec,
+  scopedQuestionCount,
   type ExamOption,
   type ExamBrief,
   type ExamPaper,
@@ -78,12 +79,9 @@ export class AttemptPaperService {
   async brief(studentId: string, testId: string): Promise<ExamBrief> {
     const test = await this.access.reachableTest(studentId, testId);
 
+    const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
     // A scoped test sits its own sections; the rest belong to other tests on the same configuration.
-    const covered = scopedSections(
-      test.baseConfig.sections,
-      test.scope,
-      (test.scopeRef as TestScopeRef | null) ?? null,
-    );
+    const covered = scopedSections(test.baseConfig.sections, test.scope, scopeRef);
 
     return {
       testId: test.id,
@@ -94,9 +92,9 @@ export class AttemptPaperService {
         test.baseConfig.sections,
         test.baseConfig,
         test.scope,
-        (test.scopeRef as TestScopeRef | null) ?? null,
+        scopeRef,
       ),
-      totalQuestions: covered.reduce((total, section) => total + section.questionCount, 0),
+      totalQuestions: scopedQuestionCount(test.baseConfig.sections, test.scope, scopeRef),
       languageMode: test.baseConfig.languageMode,
       languages: test.baseConfig.languages,
       sections: covered.map((section) => ({

@@ -17,6 +17,7 @@ import {
   testIsOpen,
   scopedSections,
   scopedDurationSec,
+  scopedQuestionCount,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -485,7 +486,7 @@ function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
     title: test.title,
     durationSec: scopedDurationSec(test.baseConfig.sections, test.baseConfig, test.scope, scopeRef),
     sectionCount: scoped.length,
-    totalQuestions: scoped.reduce((total, section) => total + section.questionCount, 0),
+    totalQuestions: scopedQuestionCount(test.baseConfig.sections, test.scope, scopeRef),
     order: test.seriesOrder,
     opensAt: opensFor(test, standing.programs)?.toISOString() ?? null,
     attemptStatus: standing.sittings.get(test.id) ?? null,

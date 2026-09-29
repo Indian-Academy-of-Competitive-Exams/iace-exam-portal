@@ -9,6 +9,7 @@ import {
   type LiveAttempt,
   type StartAttemptBody,
   scopedDurationSec,
+  scopedQuestionCount,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
@@ -222,6 +223,10 @@ function toLiveAttempt(
     startedByThisCall,
     testTitle: test.title,
     durationSec: sittingSeconds(test),
-    totalQuestions: test.baseConfig.totalQuestions,
+    totalQuestions: scopedQuestionCount(
+      test.baseConfig.sections,
+      test.scope,
+      (test.scopeRef as TestScopeRef | null) ?? null,
+    ),
   };
 }

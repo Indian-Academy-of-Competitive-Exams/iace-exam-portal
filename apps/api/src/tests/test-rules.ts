@@ -36,14 +36,11 @@ interface ShapedTest {
   };
 }
 
-/** A full paper is the configuration's own maintained total; a scoped one is its sections' worth. */
+/** A test is its scoped sections' worth, which for a full one is the configuration's own total. */
 export function testShapeOf(row: ShapedTest): { totalQuestions: number; durationSec: number } {
   const scopeRef = scopeRefOf(row);
   return {
-    totalQuestions:
-      row.scope === TEST_SCOPE.FULL
-        ? row.baseConfig.totalQuestions
-        : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRef),
+    totalQuestions: scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRef),
     durationSec: scopedDurationSec(row.baseConfig.sections, row.baseConfig, row.scope, scopeRef),
   };
 }

@@ -62,8 +62,8 @@ async function serviceWith(over: Bench = {}) {
   await makeBuilder(
     prisma,
     [
-      { id: idFor('sec_1'), name: 'General Intelligence' },
-      { id: idFor('sec_2'), name: 'Quantitative Aptitude' },
+      { id: idFor('sec_1'), name: 'General Intelligence', questionCount: 25 },
+      { id: idFor('sec_2'), name: 'Quantitative Aptitude', questionCount: 25 },
     ],
     { totalQuestions: 50, durationSec: 3600, ...over.config },
   );
@@ -160,6 +160,10 @@ describe('TestsService — creating a draft from a config', () => {
     await prisma.baseConfig.update({
       where: { id: BUILDER.CONFIG },
       data: { durationSec: 4800, totalQuestions: 60 },
+    });
+    await prisma.baseConfigSection.update({
+      where: { id: idFor('sec_1') },
+      data: { questionCount: 35 },
     });
 
     // The failure this prevents: an hour still served after the pattern moved to 80 minutes.

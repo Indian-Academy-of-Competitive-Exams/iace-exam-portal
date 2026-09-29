@@ -66,7 +66,7 @@ const testIn = (data: TestFields & { id: string }) =>
 
 /** Two series on the config's stage, one test first in the first of them, and the FOUNDATION program. */
 async function serviceWith(test: TestFields = {}, sittings = 0) {
-  await makeBuilder(prisma, [{ id: idFor('sec_1'), name: 'Reasoning' }]);
+  await makeBuilder(prisma, [{ id: idFor('sec_1'), name: 'Reasoning', questionCount: 100 }]);
   await prisma.testSeries.createMany({
     data: [
       { id: idFor('srs_1'), name: 'SSC CGL 2026 — Full length', examStageId: BUILDER.STAGE },

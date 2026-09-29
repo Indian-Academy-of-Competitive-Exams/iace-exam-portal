@@ -70,6 +70,12 @@ async function hall(over: Hall = {}) {
       Array.from({ length: count }, () => ({ subject: 'Reasoning', section })),
     ),
   });
+  for (const [at, questionCount] of shape.entries()) {
+    await prisma.baseConfigSection.update({
+      where: { id: paper.sectionIds[at] ?? '' },
+      data: { questionCount },
+    });
+  }
   await prisma.baseConfig.update({
     where: { id: paper.catalog.baseConfigId },
     data: {
@@ -412,11 +418,12 @@ describe('AttemptsService — a scoped test is sat on its own clock', () => {
   }
 
   /** THE failure this prevents: a fifteen-minute section sat for the whole paper's hour. */
-  it('ends a sectional sitting on the clock that section carries', async () => {
+  it('ends a sectional sitting on the clock that section carries, counting its questions alone', async () => {
     const attempt = await sittingFor(TEST_SCOPE.SECTIONAL);
 
     assert.equal(Date.parse(attempt.endsAt) - Date.parse(attempt.startedAt), 900 * 1000);
     assert.equal(attempt.durationSec, 900);
+    assert.equal(attempt.totalQuestions, 3);
   });
 
   /** A whole paper is untouched: its clock is still the configuration's, section times or not. */
@@ -424,5 +431,6 @@ describe('AttemptsService — a scoped test is sat on its own clock', () => {
     const attempt = await sittingFor(TEST_SCOPE.FULL);
 
     assert.equal(Date.parse(attempt.endsAt) - Date.parse(attempt.startedAt), 3600 * 1000);
+    assert.equal(attempt.totalQuestions, 5);
   });
 });
