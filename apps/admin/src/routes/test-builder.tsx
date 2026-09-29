@@ -156,12 +156,8 @@ function TestBuilder({
   const save = useMutation({
     meta: { silent: true },
     mutationFn: ({ values }: { values: TestFormValues; target: TestBuilderStep }) => {
-      const title = values.title.trim();
-      // A sat test refuses everything else, so a rename must not carry the rest along with it.
-      if (detail && sat) return api.admin.tests.update(detail.id, { title });
-
       const owned = {
-        title,
+        title: values.title.trim(),
         scope: values.scope,
         scopeRef: scopeRefOf(values),
         // Left out while unchosen, so the server takes the config's rather than guessing here.

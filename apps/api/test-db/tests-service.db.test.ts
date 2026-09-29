@@ -456,6 +456,68 @@ describe('TestsService — editing and removing', () => {
     assert.equal(error.code, ErrorCodes.CONFLICT);
   });
 
+  /** THE failure this prevents: the Setup save sends the scope back, and an offered test could not be renamed. */
+  it('renames and re-skins an offered test when the scope sent with them is the one it holds', async () => {
+    const scoped = { scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: idFor('sec_1') } };
+    const { service } = await serviceWith({
+      test: { ...FROZEN, status: TEST_STATUS.ACTIVE, ...scoped },
+    });
+
+    const updated = await service.update(TEST, {
+      ...scoped,
+      title: 'Mock 1 (revised)',
+      examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+    });
+
+    assert.deepEqual(
+      [updated.title, updated.examTemplate, updated.scopeRef],
+      ['Mock 1 (revised)', EXAM_TEMPLATE.SSC_RAILWAYS, scoped.scopeRef],
+    );
+  });
+
+  it('refuses an offered test a scope it does not hold, sent with a rename', async () => {
+    const { service } = await serviceWith({
+      test: {
+        ...FROZEN,
+        status: TEST_STATUS.ACTIVE,
+        scope: TEST_SCOPE.SECTIONAL,
+        scopeRef: { sectionId: idFor('sec_1') },
+      },
+    });
+
+    const error = await refused(
+      service.update(TEST, {
+        title: 'Mock 1 (revised)',
+        scope: TEST_SCOPE.SECTIONAL,
+        scopeRef: { sectionId: idFor('sec_2') },
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal((await testRow())?.title, 'Mock 1');
+  });
+
+  /** A sat test keeps its screen, but the whole Setup body sent back unchanged is still just a rename. */
+  it('renames a sat test from the whole Setup body, and refuses a new screen in it', async () => {
+    const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
+    await sat();
+    const stored = await testRow();
+    const setup = { scope: stored?.scope, scopeRef: null, examTemplate: stored?.examTemplate };
+
+    const renamed = await service.update(TEST, { ...setup, title: 'Mock 1 (revised)' });
+    const error = await refused(
+      service.update(TEST, {
+        ...setup,
+        title: 'Mock 1 (again)',
+        examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+      }),
+    );
+
+    assert.equal(renamed.title, 'Mock 1 (revised)');
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal((await testRow())?.title, 'Mock 1 (revised)');
+  });
+
   /** The failure this prevents: a frozen paper left pointing at a scope it no longer covers. */
   it('refuses a shape change on an offered test, sat or not', async () => {
     const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });

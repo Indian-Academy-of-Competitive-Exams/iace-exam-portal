@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { type Prisma } from '@prisma/client';
 import {
   AppException,
@@ -107,15 +108,28 @@ export const SAT_TEST_MESSAGE =
 export const OFFERED_TEST_MESSAGE =
   'This test has been offered, so its paper is frozen and no longer moves. A question already on it can still be dropped or made a bonus.';
 
-export function locksOutTestEdit(input: UpdateTestBody): boolean {
+type TestField = keyof UpdateTestBody;
+
+/** What an edit would actually move: a value sent back as it is stored is not a change. */
+export function changedTestFields(
+  stored: Readonly<Record<TestField, unknown>>,
+  input: UpdateTestBody,
+): TestField[] {
+  return (Object.keys(input) as TestField[]).filter(
+    (key) =>
+      input[key] !== undefined && !isDeepStrictEqual(input[key] ?? null, stored[key] ?? null),
+  );
+}
+
+export function locksOutTestEdit(changed: readonly TestField[]): boolean {
   const unfrozen = new Set<string>(TEST_UNFROZEN_FIELDS);
-  return Object.keys(input).some((key) => !unfrozen.has(key));
+  return changed.some((key) => !unfrozen.has(key));
 }
 
 /** An edit moves the paper if it could change what the paper holds — a re-skin cannot. */
-export function movesThePaper(input: UpdateTestBody): boolean {
+export function movesThePaper(changed: readonly TestField[]): boolean {
   const neutral = new Set<string>(PAPER_NEUTRAL_FIELDS);
-  return Object.keys(input).some((key) => !neutral.has(key));
+  return changed.some((key) => !neutral.has(key));
 }
 
 export const NO_PAPER_MESSAGE =

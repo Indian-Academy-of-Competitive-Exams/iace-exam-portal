@@ -26,6 +26,7 @@ import {
   OFFERED_TEST_MESSAGE,
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
+  changedTestFields,
   locksOutTestEdit,
   scopeRefOf,
   testShapeOf,
@@ -179,11 +180,12 @@ export class TestsService {
       this.assertPaperSourceOpen(test);
     }
 
-    const shapeChange = locksOutTestEdit(input);
-    if (test._count.attempts > 0 && shapeChange) {
+    const changed = changedTestFields(test, input);
+    if (test._count.attempts > 0 && locksOutTestEdit(changed)) {
       throw formRefusal(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE);
     }
-    if (test.finalizedAt !== null && movesThePaper(input)) {
+    const paperMoves = movesThePaper(changed);
+    if (test.finalizedAt !== null && paperMoves) {
       throw formRefusal(ErrorCodes.CONFLICT, OFFERED_TEST_MESSAGE);
     }
 
@@ -198,9 +200,9 @@ export class TestsService {
     this.assertCovers(config, scope, scopeRef);
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (movesThePaper(input)) await beginDraftPaperEdit(tx, id);
+      if (paperMoves) await beginDraftPaperEdit(tx, id);
       // A row outside the new scope cannot be judged complete or offered, so a narrower scope drops it.
-      if (input.scope !== undefined || input.scopeRef !== undefined) {
+      if (changed.includes('scope') || changed.includes('scopeRef')) {
         const keptIds = scopedSections(config.sections, scope, scopeRef).map(
           (section) => section.id,
         );
@@ -219,16 +221,14 @@ export class TestsService {
       return tx.test.update({
         where: { id },
         data: {
-          ...(input.title === undefined ? {} : { title: input.title }),
-          ...(input.scope === undefined ? {} : { scope: input.scope }),
-          ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
-          ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
-          ...(input.paperSource === undefined ? {} : { paperSource: input.paperSource }),
-          ...(input.questionPoolFilter === undefined
-            ? {}
-            : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
+          title: input.title,
+          scope: input.scope,
+          scopeRef: toJson(input.scopeRef),
+          examTemplate: input.examTemplate,
+          paperSource: input.paperSource,
+          questionPoolFilter: toJson(input.questionPoolFilter),
           // An Offer step opened before this edit must be refused, so every paper edit moves the version.
-          ...(movesThePaper(input) ? { version: { increment: 1 } } : {}),
+          version: paperMoves ? { increment: 1 } : undefined,
         },
         include: TEST_INCLUDE,
       });
@@ -322,10 +322,11 @@ function unknownReference(config: BaseConfigDetail, scopeRef: TestScopeRef | nul
 }
 
 /** `DbNull` is the column's own NULL; a bare `null` on a Json field means "leave it alone". */
+/** Undefined passes through, and Prisma leaves a field it is given undefined for untouched. */
 function toJson(
-  value: TestScopeRef | DrawSpec | null,
-): Prisma.InputJsonValue | typeof Prisma.DbNull {
-  return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue);
+  value: TestScopeRef | DrawSpec | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue | undefined);
 }
 
 function toTest(row: TestRow): Test {
