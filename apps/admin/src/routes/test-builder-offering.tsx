@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
   OPENING_HAS_PASSED,
-  offerRequirements,
+  owesAPaper,
   programOpeningField,
   todayISO,
   type TestDetail,
@@ -232,7 +232,7 @@ function OfferSection({
   held,
   onEdit,
 }: Readonly<{ detail: TestDetail; saved: OfferDraft; held: OfferDraft; onEdit: EditOffer }>) {
-  const ready = offerRequirements(detail).every((requirement) => requirement.met);
+  const ready = !owesAPaper(detail);
 
   return (
     <FormSection title="Offer">
@@ -264,10 +264,8 @@ function offerNote(detail: TestDetail, saved: OfferDraft, held: OfferDraft): str
     return `Pressing Done stops offering it to students reached through ${saved.series.name}. Attempts already sat keep their results.`;
   }
 
-  const unmet = offerRequirements(detail).find((requirement) => !requirement.met);
-  if (!unmet) return 'No student is offered it yet.';
-  const owed = unmet.owed ? ` (${unmet.owed})` : '';
-  return `It can be offered once ${unmet.label.charAt(0).toLowerCase()}${unmet.label.slice(1)}${owed}.`;
+  if (!owesAPaper(detail)) return 'No student is offered it yet.';
+  return `It can be offered once all ${detail.totalQuestions} questions are on the paper (${detail.paperQuestionCount} chosen so far).`;
 }
 
 const whenOf = (wall: string): string => `${opensLabel(instantOf(wall))} IST`;

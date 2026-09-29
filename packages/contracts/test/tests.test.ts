@@ -5,7 +5,6 @@ import {
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
   createTestSchema,
-  offerRequirements,
   scopedSections,
   scopedQuestionCount,
   scopedDurationSec,
@@ -101,34 +100,6 @@ describe('TEST_BUILDER_STEP', () => {
 
 /** The watermark the first offer writes; a frozen paper is one that carries it. */
 const OFFERED_AT = '2026-08-01T00:00:00.000Z';
-
-describe('offerRequirements', () => {
-  const built = {
-    finalizedAt: null,
-    paperQuestionCount: 100,
-    totalQuestions: 100,
-  };
-  const met = (test: Parameters<typeof offerRequirements>[0]) =>
-    offerRequirements(test).map((requirement) => requirement.met);
-
-  /** A test is created inside a series and cannot leave, so the paper is all that is left to owe. */
-  it('is ready when the paper is whole', () => {
-    assert.deepEqual(met(built), [true]);
-  });
-
-  /** The failure this prevents: offering a half-picked paper and finding out at the freeze. */
-  it('is not ready while the paper is short, and says how far', () => {
-    const [paper] = offerRequirements({ ...built, paperQuestionCount: 64 });
-
-    assert.equal(paper?.met, false);
-    assert.equal(paper?.owed, '64 chosen so far');
-  });
-
-  /** A frozen paper is whole by definition — a retired test must be offerable again. */
-  it('takes a frozen paper as whole however its rows are counted', () => {
-    assert.deepEqual(met({ ...built, finalizedAt: OFFERED_AT, paperQuestionCount: 0 }), [true]);
-  });
-});
 
 describe('testBuilderStepOf', () => {
   const built = {
@@ -311,6 +282,11 @@ describe('owesAPaper', () => {
 
   it('owes a paper while it is part built', () => {
     assert.equal(owesAPaper({ ...built, paperQuestionCount: 40 }), true);
+  });
+
+  /** A frozen paper is whole by definition — a retired test must be offerable again. */
+  it('owes nothing on a frozen paper, however its rows are counted', () => {
+    assert.equal(owesAPaper({ ...built, finalizedAt: OFFERED_AT, paperQuestionCount: 0 }), false);
   });
 
   /** The tick and the landing step are one rule, so they cannot say different things. */

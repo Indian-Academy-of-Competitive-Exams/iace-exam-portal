@@ -388,49 +388,16 @@ const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
 export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
 
-/** What a test owes before students can be given it. Each is shown, ticked or not. */
-const OFFER_REQUIREMENT = {
-  PAPER: 'PAPER',
-} as const;
-type OfferRequirementKey = (typeof OFFER_REQUIREMENT)[keyof typeof OFFER_REQUIREMENT];
+type PaperProgress = Pick<Test, 'finalizedAt' | 'paperQuestionCount' | 'totalQuestions'>;
 
-interface OfferRequirement {
-  key: OfferRequirementKey;
-  met: boolean;
-  /** What has to be true, in the words the checklist shows whether it is or not. */
-  label: string;
-  /** How far off it is, when it is not. */
-  owed: string | null;
-}
-
-/** A full TOTAL is every section full: nothing may exceed a section's own count, so it cannot hide. */
-export function offerRequirements(
-  test: Pick<Test, 'finalizedAt' | 'paperQuestionCount' | 'totalQuestions'>,
-): OfferRequirement[] {
-  return [paperRequirement(test)];
-}
-
-/** Whether a paper is still owed. The stepper's tick, the checklist and the landing step all read it. */
-export function owesAPaper(test: Parameters<typeof offerRequirements>[0]): boolean {
-  const paper = offerRequirements(test).find(
-    (requirement) => requirement.key === OFFER_REQUIREMENT.PAPER,
-  );
-  return paper?.met !== true;
+/** A frozen paper is whole by definition; the stepper's tick, the Offer switch and the landing step all read this. */
+export function owesAPaper(test: PaperProgress): boolean {
+  return test.finalizedAt === null && test.paperQuestionCount !== test.totalQuestions;
 }
 
 /** Reopening lands on the step still owing work, so a half-built paper is never walked past. */
-export function testBuilderStepOf(test: Parameters<typeof offerRequirements>[0]): TestBuilderStep {
+export function testBuilderStepOf(test: PaperProgress): TestBuilderStep {
   return owesAPaper(test) ? TEST_BUILDER_STEP.PAPER : TEST_BUILDER_STEP.OFFER;
-}
-
-function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
-  const met = test.finalizedAt !== null || test.paperQuestionCount === test.totalQuestions;
-  return {
-    key: OFFER_REQUIREMENT.PAPER,
-    met,
-    label: `All ${test.totalQuestions} questions are on the paper`,
-    owed: met ? null : `${test.paperQuestionCount} chosen so far`,
-  };
 }
 
 /** A row of the test's one paper, which every sitting is served. */
