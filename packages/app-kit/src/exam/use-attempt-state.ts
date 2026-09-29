@@ -83,7 +83,7 @@ export interface AttemptStateHandle {
   flush: () => Promise<boolean>;
   /** Whether anything the student did has not reached the server yet, read at the moment of asking. */
   hasUnsent: () => boolean;
-  /** The page is going: sends everything unsent on a request that outlives it, keeping the local copy. */
+  /** The page is closing or the app backgrounding: sends everything unsent now, keeping the local copy. */
   leave: () => void;
 }
 

@@ -188,6 +188,9 @@ const SittingEngine = memo(function SittingEngine({
     tab,
     answerQueue: { storage: sittingStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
   });
+  // Backgrounded is when the OS may kill the app, so what is unsent goes now rather than at the next tick.
+  const { leave } = view;
+  useEffect(() => appStateSource.subscribe(leave), [leave]);
 
   // Before paint, so the skin never shows a view the engine has already moved past.
   useLayoutEffect(() => {
