@@ -125,9 +125,10 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
   ];
 }
 
-// The exams a student is enrolled for, the first shown and the rest behind a count.
+// What reaches a series without a row of its own: courses and programs. A grant or an event shows as a dash.
 function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
-  const labels = [...new Set(student.enrolledExams)];
+  const labels = [...new Set([...student.enrolledCourses, ...student.programs])];
+  if (labels.length === 0) return <TruncatedText>{null}</TruncatedText>;
 
   return (
     <BadgeList items={labels} label={(entry) => entry} className="max-w-[12rem]">

@@ -18,6 +18,7 @@ const summary = {
   studentType: STUDENT_TYPE.OFFLINE,
   enrolledExams: ['SSC CGL'],
   enrolledCourses: [],
+  programs: [],
   hasOwnAccess: false,
   isActive: true,
   isTestBlocked: false,

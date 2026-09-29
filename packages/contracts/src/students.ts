@@ -86,6 +86,8 @@ export const studentSummarySchema = z.object({
   enrolledExams: z.array(z.string()),
   /** A whole course, for a student coached across every exam in it rather than one. */
   enrolledCourses: z.array(examCourseSchema),
+  /** Program codes, which reach a PROGRAM series with no membership row. */
+  programs: z.array(z.string()),
   /** Reaches a series through something of their own, by the resolver's rule; FREE series reach everyone regardless. */
   hasOwnAccess: z.boolean(),
   isActive: z.boolean(),
@@ -159,7 +161,6 @@ const studentEventSchema = z.object({
 export type StudentEvent = z.infer<typeof studentEventSchema>;
 
 export const studentDetailSchema = studentSummarySchema.extend({
-  programs: z.array(z.string()),
   /** A join row rather than an array on the student, so it is read here and never patched here. */
   events: z.array(studentEventSchema),
   currentBranchId: z.string().nullable(),

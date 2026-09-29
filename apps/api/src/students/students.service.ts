@@ -175,7 +175,6 @@ export class StudentsService {
 
     return {
       ...this.toSummary(student, own > 0),
-      programs: student.programs,
       events: student.eventCandidacies.map((candidacy) => candidacy.event),
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
@@ -508,6 +507,7 @@ export class StudentsService {
       studentType: StudentType;
       enrolledExams: string[];
       enrolledCourses: ExamCourse[];
+      programs: string[];
       isActive: boolean;
       isTestBlocked: boolean;
       pinHash: string | null;
@@ -525,6 +525,7 @@ export class StudentsService {
       studentType: row.studentType,
       enrolledExams: row.enrolledExams,
       enrolledCourses: row.enrolledCourses,
+      programs: row.programs,
       hasOwnAccess,
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
