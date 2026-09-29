@@ -32,11 +32,20 @@ import {
   type QuestionImportPlan,
   type QuestionImportResult,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  CurrentUser,
+  RequiresAnyFeature,
+  RequiresFeature,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { requireFile, type UploadedSheet } from '../common/importing/upload';
 import { sendErrorRows } from '../common/importing';
 import { QuestionImportService } from './question-import.service';
+
+/** The bank's run and a section's alike: the run is its previewer's, whichever key they previewed it under. */
+const RUN_KEYS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHORING] as const;
 
 @Controller('imports/questions')
 @Actors(ActorTypes.ADMIN)
@@ -75,7 +84,7 @@ export class QuestionImportController {
   }
 
   /** The previewed rows as questions, for the review window. Only the admin who previewed them. */
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(RUN_KEYS, PERMISSION_LEVELS.READ)
   @Get(':importLogId/drafts')
   drafts(
     @CurrentUser() user: AuthenticatedUser,
@@ -85,7 +94,7 @@ export class QuestionImportController {
   }
 
   /** A correction to one previewed row. Writes no question: that is still Import's to do. */
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(RUN_KEYS, PERMISSION_LEVELS.READ)
   @Put(':importLogId/rows/:line')
   saveRow(
     @CurrentUser() user: AuthenticatedUser,
@@ -97,7 +106,7 @@ export class QuestionImportController {
   }
 
   /** One previewed row set aside from Import, or brought back. Writes no question either way. */
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(RUN_KEYS, PERMISSION_LEVELS.READ)
   @Put(':importLogId/rows/:line/left-out')
   leaveOutRow(
     @CurrentUser() user: AuthenticatedUser,

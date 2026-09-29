@@ -85,14 +85,11 @@ function LeaveOut({
 /** Every row of the sheet, corrected on the authoring page before Import; nothing reaches the bank until then. */
 export function ImportWorkspace({
   plan,
-  into,
   startAt,
   onPlan,
   actions,
 }: Readonly<{
   plan: QuestionImportPlan;
-  /** The section a typist's import lands in; null for the bank. */
-  into: string | null;
   startAt: string | null;
   /** Every row judged again after a save, which is how a fixed row turns to Create. */
   onPlan: (plan: QuestionImportPlan) => void;
@@ -107,18 +104,11 @@ export function ImportWorkspace({
     const drafts = {
       queryKey: draftsKey,
       staleTime: Infinity,
-      queryFn: () =>
-        into
-          ? api.admin.authoring.importDrafts(into, importLogId)
-          : api.admin.imports.questionDrafts(importLogId),
+      queryFn: () => api.admin.imports.questionDrafts(importLogId),
     };
 
     const leave = async (line: number, leftOut: boolean) => {
-      onPlan(
-        into
-          ? await api.admin.authoring.leaveOutImportRow(into, importLogId, line, { leftOut })
-          : await api.admin.imports.leaveOutQuestionRow(importLogId, line, { leftOut }),
-      );
+      onPlan(await api.admin.imports.leaveOutQuestionRow(importLogId, line, { leftOut }));
     };
 
     return {
@@ -140,16 +130,13 @@ export function ImportWorkspace({
       }),
       save: async (line, held) => {
         const draft = toDraft(held.state, held.header);
-        const judged = into
-          ? await api.admin.authoring.saveImportRow(into, importLogId, Number(line), draft)
-          : await api.admin.imports.saveQuestionRow(importLogId, Number(line), draft);
-        onPlan(judged);
+        onPlan(await api.admin.imports.saveQuestionRow(importLogId, Number(line), draft));
         await queryClient.invalidateQueries({ queryKey: draftsKey });
       },
       subjectLocked: false,
       checkDuplicates: false,
     };
-  }, [importLogId, rows, into, onPlan, queryClient]);
+  }, [importLogId, rows, onPlan, queryClient]);
 
   return (
     <AuthoringWorkspace

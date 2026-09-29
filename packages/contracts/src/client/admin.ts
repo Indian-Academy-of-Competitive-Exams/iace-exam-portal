@@ -649,38 +649,6 @@ export function adminClient(core: ApiCore) {
           questionImportResultSchema,
           { importLogId },
         ),
-
-      importDrafts: (assignmentId: string, importLogId: string): Promise<QuestionImportDraft[]> =>
-        get(
-          ADMIN_AUTHORING_ROUTES.importDrafts(assignmentId, importLogId),
-          questionImportDraftsSchema,
-        ),
-
-      saveImportRow: (
-        assignmentId: string,
-        importLogId: string,
-        line: number,
-        draft: QuestionDraftInput,
-      ): Promise<QuestionImportPlan> =>
-        write(
-          'PUT',
-          ADMIN_AUTHORING_ROUTES.importRow(assignmentId, importLogId, line),
-          questionImportPlanSchema,
-          draft,
-        ),
-
-      leaveOutImportRow: (
-        assignmentId: string,
-        importLogId: string,
-        line: number,
-        body: QuestionImportLeaveOut,
-      ): Promise<QuestionImportPlan> =>
-        write(
-          'PUT',
-          ADMIN_AUTHORING_ROUTES.importRowLeaveOut(assignmentId, importLogId, line),
-          questionImportPlanSchema,
-          body,
-        ),
     },
 
     questions: {

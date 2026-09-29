@@ -113,15 +113,20 @@ describe('QuestionImportService — correcting a previewed row', () => {
     assert.equal(plan.rows.find((row) => row.line === 3)?.action, 'duplicate');
   });
 
+  /** The failure this prevents: either key reaches these routes, so the run itself is the fence. */
   it('refuses another admin, as if the run did not exist', async () => {
     const { imports, importLogId } = await previewed();
     const [, skipped] = await imports.drafts(importLogId, ADMIN);
     assert.ok(skipped);
+    const notFound = (error: unknown) =>
+      AppException.is(error) && error.code === ErrorCodes.NOT_FOUND;
 
+    await assert.rejects(imports.drafts(importLogId, OTHER_ADMIN), notFound);
     await assert.rejects(
       imports.saveRow(importLogId, 3, fixed(skipped.draft), OTHER_ADMIN),
-      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+      notFound,
     );
+    await assert.rejects(imports.leaveOutRow(importLogId, 3, true, OTHER_ADMIN), notFound);
   });
 
   it('refuses a correction once the run has been imported', async () => {

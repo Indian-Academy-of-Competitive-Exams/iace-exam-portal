@@ -130,7 +130,6 @@ export function ImportQuestionsPage() {
     return (
       <ImportWorkspace
         plan={plan}
-        into={into}
         startAt={startAt}
         onPlan={(judged) => intake.stage(intake.file, judged)}
         actions={

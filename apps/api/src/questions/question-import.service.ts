@@ -235,40 +235,6 @@ export class QuestionImportService {
     return this.changeRow(importLogId, line, actorId, { leftOut });
   }
 
-  async draftsForAssignment(
-    assignmentId: string,
-    importLogId: string,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<QuestionImportDraft[]> {
-    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
-    return this.drafts(importLogId, adminId);
-  }
-
-  async saveRowForAssignment(
-    assignmentId: string,
-    importLogId: string,
-    line: number,
-    draft: QuestionDraft,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<QuestionImportPlan> {
-    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
-    return this.saveRow(importLogId, line, draft, adminId);
-  }
-
-  async leaveOutRowForAssignment(
-    assignmentId: string,
-    importLogId: string,
-    line: number,
-    leftOut: boolean,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<QuestionImportPlan> {
-    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
-    return this.leaveOutRow(importLogId, line, leftOut, adminId);
-  }
-
   /** One row's change from the review window, held against the run; answers with every row judged again. */
   private async changeRow(
     importLogId: string,
