@@ -49,7 +49,9 @@ function DoneDialog({
     queryKey: sectionWorkQueryKey(testId, baseConfigSectionId),
     queryFn: () => api.admin.sectionWork.one(testId, baseConfigSectionId),
   });
-  const rows = work.data?.questions.filter((question) => question.typed) ?? [];
+  const questions = work.data?.questions ?? [];
+  const rows = questions.filter((question) => question.typed);
+  const leavingPaper = questions.filter((question) => question.order !== null && !question.typed);
 
   const gaps = selectionGaps(assignment, rows, chosen);
   const leftover = rows.filter((row) => !chosen.has(row.questionId));
@@ -108,6 +110,21 @@ function DoneDialog({
 
           {leftover.length > 0 && chosen.size > 0 ? (
             <Alert variant="info">{leftoverNotice(leftover.length, deleting)}</Alert>
+          ) : null}
+
+          {leavingPaper.length > 0 ? (
+            <Alert variant="warning">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span>{leavingPaperNotice(leavingPaper.length)}</span>
+                <ul className="flex list-disc flex-col gap-1 pl-4">
+                  {leavingPaper.map((row) => (
+                    <li key={row.questionId}>
+                      <TruncatedText>{row.preview}</TruncatedText>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Alert>
           ) : null}
 
           <DataTable
@@ -183,6 +200,11 @@ function leftoverNotice(leftover: number, deleting: number): string {
   const banked = leftover - deleting;
   const kept = `${plural(banked, 'question')} not chosen ${banked === 1 ? 'goes' : 'go'} to the bank for any test to pick.`;
   return deleting > 0 ? `${kept} ${plural(deleting, 'question')} will be deleted.` : kept;
+}
+
+function leavingPaperNotice(count: number): string {
+  const one = count === 1;
+  return `${plural(count, 'question')} already on this section's paper ${one ? 'comes' : 'come'} off it at Done. ${one ? 'It stays' : 'They stay'} in the bank.`;
 }
 
 const chosenLevels = (rows: readonly SectionQuestion[], chosen: ReadonlySet<string>) =>
