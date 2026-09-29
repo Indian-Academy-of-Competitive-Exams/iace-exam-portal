@@ -119,7 +119,7 @@ async function build() {
     bus,
   );
   const paper = new PaperService(prisma, configs, audit, redis, questions);
-  return { questions, work, done: new TypistDoneController(paper, work) };
+  return { questions, imports, work, done: new TypistDoneController(paper, work) };
 }
 
 /** A signed-in admin as the Done route receives one. */
@@ -451,11 +451,11 @@ describe('SectionWorkService.remove', () => {
 });
 
 /** One good row, written out as CSV: the section import reads the bank's own sheet. */
-function oneRowSheet(): Buffer {
+function oneRowSheet(stem = 'What is 30% of 150?'): Buffer {
   const row: Partial<Record<QuestionImportColumnKey, string>> = {
     subject: 'Quantitative Aptitude',
     difficulty: 'medium',
-    stem_en: 'What is 30% of 150?',
+    stem_en: stem,
     option1_en: '25',
     option2_en: '45',
     option3_en: '35',
@@ -597,6 +597,46 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
 
     assert.equal(result.created, 1);
     assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 1);
+  });
+
+  /** The failure this prevents: a run previewed for one importer landing through another. */
+  it('imports a run only through the importer it was previewed in', async () => {
+    const { imports, work } = await build();
+    const { pair, typing } = await aSection();
+    const other = await aSection();
+    const bankRun = (await imports.preview(oneRowSheet('What is 10% of 150?'), TYPIST)).importLogId;
+    const sectionRun = (await work.previewImport(pair, oneRowSheet(), viewer(TYPIST))).importLogId;
+
+    await assert.rejects(
+      () => work.commitImport(pair, bankRun, viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => imports.commit(sectionRun, { actorId: TYPIST }),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => work.commitImport(other.pair, sectionRun, viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    assert.equal(await prisma.question.count(), 0);
+
+    assert.equal((await imports.commit(bankRun, { actorId: TYPIST })).created, 1);
+    assert.equal((await work.commitImport(pair, sectionRun, viewer(TYPIST))).created, 1);
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 1);
+    assert.equal(await prisma.question.count({ where: { assignmentId: null } }), 1);
+  });
+
+  it('imports a run previewed before runs kept a target through either importer', async () => {
+    const { work } = await build();
+    const { pair, typing } = await aSection();
+    const { importLogId } = await work.previewImport(pair, oneRowSheet(), viewer(TYPIST));
+    await prisma.importLog.update({ where: { id: importLogId }, data: { target: null } });
+
+    const other = await aSection();
+    assert.equal((await work.commitImport(other.pair, importLogId, viewer(TYPIST))).created, 1);
+    assert.equal(await prisma.question.count({ where: { assignmentId: other.typing.id } }), 1);
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 0);
   });
 
   /** The failure this prevents: a section released by somebody who is not reading it. */

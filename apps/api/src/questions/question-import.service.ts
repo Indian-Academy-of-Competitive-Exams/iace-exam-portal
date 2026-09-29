@@ -23,6 +23,7 @@ import {
   type CsvTable,
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
+import { formRefusal } from '../common/form-refusal';
 import { AuditService } from '../audit';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -42,6 +43,8 @@ import { loadTaxonomyCatalog } from './taxonomy-context';
 
 const UPLOAD_GONE = 'That upload is no longer available';
 const ALREADY_IMPORTED = 'That file has already been imported';
+const PREVIEWED_ELSEWHERE = 'That file was previewed for somewhere else. Upload it again here.';
+const BANK_TARGET = 'bank';
 
 /** What the review window laid over the file: each corrected line's draft, and the lines left out. */
 interface RowOverlay {
@@ -68,7 +71,11 @@ export class QuestionImportService {
     return buildQuestionTemplate(await loadTaxonomyCatalog(this.prisma));
   }
 
-  async preview(file: Buffer, actorId: string): Promise<QuestionImportPlan> {
+  async preview(
+    file: Buffer,
+    actorId: string,
+    section?: ImportSection,
+  ): Promise<QuestionImportPlan> {
     const planning = await this.plan(file);
 
     const log = await this.prisma.importLog.create({
@@ -76,6 +83,7 @@ export class QuestionImportService {
         feature: AUDIT_FEATURE.QUESTION,
         source: ImportSource.SHEET,
         actorId,
+        target: targetOf(section),
         total: planning.summary.total,
         status: IMPORT_LOG_STATUS.PREVIEWED,
         errors: fileErrorsOf(planning),
@@ -114,6 +122,9 @@ export class QuestionImportService {
 
   async commit(importLogId: string, into: ImportTarget): Promise<QuestionImportResult> {
     const { log, file } = await this.openRun(importLogId, into.actorId);
+    if (log.target !== null && log.target !== targetOf(into.section)) {
+      throw formRefusal(ErrorCodes.CONFLICT, PREVIEWED_ELSEWHERE);
+    }
     const planning = await this.plan(file, await this.overlayOf(log.id));
     const creatable = planning.rows.filter(
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
@@ -128,7 +139,10 @@ export class QuestionImportService {
       for (const row of creatable) {
         const built = buildContent(row.draft);
         const question = await tx.question.create({
-          data: { ...questionData(row.draft, built, log.actorId), assignmentId: into.assignmentId },
+          data: {
+            ...questionData(row.draft, built, log.actorId),
+            assignmentId: into.section?.assignmentId,
+          },
         });
         const version = await tx.questionVersion.create({
           data: versionData(question.id, built, log.actorId),
@@ -359,9 +373,18 @@ function fileErrorsOf(planning: QuestionImportPlanning): Prisma.InputJsonValue |
   return planning.fileErrors.length > 0 ? { fileErrors: planning.fileErrors } : undefined;
 }
 
+export interface ImportSection {
+  testId: string;
+  baseConfigSectionId: string;
+}
+
 /** Where an imported sheet lands: the bank by default, or one section's own authoring. */
 export interface ImportTarget {
-  assignmentId?: string;
+  section?: ImportSection & { assignmentId: string };
   /** Whose upload it has to be: a run is committed by the admin who previewed it, nobody else. */
   actorId: string;
+}
+
+function targetOf(section: ImportSection | undefined): string {
+  return section ? `${section.testId}/${section.baseConfigSectionId}` : BANK_TARGET;
 }

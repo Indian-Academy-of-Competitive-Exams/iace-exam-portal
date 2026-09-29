@@ -199,7 +199,7 @@ export class SectionWorkService {
     viewer: SectionViewer,
   ): Promise<QuestionImportPlan> {
     typingRow(await this.load(pair, viewer));
-    return this.imports.preview(file, viewer.id);
+    return this.imports.preview(file, viewer.id, pair);
   }
 
   async commitImport(
@@ -208,7 +208,10 @@ export class SectionWorkService {
     viewer: SectionViewer,
   ): Promise<QuestionImportResult> {
     const typing = typingRow(await this.load(pair, viewer));
-    return this.imports.commit(importLogId, { assignmentId: typing.id, actorId: viewer.id });
+    return this.imports.commit(importLogId, {
+      section: { ...pair, assignmentId: typing.id },
+      actorId: viewer.id,
+    });
   }
 
   /** The reader's release, under the reading job the viewer acts through. */

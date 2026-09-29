@@ -980,6 +980,8 @@ model ImportLog {
   source     ImportSource
   actorId    String?      @db.Uuid
   fileS3Key  String?
+  // Where a question run may be imported: 'bank', or 'testId/baseConfigSectionId'; null before runs kept it.
+  target     String?
   total      Int          @default(0)
   created    Int          @default(0)
   updated    Int          @default(0)
