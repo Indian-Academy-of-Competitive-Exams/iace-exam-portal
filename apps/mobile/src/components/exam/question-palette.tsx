@@ -5,7 +5,7 @@
  */
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ANSWER_STATE, ANSWER_STATES, isReviewState, type AnswerState } from '@iace/contracts';
+import { ANSWER_STATE, ANSWER_STATES, isStateShown, type AnswerState } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
@@ -70,19 +70,15 @@ export function QuestionPalette({
           </View>
 
           <View className="gap-2 px-4">
-            {ANSWER_STATES.filter((state) => !view.forwardOnly || !isReviewState(state)).map(
-              (state) => (
-                <View key={state} className="flex-row items-center gap-3">
-                  <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
-                  <Text className="flex-1 text-sm text-exam-ink">
-                    {PALETTE_LEGEND[state].label}
-                  </Text>
-                  <Text className="text-sm font-semibold tabular-nums text-exam-ink">
-                    {view.sectionCounts(view.sectionId)[state]}
-                  </Text>
-                </View>
-              ),
-            )}
+            {ANSWER_STATES.filter((state) => isStateShown(state, view.forwardOnly)).map((state) => (
+              <View key={state} className="flex-row items-center gap-3">
+                <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
+                <Text className="flex-1 text-sm text-exam-ink">{PALETTE_LEGEND[state].label}</Text>
+                <Text className="text-sm font-semibold tabular-nums text-exam-ink">
+                  {view.sectionCounts(view.sectionId)[state]}
+                </Text>
+              </View>
+            ))}
           </View>
 
           <ScrollView

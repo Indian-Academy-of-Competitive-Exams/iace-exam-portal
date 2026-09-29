@@ -4,7 +4,7 @@
  * the two skins cannot drift into behaving differently.
  */
 import { useState } from 'react';
-import { isReviewState, type ExamClock } from '@iace/contracts';
+import { isStateShown, type ExamClock } from '@iace/contracts';
 import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
 import { Alert, Badge, Button, cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
@@ -177,9 +177,9 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
 
 /** A forward-only paper reaches three of the five states, so it is taught and tallied in three. */
 const statesOf = (view: ExamView) =>
-  LEGEND_ORDER.filter((state) => !view.forwardOnly || !isReviewState(state));
+  LEGEND_ORDER.filter((state) => isStateShown(state, view.forwardOnly));
 const tallyOf = (view: ExamView) =>
-  TALLY_ORDER.filter((state) => !view.forwardOnly || !isReviewState(state));
+  TALLY_ORDER.filter((state) => isStateShown(state, view.forwardOnly));
 
 /** The question area: the stem and its options, or a word where a closed section was. */
 function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {

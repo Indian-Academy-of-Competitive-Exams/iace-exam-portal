@@ -368,6 +368,10 @@ export function isReviewState(state: AnswerState | undefined): boolean {
   return state === ANSWER_STATE.MARKED_REVIEW || state === ANSWER_STATE.ANSWERED_MARKED;
 }
 
+/** Whether a legend, palette or tally draws this state: a forward-only paper can hold no review state. */
+export const isStateShown = (state: AnswerState, forwardOnly: boolean): boolean =>
+  !forwardOnly || !isReviewState(state);
+
 /** FORWARD_ONLY: a seat already left is closed for good, so only this one or a later one opens. */
 export function mayOpenQuestion(
   questionIds: readonly string[],

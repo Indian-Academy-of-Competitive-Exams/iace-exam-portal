@@ -6,7 +6,7 @@
  */
 import {
   contentLanguageOf,
-  isReviewState,
+  isStateShown,
   LANGUAGE_LABELS,
   type ExamBrief,
   type LanguageCode,
@@ -117,7 +117,7 @@ function GeneralScreen({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
       </p>
 
       <ul className="ri-legend">
-        {LEGEND_ORDER.filter((state) => !forwardOnly || !isReviewState(state)).map((state) => (
+        {LEGEND_ORDER.filter((state) => isStateShown(state, forwardOnly)).map((state) => (
           <li key={state}>
             <span className={`rw-cell ${STATE_CLASS[state]}`} aria-hidden />
             <span>{LEGEND_SAYS[state]}</span>

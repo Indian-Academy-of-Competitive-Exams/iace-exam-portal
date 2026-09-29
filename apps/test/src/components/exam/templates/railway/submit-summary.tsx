@@ -3,7 +3,7 @@
  * drawn over the question area with the palette folded away. The counts are the same
  * ones the palette reads, so the summary cannot disagree with the grid behind it.
  */
-import { ANSWER_STATE, isReviewState, type AnswerState } from '@iace/contracts';
+import { ANSWER_STATE, isStateShown, type AnswerState } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { LEGEND_ORDER, STATE_LABEL } from './states';
 
@@ -16,7 +16,7 @@ const HEADER: Readonly<Record<AnswerState, string>> = {
 export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
   const { submit } = view;
   const total = view.sections.reduce((sum, section) => sum + section.questionCount, 0);
-  const states = LEGEND_ORDER.filter((state) => !view.forwardOnly || !isReviewState(state));
+  const states = LEGEND_ORDER.filter((state) => isStateShown(state, view.forwardOnly));
 
   return (
     <div className="rw-summary">

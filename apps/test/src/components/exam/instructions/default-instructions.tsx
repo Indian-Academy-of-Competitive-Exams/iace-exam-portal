@@ -1,7 +1,7 @@
 /** The default skin's read-before-you-begin: the rules, then the paper, over two screens. */
 import {
   contentLanguageOf,
-  isReviewState,
+  isStateShown,
   LANGUAGE_LABELS,
   type ExamBrief,
   type LanguageCode,
@@ -147,13 +147,11 @@ function GeneralStep({ brief, forwardOnly }: Readonly<{ brief: ExamBrief; forwar
 
       <SurfaceCard title="Palette">
         <div className="flex flex-wrap gap-2">
-          {PALETTE_LEGEND.filter((entry) => !forwardOnly || !isReviewState(entry.state)).map(
-            (entry) => (
-              <Badge key={entry.state} variant={entry.variant}>
-                {entry.label}
-              </Badge>
-            ),
-          )}
+          {PALETTE_LEGEND.filter((entry) => isStateShown(entry.state, forwardOnly)).map((entry) => (
+            <Badge key={entry.state} variant={entry.variant}>
+              {entry.label}
+            </Badge>
+          ))}
         </div>
       </SurfaceCard>
 

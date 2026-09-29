@@ -8,6 +8,7 @@ import {
   ANSWER_STATE,
   AppException,
   ErrorCodes,
+  isReviewState,
   type AnswerChange,
   type AnswerState,
   type ExamClock,
@@ -429,7 +430,7 @@ function changeFor(
 ): AnswerChange {
   const option =
     next.selectedOptionId === undefined ? held?.selectedOptionId : next.selectedOptionId;
-  const marked = next.marked ?? isMarked(held?.state);
+  const marked = next.marked ?? isReviewState(held?.state);
 
   return {
     questionId,
@@ -461,9 +462,6 @@ function visitFor(
     firstActionAt: held?.firstActionAt ?? seenAt,
   };
 }
-
-const isMarked = (state: AnswerState | undefined): boolean =>
-  state === ANSWER_STATE.MARKED_REVIEW || state === ANSWER_STATE.ANSWERED_MARKED;
 
 /** The screen's guess. The server derives the truth from the same two facts and wins. */
 function stateFor(option: string | null, marked: boolean): AnswerState {

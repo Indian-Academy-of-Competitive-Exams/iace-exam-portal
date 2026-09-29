@@ -1,4 +1,4 @@
-import { ANSWER_STATES, isReviewState, type AnswerState, type LiveAnswer } from '@iace/contracts';
+import { ANSWER_STATES, isStateShown, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import { PALETTE_LEGEND } from '../../lib/constants';
 
@@ -30,7 +30,7 @@ export function QuestionPalette({
   canOpen?: (questionId: string) => boolean;
   onOpen: (questionId: string) => void;
 }>) {
-  const states = ANSWER_STATES.filter((state) => !forwardOnly || !isReviewState(state));
+  const states = ANSWER_STATES.filter((state) => isStateShown(state, forwardOnly));
 
   return (
     <div className="flex flex-col gap-exam-gap">
