@@ -145,6 +145,12 @@ describe('sectionLeftSec', () => {
   it('has no clock to read on a paper whose sections are not timed', () => {
     assert.equal(sectionLeftSec(null, OPENED, '2026-09-01T05:10:00.000Z'), null);
   });
+
+  /** The failure this prevents: a section allowed 0 minutes closing on arrival, as a spent one must. */
+  it('tells a section allowed no time from one whose time is spent', () => {
+    assert.equal(sectionLeftSec(0, OPENED, '2026-09-01T05:10:00.000Z'), null, 'no section clock');
+    assert.equal(sectionLeftSec(1800, OPENED, '2026-09-01T05:30:00.000Z'), 0, 'expired');
+  });
 });
 
 describe('mayOpenQuestion', () => {

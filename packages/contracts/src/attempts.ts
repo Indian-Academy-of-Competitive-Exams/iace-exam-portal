@@ -272,7 +272,8 @@ export function sectionLeftSec(
   openedAt: string | undefined,
   serverNow: string,
 ): number | null {
-  if (allowedSec === null || allowedSec === undefined) return null;
+  // A section allowed no time has no clock of its own; one whose time is spent reads 0 and closes.
+  if (allowedSec === null || allowedSec === undefined || allowedSec <= 0) return null;
   if (openedAt === undefined) return allowedSec;
 
   const spent = Math.round(
