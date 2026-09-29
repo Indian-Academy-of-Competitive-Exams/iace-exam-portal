@@ -50,7 +50,7 @@ export function SetupStep({
   return (
     <>
       <FormSection title="Paper">
-        <Blueprint form={form} detail={detail} fromSeries={fromSeries} config={config} />
+        <Blueprint form={form} detail={detail} fromSeries={fromSeries} config={config} sat={sat} />
       </FormSection>
 
       <FormSection title="Scoring">
@@ -80,11 +80,13 @@ function Blueprint({
   detail,
   fromSeries,
   config,
+  sat,
 }: Readonly<{
   form: TestForm;
   detail: TestDetail | null;
   fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
+  sat: boolean;
 }>) {
   const examId = useWatch({ control: form.control, name: 'examId' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
@@ -226,6 +228,7 @@ function Blueprint({
             name={control.name}
             legend="Exam template"
             hideLegend
+            disabled={sat}
             value={examTemplate}
             onValueChange={(next) => form.setValue('examTemplate', next as ExamTemplate, DIRTY)}
             className="grid max-w-2xl gap-3 sm:grid-cols-2"
