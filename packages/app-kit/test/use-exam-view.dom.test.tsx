@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  ANSWER_STATE,
   TIMER_TEMPLATE,
   type ExamPaper,
   type ExamQuestion,
@@ -252,4 +253,34 @@ test('leaving the paper nags until acknowledged, and again on the next exit', (t
   assert.equal(result.current.fullscreen.nagging, false);
   rerender({ exits: 2 });
   assert.equal(result.current.fullscreen.nagging, true);
+});
+
+/** The failure this prevents: the question a paper opens on staying "not visited", its seconds never banked. */
+test('the question a screen lands on is open, so leaving it banks the visit', async (t) => {
+  const landing: ExamPaper = {
+    ...paper(),
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+    questions: [
+      questionFor('sec1', 1),
+      { ...questionFor('sec1', 2), questionId: 'sec1-q2' },
+      questionFor('sec2', 3),
+      questionFor('sec3', 4),
+    ],
+  };
+  const { result, unmount } = mounted(apiWith({}), landing);
+  t.after(unmount);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  act(() => result.current.nextQuestion());
+  assert.equal(result.current.answers['sec1-q1']?.state, ANSWER_STATE.NOT_ANSWERED, 'on load');
+
+  act(() => result.current.openSection('sec2'));
+  act(() => result.current.openSection('sec3'));
+  assert.equal(
+    result.current.answers['sec2-q1']?.state,
+    ANSWER_STATE.NOT_ANSWERED,
+    'on entering a section',
+  );
 });

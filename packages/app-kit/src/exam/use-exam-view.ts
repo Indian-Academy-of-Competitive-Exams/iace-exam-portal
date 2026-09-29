@@ -97,6 +97,12 @@ export function useExamView(
   // A forward-only reload lands where the candidate had got to, not on a seat already left.
   const landing = forwardOnly ? Math.max(0, furthestSeat(order, state.answers)) : 0;
   const current = inSection.find((row) => row.questionId === questionId) ?? inSection[landing];
+  const onScreen = current?.questionId;
+  const { open } = state;
+  // A question landed on rather than moved to is open too, or its visit and its seconds are never banked.
+  useEffect(() => {
+    if (onScreen !== undefined) open(onScreen);
+  }, [onScreen, open]);
   const counts = paletteCounts(
     paper.questions.map((row) => row.questionId),
     state.answers,

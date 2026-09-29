@@ -75,7 +75,7 @@ export interface AttemptStateHandle {
   standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
   answer: (questionId: string, next: AnswerIntent) => void;
-  /** Which question is on screen now, so the time on the last one can be banked. */
+  /** Which question is on screen now, so the time on the last one can be banked. The same one again is a no-op. */
   open: (questionId: string | null) => void;
   /** Banks the open question's seconds without moving off it — before a flush that must be whole. */
   bankOpen: () => void;
@@ -362,6 +362,7 @@ export function useAttemptState(
 
   const open = useCallback(
     (questionId: string | null) => {
+      if (questionId === openQuestion.current) return;
       bankOpen();
       openQuestion.current = questionId;
       openedAt.current = Date.now();
