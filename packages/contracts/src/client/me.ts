@@ -1,4 +1,5 @@
 import { noContentSchema, type NoContent, type Paginated } from '../envelope';
+import { type LanguageCode } from '../exams';
 import {
   authSessionResponseSchema,
   deviceSessionSchema,
@@ -34,12 +35,14 @@ import {
   scoreCardSchema,
   solutionReportSchema,
   attemptSaveAckSchema,
+  sharedPaperSchema,
   startedAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
   type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
+  type SharedPaper,
   type StartedAttempt,
   type PerformanceTrend,
   type ScoreCard,
@@ -153,6 +156,13 @@ export function meClient(core: ApiCore) {
     /** The paper as a candidate sees it — it carries no answer. */
     attemptPaper: (attemptId: string): Promise<ExamPaper> =>
       get(ME_ATTEMPT_ROUTES.paper(attemptId), examPaperSchema),
+
+    /** One test's paper, holdable before the sitting exists. Ordered by the seed a start hands back. */
+    testPaper: (testId: string, languages: readonly LanguageCode[] = []): Promise<SharedPaper> =>
+      get(
+        `${ME_ATTEMPT_ROUTES.testPaper(testId)}${languages.length > 0 ? `?languages=${languages.join(',')}` : ''}`,
+        sharedPaperSchema,
+      ),
 
     /** The autosave. Batches what changed since the last one; the server merges and decides. */
     saveAttemptState: (

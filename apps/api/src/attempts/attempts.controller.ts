@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ActorTypes,
@@ -17,6 +18,9 @@ import {
   type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
+  languageCodeSchema,
+  type SharedPaper,
+  type LanguageCode,
   type StartedAttempt,
   type LiveAttemptState,
   type SaveAttemptStateBody,
@@ -31,6 +35,16 @@ import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptStateService } from './attempt-state.service';
 import { SubmitService } from './submit.service';
+
+/** A query string says anything, so only codes the enum knows reach the resolver. */
+function languageCodesIn(raw: string | undefined): LanguageCode[] | undefined {
+  if (raw === undefined) return undefined;
+  const codes = raw
+    .split(',')
+    .map((part) => languageCodeSchema.safeParse(part.trim()))
+    .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+  return codes.length > 0 ? codes : undefined;
+}
 
 /** The live sitting only: starting, autosaving, submitting. Anything read after it ends sits on core. */
 @Controller('me')
@@ -61,7 +75,7 @@ export class AttemptsController {
       return null;
     });
 
-    return { ...attempt, paper };
+    return { ...attempt, paper, serverNow: new Date().toISOString() };
   }
 
   /** What the student reads before the clock starts. Carries no question and no answer. */
@@ -71,6 +85,16 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ExamBrief> {
     return this.papers.brief(user.id, testId);
+  }
+
+  /** The paper before any sitting exists, so a screen can hold it while the clock is still to start. */
+  @Get('tests/:testId/paper')
+  testPaper(
+    @Param('testId') testId: string,
+    @Query('languages') languages: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SharedPaper> {
+    return this.papers.testPaper(user.id, testId, languageCodesIn(languages));
   }
 
   /** The student's OWN paper. Another student's id reads as missing, not as refused. */

@@ -10,6 +10,7 @@ import {
   TIMER_TEMPLATE,
   type LanguageCode,
   type LanguageMode,
+  servedQuestions,
   type TimerTemplate,
 } from '@iace/contracts';
 import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
@@ -35,7 +36,11 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 /** The paper is served on the ATTEMPT's own ownership; reach is the brief's gate, not this one. */
-const reachAll = () => ({ reachableTest: () => Promise.resolve() }) as never;
+const reachAll = () =>
+  ({
+    reachableTest: () => Promise.resolve(),
+    assertCanStart: () => Promise.resolve(),
+  }) as never;
 
 /** No image is resolved in these fixtures; a call would mean the paper started carrying one. */
 const noStorage = () =>
@@ -333,5 +338,70 @@ describe('AttemptPaperService and AttemptReportService — one derived order', (
       paperOrder,
       onPaper.items.map((item) => item.questionId),
     );
+  });
+});
+
+/** What a configuration offers, which is what `languagesFor` narrows a shared paper down from. */
+const offering = (onPaper: Awaited<ReturnType<typeof sitting>>['paper']) =>
+  prisma.baseConfig.update({
+    where: { id: onPaper.catalog.baseConfigId },
+    data: { languages: [LANGUAGE_CODE.EN, LANGUAGE_CODE.HI, LANGUAGE_CODE.TE] },
+  });
+
+describe('AttemptPaperService — the paper held before a sitting exists', () => {
+  /** The whole point of a shared paper: ordering it in the browser must land where the server would. */
+  it('composes into exactly the paper a sitting is served', async () => {
+    const { paper: onPaper, student, attemptId } = await sitting();
+    await prisma.baseConfig.update({
+      where: { id: onPaper.catalog.baseConfigId },
+      // A real configuration declares what it offers; `languagesFor` resolves the shared paper from it.
+      data: {
+        shuffleQuestions: true,
+        shuffleOptions: true,
+        languages: [LANGUAGE_CODE.EN, LANGUAGE_CODE.HI, LANGUAGE_CODE.TE],
+      },
+    });
+    const { shuffleSeed } = await prisma.attempt.findUniqueOrThrow({
+      where: { id: attemptId },
+      select: { shuffleSeed: true },
+    });
+
+    const served = await service.paper(student, attemptId);
+    const shared = await service.testPaper(student, onPaper.testId, [LANGUAGE_CODE.EN]);
+
+    assert.deepEqual(
+      servedQuestions(
+        shared.questions,
+        shuffleSeed,
+        shared.shuffleQuestions,
+        shared.shuffleOptions,
+      ),
+      served.questions,
+    );
+  });
+
+  it('carries no sitting of its own, so nothing about one can leak through it', async () => {
+    const { paper: onPaper, student } = await sitting();
+    await offering(onPaper);
+
+    const shared = await service.testPaper(student, onPaper.testId, [LANGUAGE_CODE.EN]);
+
+    for (const key of ['attemptId', 'endsAt', 'serverNow']) {
+      assert.equal(key in shared, false, `the shared paper carries ${key}`);
+    }
+  });
+
+  /** The bug this prevents: a shared paper answering with every language a question was authored in. */
+  it('narrows to the languages asked for, as the paper of a sitting does', async () => {
+    const { paper: onPaper, student } = await sitting({ languageMode: LANGUAGE_MODE.SINGLE });
+    await offering(onPaper);
+
+    const shared = await service.testPaper(student, onPaper.testId, [LANGUAGE_CODE.HI]);
+
+    assert.deepEqual(shared.languages, [LANGUAGE_CODE.HI]);
+    // Content is keyed by the lowercase language, so the one key is the one code asked for.
+    assert.deepEqual(Object.keys(shared.questions[0]?.content ?? {}), [
+      LANGUAGE_CODE.HI.toLowerCase(),
+    ]);
   });
 });

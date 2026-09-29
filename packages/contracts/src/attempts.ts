@@ -431,6 +431,8 @@ export const ME_ATTEMPT_ROUTES = {
   brief: (testId: string) => `/me/tests/${testId}/brief`,
   start: (testId: string) => `/me/tests/${testId}/attempt`,
   paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
+  /** The paper before any sitting exists, so it can be held before the clock starts. */
+  testPaper: (testId: string) => `/me/tests/${testId}/paper`,
   state: (attemptId: string) => `/me/attempts/${attemptId}/state`,
   submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
   scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
@@ -506,9 +508,21 @@ export const examPaperSchema = z.object({
 });
 export type ExamPaper = z.infer<typeof examPaperSchema>;
 
+/** One test's paper, shared by everyone sitting it: paper order, no shuffle, no sitting of its own. */
+export const sharedPaperSchema = examPaperSchema
+  .omit({ attemptId: true, endsAt: true, serverNow: true })
+  .extend({
+    /** The seed decides the order, so the flags that say whether to apply it travel with the paper. */
+    shuffleQuestions: z.boolean(),
+    shuffleOptions: z.boolean(),
+  });
+export type SharedPaper = z.infer<typeof sharedPaperSchema>;
+
 /** The sitting and its paper in one answer; null paper means build it failed, so the screen asks. */
 export const startedAttemptSchema = liveAttemptSchema.extend({
   paper: examPaperSchema.nullable(),
+  /** The server's clock as it answered — the anchor a HELD paper cannot carry, being older than it. */
+  serverNow: z.string(),
 });
 export type StartedAttempt = z.infer<typeof startedAttemptSchema>;
 

@@ -4,22 +4,22 @@ import {
   AppException,
   ErrorCodes,
   scopedSections,
+  servedQuestions,
   scopedDurationSec,
   scopedQuestionCount,
   type ExamOption,
   type ExamBrief,
   type ExamPaper,
+  type SharedPaper,
   type ExamQuestion,
   type LanguageCode,
   type LocalizedContent,
   type QuestionOption,
   type TestScopeRef,
-  displayOrder,
-  seededRandom,
-  shuffle,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
+import { languagesFor } from './attempt-rules';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
@@ -42,6 +42,7 @@ const PAPER_SELECT = {
         select: {
           defaultTestUi: true,
           languageMode: true,
+          languages: true,
           timerTemplate: true,
           navigation: true,
           calculatorEnabled: true,
@@ -64,7 +65,12 @@ const PAPER_SELECT = {
   },
 } as const satisfies Prisma.AttemptSelect;
 
+/** PAPER_SELECT's test half, reachable without a sitting — the shared paper has no attempt to read. */
+const TEST_PAPER_SELECT = PAPER_SELECT.test.select;
+
 type ServedQuestion = ServedPaperRow & { order: number };
+
+type PaperTest = Prisma.TestGetPayload<{ select: typeof TEST_PAPER_SELECT }>;
 
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
 @Injectable()
@@ -109,6 +115,33 @@ export class AttemptPaperService {
     };
   }
 
+  /** One test's paper, in PAPER order and unshuffled, held before any sitting of it exists. */
+  async testPaper(
+    studentId: string,
+    testId: string,
+    picked: readonly LanguageCode[] | undefined,
+  ): Promise<SharedPaper> {
+    // The same gate a start passes, so holding the paper and beginning are open at the same instant.
+    await this.access.assertCanStart(studentId, testId);
+
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: TEST_PAPER_SELECT,
+    });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+
+    const config = test.baseConfig;
+    return {
+      ...(await this.shapeOf(
+        test,
+        testId,
+        languagesFor(config.languageMode, config.languages, picked),
+      )),
+      shuffleQuestions: config.shuffleQuestions,
+      shuffleOptions: config.shuffleOptions,
+    };
+  }
+
   async paper(studentId: string, attemptId: string): Promise<ExamPaper> {
     // The owner is part of the QUERY, so serving someone else's paper is not a check to forget.
     const attempt = await this.prisma.attempt.findFirst({
@@ -119,30 +152,45 @@ export class AttemptPaperService {
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, 'No such sitting');
 
     const config = attempt.test.baseConfig;
-    const languages = attempt.languages;
-    const random = seededRandom(attempt.shuffleSeed);
-
-    const served = displayOrder(
-      await this.papers.servedOf(attempt.testId),
-      attempt.shuffleSeed,
-      config.shuffleQuestions,
-    );
+    const shared = await this.shapeOf(attempt.test, attempt.testId, attempt.languages);
 
     return {
+      ...shared,
       attemptId: attempt.id,
       endsAt: attempt.endsAt.toISOString(),
       serverNow: new Date().toISOString(),
-      languages,
+      questions: servedQuestions(
+        shared.questions,
+        attempt.shuffleSeed,
+        config.shuffleQuestions,
+        config.shuffleOptions,
+      ),
+    };
+  }
+
+  /** Everything a paper is before a sitting narrows it: sections, questions, and how it is drawn. */
+  private async shapeOf(
+    test: PaperTest,
+    testId: string,
+    languages: readonly LanguageCode[],
+  ): Promise<SharedPaper> {
+    const config = test.baseConfig;
+    const rows = await this.papers.servedOf(testId);
+
+    return {
+      languages: [...languages],
       languageMode: config.languageMode,
-      examTemplate: attempt.test.examTemplate,
+      examTemplate: test.examTemplate,
       testUi: config.defaultTestUi,
       timerTemplate: config.timerTemplate,
       navigation: config.navigation,
       calculatorEnabled: config.calculatorEnabled,
+      shuffleQuestions: config.shuffleQuestions,
+      shuffleOptions: config.shuffleOptions,
       sections: scopedSections(
         config.sections,
-        attempt.test.scope,
-        (attempt.test.scopeRef as TestScopeRef | null) ?? null,
+        test.scope,
+        (test.scopeRef as TestScopeRef | null) ?? null,
       ).map((section) => ({
         id: section.id,
         name: section.name,
@@ -151,9 +199,7 @@ export class AttemptPaperService {
         durationSec: section.durationSec,
       })),
       questions: this.withImages(
-        served.map((row, index) =>
-          toExamQuestion({ ...row, order: index + 1 }, languages, config.shuffleOptions, random),
-        ),
+        rows.map((row, index) => toExamQuestion({ ...row, order: index + 1 }, languages)),
       ),
     };
   }
@@ -165,12 +211,7 @@ export class AttemptPaperService {
   }
 }
 
-function toExamQuestion(
-  row: ServedQuestion,
-  languages: readonly LanguageCode[],
-  shuffleOptions: boolean,
-  random: () => number,
-): ExamQuestion {
+function toExamQuestion(row: ServedQuestion, languages: readonly LanguageCode[]): ExamQuestion {
   const options = optionsIn(row.questionVersion.options);
   const visible = options.map((option) => toExamOption(option, languages));
 
@@ -187,7 +228,7 @@ function toExamQuestion(
       languages,
       (held) => ({ stem: held.stem }),
     ),
-    options: shuffleOptions ? shuffle(visible, random) : visible,
+    options: visible,
   };
 }
 
