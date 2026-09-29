@@ -85,7 +85,7 @@ export function Header({
 
 /** One clock a sitting: composite counts the paper, sectional counts the section it stands in. */
 function Timer({ view, config }: Readonly<ExamSlotProps>) {
-  if (view.sectional && view.sectionSec) {
+  if (view.sectionSec !== null) {
     return (
       <SectionTimer
         key={view.sectionId}

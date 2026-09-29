@@ -94,12 +94,10 @@ function OpeningBar() {
 
 /** One clock a sitting: composite counts the paper, sectional counts the section it stands in. */
 function SittingClock({ view }: Readonly<{ view: ExamView }>) {
-  const sectionSec = view.sectional ? view.sectionSec : null;
-
-  return sectionSec ? (
-    <SectionTimer key={view.sectionId} allowedSec={sectionSec} onExpire={view.endSection} />
-  ) : (
+  return view.sectionSec === null ? (
     <ExamTimer clock={view.clock} onExpire={view.outOfTime} />
+  ) : (
+    <SectionTimer key={view.sectionId} allowedSec={view.sectionSec} onExpire={view.endSection} />
   );
 }
 

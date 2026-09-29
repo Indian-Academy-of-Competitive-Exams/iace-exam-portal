@@ -92,11 +92,17 @@ function anchored(allowedSec: number, run: (harness: ReturnType<typeof mountAnch
 }
 
 function mountAnchored(allowedSec: number) {
-  const hook = renderHook(({ allowedSec }) => useAnchoredCountdown(allowedSec, () => {}), {
-    initialProps: { allowedSec },
-  });
+  const expiries = { count: 0 };
+  const hook = renderHook(
+    ({ allowedSec }) =>
+      useAnchoredCountdown(allowedSec, () => {
+        expiries.count += 1;
+      }),
+    { initialProps: { allowedSec } },
+  );
 
   return {
+    expiries,
     result: hook.result,
     unmount: hook.unmount,
     setAllowedSec: (next: number) => hook.rerender({ allowedSec: next }),
@@ -126,6 +132,18 @@ test('a corrected allowance does not have the same elapsed time taken off it twi
       1770,
       'only the next five seconds come off, not the first 25 again',
     );
+  });
+});
+
+/** The failure this prevents: a reload into a section whose time is spent leaving it open until the paper ends. */
+test('an allowance the server corrects to zero closes the section once', () => {
+  anchored(1800, ({ expiries, setAllowedSec, tick }) => {
+    // Before the seed lands the section reads as unopened; its stamp then says the time is gone.
+    setAllowedSec(0);
+    tick(1_000);
+    tick(1_000);
+
+    assert.equal(expiries.count, 1, 'a spent section expires on the next tick, and only once');
   });
 });
 
