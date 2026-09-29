@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
 import { type StudentsService } from '../students';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import {
   changedFields,
   examDeletionBlocker,
@@ -46,6 +47,7 @@ export class ExamsService {
     )
     private readonly students: StudentsService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   async list(query: ExamListQuery): Promise<Paginated<Exam>> {
@@ -113,8 +115,20 @@ export class ExamsService {
     });
 
     this.auditContext.setPatchDiff(fieldDiff(exam, { ...exam, ...changes }, AUDITED_EXAM_FIELDS));
+    // The course decides who a STANDARD series under any of its stages reaches, and the code is on every card.
+    if (changes.course !== undefined || changes.code !== undefined) await this.announceStages(id);
 
     return toExam(updated);
+  }
+
+  private async announceStages(examId: string): Promise<void> {
+    const stages = await this.prisma.examStage.findMany({
+      where: { examId },
+      select: { id: true },
+    });
+    for (const { id } of stages) {
+      this.events.emit(DOMAIN_EVENTS.EXAM_STAGE_CHANGED, { examStageId: id });
+    }
   }
 
   async remove(id: string): Promise<void> {

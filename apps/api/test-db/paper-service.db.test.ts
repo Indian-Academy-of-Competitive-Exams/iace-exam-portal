@@ -127,7 +127,7 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
     over.client ?? prisma,
     new BaseConfigsService(
       prisma,
-      new ExamStagesService(prisma, audit),
+      new ExamStagesService(prisma, audit, new FakeEventBus().asService()),
       audit,
       redis,
       new FakeEventBus().asService(),

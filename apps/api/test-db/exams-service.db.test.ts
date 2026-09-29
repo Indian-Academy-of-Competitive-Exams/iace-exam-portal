@@ -11,6 +11,7 @@ import {
   type ExamListQueryInput,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
+import { DOMAIN_EVENTS } from '../src/common/events';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { ExamsService } from '../src/configs/exams.service';
 import { StudentsService } from '../src/students';
@@ -28,6 +29,7 @@ const idFor = (label: string): string => {
 };
 
 const prisma = testPrisma();
+const events = new FakeEventBus();
 
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
@@ -70,7 +72,7 @@ async function serviceWith(exams: ExamRow[] = [{}]) {
     new FakeEventBus().asService(),
     new NotificationsService(prisma),
   );
-  return new ExamsService(prisma, students, new AuditContext());
+  return new ExamsService(prisma, students, new AuditContext(), events.asService());
 }
 
 const listQuery = (over: Partial<ExamListQueryInput> = {}): ExamListQuery =>
@@ -222,6 +224,24 @@ describe('ExamsService — updating', () => {
     await assert.rejects(
       () => service.update(randomUUID(), { isActive: false }),
       refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+
+  /** The failure this prevents: a course change that moves who reaches a series, seen by nobody for 15 minutes. */
+  it('tells the catalog about every stage under a course or code change, and nothing else', async () => {
+    const service = await serviceWith([{ stages: 2 }]);
+    const stages = await prisma.examStage.findMany({ where: { examId: idFor('exam_1') } });
+    events.forget();
+
+    await service.update(idFor('exam_1'), { name: 'SSC Combined Graduate Level' });
+    await service.update(idFor('exam_1'), { course: EXAM_COURSE.RRB });
+
+    assert.deepEqual(
+      events
+        .of(DOMAIN_EVENTS.EXAM_STAGE_CHANGED)
+        .map((payload) => payload.examStageId)
+        .sort(),
+      stages.map((stage) => stage.id).sort(),
     );
   });
 });

@@ -4,12 +4,14 @@ export const DOMAIN_EVENTS = {
   /** A first evaluation landed. DURABLE — the scorer writes it to `OutboxEvent`, never to the bus. */
   /** A student's PIN changed; auth revoked the sessions before emitting. ANNOUNCED — no handler. */
   STUDENT_PIN_RESET: 'student.pin_reset',
-  /** One student's access moved. WIRED — see the access module's cache listener. */
+  /** One student's access moved. ANNOUNCED — the catalog reads a student's facts live, so nothing has to react. */
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
   /** A student was switched off, not merely re-granted or blocked. WIRED — auth revokes their sessions so the switch-off holds now, not at token expiry. */
   STUDENT_DEACTIVATED: 'student.deactivated',
-  /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
+  /** A series or a test in it moved. WIRED — access bumps the counter every process's held series is built under. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
+  /** What the catalog shows of a stage moved: its name, its exam's code or course, or a blueprint on it. WIRED — as above. */
+  EXAM_STAGE_CHANGED: 'exam_stage.changed',
   /** A student finished signing up and has an account for the first time. WIRED — see students. */
   STUDENT_SIGNED_UP: 'student.signed_up',
   /** An admin was switched off. WIRED — auth revokes their sessions so the flag takes effect now, not at token expiry. */
@@ -47,6 +49,10 @@ export interface AccessCatalogChangedEvent {
   testSeriesId: string;
 }
 
+export interface ExamStageChangedEvent {
+  examStageId: string;
+}
+
 export interface StudentSignedUpEvent {
   studentId: string;
 }
@@ -61,6 +67,7 @@ export interface DomainEventPayloads {
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.STUDENT_DEACTIVATED]: StudentDeactivatedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
+  [DOMAIN_EVENTS.EXAM_STAGE_CHANGED]: ExamStageChangedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;
   [DOMAIN_EVENTS.ADMIN_DEACTIVATED]: AdminDeactivatedEvent;
 }

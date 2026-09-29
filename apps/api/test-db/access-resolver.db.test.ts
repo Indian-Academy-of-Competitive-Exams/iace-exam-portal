@@ -552,16 +552,18 @@ describe('AccessResolverService — the shared copy', () => {
 });
 
 describe('AccessCacheListener', () => {
-  it('bumps every process on access.catalog_changed', async () => {
-    const { student, seriesId } = await reachable();
+  it('bumps every process on access.catalog_changed and on exam_stage.changed', async () => {
+    const { at, student, seriesId } = await reachable();
     const { calls, resolver } = watched();
     const listener = new AccessCacheListener(resolver);
     await resolver.catalog(student, NOW);
 
     await listener.onCatalogChanged({ testSeriesId: seriesId });
     await resolver.catalog(student, NOW);
+    await listener.onExamStageChanged({ examStageId: at.catalog.examStageId });
+    await resolver.catalog(student, NOW);
 
-    assert.equal(builds(calls), 2);
+    assert.equal(builds(calls), 3);
   });
 });
 

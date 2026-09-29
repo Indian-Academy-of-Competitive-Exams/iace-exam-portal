@@ -12,5 +12,6 @@ describe('AccessCacheListener', () => {
     const listener = new AccessCacheListener(failing);
 
     await assert.doesNotReject(() => listener.onCatalogChanged({ testSeriesId: 'srs_1' }));
+    await assert.doesNotReject(() => listener.onExamStageChanged({ examStageId: 'stg_1' }));
   });
 });

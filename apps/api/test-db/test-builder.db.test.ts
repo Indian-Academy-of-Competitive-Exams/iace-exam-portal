@@ -61,7 +61,7 @@ async function builder() {
   const redis = new FakeRedis().asService();
   const configs = new BaseConfigsService(
     prisma,
-    new ExamStagesService(prisma, audit),
+    new ExamStagesService(prisma, audit, events.asService()),
     audit,
     redis,
     events.asService(),

@@ -51,7 +51,7 @@ async function build(stageActive = true) {
     programs,
     series: new TestSeriesService(
       prisma,
-      new ExamStagesService(prisma, auditContext),
+      new ExamStagesService(prisma, auditContext, events.asService()),
       programs,
       new AccessResolverService(prisma, new FakeRedis().asService()),
       auditContext,

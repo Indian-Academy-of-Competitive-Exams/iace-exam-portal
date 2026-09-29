@@ -31,7 +31,7 @@ const redis = new FakeRedis();
 const events = new FakeEventBus();
 const service = new BaseConfigsService(
   prisma,
-  new ExamStagesService(prisma, new AuditContext()),
+  new ExamStagesService(prisma, new AuditContext(), events.asService()),
   new AuditContext(),
   redis.asService(),
   events.asService(),
@@ -445,16 +445,15 @@ describe('BaseConfigsService — a config a test is built on', () => {
   });
 
   /** The failure this prevents: an offered test's brief still showing a duration its config no longer has. */
-  it('tells the catalog about an edit, once for each series carrying one of its tests', async () => {
+  it('tells the catalog about an edit to a config a test is built on', async () => {
     const { catalog } = await makePaper(prisma, { questions: [] });
     events.forget();
 
     await service.update(catalog.baseConfigId, { durationSec: 5400 });
 
-    assert.deepEqual(
-      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
-      [catalog.testSeriesId],
-    );
+    assert.deepEqual(events.of(DOMAIN_EVENTS.EXAM_STAGE_CHANGED), [
+      { examStageId: catalog.examStageId },
+    ]);
   });
 });
 

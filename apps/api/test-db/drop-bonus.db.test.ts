@@ -56,7 +56,7 @@ async function bench({ offered = true, sat = true } = {}) {
     }
   }
   const audit = new AuditContext();
-  const stages = new ExamStagesService(prisma, audit);
+  const stages = new ExamStagesService(prisma, audit, new FakeEventBus().asService());
   const queue = new FakeQueue();
   const service = new PaperService(
     prisma,

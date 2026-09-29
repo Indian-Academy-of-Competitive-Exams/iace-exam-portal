@@ -42,7 +42,7 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
       new FakeEventBus().asService(),
       new NotificationsService(prisma),
     );
-    const exams = new ExamsService(prisma, students, audit);
+    const exams = new ExamsService(prisma, students, audit, new FakeEventBus().asService());
 
     const changed = await diffOf(audit, () => exams.update(examId, { name: 'SSC CGL TIER 1' }));
 

@@ -16,6 +16,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import {
   CATALOG_ONLY_STAGE_MESSAGE,
   changedFields,
@@ -49,6 +50,7 @@ export class ExamStagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   async list(query: ExamStageListQuery): Promise<Paginated<ExamStage>> {
@@ -121,6 +123,10 @@ export class ExamStagesService {
     this.auditContext.setPatchDiff(
       fieldDiff(stage, { ...stage, ...changes }, AUDITED_STAGE_FIELDS),
     );
+    // A student's catalog names every series by its stage.
+    if (changes.name !== undefined) {
+      this.events.emit(DOMAIN_EVENTS.EXAM_STAGE_CHANGED, { examStageId: id });
+    }
 
     return toStage(updated);
   }

@@ -14,10 +14,13 @@ import {
   type StageDisposition,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
+import { DOMAIN_EVENTS } from '../src/common/events';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { FakeEventBus } from '../test/support/fakes';
 import { resetDatabase, testPrisma, uid } from './support/database';
 
 const prisma = testPrisma();
+const events = new FakeEventBus();
 
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
@@ -64,7 +67,7 @@ async function serviceWith(stages: StageRow[] = [{}], exams: (typeof SSC_CGL)[] 
     });
     await hang(row.id, hanging);
   }
-  return new ExamStagesService(prisma, new AuditContext());
+  return new ExamStagesService(prisma, new AuditContext(), events.asService());
 }
 
 /** Base configs, series and tests on the stage — each test on the first config and in the first series. */
@@ -275,6 +278,19 @@ describe('ExamStagesService — updating', () => {
       () => service.update(randomUUID(), { isActive: false }),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
+  });
+
+  /** The failure this prevents: a renamed stage still labelling every series under it in a student's catalog. */
+  it('tells the catalog about a rename, and about nothing the catalog does not show', async () => {
+    const service = await serviceWith();
+    events.forget();
+
+    await service.update(idFor('stage_1'), { order: 3, isActive: false });
+    await service.update(idFor('stage_1'), { name: 'Prelims' });
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.EXAM_STAGE_CHANGED), [
+      { examStageId: idFor('stage_1') },
+    ]);
   });
 });
 

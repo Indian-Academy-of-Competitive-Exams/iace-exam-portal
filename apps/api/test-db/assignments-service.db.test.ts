@@ -56,7 +56,7 @@ function build() {
   const redis = new FakeRedis().asService();
   const configs = new BaseConfigsService(
     prisma,
-    new ExamStagesService(prisma, audit),
+    new ExamStagesService(prisma, audit, new FakeEventBus().asService()),
     audit,
     redis,
     new FakeEventBus().asService(),
