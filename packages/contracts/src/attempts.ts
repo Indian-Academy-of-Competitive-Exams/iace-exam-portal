@@ -506,6 +506,12 @@ export const examPaperSchema = z.object({
 });
 export type ExamPaper = z.infer<typeof examPaperSchema>;
 
+/** The sitting and its paper in one answer; null paper means build it failed, so the screen asks. */
+export const startedAttemptSchema = liveAttemptSchema.extend({
+  paper: examPaperSchema.nullable(),
+});
+export type StartedAttempt = z.infer<typeof startedAttemptSchema>;
+
 // ============================================================================
 // The Score Card. Marks, standing and the student's OWN answers — nothing here
 // says what the right answer was, which is why a missed question is safe to

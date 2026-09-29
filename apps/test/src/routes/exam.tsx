@@ -52,10 +52,15 @@ export function ExamPage() {
   });
 
   const attemptId = attempt.data?.id ?? '';
+  // Sent with the start, so the clock does not run while a second request queues for the paper.
+  const served = attempt.data?.paper ?? null;
   const paper = useQuery({
     queryKey: attemptPaperQueryKey(attemptId),
     // Stamped where the payload LANDS, never in a render: that instant is the clock's anchor.
-    queryFn: async () => ({ paper: await api.me.attemptPaper(attemptId), arrivedAt: Date.now() }),
+    queryFn: async () => ({
+      paper: served ?? (await api.me.attemptPaper(attemptId)),
+      arrivedAt: Date.now(),
+    }),
     enabled: attemptId !== '',
     staleTime: Infinity,
   });

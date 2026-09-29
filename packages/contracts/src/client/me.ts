@@ -34,13 +34,13 @@ import {
   scoreCardSchema,
   solutionReportSchema,
   attemptSaveAckSchema,
-  liveAttemptSchema,
+  startedAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
   type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
-  type LiveAttempt,
+  type StartedAttempt,
   type PerformanceTrend,
   type ScoreCard,
   type SolutionReport,
@@ -147,8 +147,8 @@ export function meClient(core: ApiCore) {
       get(ME_ATTEMPT_ROUTES.brief(testId), examBriefSchema),
 
     /** Idempotent: a second start while one is running resumes it, clock and all. */
-    startAttempt: (testId: string, input: StartAttemptInput = {}): Promise<LiveAttempt> =>
-      write('POST', ME_ATTEMPT_ROUTES.start(testId), liveAttemptSchema, input),
+    startAttempt: (testId: string, input: StartAttemptInput = {}): Promise<StartedAttempt> =>
+      write('POST', ME_ATTEMPT_ROUTES.start(testId), startedAttemptSchema, input),
 
     /** The paper as a candidate sees it — it carries no answer. */
     attemptPaper: (attemptId: string): Promise<ExamPaper> =>

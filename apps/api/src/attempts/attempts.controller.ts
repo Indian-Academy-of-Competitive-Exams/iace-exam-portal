@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import {
   ActorTypes,
   saveAttemptStateSchema,
@@ -7,7 +17,7 @@ import {
   type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
-  type LiveAttempt,
+  type StartedAttempt,
   type LiveAttemptState,
   type SaveAttemptStateBody,
   type StartAttemptBody,
@@ -26,6 +36,8 @@ import { SubmitService } from './submit.service';
 @Controller('me')
 @Actors(ActorTypes.STUDENT)
 export class AttemptsController {
+  private readonly logger = new Logger(AttemptsController.name);
+
   constructor(
     private readonly attempts: AttemptsService,
     private readonly papers: AttemptPaperService,
@@ -37,12 +49,19 @@ export class AttemptsController {
   @SittingRateLimit()
   @Post('tests/:testId/attempt')
   @HttpCode(HttpStatus.OK)
-  start(
+  async start(
     @Param('testId') testId: string,
     @Body(new ZodBody(startAttemptSchema)) body: StartAttemptBody,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<LiveAttempt> {
-    return this.attempts.start(user.id, testId, body);
+  ): Promise<StartedAttempt> {
+    const attempt = await this.attempts.start(user.id, testId, body);
+    // The clock is already running, so a paper that will not build is the screen's to ask for again.
+    const paper = await this.papers.paper(user.id, attempt.id).catch((error: unknown) => {
+      this.logger.error(`Paper for sitting ${attempt.id} did not build with its start`, error);
+      return null;
+    });
+
+    return { ...attempt, paper };
   }
 
   /** What the student reads before the clock starts. Carries no question and no answer. */
