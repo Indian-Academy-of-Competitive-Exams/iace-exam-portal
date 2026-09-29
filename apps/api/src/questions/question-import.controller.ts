@@ -122,7 +122,8 @@ export class QuestionImportController {
   @HttpCode(HttpStatus.OK)
   commit(
     @Body(new ZodBody(questionImportCommitSchema)) body: QuestionImportCommitBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionImportResult> {
-    return this.imports.commit(body.importLogId);
+    return this.imports.commit(body.importLogId, { actorId: user.id });
   }
 }

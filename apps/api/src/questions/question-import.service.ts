@@ -112,7 +112,7 @@ export class QuestionImportService {
     );
   }
 
-  async commit(importLogId: string, into: ImportTarget = {}): Promise<QuestionImportResult> {
+  async commit(importLogId: string, into: ImportTarget): Promise<QuestionImportResult> {
     const { log, file } = await this.openRun(importLogId, into.actorId);
     const planning = await this.plan(file, await this.overlayOf(log.id));
     const creatable = planning.rows.filter(
@@ -235,13 +235,13 @@ export class QuestionImportService {
     return withoutDrafts(await this.planTable(table, await this.overlayOf(log.id)), log.id);
   }
 
-  /** A previewed, uncommitted run; with an actor, only the one who previewed it may touch it. */
-  private async openRun(importLogId: string, actorId: string | undefined) {
+  /** A previewed, uncommitted run, and only for the admin who previewed it — a super admin included. */
+  private async openRun(importLogId: string, actorId: string) {
     const log = await this.prisma.importLog.findUnique({ where: { id: importLogId } });
     if (log?.feature !== AUDIT_FEATURE.QUESTION || !log.fileS3Key) {
       throw new AppException(ErrorCodes.NOT_FOUND, UPLOAD_GONE);
     }
-    if (actorId !== undefined && log.actorId !== actorId) {
+    if (log.actorId !== actorId) {
       throw new AppException(ErrorCodes.NOT_FOUND, UPLOAD_GONE);
     }
     if (log.status === IMPORT_LOG_STATUS.COMMITTED) {
@@ -362,6 +362,6 @@ function fileErrorsOf(planning: QuestionImportPlanning): Prisma.InputJsonValue |
 /** Where an imported sheet lands: the bank by default, or one section's own authoring. */
 export interface ImportTarget {
   assignmentId?: string;
-  /** Whose upload it has to be. Absent on the bank's importer, which nobody scopes. */
-  actorId?: string;
+  /** Whose upload it has to be: a run is committed by the admin who previewed it, nobody else. */
+  actorId: string;
 }

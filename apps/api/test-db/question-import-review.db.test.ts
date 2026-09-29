@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
+  ActorTypes,
   AppException,
   ErrorCodes,
   QUESTION_IMPORT_COLUMNS,
@@ -10,6 +11,8 @@ import {
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
+import type { AuthenticatedUser } from '../src/common/security';
+import { QuestionImportController } from '../src/questions/question-import.controller';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { FakeStorage } from '../test/support/fakes';
 import { BANK, makeQuestionBank, resetDatabase, testPrisma } from './support/database';
@@ -89,7 +92,7 @@ describe('QuestionImportService — correcting a previewed row', () => {
     assert.equal(plan.rows.find((row) => row.line === 3)?.action, 'create');
     assert.equal(plan.rows.find((row) => row.line === 3)?.edited, true);
 
-    const result = await imports.commit(importLogId);
+    const result = await imports.commit(importLogId, { actorId: ADMIN });
     assert.equal(result.created, 2);
     const written = await prisma.question.findFirstOrThrow({
       where: {
@@ -129,11 +132,34 @@ describe('QuestionImportService — correcting a previewed row', () => {
     await assert.rejects(imports.leaveOutRow(importLogId, 3, true, OTHER_ADMIN), notFound);
   });
 
+  /** The failure this prevents: an admin, a super admin included, committing a run somebody else previewed. */
+  it('commits a bank run for the admin who previewed it and nobody else', async () => {
+    const { imports, importLogId } = await previewed();
+    const route = new QuestionImportController(imports);
+    const admin = (id: string, isSuperAdmin: boolean): AuthenticatedUser => ({
+      id,
+      actor: ActorTypes.ADMIN,
+      sessionId: randomUUID(),
+      isSuperAdmin,
+      isActive: true,
+      permissions: {},
+    });
+
+    await assert.rejects(
+      route.commit({ importLogId }, admin(OTHER_ADMIN, true)),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+    assert.equal(await prisma.question.count(), 0);
+
+    const result = await route.commit({ importLogId }, admin(ADMIN, false));
+    assert.equal(result.created, 1);
+  });
+
   it('refuses a correction once the run has been imported', async () => {
     const { imports, importLogId } = await previewed();
     const [, skipped] = await imports.drafts(importLogId, ADMIN);
     assert.ok(skipped);
-    await imports.commit(importLogId);
+    await imports.commit(importLogId, { actorId: ADMIN });
 
     await assert.rejects(
       imports.saveRow(importLogId, 3, fixed(skipped.draft), ADMIN),
@@ -161,7 +187,7 @@ describe('QuestionImportService — leaving a previewed row out', () => {
     assert.equal(plan.rows.find((row) => row.line === 2)?.action, 'left_out');
     assert.equal(plan.summary.leftOut, 1);
 
-    const result = await imports.commit(importLogId);
+    const result = await imports.commit(importLogId, { actorId: ADMIN });
     assert.equal(result.created, 0);
     assert.equal(await prisma.question.count(), 0);
   });

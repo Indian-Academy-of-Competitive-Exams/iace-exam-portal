@@ -515,8 +515,9 @@ letter-based answer key are why real uploads were rejected wholesale.
   on the authoring page, one card per row; a saved correction is held against the run and its line (`ImportRowEdit`),
   never in the bank, and every row is judged again at once, so a fixed row turns to Create and a
   correction that now repeats another becomes a duplicate. Import lays the corrections over the
-  re-read file and judges it all once more. Only the admin who previewed a run may correct it, and
-  not once it is imported. Sheet pictures are stored at preview so the page can draw them.
+  re-read file and judges it all once more. Only the admin who previewed a run may correct or
+  import it, and not once it is imported. Sheet pictures are stored at preview so the page can
+  draw them.
 - **A row can be left out, and brought back.** Leaving one out is held on the same `ImportRowEdit`,
   so a corrected row brought back keeps its correction. A row left out writes nothing and claims
   neither its stem nor its code, so a later copy of it in the same file imports as Create.

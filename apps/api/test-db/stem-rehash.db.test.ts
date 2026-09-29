@@ -44,7 +44,7 @@ async function imported(...stems: string[]) {
     new AuditService(prisma, new FakeStorage() as never),
   );
   const plan = await service.preview(sheet(...stems), ADMIN);
-  return service.commit(plan.importLogId);
+  return service.commit(plan.importLogId, { actorId: ADMIN });
 }
 
 /** What a row written under the old fold looks like: a hash it no longer matches, at version 1. */

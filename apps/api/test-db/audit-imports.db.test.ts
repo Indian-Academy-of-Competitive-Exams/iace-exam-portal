@@ -346,7 +346,7 @@ async function importQuestions(...stems: string[]) {
   );
   await service.preview(questionSheet(...stems), ADMIN);
   const [log] = await importLogs();
-  const result = await service.commit(log?.id ?? '');
+  const result = await service.commit(log?.id ?? '', { actorId: ADMIN });
   return { logId: log?.id ?? '', result };
 }
 
@@ -363,7 +363,7 @@ describe('QuestionImportService — recognising what the bank already holds', ()
     const run = async (...stems: string[]) => {
       await service.preview(questionSheet(...stems), ADMIN);
       const logs = await importLogs();
-      return service.commit(logs[logs.length - 1]?.id ?? '');
+      return service.commit(logs[logs.length - 1]?.id ?? '', { actorId: ADMIN });
     };
     assert.equal((await run(stem)).created, 1);
 
@@ -456,7 +456,7 @@ describe('QuestionImportService — pictures placed over the sheet', () => {
     assert.equal(plan.summary.willCreate, 1);
     assert.equal(picturesIn(storage).length, 1, 'the preview stores the picture');
 
-    assert.equal((await service.commit(plan.importLogId)).created, 1);
+    assert.equal((await service.commit(plan.importLogId, { actorId: ADMIN })).created, 1);
     const [stored] = picturesIn(storage);
     const version = await prisma.questionVersion.findFirstOrThrow();
     assert.ok(stored && JSON.stringify(version.options).includes(stored));
@@ -472,7 +472,7 @@ describe('QuestionImportService — pictures placed over the sheet', () => {
     );
     const run = async () => {
       const plan = await service.preview(await pictureSheet(), ADMIN);
-      return service.commit(plan.importLogId);
+      return service.commit(plan.importLogId, { actorId: ADMIN });
     };
     assert.equal((await run()).created, 1);
 
