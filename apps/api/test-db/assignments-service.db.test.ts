@@ -433,6 +433,10 @@ describe('AssignmentsService — a role its section took with it', () => {
       () => assignments.remove(standing.id),
       (error: unknown) => AppException.is(error) && /left the test/.test(error.message),
     );
+    await assert.rejects(
+      () => assignments.finalize(standing.id, third.id, false),
+      (error: unknown) => AppException.is(error) && /left the test/.test(error.message),
+    );
   });
 });
 

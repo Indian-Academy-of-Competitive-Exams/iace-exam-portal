@@ -357,9 +357,14 @@ function contextOf(
     };
   }
   if (work.seatReplaced) {
+    const dropped = work.history.some(
+      (row) => row.id === work.seatAssignmentId && row.sectionDropped,
+    );
     return {
       variant: 'info',
-      text: 'This section has passed to somebody else. You can still read it.',
+      text: dropped
+        ? 'This section left the test. You can still read it.'
+        : 'This section has passed to somebody else. You can still read it.',
     };
   }
   const reader = work.reader;

@@ -50,6 +50,7 @@ const CHOOSE_WITH_DONE_MESSAGE =
 const OFFERED_MESSAGE = 'This test has been offered, so nobody new can be given its sections.';
 const PASSED_ON_MESSAGE =
   'This section has passed to somebody else, so it is no longer yours to release.';
+const LEFT_TEST_MESSAGE = 'This section left the test, so there is nothing of it to release.';
 const NOT_HANDED_MESSAGE = 'This section has not reached you yet.';
 const ALREADY_HOLDS_MESSAGE = 'This admin already holds that role on this section.';
 const HAS_WORKED_MESSAGE =
@@ -511,7 +512,12 @@ export class AssignmentsService {
     if (row.role === ASSIGNMENT_ROLES.TYPIST) {
       throw new AppException(ErrorCodes.CONFLICT, CHOOSE_WITH_DONE_MESSAGE);
     }
-    if (row.replacedAt) throw new AppException(ErrorCodes.CONFLICT, PASSED_ON_MESSAGE);
+    if (row.replacedAt) {
+      throw new AppException(
+        ErrorCodes.CONFLICT,
+        inScope(row) ? PASSED_ON_MESSAGE : LEFT_TEST_MESSAGE,
+      );
+    }
     if (!row.handedAt) throw notWhole(NOT_HANDED_MESSAGE);
     await this.assertSectionWhole(row);
     await this.assertEveryQuestionChecked(row);
