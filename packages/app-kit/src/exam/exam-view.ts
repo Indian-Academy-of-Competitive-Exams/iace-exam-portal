@@ -79,6 +79,10 @@ export interface ExamView {
 
   isSaving: boolean;
   hasUnsaved: boolean;
+  /** Whether anything done has not reached the server yet, read when asked — what a leave prompt checks. */
+  hasUnsent: () => boolean;
+  /** The page is going: sends what is unsent on a request that outlives it. */
+  leave: () => void;
   /** This tab no longer holds the sitting: it was opened in another tab or on another device. */
   takenOver: boolean;
 

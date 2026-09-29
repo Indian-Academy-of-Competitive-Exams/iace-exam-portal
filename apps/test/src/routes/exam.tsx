@@ -3,6 +3,7 @@
  * chosen template draw it — the screen itself decides nothing about how a
  * sitting behaves, and a skin decides nothing about what it saves.
  */
+import { useEffect } from 'react';
 import {
   Link,
   Navigate,
@@ -131,6 +132,7 @@ function ExamHall(
     tab: tabId(),
     answerQueue: { storage: browserSessionStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
   });
+  useLeaveGuard(view.hasUnsent, view.leave);
 
   if (view.takenOver) {
     return (
@@ -149,6 +151,23 @@ function ExamHall(
   }
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
+}
+
+/** Closing or reloading with answers unsent asks first; going anyway sends them on the way out. */
+function useLeaveGuard(hasUnsent: () => boolean, leave: () => void) {
+  useEffect(() => {
+    // The browser writes the prompt itself; all a page may do is ask for it.
+    const ask = (event: BeforeUnloadEvent) => {
+      if (hasUnsent()) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', ask);
+    // pagehide, not unload: it fires on mobile browsers and when the page goes into the back-forward cache.
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.removeEventListener('beforeunload', ask);
+      window.removeEventListener('pagehide', leave);
+    };
+  }, [hasUnsent, leave]);
 }
 
 /** Names the sitting, so a paper handed in elsewhere lands on its result instead of restarting. */

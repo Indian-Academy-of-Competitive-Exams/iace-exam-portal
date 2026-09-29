@@ -155,8 +155,12 @@ export function meClient(core: ApiCore) {
       get(ME_ATTEMPT_ROUTES.paper(attemptId), examPaperSchema),
 
     /** The autosave. Batches what changed since the last one; the server merges and decides. */
-    saveAttemptState: (attemptId: string, input: SaveAttemptStateInput): Promise<AttemptSaveAck> =>
-      write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), attemptSaveAckSchema, input),
+    saveAttemptState: (
+      attemptId: string,
+      input: SaveAttemptStateInput,
+      extra: { keepalive?: boolean } = {},
+    ): Promise<AttemptSaveAck> =>
+      write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), attemptSaveAckSchema, input, extra),
 
     /** What the server is holding, so a reloaded tab can seed its answers instead of starting blank. */
     attemptState: (attemptId: string): Promise<LiveAttemptState> =>

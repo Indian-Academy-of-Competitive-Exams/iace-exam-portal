@@ -435,3 +435,62 @@ test('banks no bare visit before the server has said what is already answered', 
 
   assert.equal(sent.length, 0, 'nothing was answered here, so nothing is sent');
 });
+
+/** The failure this prevents: the tab closes with answers unsent, and sessionStorage goes with it. */
+test('sends everything unsent on the way out, on a request that outlives the page', async (t) => {
+  const storage = fakeStorage();
+  const sent: { answers: { questionId: string }[]; keepalive?: boolean }[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: (
+        _id: string,
+        body: { answers: { questionId: string }[] },
+        extra: { keepalive?: boolean } = {},
+      ) => {
+        sent.push({ answers: body.answers, keepalive: extra.keepalive });
+        // The first save hangs, so q1 is still in the air when the page goes.
+        return sent.length === 1 ? new Promise(() => undefined) : Promise.resolve({ revision: 9 });
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api, storage)));
+  t.after(unmount);
+
+  assert.equal(result.current.hasUnsent(), false, 'nothing done, nothing to ask about');
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void result.current.flush());
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  assert.equal(result.current.hasUnsent(), true);
+
+  act(() => result.current.leave());
+
+  const last = sent.at(-1);
+  assert.equal(last?.keepalive, true);
+  assert.deepEqual(
+    last?.answers.map((change) => change.questionId).sort((a, b) => a.localeCompare(b)),
+    ['q1', 'q2'],
+  );
+  assert.notEqual(storage.getItem(QUEUE_KEY), null, 'the local copy stays until a save lands');
+});
+
+test('a tab that was stood down sends nothing on the way out', async (t) => {
+  const sent: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: unknown) => {
+        sent.push(body);
+        return { revision: 1 };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => result.current.standDown());
+  act(() => result.current.leave());
+
+  assert.equal(sent.length, 0);
+});

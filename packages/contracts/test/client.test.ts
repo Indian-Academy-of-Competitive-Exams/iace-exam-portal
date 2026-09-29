@@ -91,6 +91,26 @@ describe('typed client — success', () => {
     );
   });
 
+  /** A save sent as the tab closes has to be allowed to finish after it. */
+  it('asks the browser to keep a keepalive write alive past the page, and no other', async () => {
+    const kept: (boolean | undefined)[] = [];
+    const core = createApiCore({
+      baseUrl: 'https://api.test',
+      getAccessToken: () => 'valid',
+      getRefreshToken: () => null,
+      onTokensRefreshed: () => undefined,
+      fetchImpl: ((_url: string, init?: RequestInit) => {
+        kept.push(init?.keepalive);
+        return Promise.resolve(success({ id: 'a' }));
+      }) as unknown as typeof fetch,
+    });
+
+    await core.write('PATCH', '/thing', schema, { id: 'a' }, { keepalive: true });
+    await core.write('PATCH', '/thing', schema, { id: 'a' });
+
+    assert.deepEqual(kept, [true, undefined]);
+  });
+
   it('returns data, not the envelope', async () => {
     const { api } = clientWith([success({ id: 'abc' })]);
 

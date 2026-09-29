@@ -55,6 +55,8 @@ export interface RequestOptions<T> {
   schema: ZodType<T>;
   /** Skip the Authorization header and the refresh-on-401 dance. */
   anonymous?: boolean;
+  /** Outlives the page: a write sent as a tab closes still reaches the server. */
+  keepalive?: boolean;
 }
 
 /** Callers never see the envelope: every method returns `data` or throws an `AppException`. */
@@ -81,7 +83,7 @@ export function createApiCore(options: ApiClientOptions) {
     method: string,
     body: unknown,
     token: string | null,
-    signal?: AbortSignal,
+    extra: Pick<RequestInit, 'signal' | 'keepalive'> = {},
   ) {
     // FormData: the browser must set its own Content-Type, boundary included.
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
@@ -95,7 +97,7 @@ export function createApiCore(options: ApiClientOptions) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         ...(body === undefined ? {} : { body: isFormData ? body : JSON.stringify(body) }),
-        ...(signal ? { signal } : {}),
+        ...extra,
       });
     } catch (cause) {
       // The request never landed — offline, DNS, CORS, a dead API; same typed error as everything else, so callers need no second code path.
@@ -162,7 +164,9 @@ export function createApiCore(options: ApiClientOptions) {
       const timer = setTimeout(() => abandon.abort(), REFRESH_TIMEOUT_MS);
       try {
         const envelope = await parse(
-          await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null, abandon.signal),
+          await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null, {
+            signal: abandon.signal,
+          }),
           authTokensSchema,
         );
         onTokensRefreshed?.(envelope.data);
@@ -184,14 +188,15 @@ export function createApiCore(options: ApiClientOptions) {
     getRefreshToken() === null || !worthAskingAgain(refreshFailure);
 
   async function envelopeOf<T>(path: string, opts: RequestOptions<T>): Promise<ApiSuccess<T>> {
-    const { method = 'GET', body, schema, anonymous = false } = opts;
+    const { method = 'GET', body, schema, anonymous = false, keepalive = false } = opts;
+    const extra = keepalive ? { keepalive } : {};
 
-    if (anonymous) return parse(await send(path, method, body, null), schema);
+    if (anonymous) return parse(await send(path, method, body, null, extra), schema);
 
-    const response = await send(path, method, body, getAccessToken());
+    const response = await send(path, method, body, getAccessToken(), extra);
     if (response.status !== 401) return parse(response, schema);
 
-    const retried = await send(path, method, body, await tokenAfter(response));
+    const retried = await send(path, method, body, await tokenAfter(response), extra);
     if (retried.status === 401) onUnauthorized?.(await failureOf(retried));
     return parse(retried, schema);
   }
@@ -272,8 +277,13 @@ export function createApiCore(options: ApiClientOptions) {
   }
 
   const get = <T>(path: string, schema: ZodType<T>) => request(path, { schema });
-  const write = <T>(method: WriteMethod, path: string, schema: ZodType<T>, body?: unknown) =>
-    request(path, { method, body, schema });
+  const write = <T>(
+    method: WriteMethod,
+    path: string,
+    schema: ZodType<T>,
+    body?: unknown,
+    extra: Pick<RequestOptions<T>, 'keepalive'> = {},
+  ) => request(path, { method, body, schema, ...extra });
   const list = <T>(path: string, query: object, schema: ZodType<T>) =>
     requestPaginated(`${path}${queryString({ ...query })}`, { schema: schema.array() });
 

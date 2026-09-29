@@ -229,6 +229,8 @@ export function useExamView(
 
     isSaving: state.isSaving,
     hasUnsaved: state.hasUnsaved,
+    hasUnsent: state.hasUnsent,
+    leave: state.leave,
     takenOver: state.takenOver,
 
     openQuestion: (id) => {

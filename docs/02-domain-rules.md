@@ -208,6 +208,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   allows. Past `PAUSE_LIMIT_SEC` of silence the sitting is abandoned, and so is one whose credit is
   spent — the sweeper ends both at their deadline rather than letting a reopened tab hold a sitting
   that can no longer earn a second.
+- **Leaving takes the unsent answers with it.** On the web the unsent copy lives in the tab's
+  `sessionStorage`, which dies with the tab. So closing or reloading with anything unsent raises the
+  browser's own "changes may not be saved" prompt, and leaving anyway sends it all on a `keepalive`
+  request that outlives the page. That request cannot refresh an expired token; a reload keeps the
+  copy for the next open, a closed tab does not.
 - **`NavigationPolicy` decides what the palette is for.** Under `FREE` it opens any question in the
   section. Under `FORWARD_ONLY` a question left is closed for good: a seat already passed cannot be
   reopened, Save & Next stops wrapping from the last seat back to the first — a wrap is a move

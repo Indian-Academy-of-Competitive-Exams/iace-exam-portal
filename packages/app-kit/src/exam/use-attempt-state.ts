@@ -81,6 +81,10 @@ export interface AttemptStateHandle {
   closeSection: (sectionId: string, remainingSec: number) => void;
   /** Pushes whatever is pending now — on a section change, and before submitting. True means every answer held at the call reached the server. */
   flush: () => Promise<boolean>;
+  /** Whether anything the student did has not reached the server yet, read at the moment of asking. */
+  hasUnsent: () => boolean;
+  /** The page is going: sends everything unsent on a request that outlives it, keeping the local copy. */
+  leave: () => void;
 }
 
 const answerOf = (change: AnswerChange, held: LiveAnswer | undefined): LiveAnswer => ({
@@ -128,6 +132,13 @@ export function useAttemptState(
   const flying = useRef<AnswerChange[]>([]);
   const seeded = useRef(false);
 
+  // The batch in the air under whatever changed since, which is the newer copy of any question in both.
+  const unsent = useCallback((): AnswerChange[] => {
+    const byQuestion = new Map(flying.current.map((change) => [change.questionId, change]));
+    for (const change of pending.current.values()) byQuestion.set(change.questionId, change);
+    return [...byQuestion.values()];
+  }, []);
+
   // Starts from the queue, then kept level with the state by every writer below, so banking never waits.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const remember = (next: Record<string, LiveAnswer>): Record<string, LiveAnswer> => {
@@ -168,9 +179,7 @@ export function useAttemptState(
   }, []);
 
   const keepQueue = useCallback(() => {
-    const byQuestion = new Map(flying.current.map((change) => [change.questionId, change]));
-    for (const change of pending.current.values()) byQuestion.set(change.questionId, change);
-    const queued = [...byQuestion.values()];
+    const queued = unsent();
     const { answerQueue } = mounted.current;
     const key = queueKeyFor(answerQueue, attemptId);
     try {
@@ -179,7 +188,7 @@ export function useAttemptState(
     } catch {
       // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
     }
-  }, [attemptId]);
+  }, [attemptId, unsent]);
 
   const sendPending = useCallback(async (): Promise<boolean> => {
     const changes = [...pending.current.values()];
@@ -328,6 +337,27 @@ export function useAttemptState(
     [markSection],
   );
 
+  const hasUnsent = useCallback(
+    () => unsent().length > 0 || Object.keys(pendingSections.current).length > 0,
+    [unsent],
+  );
+
+  // Fire and forget, on keepalive: the page is gone before any answer could be read.
+  const leave = useCallback(() => {
+    if (stopped.current) return;
+    bankOpen();
+    if (!hasUnsent()) return;
+    revision.current += 1;
+    const { api, tab } = mounted.current;
+    void api.me
+      .saveAttemptState(
+        attemptId,
+        { revision: revision.current, answers: unsent(), sections: pendingSections.current, tab },
+        { keepalive: true },
+      )
+      .catch(() => undefined);
+  }, [attemptId, bankOpen, hasUnsent, unsent]);
+
   return {
     answers,
     sections,
@@ -343,6 +373,8 @@ export function useAttemptState(
     enterSection,
     closeSection,
     flush,
+    hasUnsent,
+    leave,
   };
 }
 

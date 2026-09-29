@@ -142,6 +142,8 @@ export function previewView(): ExamView {
 
     isSaving: false,
     hasUnsaved: false,
+    hasUnsent: () => false,
+    leave: noop,
     takenOver: false,
 
     openQuestion: noop,
