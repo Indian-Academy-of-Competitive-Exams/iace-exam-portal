@@ -12,6 +12,7 @@ import {
   type TestSeriesDetail,
   type TestSeriesKind,
   type TestSeriesSummary,
+  type ToggleSeriesBranchBody,
   type UpdateSeriesBranchesBody,
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
@@ -244,6 +245,35 @@ export class TestSeriesService {
     await this.assertBranchesLive(chosen);
 
     await this.prisma.testSeries.update({ where: { id }, data: { branchIds: chosen } });
+
+    this.auditContext.setEntityId(id);
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
+    return this.branches(id);
+  }
+
+  /** One UPDATE against the stored list, so two toggles made from the same stale screen both land. */
+  async toggleBranch(id: string, input: ToggleSeriesBranchBody): Promise<SeriesBranch[]> {
+    const series = await this.requireSeries(id);
+    await this.assertBranchesLive([input.branchId]);
+
+    if (input.enabled) {
+      this.assertKindHoldsTogether({
+        kind: series.kind,
+        examStageId: series.examStageId,
+        programCode: series.programCode,
+        eventId: series.eventId,
+        branchIds: [...series.branchIds, input.branchId],
+      });
+      await this.prisma.$executeRaw`
+        UPDATE "TestSeries"
+        SET "branchIds" = array_append("branchIds", ${input.branchId}::uuid), "updatedAt" = now()
+        WHERE "id" = ${id}::uuid AND NOT (${input.branchId}::uuid = ANY("branchIds"))`;
+    } else {
+      await this.prisma.$executeRaw`
+        UPDATE "TestSeries"
+        SET "branchIds" = array_remove("branchIds", ${input.branchId}::uuid), "updatedAt" = now()
+        WHERE "id" = ${id}::uuid`;
+    }
 
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });

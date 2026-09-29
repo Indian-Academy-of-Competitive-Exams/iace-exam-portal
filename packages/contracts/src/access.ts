@@ -258,10 +258,15 @@ export const seriesBranchSchema = z.object({
 });
 export type SeriesBranch = z.infer<typeof seriesBranchSchema>;
 
-/** The whole list `branchIds` should hold from now on — the array itself, not a diff against it. */
+/** The whole list `branchIds` should hold from now on — what "switch on everywhere" sends. */
 export const updateSeriesBranchesSchema = z.object({ branchIds: z.array(z.string()) });
 export type UpdateSeriesBranchesInput = z.input<typeof updateSeriesBranchesSchema>;
 export type UpdateSeriesBranchesBody = z.infer<typeof updateSeriesBranchesSchema>;
+
+/** One branch on or off, applied to the stored list: a whole list rebuilt from a stale screen would undo a toggle made elsewhere. */
+export const toggleSeriesBranchSchema = z.object({ branchId: z.string(), enabled: z.boolean() });
+export type ToggleSeriesBranchInput = z.input<typeof toggleSeriesBranchSchema>;
+export type ToggleSeriesBranchBody = z.infer<typeof toggleSeriesBranchSchema>;
 
 /** No recipient: `/me/notifications` is always the caller's own, so naming them is dead weight. */
 export const notificationSchema = z.object({
@@ -486,7 +491,7 @@ export const ADMIN_SERIES_ROUTES = {
   detail: (id: string) => `/admin/test-series/${id}`,
   update: (id: string) => `/admin/test-series/${id}`,
   remove: (id: string) => `/admin/test-series/${id}`,
-  /** Read every branch and whether this series reaches it; write the whole `branchIds` list. */
+  /** Read every branch and whether this series reaches it; PUT the whole `branchIds` list, PATCH one branch. */
   branches: (id: string) => `/admin/test-series/${id}/branches`,
   /** The link, from the series' side. The tests module owns it — a test is offered THROUGH a series. */
   tests: (id: string) => `/admin/test-series/${id}/tests`,

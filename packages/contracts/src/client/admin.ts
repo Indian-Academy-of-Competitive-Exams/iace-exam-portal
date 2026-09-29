@@ -71,6 +71,7 @@ import {
   type TestSeriesListQueryInput,
   type TestSeriesDetail,
   type TestSeriesSummary,
+  type ToggleSeriesBranchInput,
   type UpdateSeriesBranchesInput,
   type UpdateEventInput,
   type UpdateProgramInput,
@@ -481,6 +482,9 @@ export function adminClient(core: ApiCore) {
 
       setBranches: (id: string, input: UpdateSeriesBranchesInput): Promise<SeriesBranch[]> =>
         write('PUT', ADMIN_SERIES_ROUTES.branches(id), seriesBranchSchema.array(), input),
+
+      toggleBranch: (id: string, input: ToggleSeriesBranchInput): Promise<SeriesBranch[]> =>
+        write('PATCH', ADMIN_SERIES_ROUTES.branches(id), seriesBranchSchema.array(), input),
 
       tests: (id: string): Promise<SeriesTestRow[]> =>
         get(ADMIN_SERIES_ROUTES.tests(id), seriesTestRowSchema.array()),

@@ -25,6 +25,7 @@ import {
   PERMISSION_LEVELS,
   programListQuerySchema,
   testSeriesListQuerySchema,
+  toggleSeriesBranchSchema,
   updateSeriesBranchesSchema,
   updateProgramSchema,
   updateTestSeriesSchema,
@@ -39,6 +40,7 @@ import {
   type TestSeriesListQuery,
   type TestSeriesDetail,
   type TestSeriesSummary,
+  type ToggleSeriesBranchBody,
   type UpdateSeriesBranchesBody,
   type UpdateProgramBody,
   type UpdateTestSeriesBody,
@@ -175,6 +177,16 @@ export class TestSeriesController {
     @Body(new ZodBody(updateSeriesBranchesSchema)) body: UpdateSeriesBranchesBody,
   ): Promise<SeriesBranch[]> {
     return this.series.setBranches(id, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/branches')
+  toggleBranch(
+    @Param('id') id: string,
+    @Body(new ZodBody(toggleSeriesBranchSchema)) body: ToggleSeriesBranchBody,
+  ): Promise<SeriesBranch[]> {
+    return this.series.toggleBranch(id, body);
   }
 }
 

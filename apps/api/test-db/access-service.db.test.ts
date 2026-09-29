@@ -187,6 +187,45 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     assert.deepEqual((await seriesRow(other.id)).branchIds, []);
   });
 
+  /** THE failure this prevents: two admins on one stale list, each saving the whole array, undid each other. */
+  it('lands two toggles made from the same stale list, each on its own branch', async () => {
+    const { series, stageId } = await build();
+    const [kept, dropped, added] = [
+      await makeBranch(prisma, 'AMEERPET'),
+      await makeBranch(prisma, 'DILSUKHNAGAR'),
+      await makeBranch(prisma, 'KUKATPALLY'),
+    ];
+    const created = await series.create(draft(stageId));
+    await series.setBranches(created.id, { branchIds: [kept.id, dropped.id] });
+
+    await Promise.all([
+      series.toggleBranch(created.id, { branchId: dropped.id, enabled: false }),
+      series.toggleBranch(created.id, { branchId: added.id, enabled: true }),
+    ]);
+    await series.toggleBranch(created.id, { branchId: added.id, enabled: true });
+
+    assert.deepEqual((await seriesRow(created.id)).branchIds, [kept.id, added.id]);
+  });
+
+  it('refuses switching a branch on for a series that is not STANDARD, or a branch that is not there', async () => {
+    const { series, stageId } = await build();
+    const branch = await makeBranch(prisma);
+    const free = await seedSeries({ examStageId: stageId, kind: TEST_SERIES_KIND.FREE });
+    const standard = await series.create(draft(stageId, { name: uid() }));
+
+    for (const [id, branchId, field] of [
+      [free.id, branch.id, 'kind'],
+      [standard.id, uid(), 'branchIds'],
+    ] as const) {
+      const error = await series
+        .toggleBranch(id, { branchId, enabled: true })
+        .catch((e: unknown) => e);
+      assert.ok(AppException.is(error));
+      assert.ok(error.fieldErrors?.[field], field);
+    }
+    assert.deepEqual((await seriesRow(standard.id)).branchIds, []);
+  });
+
   /** A new series must not appear at every centre in the country the moment it is saved. */
   it('starts every one of them switched off, reaching nobody', async () => {
     const { series, stageId } = await build();

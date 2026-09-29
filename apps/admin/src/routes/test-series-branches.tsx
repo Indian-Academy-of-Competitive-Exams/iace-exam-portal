@@ -180,7 +180,6 @@ function BranchScheduleList({
           key={row.id}
           series={series}
           row={row}
-          rows={rows}
           canWrite={canWrite}
           onSaved={onSaved}
         />
@@ -217,13 +216,11 @@ function offerQuestion(
 function BranchScheduleRow({
   series,
   row,
-  rows,
   canWrite,
   onSaved,
 }: Readonly<{
   series: TestSeriesSummary;
   row: SeriesBranch;
-  rows: readonly SeriesBranch[];
   canWrite: boolean;
   onSaved: () => void;
 }>) {
@@ -232,11 +229,7 @@ function BranchScheduleRow({
   const save = useMutation({
     meta: { success: `${row.name} saved.` },
     mutationFn: (enabled: boolean) =>
-      api.admin.testSeries.setBranches(series.id, {
-        branchIds: rows
-          .filter((candidate) => (candidate.id === row.id ? enabled : candidate.enabled))
-          .map((candidate) => candidate.id),
-      }),
+      api.admin.testSeries.toggleBranch(series.id, { branchId: row.id, enabled }),
     onSuccess: () => {
       setAsking(null);
       onSaved();
