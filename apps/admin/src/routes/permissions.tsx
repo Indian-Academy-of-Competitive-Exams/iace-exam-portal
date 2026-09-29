@@ -172,31 +172,13 @@ function AdminPanel({
 
   const save = useMutation({
     meta: { success: `Access updated for ${admin.email}.` },
-    /** One feature at a time, revoking before granting so both levels are never held at once. */
-    mutationFn: async () => {
-      for (const change of changes) {
-        if (change.from) {
-          await api.admin.features.revoke({
-            featureKey: change.feature.key,
-            level: change.from,
-            adminId: admin.id,
-          });
-        }
-        if (change.to) {
-          await api.admin.features.grant({
-            featureKey: change.feature.key,
-            level: change.to,
-            adminId: admin.id,
-          });
-        }
-      }
-    },
-    // Dropped whether this succeeded or failed — a halfway run already changed earlier features, so only the server knows where it got to.
-    onSettled: () => {
+    mutationFn: () => api.admin.admins.setPermissions(admin.id, Object.fromEntries(draft)),
+    // The save applies whole or not at all, so a failed one keeps the draft to try again.
+    onSuccess: () => {
       setDraft(new Map<FeatureKey, Level>());
-      setConfirming(false);
       onSaved();
     },
+    onSettled: () => setConfirming(false),
   });
 
   const heldCount = features.filter((f) => admin.permissions[f.key] !== undefined).length;

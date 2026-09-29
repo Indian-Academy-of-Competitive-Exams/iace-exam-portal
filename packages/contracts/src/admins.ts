@@ -214,14 +214,12 @@ export const featureSchema = z.object({
 });
 export type Feature = z.infer<typeof featureSchema>;
 
-/** Grant and revoke are the same shape — the verb is the HTTP method. */
-export const permissionGrantSchema = z.object({
-  featureKey: featureKeySchema,
-  level: permissionLevelSchema,
-  adminId: z.string().min(1),
-});
-export type PermissionGrantInput = z.input<typeof permissionGrantSchema>;
-export type PermissionGrantBody = z.infer<typeof permissionGrantSchema>;
+/** One admin's edits in one save: a level sets the feature, null takes it away, a key left out is not touched. */
+export const permissionChangesSchema = z.partialRecord(
+  featureKeySchema,
+  permissionLevelSchema.nullable(),
+);
+export type PermissionChanges = z.infer<typeof permissionChangesSchema>;
 
 export const ADMIN_ADMIN_ROUTES = {
   list: '/admin/admins',
@@ -229,13 +227,10 @@ export const ADMIN_ADMIN_ROUTES = {
   update: (id: string) => `/admin/admins/${id}`,
   /** One route both ways. A PATCH, not a DELETE: the row survives, `createdById` points at it. */
   setActive: (id: string) => `/admin/admins/${id}/active`,
+  permissions: (id: string) => `/admin/admins/${id}/permissions`,
 } as const;
 
 export const ADMIN_FEATURE_ROUTES = {
   /** Read-only: the list is FEATURES above, not a table. */
   list: '/admin/features',
-  grant: '/admin/features/permissions',
-  /** In the path, not a body: proxies drop a DELETE body, and a silent no-op revoke is the worst case. */
-  revoke: (featureKey: FeatureKey, level: PermissionLevel, adminId: string) =>
-    `/admin/features/${featureKey}/permissions/${level}/${adminId}`,
 } as const;

@@ -2,11 +2,22 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { ADMIN_ROLES, AppException, FEATURE_KEYS, PERMISSION_LEVELS, can } from '@iace/contracts';
+import { type Prisma } from '@prisma/client';
+import {
+  ADMIN_ROLES,
+  AppException,
+  ErrorCodes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  can,
+  type FeatureKey,
+  type PermissionLevel,
+} from '@iace/contracts';
 import { AdminsService } from '../src/admins';
 import { AdminAccessService } from '../src/auth/admin-access.service';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import { FakeEventBus } from '../test/support/fakes';
 import { makeAdmin, resetDatabase, testPrisma, uid } from './support/database';
 
@@ -17,18 +28,52 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-function build() {
+function build(client: PrismaService = prisma) {
   const auditContext = new AuditContext();
   const events = new FakeEventBus();
   return {
     auditContext,
     events,
-    service: new AdminsService(prisma, auditContext, events.asService()),
+    service: new AdminsService(client, auditContext, events.asService()),
   };
 }
 
 const grantsOf = (adminId: string) =>
   prisma.adminFeaturePermission.findMany({ where: { adminId } });
+
+const grant = (adminId: string, featureKey: FeatureKey, level: PermissionLevel) =>
+  prisma.adminFeaturePermission.create({ data: { adminId, featureKey, level } });
+
+/** The second grant written inside the save throws, the way a dropped connection would. */
+function failingOnSecondWrite(): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) => {
+          let writes = 0;
+          const table = new Proxy(tx.adminFeaturePermission, {
+            get(delegate, method: string | symbol) {
+              if (method !== 'upsert') return Reflect.get(delegate, method) as unknown;
+              return (args: Prisma.AdminFeaturePermissionUpsertArgs) => {
+                writes += 1;
+                if (writes === 2) return Promise.reject(new Error('connection dropped'));
+                return delegate.upsert(args);
+              };
+            },
+          });
+          return work(
+            new Proxy(tx, {
+              get: (inner, member: string | symbol) =>
+                member === 'adminFeaturePermission'
+                  ? table
+                  : (Reflect.get(inner, member) as unknown),
+            }),
+          );
+        });
+    },
+  });
+}
 
 describe('AdminsService — features', () => {
   /** The list is FEATURE_KEYS, not a table: every checked key is grantable, and no other key is. */
@@ -48,69 +93,84 @@ describe('AdminsService — features', () => {
   });
 });
 
-describe('AdminsService — grants', () => {
-  it('grants a level and reads it back as the admin permission map', async () => {
+describe('AdminsService — permissions, saved in one request', () => {
+  it('saves a level and reads it back as the admin permission map', async () => {
     const { service } = build();
     const admin = await makeAdmin(prisma);
 
-    await service.grant({
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.WRITE,
-      adminId: admin.id,
+    const saved = await service.setPermissions(admin.id, {
+      [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
     });
 
-    assert.deepEqual(await service.permissionsFor(admin.id), {
+    assert.deepEqual(saved.permissions, {
       [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
     });
   });
 
-  it('is idempotent — granting twice leaves one entry, so one revoke undoes it', async () => {
+  it('grants, changes and removes several features in the one save, leaving the rest alone', async () => {
     const { service } = build();
     const admin = await makeAdmin(prisma);
-    const grant = {
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.READ,
-      adminId: admin.id,
-    };
+    await grant(admin.id, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ);
+    await grant(admin.id, FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+    await grant(admin.id, FEATURE_KEYS.DATA_EXPORT, PERMISSION_LEVELS.READ);
 
-    await service.grant(grant);
-    const twice = await service.grant(grant);
-    assert.deepEqual(twice.grants.READ, [admin.id]);
-
-    const revoked = await service.revoke(grant);
-    assert.deepEqual(revoked.grants.READ, []);
-    assert.deepEqual(await service.permissionsFor(admin.id), {});
-  });
-
-  /** Should not happen through the UI, but if it does the answer must be the more permissive one. */
-  it('resolves a doubled grant to WRITE rather than to whichever row came back first', async () => {
-    const { service } = build();
-    const admin = await makeAdmin(prisma);
-    for (const level of [PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE]) {
-      await service.grant({
-        featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-        level,
-        adminId: admin.id,
-      });
-    }
+    await service.setPermissions(admin.id, {
+      [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+      [FEATURE_KEYS.TEST_MANAGEMENT]: null,
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
+    });
 
     assert.deepEqual(await service.permissionsFor(admin.id), {
       [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
+      [FEATURE_KEYS.DATA_EXPORT]: PERMISSION_LEVELS.READ,
+    });
+    assert.equal((await grantsOf(admin.id)).length, 3, 'one row per feature held');
+  });
+
+  /** The failure this prevents: a save that dies partway leaving some features granted and some not. */
+  it('fails whole: a save that breaks partway leaves every feature as it was', async () => {
+    const admin = await makeAdmin(prisma);
+    await grant(admin.id, FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+    const { service } = build(failingOnSecondWrite());
+
+    await assert.rejects(
+      service.setPermissions(admin.id, {
+        [FEATURE_KEYS.TEST_MANAGEMENT]: null,
+        [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+        [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
+      }),
+      /connection dropped/,
+    );
+
+    assert.deepEqual(await build().service.permissionsFor(admin.id), {
+      [FEATURE_KEYS.TEST_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
     });
   });
 
-  /** Every code-owned key is grantable without anybody registering it first. */
-  it('grants a key nothing has been granted on before', async () => {
+  /** Deactivation prunes every grant; a save must not hand them back. */
+  it('refuses a deactivated admin', async () => {
     const { service } = build();
+    const admin = await makeAdmin(prisma, { isActive: false });
+
+    await assert.rejects(
+      service.setPermissions(admin.id, {
+        [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+      }),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.NOT_FOUND,
+    );
+    assert.deepEqual(await grantsOf(admin.id), []);
+  });
+
+  /** One level per feature is the table's rule, so "WRITE wins" is never a question anybody asks. */
+  it('holds one level per feature — a second row for the same feature is refused', async () => {
     const admin = await makeAdmin(prisma);
+    await grant(admin.id, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
-    const feature = await service.grant({
-      featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
-      level: PERMISSION_LEVELS.READ,
-      adminId: admin.id,
-    });
-
-    assert.deepEqual(feature.grants.READ, [admin.id]);
+    await assert.rejects(
+      grant(admin.id, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ),
+      (e: unknown) => (e as { code?: string }).code === 'P2002',
+    );
   });
 
   /** The guard reads this map, so a key left by an older build must be dropped, never carried. */
@@ -232,7 +292,7 @@ describe('AdminsService — setActive', () => {
     const { service } = build();
     const admin = await makeAdmin(prisma);
     for (const featureKey of [FEATURE_KEYS.STUDENT_MANAGEMENT, FEATURE_KEYS.TEST_MANAGEMENT]) {
-      await service.grant({ featureKey, level: PERMISSION_LEVELS.WRITE, adminId: admin.id });
+      await grant(admin.id, featureKey, PERMISSION_LEVELS.WRITE);
     }
 
     await service.setActive(admin.id, false, ACTOR);
@@ -296,11 +356,7 @@ describe('AdminsService — setActive', () => {
     const { service } = build();
     const [first, second] = [await makeAdmin(prisma), await makeAdmin(prisma)];
     for (const adminId of [first.id, second.id]) {
-      await service.grant({
-        featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-        level: PERMISSION_LEVELS.READ,
-        adminId,
-      });
+      await grant(adminId, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ);
     }
 
     await service.setActive(first.id, false, ACTOR);
@@ -344,11 +400,7 @@ describe('AdminsService — setActive', () => {
   it('does NOT hand back the grants deactivation took away', async () => {
     const { service } = build();
     const admin = await makeAdmin(prisma);
-    await service.grant({
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.WRITE,
-      adminId: admin.id,
-    });
+    await grant(admin.id, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
     await service.setActive(admin.id, false, ACTOR);
     const restored = await service.setActive(admin.id, true, ACTOR);
@@ -377,106 +429,43 @@ describe('AdminsService — setActive', () => {
   });
 });
 
-/** Driven inside a live AuditContext, the way the interceptor reads it: setEntityId left out would show. */
-describe('AdminsService grant/revoke — the entity the row is filed against', () => {
-  /** Neither route has an `:id` param, so the interceptor's fallback would file the row somewhere else. */
-  it('grant sets the entity id to the admin, not the feature the call returns', async () => {
+describe('AdminsService.setPermissions — the audit diff is what actually moved', () => {
+  it('reports each feature that moved, from and to, and nothing for one that did not', async () => {
     const { service, auditContext } = build();
     const admin = await makeAdmin(prisma);
-
-    const feature = await auditContext.run(async () => {
-      const result = await service.grant({
-        featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-        level: PERMISSION_LEVELS.WRITE,
-        adminId: admin.id,
-      });
-      assert.equal(auditContext.current()?.entityId, admin.id);
-      return result;
-    });
-
-    assert.equal(feature.key, FEATURE_KEYS.STUDENT_MANAGEMENT);
-  });
-
-  it('revoke sets the entity id to the admin too', async () => {
-    const { service, auditContext } = build();
-    const admin = await makeAdmin(prisma);
-    const grant = {
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.WRITE,
-      adminId: admin.id,
-    };
-    await service.grant(grant);
+    await grant(admin.id, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ);
+    await grant(admin.id, FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
     await auditContext.run(async () => {
-      await service.revoke(grant);
-      assert.equal(auditContext.current()?.entityId, admin.id);
-    });
-  });
-});
-
-describe('AdminsService grant/revoke — idempotent, so the diff reports what actually moved', () => {
-  it('a first grant reports the level going from null to the grant', async () => {
-    const { service, auditContext } = build();
-    const admin = await makeAdmin(prisma);
-
-    await auditContext.run(async () => {
-      await service.grant({
-        featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-        level: PERMISSION_LEVELS.WRITE,
-        adminId: admin.id,
+      await service.setPermissions(admin.id, {
+        [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+        [FEATURE_KEYS.TEST_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+        [FEATURE_KEYS.DATA_EXPORT]: null,
+        [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
       });
       assert.deepEqual(auditContext.current()?.changed, {
-        [FEATURE_KEYS.STUDENT_MANAGEMENT]: { from: null, to: PERMISSION_LEVELS.WRITE },
+        [FEATURE_KEYS.STUDENT_MANAGEMENT]: {
+          from: PERMISSION_LEVELS.READ,
+          to: PERMISSION_LEVELS.WRITE,
+        },
+        [FEATURE_KEYS.QUESTION_MANAGEMENT]: { from: null, to: PERMISSION_LEVELS.READ },
       });
     });
   });
 
-  /** A row claiming a grant was made when the admin already held it would be a false record. */
-  it('re-granting a permission already held changes nothing, and logs nothing', async () => {
+  /** A row claiming access moved when it had not would be a false record. */
+  it('files nothing for a save that moved nothing', async () => {
     const { service, auditContext } = build();
     const admin = await makeAdmin(prisma);
-    const grant = {
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.WRITE,
-      adminId: admin.id,
-    };
-    await service.grant(grant);
+    await grant(admin.id, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
     await auditContext.run(async () => {
-      await service.grant(grant);
-      assert.equal(auditContext.current()?.changed, null);
-    });
-  });
-
-  it('revoking a permission never held changes nothing, and logs nothing', async () => {
-    const { service, auditContext } = build();
-    const admin = await makeAdmin(prisma);
-
-    await auditContext.run(async () => {
-      await service.revoke({
-        featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-        level: PERMISSION_LEVELS.WRITE,
-        adminId: admin.id,
+      await service.setPermissions(admin.id, {
+        [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+        [FEATURE_KEYS.TEST_MANAGEMENT]: null,
       });
       assert.equal(auditContext.current()?.changed, null);
-    });
-  });
-
-  it('a real revoke reports the level going away', async () => {
-    const { service, auditContext } = build();
-    const admin = await makeAdmin(prisma);
-    const grant = {
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.READ,
-      adminId: admin.id,
-    };
-    await service.grant(grant);
-
-    await auditContext.run(async () => {
-      await service.revoke(grant);
-      assert.deepEqual(auditContext.current()?.changed, {
-        [FEATURE_KEYS.STUDENT_MANAGEMENT]: { from: PERMISSION_LEVELS.READ, to: null },
-      });
+      assert.equal(auditContext.current()?.unchanged, true);
     });
   });
 });
@@ -546,23 +535,21 @@ describe('AdminAccessService — what an admin may do, read on every request', (
     const { service } = build();
     const access = new AdminAccessService(prisma, service);
     const admin = await makeAdmin(prisma);
-    const grant = {
-      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
-      level: PERMISSION_LEVELS.WRITE,
-      adminId: admin.id,
-    };
     const writes = async () => {
       const authority = await access.current(admin.id);
       assert.ok(authority);
       return can(authority, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
     };
 
-    await service.grant(grant);
+    const students = (level: PermissionLevel | null) =>
+      service.setPermissions(admin.id, { [FEATURE_KEYS.STUDENT_MANAGEMENT]: level });
+
+    await students(PERMISSION_LEVELS.WRITE);
     assert.equal(await writes(), true);
-    await service.revoke(grant);
+    await students(null);
     assert.equal(await writes(), false);
 
-    await service.grant(grant);
+    await students(PERMISSION_LEVELS.WRITE);
     await prisma.admin.update({ where: { id: admin.id }, data: { isActive: false } });
     assert.equal(await writes(), false);
     assert.equal(await access.current(randomUUID()), null);

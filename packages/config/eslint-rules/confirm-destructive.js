@@ -23,8 +23,7 @@ const DESTRUCTIVE_PATHS = new Set([
   'admins.create',
   'grants.create',
   'testSeries.updateBranch',
-  'features.grant',
-  'features.revoke',
+  'admins.setPermissions',
 ]);
 
 const CONFIRM_DIALOG = 'ConfirmDialog';

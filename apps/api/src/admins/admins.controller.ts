@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -6,22 +6,18 @@ import {
   adminListQuerySchema,
   createAdminSchema,
   setAdminActiveSchema,
-  featureKeySchema,
-  permissionGrantSchema,
-  permissionLevelSchema,
+  permissionChangesSchema,
   updateAdminSchema,
   type Admin,
   type AdminListQuery,
   type Paginated,
   type CreateAdminBody,
   type Feature,
-  type FeatureKey,
-  type PermissionLevel,
-  type PermissionGrantBody,
+  type PermissionChanges,
   type SetAdminActiveBody,
   type UpdateAdminBody,
 } from '@iace/contracts';
-import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
+import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Actors, CurrentUser, RequiresSuperAdmin } from '../common/security';
 import { type AuthenticatedUser } from '../common/security';
 import { Audit, TOGGLE_ACTIONS } from '../audit';
@@ -77,20 +73,12 @@ export class AdminsController {
     return this.admins.listFeatures();
   }
 
-  @Audit(AUDIT_FEATURE.FEATURE_PERMISSION, AUDIT_ACTION.CREATE)
-  @Post('features/permissions')
-  grant(@Body(new ZodBody(permissionGrantSchema)) body: PermissionGrantBody): Promise<Feature> {
-    return this.admins.grant(body);
-  }
-
-  /** The tuple is in the path, not a body — see the note on ADMIN_FEATURE_ROUTES. */
-  @Audit(AUDIT_FEATURE.FEATURE_PERMISSION, AUDIT_ACTION.DELETE)
-  @Delete('features/:featureKey/permissions/:level/:adminId')
-  revoke(
-    @Param('featureKey', new ZodParam(featureKeySchema)) featureKey: FeatureKey,
-    @Param('level', new ZodParam(permissionLevelSchema)) level: PermissionLevel,
-    @Param('adminId') adminId: string,
-  ): Promise<Feature> {
-    return this.admins.revoke({ featureKey, level, adminId });
+  @Audit(AUDIT_FEATURE.FEATURE_PERMISSION, AUDIT_ACTION.UPDATE)
+  @Patch('admins/:id/permissions')
+  setPermissions(
+    @Param('id') id: string,
+    @Body(new ZodBody(permissionChangesSchema)) body: PermissionChanges,
+  ): Promise<Admin> {
+    return this.admins.setPermissions(id, body);
   }
 }

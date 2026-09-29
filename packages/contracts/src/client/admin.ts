@@ -33,8 +33,7 @@ import {
   type AdminListQueryInput,
   type CreateAdminInput,
   type Feature,
-  type PermissionGrantBody,
-  type PermissionGrantInput,
+  type PermissionChanges,
   type UpdateAdminBody,
 } from '../admins';
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from '../dashboard';
@@ -376,20 +375,14 @@ export function adminClient(core: ApiCore) {
       /** Deactivating prunes every grant. Reactivating does NOT restore them. */
       setActive: (id: string, isActive: boolean): Promise<Admin> =>
         write('PATCH', ADMIN_ADMIN_ROUTES.setActive(id), adminSchema, { isActive }),
+
+      /** Every edit to one admin's access in one save, which applies whole or not at all. */
+      setPermissions: (id: string, changes: PermissionChanges): Promise<Admin> =>
+        write('PATCH', ADMIN_ADMIN_ROUTES.permissions(id), adminSchema, changes),
     },
 
     features: {
       list: (): Promise<Feature[]> => get(ADMIN_FEATURE_ROUTES.list, featureSchema.array()),
-
-      grant: (input: PermissionGrantInput): Promise<Feature> =>
-        write('POST', ADMIN_FEATURE_ROUTES.grant, featureSchema, input),
-
-      revoke: (input: PermissionGrantBody): Promise<Feature> =>
-        write(
-          'DELETE',
-          ADMIN_FEATURE_ROUTES.revoke(input.featureKey, input.level, input.adminId),
-          featureSchema,
-        ),
     },
 
     branches: {

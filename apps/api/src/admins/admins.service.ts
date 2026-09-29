@@ -17,9 +17,8 @@ import {
   type CreateAdminBody,
   type Feature as FeatureDto,
   type FeatureKey,
-  type FieldDiff,
-  type PermissionGrantBody,
   type Paginated,
+  type PermissionChanges,
   type PermissionLevel,
   type UpdateAdminBody,
 } from '@iace/contracts';
@@ -48,12 +47,6 @@ export const AUDITED_ADMIN_FIELDS = ['fullName', 'role', 'isSuperAdmin'] as cons
 /** The single column the toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 
-export function permissionDiff(grant: { key: string; level: string }, revoked = false): FieldDiff {
-  return {
-    [grant.key]: revoked ? { from: grant.level, to: null } : { from: null, to: grant.level },
-  };
-}
-
 @Injectable()
 export class AdminsService {
   constructor(
@@ -66,7 +59,7 @@ export class AdminsService {
   // The facade auth consumes
   // ==========================================================================
 
-  /** The grant map a token carries. One indexed read, and WRITE wins if both levels are held. A stored key that code no longer defines is dropped rather than carried. */
+  /** The grant map the guard reads per request. A stored key that code no longer defines is dropped rather than carried. */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
     return (await this.grantsByAdmin([adminId])).get(adminId) ?? {};
   }
@@ -152,7 +145,7 @@ export class AdminsService {
   }
 
   async update(id: string, input: UpdateAdminBody): Promise<AdminDto> {
-    // requireAdmin, not requireActive: renaming a deactivated admin, or making one a super admin before switching them back on, are both reasonable.
+    // requireAdmin, not an active check: renaming a deactivated admin, or making one a super admin before switching them back on, are both reasonable.
     const before = await this.requireAdmin(id);
 
     const row = await this.prisma.admin.update({
@@ -226,48 +219,35 @@ export class AdminsService {
   // Grants
   // ==========================================================================
 
-  async grant(input: PermissionGrantBody): Promise<FeatureDto> {
-    return this.changeGrant(input, 'add');
-  }
+  /** One admin's changes in one transaction: a level sets the feature, null removes it, an absent key is left alone. */
+  async setPermissions(adminId: string, changes: PermissionChanges): Promise<AdminDto> {
+    const keys = Object.keys(changes) as FeatureKey[];
+    const { admin, before } = await this.prisma.$transaction(async (tx) => {
+      // Locked, so a deactivation cannot land between the check and the writes and have its pruned grants written back.
+      await tx.$queryRaw`SELECT 1 FROM "Admin" WHERE "id" = ${adminId}::uuid FOR UPDATE`;
+      const admin = await tx.admin.findUnique({ where: { id: adminId } });
+      if (!admin?.isActive) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
+      const before = (await this.grantsByAdmin([adminId], tx)).get(adminId) ?? {};
 
-  async revoke(input: PermissionGrantBody): Promise<FeatureDto> {
-    return this.changeGrant(input, 'remove');
-  }
+      const removed = keys.filter((key) => changes[key] === null);
+      await tx.adminFeaturePermission.deleteMany({
+        where: { adminId, featureKey: { in: removed } },
+      });
+      for (const key of keys) {
+        const level = changes[key];
+        if (!level) continue;
+        await tx.adminFeaturePermission.upsert({
+          where: { adminId_featureKey: { adminId, featureKey: key } },
+          create: { adminId, featureKey: key, level },
+          update: { level },
+        });
+      }
+      return { admin, before };
+    }, TX_LIMITS.SHORT);
 
-  /** Add or remove one (admin, key, level) row. */
-  private async changeGrant(
-    input: PermissionGrantBody,
-    action: 'add' | 'remove',
-  ): Promise<FeatureDto> {
-    await this.requireActive(input.adminId);
-
-    // Neither route carries an `:id` param and both return a Feature, so the interceptor's fallback would file the row against the feature rather than the admin it was made about.
-    this.auditContext.setEntityId(input.adminId);
-
-    const where = {
-      adminId_featureKey_level: {
-        adminId: input.adminId,
-        featureKey: input.featureKey,
-        level: input.level,
-      },
-    };
-    const held = await this.prisma.adminFeaturePermission.findUnique({ where });
-
-    if (action === 'add' && !held) {
-      // Create, not upsert: the row IS its own key, so there is nothing to update.
-      await this.prisma.adminFeaturePermission.create({ data: { ...input } });
-    } else if (action === 'remove' && held) {
-      await this.prisma.adminFeaturePermission.delete({ where });
-    }
-
-    // A grant that did not move is not a grant that happened.
-    if ((action === 'add') !== Boolean(held)) {
-      this.auditContext.setChanged(
-        permissionDiff({ key: input.featureKey, level: input.level }, action === 'remove'),
-      );
-    }
-
-    return this.featureWithGrants(input.featureKey);
+    const held = Object.fromEntries(keys.map((key) => [key, before[key] ?? null]));
+    this.auditContext.setPatchDiff(fieldDiff(held, changes, keys));
+    return this.toAdminDto(admin, await this.permissionsFor(adminId));
   }
 
   // ==========================================================================
@@ -281,21 +261,15 @@ export class AdminsService {
     return admin;
   }
 
-  /** Exists AND is switched on — the right check before a grant, because granting to a deactivated admin hands back what deactivation just removed. */
-  private async requireActive(id: string): Promise<void> {
-    const admin = await this.prisma.admin.findUnique({
-      where: { id },
-      select: { id: true, isActive: true },
-    });
-    if (!admin?.isActive) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
-  }
-
   /** Permissions for many admins in one query — see the note in `list`. */
-  private async grantsByAdmin(adminIds: string[]): Promise<Map<string, AdminPermissions>> {
+  private async grantsByAdmin(
+    adminIds: string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, AdminPermissions>> {
     const byAdmin = new Map<string, AdminPermissions>();
     if (adminIds.length === 0) return byAdmin;
 
-    const rows = await this.prisma.adminFeaturePermission.findMany({
+    const rows = await db.adminFeaturePermission.findMany({
       where: { adminId: { in: adminIds } },
       select: { adminId: true, featureKey: true, level: true },
     });
@@ -303,20 +277,9 @@ export class AdminsService {
     for (const row of rows) {
       const key = asFeatureKey(row.featureKey);
       if (key === null) continue;
-      const current = byAdmin.get(row.adminId) ?? {};
-      if (current[key] !== PERMISSION_LEVELS.WRITE) current[key] = row.level;
-      byAdmin.set(row.adminId, current);
+      byAdmin.set(row.adminId, { ...byAdmin.get(row.adminId), [key]: row.level });
     }
     return byAdmin;
-  }
-
-  /** One key's grant lists, read back after a change. */
-  private async featureWithGrants(key: FeatureKey): Promise<FeatureDto> {
-    const rows = await this.prisma.adminFeaturePermission.findMany({
-      where: { featureKey: key },
-      select: { adminId: true, featureKey: true, level: true },
-    });
-    return this.toFeatureDto(key, rows);
   }
 
   private toAdminDto(row: AdminRow, permissions: AdminPermissions): AdminDto {

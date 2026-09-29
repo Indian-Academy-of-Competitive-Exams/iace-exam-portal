@@ -11,7 +11,6 @@ import {
   permissionLevelSchema,
   satisfiesLevel,
   FEATURES,
-  ADMIN_FEATURE_ROUTES,
 } from '../src/admins';
 
 /** The guard and the UI must answer identically, or a visible button gets refused. */
@@ -113,16 +112,6 @@ describe('admin input schemas', () => {
     assert.equal(
       adminPermissionsSchema.safeParse({ [FEATURE_KEYS.TEST_MANAGEMENT]: 'DELETE' }).success,
       false,
-    );
-  });
-});
-
-describe('routes', () => {
-  it('puts the revoke tuple in the path, never a DELETE body', () => {
-    // A dropped DELETE body would make revoke a silent no-op, the one failure mode this endpoint must not have.
-    assert.equal(
-      ADMIN_FEATURE_ROUTES.revoke(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE, 'adm_1'),
-      '/admin/features/TEST_MANAGEMENT/permissions/WRITE/adm_1',
     );
   });
 });
