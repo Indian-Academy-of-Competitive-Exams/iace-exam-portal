@@ -60,6 +60,7 @@ interface RowMoves {
 /** What an outstanding row can do next: a typist marks done; a reader, once the typist has, reads or sends back. */
 /** Where the section stands for this row's holder, in the words each role uses. */
 function stateOf(row: AssignmentWithTest): { label: string; variant: BadgeProps['variant'] } {
+  if (row.sectionDropped) return { label: 'Section dropped', variant: 'neutral' };
   if (row.replacedAt) return { label: 'Passed on', variant: 'neutral' };
   if (isTypist(row.role)) {
     return row.finalizedAt

@@ -20,6 +20,7 @@ import {
   type PermissionLevel,
   type SectionProgressQueryInput,
   type SectionProgressRow,
+  TEST_SCOPE,
 } from '@iace/contracts';
 import type { Prisma } from '@prisma/client';
 import { AuditContext } from '../src/audit';
@@ -394,6 +395,44 @@ describe('AssignmentsService — a hand-over reads the role as it is under the l
     const next = await racing.assign(test.id, reading(second.id), second.id);
 
     assert.equal(next.finalizedAt, null);
+  });
+});
+
+describe('AssignmentsService — a role its section took with it', () => {
+  /** The failure this prevents: a holder told the role passed to somebody else when the section simply left the test. */
+  it('says the section was dropped, apart from a role passed on', async () => {
+    const { assignments, tests } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const kept = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const dropped = await makeSection(prisma, catalog, { name: 'Quant', order: 2 });
+    const [first, second, third] = [
+      await makeAdmin(prisma),
+      await makeAdmin(prisma),
+      await makeAdmin(prisma),
+    ];
+    for (const admin of [first, second, third]) {
+      await grant(admin.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    }
+    const reading = (baseConfigSectionId: string, assigneeId: string) =>
+      body({ baseConfigSectionId, assigneeId, role: ASSIGNMENT_ROLES.PROOFREADER });
+    const passedOn = await assignments.assign(test.id, reading(kept.id, first.id), first.id);
+    await assignments.assign(test.id, reading(kept.id, second.id), second.id);
+    const standing = await assignments.assign(test.id, reading(dropped.id, third.id), third.id);
+
+    await tests.update(test.id, {
+      scope: TEST_SCOPE.SECTIONAL,
+      scopeRef: { sectionId: kept.id },
+    });
+
+    const rows = await assignments.forTest(test.id);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    assert.equal(byId.get(passedOn.id)?.sectionDropped, false);
+    assert.equal(byId.get(standing.id)?.sectionDropped, true);
+    await assert.rejects(
+      () => assignments.remove(standing.id),
+      (error: unknown) => AppException.is(error) && /left the test/.test(error.message),
+    );
   });
 });
 

@@ -38,8 +38,10 @@ export const assignmentSchema = z.object({
   readerDone: z.boolean().nullable(),
   /** On a proof-reader's row: when the section reached them. Null while it is still with others. */
   handedAt: z.string().nullable(),
-  /** Set once somebody else took the role over; the row stays as the record. */
+  /** Set once the role ended, passed on or its section dropped; the row stays as the record. */
   replacedAt: z.string().nullable(),
+  /** The role ended because its section left the test's scope, not because somebody took it over. */
+  sectionDropped: z.boolean(),
   /** Nothing has been done under it yet, so it can still be taken back. Null where not asked. */
   removable: z.boolean().nullable(),
   /** The test has been offered: its paper is frozen, and no section of it is anybody's to change. */

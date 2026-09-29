@@ -55,20 +55,32 @@ const ALREADY_HOLDS_MESSAGE = 'This admin already holds that role on this sectio
 const HAS_WORKED_MESSAGE =
   'Work has been done under this assignment, so it stays on the record. Give the role to somebody else instead.';
 const REPLACED_MESSAGE = 'This assignment has passed to somebody else and stays on the record.';
+const SECTION_DROPPED_MESSAGE =
+  'This section left the test, and the assignment stays on the record.';
 
 const notWhole = (issue: string) => formRefusal(ErrorCodes.CONFLICT, issue);
 
 const ASSIGNMENT_INCLUDE = {
-  baseConfigSection: { select: { name: true, questionCount: true, subjectId: true } },
+  baseConfigSection: {
+    select: { id: true, moduleId: true, name: true, questionCount: true, subjectId: true },
+  },
   assignee: { select: { fullName: true, email: true } },
-  test: { select: { questionPoolFilter: true, finalizedAt: true, paperSource: true } },
+  test: {
+    select: {
+      questionPoolFilter: true,
+      finalizedAt: true,
+      paperSource: true,
+      scope: true,
+      scopeRef: true,
+    },
+  },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentRow = Prisma.QuestionAssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>;
 
 const WITH_TEST_INCLUDE = {
   ...ASSIGNMENT_INCLUDE,
-  test: { select: { title: true, questionPoolFilter: true, finalizedAt: true, paperSource: true } },
+  test: { select: { ...ASSIGNMENT_INCLUDE.test.select, title: true } },
 } as const satisfies Prisma.QuestionAssignmentInclude;
 
 type AssignmentWithTestRow = Prisma.QuestionAssignmentGetPayload<{
@@ -300,9 +312,15 @@ export class AssignmentsService {
 
   /** Work done is a record: only a row nothing has been done under can be taken back. */
   async remove(id: string): Promise<void> {
-    const row = await this.prisma.questionAssignment.findUnique({ where: { id } });
+    const row = await this.prisma.questionAssignment.findUnique({
+      where: { id },
+      include: ASSIGNMENT_INCLUDE,
+    });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    if (row.replacedAt) throw new AppException(ErrorCodes.CONFLICT, REPLACED_MESSAGE);
+    if (row.replacedAt) {
+      const ended = inScope(row) ? REPLACED_MESSAGE : SECTION_DROPPED_MESSAGE;
+      throw new AppException(ErrorCodes.CONFLICT, ended);
+    }
     if (!(await this.removable(row))) {
       throw new AppException(ErrorCodes.CONFLICT, HAS_WORKED_MESSAGE);
     }
@@ -750,11 +768,18 @@ function toAssignment(
     testOffered: row.test.finalizedAt !== null,
     handedAt: row.handedAt?.toISOString() ?? null,
     replacedAt: row.replacedAt?.toISOString() ?? null,
+    sectionDropped: row.replacedAt !== null && !inScope(row),
     removable,
     sectionQuestionCount: row.baseConfigSection.questionCount,
     sectionMix: sectionMixOf(row.test.questionPoolFilter, row.baseConfigSectionId),
     sectionSubjectId: row.baseConfigSection.subjectId,
   };
+}
+
+/** Whether the test still covers the row's section; a narrower scope stands its holders down. */
+function inScope(row: Pick<AssignmentRow, 'baseConfigSection' | 'test'>): boolean {
+  const { scope, scopeRef } = row.test;
+  return scopedSections([row.baseConfigSection], scope, scopeRef as TestScopeRef | null).length > 0;
 }
 
 /** Absent means the section draws every difficulty, not zero of each — never defaulted here. */
