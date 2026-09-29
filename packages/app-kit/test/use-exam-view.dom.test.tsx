@@ -4,6 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  AppException,
+  ErrorCodes,
   TIMER_TEMPLATE,
   type ExamPaper,
   type ExamQuestion,
@@ -16,6 +18,7 @@ import {
   type ExamEngineDeps,
   type FullscreenHandle,
 } from '../src';
+import { autosaveDelayMs, SUBMIT_TIMEOUT_MS, submitRetryDelayMs } from '../src/autosave-policy';
 import { fakeStorage } from './support/fake-storage';
 
 const client = new QueryClient({
@@ -95,12 +98,12 @@ function apiWith(
   } as unknown as AppApiClient;
 }
 
-function mounted(api: AppApiClient, sitting: ExamPaper = paper()) {
+function mounted(api: AppApiClient, sitting: ExamPaper = paper(), onEnded = () => {}) {
   const deps = depsFor(api);
   return renderHook(
     () =>
       useExamView(
-        { paper: sitting, arrivedAt: Date.now(), title: null, watermark: '', onEnded: () => {} },
+        { paper: sitting, arrivedAt: Date.now(), title: null, watermark: '', onEnded },
         deps,
       ),
     {
@@ -370,4 +373,122 @@ test('a paper under one clock takes an answer at once, before the server has ans
   act(() => result.current.chooseOption('opt-early'));
 
   assert.equal(result.current.answers['sec1-q1']?.selectedOptionId, 'opt-early');
+});
+
+/** The server's SAVE_GRACE_SEC: a last batch landing later than this past the deadline is dropped as late. */
+const SUBMIT_GRACE_MS = 30_000;
+
+/** A request with no answer, the way a real fetch rejects only once its signal aborts. */
+const hangs = (signal: AbortSignal | undefined) =>
+  new Promise<never>((_resolve, reject) =>
+    signal?.addEventListener('abort', () =>
+      reject(new AppException(ErrorCodes.INTERNAL, 'gone', { httpStatus: 0 })),
+    ),
+  );
+
+type SubmitCall = { last?: { answers: { questionId: string }[] }; signal?: AbortSignal };
+type RequestExtra = { signal?: AbortSignal };
+
+function apiThatSubmits(submit: (call: SubmitCall, count: number) => Promise<unknown>) {
+  const submits: SubmitCall[] = [];
+  let saves = 0;
+  const api = {
+    me: {
+      attemptState: async () => ({ answers: {}, sections: {}, revision: 0 }),
+      saveAttemptState: (_id: string, _body: unknown, extra: RequestExtra) => {
+        saves += 1;
+        return hangs(extra.signal);
+      },
+      submitAttempt: (_id: string, body: SubmitCall, extra: RequestExtra) => {
+        submits.push({ ...body, signal: extra.signal });
+        return submit({ ...body, signal: extra.signal }, submits.length);
+      },
+    },
+  } as unknown as AppApiClient;
+  return { api, submits, saves: () => saves };
+}
+
+async function settle() {
+  for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+}
+
+/** Moves the clock in small steps, each promise chain run out before the next, so nothing leaves late. */
+async function advance(ms: number, step = 250) {
+  for (let spent = 0; spent < ms; spent += step) {
+    await act(async () => {
+      await settle();
+      mock.timers.tick(step);
+      await settle();
+    });
+  }
+}
+
+const carried = (submits: SubmitCall[]) =>
+  submits.map((call) => call.last?.answers.map((change) => change.questionId));
+
+const onePaperClock = (): ExamPaper => ({
+  ...paper(),
+  timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+});
+
+/** The failure this prevents: a submit whose socket never answers holding the student on Submitting past the deadline. */
+test('a submit the server never answers is given up and sent again, and the one that answers ends the sitting', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { api, submits } = apiThatSubmits((call, count) =>
+    count === 1 ? hangs(call.signal) : Promise.resolve({ attemptId: 'attempt-1' }),
+  );
+  let ended = 0;
+  const { result, unmount } = mounted(api, onePaperClock(), () => (ended += 1));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  act(() => result.current.chooseOption('opt-1'));
+  act(() => result.current.timer.onExpire());
+  await advance(SUBMIT_TIMEOUT_MS + submitRetryDelayMs(0));
+
+  assert.equal(submits[0]?.signal?.aborted, true, 'the hung request was given up');
+  assert.deepEqual(
+    carried(submits),
+    [['sec1-q1'], ['sec1-q1']],
+    'the retry carried the batch again',
+  );
+  assert.equal(ended, 1, 'the answer to the retry ended the sitting');
+});
+
+/** The failure this prevents: the last retry of a hung submit leaving after the server stopped taking the last batch. */
+test('a submit that never answers still starts three tries inside the grace, behind a hung save', async (t) => {
+  // Every autosave 20s apart: one falls while the retries run.
+  t.mock.method(Math, 'random', () => 0);
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { api, submits, saves } = apiThatSubmits((call) => hangs(call.signal));
+  const { result, unmount } = mounted(api, onePaperClock());
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  act(() => result.current.chooseOption('opt-1'));
+  await advance(autosaveDelayMs(Math.random));
+  assert.equal(saves(), 1, 'a save is in the air at the deadline, and never answers');
+
+  act(() => result.current.timer.onExpire());
+  await advance(SUBMIT_GRACE_MS);
+  assert.equal(submits.length, 3, 'three tries left inside the grace');
+  assert.equal(saves(), 1, 'nothing saved between them');
+
+  await advance(SUBMIT_TIMEOUT_MS * 2);
+  assert.equal(submits.length, 4, 'the first try and its three retries');
+  assert.equal(saves(), 1, 'the autosave that fell between the last two sent nothing');
+
+  await advance(autosaveDelayMs(Math.random));
+  assert.equal(result.current.submit.failed, true, 'then given up for good');
+  assert.equal(saves(), 2, 'saving picks up again once the paper has given up');
 });

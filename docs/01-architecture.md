@@ -179,9 +179,13 @@ SADD), and Postgres stays off the path.
 **A client that cannot reach the server keeps its answers and asks again, boundedly.** Answers a
 save could not deliver are queued on the client (the tab's `sessionStorage` on the web, the phone's
 own store on mobile) and re-sent on the next save or after a reload. A submit is retried only when
-the request never reached the server, at most three times at 1s, 2s and 4s, inside the server's 30s
-grace after `endsAt`; a refusal or a server error that did land is never retried, and the countdown
-fires expiry once, so a whole hall hitting zero together cannot become a retry storm.
+the request never reached the server or went unanswered for 10s, at most three times at 1s, 2s and
+4s, with nothing saved between the tries. The server's 30s grace after `endsAt` is judged when it
+takes the submit up, not when it answers, so a slow first submit is still in time; the 10s only
+leaves room to retry after a real hang, and tries still leave 5s, 16s and 28s into the grace. A
+refusal or a server error that did land is never retried, and the countdown fires expiry once. A
+server slower than 10s at the deadline does get repeat submits: the claim makes them harmless to the
+sitting, but not free, and they arrive exactly when it is saturated.
 
 **Submit is buffered through a queue.** On submit — or auto-submit at time-up — the sitting is
 flipped to `SUBMITTED` and queued under its own id; `SUBMITTED` and unscored IS the request, so no

@@ -25,7 +25,7 @@ import {
   type ExamPaper,
   type SectionEffort,
 } from '@iace/contracts';
-import { shouldRetrySubmit, submitRetryDelayMs } from '../autosave-policy';
+import { shouldRetrySubmit, SUBMIT_TIMEOUT_MS, submitRetryDelayMs } from '../autosave-policy';
 import { type FullscreenHandle } from './focus-guard';
 import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
 import { TIMER_KIND, type ExamTimerView, type ExamView } from './exam-view';
@@ -116,14 +116,26 @@ export function useExamView(
       // The question still on screen has cost time too; bank it before the last batch goes.
       state.bankOpen();
       // The last batch rides the submit: one request at the deadline, and a failed one keeps it for the retry.
-      return state.finish((last) =>
-        api.me.submitAttempt(paper.attemptId, { tab, last: last ?? undefined }),
-      );
+      return state.finish(async (last) => {
+        // A hung request is given up like one that never landed, so it is retried inside the grace.
+        const abandon = new AbortController();
+        const giveUp = setTimeout(() => abandon.abort(), SUBMIT_TIMEOUT_MS);
+        try {
+          return await api.me.submitAttempt(
+            paper.attemptId,
+            { tab, last: last ?? undefined },
+            { signal: abandon.signal },
+          );
+        } finally {
+          clearTimeout(giveUp);
+        }
+      });
     },
     retry: shouldRetrySubmit,
     retryDelay: submitRetryDelayMs,
     onError: () => {
       ending.current = false;
+      state.resume();
     },
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done; nothing waits on the refetch.

@@ -173,8 +173,12 @@ export function meClient(core: ApiCore) {
       get(ME_ATTEMPT_ROUTES.state(attemptId), liveAttemptStateSchema),
 
     /** Ends it. A second call reports the first one's outcome rather than refusing. */
-    submitAttempt: (attemptId: string, input: SubmitAttemptInput = {}): Promise<SubmittedAttempt> =>
-      write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema, input),
+    submitAttempt: (
+      attemptId: string,
+      input: SubmitAttemptInput = {},
+      extra: { signal?: AbortSignal } = {},
+    ): Promise<SubmittedAttempt> =>
+      write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema, input, extra),
 
     /** Marks, standing and the cohort beside them, for every report tab. Refused until marked. */
     scoreCard: (attemptId: string): Promise<ScoreCard> =>

@@ -19,6 +19,9 @@ export const SAVE_TIMEOUT_MS = 45_000;
 /** How long the paper waits on a save in the air: its 1s+2s+4s retries still land inside the server's 30s grace. */
 export const FINISH_WAIT_MS = 5_000;
 
+/** Only a hang retries: behind FINISH_WAIT_MS and 1s+2s waits, tries still leave 5s, 16s and 28s into the 30s grace. */
+export const SUBMIT_TIMEOUT_MS = 10_000;
+
 export function autosaveDelayMs(random: () => number = Math.random): number {
   return AUTOSAVE_EVERY_MS + Math.round((random() * 2 - 1) * AUTOSAVE_JITTER_MS);
 }

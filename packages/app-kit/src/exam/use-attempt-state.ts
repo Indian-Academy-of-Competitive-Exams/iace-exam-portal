@@ -96,6 +96,8 @@ export interface AttemptStateHandle {
   flush: () => Promise<boolean>;
   /** The paper going in: the unsent batch rides the call that ends the sitting, and nothing is saved after it. */
   finish: <T>(send: (batch: LastBatch | null) => Promise<T>) => Promise<T>;
+  /** The paper could not go in, retries spent: saving starts again, unless this tab was stood down. */
+  resume: () => void;
   /** Whether anything the student did has not reached the server yet, read at the moment of asking. */
   hasUnsent: () => boolean;
   /** The page is closing or the app backgrounding: sends everything unsent now, keeping the local copy. */
@@ -315,8 +317,7 @@ export function useAttemptState(
       while (inFlight.current && Date.now() < giveUpAt) {
         await settledWithin(inFlight.current, giveUpAt - Date.now());
       }
-      const wasStopped = stopped.current;
-      // Nothing is saved beside the paper going in, nor after it went.
+      // Nothing is saved beside the paper going in, nor between its retries, nor after it went.
       stopped.current = true;
       const idle = !hasUnsent();
       if (!idle) revision.current += 1;
@@ -329,7 +330,6 @@ export function useAttemptState(
           keepQueue();
           return done;
         } catch (error: unknown) {
-          stopped.current = wasStopped;
           failed(error);
           throw error;
         }
@@ -344,6 +344,10 @@ export function useAttemptState(
     },
     [failed, hasUnsent, inAir, keepQueue, unsentBatch],
   );
+
+  const resume = useCallback(() => {
+    stopped.current = heldElsewhere.current;
+  }, []);
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
   useEffect(() => {
@@ -468,6 +472,7 @@ export function useAttemptState(
     closeSection,
     flush,
     finish,
+    resume,
     hasUnsent,
     leave,
   };
