@@ -133,14 +133,23 @@ export class PushService {
       (target) => !isAllowedPushEndpoint(target.endpoint) || !live(target),
     );
     const orphaned = devices.filter((device) => !live(device));
+    // Matched on the owner as read: a target another sign-in rebound meanwhile is theirs now, and stays.
     if (refused.length > 0) {
       await this.prisma.pushSubscription.deleteMany({
-        where: { endpoint: { in: refused.map((target) => target.endpoint) } },
+        where: {
+          OR: refused.map(({ endpoint, studentId, sessionId }) => ({
+            endpoint,
+            studentId,
+            sessionId,
+          })),
+        },
       });
     }
     if (orphaned.length > 0) {
       await this.prisma.pushDevice.deleteMany({
-        where: { token: { in: orphaned.map((device) => device.token) } },
+        where: {
+          OR: orphaned.map(({ token, studentId, sessionId }) => ({ token, studentId, sessionId })),
+        },
       });
     }
 

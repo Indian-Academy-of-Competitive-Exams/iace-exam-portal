@@ -672,6 +672,28 @@ describe('StudentGrantsService — the escape hatch', () => {
     assert.equal(granted[0]?.testSeries.name, 'Scholarship mocks');
   });
 
+  /** docs/03 §6: a grant rolled back can be made again; a student silently never told cannot be. */
+  it('fails whole when its notification cannot be written, leaving no grant behind', async () => {
+    const { stageId } = await build();
+    const held = await seedSeries({ examStageId: stageId });
+    const student = await makeStudent(prisma);
+    const unwritable = new NotificationsService(prisma);
+    unwritable.tell = () => Promise.reject(new Error('notification write failed'));
+    const grants = new StudentGrantsService(
+      prisma,
+      new AuditContext(),
+      new FakeEventBus().asService(),
+      unwritable,
+      new AuditService(prisma, new FakeStorage() as never),
+    );
+
+    await assert.rejects(
+      grants.grant(student.id, { testSeriesId: held.id }, ADMIN),
+      /notification write failed/,
+    );
+    assert.equal(await prisma.studentGrant.count(), 0);
+  });
+
   /** Re-reading the roster it came from is the normal way to use this. */
   it('is idempotent — granting twice leaves one grant', async () => {
     const { grants, stageId } = await build();

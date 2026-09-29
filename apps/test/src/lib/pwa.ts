@@ -112,6 +112,13 @@ export async function subscribeToPush(publicKey: string): Promise<PushSubscripti
   return toSubscriptionInput(subscription);
 }
 
+/** On every signed-in load: the server binds a subscription to one session, so a new one must claim it again. */
+export async function rebindPushSubscription(): Promise<void> {
+  const subscription = await currentPushSubscription();
+  const input = subscription ? toSubscriptionInput(subscription) : null;
+  if (input) await api.me.subscribeToPush(input);
+}
+
 /** Both sides, and before sign-out too: a row left behind sends this student's bell to the next one. */
 export async function unsubscribeFromPush(): Promise<void> {
   const subscription = await currentPushSubscription();

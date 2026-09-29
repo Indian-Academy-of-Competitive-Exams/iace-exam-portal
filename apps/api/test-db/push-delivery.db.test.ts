@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { DeliveryChannel, DeliveryStatus, DevicePlatform } from '@prisma/client';
+import { DeliveryChannel, DeliveryStatus, DevicePlatform, type Prisma } from '@prisma/client';
 import { ActorTypes, NOTIFICATION_INBOX_PATH, NOTIFICATION_TYPE } from '@iace/contracts';
 import { PushService } from '../src/notifications/push.service';
 import { redisKeys } from '../src/redis/redis.keys';
@@ -399,6 +399,46 @@ describe('A push reaches only a session that is still signed in', () => {
     assert.deepEqual(fcm.sent, []);
     assert.deepEqual(await endpoints(), [SUBSCRIPTION.endpoint]);
     assert.equal(await prisma.pushDevice.count(), 0);
+  });
+
+  /** The next student signs in on the same browser while the last one's dead row is being forgotten. */
+  it('forgets a dead target only as it was read, never one another sign-in has just claimed', async () => {
+    const { student, delivery, sender, fcm, redis } = await build();
+    const next = await makeStudent(prisma);
+    await prisma.pushSubscription.create({
+      data: { studentId: student, sessionId: uid(), ...SUBSCRIPTION },
+    });
+    const claimedMidway = new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== 'pushSubscription') return Reflect.get(target, key) as unknown;
+        return new Proxy(target.pushSubscription, {
+          get(delegate, method: string | symbol) {
+            if (method !== 'deleteMany') return Reflect.get(delegate, method) as unknown;
+            return async (args: Prisma.PushSubscriptionDeleteManyArgs) => {
+              await delegate.update({
+                where: { endpoint: SUBSCRIPTION.endpoint },
+                data: { studentId: next.id, sessionId: uid() },
+              });
+              return delegate.deleteMany(args);
+            };
+          },
+        });
+      },
+    });
+    const push = new PushService(
+      claimedMidway,
+      new FakeConfig(VAPID).asService(),
+      sender as never,
+      fcm as never,
+      redis.asService(),
+    );
+
+    await push.deliver(delivery);
+
+    const kept = await prisma.pushSubscription.findUnique({
+      where: { endpoint: SUBSCRIPTION.endpoint },
+    });
+    assert.equal(kept?.studentId, next.id);
   });
 
   it('keeps pushing to a browser registered before sessions were remembered', async () => {

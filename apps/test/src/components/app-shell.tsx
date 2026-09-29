@@ -18,7 +18,7 @@ import {
   UNREAD_QUERY_KEY,
   USER_MENU_ITEMS,
 } from '../lib/constants';
-import { onPushReceived, unsubscribeFromPush } from '../lib/pwa';
+import { onPushReceived, rebindPushSubscription, unsubscribeFromPush } from '../lib/pwa';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
@@ -40,6 +40,9 @@ export function AppShell() {
     () => onPushReceived(() => void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY })),
     [queryClient],
   );
+
+  // Best effort: a browser that cannot re-register simply goes without push until the switch is set again.
+  useEffect(() => void rebindPushSubscription().catch(() => undefined), []);
 
   // A rising count is a new notification the lists have not got; a falling one is the reader reading them.
   const total = unread.data?.total ?? null;

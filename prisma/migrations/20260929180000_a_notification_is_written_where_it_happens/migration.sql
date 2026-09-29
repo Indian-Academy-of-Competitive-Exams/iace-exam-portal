@@ -3,47 +3,70 @@
 -- `notification.requested` row to OutboxEvent and a relay turned it into the Notification row a
 -- minute later, so the bell lagged the fact it told of.
 --
--- The data move, in three parts:
---   1. Every row already written has had its one push, so it is stamped as pushed: the sweep
---      must not ring every student's phone for the whole history on the first pass.
---   2. Requests still waiting in the outbox at deploy become the rows they asked for, unpushed,
---      so the sweep pushes them and books any paid channel their announcement chose. A request
---      naming a test, series or announcement that is gone keeps what still exists. One whose
---      student is gone, whose payload has no title, or whose type this build no longer has is
---      dropped, as the relay would have failed or skipped it. The dedupe key makes a request the
---      relay had already written (a crash before it marked the row) land nowhere.
---   3. Those requests are marked processed, so the outbox prune retires them.
+-- 1. `pushedAt` arrives with a fast default, so every existing row reads as already pushed
+--    without the table being rewritten under this migration's lock — the first sweep must not
+--    ring every phone for the whole history. Dropping the default leaves new rows NULL.
+-- 2. One mapping from a request's payload to its row, as a function: a request naming a test,
+--    series or announcement that is gone keeps what still exists; one whose student is gone,
+--    whose payload has no title, or whose type this build no longer has is dropped, as the relay
+--    would have failed or skipped it. The dedupe key makes a request the relay had already
+--    written land nowhere; a KEYLESS one it wrote but had not yet marked lands twice (accepted:
+--    the window is one relay pass, and only a PIN-changed notice is keyless).
+-- 3. A trigger converts any request still inserted after this commits — `docs/04` §14 runs
+--    this while the previous build still serves, and its producers keep writing requests until
+--    their containers are replaced. It is created before the backlog is taken: its lock waits out
+--    in-flight inserts, so every request is either in the backlog below or passes the trigger.
+--    Nothing in this build writes that event type, so once no older build runs it never fires.
+-- 4. The backlog is claimed and converted in one statement, so no request committed in between
+--    is marked processed without being converted.
 
-ALTER TABLE "Notification" ADD COLUMN "pushedAt" TIMESTAMPTZ(3);
-
-UPDATE "Notification" SET "pushedAt" = "createdAt";
+ALTER TABLE "Notification" ADD COLUMN "pushedAt" TIMESTAMPTZ(3) DEFAULT now();
+ALTER TABLE "Notification" ALTER COLUMN "pushedAt" DROP DEFAULT;
 
 CREATE INDEX "Notification_unpushed_idx" ON "Notification"("createdAt") WHERE "pushedAt" IS NULL;
 
-INSERT INTO "Notification" (
-  "id", "studentId", "type", "title", "body", "data", "dedupeKey",
-  "announcementId", "actBy", "testId", "testSeriesId", "createdAt"
-)
-SELECT
-  gen_random_uuid(),
-  s."id",
-  (e."payload"->>'type')::"NotificationType",
-  e."payload"->>'title',
-  e."payload"->>'body',
-  e."payload"->'data',
-  e."payload"->>'dedupeKey',
-  (SELECT a."id" FROM "Announcement" a WHERE a."id"::text = e."payload"->>'announcementId'),
-  (e."payload"->>'actBy')::timestamptz,
-  (SELECT t."id" FROM "Test" t WHERE t."id"::text = e."payload"->>'testId'),
-  (SELECT ts."id" FROM "TestSeries" ts WHERE ts."id"::text = e."payload"->>'testSeriesId'),
-  e."createdAt"
-FROM "OutboxEvent" e
-JOIN "Student" s ON s."id"::text = e."payload"->>'studentId'
-WHERE e."eventType" = 'notification.requested'
-  AND e."processedAt" IS NULL
-  AND e."payload"->>'title' IS NOT NULL
-  AND e."payload"->>'type' IN (SELECT unnest(enum_range(NULL::"NotificationType"))::text)
-ON CONFLICT DO NOTHING;
+CREATE FUNCTION "uuid_or_null"(value text) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN value::uuid
+  END
+$$;
 
-UPDATE "OutboxEvent" SET "processedAt" = now()
-WHERE "eventType" = 'notification.requested' AND "processedAt" IS NULL;
+CREATE FUNCTION "notification_from_request"(payload jsonb, requested_at timestamptz)
+RETURNS void LANGUAGE sql AS $$
+  INSERT INTO "Notification" (
+    "id", "studentId", "type", "title", "body", "data", "dedupeKey",
+    "announcementId", "actBy", "testId", "testSeriesId", "createdAt"
+  )
+  SELECT
+    gen_random_uuid(), s."id", (payload->>'type')::"NotificationType", payload->>'title',
+    payload->>'body', payload->'data', payload->>'dedupeKey',
+    a."id", (payload->>'actBy')::timestamptz, t."id", ts."id", requested_at
+  FROM "Student" s
+  LEFT JOIN "Announcement" a ON a."id" = "uuid_or_null"(payload->>'announcementId')
+  LEFT JOIN "Test" t ON t."id" = "uuid_or_null"(payload->>'testId')
+  LEFT JOIN "TestSeries" ts ON ts."id" = "uuid_or_null"(payload->>'testSeriesId')
+  WHERE s."id" = "uuid_or_null"(payload->>'studentId')
+    AND payload->>'title' IS NOT NULL
+    AND payload->>'type' = ANY (enum_range(NULL::"NotificationType")::text[])
+  ON CONFLICT DO NOTHING
+$$;
+
+CREATE FUNCTION "notification_request_written"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM "notification_from_request"(NEW."payload", NEW."createdAt");
+  NEW."processedAt" := now();
+  RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER "OutboxEvent_notification_request"
+  BEFORE INSERT ON "OutboxEvent"
+  FOR EACH ROW WHEN (NEW."eventType" = 'notification.requested')
+  EXECUTE FUNCTION "notification_request_written"();
+
+WITH taken AS (
+  UPDATE "OutboxEvent" SET "processedAt" = now()
+  WHERE "eventType" = 'notification.requested' AND "processedAt" IS NULL
+  RETURNING "payload", "createdAt"
+)
+SELECT "notification_from_request"("payload", "createdAt") FROM taken;

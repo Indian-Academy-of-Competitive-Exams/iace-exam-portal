@@ -1,7 +1,8 @@
 /**
  * Pushes what producers have written. A producer writes the bell row inside its own transaction;
- * this sweep claims the rows nobody has pushed yet, books the paid chain an announcement chose,
- * queues it behind the grace window, and only then pushes — the free channel is best effort.
+ * this sweep claims the rows nobody has pushed yet and books the paid chain an announcement chose,
+ * then pushes and queues that chain behind the grace window. A booking the queue never got is
+ * found by `repairStalled`, which runs first so a failed pass cannot skip it.
  */
 import { Injectable } from '@nestjs/common';
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
@@ -75,9 +76,9 @@ export class NotificationsProcessor extends WorkerHost {
       await this.openings.sweep();
       return;
     }
+    if (job.name === NOTIFICATION_JOBS.SWEEP) await this.deliveryRepair.repairStalled();
     // The sweep, or a write job queued before this deploy: either way the rows are already written.
     await this.pushPending();
-    if (job.name === NOTIFICATION_JOBS.SWEEP) await this.deliveryRepair.repairStalled();
   }
 
   /** One pass drains what it finds: a page at a time, so a backlog does not wait out a sweep each. */
@@ -95,7 +96,6 @@ export class NotificationsProcessor extends WorkerHost {
     const rows = await this.claimPage();
     if (rows.length === 0) return 0;
 
-    await this.schedule(rows);
     await this.push.deliverAll(
       rows.flatMap((row) =>
         row.studentId === null
@@ -110,6 +110,7 @@ export class NotificationsProcessor extends WorkerHost {
             ],
       ),
     );
+    await this.schedule(rows);
     return rows.length;
   }
 

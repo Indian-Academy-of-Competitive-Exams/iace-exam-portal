@@ -15,14 +15,14 @@ const FCM_TOKEN_TYPE = 'android';
 /** The token this phone last registered, so signing out drops the one the server actually holds. */
 let registered: string | null = null;
 
-/** Android only: iOS hands back an APNs token, which FCM cannot address without its own iOS SDK. */
+/** On every sign-in, not once per process: the server binds the token to the session now open. */
 export async function registerPushDevice(): Promise<void> {
-  // Expo Go dropped Android push in SDK 53, and asking it for a token THROWS rather than declining.
+  // Expo Go throws on a token since SDK 53, and iOS hands back an APNs token FCM cannot address.
   if (IN_EXPO_GO || !Device.isDevice || Platform.OS !== 'android') return;
 
   try {
     const token = await fcmToken();
-    if (token === null || token === registered) return;
+    if (token === null) return;
 
     await api.me.registerPushDevice({
       token,

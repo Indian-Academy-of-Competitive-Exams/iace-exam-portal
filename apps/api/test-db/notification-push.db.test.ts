@@ -130,6 +130,22 @@ describe('An announcement with a paid channel', () => {
       'SMS is what WhatsApp falls back TO, not something sent beside it',
     );
     assert.equal(deliveries.jobs.length, 1, 'booked is not enough; it has to be queued');
+    assert.ok((deliveries.jobs[0]?.delay ?? 0) > 0, 'the free channels get their window first');
+  });
+
+  /** Waiting out the window would leave the student no time to act, so the message is bought now. */
+  it('queues it at once when the deadline is too close to wait out', async () => {
+    const { processor, deliveries } = build();
+    const announcement = await makeAnnouncement(prisma, [DeliveryChannel.WHATSAPP]);
+    await told({
+      type: NOTIFICATION_TYPE.GENERIC,
+      announcementId: announcement.id,
+      actBy: new Date(Date.now() + 60_000),
+    });
+
+    await processor.pushPending();
+
+    assert.equal(deliveries.jobs[0]?.delay, 0);
   });
 
   it('books and queues nothing when the admin chose no paid channel', async () => {
