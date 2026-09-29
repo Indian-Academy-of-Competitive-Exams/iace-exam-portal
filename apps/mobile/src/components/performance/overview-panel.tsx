@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { minutes, newestFirst, sittingHint } from '@iace/app-kit';
+import { everySitting, minutes, newestFirst, sittingHint } from '@iace/app-kit';
 import {
   dispositionRates,
   effortPerSitting,
@@ -14,6 +14,7 @@ import {
   standingTiles,
   TEST_SCOPE_LABELS,
   type PerformancePoint,
+  type PerformanceTrend,
   type StudentOverview,
   type TestScope,
 } from '@iace/contracts';
@@ -55,15 +56,15 @@ export function OverviewPanel() {
           onRetry={refresh}
         />
       ) : null}
-      {overview.data ? <Body overview={overview.data} sittings={trend.data?.points ?? []} /> : null}
+      {overview.data ? <Body overview={overview.data} trend={trend.data} /> : null}
     </RefreshScroll>
   );
 }
 
 function Body({
   overview,
-  sittings,
-}: Readonly<{ overview: StudentOverview; sittings: readonly PerformancePoint[] }>) {
+  trend,
+}: Readonly<{ overview: StudentOverview; trend: PerformanceTrend | undefined }>) {
   const router = useRouter();
   const [scope, setScope] = useState(EVERY_SCOPE);
   const scopes = scopesSat(overview.subjects);
@@ -98,11 +99,11 @@ function Body({
         />
       ) : null}
 
-      <ScoreTrend points={sittings} />
+      <ScoreTrend points={trend?.points ?? []} />
 
       <Subjects overview={overview} scope={chosen} />
       <Effort overview={overview} />
-      <Sittings sittings={sittings} />
+      <Sittings sittings={everySitting(trend)} />
     </>
   );
 }

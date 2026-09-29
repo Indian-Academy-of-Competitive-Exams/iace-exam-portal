@@ -610,8 +610,8 @@ export const timeUseSchema = z.object({
 });
 export type TimeUse = z.infer<typeof timeUseSchema>;
 
-/** One sat test on the trend line, oldest first — what a chart plots. */
-const performancePointSchema = z.object({
+/** One evaluated sitting with no standing, so listing every one a student has made costs no cohort count. */
+const satSittingSchema = z.object({
   attemptId: z.string(),
   attemptNo: z.number().int(),
   testId: z.string(),
@@ -621,6 +621,11 @@ const performancePointSchema = z.object({
   maxMarks: z.number(),
   percentage: z.number(),
   accuracy: z.number(),
+});
+export type SatSitting = z.infer<typeof satSittingSchema>;
+
+/** One sat test on the trend line, oldest first — what a chart plots. */
+const performancePointSchema = satSittingSchema.extend({
   rank: z.number().int().nullable(),
   percentile: z.number().nullable(),
 });
@@ -629,6 +634,9 @@ export type PerformancePoint = z.infer<typeof performancePointSchema>;
 export const performanceTrendSchema = z.object({
   /** Distinct TESTS, not sittings: three retakes of one paper is one test done. */
   testsSat: z.number().int(),
+  /** The newest twenty at their standing now: a chart, never the list of what was sat. */
   points: z.array(performancePointSchema),
+  /** Every evaluated sitting, oldest first: what a tile, a picker or a paper's history reads. */
+  sittings: z.array(satSittingSchema),
 });
 export type PerformanceTrend = z.infer<typeof performanceTrendSchema>;

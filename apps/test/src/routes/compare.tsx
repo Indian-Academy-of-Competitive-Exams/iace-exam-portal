@@ -7,6 +7,7 @@ import {
   type CohortCurve,
   type PerformanceReport,
 } from '@iace/contracts';
+import { everySitting } from '@iace/app-kit';
 import { api } from '../lib/api';
 import { attemptReportQuery, performanceQuery } from '../lib/queries';
 import { leaderboardQueryKey } from '../lib/constants';
@@ -21,7 +22,7 @@ export function ComparePanel() {
   const trend = useQuery(performanceQuery);
 
   // `scopeId` on an ATTEMPT report is the ATTEMPT's id, so the paper has to come from elsewhere.
-  const points = trend.data?.points ?? [];
+  const points = everySitting(trend.data);
   const testId =
     report.data?.cohort?.testId ??
     points.find((point) => point.attemptId === attemptId)?.testId ??

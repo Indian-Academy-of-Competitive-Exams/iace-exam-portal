@@ -1,7 +1,13 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { boardQueryFor, isBoardAsked, LEADERBOARD_SCOPE_LABELS, scopeIdFor } from '@iace/app-kit';
+import {
+  boardQueryFor,
+  everySitting,
+  isBoardAsked,
+  LEADERBOARD_SCOPE_LABELS,
+  scopeIdFor,
+} from '@iace/app-kit';
 import { LEADERBOARD_SCOPES, testsSat, type LeaderboardScope } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
@@ -28,7 +34,7 @@ export function LeaderboardPanel() {
   const [testId, setTestId] = useState('');
   const [seriesId, setSeriesId] = useState('');
 
-  const sat = testsSat(trend.data?.points ?? []);
+  const sat = testsSat(everySitting(trend.data));
   const onSeries = scope === LEADERBOARD_SCOPES.SERIES;
   const series = useQuery({
     queryKey: PERFORMANCE_SERIES_QUERY_KEY,

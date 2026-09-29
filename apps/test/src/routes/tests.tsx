@@ -7,6 +7,7 @@ import { PageCrumbs, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
 import {
   ANY_CHOICE,
   asText,
+  everySitting,
   matching,
   resultsByTest,
   sittablesOf,
@@ -58,7 +59,7 @@ export function TestsPage() {
     asText(filters.values.state) || ANY_CHOICE,
   );
   const emptiness = emptyReason(reaches.length, rows.length);
-  const results = resultsByTest(trend.data?.points ?? []);
+  const results = resultsByTest(everySitting(trend.data));
 
   return (
     <PageFrame

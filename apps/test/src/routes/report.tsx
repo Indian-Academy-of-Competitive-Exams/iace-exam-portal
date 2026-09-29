@@ -11,7 +11,7 @@ import {
   TooltipTrigger,
 } from '@iace/ui';
 import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
-import { REPORT_TABS, newestFirst, reportTabOf, sittingHint } from '@iace/app-kit';
+import { REPORT_TABS, everySitting, newestFirst, reportTabOf, sittingHint } from '@iace/app-kit';
 import { type PerformancePoint, type ScoreCard } from '@iace/contracts';
 import { performanceQuery, scoreCardQuery } from '../lib/queries';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
@@ -127,10 +127,10 @@ export function ReportRedirect({ tab }: Readonly<{ tab: string }>) {
   return <Navigate to={ROUTES.REPORT_TAB(attemptId, tab)} replace />;
 }
 
-/** The trend is oldest-first, which is the line a chart draws and the reverse of a picker's list. */
+/** The sittings are oldest-first, which is the line a chart draws and the reverse of a picker's list. */
 function useSittings() {
   const trend = useQuery(performanceQuery);
-  const points = trend.data?.points ?? [];
+  const points = everySitting(trend.data);
   return { points, newestFirst: newestFirst(points) };
 }
 

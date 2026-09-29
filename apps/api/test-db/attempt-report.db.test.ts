@@ -407,6 +407,9 @@ describe('the trend across every test a student has sat', () => {
     );
     assert.equal(trend.testsSat, 2);
     assert.equal(trend.points[0]?.accuracy, 50);
+    const card = await reports().scoreCard(recent.studentId, old.id);
+    assert.equal(trend.sittings[0]?.maxMarks, card.maxMarks);
+    assert.equal(trend.sittings[0]?.percentage, card.percentage);
   });
 
   it('plots each sitting at its standing now, a retake at none, and nobody else’s', async () => {
@@ -460,5 +463,32 @@ describe('the trend across every test a student has sat', () => {
       sittings.slice(5),
     );
     assert.ok(trend.points.every((point) => point.rank === 1 && point.percentile === 100));
+  });
+
+  /** The defect this prevents: a tile, a picker or a paper's history forgetting the 21st sitting back. */
+  it('lists every sitting past the trend length, each with its marks and its report', async () => {
+    const catalog = await makeCatalog(prisma);
+    const student = await makeStudent(prisma);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const sittings: string[] = [];
+    for (let day = 0; day < 25; day += 1) {
+      const testId = (await makeTest(prisma, catalog)).id;
+      const submittedAt = new Date(STARTED.getTime() + day * dayMs);
+      const sitting = await makeSitting(prisma, {
+        testId,
+        studentId: student.id,
+        score: day,
+        submittedAt,
+      });
+      sittings.push(sitting.id);
+    }
+
+    const trend = await reports().performance(student.id);
+
+    assert.equal(trend.points.length, 20);
+    assert.deepEqual(
+      trend.sittings.map((sitting) => [sitting.attemptId, sitting.score]),
+      sittings.map((attemptId, day) => [attemptId, day]),
+    );
   });
 });

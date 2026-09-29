@@ -3,6 +3,7 @@ import { FlatList, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   ANY_CHOICE,
+  everySitting,
   matching,
   resultsByTest,
   sittablesOf,
@@ -54,7 +55,7 @@ export default function TestsScreen() {
     .filter((row) => seriesId === ANY || row.id === seriesId);
   const rows = inState(matching(sittablesOf(filteredSeries), q), bucket);
   const emptiness = emptyReasonOf(reaches.length, rows.length);
-  const results = resultsByTest(trend.data?.points ?? []);
+  const results = resultsByTest(everySitting(trend.data));
 
   return (
     <FlatList

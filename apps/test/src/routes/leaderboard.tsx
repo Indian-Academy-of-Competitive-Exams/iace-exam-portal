@@ -11,7 +11,13 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import { boardQueryFor, isBoardAsked, LEADERBOARD_SCOPE_LABELS, scopeIdFor } from '@iace/app-kit';
+import {
+  boardQueryFor,
+  everySitting,
+  isBoardAsked,
+  LEADERBOARD_SCOPE_LABELS,
+  scopeIdFor,
+} from '@iace/app-kit';
 import { PageCrumbs, useFilters, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
 import {
   LEADERBOARD_SCOPES,
@@ -45,7 +51,7 @@ const UNTITLED = 'Untitled test';
 export function LeaderboardPage() {
   const trend = useQuery(performanceQuery);
 
-  const sat = testsSat(trend.data?.points ?? []);
+  const sat = testsSat(everySitting(trend.data));
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
   const scopeParam = useFilters<'scope'>();

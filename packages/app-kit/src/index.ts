@@ -122,6 +122,7 @@ export {
   averageAccuracy,
   bestRank,
   continueWith,
+  everySitting,
   isBriefRefused,
   matching,
   minutes,

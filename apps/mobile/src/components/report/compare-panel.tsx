@@ -7,6 +7,7 @@ import {
   type PerformancePoint,
   type PerformanceReport,
 } from '@iace/contracts';
+import { everySitting } from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { attemptReportQuery, performanceQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
@@ -29,7 +30,7 @@ export function ComparePanel({ attemptId }: Readonly<{ attemptId: string }>) {
     void trend.refetch();
   };
 
-  const points = trend.data?.points ?? [];
+  const points = everySitting(trend.data);
   const testId = report.data?.cohort?.testId ?? testOf(points, attemptId);
   const placed = (report.data?.cohort?.cohortSize ?? 0) > 0;
 

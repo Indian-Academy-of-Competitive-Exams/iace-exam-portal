@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   averageAccuracy,
   bestRank,
+  everySitting,
   resultsByTest,
   seriesProgress,
   sittablesOf,
@@ -51,8 +52,9 @@ export default function SeriesScreen() {
   const series = catalog.data?.series.find((row) => row.id === id);
   const phase = phaseOf(catalog, series);
   const progress = series ? seriesProgress(series) : null;
-  const results = resultsByTest(trend.data?.points ?? []);
-  const sat = (trend.data?.points ?? []).filter((point) =>
+  const sittings = everySitting(trend.data);
+  const results = resultsByTest(sittings);
+  const sat = sittings.filter((point) =>
     (series?.tests ?? []).some((test) => test.id === point.testId),
   );
   const sittables = phase === 'READY' && series ? sittablesOf([series]) : [];

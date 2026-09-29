@@ -22,7 +22,7 @@ import {
   TimeReturnFigure,
   WeakestSubjectsFigure,
 } from '@iace/app-kit/browser';
-import { newestFirst, sittingHint } from '@iace/app-kit';
+import { everySitting, newestFirst, sittingHint } from '@iace/app-kit';
 import {
   TEST_SCOPE_LABELS,
   civilDate,
@@ -61,7 +61,7 @@ export function OverviewPage() {
 
   usePageTour({ id: TOUR_IDS.PERFORMANCE, steps: PERFORMANCE_TOUR, ready: overview.isSuccess });
 
-  const sat = newestFirst(trend.data?.points ?? []);
+  const sat = newestFirst(everySitting(trend.data));
   const scopes = overview.data ? scopesSat(overview.data.subjects) : [];
   const chosen = scope !== null && scopes.includes(scope) ? scope : null;
   const volume = new Map(

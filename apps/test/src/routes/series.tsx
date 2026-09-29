@@ -20,6 +20,7 @@ import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   averageAccuracy,
   bestRank,
+  everySitting,
   seriesProgress,
   shutReason,
   type SeriesProgress,
@@ -65,7 +66,7 @@ export function SeriesPage() {
 
   const series = catalog.data?.series.find((row) => row.id === seriesId);
   const progress = series ? seriesProgress(series) : null;
-  const sat = (trend.data?.points ?? []).filter((point) =>
+  const sat = everySitting(trend.data).filter((point) =>
     (series?.tests ?? []).some((test) => test.id === point.testId),
   );
 

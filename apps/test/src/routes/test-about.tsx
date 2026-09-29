@@ -17,7 +17,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
-import { isBriefRefused, shutReason } from '@iace/app-kit';
+import { everySitting, isBriefRefused, shutReason } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
   LANGUAGE_LABELS,
@@ -87,7 +87,9 @@ export function TestAboutPage() {
 
   const series = catalog.data?.series.find((row) => row.tests.some((test) => test.id === testId));
   const listed = series?.tests.find((test) => test.id === testId);
-  const past = (trend.data?.points ?? []).filter((point) => point.testId === testId).reverse();
+  const past = everySitting(trend.data)
+    .filter((point) => point.testId === testId)
+    .reverse();
 
   usePageTour({ id: TOUR_IDS.TEST_ABOUT, steps: TEST_ABOUT_TOUR, ready: brief.isSuccess });
 

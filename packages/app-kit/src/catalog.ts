@@ -7,6 +7,7 @@ import {
   testAction,
   testBucket,
   type PerformancePoint,
+  type PerformanceTrend,
   type StudentCatalogSeries,
   type StudentCatalogTest,
   type TestBucket,
@@ -102,6 +103,14 @@ export const averageAccuracy = (points: readonly { accuracy: number }[]) => {
   const mean = points.reduce((sum, point) => sum + point.accuracy, 0) / points.length;
   return `${Math.round(mean)}`;
 };
+
+/** Every sitting, oldest first, with the standing the chart counted; one older than the chart reads unranked. */
+export function everySitting(trend: PerformanceTrend | undefined): PerformancePoint[] {
+  const plotted = new Map(trend?.points.map((point) => [point.attemptId, point]));
+  return (trend?.sittings ?? []).map(
+    (sitting) => plotted.get(sitting.attemptId) ?? { ...sitting, rank: null, percentile: null },
+  );
+}
 
 /** What a sat paper scored, joined onto its catalog card from the trend a screen already holds. */
 export interface TestResult {

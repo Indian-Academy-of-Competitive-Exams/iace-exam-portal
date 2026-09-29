@@ -14,6 +14,7 @@ import {
   type LocalizedContent,
   type PerformancePoint,
   type PerformanceTrend,
+  type SatSitting,
   type ScoreCard,
   type ScoreCardQuestion,
   type SolutionQuestion,
@@ -37,7 +38,7 @@ import { optionsIn } from './rollup-fold';
 
 const NOT_YOURS = 'No such sitting';
 
-/** How many sat tests a trend line carries. Beyond this a chart is a smear, not a trend. */
+/** How many sittings a trend line carries. Beyond this a chart is a smear, not a trend. */
 const TREND_LENGTH = 20;
 const NOT_REVIEWABLE = 'This paper has not been marked yet, so there is nothing to review.';
 const NOT_MARKED = 'This paper has not been marked yet. Its score card opens the moment it is.';
@@ -220,27 +221,37 @@ export class AttemptReportService {
     };
   }
 
-  /** Every test this student has sat, oldest first — the line a trend chart draws. */
+  /** Every sitting this student has had marked, oldest first; only the chart's newest are stood. */
   async performance(studentId: string): Promise<PerformanceTrend> {
-    const [sat, tests] = await Promise.all([
-      this.prisma.attempt.findMany({
-        where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
-        orderBy: { submittedAt: 'desc' },
-        take: TREND_LENGTH,
-        select: TREND_SELECT,
-      }),
-      this.prisma.attempt.findMany({
-        where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
-        distinct: ['testId'],
-        select: { testId: true },
-      }),
+    const rows = await this.prisma.attempt.findMany({
+      where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+      orderBy: { submittedAt: { sort: 'asc', nulls: 'first' } },
+      select: SITTING_SELECT,
+    });
+    const testIds = [...new Set(rows.map((row) => row.testId))];
+    const [marks, standings] = await Promise.all([
+      this.paperMarks(testIds),
+      this.leaderboard.standingsOf(rows.slice(-TREND_LENGTH).map((row) => row.id)),
     ]);
-    const standings = await this.leaderboard.standingsOf(sat.map((row) => row.id));
+    const sittings = rows.map((row) => toSatSitting(row, marks.get(row.testId) ?? 0));
 
     return {
-      testsSat: tests.length,
-      points: [...sat].reverse().map((row) => toPerformancePoint(row, standings.get(row.id))),
+      testsSat: testIds.length,
+      points: sittings
+        .slice(-TREND_LENGTH)
+        .map((sitting) => toPerformancePoint(sitting, standings.get(sitting.attemptId))),
+      sittings,
     };
+  }
+
+  /** The PAPER's own marks, so one sitting cannot read one percentage here and another on its card. */
+  private async paperMarks(testIds: readonly string[]): Promise<Map<string, number>> {
+    const rows = await this.prisma.paperQuestion.groupBy({
+      by: ['testId'],
+      where: { testId: { in: [...testIds] } },
+      _sum: { marks: true },
+    });
+    return new Map(rows.map((row) => [row.testId, round(Number(row._sum.marks ?? 0))]));
   }
 
   /** The answer key. Only a sitting the student finished and had marked ever reaches it. */
@@ -347,7 +358,7 @@ function toSolutionQuestion(
   };
 }
 
-const TREND_SELECT = {
+const SITTING_SELECT = {
   id: true,
   attemptNo: true,
   testId: true,
@@ -355,18 +366,13 @@ const TREND_SELECT = {
   score: true,
   correctCount: true,
   wrongCount: true,
-  // The PAPER's own marks, so one sitting cannot read one percentage here and another on its card.
-  test: { select: { title: true, paperQuestions: { select: { marks: true } } } },
+  test: { select: { title: true } },
 } as const satisfies Prisma.AttemptSelect;
 
-type TrendRow = Prisma.AttemptGetPayload<{ select: typeof TREND_SELECT }>;
+type SittingRow = Prisma.AttemptGetPayload<{ select: typeof SITTING_SELECT }>;
 
-/** A retake is outside the cohort, so it has no standing and plots no rank or percentile. */
-function toPerformancePoint(row: TrendRow, standing: Standing | undefined): PerformancePoint {
+function toSatSitting(row: SittingRow, maxMarks: number): SatSitting {
   const score = Number(row.score ?? 0);
-  const maxMarks = round(
-    row.test.paperQuestions.reduce((sum, question) => sum + Number(question.marks), 0),
-  );
   const attempted = (row.correctCount ?? 0) + (row.wrongCount ?? 0);
   return {
     attemptId: row.id,
@@ -378,7 +384,10 @@ function toPerformancePoint(row: TrendRow, standing: Standing | undefined): Perf
     maxMarks,
     percentage: percentageOf(score, maxMarks),
     accuracy: attempted === 0 ? 0 : round(((row.correctCount ?? 0) / attempted) * 100),
-    rank: standing?.rank ?? null,
-    percentile: standing?.percentile ?? null,
   };
+}
+
+/** A retake is outside the cohort, so it has no standing and plots no rank or percentile. */
+function toPerformancePoint(sitting: SatSitting, standing: Standing | undefined): PerformancePoint {
+  return { ...sitting, rank: standing?.rank ?? null, percentile: standing?.percentile ?? null };
 }
