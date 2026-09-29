@@ -36,37 +36,22 @@ export async function reopenReadingIfUnchecked(
   });
 }
 
-/** A reworded question loses its ticks on every draft that serves the new words, on the paper or off it, and a whole released section holding it goes back to its reader. */
+/** A reworded question loses its ticks on every draft, on the paper or off it, and a whole released section holding it goes back to its reader. */
 export async function uncheckReworded(
   tx: Prisma.TransactionClient,
   questionId: string,
-  currentVersionId: string,
 ): Promise<void> {
-  // A draft still pinning an earlier version serves the words its reader ticked, so it keeps the tick.
-  const onEarlierWords = await tx.paperQuestion.findMany({
-    where: {
-      questionId,
-      test: { finalizedAt: null },
-      questionVersionId: { not: currentVersionId },
-    },
-    select: { testId: true },
-  });
   // Off the paper too: a question taken off and put back must not return under the old words' tick.
   await tx.questionReview.updateMany({
-    where: {
-      questionId,
-      test: { finalizedAt: null },
-      testId: { notIn: onEarlierWords.map((row) => row.testId) },
-      checkedAt: { not: null },
-    },
+    where: { questionId, test: { finalizedAt: null }, checkedAt: { not: null } },
     // checkedById stays: who read the old words did the work, and removing their seat asks that.
     data: { checkedAt: null },
   });
-  const onNewWords = await tx.paperQuestion.findMany({
-    where: { questionId, test: { finalizedAt: null }, questionVersionId: currentVersionId },
+  const onDrafts = await tx.paperQuestion.findMany({
+    where: { questionId, test: { finalizedAt: null } },
     select: { testId: true, baseConfigSectionId: true },
   });
-  for (const { testId, baseConfigSectionId } of onNewWords) {
+  for (const { testId, baseConfigSectionId } of onDrafts) {
     await reopenReadingIfUnchecked(tx, testId, baseConfigSectionId);
   }
 }
