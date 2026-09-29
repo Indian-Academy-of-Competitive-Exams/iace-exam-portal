@@ -67,23 +67,29 @@ export interface TestBoardRow {
   rank: number;
   score: number;
   cohort: number;
+  percentile: number;
   name: string | null;
   branch: string | null;
   is_you: boolean;
 }
 
-/** The podium and the reader's neighbourhood, seated in `RANK_ORDER`. */
+/** The podium and the reader's neighbourhood, seated in `RANK_ORDER`, with `testResultsSql`'s percentile. */
 export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
   return Prisma.sql`
     WITH ranked AS (
       SELECT a."id", a."studentId", a."score",
              (ROW_NUMBER() OVER (ORDER BY ${RANK_ORDER}))::int AS rank,
-             (COUNT(*) OVER ())::int AS cohort
+             (COUNT(*) OVER ())::int AS cohort,
+             sitting_percentile(
+               RANK() OVER (ORDER BY a."score" ASC) - 1,
+               COUNT(*) OVER (PARTITION BY a."score"),
+               COUNT(*) OVER ()
+             )::float8 AS percentile
       FROM "Attempt" a
       WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
     ),
     mine AS (SELECT rank FROM ranked WHERE "id" = ${attemptId}::uuid)
-    SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort,
+    SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort, r.percentile,
            s."fullName" AS name, br."name" AS branch, (r."id" = ${attemptId}::uuid) AS is_you
     FROM ranked r
     JOIN "Student" s ON s."id" = r."studentId"

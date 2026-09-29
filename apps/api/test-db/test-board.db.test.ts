@@ -24,7 +24,7 @@ import {
 
 const prisma = testPrisma();
 const leaderboard = new LeaderboardService(prisma);
-const view = new LeaderboardViewService(prisma, leaderboard);
+const view = new LeaderboardViewService(prisma);
 
 after(() => prisma.$disconnect());
 
@@ -95,6 +95,29 @@ describe('the board for one paper', () => {
       [],
     );
     leaderboardSchema.parse(read);
+  });
+
+  /** The board's own window must quote the standing the score card does, ties and all. */
+  it('gives a reader off the podium, level on marks with others, the standing they hold', async () => {
+    const testId = await paper();
+    const field = [150, 150, 120, 120, 120, 100, 100, 100, 60, 60, 60, 60, 60, 60];
+    for (const [seat, score] of field.entries()) {
+      await entrant(testId, `Seat ${seat}`, score, { timeTakenSec: 600 + seat });
+    }
+    const me = await entrant(testId, 'Harshith Diyyala', 100, { timeTakenSec: 3000 });
+
+    const read = await board(me.studentId, testId);
+    const standing = await leaderboard.standing(testId, me.attemptId);
+
+    assert.deepEqual(standing, { rank: 9, percentile: 53.33, cohortSize: 15 });
+    assert.deepEqual(
+      [read.you?.rank, read.you?.percentile, read.cohortSize],
+      [standing.rank, standing.percentile, standing.cohortSize],
+    );
+    assert.equal(
+      read.podium.some((row) => row.isYou),
+      false,
+    );
   });
 
   it('seats equal marks by time taken, and a sitting with no recorded time after a timed one', async () => {

@@ -17,7 +17,6 @@ import {
   type LeaderboardScope,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { LeaderboardService } from './leaderboard.service';
 import { boardName, deltaOf, splitBoard } from './leaderboard-board';
 import { pointsBoardSql, testBoardSql, type PointsRow, type TestBoardRow } from './ranking-sql';
 
@@ -26,10 +25,7 @@ const NO_SERIES = 'No such test series';
 
 @Injectable()
 export class LeaderboardViewService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly leaderboard: LeaderboardService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async board(studentId: string, query: LeaderboardQuery): Promise<Leaderboard> {
     if (query.scope === LEADERBOARD_SCOPES.TEST) {
@@ -48,25 +44,23 @@ export class LeaderboardViewService {
     if (!mine) throw new AppException(ErrorCodes.NOT_FOUND, NO_BOARD);
 
     const frame = emptyBoard(LEADERBOARD_SCOPES.TEST, testId, mine.test.title);
-    const [standing, seats] = await Promise.all([
-      this.leaderboard.standing(testId, mine.id),
-      this.prisma.$queryRaw<TestBoardRow[]>(testBoardSql(testId, mine.id)),
-    ]);
-    if (standing === null) return frame;
+    const seats = await this.prisma.$queryRaw<TestBoardRow[]>(testBoardSql(testId, mine.id));
+    // A sitting the cohort does not count has no seat, and reads a board with nobody on it.
+    const seated = seats.find((seat) => seat.is_you);
+    if (seated === undefined) return frame;
 
     const rows: LeaderboardRow[] = seats.map((seat) => ({
       rank: seat.rank,
       name: boardName(seat.name),
       branch: seat.branch,
       value: seat.score,
-      percentile: seat.is_you ? standing.percentile : null,
+      percentile: seat.is_you ? seat.percentile : null,
       sittings: 1,
       deltaRank: null,
       isYou: seat.is_you,
     }));
 
-    const cohortSize = seats[0]?.cohort ?? standing.cohortSize;
-    return { ...frame, ...splitBoard(rows), cohortSize, you: yours(rows) };
+    return { ...frame, ...splitBoard(rows), cohortSize: seated.cohort, you: yours(rows) };
   }
 
   /** Two or more papers. Percentile points, never marks. */

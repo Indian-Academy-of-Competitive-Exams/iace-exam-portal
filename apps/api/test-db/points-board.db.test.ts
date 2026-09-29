@@ -11,7 +11,6 @@ import {
   type Leaderboard,
   type LeaderboardRow,
 } from '@iace/contracts';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { LeaderboardViewService } from '../src/attempts/leaderboard-view.service';
 import {
   makeCatalog,
@@ -24,7 +23,7 @@ import {
 } from './support/database';
 
 const prisma = testPrisma();
-const view = new LeaderboardViewService(prisma, new LeaderboardService(prisma));
+const view = new LeaderboardViewService(prisma);
 
 after(() => prisma.$disconnect());
 
