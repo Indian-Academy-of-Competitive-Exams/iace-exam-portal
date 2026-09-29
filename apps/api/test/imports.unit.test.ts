@@ -111,12 +111,23 @@ const context = (over: Partial<ImportContext> = {}): ImportContext => ({
         fullName: 'Already Here',
         hasPin: true,
         currentBranchId: 'br_ameerpet',
+        enrolledCourses: [],
+        enrolledExams: [],
+        programs: ['SSC FOUNDATION'],
       },
     ],
     // Added by an admin and never signed in: this one still needs a starting PIN.
     [
       '9000000002',
-      { id: 'stu_no_pin', fullName: null, hasPin: false, currentBranchId: 'br_ameerpet' },
+      {
+        id: 'stu_no_pin',
+        fullName: null,
+        hasPin: false,
+        currentBranchId: 'br_ameerpet',
+        enrolledCourses: [],
+        enrolledExams: [],
+        programs: [],
+      },
     ],
   ]),
   branchByName: new Map([
@@ -333,6 +344,23 @@ describe('the columns an admin actually writes', () => {
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.match(plan.rows[0]?.errors.join(' ') ?? '', /reaches no test series/);
+  });
+
+  /** An import only adds, so a sheet that fills in names alone must not be refused for a student who already reaches something. */
+  it('judges and shows an existing student as the row leaves them holding', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9000000001', 'OFFLINE', 'AMEERPET', '', 'SSC CGL', '')),
+      context(),
+    );
+    const blank = planStudentImport(
+      readCsvTable(sheet('9000000001', 'OFFLINE', 'AMEERPET', '', '', '')),
+      context(),
+    );
+
+    assert.deepEqual(plan.rows[0]?.programs, ['SSC FOUNDATION']);
+    assert.deepEqual(plan.rows[0]?.enrolledExams, ['SSC CGL']);
+    assert.deepEqual(blank.rows[0]?.errors, []);
+    assert.equal(blank.rows[0]?.action, 'update');
   });
 
   it('refuses an exam code and a program code the catalog does not hold', () => {

@@ -155,6 +155,8 @@ const STUDENT_IMPORT_NOTES = [
   ['Enrolled Courses, Enrolled Exams and Programs decide which test series a student'],
   ['can open. Every row needs AT LEAST ONE of the three. A row with none creates a'],
   ['student who can open nothing, and is reported rather than imported.'],
+  ['For a student already on the platform, an import only ADDS: what they hold stays,'],
+  ['a blank cell removes nothing, and access is taken away on their own screen.'],
   [''],
   ['Separate several values with commas: "SSC CGL, SSC CHSL". Semicolons and slashes'],
   ['work too. Exam and program codes must already exist in the catalog.'],

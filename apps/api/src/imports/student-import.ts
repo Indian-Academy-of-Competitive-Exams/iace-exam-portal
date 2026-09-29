@@ -47,7 +47,15 @@ export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
   existingByMobile: Map<
     string,
-    { id: string; fullName: string | null; hasPin: boolean; currentBranchId: string | null }
+    {
+      id: string;
+      fullName: string | null;
+      hasPin: boolean;
+      currentBranchId: string | null;
+      enrolledCourses: ExamCourse[];
+      enrolledExams: string[];
+      programs: string[];
+    }
   >;
   /** Canonical branch name → the branch. Active only: a retired one takes no new students. */
   branchByName: Map<string, { id: string; type: BranchType }>;
@@ -348,6 +356,10 @@ function planRow(
   const { mobile } = number;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
+  // An import only adds, so the row is planned, judged and shown as what it will leave the student holding.
+  const enrolledCourses = union(existing?.enrolledCourses ?? [], courses.courses);
+  const heldExams = union(existing?.enrolledExams ?? [], enrolledExams);
+  const heldPrograms = union(existing?.programs ?? [], programs);
 
   const errors = [
     name.error,
@@ -357,7 +369,7 @@ function planRow(
     courses.error,
     unknownExams.length > 0 ? `No such exam code: ${unknownExams.join(', ')}.` : undefined,
     unknownPrograms.length > 0 ? `No such program code: ${unknownPrograms.join(', ')}.` : undefined,
-    reachesNothing(courses.courses, enrolledExams, programs),
+    reachesNothing(enrolledCourses, heldExams, heldPrograms),
     ...profileErrors,
   ].filter((error): error is string => error !== undefined);
 
@@ -370,9 +382,9 @@ function planRow(
     studentType: type.studentType,
     branchName: branch.branchName,
     currentBranchId: branch.currentBranchId,
-    enrolledCourses: courses.courses,
-    enrolledExams,
-    programs,
+    enrolledCourses,
+    enrolledExams: heldExams,
+    programs: heldPrograms,
     profile,
     existingStudentId: existing?.id ?? null,
     // A student who already chose a PIN keeps it. Re-importing last term's roster must not hand every one of those accounts back to the sheet.
@@ -381,6 +393,10 @@ function planRow(
     errors,
   };
 }
+
+const union = <T>(held: readonly T[], added: readonly T[]): T[] => [
+  ...new Set([...held, ...added]),
+];
 
 /** Course, exam OR program — any one grants access, so none of the three opens nothing. */
 function reachesNothing(
