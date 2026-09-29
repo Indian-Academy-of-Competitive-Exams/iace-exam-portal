@@ -79,18 +79,6 @@ describe('Pricing an announcement before it is sent', () => {
 
     assert.equal(priced.estimatedCostPaise, 3 * 17, 'SMS is a fallback, not a second message');
   });
-
-  /** A student with no number on file cannot be reached by a paid channel, so nobody pays for them. */
-  it('prices only the students a paid channel could reach', async () => {
-    const { audience, roster } = await branchOf();
-    await prisma.student.update({ where: { id: roster[0]?.id ?? '' }, data: { mobile: '' } });
-
-    const priced = await service.preview(audience, ['WHATSAPP']);
-
-    assert.equal(priced.recipientCount, 3);
-    assert.equal(priced.reachableCount, 2);
-    assert.equal(priced.estimatedCostPaise, 2 * 17);
-  });
 });
 
 describe('Sending an announcement', () => {

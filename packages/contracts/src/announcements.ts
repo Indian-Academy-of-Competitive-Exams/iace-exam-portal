@@ -41,8 +41,6 @@ export type CreateAnnouncementBody = z.infer<typeof createAnnouncementSchema>;
 /** Asked before sending, and again on the server at send: the roster moves between the two. */
 export const announcementPreviewSchema = z.object({
   recipientCount: z.number(),
-  /** How many of them a paid channel could actually reach — the rest have no mobile on file. */
-  reachableCount: z.number(),
   estimatedCostPaise: z.number(),
   /** True when the cohort is larger than one send is allowed to be. */
   overCap: z.boolean(),

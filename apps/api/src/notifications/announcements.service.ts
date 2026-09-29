@@ -60,15 +60,11 @@ export class AnnouncementsService {
     const where = cohortWhere(audience);
     const cap = this.config.get('NOTIFICATION_MAX_RECIPIENTS');
 
-    const [recipientCount, reachableCount] = await this.prisma.$transaction([
-      this.prisma.student.count({ where }),
-      this.prisma.student.count({ where: { ...where, mobile: { not: '' } } }),
-    ]);
+    const recipientCount = await this.prisma.student.count({ where });
 
     return {
       recipientCount,
-      reachableCount,
-      estimatedCostPaise: this.priceOf(reachableCount, paidChannels),
+      estimatedCostPaise: this.priceOf(recipientCount, paidChannels),
       overCap: recipientCount > cap,
       cap,
     };
@@ -96,8 +92,7 @@ export class AnnouncementsService {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'That reaches nobody');
     }
 
-    const reachable = await this.prisma.student.count({ where: { ...where, mobile: { not: '' } } });
-    const estimatedCostPaise = this.priceOf(reachable, input.paidChannels);
+    const estimatedCostPaise = this.priceOf(recipients.length, input.paidChannels);
 
     const id = await this.prisma.$transaction(
       async (tx) => {
