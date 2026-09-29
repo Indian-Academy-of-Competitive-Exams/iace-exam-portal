@@ -278,7 +278,8 @@ export class ImportsService {
           // The branch follows the sheet, and only a NON_IACE row reaches here without one.
           ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
           ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
-          ...readiness,
+          // Only a row that changes the profile restates the flags, so it cannot undo a save made mid-import.
+          ...(profile ? readiness : {}),
           ...startingPin,
         },
       });
