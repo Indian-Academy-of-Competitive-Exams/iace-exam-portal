@@ -261,9 +261,10 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   be accepted. A save is still taken up to 30 seconds past the deadline: a slow network is not a
   cheat.
 - **Submit's order is the design.** Answers are written before the sitting is claimed, so a write
-  that throws leaves it open with its state intact; the claim and the scoring request commit
-  together, so no crash strands an attempt nobody scores; the live state is taken last, so nothing
-  scores a half-written paper. A sitting nobody ended is ended by the sweeper.
+  that throws leaves it open with its state intact; the live state is taken behind the claim and
+  written last, so nothing scores a half-written paper; only then is it queued for scoring. A sitting
+  left `SUBMITTED` and unscored is queued again by the sweeper under the same id, and a sitting
+  nobody ended is ended by it.
 - The pre-test gate is minimal — mother's name, father's name, date of birth. It **prompts**, and
   `profileCompleted` only drives a nudge. Neither blocks a sitting.
 - The in-exam screen replicates the government CBT faithfully; it is the one thing students expect to

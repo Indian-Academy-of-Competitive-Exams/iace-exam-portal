@@ -61,7 +61,8 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const metrics = new FakeMetrics();
-  const outbox = new ScoringOutbox(prisma, new FakeQueue().asQueue());
+  const scoring = new FakeQueue();
+  const outbox = new ScoringOutbox(prisma, scoring.asQueue());
   const sweeper = new AttemptSweeperProcessor(
     prisma,
     state,
@@ -71,7 +72,7 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
     fakeQueueFailures(),
     metrics.asService(),
   );
-  return { asked, sweeper, rollupQueue, state, metrics, outbox };
+  return { asked, sweeper, rollupQueue, scoring, state, metrics, outbox };
 }
 
 const ended = () => prisma.attempt.count({ where: { status: ATTEMPT_STATUS.SUBMITTED } });
@@ -174,12 +175,14 @@ describe('AttemptSweeperProcessor — asking again for the never-scored', () => 
   /** The gap this closes: a backlog of a handful sat invisible behind a queue depth of zero. */
   it('asks again for the whole backlog when it fits in one sweep, and reports it on the gauge', async () => {
     const ids = await unscored(3);
-    const { sweeper, metrics } = build();
+    const { sweeper, scoring, metrics } = build();
 
     await sweeper.process();
 
-    const requested = await prisma.outboxEvent.findMany({ where: { aggregateId: { in: ids } } });
-    assert.equal(requested.length, 3);
+    assert.deepEqual(
+      scoring.jobs.map((job) => (job.data as { attemptId: string }).attemptId).sort(),
+      [...ids].sort(),
+    );
     assert.deepEqual(metrics.scoringBacklog, [3]);
   });
 
@@ -187,11 +190,11 @@ describe('AttemptSweeperProcessor — asking again for the never-scored', () => 
   it('bounds one sweep to the ceiling, not the whole backlog, but reports the true size', async () => {
     const count = NEVER_SCORED_BATCH_CEILING + 5;
     await unscored(count);
-    const { sweeper, metrics } = build();
+    const { sweeper, scoring, metrics } = build();
 
     await sweeper.process();
 
-    assert.equal(await prisma.outboxEvent.count(), NEVER_SCORED_BATCH_CEILING);
+    assert.equal(scoring.jobs.length, NEVER_SCORED_BATCH_CEILING);
     assert.deepEqual(metrics.scoringBacklog, [count]);
   });
 });

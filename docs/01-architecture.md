@@ -183,9 +183,10 @@ the request never reached the server, at most three times at 1s, 2s and 4s, insi
 grace after `endsAt`; a refusal or a server error that did land is never retried, and the countdown
 fires expiry once, so a whole hall hitting zero together cannot become a retry storm.
 
-**Submit is buffered through a queue.** On submit — or auto-submit at time-up — the scoring request
-is inserted in the same transaction that flips the sitting to `SUBMITTED`, so no crash can strand an
-attempt nobody scores. Handing it to BullMQ is a separate, repeatable step, deduplicated by job id.
+**Submit is buffered through a queue.** On submit — or auto-submit at time-up — the sitting is
+flipped to `SUBMITTED` and queued under its own id; `SUBMITTED` and unscored IS the request, so no
+crash can strand an attempt nobody scores: the sweeper queues it again under the same id, which
+BullMQ holds once. A re-score, which leaves no such state behind, is an `OutboxEvent` instead.
 The worker evaluates (marks and negative marks) and writes the durable scored fields, the time the
 sitting took among them. Thousands of simultaneous submits become a queue instead of thousands of
 synchronous transactions fighting each other — nobody waits on it, but it is not instant: `docs/04`

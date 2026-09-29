@@ -1,7 +1,8 @@
 /**
- * Submitted implies scored. The request is INSERTED in the same transaction that flips a sitting
- * to SUBMITTED, so the two commit together and no crash can strand an attempt nobody scores.
- * Handing it to the queue is a separate, repeatable step — at-least-once, deduplicated by job id.
+ * Asking for a score. A submitted sitting is its own request: queued under its own id, and queued
+ * again by the sweeper while it stays unscored — BullMQ holds one job per id, so asking twice is
+ * asking once. A re-score has no such state to find, so it alone is written as an outbox row in
+ * the transaction that caused it, and handed on by the sweeper.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -43,7 +44,19 @@ export class ScoringOutbox {
     @InjectQueue(QUEUE_NAMES.SCORING) private readonly scoring: Queue<ScoringJobData>,
   ) {}
 
-  /** Written with the caller's own transaction: a SUBMITTED attempt always carries one of these. */
+  /** Each sitting under its own id: a job the queue still holds swallows the second ask. */
+  async queue(attempts: readonly { id: string; testId: string }[]): Promise<void> {
+    if (attempts.length === 0) return;
+    await this.scoring.addBulk(
+      attempts.map((attempt) => ({
+        name: QUEUE_NAMES.SCORING,
+        data: { attemptId: attempt.id, testId: attempt.testId },
+        opts: keyedJob(scoringJobId(attempt.id)),
+      })),
+    );
+  }
+
+  /** A re-score asked for again: written with the caller's own transaction. */
   async request(
     tx: Prisma.TransactionClient,
     attempt: { id: string; testId: string },
@@ -80,11 +93,11 @@ export class ScoringOutbox {
     return sittings.length;
   }
 
-  /** One id straight after a submit, or every request left pending when the sweeper runs. */
-  async relay(eventId?: string): Promise<number> {
+  /** Every re-score request left pending past its grace, when the sweeper runs. */
+  async relay(): Promise<number> {
     let handed = 0;
     for (;;) {
-      const pending = await this.pending(eventId);
+      const pending = await this.pending();
       const sent = await this.deliver(pending);
       // Drains a backlog rather than 200 of it a sweep, and stops on a queue nobody can reach.
       if (sent === null) return handed;
@@ -93,14 +106,14 @@ export class ScoringOutbox {
     }
   }
 
-  private async pending(eventId?: string): Promise<PendingRequest[]> {
+  private async pending(): Promise<PendingRequest[]> {
     const settling = new Date(Date.now() - RELAY_GRACE_SEC * MS_PER_SECOND);
     return this.prisma.outboxEvent.findMany({
       where: {
         eventType: SCORING_REQUEST.EVENT_TYPE,
         processedAt: null,
-        // A submit hands on its own; a sweep waits, or it scores answers still being written.
-        ...(eventId ? { id: eventId } : { createdAt: { lt: settling } }),
+        // Past its grace, so the transaction that wrote it has settled everything it re-scores.
+        createdAt: { lt: settling },
       },
       orderBy: { createdAt: 'asc' },
       take: RELAY_BATCH,

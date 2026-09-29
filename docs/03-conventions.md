@@ -207,9 +207,9 @@ does not run.
 | `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired     |
 | `access.catalog_changed` | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired     |
 
-Submit and scoring do not go through the bus: they go through `OutboxEvent` and the BullMQ scoring
-queue, which is the durable path and the right one for a write that must not be lost. Counting does
-not ride an outbox row at all — a student's aggregates commit with their marks, and the cohort's are
+Submit and scoring do not go through the bus: a submitted sitting goes to the BullMQ scoring queue
+under its own id, and its unscored state is what the sweeper finds if that was lost; a re-score,
+which leaves no such state, goes through `OutboxEvent`. Counting does not ride an outbox row at all — a student's aggregates commit with their marks, and the cohort's are
 recounted by a periodic pass that finds its own work (`docs/02` §9).
 
 **Notifications left the bus for the same reason.** They used to be `@OnEvent` handlers that
