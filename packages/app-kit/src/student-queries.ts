@@ -74,7 +74,12 @@ export const attemptPaperQueryKey = (attemptId: string) =>
 
 /** One test's shared paper, keyed by the resolved languages — it is held before any sitting exists. */
 export const testPaperQueryKey = (testId: string, languages: readonly string[]) =>
-  ['me', 'test-paper', testId, [...languages].sort().join(',')] as const;
+  [
+    'me',
+    'test-paper',
+    testId,
+    [...languages].sort((a, b) => a.localeCompare(b)).join(','),
+  ] as const;
 
 /** The reads several screens share, over whichever client the app built; each screen draws its own expected refusal. */
 export function createStudentQueries(api: AppApiClient) {

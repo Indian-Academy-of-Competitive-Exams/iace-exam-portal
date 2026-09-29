@@ -155,11 +155,10 @@ export function meClient(core: ApiCore) {
       get(ME_ATTEMPT_ROUTES.paper(attemptId), examPaperSchema),
 
     /** One test's paper, holdable before the sitting exists. Ordered by the seed a start hands back. */
-    testPaper: (testId: string, languages: readonly LanguageCode[] = []): Promise<SharedPaper> =>
-      get(
-        `${ME_ATTEMPT_ROUTES.testPaper(testId)}${languages.length > 0 ? `?languages=${languages.join(',')}` : ''}`,
-        sharedPaperSchema,
-      ),
+    testPaper: (testId: string, languages: readonly LanguageCode[] = []): Promise<SharedPaper> => {
+      const query = languages.length > 0 ? `?languages=${languages.join(',')}` : '';
+      return get(`${ME_ATTEMPT_ROUTES.testPaper(testId)}${query}`, sharedPaperSchema);
+    },
 
     /** The autosave. Batches what changed since the last one; the server merges and decides. */
     saveAttemptState: (
