@@ -115,18 +115,32 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
   /** A drop or a bonus only bumps the test's revision; every sitting marked before it is found here. */
   private async askForRescores(): Promise<void> {
-    const behind = await this.prisma.$queryRaw<{ id: string; testId: string; revision: number }[]>`
+    let queued = 0;
+    let after: string | null = null;
+    for (;;) {
+      const page = await this.behindThePaper(after);
+      await this.scoring.rescore(page);
+      queued += page.length;
+      // Paged past the last id, not re-read: a queued sitting stays behind until it is marked.
+      if (page.length < RESCORE_PAGE) break;
+      after = page.at(-1)?.id ?? null;
+    }
+    if (queued > 0)
+      this.logger.log(`Queued ${queued} sittings to be marked against a changed paper`);
+  }
+
+  private behindThePaper(after: string | null) {
+    const past = after === null ? Prisma.empty : Prisma.sql`AND a."id" > ${after}::uuid`;
+    return this.prisma.$queryRaw<{ id: string; testId: string; revision: number }[]>`
       SELECT a."id", a."testId", t."paperRevision" AS revision
       FROM "Test" t
       JOIN "Attempt" a
         ON a."testId" = t."id"
        AND ${EVALUATED}
        AND a."scoredRevision" < t."paperRevision"
-      WHERE t."paperRevision" > 0
-      LIMIT ${NEVER_SCORED_BATCH_CEILING}`;
-    await this.scoring.rescore(behind);
-    if (behind.length > 0)
-      this.logger.log(`Queued ${behind.length} sittings to be marked against a changed paper`);
+      WHERE t."paperRevision" > 0 ${past}
+      ORDER BY a."id"
+      LIMIT ${RESCORE_PAGE}`;
   }
 
   /** The gauge queue depth cannot show: sittings ended this long ago and still unscored. */
@@ -167,8 +181,11 @@ const IN_PROGRESS = Prisma.raw(`'${ATTEMPT_STATUS.IN_PROGRESS}'`);
 /** Literal, not a parameter: a bound enum cannot prove Attempt_rescore_idx's predicate, so the planner skips it. */
 const EVALUATED = Prisma.raw(`a."status" = '${ATTEMPT_STATUS.EVALUATED}'`);
 
-/** Either arm's ceiling on one sweep's asks: wide enough to drain a 6,000 hall in minutes, not hours. */
+/** The never-scored arm's own ceiling: wide enough to drain 6,000 in minutes, not hours. */
 export const NEVER_SCORED_BATCH_CEILING = 1000;
+
+/** Sittings behind their paper read at a time; one sweep keeps paging until a short page. */
+export const RESCORE_PAGE = 1000;
 
 /** How many stranded sittings one read holds. A sweep keeps reading until the backlog is gone. */
 export const SWEEP_BATCH = 200;

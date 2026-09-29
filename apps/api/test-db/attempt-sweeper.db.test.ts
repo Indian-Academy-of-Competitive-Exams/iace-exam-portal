@@ -5,12 +5,18 @@ import { ATTEMPT_STATUS, STUDENT_TYPE } from '@iace/contracts';
 import {
   AttemptSweeperProcessor,
   NEVER_SCORED_BATCH_CEILING,
+  RESCORE_PAGE,
   SWEEP_BATCH,
   SWEEP_LANES,
 } from '../src/attempts/attempt-sweeper.processor';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringQueue } from '../src/attempts/scoring-queue';
-import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS, SCORING_RETRY_AFTER_MS } from '../src/queue/queues';
+import {
+  COHORT_SWEEP_JOB_ID,
+  ROLLUP_JOBS,
+  SCORING_RETRY_AFTER_MS,
+  rescoreJobId,
+} from '../src/queue/queues';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
@@ -195,6 +201,47 @@ describe('AttemptSweeperProcessor — asking again for the never-scored', () => 
 
     assert.equal(scoring.jobs.length, NEVER_SCORED_BATCH_CEILING);
     assert.deepEqual(metrics.scoringBacklog, [count]);
+  });
+});
+
+/** `count` sittings marked against revision 0 of a test a drop has since moved to revision 1. */
+async function markedBeforeADrop(count: number): Promise<string[]> {
+  const test = await makeTest(prisma, await makeCatalog(prisma));
+  await prisma.test.update({ where: { id: test.id }, data: { paperRevision: 1 } });
+  const students = Array.from({ length: count }, () => uid());
+  await prisma.student.createMany({
+    data: students.map((id) => ({ id, mobile: uid(), studentType: STUDENT_TYPE.ONLINE })),
+  });
+  const submittedAt = new Date(Date.now() - HOUR_MS);
+  const attempts = students.map((studentId) => ({
+    id: uid(),
+    testId: test.id,
+    studentId,
+    status: ATTEMPT_STATUS.EVALUATED,
+    startedAt: new Date(submittedAt.getTime() - HOUR_MS),
+    endsAt: submittedAt,
+    submittedAt,
+    evaluatedAt: submittedAt,
+    score: 1,
+    scoredRevision: 0,
+    shuffleSeed: 1,
+  }));
+  await prisma.attempt.createMany({ data: attempts });
+  return attempts.map((attempt) => attempt.id);
+}
+
+describe('AttemptSweeperProcessor — asking for the sittings a drop left behind', () => {
+  /** The failure this prevents: one capped read a sweep, so a 6,000 hall took six sweeps to queue. */
+  it('asks for every one in a single sweep, however many pages they fill', async () => {
+    const ids = await markedBeforeADrop(RESCORE_PAGE + 5);
+    const { sweeper, scoring } = build();
+
+    await sweeper.process();
+
+    assert.deepEqual(
+      scoring.jobs.map((job) => job.jobId).sort(),
+      ids.map((id) => rescoreJobId(id, 1)).sort(),
+    );
   });
 });
 
