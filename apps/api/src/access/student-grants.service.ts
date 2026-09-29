@@ -5,7 +5,6 @@ import {
   ErrorCodes,
   NOTIFICATION_TYPE,
   type GrantSeriesBody,
-  type StudentGrantRow,
   type StudentSeriesAccess,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
@@ -52,23 +51,6 @@ export class StudentGrantsService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
   ) {}
-
-  async list(studentId: string): Promise<StudentGrantRow[]> {
-    await this.requireStudent(studentId);
-
-    const rows = await this.prisma.studentGrant.findMany({
-      where: { studentId },
-      include: { testSeries: { select: { id: true, name: true } } },
-      orderBy: [{ createdAt: 'desc' }],
-    });
-
-    return rows.map((row) => ({
-      studentId: row.studentId,
-      testSeriesId: row.testSeriesId,
-      testSeries: row.testSeries,
-      createdAt: row.createdAt.toISOString(),
-    }));
-  }
 
   async exportForSeries(testSeriesId: string): Promise<{ workbook: Buffer; rows: number }> {
     const series = await this.prisma.testSeries.findUnique({
@@ -146,11 +128,7 @@ export class StudentGrantsService {
     }));
   }
 
-  async grant(
-    studentId: string,
-    input: GrantSeriesBody,
-    createdById: string,
-  ): Promise<StudentGrantRow[]> {
+  async grant(studentId: string, input: GrantSeriesBody, createdById: string): Promise<void> {
     const student = await this.requireStudent(studentId);
     if (student.isTestBlocked) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, BLOCKED_GRANT_MESSAGE, {
@@ -199,8 +177,6 @@ export class StudentGrantsService {
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
-
-    return this.list(studentId);
   }
 
   async revoke(studentId: string, testSeriesId: string): Promise<void> {

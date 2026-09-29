@@ -660,15 +660,19 @@ describe('ProgramsService', () => {
 });
 
 describe('StudentGrantsService — the escape hatch', () => {
-  it('grants a series to one student and reads it back named', async () => {
+  it('grants a series to one student, filed under the admin who made it', async () => {
     const { grants, stageId } = await build();
-    const held = await seedSeries({ examStageId: stageId, name: 'Scholarship mocks' });
+    const held = await seedSeries({ examStageId: stageId });
     const student = await makeStudent(prisma);
 
-    const granted = await grants.grant(student.id, { testSeriesId: held.id }, ADMIN);
+    await grants.grant(student.id, { testSeriesId: held.id }, ADMIN);
 
-    assert.equal(granted.length, 1);
-    assert.equal(granted[0]?.testSeries.name, 'Scholarship mocks');
+    assert.deepEqual(
+      await prisma.studentGrant.findMany({
+        select: { studentId: true, testSeriesId: true, createdById: true },
+      }),
+      [{ studentId: student.id, testSeriesId: held.id, createdById: ADMIN }],
+    );
   });
 
   /** docs/03 §6: a grant rolled back can be made again; a student silently never told cannot be. */

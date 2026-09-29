@@ -54,9 +54,7 @@ import {
   EVENT_ROUTES,
   seriesBranchSchema,
   eventSchema,
-  eventCandidateSchema,
   programCatalogSchema,
-  studentGrantRowSchema,
   studentSeriesAccessSchema,
   testSeriesDetailSchema,
   testSeriesSummarySchema,
@@ -66,12 +64,10 @@ import {
   type CreateProgramInput,
   type CreateTestSeriesInput,
   type Event,
-  type EventCandidate,
   type EventListQueryInput,
   type GrantSeriesInput,
   type Program,
   type ProgramListQueryInput,
-  type StudentGrantRow,
   type StudentSeriesAccess,
   type TestSeriesListQueryInput,
   type TestSeriesDetail,
@@ -458,8 +454,8 @@ export function adminClient(core: ApiCore) {
       remove: (id: string): Promise<NoContent> =>
         write('DELETE', EVENT_ROUTES.remove(id), noContentSchema),
 
-      addCandidates: (id: string, input: AddEventCandidatesInput): Promise<EventCandidate[]> =>
-        write('POST', EVENT_ROUTES.addCandidates(id), eventCandidateSchema.array(), input),
+      addCandidates: (id: string, input: AddEventCandidatesInput): Promise<NoContent> =>
+        write('POST', EVENT_ROUTES.addCandidates(id), noContentSchema, input),
 
       removeCandidate: (id: string, studentId: string): Promise<NoContent> =>
         write('DELETE', EVENT_ROUTES.removeCandidate(id, studentId), noContentSchema),
@@ -504,8 +500,8 @@ export function adminClient(core: ApiCore) {
 
     /** The escape hatch, filed against the student it was made about. */
     grants: {
-      create: (studentId: string, input: GrantSeriesInput): Promise<StudentGrantRow[]> =>
-        write('POST', ADMIN_GRANT_ROUTES.create(studentId), studentGrantRowSchema.array(), input),
+      create: (studentId: string, input: GrantSeriesInput): Promise<NoContent> =>
+        write('POST', ADMIN_GRANT_ROUTES.create(studentId), noContentSchema, input),
 
       remove: (studentId: string, testSeriesId: string): Promise<NoContent> =>
         write('DELETE', ADMIN_GRANT_ROUTES.remove(studentId, testSeriesId), noContentSchema),

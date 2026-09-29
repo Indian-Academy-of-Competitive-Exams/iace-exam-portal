@@ -135,7 +135,7 @@ export class EventsService {
   }
 
   /** `skipDuplicates`, so re-importing the same roster over itself adds nobody twice. */
-  async addCandidates(id: string, studentIds: readonly string[]): Promise<EventCandidate[]> {
+  async addCandidates(id: string, studentIds: readonly string[]): Promise<void> {
     const before = (await this.requireEvent(id))._count.candidates;
 
     const { count } =
@@ -146,15 +146,6 @@ export class EventsService {
           })
         : { count: 0 };
     this.auditContext.setPatchDiff(rosterDiff(before, before + count));
-
-    // The rows just written, not the roster: past a page the roster is not a return value.
-    const rows = await this.prisma.eventCandidate.findMany({
-      where: { eventId: id, studentId: { in: [...studentIds] } },
-      include: CANDIDATE_INCLUDE,
-      orderBy: [{ createdAt: 'asc' }],
-    });
-
-    return rows.map(toCandidate);
   }
 
   async removeCandidate(id: string, studentId: string): Promise<void> {

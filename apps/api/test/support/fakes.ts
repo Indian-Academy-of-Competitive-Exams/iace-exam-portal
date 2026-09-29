@@ -425,9 +425,9 @@ export class FakeEventsService {
     return Promise.resolve({ id });
   }
 
-  addCandidates(eventId: string, studentIds: readonly string[]): Promise<never[]> {
+  addCandidates(eventId: string, studentIds: readonly string[]): Promise<void> {
     this.added.push({ eventId, studentIds: [...studentIds] });
-    return Promise.resolve([]);
+    return Promise.resolve();
   }
 
   asService(): EventsService {

@@ -35,7 +35,6 @@ import {
   type Paginated,
   type Program,
   type ProgramListQuery,
-  type StudentGrantRow,
   type StudentSeriesAccess,
   type TestSeriesListQuery,
   type TestSeriesDetail,
@@ -185,12 +184,6 @@ export class TestSeriesController {
 export class StudentGrantsController {
   constructor(private readonly grants: StudentGrantsService) {}
 
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get()
-  list(@Param('studentId') studentId: string): Promise<StudentGrantRow[]> {
-    return this.grants.list(studentId);
-  }
-
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
@@ -198,7 +191,7 @@ export class StudentGrantsController {
     @Param('studentId') studentId: string,
     @Body(new ZodBody(grantSeriesSchema)) body: GrantSeriesBody,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<StudentGrantRow[]> {
+  ): Promise<void> {
     return this.grants.grant(studentId, body, user.id);
   }
 

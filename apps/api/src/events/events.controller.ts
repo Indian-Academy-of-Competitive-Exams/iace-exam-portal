@@ -97,7 +97,7 @@ export class EventsController {
   addCandidates(
     @Param('id') id: string,
     @Body(new ZodBody(addEventCandidatesSchema)) body: AddEventCandidatesBody,
-  ): Promise<EventCandidate[]> {
+  ): Promise<void> {
     return this.events.addCandidates(id, body.studentIds);
   }
 

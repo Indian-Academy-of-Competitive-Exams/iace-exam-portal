@@ -226,19 +226,6 @@ export const updateTestSeriesSchema = createTestSeriesSchema.partial();
 export type UpdateTestSeriesInput = z.input<typeof updateTestSeriesSchema>;
 export type UpdateTestSeriesBody = z.infer<typeof updateTestSeriesSchema>;
 
-/** The escape hatch for access that is not exam-, program- or branch-derivable. */
-const studentGrantSchema = z.object({
-  studentId: z.string(),
-  testSeriesId: z.string(),
-  createdAt: z.string(),
-});
-
-/** A grant as the student screen reads it: the series it opens, named. */
-export const studentGrantRowSchema = studentGrantSchema.extend({
-  testSeries: z.object({ id: z.string(), name: z.string() }),
-});
-export type StudentGrantRow = z.infer<typeof studentGrantRowSchema>;
-
 /** Why a student reaches a series. A grant can sit beside an automatic one, so a row carries a set. */
 export const STUDENT_SERIES_SOURCE = {
   COURSE: 'COURSE',
