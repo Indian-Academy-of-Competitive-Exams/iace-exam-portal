@@ -3,7 +3,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { PERFORMANCE_SCOPES, type LeaderboardScope, type PerformanceScope } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
-import { isMarkingPending, isSolutionsShut } from './marking';
+import { isMarkingPending } from './marking';
 
 /** The signed-in student's identity. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
@@ -101,7 +101,7 @@ export function createStudentQueries(api: AppApiClient) {
       queryOptions({
         queryKey: solutionsQueryKey(attemptId),
         queryFn: () => api.me.solutions(attemptId),
-        meta: { silent: isSolutionsShut },
+        meta: { silent: isMarkingPending },
       }),
     questionReportQuery: (attemptId: string) =>
       queryOptions({

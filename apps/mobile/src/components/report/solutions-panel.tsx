@@ -2,22 +2,11 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import {
-  isMarkingPending,
-  isSolutionsShut,
-  reviewedQuestions,
-  useBookmarks,
-  verdictOf,
-} from '@iace/app-kit';
-import {
-  LANGUAGE_MODE,
-  type ExamSection,
-  type ScoreCard,
-  type SolutionReport,
-} from '@iace/contracts';
+import { isMarkingPending, useBookmarks, verdictOf } from '@iace/app-kit';
+import { LANGUAGE_MODE, type ExamSection, type SolutionReport } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
-import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
+import { solutionsQuery } from '../../lib/queries';
 import { ChipRow, type ChipOption } from '../ui/chip-row';
 import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
@@ -25,14 +14,11 @@ import { Skeleton } from '../ui/skeleton';
 import { ReviewContent } from '../review/review-content';
 import { ReviewPalette, VERDICT_STYLE } from '../review/review-palette';
 
-/** The paper again, once it is marked: their own answer beside the key, question by question. */
+/** The paper again, once it is marked: one read carries their own answer, the marks and the key. */
 export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
-  const card = useQuery(scoreCardQuery(attemptId));
   const solutions = useQuery(solutionsQuery(attemptId));
 
-  const refusal = isSolutionsShut(solutions.error) ? solutions.error : null;
-
-  if (card.isLoading || solutions.isLoading) {
+  if (solutions.isLoading) {
     return (
       <View className="flex-1 gap-3 px-5 py-4">
         <Skeleton className="h-6 w-1/2 rounded-md" />
@@ -41,28 +27,15 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
     );
   }
 
-  if (refusal) {
+  if (isMarkingPending(solutions.error)) {
     return (
       <View className="flex-1 justify-center px-6">
-        <EmptyState
-          kind={EMPTY_STATE_KINDS.REFUSED}
-          title="The solutions are not open yet"
-          // ui-copy-ok: rule — the server owns when the key opens, and says so
-          hint={refusal.message}
-        />
+        <EmptyState title="No marks yet" onRetry={() => void solutions.refetch()} />
       </View>
     );
   }
 
-  if (isMarkingPending(card.error)) {
-    return (
-      <View className="flex-1 justify-center px-6">
-        <EmptyState title="No marks yet" onRetry={() => void card.refetch()} />
-      </View>
-    );
-  }
-
-  if (!card.data || !solutions.data) {
+  if (!solutions.data) {
     return (
       <View className="flex-1 justify-center px-6">
         <EmptyState
@@ -74,15 +47,14 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
     );
   }
 
-  return <Paper attemptId={attemptId} card={card.data} solutions={solutions.data} />;
+  return <Paper attemptId={attemptId} solutions={solutions.data} />;
 }
 
 function Paper({
   attemptId,
-  card,
   solutions,
-}: Readonly<{ attemptId: string; card: ScoreCard; solutions: SolutionReport }>) {
-  const questions = reviewedQuestions(card, solutions);
+}: Readonly<{ attemptId: string; solutions: SolutionReport }>) {
+  const { questions } = solutions;
   const [sectionId, setSectionId] = useState(solutions.sections[0]?.id ?? '');
   const [openId, setOpenId] = useState(questions[0]?.questionId ?? '');
   const [palette, setPalette] = useState(false);

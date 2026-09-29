@@ -1,11 +1,6 @@
-/** A marked paper under review on both clients: their own answer always, and the key only past the gate. */
+/** A marked paper under review on both clients: their own answer, the marks and the key, in one read. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  type ScoreCard,
-  type ScoreCardQuestion,
-  type SolutionQuestion,
-  type SolutionReport,
-} from '@iace/contracts';
+import { type ScoreCardQuestion, type SolutionQuestion } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { bookmarksInAttemptQueryKey, savedQueryKey } from './student-queries';
 
@@ -18,15 +13,6 @@ export type Verdict = (typeof VERDICT)[keyof typeof VERDICT];
 export function verdictOf(question: ReviewedQuestion): Verdict {
   if (question.isCorrect === true) return VERDICT.RIGHT;
   return question.isCorrect === false ? VERDICT.WRONG : VERDICT.LEFT;
-}
-
-/** Their own answers always; the key only where the gate let it through. */
-export function reviewedQuestions(
-  card: ScoreCard,
-  solutions: SolutionReport | undefined,
-): ReviewedQuestion[] {
-  const keyed = new Map((solutions?.questions ?? []).map((row) => [row.questionId, row]));
-  return card.questions.map((row) => ({ ...row, ...keyed.get(row.questionId) }));
 }
 
 export interface BookmarkControl {

@@ -38,7 +38,7 @@ export {
 export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
-export { isMarkingPending, isSolutionsShut } from './marking';
+export { isMarkingPending } from './marking';
 export { seenTours, useTourRun, type SeenTours, type TourRun, type TourStep } from './tour';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';
@@ -94,7 +94,6 @@ export {
 } from './leaderboard';
 export {
   VERDICT,
-  reviewedQuestions,
   useBookmarks,
   verdictOf,
   type BookmarkControl,
