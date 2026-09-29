@@ -59,8 +59,6 @@ export interface HeldState {
   creditedMs?: number;
   revision: number;
   answers: Record<string, LiveAnswer>;
-  /** Questions changed since the last flush. Absent on a key written before this shipped. */
-  pending?: string[];
   sections: Record<string, SectionProgress>;
   forwardOnly?: ForwardOrder;
   /** The tab answering: a string holds it, null was stood down, absent is a key put back cold. */
@@ -199,7 +197,6 @@ export function applyBatch(
     revision: batch.revision,
     lastSeenAt: now.toISOString(),
     answers,
-    pending: [...new Set([...(held.pending ?? []), ...batch.answers.map((c) => c.questionId)])],
     sections: sectionsAfter(held.sections, batch.sections, now),
   };
 }
@@ -220,28 +217,6 @@ function sectionsAfter(
     };
   }
   return next;
-}
-
-function sameAnswer(a: LiveAnswer | undefined, b: LiveAnswer | undefined): boolean {
-  if (a === undefined || b === undefined) return false;
-  return (
-    a.state === b.state &&
-    a.selectedOptionId === b.selectedOptionId &&
-    a.typedAnswer === b.typedAnswer &&
-    a.timeSpentSec === b.timeSpentSec &&
-    a.answeredAt === b.answeredAt &&
-    a.firstActionAt === b.firstActionAt
-  );
-}
-
-/** What stays pending once a flush wrote `written`: an answer a save changed since then has not landed. */
-export function pendingAfter(
-  held: HeldState,
-  written: Readonly<Record<string, LiveAnswer>>,
-): string[] {
-  return (held.pending ?? []).filter(
-    (questionId) => !sameAnswer(held.answers[questionId], written[questionId]),
-  );
 }
 
 /** Whether a save arriving now is still in time. Past the deadline and its grace, it is not. */

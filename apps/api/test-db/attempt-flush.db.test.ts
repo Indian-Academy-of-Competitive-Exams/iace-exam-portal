@@ -5,6 +5,7 @@ import { ANSWER_STATE, ATTEMPT_STATUS, type AttemptStatus } from '@iace/contract
 import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { FakeRedis, fakeQueueFailures } from '../test/support/fakes';
+import { redisKeys } from '../src/redis/redis.keys';
 import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import {
@@ -40,11 +41,8 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
     submittedAt: null,
   });
   const questionId = paper.items[0]?.questionId ?? '';
-  const state = new AttemptStateService(
-    prisma,
-    new FakeRedis().asService(),
-    new PaperSheetService(prisma),
-  );
+  const redis = new FakeRedis();
+  const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   await state.open({
     id: attempt.id,
     studentId,
@@ -64,6 +62,7 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
   }
 
   return {
+    redis,
     attemptId: attempt.id,
     studentId,
     questionId,
@@ -77,13 +76,23 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
   };
 }
 
+const dirtyIn = (redis: FakeRedis) => redis.client.smembers(redisKeys.attemptsDirty);
+
+const answering = (questionId: string, selectedOptionId: string, timeSpentSec: number) => ({
+  questionId,
+  state: ANSWER_STATE.ANSWERED,
+  selectedOptionId,
+  typedAnswer: null,
+  timeSpentSec,
+});
+
 describe('AttemptFlushProcessor', () => {
   it('writes what Redis holds into the sitting’s sheet, and clears the mark', async () => {
-    const { processor, state, attemptId, startedAt } = await build();
+    const { processor, redis, attemptId, startedAt } = await build();
 
     await processor.process();
 
-    assert.deepEqual(await state.dirtyIds(), []);
+    assert.deepEqual(await dirtyIn(redis), []);
     const [onSheet] = await servedAnswers(prisma, attemptId);
     // The sheet stores whole seconds after startedAt, so what it reports back is NOW truncated to the second.
     const flushedAt = new Date(
@@ -117,57 +126,78 @@ describe('AttemptFlushProcessor', () => {
 
   /** Submit flushes before it flips the status, so anything finished is already durable. */
   it('skips an attempt that has been submitted, and drops its mark', async () => {
-    const { processor, state, attemptId } = await build(ATTEMPT_STATUS.SUBMITTED);
+    const { processor, redis, attemptId } = await build(ATTEMPT_STATUS.SUBMITTED);
 
     await processor.process();
 
     const [onSheet] = await servedAnswers(prisma, attemptId);
     assert.equal(onSheet?.state, ANSWER_STATE.NOT_VISITED);
-    assert.deepEqual(await state.dirtyIds(), []);
+    assert.deepEqual(await dirtyIn(redis), []);
   });
 
-  /** The race the pending list was built for: keep the answer marked, and the sitting with it. */
-  it('keeps the mark when a save lands inside the pass', async () => {
-    const { processor, state, attemptId, studentId, questionId } = await build();
-
-    // The save happens while the sheet is being written, which is the only window that matters.
-    const sheets = processor['sheets'] as { patch: (...args: never[]) => Promise<unknown> };
-    const wrote = sheets.patch.bind(sheets);
-    sheets.patch = async (...args: never[]) => {
+  /** A save landing mid-pass is marked again after its write, so the next pass writes it. */
+  it('writes a save that lands inside the pass on the next one', async () => {
+    const { processor, redis, state, attemptId, studentId, questionId } = await build();
+    const sheets = processor['sheets'] as { write: (...args: never[]) => Promise<unknown> };
+    const wrote = sheets.write.bind(sheets);
+    let landed = false;
+    sheets.write = async (...args: never[]) => {
       const done = await wrote(...args);
-      await state.save(
-        studentId,
-        attemptId,
-        {
-          revision: 2,
-          answers: [
-            {
-              questionId,
-              state: ANSWER_STATE.ANSWERED,
-              selectedOptionId: 'o2',
-              typedAnswer: null,
-              timeSpentSec: 30,
-            },
-          ],
-        },
-        NOW,
-      );
+      if (!landed) {
+        landed = true;
+        await state.save(
+          studentId,
+          attemptId,
+          { revision: 2, answers: [answering(questionId, 'o2', 30)] },
+          NOW,
+        );
+      }
       return done;
     };
 
     await processor.process();
+    assert.deepEqual(await dirtyIn(redis), [attemptId]);
+    await processor.process();
 
-    assert.deepEqual(await state.dirtyIds(), [attemptId]);
-    assert.deepEqual((await state.read(attemptId))?.pending, [questionId]);
+    const [onSheet] = await servedAnswers(prisma, attemptId);
+    assert.deepEqual([onSheet?.selectedOptionId, onSheet?.timeSpentSec], ['o2', 30]);
   });
 
-  it('drops the mark for a sitting whose state has expired', async () => {
-    const { processor, state, attemptId } = await build();
-    await state.take(attemptId);
-    await state.dirtyIds();
+  /** The failure this prevents: a student's save giving way, again and again, to the flusher's own write of their key. */
+  it('never writes the student’s live state, only reads it', async () => {
+    const { processor, redis, attemptId } = await build();
+    const key = redisKeys.attemptState(attemptId);
+    const before = await redis.client.get(key);
 
     await processor.process();
 
-    assert.deepEqual(await state.dirtyIds(), []);
+    assert.equal(await redis.client.get(key), before);
+  });
+
+  /** A failed write costs the durable copy a pass, never the answers: the sitting goes back on the list. */
+  it('puts a sitting back when its write fails, and writes it on the next pass', async () => {
+    const { processor, redis, attemptId } = await build();
+    const sheets = processor['sheets'] as { write: (...args: never[]) => Promise<unknown> };
+    const wrote = sheets.write.bind(sheets);
+    sheets.write = () => Promise.reject(new Error('postgres went away'));
+
+    await processor.process();
+    assert.deepEqual(await dirtyIn(redis), [attemptId]);
+    sheets.write = wrote;
+    await processor.process();
+
+    const [onSheet] = await servedAnswers(prisma, attemptId);
+    assert.equal(onSheet?.selectedOptionId, 'o1');
+    assert.deepEqual(await dirtyIn(redis), []);
+  });
+
+  it('drops the mark for a sitting whose state has expired', async () => {
+    const { processor, redis, state, attemptId } = await build();
+    await state.take(attemptId);
+    await redis.client.sadd(redisKeys.attemptsDirty, attemptId);
+
+    await processor.process();
+
+    assert.deepEqual(await dirtyIn(redis), []);
   });
 });

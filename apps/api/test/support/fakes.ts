@@ -136,24 +136,38 @@ export class FakeRedis {
       return Promise.resolve(Math.ceil((entry.expiresAtMs - this.nowMs) / 1000));
     },
 
-    sadd: (key: string, member: string): Promise<number> => {
+    sadd: (key: string, ...members: string[]): Promise<number> => {
       const entry = this.live(key);
       const set = entry?.value instanceof Set ? entry.value : new Set<string>();
-      const had = set.has(member);
-      set.add(member);
+      const added = members.filter((member) => !set.has(member));
+      for (const member of members) set.add(member);
       this.store.set(key, { value: set, expiresAtMs: entry?.expiresAtMs ?? null });
-      return Promise.resolve(had ? 0 : 1);
+      return Promise.resolve(new Set(added).size);
     },
 
-    srem: (key: string, member: string): Promise<number> => {
+    srem: (key: string, ...members: string[]): Promise<number> => {
       const entry = this.live(key);
       if (!(entry?.value instanceof Set)) return Promise.resolve(0);
-      return Promise.resolve(entry.value.delete(member) ? 1 : 0);
+      const set = entry.value;
+      return Promise.resolve(members.filter((member) => set.delete(member)).length);
     },
 
     smembers: (key: string): Promise<string[]> => {
       const entry = this.live(key);
       return Promise.resolve(entry?.value instanceof Set ? [...entry.value] : []);
+    },
+
+    scard: (key: string): Promise<number> => {
+      const entry = this.live(key);
+      return Promise.resolve(entry?.value instanceof Set ? entry.value.size : 0);
+    },
+
+    spop: (key: string, count: number): Promise<string[]> => {
+      const entry = this.live(key);
+      if (!(entry?.value instanceof Set)) return Promise.resolve([]);
+      const taken = [...entry.value].slice(0, count);
+      for (const member of taken) entry.value.delete(member);
+      return Promise.resolve(taken);
     },
   };
 

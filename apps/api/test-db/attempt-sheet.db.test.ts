@@ -76,22 +76,6 @@ describe('AttemptSheetService', () => {
     );
   });
 
-  it('patches only the named slots, and nothing once the sitting has ended', async () => {
-    const { attemptId, q1, q2, optionIds, answer, held, sheets, chosen } = await sitting();
-    const [, second = []] = optionIds;
-
-    await sheets.patch(held({ [q1]: answer('forged'), [q2]: answer(second[1] ?? '') }), [q2]);
-    assert.equal(await chosen(q2), second[1]);
-    assert.equal(await chosen(q1), null);
-
-    await prisma.attempt.update({
-      where: { id: attemptId },
-      data: { status: ATTEMPT_STATUS.SUBMITTED },
-    });
-    await sheets.patch(held({ [q2]: answer(second[2] ?? '') }), [q2]);
-    assert.equal(await chosen(q2), second[1]);
-  });
-
   it('writes the whole sheet, live-gated before the claim and not after it', async () => {
     const { attemptId, q1, q2, optionIds, answer, held, sheets, chosen } = await sitting();
     const [first = [], second = []] = optionIds;

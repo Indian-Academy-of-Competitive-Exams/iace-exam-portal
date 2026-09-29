@@ -237,8 +237,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   must never change**: every past sitting's review is derived from it, so a new shuffle or PRNG
   reorders every review already given.
 - A sitting keeps its answers on one `AttemptSheet`: a slot per paper row in paper order, seeded
-  untouched at start, patched by the flusher, written whole at submit, and marked by the scorer in a
-  parallel verdict array. The order a student saw is derived from `shuffleSeed`, never stored.
+  untouched at start, written whole from Redis by the flusher and again at submit, and marked by the
+  scorer in a parallel verdict array. The flusher only reads the live key — it takes a sitting off
+  the dirty set, and a save that lands after marks it again — so it never makes a save retry. The order a student saw is derived from `shuffleSeed`, never stored.
   **Once anyone sits a test its paper is frozen in the database** — rows may not be added, removed,
   repointed or repriced; only a question's status moves — and so are the options, answer key and
   content of every version it pins. A slot's state is an index into `SLOT_STATES`, which is

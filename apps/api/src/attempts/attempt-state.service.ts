@@ -12,7 +12,6 @@ import {
   ATTEMPT_STATUS,
   ErrorCodes,
   type AttemptSaveAck,
-  type LiveAnswer,
   type LiveAttemptState,
   type SaveAttemptStateBody,
 } from '@iace/contracts';
@@ -35,7 +34,6 @@ import {
   isInTime,
   PAUSE_LIMIT_SEC,
   packHeld,
-  pendingAfter,
   withinReach,
   type ForwardOrder,
   type HeldState,
@@ -95,7 +93,6 @@ export class AttemptStateService {
         revision: 0,
         lastSeenAt: now.toISOString(),
         answers: {},
-        pending: [],
         sections: {},
         tab,
         forwardOnly: attempt.forwardOnly,
@@ -151,8 +148,8 @@ export class AttemptStateService {
       },
       () => this.durableState(studentId, attemptId),
     );
-    // Marked AFTER the write: a mark whose state never landed would flush yesterday's answers.
-    await this.redis.client.sadd(redisKeys.attemptsDirty, attemptId);
+    // Marked AFTER the write: a flush that takes the mark then reads the key is sure to see this state.
+    await this.markDirty(attemptId);
 
     return { ...acked(next, now), applied };
   }
@@ -169,7 +166,7 @@ export class AttemptStateService {
   /** The last read, which also shuts the door — one command, so a race has no in-between to lose. */
   async take(attemptId: string): Promise<HeldState | null> {
     const held = await this.redis.takeJson<unknown>(redisKeys.attemptState(attemptId));
-    await this.clearDirty(attemptId);
+    await this.redis.client.srem(redisKeys.attemptsDirty, attemptId);
     return heldIn(held);
   }
 
@@ -250,36 +247,19 @@ export class AttemptStateService {
     throw new AppException(ErrorCodes.CONFLICT, BEING_ANSWERED);
   }
 
-  /** What the flusher drains. Read as a whole: a save landing mid-drain re-marks its own attempt. */
-  async dirtyIds(): Promise<string[]> {
-    return this.redis.client.smembers(redisKeys.attemptsDirty);
+  /** How many sittings wait on the flusher: a pass drains this many, and leaves later marks to the next. */
+  async dirtyCount(): Promise<number> {
+    return this.redis.client.scard(redisKeys.attemptsDirty);
   }
 
-  async clearDirty(...attemptIds: string[]): Promise<void> {
+  /** Taken, not read: a save that lands after this marks its sitting again for the next pass. */
+  async takeDirty(count: number): Promise<string[]> {
+    return this.redis.client.spop(redisKeys.attemptsDirty, count);
+  }
+
+  async markDirty(...attemptIds: string[]): Promise<void> {
     if (attemptIds.length === 0) return;
-    await this.redis.client.srem(redisKeys.attemptsDirty, ...attemptIds);
-  }
-
-  /** Clears only answers still as this pass wrote them, and says whether that settled the sitting. */
-  async clearPending(
-    attemptId: string,
-    written: Readonly<Record<string, LiveAnswer>>,
-  ): Promise<boolean> {
-    const next = await this.patch(attemptId, (held) => ({
-      ...held,
-      pending: pendingAfter(held, written),
-    }));
-    // A key taken by submit has nothing left to settle; anything still pending is a save that raced.
-    const settled = next === null || (next.pending ?? []).length === 0;
-    // Unmarks only if untouched since: a save landing right after keeps its own fresh mark instead.
-    if (settled && next !== null) await this.unmarkIfUnchanged(attemptId, next);
-    return settled;
-  }
-
-  /** The check `clearDirty` used to skip: a mismatch here means something else has since written it. */
-  private async unmarkIfUnchanged(attemptId: string, written: HeldState): Promise<void> {
-    const current = await this.redis.getRaw(redisKeys.attemptState(attemptId));
-    if (current === JSON.stringify(packHeld(written))) await this.clearDirty(attemptId);
+    await this.redis.client.sadd(redisKeys.attemptsDirty, ...attemptIds);
   }
 
   /** Redis first, Postgres only if the key has gone — paying on a rare resume, not on every read. */
@@ -337,7 +317,6 @@ export class AttemptStateService {
       lastSeenAt: (attempt.sheet?.updatedAt ?? attempt.startedAt).toISOString(),
       revision: 0,
       answers,
-      pending: [],
       sections: {},
       forwardOnly: forwardOrderOf(
         attempt.test.baseConfig.navigation,
@@ -384,7 +363,6 @@ function mergedOver(durable: HeldState, held: HeldState): HeldState {
     ...durable,
     revision: held.revision,
     answers: { ...durable.answers, ...held.answers },
-    pending: held.pending,
     sections: held.sections,
   };
 }

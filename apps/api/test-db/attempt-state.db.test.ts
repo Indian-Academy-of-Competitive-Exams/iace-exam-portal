@@ -122,7 +122,7 @@ describe('AttemptStateService', () => {
     assert.equal(ack.revision, 1);
     const state = await service.current(student, attemptId, NOW);
     assert.equal(state.answers[q1]?.state, ANSWER_STATE.ANSWERED);
-    assert.deepEqual(await service.dirtyIds(), [attemptId]);
+    assert.deepEqual(await redis.client.smembers(redisKeys.attemptsDirty), [attemptId]);
     assert.ok(redis.snapshot()[`attempt:state:${attemptId}`]);
   });
 
@@ -161,7 +161,7 @@ describe('AttemptStateService', () => {
 
     await service.take(attemptId);
 
-    assert.deepEqual(await service.dirtyIds(), []);
+    assert.equal(await service.dirtyCount(), 0);
     await service.save(student, attemptId, { revision: 2, answers: [] }, NOW);
     const rebuilt = await service.current(student, attemptId, NOW);
     assert.equal(Object.keys(rebuilt.answers).length, 0);
@@ -343,24 +343,6 @@ describe('AttemptStateService', () => {
     const held = await service.read(attemptId);
     assert.equal(held?.testId, live.testId);
     assert.equal(held?.startedAt, live.startedAt.toISOString());
-  });
-
-  /** The failure this prevents: a flush clearing a mark whose answer changed again while it wrote. */
-  it('keeps an answer pending when a save changes it while a flush is writing the old one', async () => {
-    const { service, student, attemptId, live, q1, change } = await build();
-    await service.open(live);
-    await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
-    const read = await service.read(attemptId);
-
-    await service.save(
-      student,
-      attemptId,
-      { revision: 2, answers: [change({ selectedOptionId: 'o3' })] },
-      NOW,
-    );
-    await service.clearPending(attemptId, read?.answers ?? {});
-
-    assert.deepEqual((await service.read(attemptId))?.pending, [q1]);
   });
 
   describe('reading a sitting back', () => {

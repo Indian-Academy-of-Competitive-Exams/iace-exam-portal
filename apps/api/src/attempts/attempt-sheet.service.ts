@@ -1,9 +1,9 @@
-/** The one writer of `AttemptSheet.answers`: seeded at start, patched by the flusher, written whole at submit. */
+/** The one writer of `AttemptSheet.answers`: seeded at start, then written whole by the flusher and at submit. */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { blankSheet, encodeAnswer, sheetOf, type AnswerSheet } from './answer-sheet';
+import { blankSheet, sheetOf, type AnswerSheet } from './answer-sheet';
 import { type HeldState } from './attempt-state';
 import { PaperSheetService } from './paper-sheet.service';
 
@@ -23,27 +23,7 @@ export class AttemptSheetService {
     await tx.attemptSheet.create({ data: { attemptId, answers: blankSheet(size) } });
   }
 
-  /** The flusher's write: the named slots in place, one statement, only while the sitting is live. */
-  async patch(held: HeldState, questionIds: readonly string[]): Promise<void> {
-    const paper = await this.papers.rowsOf(held.testId);
-    const startedAt = new Date(held.startedAt);
-    const named = new Set(questionIds);
-    let answers = Prisma.sql`"answers"`;
-    let patched = 0;
-    paper.forEach((row, slot) => {
-      const answer = held.answers[row.questionId];
-      if (answer === undefined || !named.has(row.questionId)) return;
-      const value = JSON.stringify(encodeAnswer(answer, row.optionIds, startedAt));
-      answers = Prisma.sql`jsonb_set(${answers}, ARRAY[${String(slot)}]::text[], ${value}::jsonb)`;
-      patched += 1;
-    });
-    if (patched === 0) return;
-    await this.prisma.$executeRaw`
-      UPDATE "AttemptSheet" SET "answers" = ${answers}, "updatedAt" = now()
-      WHERE "attemptId" = ${held.attemptId}::uuid AND ${whileLive(held.attemptId)}`;
-  }
-
-  /** Submit's write: every live answer at once, so nothing a flush missed can be lost. */
+  /** Every live answer at once — the flusher's write while the sitting is live, and submit's last. */
   async write(held: HeldState, onlyWhileLive: boolean): Promise<AnswerSheet> {
     const paper = await this.papers.rowsOf(held.testId);
     const sheet = sheetOf(held.answers, paper, new Date(held.startedAt));

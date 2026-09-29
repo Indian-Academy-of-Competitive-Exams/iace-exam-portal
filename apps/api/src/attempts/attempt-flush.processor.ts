@@ -7,7 +7,7 @@ import { AttemptSheetService } from './attempt-sheet.service';
 import { type HeldState } from './attempt-state';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
-/** How many sittings one pass writes at a time. Lanes, not workers: one pass owns the dirty set. */
+/** How many sittings one pass writes at a time. Lanes, not workers: the flush queue runs one pass. */
 export const FLUSH_LANES = 8;
 
 /** Redis to the sitting's sheet on a timer. A failed run costs the durable copy a minute, not answers. */
@@ -35,39 +35,32 @@ export class AttemptFlushProcessor extends WorkerHost {
     this.failures.connectionError(QUEUE_NAMES.ATTEMPT_FLUSH, error);
   }
 
-  /** One pass owns the dirty set, so the lanes below are its own and never a second worker's. */
+  /** Bounded by the set as the pass found it, so a hall that keeps saving cannot keep one pass running. */
   async process(): Promise<void> {
-    const dirty = await this.state.dirtyIds();
-
-    for (let at = 0; at < dirty.length; at += FLUSH_LANES) {
-      const lane = dirty.slice(at, at + FLUSH_LANES);
+    let left = await this.state.dirtyCount();
+    while (left > 0) {
+      const lane = await this.state.takeDirty(FLUSH_LANES);
+      if (lane.length === 0) return;
+      left -= lane.length;
       const held = await this.state.readMany(lane);
-      const done = await Promise.all(lane.map((id) => this.flush(id, held.get(id))));
-      await this.state.clearDirty(...done.filter((id): id is string => id !== null));
+      const failed = await Promise.all(lane.map((id) => this.flush(id, held.get(id))));
+      await this.state.markDirty(...failed.filter((id): id is string => id !== null));
     }
   }
 
-  /** The id once it is written, or null to leave it dirty for the next pass to try again. */
+  /** The id when its write failed, to go back on the list; null once written or gone. */
   private async flush(attemptId: string, held: HeldState | undefined): Promise<string | null> {
     // A key that has gone was taken by submit, which writes the final answers itself.
-    if (!held) return attemptId;
-
-    // No list means a key written before this shipped, whose whole paper is still the safe write.
-    const ids = held.pending ?? Object.keys(held.answers);
-    const written = Object.fromEntries(
-      ids.flatMap((id) => {
-        const answer = held.answers[id];
-        return answer ? [[id, answer] as const] : [];
-      }),
-    );
+    if (!held) return null;
     try {
-      await this.sheets.patch(held, ids);
-      // clearPending unmarks it itself once settled, checked against what it just wrote.
-      await this.state.clearPending(attemptId, written);
+      await this.sheets.write(held, true);
       return null;
     } catch (error) {
-      this.logger.error(`Flushing attempt ${attemptId} failed; it stays dirty`, error);
-      return null;
+      this.logger.error(
+        `Flushing attempt ${attemptId} failed; it goes back for the next pass`,
+        error,
+      );
+      return attemptId;
     }
   }
 }

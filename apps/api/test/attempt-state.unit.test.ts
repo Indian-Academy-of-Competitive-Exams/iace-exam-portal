@@ -20,7 +20,6 @@ import {
   PAUSE_LIMIT_SEC,
   PRESENT_GRACE_SEC,
   packHeld,
-  pendingAfter,
   SAVE_GRACE_SEC,
   stateOf,
   type HeldState,
@@ -374,33 +373,6 @@ describe('a section clock the server stamps', () => {
   });
 });
 
-describe('pending — what a flush has left to write', () => {
-  const saved = (questionIds: readonly string[], revision: number) => ({
-    revision,
-    answers: questionIds.map((questionId) => change({ questionId })),
-  });
-
-  it('records every question a save touched', () => {
-    const next = applyBatch(held(), saved(['q1', 'q2'], 1));
-
-    assert.deepEqual(next.pending, ['q1', 'q2']);
-  });
-
-  /** The point of the list: a later pass rewrites the two that moved, not the eighty that did not. */
-  it('adds to what an earlier save left, and never lists one twice', () => {
-    const first = applyBatch(held(), saved(['q1', 'q2'], 1));
-    const second = applyBatch(first, saved(['q2', 'q3'], 2));
-
-    assert.deepEqual(second.pending, ['q1', 'q2', 'q3']);
-  });
-
-  it('leaves the list alone for a batch a newer save already carried', () => {
-    const first = applyBatch(held(), saved(['q1'], 5));
-
-    assert.deepEqual(applyBatch(first, saved(['q9'], 5)).pending, ['q1']);
-  });
-});
-
 describe('AttemptStateService.save — the ack tells the truth', () => {
   const IN_TIME = new Date('2026-09-01T05:10:00.000Z');
   const service = (redis: FakeRedis) =>
@@ -484,128 +456,6 @@ describe('AttemptStateService.save — a forward-only paper', () => {
   });
 });
 
-describe('AttemptStateService.clearPending', () => {
-  const service = (redis: FakeRedis) =>
-    new AttemptStateService({} as PrismaService, redis.asService(), {} as PaperSheetService);
-
-  const answer: LiveAnswer = {
-    state: ANSWER_STATE.ANSWERED,
-    selectedOptionId: 'o1',
-    typedAnswer: null,
-    timeSpentSec: 10,
-    answeredAt: '2026-09-01T05:01:00.000Z',
-    firstActionAt: '2026-09-01T05:00:30.000Z',
-  };
-
-  /** The failure this prevents: a save landing mid-pass cleared unwritten, so its answer never lands. */
-  it('clears only what the pass wrote, keeping a mark made while it ran', async () => {
-    const redis = new FakeRedis();
-    await redis.setJson(
-      redisKeys.attemptState('att_1'),
-      packHeld(held({ pending: ['q1', 'q2'], answers: { q1: answer } })),
-      60,
-    );
-
-    await service(redis).clearPending('att_1', { q1: answer });
-
-    const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
-    assert.deepEqual(after?.pending, ['q2']);
-  });
-
-  it('writes nothing when the pass wrote nothing', async () => {
-    const redis = new FakeRedis();
-    await redis.setJson(redisKeys.attemptState('att_1'), packHeld(held({ pending: ['q1'] })), 60);
-
-    await service(redis).clearPending('att_1', {});
-
-    const after = await redis.getJson<HeldState>(redisKeys.attemptState('att_1'));
-    assert.deepEqual(after?.pending, ['q1']);
-  });
-
-  it('drops the dirty mark once everything the pass wrote has settled', async () => {
-    const redis = new FakeRedis();
-    await redis.setJson(
-      redisKeys.attemptState('att_1'),
-      packHeld(held({ pending: ['q1'], answers: { q1: answer } })),
-      60,
-    );
-    await redis.client.sadd(redisKeys.attemptsDirty, 'att_1');
-
-    const settled = await service(redis).clearPending('att_1', { q1: answer });
-
-    assert.equal(settled, true);
-    assert.deepEqual(await redis.client.smembers(redisKeys.attemptsDirty), []);
-  });
-
-  /** The bug this prevents: a flush that just settled wiping the fresh mark a racing save just set. */
-  it('keeps the mark a save sets between the settling write and the unmark check', async () => {
-    const redis = new FakeRedis();
-    await redis.setJson(
-      redisKeys.attemptState('att_1'),
-      packHeld(held({ pending: ['q1'], answers: { q1: answer } })),
-      60,
-    );
-    await redis.client.sadd(redisKeys.attemptsDirty, 'att_1');
-    const attemptService = service(redis);
-
-    const realGetRaw = redis.getRaw.bind(redis);
-    let reads = 0;
-    redis.getRaw = async (key: string) => {
-      reads += 1;
-      // The second read is clearPending's own post-write check; race a save in right before it.
-      if (reads === 2) {
-        await attemptService.save(
-          'stu_1',
-          'att_1',
-          { revision: 1, answers: [change()] },
-          new Date('2026-09-01T05:10:00.000Z'),
-        );
-      }
-      return realGetRaw(key);
-    };
-
-    const settled = await attemptService.clearPending('att_1', { q1: answer });
-
-    assert.equal(settled, true);
-    assert.deepEqual(await redis.client.smembers(redisKeys.attemptsDirty), ['att_1']);
-  });
-});
-
-describe('pendingAfter', () => {
-  const answer = (selectedOptionId: string): LiveAnswer => ({
-    state: ANSWER_STATE.ANSWERED,
-    selectedOptionId,
-    typedAnswer: null,
-    timeSpentSec: 10,
-    answeredAt: '2026-09-01T05:01:00.000Z',
-    firstActionAt: '2026-09-01T05:00:30.000Z',
-  });
-  const held = (answers: Record<string, LiveAnswer>, pending: string[]): HeldState => ({
-    attemptId: 'att_1',
-    studentId: 'stu_1',
-    testId: 'test_1',
-    startedAt: '2026-09-01T05:00:00.000Z',
-    endsAt: '2026-09-01T06:00:00.000Z',
-    revision: 3,
-    answers,
-    pending,
-    sections: {},
-  });
-
-  it('clears what the flush wrote and nothing a save changed after it read', () => {
-    const written = { q1: answer('o1'), q2: answer('o1') };
-    const now = held({ q1: answer('o1'), q2: answer('o2'), q3: answer('o3') }, ['q1', 'q2', 'q3']);
-
-    assert.deepEqual(pendingAfter(now, written), ['q2', 'q3']);
-  });
-
-  it('leaves nothing pending for a key with no list, whose pass wrote the whole paper', () => {
-    const now = { ...held({ q1: answer('o1') }, []), pending: undefined };
-
-    assert.deepEqual(pendingAfter(now, { q1: answer('o1') }), []);
-  });
-});
-
 describe('the live key — written by position, read back by name', () => {
   const answered: LiveAnswer = {
     state: ANSWER_STATE.ANSWERED_MARKED,
@@ -626,7 +476,7 @@ describe('the live key — written by position, read back by name', () => {
 
   /** The failure this prevents: a sitting coming back from Redis with somebody else's answers. */
   it('reads back every answer it wrote', () => {
-    const state = held({ answers: { q1: answered, q2: typed }, pending: ['q2'], tab: 'tab_a' });
+    const state = held({ answers: { q1: answered, q2: typed }, tab: 'tab_a' });
 
     assert.deepEqual(heldIn(packHeld(state)), state);
   });

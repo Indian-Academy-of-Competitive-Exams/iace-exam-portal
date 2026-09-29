@@ -452,7 +452,7 @@ describe('a save that races the submit', () => {
     );
     built.hooks.beforeClaim = async () => {
       delete built.hooks.beforeClaim;
-      await built.sheets.patch(stale, [built.q1]);
+      await built.sheets.write(stale, true);
     };
 
     await built.submit.submit(built.student, built.attemptId);
