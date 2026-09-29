@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import {
@@ -16,7 +15,7 @@ import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
-import { SCORING_REQUEST, ScoringOutbox } from '../src/attempts/scoring-outbox';
+import { ScoringQueue } from '../src/attempts/scoring-queue';
 import { SubmitService } from '../src/attempts/submit.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
@@ -38,9 +37,6 @@ const HOUR_MS = 60 * 60 * 1000;
 const LATE = new Date(Date.now() - HOUR_MS);
 /** A deadline still ahead on the real clock, which is what a batch riding a submit is judged by. */
 const SOON = new Date(Date.now() + HOUR_MS);
-const SETTLED = new Date(Date.now() - HOUR_MS);
-const OLDER = new Date(Date.now() - 2 * HOUR_MS);
-const OLDEST = new Date(Date.now() - 3 * HOUR_MS);
 const WRONG_OPTION = 'o2';
 
 const prisma = testPrisma();
@@ -99,9 +95,9 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const queue = new FakeQueue();
-  const outbox = new ScoringOutbox(prisma, queue.asQueue());
+  const scoring = new ScoringQueue(queue.asQueue());
   const sheets = new AttemptSheetService(client, new PaperSheetService(client));
-  const submit = new SubmitService(client, state, outbox, new FakeMetrics().asService(), sheets);
+  const submit = new SubmitService(client, state, scoring, new FakeMetrics().asService(), sheets);
   const change = (questionId = q1): AnswerChange => ({
     questionId,
     state: ANSWER_STATE.ANSWERED,
@@ -118,7 +114,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     hooks,
     state,
     queue,
-    outbox,
+    scoring,
     sheets,
     submit,
     change,
@@ -127,7 +123,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
       prisma,
       state,
       submit,
-      outbox,
+      scoring,
       new RollupQueue(new FakeQueue().asQueue()),
       fakeQueueFailures(),
       new FakeMetrics().asService(),
@@ -148,8 +144,6 @@ const chosenOn = async (attemptId: string, questionId: string) =>
   (await servedAnswers(prisma, attemptId)).find((row) => row.questionId === questionId)
     ?.selectedOptionId ?? null;
 
-const requests = () => prisma.outboxEvent.findMany({ orderBy: { createdAt: 'asc' } });
-
 describe('SubmitService', () => {
   it('writes what Redis held, ends the sitting, and enqueues one scoring job', async () => {
     const built = await build();
@@ -162,7 +156,6 @@ describe('SubmitService', () => {
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
     assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.SUBMITTED);
-    assert.equal(await prisma.outboxEvent.count(), 0, 'a submit writes no request row');
     assert.deepEqual(built.queue.jobs, [
       {
         name: QUEUE_NAMES.SCORING,
@@ -326,7 +319,6 @@ describe('SubmitService', () => {
     );
     assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.IN_PROGRESS);
     assert.equal(await chosenOn(built.attemptId, built.q1), null);
-    assert.equal(await prisma.outboxEvent.count(), 0);
 
     delete built.hooks.beforeWrite;
     const result = await built.submit.submit(built.student, built.attemptId);
@@ -415,66 +407,6 @@ describe('a queue that is down at submit', () => {
   });
 });
 
-describe('the re-score outbox', () => {
-  /** The failure this prevents: 200 a sweep, so a queue outage takes 40 minutes to drain. */
-  it('drains a backlog bigger than one batch in a single pass', async () => {
-    const { queue, outbox } = await build();
-    await prisma.outboxEvent.createMany({
-      data: Array.from({ length: 250 }, () => ({
-        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: randomUUID(),
-        eventType: SCORING_REQUEST.EVENT_TYPE,
-        payload: { testId: 'tst_1' },
-        createdAt: SETTLED,
-      })),
-    });
-
-    assert.equal(await outbox.relay(), 250);
-    assert.equal(queue.jobs.length, 250);
-  });
-
-  /** The job id is what lets BullMQ collapse two hand-offs; deriving it here is our half. */
-  it('names every hand-off after the request it carries', async () => {
-    const built = await build();
-    const request = await prisma.outboxEvent.create({
-      data: {
-        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: built.attemptId,
-        eventType: SCORING_REQUEST.EVENT_TYPE,
-        payload: { testId: built.testId },
-        createdAt: SETTLED,
-      },
-    });
-
-    await Promise.all([built.outbox.relay(), built.outbox.relay()]);
-
-    assert.deepEqual(
-      new Set(built.queue.jobs.map((job) => job.jobId)),
-      new Set([scoringJobId(request.id)]),
-    );
-  });
-
-  /** The failure this prevents: one unusable row at the head starving every request behind it. */
-  it('gives up on a request nothing can act on rather than blocking the queue behind it', async () => {
-    const { queue, outbox } = await build();
-    await prisma.outboxEvent.create({
-      data: {
-        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: randomUUID(),
-        eventType: SCORING_REQUEST.EVENT_TYPE,
-        payload: {},
-        createdAt: SETTLED,
-      },
-    });
-
-    await outbox.relay();
-    await outbox.relay();
-
-    assert.equal(queue.jobs.length, 0);
-    assert.ok((await requests())[0]?.processedAt, 'it must not come back every sweep forever');
-  });
-});
-
 describe('a save that races the submit', () => {
   /** The failure this prevents: an autosave accepted with a 200 and then thrown away by the take. */
   it('writes an answer that landed while the claim was in flight', async () => {
@@ -544,7 +476,7 @@ describe('a sitting the scorer never scored', () => {
   const unscored = () => build({ status: ATTEMPT_STATUS.SUBMITTED, submittedAt: LATE });
 
   /** The failure this prevents: a job that exhausted its retries leaving a result nobody owns. */
-  it('queues a score again under the sitting’s own id, writing no request row', async () => {
+  it('queues a score again under the sitting’s own id', async () => {
     const { attemptId, queue, sweeper } = await unscored();
 
     await sweeper.process();
@@ -553,12 +485,11 @@ describe('a sitting the scorer never scored', () => {
       queue.jobs.map((job) => job.jobId),
       [scoringJobId(attemptId)],
     );
-    assert.equal(await prisma.outboxEvent.count(), 0);
   });
 
   it('does not stack a second ask on top of a job the queue still holds', async () => {
-    const { attemptId, testId, queue, outbox, sweeper } = await unscored();
-    await outbox.queue([{ id: attemptId, testId }]);
+    const { attemptId, testId, queue, scoring, sweeper } = await unscored();
+    await scoring.queue([{ id: attemptId, testId }]);
 
     await sweeper.process();
 
@@ -579,56 +510,5 @@ describe('a sitting the scorer never scored', () => {
     await sweeper.process();
 
     assert.equal(queue.jobs.length, 0);
-  });
-});
-
-describe('an EVALUATED sitting a re-score never landed on', () => {
-  const rescored = () => build({ status: ATTEMPT_STATUS.EVALUATED, submittedAt: LATE });
-
-  const asked = (attemptId: string, testId: string, createdAt: Date, processedAt: Date | null) =>
-    prisma.outboxEvent.create({
-      data: {
-        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: attemptId,
-        eventType: SCORING_REQUEST.EVENT_TYPE,
-        payload: { testId },
-        createdAt,
-        processedAt,
-      },
-    });
-
-  /** The failure this prevents: a re-score job that died leaves marks stale against a dropped question. */
-  it('asks again for an EVALUATED sitting whose own request postdates its last mark', async () => {
-    const { attemptId, testId, sweeper } = await rescored();
-    await prisma.attempt.update({ where: { id: attemptId }, data: { updatedAt: OLDER } });
-    await asked(attemptId, testId, LATE, LATE);
-
-    await sweeper.process();
-
-    const rows = await requests();
-    assert.equal(rows.length, 2);
-    assert.equal(rows[1]?.aggregateId, attemptId);
-  });
-
-  /** The mark that answered the request landed, so evaluatedAt's fixed clock must not be re-read. */
-  it('leaves an EVALUATED sitting alone once its last mark lands after the request', async () => {
-    const { attemptId, testId, sweeper } = await rescored();
-    // updatedAt is left at creation time, which sitPaper sets after LATE: the mark already ran.
-    await asked(attemptId, testId, LATE, LATE);
-
-    await sweeper.process();
-
-    assert.equal(await prisma.outboxEvent.count(), 1);
-  });
-
-  it('does not stack a third ask on top of a retry still waiting to be handed on', async () => {
-    const { attemptId, testId, sweeper } = await rescored();
-    await prisma.attempt.update({ where: { id: attemptId }, data: { updatedAt: OLDEST } });
-    await asked(attemptId, testId, OLDER, OLDER);
-    await asked(attemptId, testId, LATE, null);
-
-    await sweeper.process();
-
-    assert.equal(await prisma.outboxEvent.count(), 2);
   });
 });

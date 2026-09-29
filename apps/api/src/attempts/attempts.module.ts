@@ -35,7 +35,7 @@ import { LeaderboardService } from './leaderboard.service';
 import { RollupQueue } from './rollup-queue';
 import { RollupProcessor } from './rollup.processor';
 import { RollupService } from './rollup.service';
-import { ScoringOutbox } from './scoring-outbox';
+import { ScoringQueue } from './scoring-queue';
 import { ScoringProcessor } from './scoring.processor';
 import { SubmitService } from './submit.service';
 
@@ -76,7 +76,7 @@ import { SubmitService } from './submit.service';
     TestAnalyticsService,
     RollupQueue,
     RollupService,
-    ScoringOutbox,
+    ScoringQueue,
     SubmitService,
     ...onRole(
       [API_ROLES.WORKER],
@@ -84,7 +84,7 @@ import { SubmitService } from './submit.service';
     ),
   ],
   // Neither processor is here on purpose: an export is how a worker reaches a request path.
-  exports: [LeaderboardService, ScoringOutbox, StudentOverviewService],
+  exports: [LeaderboardService, StudentOverviewService],
 })
 export class AttemptsModule implements OnModuleInit {
   constructor(

@@ -120,8 +120,9 @@ The first sitting freezes both the paper and the blueprint it came from.
 
 - The **only** permitted post-start change is moving a `PaperQuestion` to `DROPPED` or `BONUS`, and
   it is refused on a test that has not been offered.
-- The move and a re-score for every ended sitting that served the question commit together, so no
-  drop or bonus lands without the marks following it.
+- The move and the test's `paperRevision` commit together, and every sitting is stamped with the
+  revision its marks were counted against; the sweeper re-scores each evaluated sitting behind its
+  test's, once per revision, so no drop or bonus lands without the marks following it.
 - `DROPPED` pays its marks to everyone who attempted it and takes back the negative; a student who
   left it alone gets zero. `BONUS` pays the whole cohort.
 - `isCorrect` stays the answer key's verdict either way. A drop or a bonus moves the marks, never the

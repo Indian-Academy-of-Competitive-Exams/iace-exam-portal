@@ -18,7 +18,7 @@ import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { answeredIn, type AnswerSheet } from './answer-sheet';
 import { holdsSitting, isInTime, type HeldState } from './attempt-state';
-import { ScoringOutbox } from './scoring-outbox';
+import { ScoringQueue } from './scoring-queue';
 import { MetricsService } from '../common/metrics';
 
 const NOT_YOURS = 'No such attempt';
@@ -42,7 +42,7 @@ export class SubmitService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
-    private readonly outbox: ScoringOutbox,
+    private readonly scoring: ScoringQueue,
     private readonly metrics: MetricsService,
     private readonly sheets: AttemptSheetService,
   ) {}
@@ -155,7 +155,7 @@ export class SubmitService {
 
   /** A queue nobody can reach must not fail a submit that committed — the sweeper queues it again. */
   private async queue(attempt: AttemptRow): Promise<void> {
-    await this.outbox.queue([attempt]).catch((error: unknown) => {
+    await this.scoring.queue([attempt]).catch((error: unknown) => {
       this.logger.error(
         `Attempt ${attempt.id} was not queued for scoring; the sweeper will`,
         error,

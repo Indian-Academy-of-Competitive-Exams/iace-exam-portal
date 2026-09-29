@@ -32,7 +32,7 @@ const SCORING_SELECT = {
   isGraded: true,
   startedAt: true,
   submittedAt: true,
-  // The scoring terms' cache key: a disposition bumps it, so a warm copy cannot hide a drop.
+  // The terms' cache key, and the revision the marks are stamped with for the sweeper to compare.
   test: { select: { paperRevision: true, scope: true } },
   sheet: { select: { answers: true } },
 } as const satisfies Prisma.AttemptSelect;
@@ -156,6 +156,7 @@ export class ScoringProcessor extends WorkerHost {
           "unattemptedCount" = ${scored.unattemptedCount},
           "sectionScores" = ${JSON.stringify(packedSections(scored.sections))}::jsonb,
           "timeTakenSec" = ${timeTakenSec(attempt.startedAt, attempt.submittedAt)},
+          "scoredRevision" = ${attempt.test.paperRevision},
           "updatedAt" = ${now}
         FROM held h
         WHERE a."id" = h."id" AND a."status" = ANY(${[...SCORABLE]}::"AttemptStatus"[])

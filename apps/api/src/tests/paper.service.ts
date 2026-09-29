@@ -40,7 +40,6 @@ import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from './test-rules';
 import { beginDraftPaperEdit, beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
 import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
-import { ScoringOutbox } from '../attempts';
 import { doneOpen, reopenReadingIfUnchecked } from '../assignments';
 import { AuditContext } from '../audit';
 import { formRefusal } from '../common/form-refusal';
@@ -110,7 +109,6 @@ export class PaperService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configs: BaseConfigsService,
-    private readonly outbox: ScoringOutbox,
     private readonly auditContext: AuditContext,
     private readonly redis: RedisService,
     private readonly questions: QuestionsService,
@@ -552,32 +550,29 @@ export class PaperService {
     }
     const row = await this.requireRow(testId, rowId);
 
-    const asked = await this.prisma.$transaction(async (tx) => {
+    const moved = await this.prisma.$transaction(async (tx) => {
       // Test before Question: the guard's status-only fast path skips the lock this needs below.
       await beginPaperEdit(tx, testId);
       // The gate is the WRITE, not a read before it: two admins clicking cannot both win.
-      const moved = await tx.paperQuestion.updateMany({
+      const rows = await tx.paperQuestion.updateMany({
         where: { testId, questionId: row.questionId, status: { not: status } },
         data: { status },
       });
-      if (moved.count === 0) return null;
-      // With the fan-out, so a scorer reading the counter after this sees the statuses it names.
+      if (rows.count === 0) return 0;
+      // The whole re-score: every sitting marked against an older revision is found by the sweeper.
       await tx.test.update({ where: { id: testId }, data: { paperRevision: { increment: 1 } } });
-      return {
-        rows: moved.count,
-        sittings: await this.outbox.rescore(tx, testId),
-      };
-    }, TX_LIMITS.BULK);
+      return rows.count;
+    }, TX_LIMITS.SHORT);
 
     // Only on a real change, and against the ROW: "test updated" cannot settle a dispute later.
-    if (asked) {
+    if (moved > 0) {
       this.auditContext.setEntityId(rowId);
       this.auditContext.setChanged({
         status: { from: row.status, to: status },
         reason: { from: null, to: reason },
       });
       this.logger.log(
-        `Question ${row.questionId} on test ${testId} is ${status} across ${asked.rows} paper rows; ${asked.sittings} sittings to re-score`,
+        `Question ${row.questionId} on test ${testId} is ${status} across ${moved} paper rows; its sittings are re-scored by the sweep`,
       );
     }
     return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));

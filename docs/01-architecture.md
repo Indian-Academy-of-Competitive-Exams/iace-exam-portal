@@ -186,7 +186,9 @@ fires expiry once, so a whole hall hitting zero together cannot become a retry s
 **Submit is buffered through a queue.** On submit — or auto-submit at time-up — the sitting is
 flipped to `SUBMITTED` and queued under its own id; `SUBMITTED` and unscored IS the request, so no
 crash can strand an attempt nobody scores: the sweeper queues it again under the same id, which
-BullMQ holds once. A re-score, which leaves no such state behind, is an `OutboxEvent` instead.
+BullMQ holds once. A re-score is found the same way: the scorer stamps each sitting with the paper
+revision it marked against, a drop or a bonus moves the test's revision, and the sweeper queues
+every evaluated sitting behind it, under the sitting's id and the revision.
 The worker evaluates (marks and negative marks) and writes the durable scored fields, the time the
 sitting took among them. Thousands of simultaneous submits become a queue instead of thousands of
 synchronous transactions fighting each other — nobody waits on it, but it is not instant: `docs/04`

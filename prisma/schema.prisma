@@ -708,6 +708,8 @@ model Attempt {
   sectionScores    Json?
   // Less time wins a tie on marks: seconds from start to submit, capped at a day, a day if unsubmitted.
   timeTakenSec     Int?
+  // The Test.paperRevision the marks were counted against; behind the test's, the sweeper re-scores.
+  scoredRevision   Int                 @default(0)
   createdAt        DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   // Void (support console): archive, never delete. When set, excluded from rollups/leaderboard/cohort reads.
@@ -1035,6 +1037,7 @@ model RowActionLog {
 
 // Written in the same transaction as the state change. A relay claims rows with
 // FOR UPDATE SKIP LOCKED; the poll is served by a partial index on pending rows.
+// Nothing in this build reads or writes it: kept only as the insert target of a build before 20260930140000.
 model OutboxEvent {
   // A trigger turns a notification.requested row, which only a build before 20260929180000 writes, into its Notification.
   id            String    @id @default(uuid(7)) @db.Uuid
@@ -1044,9 +1047,6 @@ model OutboxEvent {
   payload       Json?
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
   processedAt   DateTime? @db.Timestamptz(3)
-
-  @@index([processedAt, createdAt])
-  @@index([aggregateType, aggregateId, createdAt])
 }
 
 // ============================================================================

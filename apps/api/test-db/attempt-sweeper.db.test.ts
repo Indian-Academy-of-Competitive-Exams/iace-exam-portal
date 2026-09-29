@@ -9,7 +9,7 @@ import {
   SWEEP_LANES,
 } from '../src/attempts/attempt-sweeper.processor';
 import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringOutbox } from '../src/attempts/scoring-outbox';
+import { ScoringQueue } from '../src/attempts/scoring-queue';
 import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS, SCORING_RETRY_AFTER_MS } from '../src/queue/queues';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
@@ -62,17 +62,16 @@ function build(refuse: (attemptId: string) => boolean = () => false) {
   const state = new AttemptStateService(prisma, redis.asService(), new PaperSheetService(prisma));
   const metrics = new FakeMetrics();
   const scoring = new FakeQueue();
-  const outbox = new ScoringOutbox(prisma, scoring.asQueue());
   const sweeper = new AttemptSweeperProcessor(
     prisma,
     state,
     submit,
-    outbox,
+    new ScoringQueue(scoring.asQueue()),
     new RollupQueue(rollupQueue.asQueue()),
     fakeQueueFailures(),
     metrics.asService(),
   );
-  return { asked, sweeper, rollupQueue, scoring, state, metrics, outbox };
+  return { asked, sweeper, rollupQueue, scoring, state, metrics };
 }
 
 const ended = () => prisma.attempt.count({ where: { status: ATTEMPT_STATUS.SUBMITTED } });

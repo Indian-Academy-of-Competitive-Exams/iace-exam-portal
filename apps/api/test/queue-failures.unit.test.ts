@@ -41,7 +41,7 @@ describe('QueueFailures', () => {
     const { metrics, failures } = build();
 
     failures.record(
-      QUEUE_NAMES.OUTBOX_PRUNE,
+      QUEUE_NAMES.NOTIFICATION_PRUNE,
       { id: 'j', attemptsMade: 1, opts: {} } as Job,
       new Error('x'),
     );

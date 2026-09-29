@@ -17,7 +17,7 @@ import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptsService } from '../src/attempts/attempts.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { ScoringOutbox } from '../src/attempts/scoring-outbox';
+import { ScoringQueue } from '../src/attempts/scoring-queue';
 import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES } from '../src/queue/queues';
 import { redisKeys } from '../src/redis/redis.keys';
@@ -96,7 +96,7 @@ async function hall(questionCount = 2) {
     submit: new SubmitService(
       prisma,
       state,
-      new ScoringOutbox(prisma, queue.asQueue()),
+      new ScoringQueue(queue.asQueue()),
       new FakeMetrics().asService(),
       sheets,
     ),

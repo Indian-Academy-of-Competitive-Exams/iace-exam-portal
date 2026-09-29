@@ -6,5 +6,4 @@ export {
   type StudentRollup,
   type StudentRollups,
 } from './overview.service';
-export { ScoringOutbox } from './scoring-outbox';
 export { answersOf } from './answer-sheet';

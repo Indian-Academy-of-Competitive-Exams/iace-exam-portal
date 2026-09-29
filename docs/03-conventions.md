@@ -173,9 +173,6 @@ owns the sitting owns the derivation.
   `handedAt` with it; on a picked section it stamps `handedAt` at the owner's hand-over. The stamps
   and the paper rows they rest on are one fact and commit together; the leftover questions go to
   the bank through `QuestionsService`, not by a write of `tests`' own, inside that same transaction.
-- the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
-  the one crossing that is infra rather than domain: retention is a property of the buffer, not of
-  the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.
 
 **There is no group table and access is not a link row.** A series' `kind` decides who reaches it:
 FREE reaches everyone; STANDARD reaches a student whose current branch is on the series' branch list
@@ -210,8 +207,8 @@ does not run.
 | `exam_stage.changed`     | configs (a stage rename, an exam's code or course, an edit to a blueprint a test is built on) | access (as above)                                   | wired |
 
 Submit and scoring do not go through the bus: a submitted sitting goes to the BullMQ scoring queue
-under its own id, and its unscored state is what the sweeper finds if that was lost; a re-score,
-which leaves no such state, goes through `OutboxEvent`. Counting does not ride an outbox row at all — a student's aggregates commit with their marks, and the cohort's are
+under its own id, and its unscored state is what the sweeper finds if that was lost; a re-score is
+found the same way, by a sitting's `scoredRevision` behind its test's `paperRevision`. Counting does not ride an outbox row at all — a student's aggregates commit with their marks, and the cohort's are
 recounted by a periodic pass that finds its own work (`docs/02` §9).
 
 **Notifications left the bus for the same reason.** They used to be `@OnEvent` handlers that

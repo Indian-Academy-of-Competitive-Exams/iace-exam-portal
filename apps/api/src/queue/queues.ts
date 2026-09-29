@@ -4,7 +4,6 @@ export const QUEUE_NAMES = {
   AUDIT_ARCHIVE: 'audit-archive',
   ATTEMPT_FLUSH: 'attempt-flush',
   ATTEMPT_SWEEP: 'attempt-sweep',
-  OUTBOX_PRUNE: 'outbox-prune',
   NOTIFICATION_PRUNE: 'notification-prune',
   ROLLUP: 'rollup',
   NOTIFICATIONS: 'notifications',
@@ -25,7 +24,6 @@ export const QUEUE_POLICY = {
   [QUEUE_NAMES.ATTEMPT_FLUSH]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.ATTEMPT_SWEEP]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.AUDIT_ARCHIVE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
-  [QUEUE_NAMES.OUTBOX_PRUNE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.NOTIFICATION_PRUNE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   // Writing rows and booking deliveries. A broadcast arrives in chunks, so width beats depth here.
   [QUEUE_NAMES.NOTIFICATIONS]: { concurrency: 4, attempts: 5, backoffMs: 5000 },
@@ -67,19 +65,24 @@ export interface ScoringJobData {
   testId: string;
 }
 
-/** Keyed on the sitting for a first score, on the outbox row for a re-score: asking twice queues once. */
-export function scoringJobId(key: string): string {
-  return `${QUEUE_NAMES.SCORING}-${key}`;
+/** A first score, keyed on the sitting: asking twice queues once. */
+export function scoringJobId(attemptId: string): string {
+  return `${QUEUE_NAMES.SCORING}-${attemptId}`;
 }
 
-/** Unscored this long is a backlog the gauge reports, and a re-score this stale is asked for again. */
+/** A re-score, keyed on the sitting AND the paper revision: a later drop is a new ask, a repeat is not. */
+export function rescoreJobId(attemptId: string, paperRevision: number): string {
+  return `${QUEUE_NAMES.SCORING}-rescore-${attemptId}-${paperRevision}`;
+}
+
+/** Unscored this long is a backlog the gauge reports. */
 export const SCORING_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 /** How many stranded events one relay pass hands on. */
 export const RELAY_BATCH = 200;
 
-/** How long a sweep leaves a request or an ended sitting to its own writer before queuing it itself. */
-export const RELAY_GRACE_SEC = 30;
+/** How long a sweep leaves an ended sitting to its own submit before queuing it itself. */
+export const SUBMIT_QUEUE_GRACE_SEC = 30;
 
 /** What a rollup job is: one sitting to fold in, one test or student to rebuild, or every table. */
 export const ROLLUP_JOBS = {
@@ -152,11 +155,8 @@ export const ATTEMPT_FLUSH_EVERY_MS = 60 * 1000;
 /** How often sittings past their deadline are ended. Slower: nothing is lost by ending one late. */
 export const ATTEMPT_SWEEP_EVERY_MS = 2 * 60 * 1000;
 
-/** Nightly, at an hour no Indian coaching branch is running a test. */
-export const OUTBOX_PRUNE_CRON = '45 20 * * *';
-
-/** 02:45 IST: the same quiet window as the prune, half an hour clear of it. */
+/** 02:45 IST: the same quiet window as the prune, a quarter of an hour clear of it. */
 export const AUDIT_ARCHIVE_CRON = '15 21 * * *';
 
-/** After the outbox prune and before the audit archive, so the three never contend for the pool. */
+/** 02:30 IST, at an hour no Indian coaching branch is running a test, clear of the audit archive. */
 export const NOTIFICATION_PRUNE_CRON = '0 21 * * *';

@@ -7,13 +7,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   QUEUE_NAMES,
   QUEUE_POLICY,
-  RELAY_GRACE_SEC,
   SCORING_RETRY_AFTER_MS,
+  SUBMIT_QUEUE_GRACE_SEC,
 } from '../queue/queues';
 import { isAbandoned, SAVE_GRACE_SEC } from './attempt-state';
 import { AttemptStateService } from './attempt-state.service';
 import { RollupQueue } from './rollup-queue';
-import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
+import { ScoringQueue } from './scoring-queue';
 import { SubmitService } from './submit.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { MetricsService } from '../common/metrics/metrics.service';
@@ -30,7 +30,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
     private readonly submit: SubmitService,
-    private readonly outbox: ScoringOutbox,
+    private readonly scoring: ScoringQueue,
     private readonly rollup: RollupQueue,
     private readonly failures: QueueFailures,
     private readonly metrics: MetricsService,
@@ -50,15 +50,14 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
   async process(): Promise<void> {
     await this.endStranded();
-    // Re-score requests: a crash between their commit and the queue leaves one nobody handed on.
-    await this.outbox.relay().catch((error: unknown) => {
-      this.logger.error('Relaying the scoring requests nobody handed on failed', error);
-    });
     await this.rollup.sweep().catch((error: unknown) => {
       this.logger.error('Asking for the cohort counting pass failed', error);
     });
     await this.askAgainForUnscored().catch((error: unknown) => {
       this.logger.error('Asking again for the sittings nobody scored failed', error);
+    });
+    await this.askForRescores().catch((error: unknown) => {
+      this.logger.error('Asking for the sittings marked against an older paper failed', error);
     });
   }
 
@@ -103,42 +102,31 @@ export class AttemptSweeperProcessor extends WorkerHost {
     }
   }
 
-  /** Two gaps a sweep closes: an ended sitting never scored, or a re-score never landed. */
+  /** An ended sitting never scored: its own submit's job was lost, or is still in the queue. */
   private async askAgainForUnscored(now: Date = new Date()): Promise<void> {
     const settled = new Date(now.getTime() - SCORING_RETRY_AFTER_MS);
     this.metrics.setScoringBacklog(await this.unscoredCount(settled));
     const unscored = await this.neverScored(now);
-    await this.outbox.queue(unscored);
+    await this.scoring.queue(unscored);
     // Most are a job still in the queue, swallowed by its id; a count that stays up is a lost one.
     if (unscored.length > 0)
       this.logger.log(`Queued ${unscored.length} ended, unscored sittings again`);
-    await this.askAgainForRescores(settled);
   }
 
-  /** Candidates, then their outbox rows: a re-score request already in flight is never piled onto. */
-  private async askAgainForRescores(settled: Date): Promise<void> {
-    const candidates = await this.staleRescores(settled);
-    if (candidates.length === 0) return;
-
-    const requests = await this.prisma.outboxEvent.findMany({
-      where: {
-        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
-        aggregateId: { in: candidates.map((attempt) => attempt.id) },
-        eventType: SCORING_REQUEST.EVENT_TYPE,
-      },
-      select: { aggregateId: true, processedAt: true },
-    });
-    // Still in flight, or handed on this window: a scorer already has it, so asking again piles up.
-    const waiting = new Set(
-      requests
-        .filter((row) => row.processedAt === null || row.processedAt >= settled)
-        .map((row) => row.aggregateId),
-    );
-
-    for (const attempt of candidates.filter((row) => !waiting.has(row.id))) {
-      await this.outbox.request(this.prisma, attempt);
-      this.logger.warn(`Attempt ${attempt.id} was re-scored but the correction never landed`);
-    }
+  /** A drop or a bonus only bumps the test's revision; every sitting marked before it is found here. */
+  private async askForRescores(): Promise<void> {
+    const behind = await this.prisma.$queryRaw<{ id: string; testId: string; revision: number }[]>`
+      SELECT a."id", a."testId", t."paperRevision" AS revision
+      FROM "Test" t
+      JOIN "Attempt" a
+        ON a."testId" = t."id"
+       AND ${EVALUATED}
+       AND a."scoredRevision" < t."paperRevision"
+      WHERE t."paperRevision" > 0
+      LIMIT ${NEVER_SCORED_BATCH_CEILING}`;
+    await this.scoring.rescore(behind);
+    if (behind.length > 0)
+      this.logger.log(`Queued ${behind.length} sittings to be marked against a changed paper`);
   }
 
   /** The gauge queue depth cannot show: sittings ended this long ago and still unscored. */
@@ -151,31 +139,13 @@ export class AttemptSweeperProcessor extends WorkerHost {
 
   /** Past the grace a submit gets to queue its own job; one the queue still holds is not queued twice. */
   private neverScored(now: Date): Promise<{ id: string; testId: string }[]> {
-    const settling = new Date(now.getTime() - RELAY_GRACE_SEC * MS_PER_SECOND);
+    const settling = new Date(now.getTime() - SUBMIT_QUEUE_GRACE_SEC * MS_PER_SECOND);
     // Caps one sweep's re-asks, not the scoring queue, which drains at its own pace.
     return this.prisma.$queryRaw<{ id: string; testId: string }[]>`
       SELECT "id", "testId" FROM "Attempt"
       WHERE ${UNSCORED} AND "submittedAt" < ${settling}
       ORDER BY "submittedAt" ASC
       LIMIT ${NEVER_SCORED_BATCH_CEILING}`;
-  }
-
-  /** An EVALUATED sitting whose last mark predates its own re-score request: the correction never ran. */
-  // Scans a week of relayed requests, not all of them: the outbox prune drops anything older.
-  private async staleRescores(settled: Date): Promise<{ id: string; testId: string }[]> {
-    const rows = await this.prisma.$queryRaw<{ id: string; testId: string }[]>`
-      SELECT a."id", a."testId"
-      FROM "OutboxEvent" o
-      JOIN "Attempt" a
-        ON a."id" = o."aggregateId"
-       AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
-       AND a."updatedAt" < o."createdAt"
-      WHERE o."aggregateType" = ${SCORING_REQUEST.AGGREGATE_TYPE}
-        AND o."eventType" = ${SCORING_REQUEST.EVENT_TYPE}
-        AND o."processedAt" < ${settled}
-      ORDER BY o."processedAt" ASC
-      LIMIT ${RESCORE_BATCH}`;
-    return [...new Map(rows.map((row) => [row.id, row])).values()];
   }
 
   /** The same grace a save gets, so the sweeper never ends a sitting a save could still reach. */
@@ -194,10 +164,10 @@ const UNSCORED = Prisma.raw(`"status" = '${ATTEMPT_STATUS.SUBMITTED}' AND "score
 /** Literal, not a parameter: a bound enum cannot prove Attempt_expiring_idx's predicate, so the planner skips it. */
 const IN_PROGRESS = Prisma.raw(`'${ATTEMPT_STATUS.IN_PROGRESS}'`);
 
-/** How many stale rescores one sweep asks about — a rare correction path, not a backlog drain. */
-const RESCORE_BATCH = 100;
+/** Literal, not a parameter: a bound enum cannot prove Attempt_rescore_idx's predicate, so the planner skips it. */
+const EVALUATED = Prisma.raw(`a."status" = '${ATTEMPT_STATUS.EVALUATED}'`);
 
-/** The never-scored arm's own ceiling: wide enough to drain 6,000 in minutes, not hours. */
+/** Either arm's ceiling on one sweep's asks: wide enough to drain a 6,000 hall in minutes, not hours. */
 export const NEVER_SCORED_BATCH_CEILING = 1000;
 
 /** How many stranded sittings one read holds. A sweep keeps reading until the backlog is gone. */

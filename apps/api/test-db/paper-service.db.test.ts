@@ -13,7 +13,6 @@ import {
   TEST_SCOPE,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { QuestionsService } from '../src/questions/questions.service';
@@ -21,7 +20,7 @@ import { PaperService } from '../src/tests/paper.service';
 import { type Editor } from '../src/tests/edit-lock';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from '../src/tests/test-rules';
-import { FakeEventBus, FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BUILDER,
   makeAdmin,
@@ -132,7 +131,6 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
       redis,
       new FakeEventBus().asService(),
     ),
-    new ScoringOutbox(prisma, new FakeQueue().asQueue()),
     audit,
     redis,
     new QuestionsService(prisma, audit, new FakeStorage() as never),

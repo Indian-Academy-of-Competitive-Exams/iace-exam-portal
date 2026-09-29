@@ -13,7 +13,7 @@ export const API_ROLES = {
   EXAM: 'exam',
   /** Signing in, the catalog, results, notifications and the whole admin side. */
   CORE: 'core',
-  /** No routes but health and metrics: the queues, their schedulers and the outbox relay. */
+  /** No routes but health and metrics: the queues and their schedulers. */
   WORKER: 'worker',
 } as const;
 

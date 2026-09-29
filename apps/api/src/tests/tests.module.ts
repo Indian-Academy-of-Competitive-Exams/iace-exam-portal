@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigsModule } from '../configs';
-import { AttemptsModule } from '../attempts';
 import { EventsModule } from '../common/events';
 import { AssignmentsModule } from '../assignments';
 import { QuestionsModule } from '../questions';
@@ -14,14 +13,7 @@ import { API_ROLES, onRole } from '../config/api-role';
 
 /** Owns `Test`. Its shape is the config's, read through `BaseConfigsService` rather than copied. */
 @Module({
-  imports: [
-    PrismaModule,
-    ConfigsModule,
-    EventsModule,
-    AttemptsModule,
-    AssignmentsModule,
-    QuestionsModule,
-  ],
+  imports: [PrismaModule, ConfigsModule, EventsModule, AssignmentsModule, QuestionsModule],
   controllers: onRole(
     [API_ROLES.CORE],
     [TestsController, SeriesTestsController, TypistDoneController],

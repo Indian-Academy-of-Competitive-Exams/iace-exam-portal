@@ -1,13 +1,6 @@
-import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { InjectQueue } from '@nestjs/bullmq';
-import { type Queue } from 'bullmq';
-import { PrismaModule } from '../../prisma/prisma.module';
-import { QueueModule } from '../../queue/queue.module';
-import { OUTBOX_PRUNE_CRON, QUEUE_NAMES } from '../../queue/queues';
 import { DomainEventBus } from './domain-event-bus';
-import { OutboxPruneProcessor } from './outbox-prune.processor';
-import { API_ROLES, onRole, servesRole } from '../../config/api-role';
 
 /** Infrastructure, not a bounded context — like `prisma` and `redis`, every service links it and none of them become it (docs/03 §4.4). */
 @Global()
@@ -18,23 +11,8 @@ import { API_ROLES, onRole, servesRole } from '../../config/api-role';
       wildcard: false,
       delimiter: '.',
     }),
-    PrismaModule,
-    QueueModule,
   ],
-  providers: [DomainEventBus, ...onRole([API_ROLES.WORKER], [OutboxPruneProcessor])],
+  providers: [DomainEventBus],
   exports: [DomainEventBus],
 })
-export class EventsModule implements OnModuleInit {
-  constructor(@InjectQueue(QUEUE_NAMES.OUTBOX_PRUNE) private readonly pruneQueue: Queue) {}
-
-  /** Fixed scheduler id: what stops a redeploy from stacking a second nightly prune. */
-  async onModuleInit(): Promise<void> {
-    // The container that runs the jobs is the one that schedules them.
-    if (!servesRole(API_ROLES.WORKER)) return;
-
-    await this.pruneQueue.upsertJobScheduler(QUEUE_NAMES.OUTBOX_PRUNE, {
-      pattern: OUTBOX_PRUNE_CRON,
-      tz: 'UTC',
-    });
-  }
-}
+export class EventsModule {}

@@ -540,6 +540,7 @@ Table Attempt {
   unattemptedCount integer
   sectionScores jsonb
   timeTakenSec integer
+  scoredRevision integer [not null, default: 0]
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   voidedAt timestamptz(3)
@@ -774,10 +775,6 @@ Table OutboxEvent {
   payload jsonb
   createdAt timestamptz(3) [not null, default: `now()`]
   processedAt timestamptz(3)
-  indexes {
-    (processedAt, createdAt)
-    (aggregateType, aggregateId, createdAt)
-  }
 }
 
 Table Notification {
