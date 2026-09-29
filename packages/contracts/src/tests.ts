@@ -583,15 +583,29 @@ export const seriesTestRowSchema = z.object({
 });
 export type SeriesTestRow = z.infer<typeof seriesTestRowSchema>;
 
-/** Null opens it with the series. The instant is the same for every branch. */
-export const setSeriesTestUnlockSchema = z.object({ unlockAt: z.iso.datetime().nullish() });
-export type SetSeriesTestUnlockInput = z.input<typeof setSeriesTestUnlockSchema>;
-export type SetSeriesTestUnlockBody = z.infer<typeof setSeriesTestUnlockSchema>;
+/** The whole Offer step in one save: when the test opens, which programs open it early, and whether students get it. */
+export const saveOfferingSchema = z.object({
+  /** The same instant for every branch; null opens it with the series. */
+  opensAt: z.iso.datetime().nullable(),
+  /** Every program opening the test keeps; one left out is taken away. */
+  programOpenings: z.array(
+    z.object({ programCode: z.string().trim().min(1), opensAt: z.iso.datetime() }),
+  ),
+  offered: z.boolean(),
+});
+export type SaveOfferingInput = z.input<typeof saveOfferingSchema>;
+export type SaveOfferingBody = z.infer<typeof saveOfferingSchema>;
 
-/** When one program's cohort may begin, ahead of everybody else. Entry still closes together. */
-export const setProgramUnlockSchema = z.object({ opensAt: z.iso.datetime() });
-export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
-export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
+/** What the save left behind, read back rather than assumed. */
+export const testOfferingSchema = z.object({
+  status: testStatusSchema,
+  opensAt: z.string().nullable(),
+  programUnlocks: z.array(testProgramUnlockSchema),
+});
+export type TestOffering = z.infer<typeof testOfferingSchema>;
+
+/** Where a refused program opening is reported, so the screen puts it under its own row. */
+export const programOpeningField = (programCode: string) => `programOpenings.${programCode}`;
 
 /** What an offer did. `finalizedByThisCall` is false when the test was already frozen. */
 export const offerResultSchema = z.object({
@@ -602,12 +616,6 @@ export const offerResultSchema = z.object({
   status: testStatusSchema,
 });
 export type OfferResult = z.infer<typeof offerResultSchema>;
-
-export const setTestStatusSchema = z.object({
-  status: testStatusSchema,
-});
-export type SetTestStatusInput = z.input<typeof setTestStatusSchema>;
-export type SetTestStatusBody = z.infer<typeof setTestStatusSchema>;
 
 /** A test reaches a student only through a series, so attaching it is what makes it offerable. */
 export const testSeriesLinkSchema = z.object({
@@ -656,9 +664,7 @@ export const ADMIN_TEST_PAPER_ROUTES = {
     `/admin/tests/${id}/paper/sections/${sectionId}/hand-over`,
   /** The ONE change an offered paper still allows: withdrawing a question, or paying it to all. */
   questionStatus: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}/status`,
-  offer: (id: string) => `/admin/tests/${id}/offer`,
-  setStatus: (id: string) => `/admin/tests/${id}/status`,
+  /** The Offer step's one write: the opening, the program openings and whether it is offered. */
+  offering: (id: string) => `/admin/tests/${id}/offering`,
   series: (id: string) => `/admin/tests/${id}/series`,
-  programUnlock: (id: string, programCode: string) =>
-    `/admin/tests/${id}/program-unlocks/${encodeURIComponent(programCode)}`,
 } as const;

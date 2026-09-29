@@ -497,7 +497,6 @@ export const ADMIN_SERIES_ROUTES = {
   branches: (id: string) => `/admin/test-series/${id}/branches`,
   /** The link, from the series' side. The tests module owns it — a test is offered THROUGH a series. */
   tests: (id: string) => `/admin/test-series/${id}/tests`,
-  test: (id: string, testId: string) => `/admin/test-series/${id}/tests/${testId}`,
   grantsExport: (id: string) => `/admin/test-series/${id}/grants/export`,
 } as const;
 

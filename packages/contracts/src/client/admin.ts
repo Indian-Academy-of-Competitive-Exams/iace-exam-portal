@@ -134,27 +134,21 @@ import {
   testDetailSchema,
   testPaperSchema,
   testSchema,
-  offerResultSchema,
   seriesTestRowSchema,
-  testProgramUnlockSchema,
   testSeriesLinkSchema,
-  testStatusSchema,
+  testOfferingSchema,
   type AddPaperQuestionInput,
   type CreateTestInput,
   type SetPaperQuestionStatusInput,
-  type SetProgramUnlockInput,
   type SetTestSeriesInput,
-  type SetTestStatusInput,
+  type SaveOfferingInput,
   type Test,
   type TestDetail,
   type TestListQueryInput,
   type TestPaper,
-  type OfferResult,
   type SeriesTestRow,
-  type SetSeriesTestUnlockInput,
-  type TestProgramUnlock,
   type TestSeriesLink,
-  type TestStatus,
+  type TestOffering,
   type UpdateTestInput,
 } from '../tests';
 import {
@@ -508,13 +502,6 @@ export function adminClient(core: ApiCore) {
 
       grantsExport: (id: string): Promise<Blob> =>
         requestBlob(ADMIN_SERIES_ROUTES.grantsExport(id)),
-
-      setTestUnlock: (
-        id: string,
-        testId: string,
-        input: SetSeriesTestUnlockInput,
-      ): Promise<SeriesTestRow[]> =>
-        write('PATCH', ADMIN_SERIES_ROUTES.test(id, testId), seriesTestRowSchema.array(), input),
     },
 
     /** Every series a student reaches and what opens each one, the branch gate already applied. */
@@ -611,34 +598,12 @@ export function adminClient(core: ApiCore) {
       ): Promise<TestPaper> =>
         write('PATCH', ADMIN_TEST_PAPER_ROUTES.questionStatus(id, rowId), testPaperSchema, input),
 
-      offer: (id: string): Promise<OfferResult> =>
-        write('POST', ADMIN_TEST_PAPER_ROUTES.offer(id), offerResultSchema),
+      /** The Offer step's one write, in one transaction: a refusal leaves the test as it was. */
+      saveOffering: (id: string, input: SaveOfferingInput): Promise<TestOffering> =>
+        write('PUT', ADMIN_TEST_PAPER_ROUTES.offering(id), testOfferingSchema, input),
 
       moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink> =>
         write('POST', ADMIN_TEST_PAPER_ROUTES.series(id), testSeriesLinkSchema, input),
-
-      setStatus: (id: string, input: SetTestStatusInput): Promise<TestStatus> =>
-        write('PATCH', ADMIN_TEST_PAPER_ROUTES.setStatus(id), testStatusSchema, input),
-
-      /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
-      setProgramUnlock: (
-        id: string,
-        programCode: string,
-        input: SetProgramUnlockInput,
-      ): Promise<TestProgramUnlock[]> =>
-        write(
-          'PUT',
-          ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode),
-          testProgramUnlockSchema.array(),
-          input,
-        ),
-
-      clearProgramUnlock: (id: string, programCode: string): Promise<TestProgramUnlock[]> =>
-        write(
-          'DELETE',
-          ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode),
-          testProgramUnlockSchema.array(),
-        ),
     },
 
     /** Subject -> Topic. Anything finer than a topic is a `topic:` tag on the question. */

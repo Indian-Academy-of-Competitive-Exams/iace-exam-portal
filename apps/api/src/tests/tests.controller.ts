@@ -21,9 +21,7 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   setTestSeriesSchema,
-  setProgramUnlockSchema,
-  setSeriesTestUnlockSchema,
-  setTestStatusSchema,
+  saveOfferingSchema,
   testListQuerySchema,
   updateTestSchema,
   type AddPaperQuestionBody,
@@ -31,18 +29,14 @@ import {
   type CreateTestBody,
   type Paginated,
   type SetTestSeriesBody,
-  type SetTestStatusBody,
   type Test,
   type TestDetail,
   type TestListQuery,
   type TestPaper,
   type TestSeriesLink,
-  type OfferResult,
   type SeriesTestRow,
-  type SetProgramUnlockBody,
-  type SetSeriesTestUnlockBody,
-  type TestProgramUnlock,
-  type TestStatus,
+  type SaveOfferingBody,
+  type TestOffering,
   type UpdateTestBody,
   setPaperQuestionStatusSchema,
   removePaperQuestionsSchema,
@@ -57,7 +51,6 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { TestsService } from './tests.service';
 import { PaperService } from './paper.service';
-import { FinalizeService } from './finalize.service';
 import { OfferingService } from './offering.service';
 import { AssignmentsService } from '../assignments';
 
@@ -68,7 +61,6 @@ export class TestsController {
   constructor(
     private readonly tests: TestsService,
     private readonly paper: PaperService,
-    private readonly finalizer: FinalizeService,
     private readonly offering: OfferingService,
   ) {}
 
@@ -186,36 +178,16 @@ export class TestsController {
     return this.paper.handOver(id, sectionId, user);
   }
 
-  /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
+  /** The Offer step's one write: the opening, the program openings and whether students get it. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Put(':id/program-unlocks/:programCode')
-  setProgramUnlock(
+  @Put(':id/offering')
+  saveOffering(
     @Param('id') id: string,
-    @Param('programCode') programCode: string,
-    @Body(new ZodBody(setProgramUnlockSchema)) body: SetProgramUnlockBody,
-  ): Promise<TestProgramUnlock[]> {
-    return this.offering.setProgramUnlock(id, programCode, body);
-  }
-
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Delete(':id/program-unlocks/:programCode')
-  @HttpCode(HttpStatus.OK)
-  clearProgramUnlock(
-    @Param('id') id: string,
-    @Param('programCode') programCode: string,
-  ): Promise<TestProgramUnlock[]> {
-    return this.offering.clearProgramUnlock(id, programCode);
-  }
-
-  /** The last step of the builder, and idempotent: a second offer freezes nothing twice. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post(':id/offer')
-  @HttpCode(HttpStatus.OK)
-  offer(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<OfferResult> {
-    return this.finalizer.offer(id, user.isSuperAdmin);
+    @Body(new ZodBody(saveOfferingSchema)) body: SaveOfferingBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<TestOffering> {
+    return this.offering.saveOffering(id, body, user.isSuperAdmin);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -233,16 +205,6 @@ export class TestsController {
     @Body(new ZodBody(setTestSeriesSchema)) body: SetTestSeriesBody,
   ): Promise<TestSeriesLink> {
     return this.offering.moveToSeries(id, body);
-  }
-
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/status')
-  setStatus(
-    @Param('id') id: string,
-    @Body(new ZodBody(setTestStatusSchema)) body: SetTestStatusBody,
-  ): Promise<TestStatus> {
-    return this.offering.setStatus(id, body.status);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.DELETE)
@@ -264,17 +226,6 @@ export class SeriesTestsController {
   @Get()
   list(@Param('seriesId') seriesId: string): Promise<SeriesTestRow[]> {
     return this.offering.testsIn(seriesId);
-  }
-
-  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':testId')
-  setUnlock(
-    @Param('seriesId') seriesId: string,
-    @Param('testId') testId: string,
-    @Body(new ZodBody(setSeriesTestUnlockSchema)) body: SetSeriesTestUnlockBody,
-  ): Promise<SeriesTestRow[]> {
-    return this.offering.setUnlock(seriesId, testId, body);
   }
 }
 

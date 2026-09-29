@@ -179,6 +179,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   tables, so `OfferingService` holds it alone: it refuses a program opening later than the test's
   own or on a test with no opening (which is already open), moving the test's opening earlier drops
   every program opening now later than it, and clearing it drops them all.
+- **The Offer step saves in one request** (`PUT /admin/tests/:id/offering`): the test's opening, the
+  program openings it keeps, and whether it is offered, in one transaction that holds the Test row.
+  A refusal anywhere leaves the test exactly as it was. A program opening the admin set is judged
+  and refused; one they left alone and the new opening overtook is dropped, as the Offer step warns.
+  Offering is the only road to ACTIVE, and retiring is the save with `offered` false.
 - **An opening being set lies ahead of now**, for the test and for a program alike. A time already
   passed would open the test the moment it saved, so `OfferingService` refuses it
   (`OPENING_HAS_PASSED`, judged by the same `testIsOpen` the catalog reads) and the Offer step says

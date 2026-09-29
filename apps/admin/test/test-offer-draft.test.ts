@@ -3,12 +3,11 @@ import { describe, it } from 'node:test';
 import { TEST_STATUS } from '@iace/contracts';
 import {
   anyPassed,
-  applyOffer,
   offerChangesOf,
+  offeringBodyOf,
   passedOpenings,
   savedOffer,
   type OfferDraft,
-  type OfferWrites,
 } from '../src/routes/test-offer-draft';
 import type { ProgramOpening } from '../src/routes/test-schedule-draft';
 
@@ -18,32 +17,6 @@ const draftTest = (over: Partial<OfferDraft> = {}): OfferDraft => ({
   offered: false,
   ...over,
 });
-
-/** Records each write in the order Done made it, and refuses the one named. */
-function recordedWrites(refuse?: keyof OfferWrites) {
-  const calls: string[] = [];
-  const write =
-    (name: keyof OfferWrites) =>
-    async (...args: unknown[]) => {
-      if (name === refuse) throw new Error(`${name} refused`);
-      calls.push([name, ...args].join(' '));
-    };
-
-  const writes: OfferWrites = {
-    retire: write('retire'),
-    setOpening: write('setOpening'),
-    setProgramOpening: write('setProgramOpening'),
-    clearProgramOpening: write('clearProgramOpening'),
-    offer: write('offer'),
-  };
-  return { calls, writes };
-}
-
-const done = async (saved: OfferDraft, held: OfferDraft, refuse?: keyof OfferWrites) => {
-  const { calls, writes } = recordedWrites(refuse);
-  await applyOffer(held, offerChangesOf(saved, held), writes);
-  return calls;
-};
 
 describe('the offer a test is read out of', () => {
   it('is offered only while the test is active', () => {
@@ -59,44 +32,33 @@ describe('the offer a test is read out of', () => {
   });
 });
 
-describe('what Done writes, and in what order', () => {
-  it('writes nothing when nothing was touched', async () => {
+describe('what Done sends', () => {
+  it('counts no change when nothing was touched', () => {
     assert.equal(offerChangesOf(draftTest(), draftTest()).count, 0);
-    assert.deepEqual(await done(draftTest(), draftTest()), []);
   });
 
-  it('saves the opening before it offers the test', async () => {
+  /** The whole held step goes in one request, so the server can refuse it whole. */
+  it('sends the opening as an instant, the timed program openings, and whether it is offered', () => {
     const held = draftTest({
-      schedule: { opensAt: '2026-09-11T18:00', programs: [] },
+      schedule: {
+        opensAt: '2026-09-11T18:00',
+        programs: [
+          { programCode: 'SSC 2026', opensAt: '2026-09-11T09:00' },
+          { programCode: 'RRB JE', opensAt: '' },
+        ],
+      },
       offered: true,
     });
 
-    assert.equal(offerChangesOf(draftTest(), held).count, 2);
-    assert.deepEqual(await done(draftTest(), held), [
-      'setOpening srs_1 2026-09-11T12:30:00.000Z',
-      'offer',
-    ]);
-  });
-
-  it('does not offer a test whose opening was refused', async () => {
-    const held = draftTest({
-      schedule: { opensAt: '2026-09-11T18:00', programs: [] },
+    assert.deepEqual(offeringBodyOf(held), {
+      opensAt: '2026-09-11T12:30:00.000Z',
+      programOpenings: [{ programCode: 'SSC 2026', opensAt: '2026-09-11T03:30:00.000Z' }],
       offered: true,
     });
-    const { calls, writes } = recordedWrites('setOpening');
-
-    await assert.rejects(applyOffer(held, offerChangesOf(draftTest(), held), writes));
-    assert.deepEqual(calls, []);
   });
 
-  it('retires a test before its opening moves', async () => {
-    const saved = draftTest({ offered: true });
-    const held = draftTest({ schedule: { opensAt: '2026-09-11T18:00', programs: [] } });
-
-    assert.deepEqual(await done(saved, held), [
-      'retire',
-      'setOpening srs_1 2026-09-11T12:30:00.000Z',
-    ]);
+  it('sends a blank opening as none, which opens the test with its series', () => {
+    assert.equal(offeringBodyOf(draftTest()).opensAt, null);
   });
 });
 

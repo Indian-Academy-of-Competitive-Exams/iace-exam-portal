@@ -6,20 +6,19 @@ import {
   FORM_LEVEL_FIELD,
   OPENING_HAS_PASSED,
   TEST_STATUS,
+  programOpeningField,
   testIsOpen,
+  type SaveOfferingBody,
   type SeriesTestRow,
-  type SetSeriesTestUnlockBody,
-  type SetProgramUnlockBody,
   type SetTestSeriesBody,
+  type TestOffering,
   type TestProgramUnlock,
   type TestSeriesLink,
-  type TestStatus,
 } from '@iace/contracts';
-import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import {
-  activationBlocker,
   attemptsLabel,
   seriesFitIssue,
   seriesRefused,
@@ -27,6 +26,8 @@ import {
   testShapeOf,
 } from './test-rules';
 import { formRefusal } from '../common/form-refusal';
+import { beginPaperEdit } from './begin-paper-edit';
+import { FinalizeService, FREEZE_LIMITS } from './finalize.service';
 
 const OFFERING_SELECT = {
   id: true,
@@ -76,7 +77,11 @@ const dateOrNull = (value: string | null | undefined): Date | null =>
 const OPENS_BEFORE_THE_TEST_DOES =
   'A program opens a test earlier, never later. A later opening would hold this program’s students back after the test has opened for everyone else.';
 
-const UNLOCK_FIELD = 'unlockAt';
+const OPENS_AT_FIELD = 'opensAt';
+
+const DUPLICATE_PROGRAM_OPENING = 'Each program opens a test once. Give each program one opening.';
+
+type OfferingClient = Pick<Prisma.TransactionClient, 'test' | 'program' | 'testProgramUnlock'>;
 
 const nameTakenIn = (seriesName: string, title: string) =>
   `${seriesName} already has a test called ${title}, and a name belongs to one test inside its series.`;
@@ -94,24 +99,19 @@ const opensAfterItsTurn = (title: string) =>
 const TEST_HAS_NO_OPENING =
   'This test has no opening time of its own, so it is already open. Give the test an opening time before letting a program in ahead of it.';
 
-/** The write guard's exact complement: a row the opening overtook now DELAYS its cohort, so it goes. */
-async function dropUnlocksTheOpeningOvertook(
-  tx: Prisma.TransactionClient,
-  testId: string,
-  testOpensAt: Date | null,
-): Promise<void> {
-  await tx.testProgramUnlock.deleteMany({
-    where: { testId, ...(testOpensAt === null ? {} : { opensAt: { gt: testOpensAt } }) },
-  });
+/** A program opening the admin set must open the test earlier; one they left alone may simply be overtaken. */
+function noLaterThanTheTest(testOpensAt: Date | null, opensAt: Date): string | null {
+  if (testOpensAt !== null && opensAt <= testOpensAt) return null;
+  return testOpensAt === null ? TEST_HAS_NO_OPENING : OPENS_BEFORE_THE_TEST_DOES;
 }
 
-/** No constraint can carry this: it compares a row on one table with a column on another. */
-function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date): void {
-  if (testOpensAt !== null && opensAt <= testOpensAt) return;
-
-  const message = testOpensAt === null ? TEST_HAS_NO_OPENING : OPENS_BEFORE_THE_TEST_DOES;
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-    fieldErrors: { opensAt: [message] },
+function programRefused(
+  code: (typeof ErrorCodes)[keyof typeof ErrorCodes],
+  programCode: string,
+  message: string,
+): AppException {
+  return new AppException(code, message, {
+    fieldErrors: { [programOpeningField(programCode)]: [message] },
   });
 }
 
@@ -185,6 +185,7 @@ export class OfferingService {
     private readonly prisma: PrismaService,
     private readonly events: DomainEventBus,
     private readonly auditContext: AuditContext,
+    private readonly finalizer: FinalizeService,
   ) {}
 
   async series(testId: string): Promise<TestSeriesLink> {
@@ -203,7 +204,7 @@ export class OfferingService {
     await this.assertTitleFreeIn(next, series.name, test);
     const opensAt = test.opensAt;
     if (series.sequentialTests && opensAt !== null) {
-      await this.assertOpeningFitsOrder(next, FORM_LEVEL_FIELD, (siblings) =>
+      await this.assertOpeningFitsOrder(this.prisma, next, FORM_LEVEL_FIELD, (siblings) =>
         arrivalClash(opensAt, siblings),
       );
     }
@@ -222,21 +223,99 @@ export class OfferingService {
     return linkOf(moved);
   }
 
-  async setStatus(testId: string, status: TestStatus): Promise<TestStatus> {
-    const test = await this.requireTest(testId);
-    if (test.status === status) return status;
+  /** The Offer step in one transaction, the Test row held first: a refusal anywhere leaves the test as it was. */
+  async saveOffering(
+    testId: string,
+    body: SaveOfferingBody,
+    isSuperAdmin: boolean,
+    now: Date = new Date(),
+  ): Promise<TestOffering> {
+    await this.prisma.$transaction(async (tx) => {
+      await beginPaperEdit(tx, testId);
+      const test = await this.requireTest(testId, tx);
+      const opensAt = dateOrNull(body.opensAt);
+      await this.writeOpening(tx, test, opensAt, now);
+      await this.writeProgramOpenings(tx, test.id, body.programOpenings, opensAt, now);
 
-    if (status === TEST_STATUS.ACTIVE) {
-      const blocker = activationBlocker(test);
-      if (blocker) {
-        throw formRefusal(ErrorCodes.CONFLICT, blocker);
+      if (body.offered && test.status !== TEST_STATUS.ACTIVE) {
+        await this.finalizer.offerWithin(tx, test.id, isSuperAdmin);
+      }
+      if (!body.offered && test.status === TEST_STATUS.ACTIVE) {
+        await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.INACTIVE } });
+      }
+    }, FREEZE_LIMITS);
+
+    const saved = await this.requireTest(testId);
+    this.announce(saved);
+    return {
+      status: saved.status,
+      opensAt: saved.opensAt?.toISOString() ?? null,
+      programUnlocks: await this.programUnlocks(this.prisma, testId),
+    };
+  }
+
+  /** Only a new time is judged; a sat test's opening is part of its history and no longer moves. */
+  private async writeOpening(
+    tx: Prisma.TransactionClient,
+    test: OfferingRow,
+    opensAt: Date | null,
+    now: Date,
+  ): Promise<void> {
+    if (opensAt?.getTime() === test.opensAt?.getTime()) return;
+    this.assertUnsat(test, 'when it opens can no longer move');
+    if (opensAt !== null) {
+      assertOpeningAhead(opensAt, now, OPENS_AT_FIELD);
+      if (test.testSeries.sequentialTests) {
+        await this.assertOpeningFitsOrder(tx, test.testSeriesId, OPENS_AT_FIELD, (siblings) =>
+          orderClash(test, opensAt, siblings),
+        );
       }
     }
+    await tx.test.update({ where: { id: test.id }, data: { opensAt } });
+  }
 
-    await this.prisma.test.update({ where: { id: testId }, data: { status } });
-    this.announce(test);
+  /** The kept set replaces the stored one; a row the admin set is judged, one they left and the opening overtook is dropped. */
+  private async writeProgramOpenings(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    rows: SaveOfferingBody['programOpenings'],
+    testOpensAt: Date | null,
+    now: Date,
+  ): Promise<void> {
+    const codes = rows.map((row) => row.programCode);
+    if (new Set(codes).size !== codes.length) {
+      throw formRefusal(ErrorCodes.VALIDATION_ERROR, DUPLICATE_PROGRAM_OPENING);
+    }
+    const stored = new Map(
+      (await this.programUnlocks(tx, testId)).map((row) => [row.programCode, row.opensAt]),
+    );
 
-    return status;
+    const kept: { programCode: string; opensAt: Date }[] = [];
+    for (const row of rows) {
+      const opensAt = new Date(row.opensAt);
+      const untouched = stored.get(row.programCode) === opensAt.toISOString();
+      const late = noLaterThanTheTest(testOpensAt, opensAt);
+      if (untouched && late === null) kept.push({ programCode: row.programCode, opensAt });
+      if (untouched) continue;
+
+      await this.requireProgram(tx, row.programCode);
+      if (testIsOpen(opensAt.toISOString(), now)) {
+        throw programRefused(ErrorCodes.VALIDATION_ERROR, row.programCode, OPENING_HAS_PASSED);
+      }
+      if (late !== null) throw programRefused(ErrorCodes.VALIDATION_ERROR, row.programCode, late);
+      kept.push({ programCode: row.programCode, opensAt });
+    }
+
+    await tx.testProgramUnlock.deleteMany({
+      where: { testId, programCode: { notIn: kept.map((row) => row.programCode) } },
+    });
+    for (const { programCode, opensAt } of kept) {
+      await tx.testProgramUnlock.upsert({
+        where: { testId_programCode: { testId, programCode } },
+        update: { opensAt },
+        create: { testId, programCode, opensAt },
+      });
+    }
   }
 
   /** A series must exist and be built for this test's stage, and it says how it opens what it holds. */
@@ -277,35 +356,6 @@ export class OfferingService {
     }));
   }
 
-  /** When a test opens inside its series. Every branch sits it at that instant. */
-  async setUnlock(
-    testSeriesId: string,
-    testId: string,
-    input: SetSeriesTestUnlockBody,
-    now: Date = new Date(),
-  ): Promise<SeriesTestRow[]> {
-    const test = await this.requireTestIn(testSeriesId, testId);
-    // `Test.opensAt` is a frozen field, and this is its other door — see TEST_UNFROZEN_FIELDS.
-    this.assertUnsat(test, 'when it opens can no longer move');
-    const opensAt = dateOrNull(input.unlockAt);
-    if (opensAt !== null) {
-      assertOpeningAhead(opensAt, now, UNLOCK_FIELD);
-      if (test.testSeries.sequentialTests) {
-        await this.assertOpeningFitsOrder(testSeriesId, UNLOCK_FIELD, (siblings) =>
-          orderClash(test, opensAt, siblings),
-        );
-      }
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.test.update({ where: { id: testId }, data: { opensAt } });
-      await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
-    }, TX_LIMITS.SHORT);
-
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-    return this.testsIn(testSeriesId);
-  }
-
   /** A name is unique inside a series, so the series it ARRIVES in is the one that judges it. */
   private async assertTitleFreeIn(
     testSeriesId: string,
@@ -323,11 +373,12 @@ export class OfferingService {
 
   /** A series holds a handful of tests, so the whole set is read and compared here rather than in SQL. */
   private async assertOpeningFitsOrder(
+    db: OfferingClient,
     testSeriesId: string,
     field: string,
     clashOf: (siblings: readonly SeriesSibling[]) => string | null,
   ): Promise<void> {
-    const siblings = await this.prisma.test.findMany({
+    const siblings = await db.test.findMany({
       where: { testSeriesId },
       select: { id: true, title: true, seriesOrder: true, opensAt: true },
     });
@@ -341,8 +392,8 @@ export class OfferingService {
   }
 
   /** Which programs open this test ahead of everyone else, and when. */
-  private async programUnlocks(testId: string): Promise<TestProgramUnlock[]> {
-    const rows = await this.prisma.testProgramUnlock.findMany({
+  private async programUnlocks(db: OfferingClient, testId: string): Promise<TestProgramUnlock[]> {
+    const rows = await db.testProgramUnlock.findMany({
       where: { testId },
       orderBy: [{ programCode: 'asc' }],
     });
@@ -352,57 +403,18 @@ export class OfferingService {
     }));
   }
 
-  /** A program opens a test EARLIER. Later would hold its students back behind everyone else. */
-  async setProgramUnlock(
-    testId: string,
-    programCode: string,
-    input: SetProgramUnlockBody,
-    now: Date = new Date(),
-  ): Promise<TestProgramUnlock[]> {
-    const test = await this.requireTest(testId);
-    await this.requireProgram(programCode);
-    const opensAt = new Date(input.opensAt);
-    assertOpeningAhead(opensAt, now, 'opensAt');
-    assertOpensNoLaterThanTheTest(test.opensAt, opensAt);
-
-    await this.prisma.testProgramUnlock.upsert({
-      where: { testId_programCode: { testId, programCode } },
-      update: { opensAt },
-      create: { testId, programCode, opensAt },
-    });
-
-    this.announce(test);
-    return this.programUnlocks(testId);
-  }
-
-  async clearProgramUnlock(testId: string, programCode: string): Promise<TestProgramUnlock[]> {
-    const test = await this.requireTest(testId);
-
-    await this.prisma.testProgramUnlock.deleteMany({ where: { testId, programCode } });
-    this.announce(test);
-    return this.programUnlocks(testId);
-  }
-
-  private async requireProgram(programCode: string): Promise<void> {
-    const program = await this.prisma.program.findUnique({
+  private async requireProgram(db: OfferingClient, programCode: string): Promise<void> {
+    const program = await db.program.findUnique({
       where: { code: programCode },
       select: { code: true },
     });
-    if (!program) throw new AppException(ErrorCodes.NOT_FOUND, 'No such program');
+    if (!program) throw programRefused(ErrorCodes.NOT_FOUND, programCode, 'No such program');
   }
 
   /** Filed against the test, and the series carrying it loses its cached catalog. */
   private announce(test: OfferingRow): void {
     this.auditContext.setEntityId(test.id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
-  }
-
-  private async requireTestIn(testSeriesId: string, testId: string): Promise<OfferingRow> {
-    const test = await this.requireTest(testId);
-    if (test.testSeriesId !== testSeriesId) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'That test is not in this series');
-    }
-    return test;
   }
 
   /** A sat test's history is fixed: `consequence` names what its attempts forbid. */
@@ -413,8 +425,8 @@ export class OfferingService {
     throw formRefusal(ErrorCodes.CONFLICT, message);
   }
 
-  private async requireTest(id: string): Promise<OfferingRow> {
-    const test = await this.prisma.test.findUnique({ where: { id }, select: OFFERING_SELECT });
+  private async requireTest(id: string, db: OfferingClient = this.prisma): Promise<OfferingRow> {
+    const test = await db.test.findUnique({ where: { id }, select: OFFERING_SELECT });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }

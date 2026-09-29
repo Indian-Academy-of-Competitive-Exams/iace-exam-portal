@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
   OPENING_HAS_PASSED,
-  TEST_STATUS,
   offerRequirements,
+  programOpeningField,
   todayISO,
   type TestDetail,
 } from '@iace/contracts';
@@ -22,10 +22,9 @@ import { QUERY_KEYS } from '../lib/constants';
 import { opensLabel } from '../lib/duration';
 import { instantOf, type ProgramOpening, type ScheduleDraft } from './test-schedule-draft';
 import {
-  applyOffer,
+  offeringBodyOf,
   type OfferChanges,
   type OfferDraft,
-  type OfferWrites,
   type PassedOpenings,
 } from './test-offer-draft';
 import type { OfferHold, ProgramRefusal } from './use-offer-draft';
@@ -39,6 +38,9 @@ const OVERTAKEN_PROGRAMS_DROPPED = "A program opening later than the test's own 
 const EVERY_PROGRAM_DROPPED = 'Every program opening is dropped with it.';
 
 type EditOffer = (next: Partial<OfferDraft>) => void;
+
+/** `programOpeningField` names a refused row by this and its code. */
+const PROGRAM_OPENING_PREFIX = programOpeningField('');
 
 export function OfferStep({ detail, offer }: Readonly<{ detail: TestDetail; offer: OfferHold }>) {
   const { saved, held } = offer;
@@ -302,32 +304,17 @@ function changeLines(saved: OfferDraft, held: OfferDraft, changes: OfferChanges)
   return lines;
 }
 
-/** The server owns the rule; this only puts its refusal under the row that caused it. */
-const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null => {
-  const message = AppException.is(error) ? error.fieldErrors?.opensAt?.[0] : undefined;
-  return message ? { programCode, message } : null;
-};
-
-function writesFor(
-  testId: string,
-  onRefused: (refusal: ProgramRefusal | null) => void,
-): OfferWrites {
-  return {
-    retire: () => api.admin.tests.setStatus(testId, { status: TEST_STATUS.INACTIVE }),
-    setOpening: (testSeriesId, unlockAt) =>
-      api.admin.testSeries.setTestUnlock(testSeriesId, testId, { unlockAt }),
-    setProgramOpening: async (programCode, opensAt) => {
-      try {
-        return await api.admin.tests.setProgramUnlock(testId, programCode, { opensAt });
-      } catch (error) {
-        onRefused(refusalOf(programCode, error));
-        throw error;
-      }
-    },
-    clearProgramOpening: (programCode) => api.admin.tests.clearProgramUnlock(testId, programCode),
-    // One call: the freeze and the opening are one transaction, so neither lands without the other.
-    offer: () => api.admin.tests.offer(testId),
-  };
+/** The server owns the rule; this only puts its refusal under the program row that caused it. */
+function refusalOf(error: unknown): ProgramRefusal | null {
+  if (!AppException.is(error)) return null;
+  for (const [field, messages] of Object.entries(error.fieldErrors ?? {})) {
+    const [message] = messages;
+    const programCode = field.startsWith(PROGRAM_OPENING_PREFIX)
+      ? field.slice(PROGRAM_OPENING_PREFIX.length)
+      : null;
+    if (programCode !== null && message !== undefined) return { programCode, message };
+  }
+  return null;
 }
 
 const savedMessage = (changes: OfferChanges | null): string => {
@@ -356,7 +343,7 @@ export function OfferSaveDialog({
   const save = useMutation({
     meta: { success: savedMessage(changes), fields: ['opensAt'] },
     mutationFn: async () => {
-      if (held && changes) await applyOffer(held, changes, writesFor(detail.id, offer.refuse));
+      if (held) await api.admin.tests.saveOffering(detail.id, offeringBodyOf(held));
     },
     onMutate: () => offer.refuse(null),
     onSuccess: () => {
@@ -364,8 +351,11 @@ export function OfferSaveDialog({
       onSaved();
     },
     // Closed so a refusal under its row can be read; the draft stays for another try.
-    onError: () => onOpenChange(false),
-    // An opening deletes every program row it overtakes, so what stuck is read back, never assumed.
+    onError: (error) => {
+      offer.refuse(refusalOf(error));
+      onOpenChange(false);
+    },
+    // An opening drops every program row it overtakes, so what stuck is read back, never assumed.
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
     },

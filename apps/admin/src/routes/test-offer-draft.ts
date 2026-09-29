@@ -1,4 +1,4 @@
-import { TEST_STATUS, testIsOpen, type TestDetail } from '@iace/contracts';
+import { TEST_STATUS, testIsOpen, type SaveOfferingInput, type TestDetail } from '@iace/contracts';
 import {
   changesOf,
   instantOf,
@@ -25,15 +25,6 @@ export interface OfferChanges {
   offering: boolean;
   retiring: boolean;
   count: number;
-}
-
-/** The writes Done makes, named for what they do rather than the endpoints behind them. */
-export interface OfferWrites {
-  retire: () => Promise<unknown>;
-  setOpening: (testSeriesId: string, unlockAt: string | null) => Promise<unknown>;
-  setProgramOpening: (programCode: string, opensAt: string) => Promise<unknown>;
-  clearProgramOpening: (programCode: string) => Promise<unknown>;
-  offer: () => Promise<unknown>;
 }
 
 export type OfferSource = Pick<
@@ -84,24 +75,11 @@ export function passedOpenings(saved: OfferDraft, held: OfferDraft, now: Date): 
 export const anyPassed = (passed: PassedOpenings): boolean =>
   passed.opening || passed.programs.size > 0;
 
-/** Retired first and offered last, so no student reaches a test on a half-written offer. */
-export async function applyOffer(
-  held: OfferDraft,
-  changes: OfferChanges,
-  writes: OfferWrites,
-): Promise<void> {
-  if (changes.retiring) await writes.retire();
-
-  const { opensAt } = held.schedule;
-  if (changes.schedule.opening) {
-    await writes.setOpening(held.series.id, opensAt ? instantOf(opensAt) : null);
-  }
-  for (const row of changes.schedule.written) {
-    await writes.setProgramOpening(row.programCode, instantOf(row.opensAt));
-  }
-  for (const programCode of changes.schedule.cleared) {
-    await writes.clearProgramOpening(programCode);
-  }
-
-  if (changes.offering) await writes.offer();
-}
+/** Done's one write: the whole held Offer step, since the server judges what changed against what it holds. */
+export const offeringBodyOf = (held: OfferDraft): SaveOfferingInput => ({
+  opensAt: held.schedule.opensAt ? instantOf(held.schedule.opensAt) : null,
+  programOpenings: held.schedule.programs
+    .filter((row) => row.opensAt !== '')
+    .map((row) => ({ programCode: row.programCode, opensAt: instantOf(row.opensAt) })),
+  offered: held.offered,
+});

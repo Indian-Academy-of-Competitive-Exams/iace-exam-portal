@@ -10,9 +10,12 @@ import {
   OPENING_HAS_PASSED,
   TEST_SERIES_KIND,
   TEST_STATUS,
+  programOpeningField,
+  type SaveOfferingBody,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
+import { FinalizeService } from '../src/tests/finalize.service';
 import { OfferingService } from '../src/tests/offering.service';
 import { FakeEventBus } from '../test/support/fakes';
 import {
@@ -80,7 +83,11 @@ async function serviceWith(test: TestFields = {}, sittings = 0) {
     });
   }
   const events = new FakeEventBus();
-  return { events, service: new OfferingService(prisma, events.asService(), new AuditContext()) };
+  const finalizer = new FinalizeService(prisma, events.asService());
+  return {
+    events,
+    service: new OfferingService(prisma, events.asService(), new AuditContext(), finalizer),
+  };
 }
 
 const FROZEN = { finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
@@ -93,6 +100,33 @@ const inOrder = (id = idFor('srs_1')) =>
 
 const catalogBusts = (events: FakeEventBus) =>
   events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId);
+
+/** The Offer step as the screen saves it: whatever the test holds, with the changes given. */
+async function save(
+  service: OfferingService,
+  over: Partial<SaveOfferingBody> = {},
+  now: Date = NOW,
+) {
+  const row = await testRow();
+  const unlocks = await prisma.testProgramUnlock.findMany({ where: { testId: TEST } });
+  return service.saveOffering(
+    TEST,
+    {
+      opensAt: row.opensAt?.toISOString() ?? null,
+      programOpenings: unlocks.map((unlock) => ({
+        programCode: unlock.programCode,
+        opensAt: unlock.opensAt.toISOString(),
+      })),
+      offered: row.status === TEST_STATUS.ACTIVE,
+      ...over,
+    },
+    false,
+    now,
+  );
+}
+
+const programOpening = (opensAt: Date) =>
+  prisma.testProgramUnlock.create({ data: { testId: TEST, programCode: PROGRAM, opensAt } });
 
 const refused = async (attempt: Promise<unknown>) => {
   const error = await attempt.catch((caught: unknown) => caught);
@@ -191,12 +225,7 @@ describe('OfferingService — a test belongs to one series', () => {
   /** The defect this closes: the old whole-set save rebuilt the link and dropped the opening with it. */
   it('moves a test to another series without losing its opening or its program openings', async () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
-    await service.setProgramUnlock(
-      TEST,
-      PROGRAM,
-      { opensAt: new Date(OPENS_AT.getTime() - HOUR_MS).toISOString() },
-      NOW,
-    );
+    await programOpening(new Date(OPENS_AT.getTime() - HOUR_MS));
 
     await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
 
@@ -234,39 +263,50 @@ describe('OfferingService — a test belongs to one series', () => {
   });
 });
 
-describe('OfferingService — offering a test', () => {
-  it('offers a finalized test that a series carries', async () => {
-    const { service } = await serviceWith(FROZEN);
+describe('OfferingService — the Offer step saves in one piece', () => {
+  it('offers again a test retired after it was offered', async () => {
+    const { service } = await serviceWith({ ...FROZEN, status: TEST_STATUS.INACTIVE });
 
-    assert.equal(await service.setStatus(TEST, TEST_STATUS.ACTIVE), TEST_STATUS.ACTIVE);
+    const saved = await save(service, { offered: true });
+
+    assert.equal(saved.status, TEST_STATUS.ACTIVE);
     assert.equal((await testRow()).status, TEST_STATUS.ACTIVE);
-  });
-
-  it('refuses to make a test active before it has ever been offered', async () => {
-    const { service } = await serviceWith();
-
-    const error = await refused(service.setStatus(TEST, TEST_STATUS.ACTIVE));
-
-    assert.match(error.message, /never been offered/);
-    assert.equal((await testRow()).status, TEST_STATUS.DRAFT);
   });
 
   /** Withdrawing an offer asks nothing of a test — only offering does — but the catalog must hear of it. */
   it('retires a test without asking anything of it, and tells the catalog cache', async () => {
     const { service, events } = await serviceWith({ ...FROZEN, status: TEST_STATUS.ACTIVE });
 
-    await service.setStatus(TEST, TEST_STATUS.INACTIVE);
+    await save(service, { offered: false });
 
     assert.equal((await testRow()).status, TEST_STATUS.INACTIVE);
     assert.deepEqual(catalogBusts(events), [idFor('srs_1')]);
   });
 
-  it('says nothing to the cache when the status did not move', async () => {
-    const { service, events } = await serviceWith(FROZEN);
+  /** The failure this prevents: an opening saved while the offer beside it was refused, half a Done. */
+  it('writes neither the opening nor the offer when the offer is refused', async () => {
+    const { service } = await serviceWith();
 
-    await service.setStatus(TEST, TEST_STATUS.DRAFT);
+    await refused(save(service, { opensAt: OPENS_AT.toISOString(), offered: true }));
 
-    assert.deepEqual(catalogBusts(events), []);
+    const row = await testRow();
+    assert.deepEqual([row.opensAt, row.status], [null, TEST_STATUS.DRAFT]);
+  });
+
+  it('writes neither the opening nor any program opening when one program opening is refused', async () => {
+    const { service } = await serviceWith();
+    const late = new Date(A_DAY_LATER_DATE.getTime() + HOUR_MS).toISOString();
+
+    const error = await refused(
+      save(service, {
+        opensAt: A_DAY_LATER,
+        programOpenings: [{ programCode: PROGRAM, opensAt: late }],
+      }),
+    );
+
+    assert.ok(error.fieldErrors?.[programOpeningField(PROGRAM)]);
+    assert.equal((await testRow()).opensAt, null);
+    assert.equal(await prisma.testProgramUnlock.count(), 0);
   });
 });
 
@@ -293,17 +333,12 @@ describe('OfferingService — a series and the tests it holds', () => {
     ]);
   });
 
-  it('sets when a test opens inside a series, and busts that catalog', async () => {
+  it('sets when a test opens, and busts that catalog', async () => {
     const { service, events } = await serviceWith();
 
-    const rows = await service.setUnlock(
-      idFor('srs_1'),
-      TEST,
-      { unlockAt: OPENS_AT.toISOString() },
-      NOW,
-    );
+    const saved = await save(service, { opensAt: OPENS_AT.toISOString() });
 
-    assert.equal(rows[0]?.unlockAt, OPENS_AT.toISOString());
+    assert.equal(saved.opensAt, OPENS_AT.toISOString());
     assert.deepEqual(catalogBusts(events), [idFor('srs_1')]);
   });
 
@@ -311,24 +346,20 @@ describe('OfferingService — a series and the tests it holds', () => {
   it('refuses an opening that is not ahead of now, down to the instant', async () => {
     const { service, events } = await serviceWith();
 
-    const error = await refused(
-      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: OPENS_AT.toISOString() }, OPENS_AT),
-    );
+    const error = await refused(save(service, { opensAt: OPENS_AT.toISOString() }, OPENS_AT));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.deepEqual(error.fieldErrors?.unlockAt, [OPENING_HAS_PASSED]);
+    assert.deepEqual(error.fieldErrors?.opensAt, [OPENING_HAS_PASSED]);
     assert.equal((await testRow()).opensAt, null);
     assert.deepEqual(catalogBusts(events), []);
   });
 
-  /** `Test.opensAt` is a frozen field; this endpoint is its other door and must refuse the same. */
+  /** `Test.opensAt` is a frozen field once sat; the Offer step must refuse to move it the same. */
   it('refuses to move or clear when a sat test opens', async () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT }, 1);
 
-    const moved = await refused(
-      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: '2026-10-01T04:30:00.000Z' }, NOW),
-    );
-    const cleared = await refused(service.setUnlock(idFor('srs_1'), TEST, { unlockAt: null }));
+    const moved = await refused(save(service, { opensAt: '2026-10-01T04:30:00.000Z' }));
+    const cleared = await refused(save(service, { opensAt: null }));
 
     assert.equal(moved.code, ErrorCodes.CONFLICT);
     assert.equal(cleared.code, ErrorCodes.CONFLICT);
@@ -340,9 +371,9 @@ describe('OfferingService — a series and the tests it holds', () => {
     await inOrder();
     await testIn({ id: idFor('tst_0'), title: 'Mock 1', seriesOrder: 1, opensAt: OPENS_AT });
 
-    const rows = await service.setUnlock(idFor('srs_1'), TEST, { unlockAt: A_DAY_LATER }, NOW);
+    const saved = await save(service, { opensAt: A_DAY_LATER });
 
-    assert.equal(rows.find((row) => row.testId === TEST)?.unlockAt, A_DAY_LATER);
+    assert.equal(saved.opensAt, A_DAY_LATER);
   });
 
   /** The failure this prevents: paper 2 opens before paper 1, and the order the series promises is a lie. */
@@ -351,12 +382,10 @@ describe('OfferingService — a series and the tests it holds', () => {
     await inOrder();
     await testIn({ id: idFor('tst_0'), title: 'Mock 1', seriesOrder: 1, opensAt: OPENS_AT });
 
-    const error = await refused(
-      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: OPENS_AT.toISOString() }, NOW),
-    );
+    const error = await refused(save(service, { opensAt: OPENS_AT.toISOString() }));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.match(error.fieldErrors?.unlockAt?.[0] ?? '', /Mock 1 comes before it/);
+    assert.match(error.fieldErrors?.opensAt?.[0] ?? '', /Mock 1 comes before it/);
     assert.equal((await testRow()).opensAt, null);
     assert.deepEqual(catalogBusts(events), []);
   });
@@ -366,11 +395,9 @@ describe('OfferingService — a series and the tests it holds', () => {
     await inOrder();
     await testIn({ id: idFor('tst_2'), title: 'Mock 3', seriesOrder: 3, opensAt: OPENS_AT });
 
-    const error = await refused(
-      service.setUnlock(idFor('srs_1'), TEST, { unlockAt: A_DAY_LATER }, NOW),
-    );
+    const error = await refused(save(service, { opensAt: A_DAY_LATER }));
 
-    assert.match(error.fieldErrors?.unlockAt?.[0] ?? '', /Mock 3 comes after it/);
+    assert.match(error.fieldErrors?.opensAt?.[0] ?? '', /Mock 3 comes after it/);
   });
 
   /** Together is the other rule: without the order, the openings are each the admin's own business. */
@@ -383,35 +410,25 @@ describe('OfferingService — a series and the tests it holds', () => {
       opensAt: A_DAY_LATER_DATE,
     });
 
-    const rows = await service.setUnlock(
-      idFor('srs_1'),
-      TEST,
-      { unlockAt: OPENS_AT.toISOString() },
-      NOW,
-    );
+    const saved = await save(service, { opensAt: OPENS_AT.toISOString() });
 
-    assert.equal(rows.find((row) => row.testId === TEST)?.unlockAt, OPENS_AT.toISOString());
+    assert.equal(saved.opensAt, OPENS_AT.toISOString());
   });
 
   /** The resolver reads `Test.opensAt`, so the series' opening IS the test's own column. */
   it('clears the opening time back to null', async () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
 
-    const rows = await service.setUnlock(idFor('srs_1'), TEST, { unlockAt: null });
+    const saved = await save(service, { opensAt: null });
 
-    assert.equal(rows[0]?.unlockAt, null);
+    assert.equal(saved.opensAt, null);
     assert.equal((await testRow()).opensAt, null);
-  });
-
-  it('refuses to set an opening through a series the test is not in', async () => {
-    const { service } = await serviceWith();
-
-    await refused(service.setUnlock(idFor('srs_2'), TEST, { unlockAt: null }));
   });
 });
 
 describe('OfferingService — a program opens a test earlier, never later', () => {
   const EARLIER = new Date(OPENS_AT.getTime() - HOUR_MS);
+  const earlier = [{ programCode: PROGRAM, opensAt: EARLIER.toISOString() }];
 
   /** The failure this prevents: a test that opens once for everybody because of the series holding it. */
   it('stores a program opening whichever series the test sits in', async () => {
@@ -419,18 +436,9 @@ describe('OfferingService — a program opens a test earlier, never later', () =
       await resetDatabase(prisma);
       const { service } = await serviceWith({ opensAt: OPENS_AT, testSeriesId });
 
-      const rows = await service.setProgramUnlock(
-        TEST,
-        PROGRAM,
-        { opensAt: EARLIER.toISOString() },
-        NOW,
-      );
+      const saved = await save(service, { programOpenings: earlier });
 
-      assert.deepEqual(
-        rows,
-        [{ programCode: PROGRAM, opensAt: EARLIER.toISOString() }],
-        testSeriesId,
-      );
+      assert.deepEqual(saved.programUnlocks, earlier, testSeriesId);
       assert.equal(await prisma.testProgramUnlock.count(), 1);
     }
   });
@@ -439,31 +447,26 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     const { service } = await serviceWith({ opensAt: OPENS_AT });
 
     const error = await refused(
-      service.setProgramUnlock(
-        TEST,
-        PROGRAM,
-        { opensAt: EARLIER.toISOString() },
-        new Date(EARLIER.getTime() + 60_000),
-      ),
+      save(service, { programOpenings: earlier }, new Date(EARLIER.getTime() + 60_000)),
     );
 
-    assert.deepEqual(error.fieldErrors?.opensAt, [OPENING_HAS_PASSED]);
+    assert.deepEqual(error.fieldErrors?.[programOpeningField(PROGRAM)], [OPENING_HAS_PASSED]);
     assert.equal(await prisma.testProgramUnlock.count(), 0);
   });
 
   /** A later opening would hold this program's students back after the test opened for everyone. */
-  it('refuses a program unlock later than the test opens, or on a test with no opening of its own', async () => {
+  it('refuses a program opening later than the test opens, or on a test with no opening of its own', async () => {
     const later = new Date(OPENS_AT.getTime() + 1000).toISOString();
     const { service } = await serviceWith({ opensAt: OPENS_AT });
 
-    const late = await refused(service.setProgramUnlock(TEST, PROGRAM, { opensAt: later }, NOW));
-    await prisma.test.update({ where: { id: TEST }, data: { opensAt: null } });
-    const unopened = await refused(
-      service.setProgramUnlock(TEST, PROGRAM, { opensAt: EARLIER.toISOString() }, NOW),
+    const late = await refused(
+      save(service, { programOpenings: [{ programCode: PROGRAM, opensAt: later }] }),
     );
+    await prisma.test.update({ where: { id: TEST }, data: { opensAt: null } });
+    const unopened = await refused(save(service, { programOpenings: earlier }));
 
     assert.equal(late.code, ErrorCodes.VALIDATION_ERROR);
-    assert.ok(late.fieldErrors?.opensAt);
+    assert.ok(late.fieldErrors?.[programOpeningField(PROGRAM)]);
     assert.equal(unopened.code, ErrorCodes.VALIDATION_ERROR);
     assert.equal(await prisma.testProgramUnlock.count(), 0);
   });
@@ -472,47 +475,43 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     const { service } = await serviceWith({ opensAt: OPENS_AT });
 
     const error = await refused(
-      service.setProgramUnlock(TEST, 'NO SUCH PROGRAM', { opensAt: EARLIER.toISOString() }, NOW),
+      save(service, {
+        programOpenings: [{ programCode: 'NO SUCH PROGRAM', opensAt: EARLIER.toISOString() }],
+      }),
     );
 
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
 
-  /** With the program opening set, then the test's own opening moved to the instant given. */
-  const movedTo = async (unlockAt: Date | null) => {
+  /** With the program opening held, then the test's own opening moved to the instant given. */
+  const movedTo = async (opensAt: Date | null) => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
-    await service.setProgramUnlock(TEST, PROGRAM, { opensAt: EARLIER.toISOString() }, NOW);
-    await service.setUnlock(
-      idFor('srs_1'),
-      TEST,
-      { unlockAt: unlockAt?.toISOString() ?? null },
-      NOW,
-    );
-    return { service, unlocks: await prisma.testProgramUnlock.count() };
+    await programOpening(EARLIER);
+    await save(service, { opensAt: opensAt?.toISOString() ?? null });
+    return prisma.testProgramUnlock.count();
   };
 
   /** The rule inverts if nothing revalidates: 03:30 was an hour EARLY, and is an hour LATE at 02:30. */
-  it('drops an unlock the series opening overtakes when the test is moved earlier', async () => {
-    assert.equal((await movedTo(new Date(EARLIER.getTime() - HOUR_MS))).unlocks, 0);
+  it('drops a program opening the test’s own opening overtakes when it moves earlier', async () => {
+    assert.equal(await movedTo(new Date(EARLIER.getTime() - HOUR_MS)), 0);
   });
 
-  it('leaves it alone when the test is moved LATER and it still opens the cohort early', async () => {
-    assert.equal((await movedTo(new Date(OPENS_AT.getTime() + HOUR_MS))).unlocks, 1);
+  it('keeps it when the test moves LATER and it still opens the cohort early', async () => {
+    assert.equal(await movedTo(new Date(OPENS_AT.getTime() + HOUR_MS)), 1);
   });
 
-  /** `setProgramUnlock` refuses to CREATE a row against a cleared opening, so none may survive one. */
   it('leaves no orphan behind when the opening is cleared entirely', async () => {
-    const { unlocks } = await movedTo(null);
-
+    assert.equal(await movedTo(null), 0);
     assert.equal((await testRow()).opensAt, null);
-    assert.equal(unlocks, 0);
   });
 
-  it('takes the unlock back, leaving the cohort with the test’s own opening', async () => {
+  it('takes a program opening back when the save leaves it out', async () => {
     const { service } = await serviceWith({ opensAt: OPENS_AT });
-    await service.setProgramUnlock(TEST, PROGRAM, { opensAt: EARLIER.toISOString() }, NOW);
+    await programOpening(EARLIER);
 
-    assert.deepEqual(await service.clearProgramUnlock(TEST, PROGRAM), []);
+    const saved = await save(service, { programOpenings: [] });
+
+    assert.deepEqual(saved.programUnlocks, []);
     assert.equal(await prisma.testProgramUnlock.count(), 0);
   });
 });

@@ -146,12 +146,6 @@ export function paperCompletenessIssues(
   return issues;
 }
 
-/** A test reaches a student only once its paper has stopped moving; its series is a column now. */
-export function activationBlocker(test: { finalizedAt: Date | null }): string | null {
-  if (test.finalizedAt !== null) return null;
-  return 'This test has never been offered, so its paper is not frozen and there is nothing for a student to sit. Offer it instead.';
-}
-
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */
 export function testDeletionBlocker(usage: { attemptCount: number }): string | null {
   if (usage.attemptCount === 0) return null;

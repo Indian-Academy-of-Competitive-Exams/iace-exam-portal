@@ -86,7 +86,12 @@ async function builder() {
     bank,
     seriesId,
     finalizer: new FinalizeService(prisma, events.asService()),
-    offering: new OfferingService(prisma, events.asService(), audit),
+    offering: new OfferingService(
+      prisma,
+      events.asService(),
+      audit,
+      new FinalizeService(prisma, events.asService()),
+    ),
     /** Picked by hand, so this is how a paper is built up to the counts its config asks. */
     pickWholePaper: async () => {
       await paper.addQuestions(draft.id, {
@@ -131,17 +136,20 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal(config.locked, false);
   });
 
-  it('will not make a test active again until it has been offered once', async () => {
-    const { draft, finalizer, offering, pickWholePaper } = await builder();
+  it('offers, retires and offers again through the one save, and never a paper that is not whole', async () => {
+    const { draft, offering, pickWholePaper } = await builder();
+    const done = (offered: boolean) =>
+      offering.saveOffering(draft.id, { opensAt: null, programOpenings: [], offered }, false);
 
-    await assert.rejects(() => offering.setStatus(draft.id, TEST_STATUS.ACTIVE), AppException.is);
+    await assert.rejects(() => done(true), AppException.is);
+    assert.equal((await testRow(draft.id)).status, TEST_STATUS.DRAFT);
 
     await pickWholePaper();
-    await finalizer.offer(draft.id);
-    await offering.setStatus(draft.id, TEST_STATUS.INACTIVE);
-
-    // The other half of the gate is the series, and creation is what already gave it one.
-    assert.equal(await offering.setStatus(draft.id, TEST_STATUS.ACTIVE), TEST_STATUS.ACTIVE);
+    assert.equal((await done(true)).status, TEST_STATUS.ACTIVE);
+    const { finalizedAt } = await testRow(draft.id);
+    assert.equal((await done(false)).status, TEST_STATUS.INACTIVE);
+    assert.equal((await done(true)).status, TEST_STATUS.ACTIVE);
+    assert.deepEqual((await testRow(draft.id)).finalizedAt, finalizedAt, 'frozen once, not twice');
   });
 });
 

@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { uncheckedOn } from '../assignments';
 import { paperCompletenessIssues, scopeRefOf } from './test-rules';
+import { beginPaperEdit } from './begin-paper-edit';
 import { formRefusal } from '../common/form-refusal';
 
 const OFFER_SELECT = {
@@ -21,7 +22,6 @@ const OFFER_SELECT = {
   baseConfigId: true,
   finalizedAt: true,
   status: true,
-  version: true,
   testSeriesId: true,
   scope: true,
   scopeRef: true,
@@ -30,9 +30,20 @@ const OFFER_SELECT = {
 type OfferRow = Prisma.TestGetPayload<{ select: typeof OFFER_SELECT }>;
 
 /** Prisma's 5s default is a cliff nobody sees, so the freeze names its own. */
-const FREEZE_LIMITS = { maxWait: 10_000, timeout: 15_000 } as const;
+export const FREEZE_LIMITS = { maxWait: 10_000, timeout: 15_000 } as const;
 
-const RACED_MESSAGE = 'Another change landed on this test while it was being offered. Try again.';
+const offerResult = (
+  testId: string,
+  finalizedAt: Date,
+  finalizedByThisCall: boolean,
+  frozenQuestions: number,
+): OfferResult => ({
+  testId,
+  finalizedAt: finalizedAt.toISOString(),
+  finalizedByThisCall,
+  frozenQuestions,
+  status: TEST_STATUS.ACTIVE,
+});
 
 const PAPER_REF_SELECT = {
   questionId: true,
@@ -51,75 +62,44 @@ export class FinalizeService {
     private readonly events: DomainEventBus,
   ) {}
 
-  /** The freeze and the opening are ONE call: a failure between them offered a test to nobody. */
+  /** On its own: the Test row locked, then the same offer the Offer step's save makes. */
   async offer(testId: string, isSuperAdmin = false): Promise<OfferResult> {
-    const test = await this.requireTest(testId);
-    const offered =
-      test.finalizedAt === null
-        ? await this.freeze(test, isSuperAdmin)
-        : await this.reopen(test, isSuperAdmin);
-
+    const offered = await this.prisma.$transaction(async (tx) => {
+      await beginPaperEdit(tx, testId);
+      return this.offerWithin(tx, testId, isSuperAdmin);
+    }, FREEZE_LIMITS);
+    const { testSeriesId } = await this.requireTest(testId);
     // The series carrying it: the catalog a student reads is cached against it.
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return offered;
   }
 
-  /** The first offer, and the only one that freezes anything. */
-  private async freeze(test: OfferRow, isSuperAdmin: boolean): Promise<OfferResult> {
-    const finalizedAt = new Date();
-    const frozen = await this.prisma.$transaction(async (tx) => {
-      // The one gate: the request whose `version` still matches wins, the other writes nothing.
-      const claimed = await tx.test.updateMany({
-        where: { id: test.id, version: test.version, finalizedAt: null },
-        // The status rides the SAME claim, so the two can never land apart.
-        data: {
-          finalizedAt,
-          status: TEST_STATUS.ACTIVE,
-          version: { increment: 1 },
-        },
-      });
-      if (claimed.count === 0) return null;
+  /** Inside a transaction that already holds the Test row, so no paper edit can land between the gates and the freeze. */
+  async offerWithin(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    isSuperAdmin: boolean,
+  ): Promise<OfferResult> {
+    const test = await tx.test.findUnique({ where: { id: testId }, select: OFFER_SELECT });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
+    const paper = await this.paperOf(tx, test);
 
-      // The claim holds the Test row every paper edit locks first, so the reading is judged on the paper that freezes.
-      await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
-      // Behind the gate: a paper counted outside it can be redrawn before the freeze.
-      const paper = await this.paperOf(tx, test);
-      // Throwing here rolls the claim back, so a paper that is not whole leaves the test a draft.
-      await this.assertPaperIsWhole(tx, test, paper);
-
-      return paper.length;
-    }, FREEZE_LIMITS);
-
-    if (frozen === null) return this.reopen(await this.requireTest(test.id), isSuperAdmin);
-
-    return {
-      testId: test.id,
-      finalizedAt: finalizedAt.toISOString(),
-      finalizedByThisCall: true,
-      frozenQuestions: frozen,
-      status: TEST_STATUS.ACTIVE,
-    };
-  }
-
-  /** Offered before: the paper never moved after that, so only the status can still change. */
-  private async reopen(test: OfferRow, isSuperAdmin: boolean): Promise<OfferResult> {
-    if (test.finalizedAt === null) throw new AppException(ErrorCodes.CONFLICT, RACED_MESSAGE);
-    await this.assertAssignmentsRead(this.prisma, test.id, isSuperAdmin);
-
-    if (test.status !== TEST_STATUS.ACTIVE) {
-      await this.prisma.test.update({
-        where: { id: test.id },
-        data: { status: TEST_STATUS.ACTIVE },
-      });
+    if (test.finalizedAt !== null) {
+      if (test.status !== TEST_STATUS.ACTIVE) {
+        await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.ACTIVE } });
+      }
+      return offerResult(test.id, test.finalizedAt, false, paper.length);
     }
 
-    return {
-      testId: test.id,
-      finalizedAt: test.finalizedAt.toISOString(),
-      finalizedByThisCall: false,
-      frozenQuestions: await this.prisma.paperQuestion.count({ where: { testId: test.id } }),
-      status: TEST_STATUS.ACTIVE,
-    };
+    await this.assertPaperIsWhole(tx, test, paper);
+    const finalizedAt = new Date();
+    // The status rides the SAME write, so the two can never land apart.
+    await tx.test.update({
+      where: { id: test.id },
+      data: { finalizedAt, status: TEST_STATUS.ACTIVE, version: { increment: 1 } },
+    });
+    return offerResult(test.id, finalizedAt, true, paper.length);
   }
 
   /** Every row the test holds, which is the whole of its one paper. */
