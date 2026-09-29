@@ -35,7 +35,7 @@ import {
 } from './support/database';
 
 const MINUTE_MS = 60_000;
-const SCORE_CARD_QUERY_BUDGET = 14;
+const QUERY_BUDGET = { SCORE_CARD: 14, REFUSAL: 2 } as const;
 const STARTED = new Date('2026-09-01T05:00:00.000Z');
 const WRONG = 'o2';
 
@@ -82,6 +82,21 @@ async function sat(
 const text = (value: string) => [{ type: 'TEXT', text: value }];
 
 const refusedWith = (code: string) => (error: AppException) => error.code === code;
+
+/** What one read costs, counted on a client of its own so no other read lands in the count. */
+async function queriesOf(read: (client: PrismaService) => Promise<unknown>): Promise<number> {
+  const counted = testPrisma();
+  let queries = 0;
+  counted.$on('query', () => {
+    queries += 1;
+  });
+  try {
+    await read(counted);
+  } finally {
+    await counted.$disconnect();
+  }
+  return queries;
+}
 
 describe('the Score Card', () => {
   const NEVER_SHOWN = 'o_never_shown';
@@ -153,19 +168,24 @@ describe('the Score Card', () => {
     const { studentId, attemptId } = await mine(onPaper);
     await sat(onPaper, [RIGHT_OPTION, NEVER_SHOWN, RIGHT_OPTION, RIGHT_OPTION]);
     await new RollupService(prisma).rebuildTest(onPaper.testId);
-    const counted = testPrisma();
-    let queries = 0;
-    counted.$on('query', () => {
-      queries += 1;
-    });
 
-    try {
-      await analytics(counted).scoreCard(studentId, attemptId);
-    } finally {
-      await counted.$disconnect();
-    }
+    const queries = await queriesOf((client) => analytics(client).scoreCard(studentId, attemptId));
 
-    assert.ok(queries <= SCORE_CARD_QUERY_BUDGET, `one score card cost ${queries} queries`);
+    assert.ok(queries <= QUERY_BUDGET.SCORE_CARD, `one score card cost ${queries} queries`);
+  });
+
+  /** A student retrying "No marks yet" in the rush must not pay for the card they cannot see yet. */
+  it('refuses an unmarked paper within its own, narrower budget', async () => {
+    const { studentId, attemptId } = await mine(await paper(), { marked: false });
+
+    const queries = await queriesOf((client) =>
+      assert.rejects(
+        () => analytics(client).scoreCard(studentId, attemptId),
+        refusedWith(ErrorCodes.CONFLICT),
+      ),
+    );
+
+    assert.ok(queries <= QUERY_BUDGET.REFUSAL, `one refusal cost ${queries} queries`);
   });
 
   it('reports the marks, the counts and the percentage the paper was worth', async () => {

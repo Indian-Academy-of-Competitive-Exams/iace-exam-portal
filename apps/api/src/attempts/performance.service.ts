@@ -96,7 +96,6 @@ type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
 const SCORE_CARD_SELECT = {
   ...REPORT_SELECT,
   attemptNo: true,
-  status: true,
   evaluatedAt: true,
   correctCount: true,
   wrongCount: true,
@@ -192,14 +191,12 @@ export class PerformanceAnalyticsService {
 
   /** The student path: one request answers every tab of a sitting's report, so it is read once. */
   async scoreCard(studentId: string, attemptId: string): Promise<ScoreCard> {
+    // Marked is in the WHERE, so a refusal never pays for the nested reads behind the row.
     const attempt = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
+      where: { id: attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
       select: SCORE_CARD_SELECT,
     });
-    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
-    }
+    if (!attempt) return this.refuseCard(studentId, attemptId);
 
     const [testStats, standing] = await Promise.all([
       this.testStats([attempt.testId]),
@@ -240,6 +237,16 @@ export class PerformanceAnalyticsService {
       percentile: standing?.percentile ?? null,
       cohortSize: standing?.cohortSize ?? null,
     };
+  }
+
+  /** Only a refusal reads this: the owner is in the WHERE, so another student's sitting is missing. */
+  private async refuseCard(studentId: string, attemptId: string): Promise<never> {
+    const theirs = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: { id: true },
+    });
+    if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
   }
 
   /** The anchor's figures alone: the other sittings only ever give the trajectory their marks. */
