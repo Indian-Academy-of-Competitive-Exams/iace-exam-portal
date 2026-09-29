@@ -1,9 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { type Request } from 'express';
-import { AppException, ErrorCodes } from '@iace/contracts';
+import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { TokenService } from '../token.service';
 import { SessionService } from '../session.service';
+import { AdminAccessService } from '../admin-access.service';
 import { IS_PUBLIC_KEY, type AuthenticatedUser } from '../../common/security';
 
 /** Applied globally (see AppModule's APP_GUARD); routes opt out with @Public(). */
@@ -13,6 +14,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
+    private readonly access: AdminAccessService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -35,15 +37,15 @@ export class JwtAuthGuard implements CanActivate {
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has ended. Sign in again');
     }
 
-    request.user = {
-      id: claims.sub,
-      actor: claims.actor,
-      sessionId: claims.sid,
-      isSuperAdmin: claims.isSuperAdmin ?? false,
-      // Absent on a student token and on any admin token minted before this claim existed; both mean active.
-      isActive: claims.isActive ?? true,
-      permissions: claims.permissions ?? {},
-    };
+    // An admin's grants are read now, not from the token, so a revoke bites on the next request; a student has none.
+    const authority =
+      claims.actor === ActorTypes.ADMIN
+        ? await this.access.current(claims.sub)
+        : { isSuperAdmin: false, isActive: true, permissions: {} };
+    if (!authority)
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Account is no longer available');
+
+    request.user = { id: claims.sub, actor: claims.actor, sessionId: claims.sid, ...authority };
     return true;
   }
 }

@@ -2,8 +2,9 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { ADMIN_ROLES, AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
+import { ADMIN_ROLES, AppException, FEATURE_KEYS, PERMISSION_LEVELS, can } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
+import { AdminAccessService } from '../src/auth/admin-access.service';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { FakeEventBus } from '../test/support/fakes';
@@ -536,5 +537,34 @@ describe('AdminsService.setActive — the isActive diff', () => {
       await service.setActive(off.id, false, ACTOR);
       assert.equal(auditContext.current()?.changed, null);
     });
+  });
+});
+
+describe('AdminAccessService — what an admin may do, read on every request', () => {
+  /** The failure this prevents: a revoked permission honoured until the token next refreshed, up to 15 minutes. */
+  it('drops a revoked grant on the very next read, and reaches nothing once deactivated', async () => {
+    const { service } = build();
+    const access = new AdminAccessService(prisma, service);
+    const admin = await makeAdmin(prisma);
+    const grant = {
+      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
+      level: PERMISSION_LEVELS.WRITE,
+      adminId: admin.id,
+    };
+    const writes = async () => {
+      const authority = await access.current(admin.id);
+      assert.ok(authority);
+      return can(authority, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+    };
+
+    await service.grant(grant);
+    assert.equal(await writes(), true);
+    await service.revoke(grant);
+    assert.equal(await writes(), false);
+
+    await service.grant(grant);
+    await prisma.admin.update({ where: { id: admin.id }, data: { isActive: false } });
+    assert.equal(await writes(), false);
+    assert.equal(await access.current(randomUUID()), null);
   });
 });

@@ -1,7 +1,7 @@
 import {
   ActorTypes,
   PERMISSION_LEVELS,
-  satisfiesLevel,
+  can,
   type AdminIdentity,
   type FeatureKey,
   type PermissionLevel,
@@ -25,12 +25,9 @@ export const { AuthProvider, useAuth } = createAuth<
       await api.auth.logout();
     },
   },
-  // Mirrors FeaturePermissionGuard via satisfiesLevel — disagreement is the bug where the UI offers a button the API refuses.
+  // The guard's own rule, so the screen cannot offer a button the API refuses.
   extend: (admin) => ({
     can: (key: FeatureKey, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
-      // isActive first, gating the super-admin bypass too — the server's order.
-      admin !== null &&
-      admin.isActive &&
-      (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level)),
+      admin !== null && can(admin, key, level),
   }),
 });

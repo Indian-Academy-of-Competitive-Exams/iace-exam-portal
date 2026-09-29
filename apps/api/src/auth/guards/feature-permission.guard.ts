@@ -5,8 +5,7 @@ import {
   AppException,
   ErrorCodes,
   FEATURE_KEYS,
-  PERMISSION_LEVELS,
-  satisfiesLevel,
+  can,
   type FeatureKey,
 } from '@iace/contracts';
 import {
@@ -38,21 +37,16 @@ export class FeaturePermissionGuard implements CanActivate {
         'Your account has been deactivated. Ask a super admin to restore it',
       );
     }
-    if (user.isSuperAdmin) return true;
-
     const keys: readonly FeatureKey[] = Array.isArray(required.key)
       ? required.key
       : [required.key as FeatureKey];
-    if (!keys.some((key) => satisfiesLevel(user.permissions[key], required.level))) {
+    if (!keys.some((key) => can(user, key, required.level))) {
       throw new AppException(
         ErrorCodes.FORBIDDEN,
         `You do not have ${required.level} access to ${keys.join(' or ')}`,
       );
     }
-    if (
-      required.export &&
-      !satisfiesLevel(user.permissions[FEATURE_KEYS.DATA_EXPORT], PERMISSION_LEVELS.READ)
-    ) {
+    if (required.export && !can(user, FEATURE_KEYS.DATA_EXPORT)) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'You do not have access to exports');
     }
     return true;

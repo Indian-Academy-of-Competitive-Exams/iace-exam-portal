@@ -197,11 +197,6 @@ export const accessTokenClaimsSchema = z.object({
   sub: z.string(),
   actor: actorTypeSchema,
   sid: z.string(),
-  isSuperAdmin: z.boolean().optional(),
-  /** Absent on a student token, and on an admin token issued before deactivation existed — both are read as active. */
-  isActive: z.boolean().optional(),
-  /** Carried in the token, so the guard costs nothing at request time; a grant change takes effect on the next refresh (<= the access TTL). */
-  permissions: adminPermissionsSchema.optional(),
 });
 export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;
 

@@ -124,6 +124,22 @@ export function satisfiesLevel(
   return granted === PERMISSION_LEVELS.WRITE;
 }
 
+/** What an admin may do right now, read fresh for every request. */
+export interface AdminAuthority {
+  isActive: boolean;
+  isSuperAdmin: boolean;
+  permissions: AdminPermissions;
+}
+
+/** The one rule the guard and every screen read: active, then a super admin, then the feature at the level. */
+export function can(
+  admin: AdminAuthority,
+  key: FeatureKey,
+  level: PermissionLevel = PERMISSION_LEVELS.READ,
+): boolean {
+  return admin.isActive && (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level));
+}
+
 // ============================================================================
 // Admins
 // ============================================================================

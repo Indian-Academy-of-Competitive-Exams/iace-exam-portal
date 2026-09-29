@@ -42,6 +42,7 @@ const SECTION_KEYS = [
 
 const viewerOf = (user: AuthenticatedUser): SectionViewer => ({
   id: user.id,
+  isActive: user.isActive,
   isSuperAdmin: user.isSuperAdmin,
   permissions: user.permissions,
 });

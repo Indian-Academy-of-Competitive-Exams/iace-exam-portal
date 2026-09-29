@@ -272,7 +272,6 @@ export class AuthService {
       sub: identity.id,
       actor: identity.actor,
       sid: claims.sid,
-      ...adminClaims(identity),
     });
 
     return { accessToken, refreshToken: nextRefresh, expiresInSec: this.tokens.accessTtlSec };
@@ -314,7 +313,6 @@ export class AuthService {
       sub: identity.id,
       actor: identity.actor,
       sid: sessionId,
-      ...adminClaims(identity),
     });
     const refreshToken = await this.tokens.signRefresh({
       sub: identity.id,
@@ -378,14 +376,4 @@ export class AuthService {
     if (!admin.isActive || admin.isSuperAdmin) return { permissions: {} };
     return { permissions: await this.admins.permissionsFor(admin.id) };
   }
-}
-
-/** What an admin token carries beyond the subject. A student's carries none of it. */
-function adminClaims(identity: AuthIdentity) {
-  if (identity.actor !== ActorTypes.ADMIN) return {};
-  return {
-    isSuperAdmin: identity.isSuperAdmin,
-    isActive: identity.isActive,
-    permissions: identity.permissions,
-  };
 }

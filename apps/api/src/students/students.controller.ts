@@ -23,7 +23,7 @@ import {
   PERMISSION_LEVELS,
   STUDENT_EXPORT_VIEWS,
   ActorTypes,
-  satisfiesLevel,
+  can,
   createStudentSchema,
   setStudentActiveSchema,
   setStudentTestBlockedSchema,
@@ -103,7 +103,7 @@ export class StudentsController {
     @Res() response: Response,
   ): Promise<void> {
     const performance = query.view === STUDENT_EXPORT_VIEWS.PERFORMANCE;
-    if (performance && !user.isSuperAdmin && !canReadPerformance(user)) {
+    if (performance && !can(user, FEATURE_KEYS.STUDENT_PERFORMANCE)) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'You do not have access to student performance');
     }
     const { workbook, rows } = await buildStudentExport(
@@ -184,6 +184,3 @@ export class StudentsController {
     return this.students.setTestBlocked(id, body.isTestBlocked);
   }
 }
-
-const canReadPerformance = (user: AuthenticatedUser) =>
-  satisfiesLevel(user.permissions[FEATURE_KEYS.STUDENT_PERFORMANCE], PERMISSION_LEVELS.READ);

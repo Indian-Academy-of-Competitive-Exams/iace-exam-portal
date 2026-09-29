@@ -57,6 +57,7 @@ const viewer = (
   isSuperAdmin = false,
 ): SectionViewer => ({
   id,
+  isActive: true,
   isSuperAdmin,
   permissions,
 });

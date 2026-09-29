@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { JwtService } from '@nestjs/jwt';
-import { ActorTypes, AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
+import { ActorTypes, AppException } from '@iace/contracts';
 import { TokenService } from '../src/auth/token.service';
 import { FakeConfig } from './support/fakes';
 
@@ -24,26 +24,15 @@ describe('TokenService', () => {
     assert.equal(claims.sid, 'sess_1');
   });
 
-  it('carries admin authority in the access token, and nothing extra for students', async () => {
+  /** An admin's authority is read per request, so a revoke is never held back by a token still in hand. */
+  it('carries only who and which session, never an authority an admin could lose mid-session', async () => {
     const tokens = build();
 
     const admin = await tokens.verifyAccess(
-      await tokens.signAccess({
-        sub: 'adm_1',
-        actor: ActorTypes.ADMIN,
-        sid: 's',
-        isSuperAdmin: true,
-        permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
-      }),
+      await tokens.signAccess({ sub: 'adm_1', actor: ActorTypes.ADMIN, sid: 's' }),
     );
-    assert.equal(admin.isSuperAdmin, true);
-    assert.deepEqual(admin.permissions, {
-      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
-    });
 
-    const student = await tokens.verifyAccess(await tokens.signAccess(STUDENT_CLAIMS));
-    assert.equal(student.isSuperAdmin, undefined);
-    assert.equal(student.permissions, undefined);
+    assert.deepEqual(Object.keys(admin).sort(), ['actor', 'sid', 'sub']);
   });
 
   it('will not accept a refresh token as an access token', async () => {

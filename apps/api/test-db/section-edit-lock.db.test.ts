@@ -79,6 +79,7 @@ const draft = (over: Partial<QuestionDraftInput> = {}) =>
 
 const viewer = (id: string, isSuperAdmin = false): SectionViewer => ({
   id,
+  isActive: true,
   isSuperAdmin,
   permissions: {},
 });

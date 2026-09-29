@@ -9,8 +9,8 @@ import {
   PERMISSION_LEVELS,
   REVIEW_STATES,
   SECTION_SEATS,
-  satisfiesLevel,
-  type AdminPermissions,
+  can,
+  type AdminAuthority,
   type Assignment,
   type DifficultyLevel,
   type DifficultyMix,
@@ -35,10 +35,8 @@ import { reachableTest } from './question-query';
 import { QuestionsService } from './questions.service';
 
 /** Who is asking: the controller knows their grants, this service knows the section. */
-export interface SectionViewer {
+export interface SectionViewer extends AdminAuthority {
   id: string;
-  isSuperAdmin: boolean;
-  permissions: AdminPermissions;
 }
 
 interface Pair {
@@ -344,12 +342,8 @@ export class SectionWorkService {
     const active = rows.filter((row) => row.replacedAt === null);
     const own = rows.filter((row) => row.assigneeId === viewer.id);
     const mine = own.find((row) => row.replacedAt === null) ?? own.at(-1) ?? null;
-    const reads = satisfiesLevel(
-      viewer.permissions[FEATURE_KEYS.TEST_MANAGEMENT],
-      PERMISSION_LEVELS.READ,
-    );
     // Not theirs reads as not there: a feature key is not a seat on this section.
-    if (!mine && !reads && !viewer.isSuperAdmin) {
+    if (!mine && !can(viewer, FEATURE_KEYS.TEST_MANAGEMENT)) {
       throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     }
     if (!test.paperSource) throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE);
@@ -368,9 +362,7 @@ export class SectionWorkService {
       reader: active.find((row) => row.role === ASSIGNMENT_ROLES.PROOFREADER) ?? null,
       mine,
       seat,
-      ownerWrites:
-        viewer.isSuperAdmin ||
-        satisfiesLevel(viewer.permissions[FEATURE_KEYS.TEST_MANAGEMENT], PERMISSION_LEVELS.WRITE),
+      ownerWrites: can(viewer, FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE),
     };
   }
 

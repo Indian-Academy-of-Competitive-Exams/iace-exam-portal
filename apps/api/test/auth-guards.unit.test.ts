@@ -11,9 +11,11 @@ import {
   ErrorCodes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  type AdminAuthority,
   type AdminPermissions,
 } from '@iace/contracts';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
+import { type AdminAccessService } from '../src/auth/admin-access.service';
 import { ActorGuard } from '../src/auth/guards/actor.guard';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
 import { Actors, Public, RequiresFeature, type AuthenticatedUser } from '../src/common/security';
@@ -77,8 +79,12 @@ describe('JwtAuthGuard', () => {
     const config = new FakeConfig();
     const tokens = new TokenService(new JwtService({}), config.asService());
     const sessions = new SessionService(redis.asService());
-    const guard = new JwtAuthGuard(new Reflector(), tokens, sessions);
-    return { guard, tokens, sessions, redis };
+    const authorities = new Map<string, AdminAuthority>();
+    const access = {
+      current: (id: string) => Promise.resolve(authorities.get(id) ?? null),
+    } as unknown as AdminAccessService;
+    const guard = new JwtAuthGuard(new Reflector(), tokens, sessions, access);
+    return { guard, tokens, sessions, redis, authorities };
   }
 
   /** Signs in for real: a session in Redis plus the matching access token. */
@@ -89,8 +95,6 @@ describe('JwtAuthGuard', () => {
       actor?: 'STUDENT' | 'ADMIN';
       isSuperAdmin?: boolean;
       permissions?: AdminPermissions;
-      allBranches?: boolean;
-      branchIds?: string[];
     } = {},
     device = NO_DEVICE,
   ) {
@@ -98,15 +102,14 @@ describe('JwtAuthGuard', () => {
     const actor = claims.actor ?? ActorTypes.STUDENT;
     const sid = ctx.sessions.newSessionId();
     await ctx.sessions.create(actor, sub, sid, 'refresh-token', device, 3600);
-    const token = await ctx.tokens.signAccess({
-      sub,
-      actor,
-      sid,
-      ...(claims.isSuperAdmin === undefined ? {} : { isSuperAdmin: claims.isSuperAdmin }),
-      ...(claims.permissions === undefined ? {} : { permissions: claims.permissions }),
-      ...(claims.allBranches === undefined ? {} : { allBranches: claims.allBranches }),
-      ...(claims.branchIds === undefined ? {} : { branchIds: claims.branchIds }),
-    });
+    if (actor === ActorTypes.ADMIN) {
+      ctx.authorities.set(sub, {
+        isActive: true,
+        isSuperAdmin: claims.isSuperAdmin ?? false,
+        permissions: claims.permissions ?? {},
+      });
+    }
+    const token = await ctx.tokens.signAccess({ sub, actor, sid });
     return { token, sid, sub, actor };
   }
 
@@ -231,6 +234,34 @@ describe('JwtAuthGuard', () => {
     assert.deepEqual(user.permissions, {
       [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
     });
+  });
+
+  /** The failure this prevents: a grant revoked while the token was still in hand, honoured anyway. */
+  it('reads an admin authority as it stands now, not as the token was signed', async () => {
+    const ctx = build();
+    const { token } = await signIn(ctx, {
+      sub: 'adm_1',
+      actor: ActorTypes.ADMIN,
+      permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    });
+    ctx.authorities.set('adm_1', { isActive: true, isSuperAdmin: false, permissions: {} });
+    const { context, request } = probe(ProbeController.prototype.plainRoute, authed(token));
+
+    await ctx.guard.canActivate(context);
+
+    assert.deepEqual((request.user as AuthenticatedUser).permissions, {});
+  });
+
+  it('refuses an admin who is no longer on record', async () => {
+    const ctx = build();
+    const { token } = await signIn(ctx, { sub: 'adm_2', actor: ActorTypes.ADMIN });
+    ctx.authorities.delete('adm_2');
+    const { context } = probe(ProbeController.prototype.plainRoute, authed(token));
+
+    await assert.rejects(
+      ctx.guard.canActivate(context),
+      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.UNAUTHENTICATED,
+    );
   });
 
   it('does not look up a session for a @Public route', async () => {

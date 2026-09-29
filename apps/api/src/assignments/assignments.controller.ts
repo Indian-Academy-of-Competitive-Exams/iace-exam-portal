@@ -14,7 +14,7 @@ import {
   ActorTypes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
-  satisfiesLevel,
+  can,
   assignableQuerySchema,
   assignmentSectionsQuerySchema,
   assignmentTestsQuerySchema,
@@ -162,10 +162,7 @@ export class AssignmentsController {
     return this.thread.forSection(testId, sectionId, {
       id: user.id,
       isSuperAdmin: user.isSuperAdmin,
-      managesTests: satisfiesLevel(
-        user.permissions[FEATURE_KEYS.TEST_MANAGEMENT],
-        PERMISSION_LEVELS.READ,
-      ),
+      managesTests: can(user, FEATURE_KEYS.TEST_MANAGEMENT),
     });
   }
 

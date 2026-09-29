@@ -8,6 +8,7 @@ import { EventsModule } from '../common/events';
 import { MessagingModule } from '../common/messaging';
 import { AdminSessionsListener } from './admin-sessions.listener';
 import { StudentSessionsListener } from './student-sessions.listener';
+import { AdminAccessService } from './admin-access.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
@@ -33,6 +34,7 @@ import { API_ROLES, onRole } from '../config/api-role';
   controllers: onRole([API_ROLES.CORE], [AuthController]),
   providers: [
     AuthService,
+    AdminAccessService,
     TokenService,
     SessionService,
     AdminSessionsListener,
@@ -42,6 +44,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     StartingPinService,
   ],
   exports: [
+    AdminAccessService,
     // AuthService for the student's own PIN change: it owns verification, the lockout ladder, session revocation and token issuance, and MeController must not reimplement any of the four.
     AuthService,
     TokenService,
