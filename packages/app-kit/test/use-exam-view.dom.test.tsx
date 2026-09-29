@@ -284,3 +284,37 @@ test('the question a screen lands on is open, so leaving it banks the visit', as
     'on entering a section',
   );
 });
+
+/** The failure this prevents: a reload drawing section one before the server says it closed, then banking a visit there. */
+test('a reload into a later section banks nothing on the closed one it drew first', async (t) => {
+  let seed: (held: unknown) => void = () => {};
+  const api = {
+    me: {
+      attemptState: () => new Promise((resolve) => (seed = resolve)),
+      saveAttemptState: async (_id: string, body: SaveCall) => ({
+        revision: body.revision,
+        applied: true,
+        endsAt: paper().endsAt,
+        serverNow: paper().serverNow,
+      }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = mounted(api);
+  t.after(unmount);
+  assert.equal(result.current.sectionId, 'sec1');
+
+  await act(async () => {
+    seed({
+      answers: {},
+      sections: {
+        sec1: { remainingSec: 0, closed: true },
+        sec2: { remainingSec: 900, closed: false, openedAt: '2026-09-01T04:50:00.000Z' },
+      },
+      revision: 3,
+    });
+    await Promise.resolve();
+  });
+
+  assert.equal(result.current.sectionId, 'sec2');
+  assert.equal(result.current.answers['sec1-q1'], undefined);
+});

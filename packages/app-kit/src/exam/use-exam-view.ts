@@ -99,10 +99,10 @@ export function useExamView(
   const current = inSection.find((row) => row.questionId === questionId) ?? inSection[landing];
   const onScreen = current?.questionId;
   const { open } = state;
-  // A question landed on rather than moved to is open too, or its visit and its seconds are never banked.
+  // Landed on, not moved to, and only once the server has said where the sitting is: before, it may be a closed section.
   useEffect(() => {
-    if (onScreen !== undefined) open(onScreen);
-  }, [onScreen, open]);
+    if (sectionsSeeded && onScreen !== undefined) open(onScreen);
+  }, [sectionsSeeded, onScreen, open]);
   const counts = paletteCounts(
     paper.questions.map((row) => row.questionId),
     state.answers,
