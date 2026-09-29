@@ -5,7 +5,6 @@ import { STUDENT_TYPE } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
 import {
-  FakeEventBus,
   FakeEventsService,
   FakeMessageSender,
   FakeProgramsService,
@@ -27,7 +26,6 @@ const importer = () =>
     new AuditService(prisma, new FakeStorage() as never),
     new FakeEventsService().asService(),
     new FakeProgramsService().asService(),
-    new FakeEventBus().asService(),
   );
 
 const HEADERS = 'Mobile Number,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs';

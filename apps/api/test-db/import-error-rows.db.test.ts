@@ -28,7 +28,6 @@ import { ImportsService } from '../src/imports/imports.service';
 import { QuestionImportController } from '../src/questions/question-import.controller';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import {
-  FakeEventBus,
   FakeEventsService,
   FakeProgramsService,
   fakeStartingPins,
@@ -46,7 +45,6 @@ const imports = new ImportsService(
   audit,
   new FakeEventsService().asService(),
   new FakeProgramsService().asService(),
-  new FakeEventBus().asService(),
 );
 const questionImports = new QuestionImportService(prisma, new FakeStorage() as never, audit);
 

@@ -60,7 +60,6 @@ async function build(stageActive = true) {
     grants: new StudentGrantsService(
       prisma,
       auditContext,
-      events.asService(),
       new NotificationsService(prisma),
       new AuditService(prisma, new FakeStorage() as never),
     ),
@@ -682,7 +681,6 @@ describe('StudentGrantsService — the escape hatch', () => {
     const grants = new StudentGrantsService(
       prisma,
       new AuditContext(),
-      new FakeEventBus().asService(),
       unwritable,
       new AuditService(prisma, new FakeStorage() as never),
     );
@@ -776,20 +774,6 @@ describe('the access writes that bust the catalog cache', () => {
     assert.equal(created.isEnabled, true);
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
-    ]);
-  });
-
-  it('announces the student on a grant and again on a revoke', async () => {
-    const { grants, events, stageId } = await build();
-    const held = await seedSeries({ examStageId: stageId });
-    const student = await makeStudent(prisma);
-
-    await grants.grant(student.id, { testSeriesId: held.id }, ADMIN);
-    await grants.revoke(student.id, held.id);
-
-    assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED), [
-      { studentId: student.id },
-      { studentId: student.id },
     ]);
   });
 

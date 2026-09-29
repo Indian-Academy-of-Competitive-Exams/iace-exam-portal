@@ -14,12 +14,10 @@ import {
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
-import { DOMAIN_EVENTS } from '../src/common/events';
 import { ImportsService } from '../src/imports/imports.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import {
-  FakeEventBus,
   FakeEventsService,
   FakeMessageSender,
   FakeProgramsService,
@@ -116,7 +114,6 @@ const importsOn = (
     hash?: (pin: string) => Promise<string>;
     audit?: AuditService;
     storage?: FakeStorage;
-    bus?: FakeEventBus;
   } = {},
 ) =>
   new ImportsService(
@@ -127,7 +124,6 @@ const importsOn = (
     // The event path is not what these tests exercise — see event-candidate-import.
     new FakeEventsService().asService(),
     new FakeProgramsService().asService(),
-    (over.bus ?? new FakeEventBus()).asService(),
   );
 
 /** The roster names the ONLINE branch, so the database has to hold one for the rows to resolve. */
@@ -284,37 +280,6 @@ describe('ImportsService.commitStudents — a re-import adds access, never takes
     assert.deepEqual(row.programs, ['SSC FOUNDATION']);
     assert.deepEqual([...row.enrolledCourses].sort(), ['RRB', 'SSC']);
     assert.deepEqual(row.enrolledExams, ['SSC CGL']);
-  });
-});
-
-/** A catalog is cached against the access columns; an import that moves them silently serves the old one. */
-describe('ImportsService — the catalogs an import makes stale', () => {
-  const busted = (bus: FakeEventBus) => bus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED);
-
-  it('busts every student a roster import updated, and nobody it created', async () => {
-    await onlineBranch();
-    const existing = await makeStudent(prisma, { mobile: '9000000001' });
-    const bus = new FakeEventBus();
-
-    await importsOn(prisma, { bus }).commitStudents(
-      Buffer.from(roster('mobile,fullName\n9000000001,Renamed\n9876543210,Asha')),
-      ADMIN,
-    );
-
-    assert.deepEqual(busted(bus), [{ studentId: existing.id }]);
-  });
-
-  it('busts every student a program import enrolled', async () => {
-    const student = await makeStudent(prisma, { mobile: '9000000001' });
-    const bus = new FakeEventBus();
-
-    await importsOn(prisma, { bus }).commitProgramStudents(
-      'SSC FOUNDATION',
-      Buffer.from('mobile\n9000000001'),
-      ADMIN,
-    );
-
-    assert.deepEqual(busted(bus), [{ studentId: student.id }]);
   });
 });
 

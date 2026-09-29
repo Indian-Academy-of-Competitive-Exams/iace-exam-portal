@@ -18,7 +18,6 @@ import {
   type ExportColumn,
 } from '../common/exporting';
 import { studentCardsOf, type StudentCard } from '../students';
-import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { NotificationsService } from '../notifications';
 import { REACH_SELECT, reachableBy, seriesSources } from './access-resolver.service';
 
@@ -50,7 +49,6 @@ export class StudentGrantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
-    private readonly events: DomainEventBus,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
   ) {}
@@ -201,7 +199,6 @@ export class StudentGrantsService {
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
-    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
 
     return this.list(studentId);
   }
@@ -212,7 +209,6 @@ export class StudentGrantsService {
     await this.prisma.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
 
     this.auditContext.setEntityId(studentId);
-    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
   private async requireStudent(id: string): Promise<{ isTestBlocked: boolean }> {

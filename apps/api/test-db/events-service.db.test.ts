@@ -9,9 +9,7 @@ import {
   eventListQuerySchema,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { DOMAIN_EVENTS } from '../src/common/events';
 import { EventsService } from '../src/events/events.service';
-import { FakeEventBus } from '../test/support/fakes';
 import { makeCatalog, makeStudent, resetDatabase, testPrisma, uid } from './support/database';
 
 const prisma = testPrisma();
@@ -20,9 +18,8 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 function build() {
-  const eventBus = new FakeEventBus();
   const audit = new AuditContext();
-  return { eventBus, audit, service: new EventsService(prisma, eventBus.asService(), audit) };
+  return { audit, service: new EventsService(prisma, audit) };
 }
 
 const makeEvent = (name = 'Scholarship test') =>
@@ -141,19 +138,6 @@ describe('EventsService — the roster', () => {
     );
   });
 
-  it('busts the catalog of a student added to an event', async () => {
-    const { service, eventBus } = build();
-    const event = await makeEvent();
-    const student = await makeStudent(prisma);
-
-    await service.addCandidates(event.id, [student.id]);
-
-    assert.equal(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED).length, 1);
-    assert.deepEqual(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED)[0], {
-      studentId: student.id,
-    });
-  });
-
   it('adds a candidate twice without error, and keeps one row', async () => {
     const { service } = build();
     const event = await makeEvent();
@@ -165,27 +149,25 @@ describe('EventsService — the roster', () => {
     assert.equal(await prisma.eventCandidate.count(), 1);
   });
 
-  it('busts the catalog of a student removed from an event', async () => {
-    const { service, eventBus } = build();
+  it('removes a student from an event', async () => {
+    const { service } = build();
     const event = await makeEvent();
     const [studentId = ''] = await intake(event.id, 1);
 
     await service.removeCandidate(event.id, studentId);
 
     assert.equal(await prisma.eventCandidate.count(), 0);
-    assert.equal(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED).length, 1);
   });
 
-  /** A no-op on a missing PAIRING is right; a 200 and a bust for an event that never existed is not. */
-  it('reads a removal from an event that is not there as missing, and rings no bell', async () => {
-    const { service, eventBus } = build();
+  /** A no-op on a missing PAIRING is right; a 200 for an event that never existed is not. */
+  it('reads a removal from an event that is not there as missing', async () => {
+    const { service } = build();
     const student = await makeStudent(prisma);
 
     const error = await service.removeCandidate(uid(), student.id).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
-    assert.equal(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED).length, 0);
   });
 });
 

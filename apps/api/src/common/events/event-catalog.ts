@@ -1,18 +1,15 @@
 /** Every cross-module event in the platform, declared in one place (docs/03 §6). */
 
 export const DOMAIN_EVENTS = {
-  /** A first evaluation landed. DURABLE — the scorer writes it to `OutboxEvent`, never to the bus. */
-  /** A student's PIN changed; auth revoked the sessions before emitting. ANNOUNCED — no handler. */
+  /** A student's PIN changed; auth revoked the sessions before emitting. WIRED — notifications tells the student. */
   STUDENT_PIN_RESET: 'student.pin_reset',
-  /** One student's access moved. ANNOUNCED — the catalog reads a student's facts live, so nothing has to react. */
-  STUDENT_ACCESS_CHANGED: 'student.access_changed',
   /** A student was switched off, not merely re-granted or blocked. WIRED — auth revokes their sessions so the switch-off holds now, not at token expiry. */
   STUDENT_DEACTIVATED: 'student.deactivated',
   /** A series or a test in it moved. WIRED — access bumps the counter every process's held series is built under. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
   /** What the catalog shows of a stage moved: its name, its exam's code or course, or a blueprint on it. WIRED — as above. */
   EXAM_STAGE_CHANGED: 'exam_stage.changed',
-  /** A student finished signing up and has an account for the first time. WIRED — see students. */
+  /** A student finished signing up and has an account for the first time. WIRED — notifications welcomes them. */
   STUDENT_SIGNED_UP: 'student.signed_up',
   /** An admin was switched off. WIRED — auth revokes their sessions so the flag takes effect now, not at token expiry. */
   ADMIN_DEACTIVATED: 'admin.deactivated',
@@ -37,10 +34,6 @@ export interface StudentPinResetEvent {
   reason: PinResetReason;
 }
 
-export interface StudentAccessChangedEvent {
-  studentId: string;
-}
-
 export interface StudentDeactivatedEvent {
   studentId: string;
 }
@@ -63,7 +56,6 @@ export interface AdminDeactivatedEvent {
 /** Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape and a handler cannot claim a shape the producer never sends. */
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
-  [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.STUDENT_DEACTIVATED]: StudentDeactivatedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
   [DOMAIN_EVENTS.EXAM_STAGE_CHANGED]: ExamStageChangedEvent;

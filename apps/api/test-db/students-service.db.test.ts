@@ -479,35 +479,6 @@ describe('StudentsService.setTestBlocked — separate from sign-in', () => {
   });
 });
 
-/** A student's catalog is cached against their access columns and switches; a silent write leaves it stale. */
-describe('the student writes that bust the catalog cache', () => {
-  const changed = (events: FakeEventBus) => events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED);
-
-  it('announces a test block, a deactivation and an enrolment change', async () => {
-    for (const write of [
-      (service: StudentsService) => service.setTestBlocked(STUDENT, true),
-      (service: StudentsService) => service.setActive(STUDENT, false),
-      (service: StudentsService) => service.update(STUDENT, { enrolledCourses: ['SSC'] }),
-    ]) {
-      await resetDatabase(prisma);
-      const { service, events } = await serviceWith();
-
-      await write(service);
-
-      assert.deepEqual(changed(events), [{ studentId: STUDENT }]);
-    }
-  });
-
-  /** Every profile edit busting every catalog is a stampede for a change access cannot see. */
-  it('stays quiet for a patch that moves no access column', async () => {
-    const { service, events } = await serviceWith({ student: { enrolledExams: ['SSC CGL'] } });
-
-    await service.update(STUDENT, { fullName: 'Ravi Kumar' });
-
-    assert.deepEqual(changed(events), []);
-  });
-});
-
 /** The session listener acts on this one signal alone; a grant or a block firing it too would sign out a student nobody meant to touch. */
 describe('StudentsService — the deactivation signal a session listener can trust', () => {
   const deactivated = (events: FakeEventBus) => events.of(DOMAIN_EVENTS.STUDENT_DEACTIVATED);

@@ -62,14 +62,6 @@ export const AUDITED_STUDENT_FIELDS = [
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 const AUDITED_TEST_BLOCKED_FIELDS = ['isTestBlocked'] as const;
 
-/** The columns a student's catalog is resolved from — moving one makes their cached answer wrong. */
-const ACCESS_STUDENT_FIELDS = [
-  'enrolledCourses',
-  'programs',
-  'currentBranchId',
-  'isTestBlocked',
-] as const;
-
 /** Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports` excepted (see its own note; a bulk roster is one statement per file rather than per row). */
 @Injectable()
 export class StudentsService {
@@ -397,9 +389,6 @@ export class StudentsService {
 
     const after = auditFieldsOf(updated);
     this.auditContext.setChanged(fieldDiff(before, after, AUDITED_STUDENT_FIELDS));
-    if (fieldDiff(before, after, ACCESS_STUDENT_FIELDS)) {
-      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
-    }
 
     return this.detail(id);
   }
@@ -448,7 +437,6 @@ export class StudentsService {
     this.auditContext.setChanged(
       fieldDiff(student, { ...student, isActive }, AUDITED_ACTIVE_FIELDS),
     );
-    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
     // Only a deactivation must sign them out now; a reactivation revokes nothing.
     if (!isActive) this.events.emit(DOMAIN_EVENTS.STUDENT_DEACTIVATED, { studentId: id });
     return this.detail(id);
@@ -466,7 +454,6 @@ export class StudentsService {
     this.auditContext.setChanged(
       fieldDiff(student, { ...student, isTestBlocked }, AUDITED_TEST_BLOCKED_FIELDS),
     );
-    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
     return this.detail(id);
   }
 

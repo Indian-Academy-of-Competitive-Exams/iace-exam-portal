@@ -6,7 +6,6 @@ import { AuditService } from '../src/audit/audit.service';
 import { MESSAGE_KINDS, type MessageSender } from '../src/common/messaging';
 import { ImportsService } from '../src/imports/imports.service';
 import {
-  FakeEventBus,
   FakeEventsService,
   FakeMessageSender,
   FakeProgramsService,
@@ -38,7 +37,6 @@ const importer = (
     new AuditService(prisma, new FakeStorage() as never),
     new FakeEventsService().asService(),
     new FakeProgramsService().asService(),
-    new FakeEventBus().asService(),
   );
 
 const sheet = (body: string) => Buffer.from(roster(body));

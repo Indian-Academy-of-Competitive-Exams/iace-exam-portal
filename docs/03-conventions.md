@@ -200,13 +200,14 @@ producer, and the event is there for whatever wants to hear about it later. A na
 not declared ahead of its producer — the producer adds it, so the catalog never lists a path that
 does not run.
 
-| Event                    | Producer                                                                                                      | Consumers                                           | State     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | --------- |
-| `student.signed_up`      | auth, on the signup that created the row                                                                      | students (records the platform consent)             | wired     |
-| `student.pin_reset`      | auth, both reset paths                                                                                        | —                                                   | announced |
-| `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | —                                                   | announced |
-| `access.catalog_changed` | access (series write), tests (every offering write, a rename or re-skin)                                      | access (every API process rebuilds its held series) | wired     |
-| `exam_stage.changed`     | configs (a stage rename, an exam's code or course, an edit to a blueprint a test is built on)                 | access (as above)                                   | wired     |
+| Event                    | Producer                                                                                      | Consumers                                           | State |
+| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----- |
+| `student.signed_up`      | auth, on the signup that created the row                                                      | notifications (the welcome)                         | wired |
+| `student.pin_reset`      | auth, both reset paths                                                                        | notifications (the PIN-changed notice)              | wired |
+| `student.deactivated`    | students (deactivation, erasure)                                                              | auth (revokes their sessions)                       | wired |
+| `admin.deactivated`      | admins (deactivation)                                                                         | auth (revokes their sessions)                       | wired |
+| `access.catalog_changed` | access (series write), tests (every offering write, a rename or re-skin)                      | access (every API process rebuilds its held series) | wired |
+| `exam_stage.changed`     | configs (a stage rename, an exam's code or course, an edit to a blueprint a test is built on) | access (as above)                                   | wired |
 
 Submit and scoring do not go through the bus: a submitted sitting goes to the BullMQ scoring queue
 under its own id, and its unscored state is what the sweeper finds if that was lost; a re-score,
@@ -219,7 +220,8 @@ and the row a student reads, with nothing to retry it and nothing to say it had 
 now writes the `Notification` row itself, through `NotificationsService.tell`, inside its OWN
 transaction — the fact and the bell row commit together, and the dedupe key makes a replay land
 once. A sweep claims the rows with no `pushedAt` (`SKIP LOCKED`), books the paid channel an
-announcement chose, and pushes them.
+announcement chose, and pushes them. The welcome and the PIN-changed notice are the two left on the
+bus: auth commits no transaction they could join, so the listener writes them after the fact.
 
 This inverts one guarantee deliberately. A notification that cannot be written now FAILS the write
 that caused it, where before it was swallowed. That is the point: rolling the grant back is

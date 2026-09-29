@@ -15,7 +15,6 @@ import {
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
-import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 
 export const AUDITED_EVENT_FIELDS = ['name', 'description', 'isActive'] as const;
@@ -37,7 +36,6 @@ type CandidateRow = Prisma.EventCandidateGetPayload<{ include: typeof CANDIDATE_
 export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly events: DomainEventBus,
     private readonly auditContext: AuditContext,
   ) {}
 
@@ -148,10 +146,6 @@ export class EventsService {
           })
         : { count: 0 };
     this.auditContext.setPatchDiff(rosterDiff(before, before + count));
-    // Per student, not one global bust — an intake must not throw away every other catalog.
-    for (const studentId of studentIds) {
-      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
-    }
 
     // The rows just written, not the roster: past a page the roster is not a return value.
     const rows = await this.prisma.eventCandidate.findMany({
@@ -170,7 +164,6 @@ export class EventsService {
       where: { eventId: id, studentId },
     });
     this.auditContext.setPatchDiff(rosterDiff(before, before - count));
-    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
   private async requireEvent(id: string): Promise<EventRow> {
