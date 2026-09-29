@@ -153,6 +153,7 @@ export function useAttemptState(
   const seeded = useRef(false);
   const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
   const onScreen = useRef(true);
+  const lastSaveFailed = useRef(false);
 
   const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
@@ -211,13 +212,18 @@ export function useAttemptState(
     setTakenOver(true);
   }, [keepQueue]);
 
+  const unsaved = useCallback((value: boolean) => {
+    lastSaveFailed.current = value;
+    setHasUnsaved(value);
+  }, []);
+
   const failed = useCallback(
     (error: unknown) => {
-      setHasUnsaved(true);
+      unsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
       if (isTakenOver(error)) standDown();
     },
-    [standDown],
+    [standDown, unsaved],
   );
 
   const hasUnsent = useCallback(
@@ -279,7 +285,7 @@ export function useAttemptState(
       // A batch behind the one the server holds answers 200 too; only `applied` says it landed.
       const applied = saved.applied !== false;
       if (applied) acknowledge(batch);
-      setHasUnsaved(!applied);
+      unsaved(!applied);
       return applied;
     } catch (error: unknown) {
       failed(error);
@@ -288,7 +294,7 @@ export function useAttemptState(
       clearTimeout(giveUp.current);
       setIsSaving(false);
     }
-  }, [acknowledge, attemptId, failed, unsentBatch]);
+  }, [acknowledge, attemptId, failed, unsaved, unsentBatch]);
 
   const flush = useCallback(async (): Promise<boolean> => {
     // Nothing awaited between the last check and the send, so two saves never fly side by side.
@@ -403,8 +409,10 @@ export function useAttemptState(
       const seenAt = seenAtOf(openedAt);
       openedAt.current = Date.now();
       record(changeFor(questionId, answersNow.current[questionId], next, spent, seenAt));
-      // Between saves only: one in the air already carries the batch, and the next waits behind it.
-      if (!inFlight.current && shouldFlushNow(pending.current.size)) void flush();
+      // Between saves only, and not after one failed: the timer retries, rather than every tap.
+      if (!inFlight.current && !lastSaveFailed.current && shouldFlushNow(pending.current.size)) {
+        void flush();
+      }
     },
     [flush, record],
   );

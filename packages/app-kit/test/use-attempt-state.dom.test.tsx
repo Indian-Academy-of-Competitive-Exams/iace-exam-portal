@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { ANSWER_STATE, AppException, ErrorCodes, type ExamClock } from '@iace/contracts';
 import { useAttemptState } from '../src/exam/use-attempt-state';
-import { FINISH_WAIT_MS, SAVE_TIMEOUT_MS } from '../src/autosave-policy';
+import { AUTOSAVE_AT_COUNT, FINISH_WAIT_MS, SAVE_TIMEOUT_MS } from '../src/autosave-policy';
 import type { AppApiClient, KeyValueStorage } from '../src';
 import { fakeStorage } from './support/fake-storage';
 
@@ -897,4 +897,28 @@ test('a save that lands after its screen unmounted leaves the stored queue alone
   after.unmount();
 
   assert.ok(kept?.includes('q2'), `the queue still holds q2: ${kept}`);
+});
+
+/** The failure this prevents: a full queue and a dead network turning every tap into another failed save. */
+test('while saves fail, a full queue waits for the timer instead of saving on every tap', async (t) => {
+  const calls: unknown[] = [];
+  const deps = depsFor(apiThatFails(calls));
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  act(() => {
+    for (let n = 1; n <= AUTOSAVE_AT_COUNT; n += 1) {
+      result.current.answer(`q${n}`, { selectedOptionId: 'opt' });
+    }
+  });
+  await act(settle);
+  assert.equal(calls.length, 1, 'the full queue went up once');
+
+  act(() => result.current.answer('q-late-1', { selectedOptionId: 'opt' }));
+  act(() => result.current.answer('q-late-2', { selectedOptionId: 'opt' }));
+  await act(settle);
+  assert.equal(calls.length, 1, 'no save per tap while the last one failed');
+
+  await act(async () => void (await result.current.flush()));
+  assert.equal(calls.length, 2, "the timer's save still goes");
 });
