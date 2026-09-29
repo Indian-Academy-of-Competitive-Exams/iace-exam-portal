@@ -565,10 +565,20 @@ export const satSeriesSchema = z.object({
 });
 export type SatSeries = z.infer<typeof satSeriesSchema>;
 
-/** Never carries a question, an option or an answer key — at any scope, on either path. */
-export const performanceReportSchema = z.object({
+/** One sitting against its paper's cohort: a report's anchor, and the body of a score card. */
+const sittingFiguresSchema = z.object({
   /** This paper's clock against the cohort's average: above 1 is slower, below 1 faster. */
   paceIndex: z.number().nullable(),
+  /** Null wherever the scope spans more than one paper — marks do not compare across papers. */
+  cohort: cohortCurveSchema.nullable(),
+  /** The ANCHOR sitting, like everything below it: marks summed across papers are not a paper. */
+  composition: markCompositionSchema,
+  sections: z.array(sectionalStandingSchema),
+  time: timeUseSchema,
+});
+
+/** Never carries a question, an option or an answer key — at any scope, on either path. */
+export const performanceReportSchema = sittingFiguresSchema.extend({
   studentId: z.string(),
   scope: performanceScopeSchema,
   /** The id the scope was asked about. Null for ALL_TIME. */
@@ -578,14 +588,34 @@ export const performanceReportSchema = z.object({
   attemptsCounted: z.number().int(),
   generatedAt: z.string(),
   trajectory: z.array(percentilePointSchema),
-  /** Null wherever the scope spans more than one paper — marks do not compare across papers. */
-  cohort: cohortCurveSchema.nullable(),
-  /** The ANCHOR sitting, like everything below it: marks summed across papers are not a paper. */
-  composition: markCompositionSchema,
-  sections: z.array(sectionalStandingSchema),
-  time: timeUseSchema,
 });
 export type PerformanceReport = z.infer<typeof performanceReportSchema>;
+
+/** Every tab of one sitting's report reads this; like the report, it carries no question at all. */
+export const scoreCardSchema = sittingFiguresSchema.extend({
+  attemptId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  attemptNo: z.number().int(),
+  /** False for a retake: it is marked, but it is not in the ranking. */
+  isGraded: z.boolean(),
+  submittedAt: z.string().nullable(),
+  evaluatedAt: z.string().nullable(),
+  score: z.number(),
+  maxMarks: z.number(),
+  percentage: z.number(),
+  correctCount: z.number().int(),
+  wrongCount: z.number().int(),
+  unattemptedCount: z.number().int(),
+  totalQuestions: z.number().int(),
+  timeTakenSec: z.number().int(),
+  durationSec: z.number().int(),
+  /** Live from the ranking. Null for a retake, and while a wiped board is being put back. */
+  rank: z.number().int().nullable(),
+  percentile: z.number().nullable(),
+  cohortSize: z.number().int().nullable(),
+});
+export type ScoreCard = z.infer<typeof scoreCardSchema>;
 
 // ============================================================================
 // Reading a trend the way the Performance screen has to: which papers were sat,
@@ -792,7 +822,6 @@ export const questionFilterSchema = z.enum(QUESTION_FILTERS);
 export type QuestionFilter = z.infer<typeof questionFilterSchema>;
 
 export const PERFORMANCE_ROUTES = {
-  me: '/me/performance/report',
   /** The series the picker may offer: one they have sat a test in, so a report cannot be empty. */
   mySeries: '/me/performance/series',
   ofStudent: (studentId: string) => `/admin/students/${studentId}/performance`,

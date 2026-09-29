@@ -2,9 +2,9 @@
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { minutes } from '@iace/app-kit';
-import { type PerformanceReport, type SectionalStanding } from '@iace/contracts';
+import { type SectionalStanding } from '@iace/contracts';
 import { Text } from '../ui/text';
-import { attemptReportQuery } from '../../lib/queries';
+import { scoreCardQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
 import { Badge, type BadgeVariant } from '../ui/badge';
 import { Card } from '../ui/card';
@@ -24,36 +24,36 @@ const STANDINGS: Readonly<Record<string, { label: string; variant: BadgeVariant 
 };
 
 export function SubjectsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
-  const report = useQuery(attemptReportQuery(attemptId));
-  const refresh = () => void report.refetch();
+  const card = useQuery(scoreCardQuery(attemptId));
+  const refresh = () => void card.refetch();
 
   return (
-    <RefreshScroll refreshing={report.isRefetching} onRefresh={refresh}>
-      {report.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
-      {report.isError ? (
+    <RefreshScroll refreshing={card.isRefetching} onRefresh={refresh}>
+      {card.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
+      {card.isError ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="This subject report did not load"
           onRetry={refresh}
         />
       ) : null}
-      {report.data ? <Sections report={report.data} /> : null}
+      {card.data ? <Sections sections={card.data.sections} /> : null}
     </RefreshScroll>
   );
 }
 
-function Sections({ report }: Readonly<{ report: PerformanceReport }>) {
-  if (report.sections.length === 0) {
+function Sections({ sections }: Readonly<{ sections: readonly SectionalStanding[] }>) {
+  if (sections.length === 0) {
     return <EmptyState title="No sections" />;
   }
 
   return (
     <>
-      <Text variant="muted">{plural(report.sections.length, 'section')}</Text>
-      {report.sections.map((section) => (
+      <Text variant="muted">{plural(sections.length, 'section')}</Text>
+      {sections.map((section) => (
         <Section key={section.baseConfigSectionId} section={section} />
       ))}
-      <Spread sections={report.sections} />
+      <Spread sections={sections} />
     </>
   );
 }

@@ -1,11 +1,6 @@
 /** Every read both student clients cache, keyed once, so web and mobile can never cache one read twice. */
 import { queryOptions } from '@tanstack/react-query';
-import {
-  PERFORMANCE_SCOPES,
-  type LanguageCode,
-  type LeaderboardScope,
-  type PerformanceScope,
-} from '@iace/contracts';
+import { type LanguageCode, type LeaderboardScope } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
 import { isMarkingPending } from './marking';
@@ -57,10 +52,6 @@ export const OVERVIEW_QUERY_KEY = ['me', 'overview'] as const;
 
 /** The series the SERIES board may be asked about, which only a sitting puts on the list. */
 export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as const;
-
-/** One report, keyed by what it is OF, so swapping scope or paper never reads a stale one. */
-export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
-  ['me', 'performance', 'report', scope, scopeId] as const;
 
 export const leaderboardQueryKey = (scope: LeaderboardScope, scopeId: string) =>
   ['me', 'leaderboard', scope, scopeId] as const;
@@ -123,11 +114,6 @@ export function createStudentQueries(api: AppApiClient) {
       queryOptions({
         queryKey: questionReportQueryKey(attemptId),
         queryFn: () => api.me.questionReport(attemptId),
-      }),
-    attemptReportQuery: (attemptId: string) =>
-      queryOptions({
-        queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
-        queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
       }),
   };
 }

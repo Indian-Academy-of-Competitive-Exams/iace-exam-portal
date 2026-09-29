@@ -6,17 +6,15 @@ import { isMarkingPending, minutes } from '@iace/app-kit';
 import {
   paperCounts,
   type CohortCurve,
-  type PerformanceReport,
   type ScoreCard,
   type SectionalStanding,
 } from '@iace/contracts';
-import { attemptReportQuery, scoreCardQuery } from '../lib/queries';
+import { scoreCardQuery } from '../lib/queries';
 import { Hero, HeroFigure, PageBody, ReportSkeleton, StatTile, TileGrid } from '../components/ui';
 
 export function ScoreCardPanel() {
   const { attemptId = '' } = useParams();
   const card = useQuery(scoreCardQuery(attemptId));
-  const report = useQuery(attemptReportQuery(attemptId));
 
   const again = () => void card.refetch();
 
@@ -43,14 +41,15 @@ export function ScoreCardPanel() {
     );
   }
 
-  return <Result card={card.data} report={report.data ?? null} />;
+  return <Result card={card.data} />;
 }
 
-function Result({ card, report }: Readonly<{ card: ScoreCard; report: PerformanceReport | null }>) {
+function Result({ card }: Readonly<{ card: ScoreCard }>) {
   const attempted = card.correctCount + card.wrongCount;
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
   // A curve exists only where a cohort drew one; a retake has none to show.
-  const curve = report?.cohort && report.cohort.bands.length > 0 ? report.cohort : null;
+  const curve = card.cohort && card.cohort.bands.length > 0 ? card.cohort : null;
+  const counts = paperCounts(card.sections);
 
   return (
     <PageBody>
@@ -73,25 +72,23 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         />
       </TileGrid>
 
-      {report === null ? null : (
-        <div className={cn('grid items-start gap-4', curve === null ? null : 'lg:grid-cols-2')}>
-          {/* Marks and Time read as one column against the crowd standing beside them. */}
-          <div className="flex min-w-0 flex-col gap-4">
-            <MarksFigure
-              composition={report.composition}
-              counts={paperCounts(report.sections)}
-              benchmark={marksAgainst(curve)}
-            />
-            <TimeFigure
-              time={report.time}
-              counts={paperCounts(report.sections)}
-              paceIndex={report.paceIndex}
-              benchmark={timeAgainst(report.sections)}
-            />
-          </div>
-          {curve === null ? null : <CohortFigure cohort={curve} />}
+      <div className={cn('grid items-start gap-4', curve === null ? null : 'lg:grid-cols-2')}>
+        {/* Marks and Time read as one column against the crowd standing beside them. */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <MarksFigure
+            composition={card.composition}
+            counts={counts}
+            benchmark={marksAgainst(curve)}
+          />
+          <TimeFigure
+            time={card.time}
+            counts={counts}
+            paceIndex={card.paceIndex}
+            benchmark={timeAgainst(card.sections)}
+          />
         </div>
-      )}
+        {curve === null ? null : <CohortFigure cohort={curve} />}
+      </div>
     </PageBody>
   );
 }

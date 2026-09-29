@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { isMarkingPending, minutes } from '@iace/app-kit';
 import { type MarkComposition, type ScoreCard } from '@iace/contracts';
 import { Text } from '../ui/text';
-import { attemptReportQuery, scoreCardQuery } from '../../lib/queries';
+import { scoreCardQuery } from '../../lib/queries';
 import { Card } from '../ui/card';
 import { Hero, HeroFigure } from '../ui/hero';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
@@ -15,12 +15,8 @@ import { StatTile, StatTileRow } from '../ui/stat-tile';
 
 export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const card = useQuery(scoreCardQuery(attemptId));
-  const report = useQuery(attemptReportQuery(attemptId));
 
-  const refresh = () => {
-    void card.refetch();
-    void report.refetch();
-  };
+  const refresh = () => void card.refetch();
 
   return (
     <RefreshScroll refreshing={card.isRefetching} onRefresh={refresh}>
@@ -41,15 +37,12 @@ export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
           onRetry={refresh}
         />
       ) : null}
-      {card.data ? <Result card={card.data} composition={report.data?.composition} /> : null}
+      {card.data ? <Result card={card.data} /> : null}
     </RefreshScroll>
   );
 }
 
-function Result({
-  card,
-  composition,
-}: Readonly<{ card: ScoreCard; composition: MarkComposition | undefined }>) {
+function Result({ card }: Readonly<{ card: ScoreCard }>) {
   const attempted = card.correctCount + card.wrongCount;
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
 
@@ -74,7 +67,7 @@ function Result({
         />
       </StatTileRow>
 
-      {composition ? <Marks composition={composition} /> : null}
+      <Marks composition={card.composition} />
     </>
   );
 }

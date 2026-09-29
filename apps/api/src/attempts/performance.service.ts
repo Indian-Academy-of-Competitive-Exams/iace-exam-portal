@@ -1,8 +1,8 @@
 /**
- * ONE metric set, parameterised by (studentId, scope). The student's own path and the admin's call
- * the same method with a different studentId, so the two can never drift apart; the only difference
- * is who is allowed to name the student. No select here loads `questionVersion`, so no scope and no
- * caller can reach an answer key through this file.
+ * ONE metric set for a sitting, `figuresOf`, read two ways: the score card a student opens on their
+ * own sitting, and the report an admin opens at any scope for a student they may see. Both run the
+ * one method, so the two can never drift apart. No select here loads `questionVersion`, so no scope
+ * and no caller can reach an answer key through this file.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -17,9 +17,13 @@ import {
   type PerformanceReportQuery,
   type PercentilePoint,
   type SatSeries,
+  type ScoreCard,
   type ScoreCardSection,
   civilDate,
+  scopedDurationSec,
+  scopedQuestionCount,
   type TestCalendar,
+  type TestScopeRef,
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +32,14 @@ import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { requireStudent } from './require-student';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { marksBySection, numberOrNull, perSitting, sectionsWithScores } from './attempt-report';
+import {
+  elapsedSeconds,
+  marksBySection,
+  numberOrNull,
+  percentageOf,
+  perSitting,
+  sectionsWithScores,
+} from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
 import { NO_TOPPER, topperOf } from './topper';
@@ -42,6 +53,7 @@ import {
 } from './performance-analytics';
 
 const NOT_YOURS = 'No such sitting';
+const NOT_MARKED = 'This paper has not been marked yet. Its score card opens the moment it is.';
 
 /** How many sittings any one report folds in. Beyond this a trajectory is a smear, not a line. */
 const SCOPE_ATTEMPT_CAP = 20;
@@ -80,13 +92,50 @@ const REPORT_SELECT = {
 
 type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
 
+/** The report's row, and what only a card prints: its counts, its clock and the paper's scope. */
+const SCORE_CARD_SELECT = {
+  ...REPORT_SELECT,
+  attemptNo: true,
+  status: true,
+  evaluatedAt: true,
+  correctCount: true,
+  wrongCount: true,
+  unattemptedCount: true,
+  test: {
+    select: {
+      title: true,
+      scope: true,
+      scopeRef: true,
+      baseConfig: {
+        select: {
+          durationSec: true,
+          totalQuestions: true,
+          shuffleQuestions: true,
+          sections: {
+            select: {
+              id: true,
+              moduleId: true,
+              durationSec: true,
+              perQuestionSec: true,
+              name: true,
+              order: true,
+              questionCount: true,
+              marksPerQuestion: true,
+            },
+            orderBy: { order: 'asc' },
+          },
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.AttemptSelect;
+
 /** Everything a question buckets by off the paper row, and nothing that could carry an answer. */
 const PERFORMANCE_ROW_SELECT = {
   ...SHEET_ROW_SELECT,
   marks: true,
   negativeMarks: true,
   status: true,
-  question: { select: { difficulty: true, subject: { select: { id: true, name: true } } } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
 type PerformancePaperRow = Prisma.PaperQuestionGetPayload<{
@@ -120,33 +169,9 @@ export class PerformanceAnalyticsService {
     const sat = recent.toReversed();
     // Everything but the trajectory describes the anchor, so one payload never mixes two papers.
     const anchor = sat.findLast((row) => row.isGraded) ?? sat.at(-1) ?? null;
-    // The anchor's sheet alone: the other sittings only ever give the trajectory their marks.
-    const [paper, sheet] =
-      anchor === null
-        ? [[], null]
-        : await Promise.all([
-            this.prisma.paperQuestion.findMany({
-              where: { testId: anchor.testId },
-              orderBy: { order: 'asc' },
-              select: PERFORMANCE_ROW_SELECT,
-            }),
-            this.prisma.attemptSheet.findUnique({
-              where: { attemptId: anchor.id },
-              select: { answers: true, verdicts: true },
-            }),
-          ]);
-    const rows =
-      anchor === null
-        ? []
-        : toReported(
-            servedSheet(paper, { ...anchor, sheet }, anchor.test.baseConfig.shuffleQuestions),
-          );
     const testIds = [...new Set(sat.map((row) => row.testId))];
-
-    const [testStats, sectionCohort, topper, standings] = await Promise.all([
+    const [testStats, standings] = await Promise.all([
       this.testStats(testIds),
-      this.sectionCohort(anchor),
-      anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
       this.leaderboard.standingsOf(sat.map((row) => row.id)),
     ]);
     const standing = anchor === null ? null : (standings.get(anchor.id) ?? null);
@@ -161,7 +186,96 @@ export class PerformanceAnalyticsService {
       trajectory: sat.map((row) =>
         toPoint(row, standings.get(row.id), testStats.get(row.testId)?.evaluatedCount ?? null),
       ),
-      cohort: await this.curveOf(query, anchor, standing, testStats),
+      ...(await this.figuresOf(query, anchor, standing, testStats)),
+    };
+  }
+
+  /** The student path: one request answers every tab of a sitting's report, so it is read once. */
+  async scoreCard(studentId: string, attemptId: string): Promise<ScoreCard> {
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: SCORE_CARD_SELECT,
+    });
+    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
+      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
+    }
+
+    const [testStats, standing] = await Promise.all([
+      this.testStats([attempt.testId]),
+      this.leaderboard.standing(attempt.testId, attempt.id),
+    ]);
+    const oneSitting = { scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: attempt.id };
+    const figures = await this.figuresOf(oneSitting, attempt, standing, testStats);
+    const { test } = attempt;
+    const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+    const score = Number(attempt.score ?? 0);
+    const { maxMarks } = figures.composition;
+
+    return {
+      ...figures,
+      attemptId: attempt.id,
+      testId: attempt.testId,
+      testTitle: test.title,
+      attemptNo: attempt.attemptNo,
+      isGraded: attempt.isGraded,
+      submittedAt: attempt.submittedAt?.toISOString() ?? null,
+      evaluatedAt: attempt.evaluatedAt?.toISOString() ?? null,
+      score,
+      maxMarks,
+      percentage: percentageOf(score, maxMarks),
+      correctCount: attempt.correctCount ?? 0,
+      wrongCount: attempt.wrongCount ?? 0,
+      unattemptedCount: attempt.unattemptedCount ?? 0,
+      totalQuestions: scopedQuestionCount(test.baseConfig.sections, test.scope, scopeRef),
+      timeTakenSec:
+        attempt.submittedAt === null ? 0 : elapsedSeconds(attempt.startedAt, attempt.submittedAt),
+      durationSec: scopedDurationSec(
+        test.baseConfig.sections,
+        test.baseConfig,
+        test.scope,
+        scopeRef,
+      ),
+      rank: standing?.rank ?? null,
+      percentile: standing?.percentile ?? null,
+      cohortSize: standing?.cohortSize ?? null,
+    };
+  }
+
+  /** The anchor's figures alone: the other sittings only ever give the trajectory their marks. */
+  private async figuresOf(
+    query: PerformanceReportQuery,
+    anchor: ReportRow | null,
+    standing: Standing | null,
+    testStats: ReadonlyMap<string, TestStatRow>,
+  ) {
+    const [paper, sheet, sectionCohort, topper, cohort] = await Promise.all([
+      anchor === null
+        ? []
+        : this.prisma.paperQuestion.findMany({
+            where: { testId: anchor.testId },
+            orderBy: { order: 'asc' },
+            select: PERFORMANCE_ROW_SELECT,
+          }),
+      anchor === null
+        ? null
+        : this.prisma.attemptSheet.findUnique({
+            where: { attemptId: anchor.id },
+            select: { answers: true, verdicts: true },
+          }),
+      this.sectionCohort(anchor),
+      anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
+      this.curveOf(query, anchor, standing, testStats),
+    ]);
+    const rows =
+      anchor === null
+        ? []
+        : toReported(
+            servedSheet(paper, { ...anchor, sheet }, anchor.test.baseConfig.shuffleQuestions),
+          );
+
+    return {
+      cohort,
       composition: compositionOf(rows),
       sections: sectionalStandingOf(sectionsOf(anchor, paper), sectionCohort, topper.bySection),
       time: timeUseOf(rows),
@@ -324,9 +438,6 @@ function sectionsOf(
 function toReported(served: readonly (PerformancePaperRow & ServedAnswer)[]): ReportedQuestion[] {
   return served.map((question) => ({
     baseConfigSectionId: question.baseConfigSectionId,
-    subjectId: question.question.subject.id,
-    subjectName: question.question.subject.name,
-    difficulty: question.question.difficulty,
     state: question.state,
     answered: question.selectedOptionId !== null || (question.typedAnswer?.trim() ?? '') !== '',
     isCorrect: question.isCorrect,

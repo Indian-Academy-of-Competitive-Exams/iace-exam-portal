@@ -1,7 +1,7 @@
 /**
- * What a student is shown about a sitting they have finished. TWO reads live here and they are not
- * the same: the score card's select never loads `questionVersion`, so no key can reach it; the
- * review's does, and is reachable only past `solutionsAreOpen`. Keep them that way.
+ * What a student reviews of a sitting they have finished, and the trend across all of them. The
+ * review's read is the one place a student's `questionVersion` loads, reachable only past the
+ * marked-sitting gate; the score card never loads one (`performance.service.ts`). Keep it that way.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -15,25 +15,20 @@ import {
   type PerformancePoint,
   type PerformanceTrend,
   type SatSitting,
-  type ScoreCard,
   type ScoreCardQuestion,
   type SolutionQuestion,
   type SolutionReport,
-  type TestScopeRef,
-  scopedQuestionCount,
-  scopedDurationSec,
   round2 as round,
   servedQuestions,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { answeredRows, servedSheet, type ServedAnswer } from './answer-sheet';
+import { answeredRows, type ServedAnswer } from './answer-sheet';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { sectionScoresIn } from './score-paper';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { elapsedSeconds, marksBySection, percentageOf, sectionsWithScores } from './attempt-report';
+import { percentageOf } from './attempt-report';
 import { optionsIn } from './rollup-fold';
 
 const NOT_YOURS = 'No such sitting';
@@ -41,52 +36,6 @@ const NOT_YOURS = 'No such sitting';
 /** How many sittings a trend line carries. Beyond this a chart is a smear, not a trend. */
 const TREND_LENGTH = 20;
 const NOT_REVIEWABLE = 'This paper has not been marked yet, so there is nothing to review.';
-const NOT_MARKED = 'This paper has not been marked yet. Its score card opens the moment it is.';
-
-const SCORE_CARD_SELECT = {
-  id: true,
-  testId: true,
-  attemptNo: true,
-  isGraded: true,
-  status: true,
-  startedAt: true,
-  submittedAt: true,
-  evaluatedAt: true,
-  score: true,
-  correctCount: true,
-  wrongCount: true,
-  unattemptedCount: true,
-  sectionScores: true,
-  shuffleSeed: true,
-  sheet: { select: { answers: true, verdicts: true } },
-  test: {
-    select: {
-      title: true,
-      scope: true,
-      scopeRef: true,
-      baseConfig: {
-        select: {
-          durationSec: true,
-          totalQuestions: true,
-          shuffleQuestions: true,
-          sections: {
-            select: {
-              id: true,
-              moduleId: true,
-              durationSec: true,
-              perQuestionSec: true,
-              name: true,
-              order: true,
-              questionCount: true,
-              marksPerQuestion: true,
-            },
-            orderBy: { order: 'asc' },
-          },
-        },
-      },
-    },
-  },
-} as const satisfies Prisma.AttemptSelect;
 
 /** The paper's own terms per row; every sitting of a test was served the whole of it. */
 const PRICED_ROW_SELECT = {
@@ -147,8 +96,6 @@ const SOLUTION_ROW_SELECT = {
 type SolutionRow = Prisma.PaperQuestionGetPayload<{ select: typeof SOLUTION_ROW_SELECT }> &
   ServedAnswer;
 
-type ScoreCardRow = Prisma.AttemptGetPayload<{ select: typeof SCORE_CARD_SELECT }>;
-
 @Injectable()
 export class AttemptReportService {
   constructor(
@@ -156,70 +103,6 @@ export class AttemptReportService {
     private readonly leaderboard: LeaderboardService,
     private readonly storage: StorageService,
   ) {}
-
-  async scoreCard(studentId: string, attemptId: string): Promise<ScoreCard> {
-    // A whole hall polls this until marking lands, so the refusal is answered before the wide read.
-    await this.requireMarked(studentId, attemptId);
-
-    const attempt = await this.require(studentId, attemptId);
-    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
-    }
-
-    const config = attempt.test.baseConfig;
-    const paper = await this.prisma.paperQuestion.findMany({
-      where: { testId: attempt.testId },
-      orderBy: { order: 'asc' },
-      select: PRICED_ROW_SELECT,
-    });
-    const questions = servedSheet(paper, attempt, config.shuffleQuestions).map(toScoreCardQuestion);
-    const perSection = marksBySection(questions);
-
-    const standing = await this.leaderboard.standing(attempt.testId, attempt.id);
-    const score = Number(attempt.score ?? 0);
-    const maxMarks = round([...perSection.values()].reduce((sum, marks) => sum + marks, 0));
-
-    return {
-      attemptId: attempt.id,
-      testId: attempt.testId,
-      testTitle: attempt.test.title,
-      attemptNo: attempt.attemptNo,
-      isGraded: attempt.isGraded,
-      submittedAt: attempt.submittedAt?.toISOString() ?? null,
-      evaluatedAt: attempt.evaluatedAt?.toISOString() ?? null,
-      score,
-      maxMarks,
-      percentage: percentageOf(score, maxMarks),
-      correctCount: attempt.correctCount ?? 0,
-      wrongCount: attempt.wrongCount ?? 0,
-      unattemptedCount: attempt.unattemptedCount ?? 0,
-      totalQuestions: scopedQuestionCount(
-        config.sections,
-        attempt.test.scope,
-        (attempt.test.scopeRef as TestScopeRef | null) ?? null,
-      ),
-      timeTakenSec:
-        attempt.submittedAt === null ? 0 : elapsedSeconds(attempt.startedAt, attempt.submittedAt),
-      durationSec: scopedDurationSec(
-        config.sections,
-        config,
-        attempt.test.scope,
-        (attempt.test.scopeRef as TestScopeRef | null) ?? null,
-      ),
-      rank: standing?.rank ?? null,
-      percentile: standing?.percentile ?? null,
-      cohortSize: standing?.cohortSize ?? null,
-      sections: sectionsWithScores(
-        config.sections.map((section) => ({
-          ...section,
-          marksPerQuestion: Number(section.marksPerQuestion),
-        })),
-        sectionScoresIn(attempt.sectionScores),
-        perSection,
-      ),
-      questions,
-    };
-  }
 
   /** Every sitting this student has had marked, oldest first; only the chart's newest are stood. */
   async performance(studentId: string): Promise<PerformanceTrend> {
@@ -300,28 +183,6 @@ export class AttemptReportService {
       })),
       questions: questions.map((row) => servedQuestion(row, urls)),
     };
-  }
-
-  /** The poll's whole cost: the status off the primary key, with no sheet and no paper behind it. */
-  private async requireMarked(studentId: string, attemptId: string): Promise<void> {
-    const attempt = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
-      select: { status: true },
-    });
-    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
-    }
-  }
-
-  /** The owner is part of the QUERY, so another student's sitting reads as missing, not refused. */
-  private async require(studentId: string, attemptId: string): Promise<ScoreCardRow> {
-    const attempt = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
-      select: SCORE_CARD_SELECT,
-    });
-    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    return attempt;
   }
 }
 

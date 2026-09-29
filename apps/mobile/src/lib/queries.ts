@@ -4,7 +4,6 @@ import { api } from './api';
 import { endedSittingQueryKey } from './constants';
 
 export const {
-  attemptReportQuery,
   briefQuery,
   catalogQuery,
   overviewQuery,

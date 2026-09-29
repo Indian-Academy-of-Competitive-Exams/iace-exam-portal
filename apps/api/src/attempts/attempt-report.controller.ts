@@ -8,16 +8,20 @@ import {
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { AttemptReportService } from './attempt-report.service';
+import { PerformanceAnalyticsService } from './performance.service';
 
 @Controller('me')
 @Actors(ActorTypes.STUDENT)
 export class MeAttemptReportController {
-  constructor(private readonly reports: AttemptReportService) {}
+  constructor(
+    private readonly reports: AttemptReportService,
+    private readonly analytics: PerformanceAnalyticsService,
+  ) {}
 
-  /** Marks, standing and their OWN answers. Carries no correct option, on any question. */
+  /** Marks, standing and the cohort beside them, for every report tab. Carries no question at all. */
   @Get('attempts/:id/scorecard')
   scoreCard(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ScoreCard> {
-    return this.reports.scoreCard(user.id, id);
+    return this.analytics.scoreCard(user.id, id);
   }
 
   /** The answer key, and the ONLY endpoint carrying it. Refused until the gate opens. */

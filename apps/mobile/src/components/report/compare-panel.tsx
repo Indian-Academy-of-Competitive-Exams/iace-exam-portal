@@ -5,11 +5,11 @@ import {
   percentLabel,
   type CohortCurve,
   type PerformancePoint,
-  type PerformanceReport,
+  type ScoreCard,
 } from '@iace/contracts';
 import { everySitting } from '@iace/app-kit';
 import { Text } from '../ui/text';
-import { attemptReportQuery, performanceQuery } from '../../lib/queries';
+import { performanceQuery, scoreCardQuery } from '../../lib/queries';
 import { plural } from '../../lib/plural';
 import { Alert } from '../ui/alert';
 import { Card } from '../ui/card';
@@ -22,33 +22,32 @@ const DASH = '—';
 
 /** Who else sat this paper. Without a cohort the benchmark swaps rather than the tab disappearing. */
 export function ComparePanel({ attemptId }: Readonly<{ attemptId: string }>) {
-  const report = useQuery(attemptReportQuery(attemptId));
+  const card = useQuery(scoreCardQuery(attemptId));
   const trend = useQuery(performanceQuery);
 
   const refresh = () => {
-    void report.refetch();
+    void card.refetch();
     void trend.refetch();
   };
 
-  const points = everySitting(trend.data);
-  const testId = report.data?.cohort?.testId ?? testOf(points, attemptId);
-  const placed = (report.data?.cohort?.cohortSize ?? 0) > 0;
+  const testId = card.data?.testId ?? '';
+  const placed = (card.data?.cohort?.cohortSize ?? 0) > 0;
 
   return (
-    <RefreshScroll refreshing={report.isRefetching} onRefresh={refresh}>
-      {report.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
-      {report.isError ? (
+    <RefreshScroll refreshing={card.isRefetching} onRefresh={refresh}>
+      {card.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
+      {card.isError ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="This comparison did not load"
           onRetry={refresh}
         />
       ) : null}
-      {report.data ? (
+      {card.data ? (
         <Body
-          report={report.data}
+          card={card.data}
           placed={placed}
-          sittings={points.filter((point) => point.testId === testId)}
+          sittings={everySitting(trend.data).filter((point) => point.testId === testId)}
         />
       ) : null}
     </RefreshScroll>
@@ -56,15 +55,15 @@ export function ComparePanel({ attemptId }: Readonly<{ attemptId: string }>) {
 }
 
 function Body({
-  report,
+  card,
   placed,
   sittings,
 }: Readonly<{
-  report: PerformanceReport;
+  card: ScoreCard;
   placed: boolean;
   sittings: readonly PerformancePoint[];
 }>) {
-  if (!placed || report.cohort === null) {
+  if (!placed || card.cohort === null) {
     return (
       <>
         <Alert variant="info">
@@ -77,8 +76,8 @@ function Body({
 
   return (
     <>
-      <Against cohort={report.cohort} max={report.composition.maxMarks} />
-      <Curve cohort={report.cohort} />
+      <Against cohort={card.cohort} max={card.maxMarks} />
+      <Curve cohort={card.cohort} />
     </>
   );
 }
@@ -168,6 +167,3 @@ function OwnAttempts({ sittings }: Readonly<{ sittings: readonly PerformancePoin
     </View>
   );
 }
-
-const testOf = (points: readonly PerformancePoint[], attemptId: string) =>
-  points.find((point) => point.attemptId === attemptId)?.testId ?? '';

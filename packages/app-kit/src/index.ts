@@ -73,7 +73,6 @@ export {
   PERFORMANCE_QUERY_KEY,
   OVERVIEW_QUERY_KEY,
   PERFORMANCE_SERIES_QUERY_KEY,
-  performanceReportQueryKey,
   leaderboardQueryKey,
   briefQueryKey,
   ACTIVE_DEVICES_QUERY_KEY,

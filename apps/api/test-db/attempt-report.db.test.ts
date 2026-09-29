@@ -4,11 +4,15 @@ import {
   ANSWER_STATE,
   ErrorCodes,
   PAPER_QUESTION_STATUS,
+  PERFORMANCE_SCOPES,
+  scoreCardSchema,
   type AppException,
+  type PerformanceReport,
 } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
+import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
@@ -24,7 +28,6 @@ import {
   makeStudent,
   makeTest,
   resetDatabase,
-  servedAnswers,
   sitPaper,
   testPrisma,
   type Paper,
@@ -32,6 +35,7 @@ import {
 } from './support/database';
 
 const MINUTE_MS = 60_000;
+const SCORE_CARD_QUERY_BUDGET = 14;
 const STARTED = new Date('2026-09-01T05:00:00.000Z');
 const WRONG = 'o2';
 
@@ -52,7 +56,15 @@ const processor = new ScoringProcessor(
 const reports = (client: PrismaService = prisma) =>
   new AttemptReportService(client, new LeaderboardService(client), new FakeStorage() as never);
 
+const analytics = (client: PrismaService = prisma) =>
+  new PerformanceAnalyticsService(client, new LeaderboardService(client));
+
 type Sat = Omit<SitInput, 'paper' | 'studentId' | 'chosen'>;
+
+type Figures = Pick<
+  PerformanceReport,
+  'cohort' | 'composition' | 'sections' | 'time' | 'paceIndex'
+>;
 
 /** A sitting of the paper by a new student, marked by the real scorer unless told not to be. */
 async function sat(
@@ -101,55 +113,65 @@ describe('the Score Card', () => {
       ...over,
     });
 
-  it('reads each answer and its marks off the sheet, in the order the sitting was served', async () => {
-    const onPaper = await paper();
-    // Shuffled, and with a seed that really moves Section B — so a reader ignoring it still fails.
-    await prisma.baseConfig.update({
-      where: { id: onPaper.catalog.baseConfigId },
-      data: { shuffleQuestions: true },
-    });
-    const { studentId, attemptId } = await mine(onPaper, { shuffleSeed: 1 });
-
-    const card = await reports().scoreCard(studentId, attemptId);
-
-    assert.notDeepEqual(
-      card.questions.map((row) => row.questionId),
-      onPaper.items.map((item) => item.questionId),
-    );
-    assert.deepEqual(
-      card.questions.map((row) => [
-        row.questionId,
-        row.order,
-        row.selectedOptionId,
-        row.isCorrect,
-        row.marksAwarded,
-      ]),
-      (await servedAnswers(prisma, attemptId)).map((row) => [
-        row.questionId,
-        row.order,
-        row.selectedOptionId,
-        row.isCorrect,
-        row.marksAwarded,
-      ]),
-    );
-  });
-
   /** The invariant the whole payload exists to protect. */
   it('never says what the right answer was, on a question they missed', async () => {
     const { studentId, attemptId } = await mine(await paper());
 
-    const card = await reports().scoreCard(studentId, attemptId);
-    const missed = card.questions[1];
+    const card = await analytics().scoreCard(studentId, attemptId);
 
-    assert.equal(missed?.isCorrect, false);
-    assert.equal(missed?.selectedOptionId, 'o1');
+    assert.equal(scoreCardSchema.safeParse(card).success, true);
+    assert.equal(card.composition.lostToWrong, 2);
     assert.ok(!JSON.stringify(card).includes(NEVER_SHOWN), 'the key must not reach a score card');
+  });
+
+  /** The failure this prevents: a student's card and an admin's view of the one sitting disagreeing. */
+  it('carries the very figures the admin reads for the same sitting', async () => {
+    const onPaper = await paper();
+    const { studentId, attemptId } = await mine(onPaper);
+    await sat(onPaper, [RIGHT_OPTION, NEVER_SHOWN, RIGHT_OPTION, RIGHT_OPTION]);
+    const figures = ({ cohort, composition, sections, time, paceIndex }: Figures) => ({
+      cohort,
+      composition,
+      sections,
+      time,
+      paceIndex,
+    });
+
+    const card = await analytics().scoreCard(studentId, attemptId);
+    const report = await analytics().report(studentId, {
+      scope: PERFORMANCE_SCOPES.ATTEMPT,
+      attemptId,
+    });
+
+    assert.deepEqual(figures(card), figures(report));
+    assert.deepEqual([card.cohort?.rank, card.cohort?.cohortSize], [card.rank, card.cohortSize]);
+  });
+
+  /** The rush after a test opens thousands of these at once, so every query here is paid that often. */
+  it('opens within its query budget, with a rollup and its topper behind it', async () => {
+    const onPaper = await paper();
+    const { studentId, attemptId } = await mine(onPaper);
+    await sat(onPaper, [RIGHT_OPTION, NEVER_SHOWN, RIGHT_OPTION, RIGHT_OPTION]);
+    await new RollupService(prisma).rebuildTest(onPaper.testId);
+    const counted = testPrisma();
+    let queries = 0;
+    counted.$on('query', () => {
+      queries += 1;
+    });
+
+    try {
+      await analytics(counted).scoreCard(studentId, attemptId);
+    } finally {
+      await counted.$disconnect();
+    }
+
+    assert.ok(queries <= SCORE_CARD_QUERY_BUDGET, `one score card cost ${queries} queries`);
   });
 
   it('reports the marks, the counts and the percentage the paper was worth', async () => {
     const { studentId, attemptId } = await mine(await paper());
 
-    const card = await reports().scoreCard(studentId, attemptId);
+    const card = await analytics().scoreCard(studentId, attemptId);
 
     assert.equal(card.score, 1.5);
     assert.equal(card.maxMarks, 8);
@@ -161,7 +183,7 @@ describe('the Score Card', () => {
   it('lays this sitting over every section, and prices each from the paper', async () => {
     const { studentId, attemptId } = await mine(await paper());
 
-    const card = await reports().scoreCard(studentId, attemptId);
+    const card = await analytics().scoreCard(studentId, attemptId);
 
     assert.deepEqual(
       card.sections.map((section) => [section.name, section.score, section.unattemptedCount]),
@@ -178,7 +200,7 @@ describe('the Score Card', () => {
     const { studentId, attemptId } = await mine(onPaper);
     await sat(onPaper, [RIGHT_OPTION, NEVER_SHOWN, RIGHT_OPTION, RIGHT_OPTION]);
 
-    const card = await reports().scoreCard(studentId, attemptId);
+    const card = await analytics().scoreCard(studentId, attemptId);
 
     assert.deepEqual([card.rank, card.percentile, card.cohortSize], [2, 25, 2]);
   });
@@ -187,7 +209,7 @@ describe('the Score Card', () => {
   it('shows no rank for a sitting outside the cohort', async () => {
     const { studentId, attemptId } = await mine(await paper(), { isGraded: false, attemptNo: 2 });
 
-    const card = await reports().scoreCard(studentId, attemptId);
+    const card = await analytics().scoreCard(studentId, attemptId);
 
     assert.deepEqual([card.rank, card.percentile, card.cohortSize], [null, null, null]);
   });
@@ -196,7 +218,7 @@ describe('the Score Card', () => {
     const { studentId, attemptId } = await mine(await paper(), { marked: false });
 
     await assert.rejects(
-      () => reports().scoreCard(studentId, attemptId),
+      () => analytics().scoreCard(studentId, attemptId),
       refusedWith(ErrorCodes.CONFLICT),
     );
   });
@@ -214,7 +236,7 @@ describe('the Score Card', () => {
     const cards = () =>
       Promise.all(
         [ace, middle, last].map(async (one) => {
-          const card = await reports().scoreCard(one.studentId, one.attemptId);
+          const card = await analytics().scoreCard(one.studentId, one.attemptId);
           return [card.score, card.rank];
         }),
       );
@@ -240,7 +262,7 @@ describe('the Score Card', () => {
     const someoneElse = await sat(onPaper, [null, null, null, null]);
 
     await assert.rejects(
-      () => reports().scoreCard(someoneElse.studentId, attemptId),
+      () => analytics().scoreCard(someoneElse.studentId, attemptId),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
@@ -407,7 +429,7 @@ describe('the trend across every test a student has sat', () => {
     );
     assert.equal(trend.testsSat, 2);
     assert.equal(trend.points[0]?.accuracy, 50);
-    const card = await reports().scoreCard(recent.studentId, old.id);
+    const card = await analytics().scoreCard(recent.studentId, old.id);
     assert.equal(trend.sittings?.[0]?.maxMarks, card.maxMarks);
     assert.equal(trend.sittings?.[0]?.percentage, card.percentage);
   });

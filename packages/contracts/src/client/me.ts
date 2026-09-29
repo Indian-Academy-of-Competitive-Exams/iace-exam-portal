@@ -32,7 +32,6 @@ import {
   examBriefSchema,
   examPaperSchema,
   performanceTrendSchema,
-  scoreCardSchema,
   solutionReportSchema,
   attemptSaveAckSchema,
   sharedPaperSchema,
@@ -45,7 +44,6 @@ import {
   type SharedPaper,
   type StartedAttempt,
   type PerformanceTrend,
-  type ScoreCard,
   type SolutionReport,
   type SaveAttemptStateInput,
   type SubmitAttemptInput,
@@ -56,15 +54,14 @@ import {
 import {
   OVERVIEW_ROUTES,
   PERFORMANCE_ROUTES,
-  performanceReportSchema,
   questionReportSchema,
   satSeriesSchema,
+  scoreCardSchema,
   studentOverviewSchema,
   testCalendarSchema,
-  type PerformanceReport,
   type QuestionReport,
-  type PerformanceReportQueryInput,
   type SatSeries,
+  type ScoreCard,
   type StudentOverview,
   type TestCalendar,
 } from '../stats';
@@ -180,7 +177,7 @@ export function meClient(core: ApiCore) {
     submitAttempt: (attemptId: string, input: SubmitAttemptInput = {}): Promise<SubmittedAttempt> =>
       write('POST', ME_ATTEMPT_ROUTES.submit(attemptId), submittedAttemptSchema, input),
 
-    /** Marks, standing and their own answers. Refused until the paper has been marked. */
+    /** Marks, standing and the cohort beside them, for every report tab. Refused until marked. */
     scoreCard: (attemptId: string): Promise<ScoreCard> =>
       get(ME_ATTEMPT_ROUTES.scoreCard(attemptId), scoreCardSchema),
 
@@ -198,10 +195,6 @@ export function meClient(core: ApiCore) {
 
     /** Sitting counts by institute day, for the calendar the trend's twenty cannot fill. */
     testDays: (): Promise<TestCalendar> => get(ME_ATTEMPT_ROUTES.testDays, testCalendarSchema),
-
-    /** The cutoff-free metric set for one sitting or the whole career. */
-    performanceReport: (query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
-      get(`${PERFORMANCE_ROUTES.me}${queryString({ ...query })}`, performanceReportSchema),
 
     /** Every series they have sat a test in — the SERIES scope has nothing else to offer. */
     performanceSeries: (): Promise<SatSeries[]> =>

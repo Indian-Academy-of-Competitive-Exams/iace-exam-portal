@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
 import { minutes } from '@iace/app-kit';
-import { round2, type PerformanceReport, type SectionalStanding } from '@iace/contracts';
-import { attemptReportQuery } from '../lib/queries';
+import { round2, type SectionalStanding } from '@iace/contracts';
+import { scoreCardQuery } from '../lib/queries';
 import { PageBody, ReportSkeleton, Section } from '../components/ui';
 
 const DASH = '—';
@@ -19,30 +19,30 @@ const STANDINGS = {
 
 export function SubjectPanel() {
   const { attemptId = '' } = useParams();
-  const report = useQuery(attemptReportQuery(attemptId));
+  const card = useQuery(scoreCardQuery(attemptId));
 
   return (
     <>
-      {report.isLoading ? <ReportSkeleton /> : null}
-      {report.data ? <Body report={report.data} /> : null}
+      {card.isLoading ? <ReportSkeleton /> : null}
+      {card.data ? <Body sections={card.data.sections} /> : null}
     </>
   );
 }
 
-function Body({ report }: Readonly<{ report: PerformanceReport }>) {
+function Body({ sections }: Readonly<{ sections: readonly SectionalStanding[] }>) {
   return (
     <PageBody>
-      <Section title="Sections" meta={plural(report.sections.length, 'section')}>
+      <Section title="Sections" meta={plural(sections.length, 'section')}>
         <DataTable
           columns={COLUMNS}
-          rows={report.sections}
+          rows={sections}
           rowKey={(row) => row.baseConfigSectionId}
           isLoading={false}
           empty="This paper had no sections"
         />
       </Section>
 
-      <SectionsFigure sections={report.sections} />
+      <SectionsFigure sections={sections} />
     </PageBody>
   );
 }

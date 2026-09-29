@@ -6,7 +6,6 @@ import { type ExecutionContext } from '@nestjs/common';
 import {
   ANSWER_STATE,
   ActorTypes,
-  DIFFICULTY_LEVEL,
   ErrorCodes,
   FEATURE_KEYS,
   PAPER_QUESTION_STATUS,
@@ -27,9 +26,6 @@ import {
 function asked(overrides: Partial<ReportedQuestion> = {}): ReportedQuestion {
   return {
     baseConfigSectionId: 'sec_1',
-    subjectId: 'sub_r',
-    subjectName: 'Reasoning',
-    difficulty: DIFFICULTY_LEVEL.MEDIUM,
     state: ANSWER_STATE.ANSWERED,
     answered: true,
     isCorrect: true,

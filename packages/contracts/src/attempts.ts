@@ -527,9 +527,9 @@ export const startedAttemptSchema = liveAttemptSchema.extend({
 export type StartedAttempt = z.infer<typeof startedAttemptSchema>;
 
 // ============================================================================
-// The Score Card. Marks, standing and the student's OWN answers — nothing here
-// says what the right answer was, which is why a missed question is safe to
-// show. The correct option rides only on the gated Solution Report.
+// A sitting, question by question and section by section, as the student sat
+// it. Nothing here says what the right answer was; the correct option rides
+// only on the gated Solution Report. The Score Card itself is in stats.ts.
 // ============================================================================
 
 /** How one question went FOR THIS STUDENT. There is deliberately no correct option on it. */
@@ -561,36 +561,9 @@ export const scoreCardSectionSchema = attemptSectionScoreSchema.extend({
 });
 export type ScoreCardSection = z.infer<typeof scoreCardSectionSchema>;
 
-export const scoreCardSchema = z.object({
-  attemptId: z.string(),
-  testId: z.string(),
-  testTitle: z.string().nullable(),
-  attemptNo: z.number().int(),
-  /** False for a retake: it is marked, but it is not in the ranking. */
-  isGraded: z.boolean(),
-  submittedAt: z.string().nullable(),
-  evaluatedAt: z.string().nullable(),
-  score: z.number(),
-  maxMarks: z.number(),
-  percentage: z.number(),
-  correctCount: z.number().int(),
-  wrongCount: z.number().int(),
-  unattemptedCount: z.number().int(),
-  totalQuestions: z.number().int(),
-  timeTakenSec: z.number().int(),
-  durationSec: z.number().int(),
-  /** Live from the ranking. Null for a retake, and while a wiped board is being put back. */
-  rank: z.number().int().nullable(),
-  percentile: z.number().nullable(),
-  cohortSize: z.number().int().nullable(),
-  sections: z.array(scoreCardSectionSchema),
-  questions: z.array(scoreCardQuestionSchema),
-});
-export type ScoreCard = z.infer<typeof scoreCardSchema>;
-
 // ============================================================================
 // The Solution Report — the ONE payload the answer key rides on, and only once
-// the gate has opened. Everything a Score Card carries, plus what was right.
+// the gate has opened. Each question as they answered it, plus what was right.
 // ============================================================================
 
 /** One question, reviewed. `options` carry `isCorrect`, which is why this whole shape is gated. */

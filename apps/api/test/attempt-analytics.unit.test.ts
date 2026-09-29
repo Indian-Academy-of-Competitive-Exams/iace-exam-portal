@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, DIFFICULTY_LEVEL } from '@iace/contracts';
+import { ANSWER_STATE } from '@iace/contracts';
 import { timeUseOf, type AnalysedQuestion } from '../src/attempts/attempt-analytics';
 
 function asked(overrides: Partial<AnalysedQuestion> = {}): AnalysedQuestion {
   return {
     baseConfigSectionId: 'sec_a',
-    subjectId: 'sub_r',
-    subjectName: 'Reasoning',
-    difficulty: DIFFICULTY_LEVEL.MEDIUM,
     state: ANSWER_STATE.ANSWERED,
     answered: true,
     isCorrect: true,

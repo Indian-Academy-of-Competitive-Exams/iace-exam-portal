@@ -1,17 +1,14 @@
 /**
  * What a finished sitting says about how it was sat, derived and never instrumented: every number
  * here comes off rows the exam already wrote — the option chosen, the palette state, the seconds
- * on each question — plus the question's own subject and difficulty.
+ * on each question.
  */
-import { type AnswerState, type DifficultyLevel, type TimeUse } from '@iace/contracts';
+import { type AnswerState, type TimeUse } from '@iace/contracts';
 import { round2 as round } from '@iace/contracts';
 
 /** One answered question, with the little the analytics needs to know about it. */
 export interface AnalysedQuestion {
   baseConfigSectionId: string;
-  subjectId: string;
-  subjectName: string;
-  difficulty: DifficultyLevel;
   state: AnswerState;
   /** What they DID, not what it was worth: a question with an unusable key was still answered. */
   answered: boolean;

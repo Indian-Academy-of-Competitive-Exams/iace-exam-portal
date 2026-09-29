@@ -237,7 +237,7 @@ api.iace.co.in {
 ```
 
 **The split is not prefix-clean, so the matcher cannot be either.** `GET /me/performance` is exam,
-but `/me/performance/report`, `/me/performance/days` and `/me/performance/series` are core, so the
+but `/me/performance/days` and `/me/performance/series` are core, so the
 matcher names that exact path, never a `/me/performance*` wildcard. `GET
 /me/attempts/:id/question-report` is core too, under the same `/me/attempts` prefix the exam routes
 use, so the matcher lists leaf suffixes like `/me/attempts/*/state` rather than a blanket

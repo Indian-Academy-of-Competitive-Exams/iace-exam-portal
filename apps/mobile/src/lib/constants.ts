@@ -27,7 +27,6 @@ export {
   briefQueryKey,
   leaderboardQueryKey,
   notificationsQueryKey,
-  performanceReportQueryKey,
   questionReportQueryKey,
   savedFacetsQueryKey,
   savedQueryKey,

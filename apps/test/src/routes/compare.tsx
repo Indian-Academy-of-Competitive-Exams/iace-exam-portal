@@ -1,15 +1,10 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
-import {
-  LEADERBOARD_SCOPES,
-  percentLabel,
-  type CohortCurve,
-  type PerformanceReport,
-} from '@iace/contracts';
+import { LEADERBOARD_SCOPES, percentLabel, type CohortCurve } from '@iace/contracts';
 import { everySitting } from '@iace/app-kit';
 import { api } from '../lib/api';
-import { attemptReportQuery, performanceQuery } from '../lib/queries';
+import { performanceQuery, scoreCardQuery } from '../lib/queries';
 import { leaderboardQueryKey } from '../lib/constants';
 import { PageBody, ReportSkeleton, RowsSkeleton, Section } from '../components/ui';
 import { AttemptCompare } from '../components/performance/attempt-compare';
@@ -18,33 +13,28 @@ import { Podium, Standings } from '../components/leaderboard/board';
 /** Who else sat this paper. Without a cohort the benchmark swaps rather than the tab disappearing. */
 export function ComparePanel() {
   const { attemptId = '' } = useParams();
-  const report = useQuery(attemptReportQuery(attemptId));
+  const card = useQuery(scoreCardQuery(attemptId));
   const trend = useQuery(performanceQuery);
 
-  // `scopeId` on an ATTEMPT report is the ATTEMPT's id, so the paper has to come from elsewhere.
-  const points = everySitting(trend.data);
-  const testId =
-    report.data?.cohort?.testId ??
-    points.find((point) => point.attemptId === attemptId)?.testId ??
-    '';
-  const placed = (report.data?.cohort?.cohortSize ?? 0) > 0;
+  const testId = card.data?.testId ?? '';
+  const placed = (card.data?.cohort?.cohortSize ?? 0) > 0;
   const board = useQuery({
     queryKey: leaderboardQueryKey(LEADERBOARD_SCOPES.TEST, testId),
     queryFn: () => api.me.leaderboard({ scope: LEADERBOARD_SCOPES.TEST, testId }),
     enabled: placed && testId !== '',
   });
 
-  if (report.isLoading) return <ReportSkeleton />;
-  if (!report.data) return null;
+  if (card.isLoading) return <ReportSkeleton />;
+  if (!card.data) return null;
 
-  const sittings = points.filter((point) => point.testId === testId);
+  const sittings = everySitting(trend.data).filter((point) => point.testId === testId);
 
   return (
     <PageBody>
       {placed ? (
-        <Against cohort={report.data.cohort} report={report.data} />
+        <Against cohort={card.data.cohort} maxMarks={card.data.maxMarks} />
       ) : (
-        <AttemptCompare sittings={sittings} cohort={report.data.cohort} />
+        <AttemptCompare sittings={sittings} cohort={card.data.cohort} />
       )}
 
       <Standing placed={placed} />
@@ -79,10 +69,9 @@ function Standing({ placed }: Readonly<{ placed: boolean }>) {
 /** You, the field's average and the paper's topper on one scale of marks. */
 function Against({
   cohort,
-  report,
-}: Readonly<{ cohort: CohortCurve | null; report: PerformanceReport }>) {
+  maxMarks: max,
+}: Readonly<{ cohort: CohortCurve | null; maxMarks: number }>) {
   if (cohort === null) return null;
-  const max = report.composition.maxMarks;
 
   const items: ComparisonItem[] = [
     {
