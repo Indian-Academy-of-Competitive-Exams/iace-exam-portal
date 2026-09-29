@@ -10,6 +10,7 @@ import {
   studentSittingsQuerySchema,
   studentListQuerySchema,
 } from '@iace/contracts';
+import { ProgramsService } from '../src/access/programs.service';
 import { AuditContext } from '../src/audit';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { BranchesService } from '../src/branches/branches.service';
@@ -78,6 +79,8 @@ interface Bench {
   /** The student, `stu_1`, unless the case is about creating one. */
   student?: StudentOverrides | null;
   branches?: { id: string; name: string; type: string; isActive?: boolean }[];
+  /** The live catalog instead of the fake, for a case that turns on a program being retired. */
+  realPrograms?: boolean;
 }
 
 async function serviceWith(over: Bench = {}) {
@@ -105,7 +108,7 @@ async function serviceWith(over: Bench = {}) {
       exams.asService(),
       new BranchesService(prisma, new AuditContext()),
       fakeStartingPins(sender),
-      programs.asService(),
+      over.realPrograms ? new ProgramsService(prisma, auditContext) : programs.asService(),
       auditContext,
       events.asService(),
       new NotificationsService(prisma),
@@ -381,6 +384,29 @@ describe('StudentsService.update — the access fields', () => {
       [cleared.enrolledExams, cleared.programs, cleared.currentBranchId],
       [[], [], null],
     );
+  });
+
+  /** A wrong roster sheet tagged students for good; the student screen is where a program comes off. */
+  it('takes one program off while a retired one stays held, and refuses a code the catalog does not hold', async () => {
+    await prisma.program.createMany({
+      data: [
+        { code: 'SSC CGL FOUNDATION', name: 'SSC CGL Foundation' },
+        { code: 'BANK PO CRASH', name: 'Bank PO Crash', isActive: false },
+      ],
+    });
+    const { service } = await serviceWith({
+      realPrograms: true,
+      student: { programs: ['SSC CGL FOUNDATION', 'BANK PO CRASH'] },
+    });
+
+    await service.update(STUDENT, { programs: ['BANK PO CRASH'] });
+    assert.deepEqual((await row()).programs, ['BANK PO CRASH']);
+
+    await assert.rejects(
+      () => service.update(STUDENT, { programs: ['BANK PO CRASH', 'NOT A PROGRAM'] }),
+      refusedOn('programs'),
+    );
+    assert.deepEqual((await row()).programs, ['BANK PO CRASH'], 'and writes nothing');
   });
 
   /** An enrolment reaches every group carrying that code, so adding one to a blocked student undoes the block. */

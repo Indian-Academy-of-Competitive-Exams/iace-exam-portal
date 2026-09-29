@@ -120,15 +120,19 @@ export function TestSeriesPicker({
   );
 }
 
-/** A FILTER, so unlike `ProgramPicker` it reaches retired programs — students are still on them. */
+/** Unlike `ProgramPicker` it reaches retired programs — students are still on them; `retiredOnlyIfHeld` keeps a form from offering one the save refuses. */
 export function ProgramMultiPicker({
   placeholder = 'Any program',
+  retiredOnlyIfHeld = false,
   ...props
-}: Readonly<MultiPickerProps>) {
+}: Readonly<MultiPickerProps & { retiredOnlyIfHeld?: boolean }>) {
   const programs = usePagedPicker({
     queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.FILTER],
     fetchPage: (params) => api.admin.programs.list(params),
   });
+  const offered = retiredOnlyIfHeld
+    ? programs.items.filter((program) => program.isActive || props.value.includes(program.code))
+    : programs.items;
 
   return (
     <MultiCombobox
@@ -136,7 +140,7 @@ export function ProgramMultiPicker({
       {...programs.paging}
       chips={false}
       placeholder={placeholder}
-      items={programs.items.map((program) => ({
+      items={offered.map((program) => ({
         value: program.code,
         label: program.code,
         hint: program.name,

@@ -292,6 +292,7 @@ export class StudentsService {
     student: {
       isTestBlocked: boolean;
       enrolledExams: string[];
+      programs: string[];
       studentType: StudentType;
       currentBranchId: string | null;
     },
@@ -303,8 +304,10 @@ export class StudentsService {
         await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
       }
     }
-    if (input.programs?.length) {
-      await this.programs.assertUsable(input.programs, PROGRAMS_FIELD);
+    // Only what the save ADDS: a retired program they still hold must not block taking another off.
+    const addedPrograms = input.programs ? addedTo(student.programs, input.programs) : [];
+    if (addedPrograms.length) {
+      await this.programs.assertUsable(addedPrograms, PROGRAMS_FIELD);
     }
     await this.assertBranchSuitsPatch(student, input);
   }

@@ -53,6 +53,7 @@ import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
+import { ProgramMultiPicker } from '../components/access-picker';
 import { StudentPerformancePanel } from '../components/student-performance';
 import { ActionsTab } from './student-detail-actions';
 import { EventsTab } from './student-detail-events';
@@ -70,6 +71,7 @@ interface FormValues {
   studentType: StudentType;
   enrolledExams: string[];
   enrolledCourses: ExamCourse[];
+  programs: string[];
   currentBranchId: string;
   motherName: string;
   fatherName: string;
@@ -84,6 +86,7 @@ const FORM_FIELDS = [
   'studentType',
   'enrolledExams',
   'enrolledCourses',
+  'programs',
   'currentBranchId',
   'motherName',
   'fatherName',
@@ -120,6 +123,7 @@ function toFormValues(student: StudentDetail): FormValues {
     studentType: student.studentType,
     enrolledExams: [...student.enrolledExams],
     enrolledCourses: [...student.enrolledCourses],
+    programs: [...student.programs],
     currentBranchId: student.currentBranchId ?? '',
     motherName: student.profile?.motherName ?? '',
     fatherName: student.profile?.fatherName ?? '',
@@ -185,13 +189,14 @@ function StudentStateNotice({
   );
 }
 
-/** Where a student sits relative to the institute — the four fields access resolves through. */
+/** Where a student sits relative to the institute — the fields access resolves through. */
 function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const exams = useExams({ activeOnly: true });
   // Unfiltered — a student's branch may have since been retired, and must still resolve to a name, not the raw id.
   const allBranches = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
   const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
+  const programs = useWatch({ control: form.control, name: 'programs' }) ?? [];
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const branch = useBranchChoice(studentType, currentBranchId);
@@ -243,6 +248,20 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               chips={false}
               placeholder="No exams yet"
               emptyLabel="No exam matches that"
+            />
+          )}
+        </FormField>
+
+        <FormField form={form} name="programs" label="Programs">
+          {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+            <ProgramMultiPicker
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              value={programs}
+              onChange={(next) => form.setValue('programs', next, { shouldDirty: true })}
+              retiredOnlyIfHeld
+              placeholder="No programs yet"
             />
           )}
         </FormField>
@@ -396,6 +415,7 @@ export function StudentDetailPage() {
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
       enrolledCourses: [],
+      programs: [],
       currentBranchId: '',
       motherName: '',
       fatherName: '',
@@ -430,6 +450,7 @@ export function StudentDetailPage() {
         ...(form.formState.dirtyFields.enrolledCourses
           ? { enrolledCourses: values.enrolledCourses }
           : {}),
+        ...(form.formState.dirtyFields.programs ? { programs: values.programs } : {}),
         profile: {
           motherName: orNull(values.motherName),
           fatherName: orNull(values.fatherName),
