@@ -21,6 +21,7 @@ import {
   branchEditBlocker,
   studentBranchBlocker,
   INACTIVE_BRANCH_MESSAGE,
+  NO_ONLINE_BRANCH_MESSAGE,
   ONLINE_BRANCH_EXISTS_MESSAGE,
 } from './branch-rules';
 import { everyTermMatches } from '../common/search-terms';
@@ -48,36 +49,42 @@ export class BranchesService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  /** Whether a branch may take something new — used by whoever is about to attach to one. Throws with the message the form should show; returns quietly when the branch is fine. */
-  async assertUsable(branchId: string, fieldKey = 'branchId'): Promise<void> {
-    const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
+  /** Whether a student of this type may sit in this branch, read once. One they already sit in (`live: false`) is not refused for being retired or deleted since: that is not this save's fault. */
+  async assertFitsStudent(
+    branchId: string,
+    studentType: StudentType,
+    { live, fieldKey }: { live: boolean; fieldKey: string },
+  ): Promise<void> {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { type: true, isActive: true },
+    });
+    if (!branch && !live) return;
     if (!branch) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such branch', {
         fieldErrors: { [fieldKey]: ['Pick a branch'] },
       });
     }
-    if (!branch.isActive) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_BRANCH_MESSAGE, {
-        fieldErrors: { [fieldKey]: [INACTIVE_BRANCH_MESSAGE] },
+
+    const refusal =
+      live && !branch.isActive
+        ? INACTIVE_BRANCH_MESSAGE
+        : studentBranchBlocker(studentType, branch.type);
+    if (refusal) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, refusal, {
+        fieldErrors: { [fieldKey]: [refusal] },
       });
     }
   }
 
-  /** Whether a branch suits the KIND of student being put in it. Separate from `assertUsable`: a patch that only changes the type leaves the stored branch alone, and a branch retired since they were put in it is not this save's fault to refuse. */
-  async assertSuitsStudentType(
-    branchId: string,
-    studentType: StudentType,
-    fieldKey = 'branchId',
-  ): Promise<void> {
-    const branchType = await this.branchTypeOf(branchId);
-    if (!branchType) return;
+  /** The one branch every online student sits in; refused under the branch field until a super admin creates it. */
+  async onlineBranchId(fieldKey: string): Promise<string> {
+    const online = await this.findLiveVirtual();
+    if (online) return online.id;
 
-    const blocker = studentBranchBlocker(studentType, branchType);
-    if (blocker) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {
-        fieldErrors: { [fieldKey]: [blocker] },
-      });
-    }
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, NO_ONLINE_BRANCH_MESSAGE, {
+      fieldErrors: { [fieldKey]: [NO_ONLINE_BRANCH_MESSAGE] },
+    });
   }
 
   async list(query: BranchListQuery): Promise<Paginated<Branch>> {
@@ -177,14 +184,6 @@ export class BranchesService {
       select: { name: true },
     });
     return branch?.name ?? null;
-  }
-
-  private async branchTypeOf(branchId: string): Promise<BranchType | null> {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: branchId },
-      select: { type: true },
-    });
-    return branch?.type ?? null;
   }
 
   private findLiveVirtual(): Promise<{ id: string } | null> {

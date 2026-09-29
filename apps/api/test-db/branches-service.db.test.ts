@@ -5,6 +5,7 @@ import {
   AppException,
   BRANCH_TYPE,
   ErrorCodes,
+  STUDENT_TYPE,
   branchListQuerySchema,
   type BranchListQuery,
   type BranchType,
@@ -177,8 +178,10 @@ describe('BranchesService — updating', () => {
   });
 });
 
-describe('BranchesService.assertUsable — the seam every branch write comes through', () => {
-  /** The failure this exists to prevent: a group created under a centre that has stopped taking them. */
+describe('BranchesService.assertFitsStudent — the seam every student placement comes through', () => {
+  const placing = { live: true, fieldKey: 'currentBranchId' };
+
+  /** The failure this exists to prevent: a student put at a centre that has stopped taking them. */
   it('accepts an active branch, and refuses a retired or missing one keyed to the field the form shows', async () => {
     const retired = randomUUID();
     const { service } = await serviceWith([
@@ -186,14 +189,20 @@ describe('BranchesService.assertUsable — the seam every branch write comes thr
       { id: retired, name: 'RETIRED', isActive: false },
     ]);
 
-    await assert.doesNotReject(() => service.assertUsable(AMEERPET.id));
-    await assert.rejects(
-      () => service.assertUsable(retired),
-      refusedWith(ErrorCodes.VALIDATION_ERROR, 'branchId'),
+    await assert.doesNotReject(() =>
+      service.assertFitsStudent(AMEERPET.id, STUDENT_TYPE.OFFLINE, placing),
     );
     await assert.rejects(
-      () => service.assertUsable(randomUUID()),
-      refusedWith(ErrorCodes.VALIDATION_ERROR),
+      () => service.assertFitsStudent(retired, STUDENT_TYPE.OFFLINE, placing),
+      refusedWith(ErrorCodes.VALIDATION_ERROR, 'currentBranchId'),
+    );
+    await assert.rejects(
+      () => service.assertFitsStudent(randomUUID(), STUDENT_TYPE.OFFLINE, placing),
+      refusedWith(ErrorCodes.VALIDATION_ERROR, 'currentBranchId'),
+    );
+    // One they already sit in is judged on the type alone: its retirement is not this save's fault.
+    await assert.doesNotReject(() =>
+      service.assertFitsStudent(retired, STUDENT_TYPE.OFFLINE, { ...placing, live: false }),
     );
   });
 });

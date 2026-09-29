@@ -421,8 +421,6 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const exams = useExams({ activeOnly: true, enabled: open });
   const branch = useBranchChoice(studentType);
-  // Displayed AND submitted, so a locked picker can never show one branch and save another.
-  const chosenBranchId = branch.locked ? (branch.forcedId ?? '') : currentBranchId;
 
   const create = useMutation({
     meta: {
@@ -437,8 +435,8 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         studentType: values.studentType,
         enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
         enrolledCourses: values.enrolledCourses?.length ? values.enrolledCourses : undefined,
-        // An untouched picker is "not recorded"; '' is not a branch id the server could resolve.
-        currentBranchId: chosenBranchId || undefined,
+        // A locked picker is the server's to fill; an untouched one is "not recorded", and '' is no branch id.
+        currentBranchId: branch.locked ? undefined : currentBranchId || undefined,
       }),
     onSuccess: (student) => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
@@ -533,7 +531,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
             aria-describedby={describedBy}
             aria-invalid={invalid}
             disabled={branch.locked}
-            value={chosenBranchId}
+            value={branch.shownId ?? currentBranchId}
             onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
             items={branch.branches.map((option) => ({ value: option.id, label: option.name }))}
             placeholder="Not recorded"

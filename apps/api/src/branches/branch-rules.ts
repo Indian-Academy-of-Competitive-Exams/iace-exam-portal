@@ -52,3 +52,6 @@ export function studentBranchBlocker(
 
 export const INACTIVE_BRANCH_MESSAGE =
   'That branch is no longer active. Pick another, or reactivate it first.';
+
+export const NO_ONLINE_BRANCH_MESSAGE =
+  'No online branch yet. A super admin creates it on the Branches screen.';

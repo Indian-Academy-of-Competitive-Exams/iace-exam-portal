@@ -50,7 +50,7 @@ export function useBranchChoice(studentType: StudentType, heldId = '') {
     return {
       branches,
       locked: true,
-      forcedId: null,
+      shownId: '',
       hint: 'Non-IACE students have no branch.',
       droppedName: everyBranch.find((branch) => branch.id === heldId)?.name,
     };
@@ -60,8 +60,8 @@ export function useBranchChoice(studentType: StudentType, heldId = '') {
   return {
     branches,
     locked,
-    /** The one branch a locked picker stands on — absent until a super admin creates it. */
-    forcedId: locked ? branches[0]?.id : undefined,
+    /** What a locked picker shows; never sent, because the server places an online student itself. */
+    shownId: locked ? (branches[0]?.id ?? '') : undefined,
     hint: locked ? onlineBranchHint(branches.length > 0) : undefined,
     droppedName: undefined,
   };

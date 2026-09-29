@@ -99,20 +99,22 @@ const FORM_FIELDS = [
 /** An empty input means "no value", which the API expresses as null. */
 const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
 
-// Access fields are sent only when a save actually moves one; forcedBranchId is what a locked picker shows, so the save carries it even untouched.
+// Access fields are sent only when a save moves one; an online student's type always rides along, as saying it is what puts them in the online branch.
 function accessPatch(
   values: FormValues,
   dirty: { studentType?: boolean; currentBranchId?: boolean },
-  forcedBranchId: string | null | undefined,
 ): Pick<UpdateStudentBody, 'studentType' | 'currentBranchId'> {
+  const online = values.studentType === STUDENT_TYPE.ONLINE;
   const branchPatch = () => {
-    if (forcedBranchId !== undefined) return { currentBranchId: forcedBranchId };
-    if (dirty.currentBranchId) return { currentBranchId: orNull(values.currentBranchId) };
+    if (values.studentType === STUDENT_TYPE.NON_IACE) return { currentBranchId: null };
+    if (!online && dirty.currentBranchId) {
+      return { currentBranchId: orNull(values.currentBranchId) };
+    }
     return {};
   };
 
   return {
-    ...(dirty.studentType ? { studentType: values.studentType } : {}),
+    ...(dirty.studentType || online ? { studentType: values.studentType } : {}),
     ...branchPatch(),
   };
 }
@@ -200,9 +202,8 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const branch = useBranchChoice(studentType, form.formState.defaultValues?.currentBranchId);
-  // Displayed AND submitted, so a locked picker can never show one branch and save another.
-  const chosenBranchId = branch.locked ? (branch.forcedId ?? '') : currentBranchId;
-  const currentBranchName = allBranches.find((option) => option.id === chosenBranchId)?.name;
+  const shownBranchId = branch.shownId ?? currentBranchId;
+  const currentBranchName = allBranches.find((option) => option.id === shownBranchId)?.name;
 
   return (
     <FormSection title="Access">
@@ -279,7 +280,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               aria-describedby={describedBy}
               aria-invalid={invalid}
               disabled={branch.locked}
-              value={chosenBranchId}
+              value={shownBranchId}
               selectedLabel={currentBranchName}
               onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
               items={branch.branches.map((option) => ({ value: option.id, label: option.name }))}
@@ -426,8 +427,6 @@ export function StudentDetailPage() {
     },
   });
 
-  // useWatch, not form.watch — a fresh function each render would re-render the picker on every keystroke.
-  const branch = useBranchChoice(useWatch({ control: form.control, name: 'studentType' }));
   // Seeded once per student: a refetch of the same one would wipe an in-progress edit.
   const seededId = useRef<string | null>(null);
   useEffect(() => {
@@ -442,7 +441,7 @@ export function StudentDetailPage() {
     mutationFn: (values: FormValues) =>
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
-        ...accessPatch(values, form.formState.dirtyFields, branch.forcedId),
+        ...accessPatch(values, form.formState.dirtyFields),
         // An omitted key means "leave it alone", which is true of a list nobody touched.
         ...(form.formState.dirtyFields.enrolledExams
           ? { enrolledExams: values.enrolledExams }

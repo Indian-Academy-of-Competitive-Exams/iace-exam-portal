@@ -5,6 +5,7 @@ import {
   BLOCKED_ENROLMENT_MESSAGE,
   ErrorCodes,
   NOTIFICATION_TYPE,
+  STUDENT_TYPE,
   educationEntrySchema,
   fieldDiff,
   pastExamEntrySchema,
@@ -255,14 +256,10 @@ export class StudentsService {
     if (input.programs?.length) {
       await this.programs.assertUsable(input.programs, PROGRAMS_FIELD);
     }
-    if (input.currentBranchId) {
-      await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
-      await this.branches.assertSuitsStudentType(
-        input.currentBranchId,
-        input.studentType,
-        CURRENT_BRANCH_ID_FIELD,
-      );
-    }
+    const currentBranchId = await this.placementOf(
+      input.studentType,
+      input.currentBranchId ?? null,
+    );
 
     // The same starting PIN the importer issues: random, and told to them rather than derived.
     const [issued] = await this.startingPins.mint([input.mobile]);
@@ -276,7 +273,7 @@ export class StudentsService {
         enrolledExams: input.enrolledExams ?? [],
         enrolledCourses: input.enrolledCourses ?? [],
         programs: input.programs ?? [],
-        currentBranchId: input.currentBranchId ?? null,
+        currentBranchId,
         pinHash: issued.hash,
         pinIsDefault: true,
       },
@@ -289,13 +286,7 @@ export class StudentsService {
 
   /** Every target a patch names has to still be usable before any of it is written. */
   private async assertPatchUsable(
-    student: {
-      isTestBlocked: boolean;
-      enrolledExams: string[];
-      programs: string[];
-      studentType: StudentType;
-      currentBranchId: string | null;
-    },
+    student: { isTestBlocked: boolean; enrolledExams: string[]; programs: string[] },
     input: UpdateStudentBody,
   ): Promise<void> {
     // Only what the save ADDS: a retired exam or program they still hold must not block taking another off.
@@ -308,27 +299,44 @@ export class StudentsService {
     if (addedPrograms.length) {
       await this.programs.assertUsable(addedPrograms, PROGRAMS_FIELD);
     }
-    await this.assertBranchSuitsPatch(student, input);
   }
 
-  /** The pair as this save would LEAVE it, not the half the request named — flipping only the type moves an existing branch out of agreement just as surely as picking a new branch does. Skipped when the patch touches neither, so a student already stored incoherently can still be renamed. */
-  private async assertBranchSuitsPatch(
+  /** Where a save puts them: a branch named has to fit the type, and an online student naming none sits in the online branch. */
+  private async placementOf(
+    studentType: StudentType,
+    named: string | null,
+  ): Promise<string | null> {
+    if (named) {
+      await this.branches.assertFitsStudent(named, studentType, {
+        live: true,
+        fieldKey: CURRENT_BRANCH_ID_FIELD,
+      });
+      return named;
+    }
+    return studentType === STUDENT_TYPE.ONLINE
+      ? this.branches.onlineBranchId(CURRENT_BRANCH_ID_FIELD)
+      : null;
+  }
+
+  /** The branch as this save LEAVES it, undefined for untouched: a patch naming neither type nor branch is skipped, so a student stored out of agreement can still be renamed. */
+  private async branchAfter(
     student: { studentType: StudentType; currentBranchId: string | null },
     input: UpdateStudentBody,
-  ): Promise<void> {
-    const named = input.currentBranchId;
-    if (named) await this.branches.assertUsable(named, CURRENT_BRANCH_ID_FIELD);
+  ): Promise<string | null | undefined> {
+    if (input.studentType === undefined && input.currentBranchId === undefined) return undefined;
 
-    if (input.studentType === undefined && named === undefined) return;
-
-    const branchId = named === undefined ? student.currentBranchId : named;
-    if (!branchId) return;
-
-    await this.branches.assertSuitsStudentType(
-      branchId,
-      input.studentType ?? student.studentType,
-      CURRENT_BRANCH_ID_FIELD,
-    );
+    const studentType = input.studentType ?? student.studentType;
+    if (input.currentBranchId !== undefined || studentType === STUDENT_TYPE.ONLINE) {
+      return this.placementOf(studentType, input.currentBranchId ?? null);
+    }
+    // Only the type moved, and the branch they already sit in has to suit it just as a new one would.
+    if (student.currentBranchId) {
+      await this.branches.assertFitsStudent(student.currentBranchId, studentType, {
+        live: false,
+        fieldKey: CURRENT_BRANCH_ID_FIELD,
+      });
+    }
+    return undefined;
   }
 
   /** A patch: an omitted key is left alone, an explicit null clears the field. */
@@ -339,8 +347,8 @@ export class StudentsService {
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    // Only when the patch MOVES them: the branch they are already at is one this admin reaches.
     await this.assertPatchUsable(student, input);
+    const currentBranchId = await this.branchAfter(student, input);
 
     const profilePatch = input.profile;
     // Spread of the EXISTING profile then the patch: readiness is decided on the merged result, not on the handful of fields this request touched.
@@ -354,7 +362,7 @@ export class StudentsService {
       ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
       ...(input.enrolledCourses ? { enrolledCourses: input.enrolledCourses } : {}),
       ...(input.programs ? { programs: input.programs } : {}),
-      ...(input.currentBranchId === undefined ? {} : { currentBranchId: input.currentBranchId }),
+      ...(currentBranchId === undefined ? {} : { currentBranchId }),
       ...(profilePatch
         ? {
             profile: {

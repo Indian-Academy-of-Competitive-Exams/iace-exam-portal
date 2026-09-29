@@ -216,7 +216,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
     const created = await service.create({
       mobile: '9000000020',
-      studentType: STUDENT_TYPE.ONLINE,
+      studentType: STUDENT_TYPE.OFFLINE,
     });
 
     const stored = await onlyStudent();
@@ -267,6 +267,18 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
     assert.equal(await prisma.student.count({ where: { currentBranchId: ONLINE_BRANCH.id } }), 1);
     assert.equal(await prisma.student.count({ where: { currentBranchId: null } }), 1);
+  });
+
+  /** The form no longer sends it: the server is the one place an online student is put in the online branch. */
+  it('puts an online student naming no branch in the online branch, and refuses one while none exists', async () => {
+    const { service } = await serviceWith(noStudentYet);
+    const online = { mobile: '9000000016', studentType: STUDENT_TYPE.ONLINE };
+
+    await assert.rejects(() => service.create(online), refusedOn('currentBranchId'));
+    assert.equal(await prisma.student.count(), 0, 'nothing was written');
+
+    await prisma.branch.create({ data: ONLINE_BRANCH });
+    assert.equal((await service.create(online)).currentBranchId, ONLINE_BRANCH.id);
   });
 
   /** A branch reaches its series, so a non-IACE student put at one reached that centre's tests. */
@@ -465,16 +477,40 @@ describe('StudentsService.update — the access fields', () => {
 describe('StudentsService.update — the branch has to suit the type', () => {
   const branches = [PHYSICAL, ONLINE_BRANCH];
 
-  /** The branch was once checked only when named, so a type flip left an online student at their old centre. */
+  /** The branch was once checked only when named, so a type flip left a student in a branch that disagreed. */
   it('refuses a type flip that leaves the stored branch disagreeing', async () => {
     const { service } = await serviceWith({
       branches,
+      student: { studentType: STUDENT_TYPE.ONLINE, currentBranchId: ONLINE_BRANCH.id },
+    });
+
+    await assert.rejects(
+      () => service.update(STUDENT, { studentType: STUDENT_TYPE.OFFLINE }),
+      refusedOn('currentBranchId'),
+    );
+  });
+
+  /** The form no longer sends the online branch: switching the type is enough, and the server places them. */
+  it('moves a student switched to online into the online branch, and refuses while none exists', async () => {
+    const { service } = await serviceWith({
       student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
     });
 
     await assert.rejects(
       () => service.update(STUDENT, { studentType: STUDENT_TYPE.ONLINE }),
       refusedOn('currentBranchId'),
+    );
+    const unchanged = await row();
+    assert.deepEqual(
+      [unchanged.studentType, unchanged.currentBranchId],
+      [STUDENT_TYPE.OFFLINE, PHYSICAL.id],
+    );
+
+    await prisma.branch.create({ data: ONLINE_BRANCH });
+    const moved = await service.update(STUDENT, { studentType: STUDENT_TYPE.ONLINE });
+    assert.deepEqual(
+      [moved.studentType, moved.currentBranchId],
+      [STUDENT_TYPE.ONLINE, ONLINE_BRANCH.id],
     );
   });
 
@@ -536,7 +572,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
   });
 
   /** A row stored before the rule existed must stay editable, or nobody can even correct the branch. */
-  it('leaves a student already stored out of agreement editable, and lets the branch be cleared', async () => {
+  it('leaves a student already stored out of agreement editable, and puts them right once the branch is touched', async () => {
     const { service } = await serviceWith({
       branches,
       student: { studentType: STUDENT_TYPE.ONLINE, currentBranchId: PHYSICAL.id },
@@ -546,7 +582,10 @@ describe('StudentsService.update — the branch has to suit the type', () => {
       (await service.update(STUDENT, { fullName: 'Asha Kumari' })).fullName,
       'Asha Kumari',
     );
-    assert.equal((await service.update(STUDENT, { currentBranchId: null })).currentBranchId, null);
+    assert.equal(
+      (await service.update(STUDENT, { currentBranchId: null })).currentBranchId,
+      ONLINE_BRANCH.id,
+    );
   });
 });
 

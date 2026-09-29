@@ -154,7 +154,9 @@ public rollout unchanged.
   the admin create and edit and the roster import). ONLINE sits in the online branch, OFFLINE at a
   centre, and NON-IACE at none: they are outside the institute, and a branch would hand them its
   series. An edit is judged on the pair it leaves, so switching a student to NON-IACE is refused
-  unless the same save clears their branch.
+  unless the same save clears their branch. The admin create and edit PLACE an online student
+  naming no branch in the online branch themselves (refused until it exists); the roster import
+  does not, and an ONLINE row names the online branch like any other.
 - **A retired branch takes no new students.** Deactivating one is a service check, not a schema
   constraint: nobody new may be placed in it and nobody may be transferred into it, while the
   students already there keep the branch and everything it reaches.
