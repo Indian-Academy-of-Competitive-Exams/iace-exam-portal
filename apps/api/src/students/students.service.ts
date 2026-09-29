@@ -298,13 +298,12 @@ export class StudentsService {
     },
     input: UpdateStudentBody,
   ): Promise<void> {
-    if (input.enrolledExams) {
-      this.assertMayEnrol(student, input.enrolledExams);
-      if (input.enrolledExams.length) {
-        await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
-      }
-    }
-    // Only what the save ADDS: a retired program they still hold must not block taking another off.
+    // Only what the save ADDS: a retired exam or program they still hold must not block taking another off.
+    const addedExams = input.enrolledExams
+      ? addedTo(student.enrolledExams, input.enrolledExams)
+      : [];
+    if (input.enrolledExams) this.assertMayEnrol(student, input.enrolledExams);
+    if (addedExams.length) await this.exams.assertUsable(addedExams, ENROLLED_EXAMS_FIELD);
     const addedPrograms = input.programs ? addedTo(student.programs, input.programs) : [];
     if (addedPrograms.length) {
       await this.programs.assertUsable(addedPrograms, PROGRAMS_FIELD);

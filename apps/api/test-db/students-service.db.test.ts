@@ -409,6 +409,20 @@ describe('StudentsService.update — the access fields', () => {
     assert.deepEqual((await row()).programs, ['BANK PO CRASH'], 'and writes nothing');
   });
 
+  /** The whole list was validated, so an exam since retired blocked taking any other exam off. */
+  it('takes one exam off while a retired one stays held, and still refuses an unknown one added', async () => {
+    const { service } = await serviceWith({ student: { enrolledExams: ['SSC CGL', 'OLD EXAM'] } });
+
+    await service.update(STUDENT, { enrolledExams: ['OLD EXAM'] });
+    assert.deepEqual((await row()).enrolledExams, ['OLD EXAM']);
+
+    await assert.rejects(
+      () => service.update(STUDENT, { enrolledExams: ['OLD EXAM', 'SSC CGI'] }),
+      refusedOn('enrolledExams'),
+    );
+    assert.deepEqual((await row()).enrolledExams, ['OLD EXAM'], 'and writes nothing');
+  });
+
   /** An enrolment reaches every group carrying that code, so adding one to a blocked student undoes the block. */
   it('refuses a new enrolment for a student blocked from tests, but still lets one be taken away', async () => {
     const { service } = await serviceWith({
