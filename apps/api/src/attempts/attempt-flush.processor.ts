@@ -2,12 +2,11 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
-import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
-import { type HeldState } from './attempt-state';
+import { AttemptStateService, type FlushRead } from './attempt-state.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
-/** How many sittings one pass writes at a time. Lanes, not workers: the flush queue runs one pass. */
+/** How many sittings one pass writes at a time. Lanes, not workers: one pass owns the dirty set. */
 export const FLUSH_LANES = 8;
 
 /** Redis to the sitting's sheet on a timer. A failed run costs the durable copy a minute, not answers. */
@@ -35,32 +34,26 @@ export class AttemptFlushProcessor extends WorkerHost {
     this.failures.connectionError(QUEUE_NAMES.ATTEMPT_FLUSH, error);
   }
 
-  /** Bounded by the set as the pass found it, so a hall that keeps saving cannot keep one pass running. */
+  /** The set as the pass found it; a mark goes only after its sitting is written, so a pass that dies loses none. */
   async process(): Promise<void> {
-    let left = await this.state.dirtyCount();
-    while (left > 0) {
-      const lane = await this.state.takeDirty(FLUSH_LANES);
-      if (lane.length === 0) return;
-      left -= lane.length;
-      const held = await this.state.readMany(lane);
-      const failed = await Promise.all(lane.map((id) => this.flush(id, held.get(id))));
-      await this.state.markDirty(...failed.filter((id): id is string => id !== null));
+    const dirty = await this.state.dirtyIds();
+    for (let at = 0; at < dirty.length; at += FLUSH_LANES) {
+      const lane = await this.state.snapshot(dirty.slice(at, at + FLUSH_LANES));
+      const written = await Promise.all(lane.map((sitting) => this.flush(sitting)));
+      await this.state.settle(written.filter((sitting): sitting is FlushRead => sitting !== null));
     }
   }
 
-  /** The id when its write failed, to go back on the list; null once written or gone. */
-  private async flush(attemptId: string, held: HeldState | undefined): Promise<string | null> {
-    // A key that has gone was taken by submit, which writes the final answers itself.
-    if (!held) return null;
+  /** The sitting once written, or with nothing left to write; null when the write failed, to stay marked. */
+  private async flush(sitting: FlushRead): Promise<FlushRead | null> {
+    // No key: submit took it and wrote the last answers itself, or it outlived the pause limit.
+    if (!sitting.held) return sitting;
     try {
-      await this.sheets.write(held, true);
-      return null;
+      await this.sheets.write(sitting.held, true);
+      return sitting;
     } catch (error) {
-      this.logger.error(
-        `Flushing attempt ${attemptId} failed; it goes back for the next pass`,
-        error,
-      );
-      return attemptId;
+      this.logger.error(`Flushing attempt ${sitting.attemptId} failed; it stays marked`, error);
+      return null;
     }
   }
 }

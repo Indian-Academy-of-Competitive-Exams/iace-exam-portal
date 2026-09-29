@@ -191,6 +191,18 @@ describe('AttemptFlushProcessor', () => {
     assert.deepEqual(await dirtyIn(redis), []);
   });
 
+  /** The failure this prevents: a pass that dies partway dropping marks, so a walked-away sitting is never written. */
+  it('keeps every mark when a pass dies partway', async () => {
+    const { processor, redis, attemptId } = await build();
+    const read = redis.client.mget.bind(redis.client);
+    redis.client.mget = () => Promise.reject(new Error('valkey went away'));
+
+    await assert.rejects(processor.process());
+    redis.client.mget = read;
+
+    assert.deepEqual(await dirtyIn(redis), [attemptId]);
+  });
+
   it('drops the mark for a sitting whose state has expired', async () => {
     const { processor, redis, state, attemptId } = await build();
     await state.take(attemptId);

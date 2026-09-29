@@ -238,6 +238,6 @@ describe('AttemptStateService — a handover racing a save', () => {
 
     assert.equal(refused?.code, ErrorCodes.CONFLICT);
     assert.deepEqual(await heldOf(redis), written);
-    assert.equal(await state.dirtyCount(), 0);
+    assert.deepEqual(await state.dirtyIds(), []);
   });
 });

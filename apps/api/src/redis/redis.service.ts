@@ -16,6 +16,18 @@ if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
 return redis.call('DEL', KEYS[1])
 `;
 
+/** KEYS: the set, then each member's key; ARGV: the members, then the bytes each key held when read ('' for none). */
+const REMOVE_IF_UNCHANGED = `
+local n = #KEYS - 1
+local removed = 0
+for i = 1, n do
+  if (redis.call('GET', KEYS[i + 1]) or '') == ARGV[n + i] then
+    removed = removed + redis.call('SREM', KEYS[1], ARGV[i])
+  end
+end
+return removed
+`;
+
 /** Reads an index and deletes it with every member's key in the same pass, so nothing added after the read outlives the delete. */
 const DELETE_INDEXED_SET = `
 local ids = redis.call('SMEMBERS', KEYS[1])
@@ -155,6 +167,23 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
 
   async del(...keys: string[]): Promise<void> {
     if (keys.length > 0) await this.client.del(...keys);
+  }
+
+  /** Drops each member whose key still holds the bytes read, in one script — a write landing since keeps its member. */
+  async removeIfUnchanged(
+    setKey: string,
+    read: readonly { member: string; key: string; was: string | null }[],
+  ): Promise<number> {
+    if (read.length === 0) return 0;
+    const removed = await this.client.eval(
+      REMOVE_IF_UNCHANGED,
+      1 + read.length,
+      setKey,
+      ...read.map((entry) => entry.key),
+      ...read.map((entry) => entry.member),
+      ...read.map((entry) => entry.was ?? ''),
+    );
+    return Number(removed);
   }
 
   /** Deletes an index and every `keyPrefix + member` key in one script — a member added after the read cannot outlive it. */

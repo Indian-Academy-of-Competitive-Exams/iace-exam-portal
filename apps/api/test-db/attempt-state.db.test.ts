@@ -161,7 +161,7 @@ describe('AttemptStateService', () => {
 
     await service.take(attemptId);
 
-    assert.equal(await service.dirtyCount(), 0);
+    assert.deepEqual(await service.dirtyIds(), []);
     await service.save(student, attemptId, { revision: 2, answers: [] }, NOW);
     const rebuilt = await service.current(student, attemptId, NOW);
     assert.equal(Object.keys(rebuilt.answers).length, 0);

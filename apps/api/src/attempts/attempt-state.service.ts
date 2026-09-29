@@ -51,6 +51,13 @@ const BEING_ANSWERED = 'This sitting is being written to right now. Try again in
 const ALREADY_ENDED = 'This sitting has ended, so nothing more can be saved to it.';
 const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
 
+/** One sitting as a flush pass read it: the bytes, and what they say (null when the key has gone). */
+export interface FlushRead {
+  attemptId: string;
+  was: string | null;
+  held: HeldState | null;
+}
+
 /** A sitting as it is opened or resumed: its row, and how a forward-only one orders its seats. */
 export interface SittingOpened {
   id: string;
@@ -247,14 +254,31 @@ export class AttemptStateService {
     throw new AppException(ErrorCodes.CONFLICT, BEING_ANSWERED);
   }
 
-  /** How many sittings wait on the flusher: a pass drains this many, and leaves later marks to the next. */
-  async dirtyCount(): Promise<number> {
-    return this.redis.client.scard(redisKeys.attemptsDirty);
+  /** What the flusher drains. Read, not taken: a mark goes only once its sitting is written. */
+  async dirtyIds(): Promise<string[]> {
+    return this.redis.client.smembers(redisKeys.attemptsDirty);
   }
 
-  /** Taken, not read: a save that lands after this marks its sitting again for the next pass. */
-  async takeDirty(count: number): Promise<string[]> {
-    return this.redis.client.spop(redisKeys.attemptsDirty, count);
+  /** Each sitting as its key holds it now, with the bytes read — what `settle` compares against. */
+  async snapshot(attemptIds: readonly string[]): Promise<FlushRead[]> {
+    if (attemptIds.length === 0) return [];
+    const raw = await this.redis.client.mget(...attemptIds.map((id) => redisKeys.attemptState(id)));
+    return attemptIds.map((attemptId, at) => {
+      const was = raw[at] ?? null;
+      return { attemptId, was, held: was === null ? null : parsedHeld(was) };
+    });
+  }
+
+  /** Unmarks only a sitting whose key still holds what was written: a save since keeps its own mark. */
+  async settle(written: readonly FlushRead[]): Promise<void> {
+    await this.redis.removeIfUnchanged(
+      redisKeys.attemptsDirty,
+      written.map(({ attemptId, was }) => ({
+        member: attemptId,
+        key: redisKeys.attemptState(attemptId),
+        was,
+      })),
+    );
   }
 
   async markDirty(...attemptIds: string[]): Promise<void> {

@@ -216,6 +216,20 @@ export class FakeRedis {
     if (keys.length > 0) await this.client.del(...keys);
   }
 
+  /** One thread, so the compares and the removes are already atomic — the real one needs a script. */
+  async removeIfUnchanged(
+    setKey: string,
+    read: readonly { member: string; key: string; was: string | null }[],
+  ): Promise<number> {
+    let removed = 0;
+    for (const entry of read) {
+      if ((this.text(entry.key) ?? null) === entry.was) {
+        removed += await this.client.srem(setKey, entry.member);
+      }
+    }
+    return removed;
+  }
+
   /** One thread, so the read and the delete are already atomic — the real one needs a script. */
   async deleteIndexedSet(indexKey: string, keyPrefix: string): Promise<string[]> {
     const entry = this.live(indexKey);
