@@ -497,7 +497,6 @@ export class StudentsService {
       programs: string[];
       isActive: boolean;
       isTestBlocked: boolean;
-      pinHash: string | null;
       pinIsDefault: boolean;
       preTestReady: boolean;
       profileCompleted: boolean;
@@ -516,8 +515,6 @@ export class StudentsService {
       hasOwnAccess,
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
-      // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is not a sign-in.
-      hasSignedIn: row.pinHash !== null && !row.pinIsDefault,
       hasDefaultPin: row.pinIsDefault,
       preTestReady: row.preTestReady,
       profileCompleted: row.profileCompleted,

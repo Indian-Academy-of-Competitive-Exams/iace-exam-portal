@@ -25,7 +25,6 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   // A join, not an array: EventCandidate is indexed by studentId, so `some` reads that index.
   if (query.eventId) add({ eventCandidacies: { some: { eventId: { in: query.eventId } } } });
   if (query.noAccess !== undefined) add(ownAccessFilter(query.noAccess));
-  if (query.neverSignedIn !== undefined) add(signedInFilter(query.neverSignedIn));
 
   if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
 
@@ -46,13 +45,6 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
 
 function ownAccessFilter(hasNoneOfTheirOwn: boolean): Prisma.StudentWhereInput {
   return hasNoneOfTheirOwn ? { NOT: HOLDS_OWN_ACCESS } : HOLDS_OWN_ACCESS;
-}
-
-/** Matches `hasSignedIn` exactly — a PIN the institute set does not count, or the filter and the badge beside it would disagree. */
-function signedInFilter(neverSignedIn: boolean): Prisma.StudentWhereInput {
-  return neverSignedIn
-    ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
-    : { pinHash: { not: null }, pinIsDefault: false };
 }
 
 /** Ordering, always tie-broken by id. */

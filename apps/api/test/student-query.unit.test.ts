@@ -47,12 +47,6 @@ describe('studentWhere — three-state filters', () => {
     }
   });
 
-  /** A PIN the institute handed out is not a sign-in. */
-  it('reads neverSignedIn as "has no PIN OF THEIR OWN", both ways round', () => {
-    assertHas({ neverSignedIn: 'true' }, { OR: [{ pinHash: null }, { pinIsDefault: true }] });
-    assertHas({ neverSignedIn: 'false' }, { pinHash: { not: null }, pinIsDefault: false });
-  });
-
   it('can ask for exactly the students still on a starting PIN', () => {
     assertHas({ hasDefaultPin: 'true' }, { pinIsDefault: true });
     assert.equal(conditionsFor().length, 0);
@@ -142,11 +136,11 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
     assertHas(params, HOLDS_OWN_ACCESS);
   });
 
-  /** The likeliest one to be hit: pick "Never signed in", then type a name. The status filter used to disappear and the search ran across everyone. */
-  it('keeps "never signed in" when a search is typed', () => {
-    const params = { neverSignedIn: 'true', q: 'ravi' };
+  /** The likeliest one to be hit: pick "Still on the default PIN", then type a name. The status filter used to disappear and the search ran across everyone. */
+  it('keeps "still on the default PIN" when a search is typed', () => {
+    const params = { hasDefaultPin: 'true', q: 'ravi' };
 
-    assertHas(params, { OR: [{ pinHash: null }, { pinIsDefault: true }] });
+    assertHas(params, { pinIsDefault: true });
     assertHas(params, {
       AND: [
         {
@@ -159,14 +153,6 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
     });
   });
 
-  it('keeps both PIN conditions when asked for contradictory things', () => {
-    // Contradictory on purpose: it must return nobody, not quietly pick one.
-    const params = { neverSignedIn: 'false', hasDefaultPin: 'true' };
-
-    assertHas(params, { pinHash: { not: null }, pinIsDefault: false });
-    assertHas(params, { pinIsDefault: true });
-  });
-
   it('applies every filter at once rather than the last one set', () => {
     const conditions = conditionsFor({
       q: '98765',
@@ -174,7 +160,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
       isActive: 'true',
       isTestBlocked: 'false',
       preTestReady: 'false',
-      neverSignedIn: 'true',
+      hasDefaultPin: 'true',
       course: 'SSC',
       programCode: 'FOUNDATION',
     });

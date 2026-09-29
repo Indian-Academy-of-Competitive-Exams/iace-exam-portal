@@ -148,7 +148,7 @@ function DocumentLink({ label, url }: Readonly<{ label: string; url?: string | n
 
 /** The sign-in state as a value the header carries; what is WRONG with it belongs in the notice. */
 function signInSummary(detail: StudentDetail): string {
-  return detail.hasSignedIn ? 'Has signed in' : 'Never signed in';
+  return detail.hasDefaultPin ? 'Never signed in' : 'Has signed in';
 }
 
 /** Everything outstanding, said once: a strip of chips makes the reader assemble what a sentence carries. */

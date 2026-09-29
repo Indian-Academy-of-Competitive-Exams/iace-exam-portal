@@ -22,7 +22,6 @@ const summary = {
   hasOwnAccess: false,
   isActive: true,
   isTestBlocked: false,
-  hasSignedIn: true,
   hasDefaultPin: false,
   preTestReady: true,
   profileCompleted: false,

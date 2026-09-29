@@ -93,8 +93,6 @@ export const studentSummarySchema = z.object({
   isActive: z.boolean(),
   /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
   isTestBlocked: z.boolean(),
-  /** Whether a PIN has ever been set — an admin-created student exists but has never signed in. */
-  hasSignedIn: z.boolean(),
   /** Still on an import's default PIN, which anyone holding the roster can guess. */
   hasDefaultPin: z.boolean(),
   preTestReady: z.boolean(),
@@ -192,8 +190,6 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   course: csvQuery(examCourseSchema),
   isActive: optionalBooleanQuery(),
   isTestBlocked: optionalBooleanQuery(),
-  /** Admin-created students who have never set a PIN of their own. */
-  neverSignedIn: optionalBooleanQuery(),
   /** Still on the starting PIN an import gave them — a list worth chasing. */
   hasDefaultPin: optionalBooleanQuery(),
   /** Mother's name, father's name and DOB — what a student needs before a test. */

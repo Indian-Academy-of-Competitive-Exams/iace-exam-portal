@@ -225,7 +225,6 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     assert.equal(sender.lastMessage.to, '9000000020');
     assert.equal(`hash:${String(sender.lastMessage.data?.pin)}`, stored.pinHash);
     // The PIN is the institute's, not theirs, so the roster must still chase them to change it.
-    assert.equal(created.hasSignedIn, false);
     assert.equal(created.hasDefaultPin, true);
   });
 

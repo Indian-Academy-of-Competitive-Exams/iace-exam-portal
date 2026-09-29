@@ -101,7 +101,6 @@ describe('admin student contracts', () => {
     hasOwnAccess: true,
     isActive: true,
     isTestBlocked: false,
-    hasSignedIn: true,
     hasDefaultPin: false,
     preTestReady: true,
     profileCompleted: false,
@@ -152,10 +151,9 @@ describe('admin student contracts', () => {
     assert.equal(parsed.profile?.pastExamHistory?.[0]?.exam, 'SSC CGL 2024');
   });
 
-  it('never carries the PIN hash, only whether one exists', () => {
+  it('never carries the PIN hash', () => {
     const parsed = studentSummarySchema.parse({ ...detail, pinHash: '$argon2id$whatever' });
 
-    assert.equal(parsed.hasSignedIn, true);
     assert.ok(!('pinHash' in parsed));
   });
 
