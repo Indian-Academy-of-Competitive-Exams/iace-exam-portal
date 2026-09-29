@@ -116,21 +116,6 @@ export const eventListQuerySchema = paginationQuerySchema.extend({
 export type EventListQuery = z.infer<typeof eventListQuerySchema>;
 export type EventListQueryInput = z.input<typeof eventListQuerySchema>;
 
-/** One student on an Event's roster, as the candidate list reads it. */
-export const eventCandidateSchema = z.object({
-  studentId: z.string(),
-  fullName: z.string().nullable(),
-  mobile: z.string(),
-  addedAt: z.string(),
-});
-export type EventCandidate = z.infer<typeof eventCandidateSchema>;
-
-/** A roster is an intake, not a handful: it pages, and the search reads the name and the number. */
-export const eventCandidateListQuerySchema = paginationQuerySchema.extend({
-  q: searchQuery(),
-});
-export type EventCandidateListQuery = z.infer<typeof eventCandidateListQuerySchema>;
-
 /** A whole roster in one write. Re-importing the same sheet adds nobody twice. */
 export const addEventCandidatesSchema = z.object({
   studentIds: z.array(z.string().min(1)).min(1, 'Choose at least one student'),

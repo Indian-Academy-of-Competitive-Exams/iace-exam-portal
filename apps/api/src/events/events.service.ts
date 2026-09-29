@@ -6,8 +6,6 @@ import {
   fieldDiff,
   type CreateEventBody,
   type Event,
-  type EventCandidate,
-  type EventCandidateListQuery,
   type EventListQuery,
   type Paginated,
   type UpdateEventBody,
@@ -23,13 +21,7 @@ const EVENT_INCLUDE = {
   _count: { select: { candidates: true, series: true } },
 } as const satisfies Prisma.EventInclude;
 
-const CANDIDATE_INCLUDE = {
-  student: { select: { fullName: true, mobile: true } },
-} as const satisfies Prisma.EventCandidateInclude;
-
 type EventRow = Prisma.EventGetPayload<{ include: typeof EVENT_INCLUDE }>;
-
-type CandidateRow = Prisma.EventCandidateGetPayload<{ include: typeof CANDIDATE_INCLUDE }>;
 
 /** Owns `Event` and `EventCandidate` — who an EVENT series draws its roster from, candidate or not. */
 @Injectable()
@@ -109,31 +101,6 @@ export class EventsService {
     await this.prisma.event.delete({ where: { id } });
   }
 
-  /** Paged: a scholarship intake is thousands of rows, and the panel showing them is one box. */
-  async candidates(id: string, query: EventCandidateListQuery): Promise<Paginated<EventCandidate>> {
-    await this.requireEvent(id);
-
-    const where: Prisma.EventCandidateWhereInput = {
-      eventId: id,
-      ...everyTermMatches<Prisma.EventCandidateWhereInput>(query.q, (term) => [
-        { student: { fullName: { contains: term, mode: 'insensitive' } } },
-        { student: { mobile: { contains: term } } },
-      ]),
-    };
-
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.eventCandidate.findMany({
-        where,
-        include: CANDIDATE_INCLUDE,
-        orderBy: [{ createdAt: 'asc' }],
-        ...pageArgs(query),
-      }),
-      this.prisma.eventCandidate.count({ where }),
-    ]);
-
-    return paged(query, rows.map(toCandidate), total);
-  }
-
   /** `skipDuplicates`, so re-importing the same roster over itself adds nobody twice. */
   async addCandidates(id: string, studentIds: readonly string[]): Promise<void> {
     const before = (await this.requireEvent(id))._count.candidates;
@@ -177,14 +144,5 @@ function toEvent(row: EventRow): Event {
     candidateCount: row._count.candidates,
     seriesCount: row._count.series,
     createdAt: row.createdAt.toISOString(),
-  };
-}
-
-function toCandidate(row: CandidateRow): EventCandidate {
-  return {
-    studentId: row.studentId,
-    fullName: row.student.fullName,
-    mobile: row.student.mobile,
-    addedAt: row.createdAt.toISOString(),
   };
 }

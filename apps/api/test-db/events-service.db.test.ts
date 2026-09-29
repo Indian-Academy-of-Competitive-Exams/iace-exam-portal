@@ -1,13 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import {
-  AppException,
-  ErrorCodes,
-  TEST_SERIES_KIND,
-  eventCandidateListQuerySchema,
-  eventListQuerySchema,
-} from '@iace/contracts';
+import { AppException, ErrorCodes, TEST_SERIES_KIND, eventListQuerySchema } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { EventsService } from '../src/events/events.service';
 import { makeCatalog, makeStudent, resetDatabase, testPrisma, uid } from './support/database';
@@ -50,9 +44,6 @@ async function intake(eventId: string, count: number) {
 }
 
 const listQuery = () => eventListQuerySchema.parse({ page: '1', pageSize: '20' });
-
-const rosterQuery = (over: Record<string, string> = {}) =>
-  eventCandidateListQuerySchema.parse({ page: '1', pageSize: '20', ...over });
 
 describe('EventsService — listing', () => {
   it('reports each event with the number of candidates on its roster', async () => {
@@ -108,36 +99,6 @@ describe('EventsService — deleting', () => {
 });
 
 describe('EventsService — the roster', () => {
-  /** The failure this prevents: a 2,000-row intake rendered whole inside one panel. */
-  it('returns one page of a long roster, and the whole count beside it', async () => {
-    const { service } = build();
-    const event = await makeEvent();
-    await intake(event.id, 30);
-
-    const page = await service.candidates(event.id, rosterQuery({ pageSize: '10' }));
-
-    assert.equal(page.items.length, 10);
-    assert.equal(page.total, 30);
-  });
-
-  it('finds one candidate on a long roster by name or by mobile number', async () => {
-    const { service } = build();
-    const event = await makeEvent();
-    const roster = await intake(event.id, 30);
-
-    const byName = await service.candidates(event.id, rosterQuery({ q: 'candidate 07' }));
-    const byMobile = await service.candidates(event.id, rosterQuery({ q: '9000000007' }));
-
-    assert.deepEqual(
-      byName.items.map((candidate) => candidate.studentId),
-      [roster[7]],
-    );
-    assert.deepEqual(
-      byMobile.items.map((candidate) => candidate.studentId),
-      [roster[7]],
-    );
-  });
-
   it('adds a candidate twice without error, and keeps one row', async () => {
     const { service } = build();
     const event = await makeEvent();
