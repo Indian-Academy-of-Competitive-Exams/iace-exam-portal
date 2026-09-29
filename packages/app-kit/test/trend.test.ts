@@ -10,6 +10,7 @@ const sitting = (
 ): PerformancePoint => ({
   attemptId,
   attemptNo: 1,
+  isGraded: true,
   testId: `t-${attemptId}`,
   testTitle: 'A paper',
   submittedAt: '2026-09-01T10:00:00.000Z',

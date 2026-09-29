@@ -7,6 +7,7 @@ import { type PerformancePoint } from '../src/attempts';
 function sitting(overrides: Partial<PerformancePoint> & { attemptId: string }): PerformancePoint {
   return {
     attemptNo: 1,
+    isGraded: true,
     testId: 'tst_1',
     testTitle: 'SSC CGL Mock 01',
     submittedAt: '2026-08-01T04:30:00.000Z',

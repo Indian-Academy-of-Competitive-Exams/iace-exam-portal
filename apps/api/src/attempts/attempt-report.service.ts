@@ -221,6 +221,7 @@ function toSolutionQuestion(
 const SITTING_SELECT = {
   id: true,
   attemptNo: true,
+  isGraded: true,
   testId: true,
   submittedAt: true,
   score: true,
@@ -237,6 +238,7 @@ function toSatSitting(row: SittingRow, maxMarks: number): SatSitting {
   return {
     attemptId: row.id,
     attemptNo: row.attemptNo,
+    isGraded: row.isGraded,
     testId: row.testId,
     testTitle: row.test.title,
     submittedAt: row.submittedAt?.toISOString() ?? null,

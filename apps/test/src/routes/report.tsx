@@ -12,8 +12,8 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
 import { REPORT_TABS, everySitting, newestFirst, reportTabOf, sittingHint } from '@iace/app-kit';
-import { type PerformancePoint, type ScoreCard } from '@iace/contracts';
-import { performanceQuery, scoreCardQuery } from '../lib/queries';
+import { type PerformancePoint } from '@iace/contracts';
+import { performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../lib/constants';
 import { REPORT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 
@@ -73,7 +73,7 @@ export function ReportShell() {
       tabs={{
         value: tab,
         onValueChange: (next) => navigate(ROUTES.REPORT_TAB(attemptId, next)),
-        action: <Standing attemptId={attemptId} />,
+        action: <Standing sitting={current} />,
         // Only the open tab's content renders, and the ROUTER is what decides what that is.
         items: REPORT_TABS.map((held) => ({
           value: held.path,
@@ -86,9 +86,8 @@ export function ReportShell() {
 }
 
 /** What the paper IS and what qualifies it — on the strip, so it holds on every tab. */
-function Standing({ attemptId }: Readonly<{ attemptId: string }>) {
-  const card = useQuery(scoreCardQuery(attemptId));
-  const notices = card.data ? noticesFor(card.data) : [];
+function Standing({ sitting }: Readonly<{ sitting: PerformancePoint | null }>) {
+  const notices = sitting === null ? [] : noticesFor(sitting);
   return notices.length === 0 ? null : <Notices notices={notices} />;
 }
 
@@ -113,9 +112,9 @@ function Notices({ notices }: Readonly<{ notices: readonly string[] }>) {
 }
 
 /** Each one is a CONSEQUENCE the figures cannot show: what can still move it, and what it misses. */
-function noticesFor(card: ScoreCard): string[] {
+function noticesFor(sitting: PerformancePoint): string[] {
   const notices: string[] = [];
-  if (!card.isGraded) {
+  if (!sitting.isGraded) {
     notices.push('This was a retake, so it is marked but it does not carry a rank.');
   }
   return notices;

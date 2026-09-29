@@ -471,10 +471,10 @@ describe('the trend across every test a student has sat', () => {
     const trend = await reports().performance(mine.studentId);
 
     assert.deepEqual(
-      trend.points.map((point) => [point.attemptId, point.rank, point.percentile]),
+      trend.points.map((point) => [point.attemptId, point.isGraded, point.rank, point.percentile]),
       [
-        [mine.attemptId, 2, 25],
-        [retake.id, null, null],
+        [mine.attemptId, true, 2, 25],
+        [retake.id, false, null, null],
       ],
     );
   });

@@ -611,6 +611,8 @@ export type TimeUse = z.infer<typeof timeUseSchema>;
 const satSittingSchema = z.object({
   attemptId: z.string(),
   attemptNo: z.number().int(),
+  /** False for a retake: marked, but never ranked. */
+  isGraded: z.boolean(),
   testId: z.string(),
   testTitle: z.string().nullable(),
   submittedAt: z.string().nullable(),

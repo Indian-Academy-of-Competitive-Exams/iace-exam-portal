@@ -23,6 +23,7 @@ test('a brief that failed to arrive is not a refusal, so the gate offers a retry
 const satOn = (attemptId: string, testId: string): SatSitting => ({
   attemptId,
   attemptNo: 1,
+  isGraded: true,
   testId,
   testTitle: 'A paper',
   submittedAt: '2026-09-01T10:00:00.000Z',
