@@ -189,7 +189,7 @@ export function meClient(core: ApiCore) {
     /** Sitting counts by institute day, for the calendar the trend's twenty cannot fill. */
     testDays: (): Promise<TestCalendar> => get(ME_ATTEMPT_ROUTES.testDays, testCalendarSchema),
 
-    /** The cutoff-free metric set for one sitting, one paper, one series or the whole career. */
+    /** The cutoff-free metric set for one sitting or the whole career. */
     performanceReport: (query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
       get(`${PERFORMANCE_ROUTES.me}${queryString({ ...query })}`, performanceReportSchema),
 

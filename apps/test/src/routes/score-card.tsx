@@ -1,13 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { EmptyState, EMPTY_STATE_KINDS, Metric, cn } from '@iace/ui';
-import {
-  CohortFigure,
-  MarksFigure,
-  TimeFigure,
-  TrajectoryFigure,
-  type Benchmark,
-} from '@iace/app-kit/browser';
+import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
 import { isMarkingPending, minutes } from '@iace/app-kit';
 import {
   paperCounts,
@@ -57,7 +51,6 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
   // A curve exists only where a cohort drew one; a retake has none to show.
   const curve = report?.cohort && report.cohort.bands.length > 0 ? report.cohort : null;
-  const trajectory = report?.trajectory ?? [];
 
   return (
     <PageBody>
@@ -99,8 +92,6 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
           {curve === null ? null : <CohortFigure cohort={curve} />}
         </div>
       )}
-
-      {trajectory.length > 1 ? <TrajectoryFigure trajectory={trajectory} /> : null}
     </PageBody>
   );
 }

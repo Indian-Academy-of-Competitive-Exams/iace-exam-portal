@@ -1,16 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import {
-  ErrorCodes,
-  TEST_SCOPE,
-  scopesSat,
-  studentOverviewSchema,
-  type TestScope,
-} from '@iace/contracts';
+import { TEST_SCOPE, scopesSat, studentOverviewSchema, type TestScope } from '@iace/contracts';
 import { StudentOverviewService } from '../src/attempts/overview.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { FakeLeaderboard, makeStanding, type FakeStanding } from '../test/support/fakes';
-import { makeStudent, makeSubject, resetDatabase, testPrisma, uid } from './support/database';
+import { makeStudent, makeSubject, resetDatabase, testPrisma } from './support/database';
 
 const prisma = testPrisma();
 
@@ -219,27 +213,9 @@ describe('StudentOverviewService sourcing', () => {
   });
 });
 
-describe('StudentOverviewService.forStudent', () => {
-  it('returns the named student', async () => {
-    const { student } = await folded();
-
-    const overview = await build(student.id).forStudent(student.id);
-
-    assert.equal(overview.studentId, student.id);
-    assert.equal(overview.standing.testsEvaluated, 4);
-  });
-
-  it('refuses an unknown student', async () => {
-    await assert.rejects(
-      build(uid()).forStudent(uid()),
-      (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
-    );
-  });
-});
-
 /** The tallies come off the two rollup tables; a sitting is read only through the live standings. */
 describe('StudentOverviewService reads', () => {
-  it('queries only StudentStat, StudentSubjectStat and the student, and ranks through the leaderboard', async () => {
+  it('queries only StudentStat and StudentSubjectStat, and ranks through the leaderboard', async () => {
     const { student } = await folded();
     const touched = new Set<string>();
     const watched = new Proxy(prisma, {
@@ -251,9 +227,9 @@ describe('StudentOverviewService reads', () => {
       },
     });
 
-    const overview = await build(student.id, true, watched).forStudent(student.id);
+    const overview = await build(student.id, true, watched).overview(student.id);
 
     assert.equal(overview.standing.avgPercentile, 70.17);
-    assert.deepEqual(touched, new Set(['student', 'studentStat', 'studentSubjectStat']));
+    assert.deepEqual(touched, new Set(['studentStat', 'studentSubjectStat']));
   });
 });

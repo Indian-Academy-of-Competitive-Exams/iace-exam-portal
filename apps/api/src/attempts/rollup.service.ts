@@ -9,7 +9,6 @@ import { ATTEMPT_STATUS, COHORT_COUNT_EVERY_MIN } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { sectionScoresIn } from './score-paper';
 import { IN_COHORT, RANK_ORDER } from './ranking-sql';
 import {
   addToQuestion,
@@ -24,18 +23,14 @@ import {
 
 /** Everything the fold reads off a sitting. No answer key: counting is not scoring. */
 const FOLD_SELECT = {
-  id: true,
   testId: true,
   studentId: true,
-  attemptNo: true,
   isGraded: true,
-  status: true,
   score: true,
   correctCount: true,
   wrongCount: true,
   unattemptedCount: true,
   submittedAt: true,
-  sectionScores: true,
   startedAt: true,
   shuffleSeed: true,
   test: { select: { scope: true } },
@@ -262,7 +257,7 @@ export class RollupService {
     await this.prisma.$transaction(
       async (tx) => {
         const now = new Date();
-        const ids = (await this.firstSittings(tx, testId)).map((row) => row.id);
+        const ids = await this.firstSittings(tx, testId);
         const questions = new Map<string, QuestionTotals>();
         await this.replay(tx, ids, (attempt) => {
           for (const question of attempt.questions) addToQuestion(questions, question);
@@ -448,21 +443,18 @@ export class RollupService {
   }
 
   /** The cohort's sittings: one per student by `Attempt_graded_per_test_key`, oldest first. */
-  private async firstSittings(
-    tx: Prisma.TransactionClient,
-    testId: string,
-  ): Promise<{ id: string; score: number }[]> {
+  private async firstSittings(tx: Prisma.TransactionClient, testId: string): Promise<string[]> {
     const rows = await tx.attempt.findMany({
       where: cohortSittingsOf(testId),
       orderBy: [{ evaluatedAt: 'asc' }, { attemptNo: 'asc' }],
-      select: { id: true, studentId: true, score: true },
+      select: { id: true, studentId: true },
     });
     const seen = new Set<string>();
-    const first: { id: string; score: number }[] = [];
+    const first: string[] = [];
     for (const row of rows) {
       if (seen.has(row.studentId)) continue;
       seen.add(row.studentId);
-      first.push({ id: row.id, score: Number(row.score ?? 0) });
+      first.push(row.id);
     }
     return first;
   }
@@ -489,10 +481,7 @@ export class RollupService {
 
 function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttempt {
   return {
-    id: row.id,
-    testId: row.testId,
     studentId: row.studentId,
-    attemptNo: row.attemptNo,
     isGraded: row.isGraded,
     score: Number(row.score ?? 0),
     correctCount: row.correctCount ?? 0,
@@ -500,7 +489,6 @@ function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttem
     unattemptedCount: row.unattemptedCount ?? 0,
     submittedAt: row.submittedAt,
     scope: row.test.scope,
-    sections: sectionScoresIn(row.sectionScores) ?? [],
     questions: servedSheet(paper, row, false).map((question) => ({
       paperQuestionId: question.id,
       questionId: question.questionId,

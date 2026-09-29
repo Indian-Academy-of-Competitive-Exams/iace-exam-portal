@@ -19,7 +19,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { elapsedSeconds, numberOrNull } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { requireStudent } from './require-student';
 import { optionCountsIn, optionsIn } from './rollup-fold';
 import { topperOf, type TopperTimes } from './topper';
 import {
@@ -106,12 +105,6 @@ export class QuestionReportService {
     const served = servedSheet(rows, attempt, attempt.test.baseConfig.shuffleQuestions);
 
     return this.assemble(attempt, served, { cohort, paper, topper, keyed: keyOf(rows) });
-  }
-
-  /** The same payload the student reads, for any student the admin's branches reach. */
-  async forStudent(studentId: string, attemptId: string): Promise<QuestionReport> {
-    await requireStudent(this.prisma, studentId);
-    return this.forAttempt(studentId, attemptId);
   }
 
   private assemble(

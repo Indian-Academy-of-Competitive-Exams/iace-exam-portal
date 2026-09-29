@@ -42,7 +42,6 @@ import {
 } from './performance-analytics';
 
 const NOT_YOURS = 'No such sitting';
-const NO_SERIES = 'No such test series';
 
 /** How many sittings any one report folds in. Beyond this a trajectory is a smear, not a line. */
 const SCOPE_ATTEMPT_CAP = 20;
@@ -144,12 +143,11 @@ export class PerformanceAnalyticsService {
           );
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
-    const [testStats, sectionCohort, topper, standings, series] = await Promise.all([
+    const [testStats, sectionCohort, topper, standings] = await Promise.all([
       this.testStats(testIds),
       this.sectionCohort(anchor),
       anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
       this.leaderboard.standingsOf(sat.map((row) => row.id)),
-      this.seriesOf(studentId, query),
     ]);
     const standing = anchor === null ? null : (standings.get(anchor.id) ?? null);
 
@@ -157,7 +155,7 @@ export class PerformanceAnalyticsService {
       studentId,
       scope: query.scope,
       scopeId: scopeIdOf(query),
-      label: series?.name ?? anchor?.test.title ?? null,
+      label: anchor?.test.title ?? null,
       attemptsCounted: sat.length,
       generatedAt: new Date().toISOString(),
       trajectory: sat.map((row) =>
@@ -178,7 +176,7 @@ export class PerformanceAnalyticsService {
     standing: Standing | null,
     testStats: ReadonlyMap<string, TestStatRow>,
   ): Promise<CohortCurve | null> {
-    if (anchor === null || !ONE_PAPER_SCOPES.has(query.scope)) return null;
+    if (anchor === null || query.scope !== PERFORMANCE_SCOPES.ATTEMPT) return null;
 
     const rolled = testStats.get(anchor.testId) ?? null;
     const score = Number(anchor.score ?? 0);
@@ -225,20 +223,6 @@ export class PerformanceAnalyticsService {
         },
       ]),
     );
-  }
-
-  /** What the report is OF — the owner is in this WHERE too, so no series is read for somebody else. */
-  private async seriesOf(studentId: string, query: PerformanceReportQuery) {
-    if (query.scope !== PERFORMANCE_SCOPES.SERIES) return null;
-    const series = await this.prisma.testSeries.findFirst({
-      where: {
-        id: query.seriesId,
-        tests: { some: { attempts: { some: { studentId } } } },
-      },
-      select: { id: true, name: true },
-    });
-    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, NO_SERIES);
-    return series;
   }
 
   /** Sitting counts by institute day, since the account opened. No paper is read, ever. */
@@ -289,17 +273,10 @@ const TEST_STAT_SELECT = {
 
 type TestStatRow = Prisma.TestStatGetPayload<{ select: typeof TEST_STAT_SELECT }>;
 
-const ONE_PAPER_SCOPES = new Set<string>([PERFORMANCE_SCOPES.ATTEMPT, PERFORMANCE_SCOPES.TEST]);
-
 /** The owner is part of every WHERE, so another student's work reads as missing, not as refused. */
 function scopeWhere(studentId: string, query: PerformanceReportQuery): Prisma.AttemptWhereInput {
   const sat = { studentId, status: ATTEMPT_STATUS.EVALUATED };
-  if (query.scope === PERFORMANCE_SCOPES.ATTEMPT) return { ...sat, id: query.attemptId };
-  if (query.scope === PERFORMANCE_SCOPES.TEST) return { ...sat, testId: query.testId };
-  if (query.scope === PERFORMANCE_SCOPES.SERIES) {
-    return { ...sat, test: { testSeriesId: query.seriesId } };
-  }
-  return sat;
+  return query.scope === PERFORMANCE_SCOPES.ATTEMPT ? { ...sat, id: query.attemptId } : sat;
 }
 
 /** The id the scope was answered by, and never one left over from a different scope's field. */

@@ -257,15 +257,11 @@ describe('QuestionReportService — the answer key it carries', () => {
   });
 
   /** The raw column never rides along: an option's `isCorrect` is the only shape the key takes. */
-  it('never carries the stored answer key on the payload, on either way in', async () => {
+  it('never carries the stored answer key on the payload', async () => {
     const { mine } = await sittings();
 
-    const own = await service.forAttempt(mine.studentId, mine.attemptId);
-    const admin = await service.forStudent(mine.studentId, mine.attemptId);
+    const report = await service.forAttempt(mine.studentId, mine.attemptId);
 
-    assert.equal(admin.attemptId, mine.attemptId);
-    for (const report of [own, admin]) {
-      assert.equal(JSON.stringify(report).includes('answerKey'), false);
-    }
+    assert.equal(JSON.stringify(report).includes('answerKey'), false);
   });
 });

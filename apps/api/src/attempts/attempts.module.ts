@@ -12,12 +12,9 @@ import { AttemptsController } from './attempts.controller';
 import { MeAttemptReportController } from './attempt-report.controller';
 import { AdminLiveOpsController } from './live-ops.controller';
 import { AdminPerformanceController, MePerformanceController } from './performance.controller';
-import { AdminOverviewController, MeOverviewController } from './overview.controller';
+import { MeOverviewController } from './overview.controller';
 import { MeLeaderboardController } from './leaderboard.controller';
-import {
-  AdminQuestionReportController,
-  MeQuestionReportController,
-} from './question-report.controller';
+import { MeQuestionReportController } from './question-report.controller';
 import { QuestionReportService } from './question-report.service';
 import { AdminTestAnalyticsController } from './test-analytics.controller';
 import { TestAnalyticsService } from './test-analytics.service';
@@ -57,9 +54,7 @@ import { SubmitService } from './submit.service';
         MePerformanceController,
         AdminPerformanceController,
         MeOverviewController,
-        AdminOverviewController,
         MeQuestionReportController,
-        AdminQuestionReportController,
         AdminTestAnalyticsController,
       ],
     ),

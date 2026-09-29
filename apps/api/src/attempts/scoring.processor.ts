@@ -238,10 +238,7 @@ function foldableOf(
   served: readonly ScorableQuestion[],
 ): FoldableAttempt {
   return {
-    id: attempt.id,
-    testId: attempt.testId,
     studentId: attempt.studentId,
-    attemptNo: attempt.attemptNo,
     isGraded: attempt.isGraded,
     score: scored.score,
     correctCount: scored.correctCount,
@@ -249,7 +246,6 @@ function foldableOf(
     unattemptedCount: scored.unattemptedCount,
     submittedAt: attempt.submittedAt,
     scope: attempt.test.scope,
-    sections: scored.sections,
     // `scorePaper` pushes one verdict per row it was handed, so all three lists are the paper's order.
     questions: terms.map((term, slot) => ({
       paperQuestionId: term.id,

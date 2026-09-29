@@ -1,8 +1,6 @@
 /**
  * The overall dashboard: `StudentStat` and `StudentSubjectStat` for the tallies, and the student's
- * live standings for the percentiles, which no rollup can hold still. The student's own path and the
- * admin's call the same method with a different studentId, exactly as the per-test report does; the
- * only difference is who is allowed to name the student.
+ * live standings for the percentiles, which no rollup can hold still.
  */
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
@@ -16,7 +14,6 @@ import {
 import { readInBatches } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import { perSitting } from './attempt-report';
-import { requireStudent } from './require-student';
 import { LeaderboardService, type SittingStanding } from './leaderboard.service';
 
 /** A student who has sat nothing has no row at all, which is a clean slate rather than an error. */
@@ -52,12 +49,6 @@ export class StudentOverviewService {
     private readonly prisma: PrismaService,
     private readonly leaderboard: LeaderboardService,
   ) {}
-
-  /** The admin path. The student is named, so an unknown id must read as missing, not as empty. */
-  async forStudent(studentId: string): Promise<StudentOverview> {
-    await requireStudent(this.prisma, studentId);
-    return this.overview(studentId);
-  }
 
   async overview(studentId: string): Promise<StudentOverview> {
     const [stat, rows, standings] = await Promise.all([

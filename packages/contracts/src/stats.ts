@@ -432,11 +432,9 @@ export const OVERVIEW_ROUTES = {
 // compared across papers; percentile is.
 // ============================================================================
 
-/** What a report is asked about: one sitting, one paper, one series, or a whole career. */
+/** What a report is asked about: one sitting, or a whole career. */
 export const PERFORMANCE_SCOPES = {
   ATTEMPT: 'ATTEMPT',
-  TEST: 'TEST',
-  SERIES: 'SERIES',
   ALL_TIME: 'ALL_TIME',
 } as const;
 const performanceScopeSchema = z.enum(PERFORMANCE_SCOPES);
@@ -445,8 +443,6 @@ export type PerformanceScope = z.infer<typeof performanceScopeSchema>;
 /** Which id each scope is answered by. ALL_TIME needs none — the student IS the scope. */
 export const PERFORMANCE_SCOPE_FIELD = {
   [PERFORMANCE_SCOPES.ATTEMPT]: 'attemptId',
-  [PERFORMANCE_SCOPES.TEST]: 'testId',
-  [PERFORMANCE_SCOPES.SERIES]: 'seriesId',
   [PERFORMANCE_SCOPES.ALL_TIME]: null,
 } as const satisfies Record<PerformanceScope, string | null>;
 
@@ -454,8 +450,6 @@ export const performanceReportQuerySchema = z
   .object({
     scope: performanceScopeSchema,
     attemptId: z.string().min(1).optional(),
-    testId: z.string().min(1).optional(),
-    seriesId: z.string().min(1).optional(),
   })
   .superRefine((query, ctx) => {
     const field = PERFORMANCE_SCOPE_FIELD[query.scope];

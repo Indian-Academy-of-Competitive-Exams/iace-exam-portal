@@ -67,7 +67,7 @@ async function sit(paper: Paper, studentId: string, chosen: SitInput['chosen'], 
 }
 
 /** Two papers in one series. The student is under the rival on the first, and alone on the second. */
-async function world({ seriesHoldsBoth = true } = {}) {
+async function world() {
   const questions = [
     'Reasoning',
     { subject: 'Reasoning', difficulty: DIFFICULTY_LEVEL.HIGH },
@@ -77,9 +77,7 @@ async function world({ seriesHoldsBoth = true } = {}) {
   const second = await makePaper(prisma, { questions });
   const seriesId = second.catalog.testSeriesId;
   await prisma.testSeries.update({ where: { id: seriesId }, data: { name: SERIES } });
-  if (seriesHoldsBoth) {
-    await prisma.test.update({ where: { id: first.testId }, data: { testSeriesId: seriesId } });
-  }
+  await prisma.test.update({ where: { id: first.testId }, data: { testSeriesId: seriesId } });
   const student = (await makeStudent(prisma)).id;
   const rival = (await makeStudent(prisma)).id;
   const on = (at: string) => ({ submittedAt: new Date(at) });
@@ -128,8 +126,8 @@ const rolled = (
 const ofAttempt = (studentId: string, attemptId: string) =>
   service.report(studentId, query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }));
 
-const ofTest = (studentId: string, testId: string) =>
-  service.report(studentId, query({ scope: PERFORMANCE_SCOPES.TEST, testId }));
+const ofCareer = (studentId: string) =>
+  service.report(studentId, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
 
 const missing = (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND;
 
@@ -216,20 +214,20 @@ describe('the performance report — one sitting', () => {
   });
 });
 
-describe('the performance report — one paper sat more than once', () => {
-  /** The failure this prevents: a 6-mark paper reporting 12 marks because it was sat twice. */
+describe('the performance report — a career with a retake in it', () => {
+  /** The failure this prevents: a 6-mark paper reporting 18 marks because three sittings were folded. */
   it('describes the anchor sitting alone, so every figure shares one denominator', async () => {
     const sat = await world();
     await retakeOf(sat);
 
-    const report = await ofTest(sat.student, sat.first.testId);
+    const report = await ofCareer(sat.student);
 
     assert.equal(report.composition.maxMarks, 6);
     assert.equal(
       report.sections.reduce((sum, section) => sum + section.maxMarks, 0),
       report.composition.maxMarks,
     );
-    assert.equal(report.sections[0]?.score, 1.5);
+    assert.equal(report.sections[0]?.score, 4);
     assert.equal(report.time.totalSec, 95);
   });
 
@@ -238,14 +236,15 @@ describe('the performance report — one paper sat more than once', () => {
     const sat = await world();
     const retake = await retakeOf(sat);
 
-    const report = await ofTest(sat.student, sat.first.testId);
+    const report = await ofCareer(sat.student);
 
-    assert.equal(report.attemptsCounted, 2);
+    assert.equal(report.attemptsCounted, 3);
     assert.deepEqual(
       report.trajectory.map((point) => [point.attemptId, point.rank, point.percentile]),
       [
         [sat.older, 2, 25],
         [retake, null, null],
+        [sat.newer, 1, 100],
       ],
     );
   });
@@ -265,14 +264,15 @@ describe('the performance report — one paper sat more than once', () => {
     const retake = await retakeOf(sat);
     await rolled(sat.first.testId, { evaluatedCount: 40, sumScore: 120, maxScore: 6 });
 
-    const paper = await ofTest(sat.student, sat.first.testId);
+    const career = await ofCareer(sat.student);
     const retaken = await ofAttempt(sat.student, retake);
 
     assert.deepEqual(
-      paper.trajectory.map((point) => [point.attemptId, point.cohortSize]),
+      career.trajectory.map((point) => [point.attemptId, point.cohortSize]),
       [
         [sat.older, 2],
         [retake, 40],
+        [sat.newer, 1],
       ],
     );
     assert.equal(retaken.cohort?.cohortSize, 40);
@@ -283,10 +283,9 @@ describe('the performance report — one paper sat more than once', () => {
     const sat = await world();
     await retakeOf(sat, { submittedAt: null });
 
-    const report = await ofTest(sat.student, sat.first.testId);
+    const report = await ofCareer(sat.student);
 
-    assert.equal(report.trajectory.at(-1)?.attemptId, sat.older);
-    assert.equal(report.sections[0]?.score, 1.5);
+    assert.equal(report.trajectory.at(-1)?.attemptId, sat.newer);
   });
 });
 
@@ -294,7 +293,7 @@ describe('the performance report — the wider scopes', () => {
   it('plots percentile over the sittings in order, oldest first, and never marks', async () => {
     const { student, older, newer } = await world();
 
-    const report = await service.report(student, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
+    const report = await ofCareer(student);
 
     assert.equal(report.scopeId, null);
     assert.deepEqual(
@@ -314,7 +313,7 @@ describe('the performance report — the wider scopes', () => {
     const { first, student } = await world();
     await rolled(first.testId, { evaluatedCount: 1, sumScore: 6, maxScore: 6 });
 
-    const report = await service.report(student, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
+    const report = await ofCareer(student);
 
     assert.deepEqual(
       report.trajectory.map((point) => [point.rank, point.cohortSize]),
@@ -327,30 +326,12 @@ describe('the performance report — the wider scopes', () => {
 
   /** Two papers do not share a distribution, so a curve across them would be a lie. */
   it('draws no cohort curve for a scope that spans more than one paper', async () => {
-    const { student, seriesId } = await world();
+    const { student } = await world();
 
-    const wide = await service.report(student, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
-    const series = await service.report(
-      student,
-      query({ scope: PERFORMANCE_SCOPES.SERIES, seriesId }),
-    );
+    const wide = await ofCareer(student);
 
     assert.equal(wide.cohort, null);
-    assert.equal(series.cohort, null);
-    assert.equal(series.label, SERIES);
-    assert.equal(series.attemptsCounted, 2);
-  });
-
-  it('folds only the sittings the series holds', async () => {
-    const { student, seriesId, second } = await world({ seriesHoldsBoth: false });
-
-    const report = await service.report(
-      student,
-      query({ scope: PERFORMANCE_SCOPES.SERIES, seriesId }),
-    );
-
-    assert.equal(report.attemptsCounted, 1);
-    assert.equal(report.trajectory[0]?.testId, second.testId);
+    assert.equal(wide.attemptsCounted, 2);
   });
 
   /** The defect this prevents: standings scanned every sitting ever made, not just the ≤20 plotted. */
@@ -371,7 +352,7 @@ describe('the performance report — the wider scopes', () => {
       sittings.push(sitting.id);
     }
 
-    const report = await service.report(student.id, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
+    const report = await ofCareer(student.id);
 
     assert.equal(report.attemptsCounted, 20);
     assert.deepEqual(
@@ -384,12 +365,9 @@ describe('the performance report — the wider scopes', () => {
 
 describe('the performance report — the admin path', () => {
   it('reads any student it is asked for', async () => {
-    const { first, rival } = await world();
+    const { rival } = await world();
 
-    const report = await service.forStudent(
-      rival,
-      query({ scope: PERFORMANCE_SCOPES.TEST, testId: first.testId }),
-    );
+    const report = await service.forStudent(rival, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
 
     assert.equal(report.studentId, rival);
     assert.equal(report.attemptsCounted, 1);
@@ -488,15 +466,12 @@ function keysIn(value: unknown, found = new Set<string>()): Set<string> {
 describe('the performance report — the payload whitelist', () => {
   /** The mirror of the public report's whitelist: a new key here is a decision, not a refactor. */
   it('carries exactly the fields the contract names and nothing else', async () => {
-    const { student, older, seriesId } = await world();
+    const { student, older } = await world();
 
     const sitting = await ofAttempt(student, older);
-    const series = await service.report(
-      student,
-      query({ scope: PERFORMANCE_SCOPES.SERIES, seriesId }),
-    );
+    const career = await ofCareer(student);
 
-    assert.deepEqual([...keysIn(series, keysIn(sitting))].toSorted(), REPORT_FIELDS);
+    assert.deepEqual([...keysIn(career, keysIn(sitting))].toSorted(), REPORT_FIELDS);
   });
 });
 
