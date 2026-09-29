@@ -231,8 +231,6 @@ export function useExamView(
     hasUnsent: state.hasUnsent,
     leave: state.leave,
     takenOver: state.takenOver,
-    droppedUnsaved: state.droppedUnsaved,
-    dismissDropped: state.dismissDropped,
     setAside: state.setAside,
 
     openQuestion: (id) => {

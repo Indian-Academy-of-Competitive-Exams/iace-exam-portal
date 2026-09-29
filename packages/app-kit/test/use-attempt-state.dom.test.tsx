@@ -451,32 +451,23 @@ const seat = (sitting: ReturnType<typeof sharedSitting>, tab: string, storage = 
 
 const landed = () => act(async () => void (await Promise.resolve()));
 
-const RESUMES = [
-  { how: 'another test was opened on the phone', standsDown: null, other: 'phone' },
-  { how: 'a second tab in the same browser took it', standsDown: 'tab-2', other: 'tab-2' },
+const REFUSALS = [
+  { how: "another of the student's tests was opened", standsDown: null },
+  { how: 'this test was opened in a second tab', standsDown: 'tab-2' },
 ] as const;
 
-for (const { how, standsDown, other } of RESUMES) {
-  /** The failure this prevents: Continue here replaying this tab's old answer over the one given elsewhere since. */
-  test(`an unsent answer changed elsewhere since is dropped on resume, the rest resent (${how})`, async (t) => {
+for (const { how, standsDown } of REFUSALS) {
+  /** The failure this prevents: answers never saved on this tab lost when it stops and the student continues here. */
+  test(`a tab that stops keeps what it never saved, and resends it on continuing (${how})`, async (t) => {
     const sitting = sharedSitting();
     const storage = fakeStorage();
     const laptop = seat(sitting, 'laptop', storage);
     await landed();
     sitting.claim(standsDown);
-    act(() => laptop.result.current.answer('q1', { selectedOptionId: 'laptop-old' }));
-    act(() => laptop.result.current.answer('q2', { selectedOptionId: 'laptop-only' }));
+    act(() => laptop.result.current.answer('q1', { selectedOptionId: 'mine' }));
     await act(async () => void (await laptop.result.current.flush()));
-    const stoodDown = laptop.result.current.takenOver;
-    act(() => laptop.result.current.answer('q3', { selectedOptionId: 'after-it-stopped' }));
+    const stopped = { ...laptop.result.current };
     laptop.unmount();
-
-    sitting.claim(other);
-    const elsewhere = seat(sitting, other);
-    await landed();
-    act(() => elsewhere.result.current.answer('q1', { selectedOptionId: 'elsewhere-new' }));
-    await act(async () => void (await elsewhere.result.current.flush()));
-    elsewhere.unmount();
 
     sitting.claim('laptop');
     const resumed = seat(sitting, 'laptop', storage);
@@ -484,88 +475,12 @@ for (const { how, standsDown, other } of RESUMES) {
     await landed();
     await act(async () => void (await resumed.result.current.flush()));
 
-    assert.equal(stoodDown, true);
-    assert.equal(
-      sitting.held.answers.q1?.selectedOptionId,
-      'elsewhere-new',
-      'the newer copy stands',
-    );
-    assert.equal(resumed.result.current.answers.q1?.selectedOptionId, 'elsewhere-new');
-    assert.equal(resumed.result.current.droppedUnsaved, 1, 'and the screen can say what went');
-    assert.equal(
-      sitting.held.answers.q2?.selectedOptionId,
-      'laptop-only',
-      'untouched elsewhere, so sent',
-    );
-    assert.equal(resumed.result.current.answers.q3, undefined, 'nothing is taken after it stopped');
+    assert.equal(stopped.takenOver, true, 'it stopped saving');
+    assert.equal(stopped.setAside, standsDown === null, 'and says which move stopped it');
+    assert.equal(resumed.result.current.answers.q1?.selectedOptionId, 'mine');
+    assert.equal(sitting.held.answers.q1?.selectedOptionId, 'mine', 'resent on continuing');
   });
 }
-
-/** The failure this prevents: plain moves, or an answer already saved, reported as answers that were not kept. */
-test('the dropped count is answers given here and not saved, not visits or saved answers', async (t) => {
-  const sitting = sharedSitting();
-  const storage = fakeStorage();
-  const laptop = seat(sitting, 'laptop', storage);
-  await landed();
-  act(() => laptop.result.current.answer('q1', { selectedOptionId: 'saved' }));
-  await act(async () => void (await laptop.result.current.flush()));
-  act(() => {
-    for (const questionId of ['q1', 'q2', 'q3', 'q4']) laptop.result.current.open(questionId);
-  });
-  act(() => laptop.result.current.answer('q4', { selectedOptionId: 'unsaved' }));
-  sitting.claim('phone');
-  await act(async () => void (await laptop.result.current.flush()));
-  laptop.unmount();
-
-  const phone = seat(sitting, 'phone');
-  await landed();
-  act(() => {
-    for (const questionId of ['q1', 'q2', 'q3', 'q4']) {
-      phone.result.current.answer(questionId, { selectedOptionId: 'phone' });
-    }
-  });
-  await act(async () => void (await phone.result.current.flush()));
-  phone.unmount();
-
-  sitting.claim('laptop');
-  const resumed = seat(sitting, 'laptop', storage);
-  t.after(resumed.unmount);
-  await landed();
-
-  assert.equal(resumed.result.current.droppedUnsaved, 1);
-});
-
-/** The failure this prevents: opening a second test on the phone wiping the answers queued in the first on a laptop. */
-test('a tab set aside for another test keeps what it never saved, and sends it when continued', async (t) => {
-  const storage = fakeStorage();
-  const setAside = {
-    me: {
-      attemptState: attemptStateStub,
-      saveAttemptState: async () => {
-        throw new AppException(ErrorCodes.SITTING_SET_ASIDE);
-      },
-    },
-  } as unknown as AppApiClient;
-  const before = renderHook(() => useAttemptState('attempt-1', depsFor(setAside, storage)));
-  await act(async () => void (await Promise.resolve()));
-  act(() => before.result.current.answer('q1', { selectedOptionId: 'mine' }));
-  await act(async () => void (await before.result.current.flush()));
-  const stood = { ...before.result.current };
-  before.unmount();
-
-  const sent: SentAnswers[] = [];
-  const { result, unmount } = renderHook(() =>
-    useAttemptState('attempt-1', depsFor(apiThatSaves(sent), storage)),
-  );
-  t.after(unmount);
-  await act(async () => void (await Promise.resolve()));
-  await act(async () => void (await result.current.flush()));
-
-  assert.equal(stood.takenOver, true, 'it stopped saving');
-  assert.equal(stood.setAside, true, 'and says why');
-  assert.equal(stood.droppedUnsaved, 0);
-  assert.equal(sent[0]?.answers.find((row) => row.questionId === 'q1')?.selectedOptionId, 'mine');
-});
 
 test('standing down stops saving and says so, the same as a refused save', async (t) => {
   const calls: unknown[] = [];
@@ -703,11 +618,9 @@ test('keeps the batch in the air on the device until the server answers it', asy
   act(() => void result.current.flush());
   act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
 
-  const kept = JSON.parse(storage.getItem(QUEUE_KEY) ?? '{}') as {
-    changes?: { questionId: string }[];
-  };
+  const kept = JSON.parse(storage.getItem(QUEUE_KEY) ?? '[]') as { questionId: string }[];
   assert.deepEqual(
-    (kept.changes ?? []).map((change) => change.questionId).sort((a, b) => a.localeCompare(b)),
+    kept.map((change) => change.questionId).sort((a, b) => a.localeCompare(b)),
     ['q1', 'q2'],
   );
 });
@@ -1031,12 +944,12 @@ test('while saves fail, a full queue waits for the timer instead of saving on ev
   const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
   t.after(unmount);
 
-  act(() => {
+  await act(async () => {
     for (let n = 1; n <= AUTOSAVE_AT_COUNT; n += 1) {
       result.current.answer(`q${n}`, { selectedOptionId: 'opt' });
     }
+    await settle();
   });
-  await act(settle);
   assert.equal(calls.length, 1, 'the full queue went up once');
 
   act(() => result.current.answer('q-late-1', { selectedOptionId: 'opt' }));

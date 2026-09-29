@@ -5,7 +5,7 @@
  */
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, ConfirmDialog } from '@iace/ui';
-import { droppedSays, submittingSays, type ExamView } from '@iace/app-kit';
+import { submittingSays, type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
 import { useLockedZoom } from './lock-zoom';
 import { RailwayLayout } from '../templates/railway/layout';
@@ -33,10 +33,6 @@ export function ExamShell({
       <Skin view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
 
       {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
-
-      {view.droppedUnsaved > 0 ? (
-        <DroppedNotice says={droppedSays(view.droppedUnsaved)} onDismiss={view.dismissDropped} />
-      ) : null}
 
       {/* The railway skin asks over the paper, as its original does; every other skin gets this. */}
       <ConfirmDialog
@@ -76,21 +72,6 @@ function FullscreenNag({
 }
 
 /** Over the paper, because the answers it names are already gone from it. */
-function DroppedNotice({ says, onDismiss }: Readonly<{ says: string; onDismiss: () => void }>) {
-  return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">
-      <div className="flex max-w-md flex-col gap-4">
-        <Alert variant="warning">{says}</Alert>
-        <div>
-          <Button type="button" onClick={onDismiss}>
-            Carry on
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** Said once without a count, because "1 times" is how a screen tells a student it is a machine. */
 function nagSays(exits: number): string {
   const left = exits > 1 ? `You left full screen ${exits} times.` : 'You left full screen.';

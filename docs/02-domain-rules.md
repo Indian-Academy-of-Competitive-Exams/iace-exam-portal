@@ -225,10 +225,10 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   whether that was another tab, another device, or another test. A save or a submit from a tab that
   no longer holds its sitting is refused, with `SITTING_SET_ASIDE` when the student opened another
   sitting and `SITTING_TAKEN_OVER` when another tab or device holds this same one. Either way the tab
-  stops saving and keeps what it had not saved. On continuing there, each of those answers is sent
-  unless the server's copy of that question changed since the tab last heard from it; one that did
-  was answered elsewhere later, so it stands, and the tab says how many of its own it dropped.
-  Nothing already written is lost, and the sitting it was stood down from stays live and resumable. A sitting held by nobody, because
+  stops saving and keeps what it had not saved, and sends it if the student continues there. Nothing
+  already written is lost, and the sitting it was stood down from stays live and resumable. Known
+  limit: that kept queue is resent as it stands, so it can overwrite an answer given on the other
+  device since; the fix is a per-question version the server's save checks. A sitting held by nobody, because
   its key was rebuilt from Postgres, is adopted by the first tab back. A reclaim names its attempt
   and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
 - **A pause is credited, not stopped.** Falling silent longer than the reload grace

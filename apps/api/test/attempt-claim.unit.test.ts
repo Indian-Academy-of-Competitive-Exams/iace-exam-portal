@@ -97,7 +97,7 @@ describe('holdsSitting — who may answer', () => {
   });
 });
 
-/** The client drops a tab's unsent answers only when this same sitting went elsewhere, so the two must differ. */
+/** The stand-down screen names which move stopped the tab, so the two refusals must differ. */
 describe('sittingRefusal — why a tab may not answer', () => {
   it('says set aside when the student opened another sitting', () => {
     assert.equal(sittingRefusal(held({ tab: null }), 'tab_a')?.code, ErrorCodes.SITTING_SET_ASIDE);

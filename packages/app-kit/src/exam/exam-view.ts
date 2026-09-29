@@ -28,8 +28,10 @@ export interface ExamSubmitView {
   retry: () => void;
 }
 
-const countOf = (count: number, noun: string): string =>
-  `${count} ${count === 1 ? noun : `${noun}s`}`;
+function countOf(count: number, noun: string): string {
+  const nouns = count === 1 ? noun : `${noun}s`;
+  return `${count} ${nouns}`;
+}
 
 /** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
 export function submittingSays({ submit, forwardOnly }: ExamView): string {
@@ -37,22 +39,24 @@ export function submittingSays({ submit, forwardOnly }: ExamView): string {
   return `${countOf(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
 }
 
-/** The stand-down screen's words; what is unsent here is settled on continuing, not before. */
-export function stoodDownSays({ setAside }: Pick<ExamView, 'setAside'>): {
+/** The stand-down screen's words: which kind of move stopped this tab, and where its unsent answers are. */
+export function stoodDownSays({ setAside, hasUnsent }: Pick<ExamView, 'setAside' | 'hasUnsent'>): {
   title: string;
   hint: string;
 } {
+  const kept = hasUnsent()
+    ? 'Answers not yet saved are kept on this device, and go up if you continue here.'
+    : 'Your answers are saved.';
   return setAside
-    ? { title: 'Another of your tests is open', hint: 'Continuing here stops the other test.' }
+    ? {
+        title: 'Another of your tests is open',
+        hint: `${kept} Continuing here stops the other test.`,
+      }
     : {
-        title: 'This paper is being answered somewhere else',
-        hint: 'Continuing here stops the other tab or device.',
+        title: 'This test is open on another tab or device',
+        hint: `${kept} Continuing here stops the other one.`,
       };
 }
-
-/** Said once on resuming, naming the answers another device's newer copy replaced. */
-export const droppedSays = (count: number): string =>
-  `${countOf(count, 'answer')} given here had not saved, and another device has changed ${count === 1 ? 'it' : 'them'} since. Its copy stands.`;
 
 export const TIMER_KIND = { SECTION: 'SECTION', PAPER: 'PAPER' } as const;
 
@@ -111,10 +115,7 @@ export interface ExamView {
   leave: () => void;
   /** This tab no longer holds the sitting: it was opened in another tab or on another device. */
   takenOver: boolean;
-  /** Answers this device had not saved when it was taken over, dropped so the other device's stand. */
-  droppedUnsaved: number;
-  dismissDropped: () => void;
-  /** Stopped because another of the student's tests was opened; nothing here was dropped. */
+  /** Stopped because another of the student's tests was opened, not because this one went elsewhere. */
   setAside: boolean;
 
   openQuestion: (questionId: string) => void;

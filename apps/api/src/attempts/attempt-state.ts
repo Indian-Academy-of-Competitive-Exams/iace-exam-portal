@@ -159,7 +159,7 @@ export function holdsSitting(held: HeldState, tab: string | undefined): boolean 
 const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
 const SET_ASIDE = 'Another of your tests was opened, so this one stopped saving here.';
 
-/** Why a tab may not answer now, or null when it may; the client keeps its unsent answers only when set aside. */
+/** Why a tab may not answer now, or null when it may; the two refusals name the move for the screen. */
 export function sittingRefusal(held: HeldState, tab: string | undefined): AppException | null {
   if (holdsSitting(held, tab)) return null;
   // Null is what opening ANOTHER sitting leaves behind; a tab id means this sitting went to someone else.
