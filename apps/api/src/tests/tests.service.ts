@@ -325,8 +325,7 @@ function unknownReference(config: BaseConfigDetail, scopeRef: TestScopeRef | nul
   return null;
 }
 
-/** `DbNull` is the column's own NULL; a bare `null` on a Json field means "leave it alone". */
-/** Undefined passes through, and Prisma leaves a field it is given undefined for untouched. */
+/** `null` becomes `DbNull`, the column's own NULL; undefined passes through, so Prisma leaves the field alone. */
 function toJson(
   value: TestScopeRef | DrawSpec | null | undefined,
 ): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
