@@ -162,7 +162,8 @@ describe('RollupService — counting one sitting in', () => {
     const rolled = await testStat(paper.testId);
     assert.equal(rolled?.evaluatedCount, 1);
     assert.equal(await sectionMarksOn(paper.testId), 3.5);
-    assert.equal((await studentStat(studentId))?.testsEvaluated, 1);
+    const student = await studentStat(studentId);
+    assert.deepEqual([student?.testsEvaluated, student?.retakeCount], [1, 0]);
   });
 
   it('writes the marks the scorer worked out, not a second opinion of them', async () => {
@@ -425,7 +426,7 @@ describe('RollupService — rebuilding a scope', () => {
     const scored = new Map(sittings.map((row) => [row.studentId, Number(row.score ?? 0)]));
     const students = await prisma.studentStat.findMany();
     assert.equal(
-      students.every((row) => row.testsEvaluated === 1),
+      students.every((row) => row.testsEvaluated === 1 && row.retakeCount === 0),
       true,
     );
     // The drop moved every student's marks too, so their own totals must have followed.
@@ -556,7 +557,8 @@ describe('RollupService — the student watermark a re-score can leave behind', 
     });
     await built.rollup.sweepCohorts();
 
-    assert.equal((await studentStat(studentId))?.testsEvaluated, 0);
+    const student = await studentStat(studentId);
+    assert.deepEqual([student?.testsEvaluated, student?.retakeCount], [0, 0]);
   });
 
   /** Bounded like the cohort arm: a student who is not behind must not be replayed every pass. */
@@ -598,7 +600,8 @@ describe('RollupQueue — asking for the counting nobody else will', () => {
     await built.scoring.score(attemptId);
 
     assert.equal((await testStat(paper.testId))?.evaluatedCount, 1);
-    assert.equal((await studentStat(studentId))?.testsEvaluated, 1);
+    const student = await studentStat(studentId);
+    assert.deepEqual([student?.testsEvaluated, student?.retakeCount], [1, 0]);
   });
 });
 
