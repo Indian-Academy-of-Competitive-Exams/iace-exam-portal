@@ -47,6 +47,7 @@ import {
   QUERY_SCOPES,
   REVIEW_STATE_LABELS,
   ROUTES,
+  SECTION_QUESTION_PARAM,
   SEND_BACK_REASON_LABELS,
   sectionWorkQueryKey,
 } from '../lib/constants';
@@ -111,8 +112,8 @@ export function SectionAuthoringPage() {
   );
   const follow = useCallback(
     (key: string) => {
-      if (key === NEW_CARD || search.get('q') === key) return;
-      setSearch({ q: key }, { replace: true });
+      if (key === NEW_CARD || search.get(SECTION_QUESTION_PARAM) === key) return;
+      setSearch({ [SECTION_QUESTION_PARAM]: key }, { replace: true });
     },
     [search, setSearch],
   );
@@ -138,7 +139,7 @@ export function SectionAuthoringPage() {
   return (
     <SectionWorkspace
       work={work.data}
-      startAt={search.get('q')}
+      startAt={search.get(SECTION_QUESTION_PARAM)}
       onActive={follow}
       onChanged={replace}
       onSettle={settle}
@@ -515,7 +516,8 @@ function DeleteQuestion({
   const [asking, setAsking] = useState(false);
   const remove = useMutation({
     meta: { success: 'Question deleted.' },
-    mutationFn: () => api.admin.authoring.remove(question.questionId),
+    mutationFn: () =>
+      api.admin.sectionWork.remove(work.testId, work.baseConfigSectionId, question.questionId),
     onSuccess: async () => {
       await Promise.all([
         // Exact: the deleted question's own read sits under this key, and refetching it would 404.

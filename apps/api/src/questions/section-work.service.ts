@@ -65,6 +65,7 @@ interface ScopedQuestion {
   id: string;
   order: number | null;
   typed: boolean;
+  createdById: string | null;
   difficulty: DifficultyLevel;
   preview: string;
   review: QuestionReview;
@@ -73,6 +74,8 @@ interface ScopedQuestion {
 const NOT_YOURS = 'No such section';
 const OFFERED_MESSAGE = 'This test has been offered, so its questions no longer change here.';
 const NOT_EDITABLE_MESSAGE = 'This question is not yours to change at this point in the section.';
+const NOT_DELETABLE_MESSAGE =
+  'Only a question you typed for this section, and may still change, can be deleted.';
 const SOURCE_UNCHOSEN_MESSAGE = 'Say where this test gets its questions before working on it.';
 const READERS_ONLY_MESSAGE = "Only this section's proof-reader reviews its questions.";
 const NOT_HANDED_MESSAGE = 'This section has not reached you yet.';
@@ -185,6 +188,18 @@ export class SectionWorkService {
       isSuperAdmin: viewer.isSuperAdmin,
     });
     return this.questions.update(questionId, draft, viewer.id);
+  }
+
+  /** A typist's own mistake, taken back; `questions.remove` still refuses one a paper holds. */
+  async remove(pair: Pair, questionId: string, viewer: SectionViewer): Promise<void> {
+    const context = await this.load(pair, viewer);
+    const question = await this.requireScoped(context, questionId);
+    const own = viewer.isSuperAdmin || question.createdById === viewer.id;
+    if (!question.typed || !own || !this.editable(context, question)) {
+      throw new AppException(ErrorCodes.FORBIDDEN, NOT_DELETABLE_MESSAGE);
+    }
+    await takeSectionEditLock(this.redis, this.prisma, pair, viewer);
+    await this.questions.remove(questionId);
   }
 
   /** Which other tests hold this question, asked before the edit rather than reported after it. */
@@ -386,6 +401,7 @@ export class SectionWorkService {
         select: {
           id: true,
           difficulty: true,
+          createdById: true,
           assignment: { select: { testId: true, baseConfigSectionId: true, role: true } },
           currentVersion: { select: { content: true } },
         },
@@ -410,6 +426,7 @@ export class SectionWorkService {
             written?.role === ASSIGNMENT_ROLES.TYPIST &&
             written.testId === pair.testId &&
             written.baseConfigSectionId === pair.baseConfigSectionId,
+          createdById: question.createdById,
           difficulty: question.difficulty,
           preview: stemPreviewOf(
             (question.currentVersion?.content as LocalizedContent | undefined) ?? {},
@@ -425,7 +442,7 @@ export class SectionWorkService {
     if (context.test.finalizedAt) return context.viewer.isSuperAdmin;
     if (context.viewer.isSuperAdmin) return true;
 
-    const own = heldNow(context);
+    const own = typingOrHeld(context);
     if (own?.role === ASSIGNMENT_ROLES.TYPIST) {
       if (question.review.state === REVIEW_STATES.SENT_BACK) return true;
       const typing = context.test.paperSource === PAPER_SOURCES.FRAMED && !own.finalizedAt;
@@ -471,6 +488,13 @@ export class SectionWorkService {
 /** The row the viewer holds right now; a replaced one only reads. */
 const heldNow = (context: Context): Assignment | null =>
   context.mine?.replacedAt === null ? context.mine : null;
+
+/** The row held now, or a typist's last one when nobody took the seat after them: their drafts are nobody else's. */
+function typingOrHeld(context: Context): Assignment | null {
+  const held = heldNow(context);
+  if (held || context.typist) return held;
+  return context.mine?.role === ASSIGNMENT_ROLES.TYPIST ? context.mine : null;
+}
 
 /** Picked and not yet handed on, or released by its reader: then the section is back with its owner. */
 function withOwner(context: Context): boolean {

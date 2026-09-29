@@ -96,6 +96,19 @@ export class SectionWorkController {
     );
   }
 
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.DELETE)
+  @RequiresAnyFeature(SECTION_KEYS, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Delete('questions/:questionId')
+  remove(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    return this.work.remove({ testId, baseConfigSectionId: sectionId }, questionId, viewerOf(user));
+  }
+
   @RequiresAnyFeature(SECTION_KEYS, PERMISSION_LEVELS.READ)
   @Get('questions/:questionId/other-tests')
   otherTests(

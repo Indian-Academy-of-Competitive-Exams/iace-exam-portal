@@ -21,7 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { takeSectionEditLock } from '../common/edit-lock';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
-import { assertTypistMayEdit, requireOwnAssignment, type SectionRef } from './assignment-guard';
+import { requireOwnAssignment, type SectionRef } from './assignment-guard';
 import { computeStemHash } from './question-core';
 import { writtenBetween } from './question-query';
 import { QuestionsService } from './questions.service';
@@ -49,17 +49,8 @@ export class AuthoringService {
     return { question };
   }
 
-  async update(
-    id: string,
-    draft: QuestionDraft,
-    adminId: string,
-    isSuperAdmin = false,
-  ): Promise<AuthoringSaveResult> {
-    const section = await this.assertTheirs(id, adminId);
-    if (section) {
-      await assertTypistMayEdit(this.prisma, section, id, { id: adminId, isSuperAdmin });
-    }
-    await this.claimSection(section, adminId, false);
+  async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
+    assertLoose(await this.assertTheirs(id, adminId));
     const question = await this.questions.update(id, draft, adminId);
     return { question };
   }
@@ -76,11 +67,7 @@ export class AuthoringService {
       select: { assignment: { select: { testId: true, baseConfigSectionId: true } } },
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-    if (row.assignment && !isSuperAdmin) {
-      await assertTypistMayEdit(this.prisma, row.assignment, id, { id: adminId, isSuperAdmin });
-    }
-
-    await this.claimSection(row.assignment, adminId, isSuperAdmin);
+    assertLoose(row.assignment);
     await this.questions.remove(id);
   }
 
@@ -184,6 +171,14 @@ export class AuthoringService {
 }
 
 const SEVEN_DAYS = 7;
+
+const ON_ITS_SECTION_MESSAGE =
+  "This question was written for a section, so it is changed on that section's page.";
+
+/** A section's question has its own rules for who changes it and when, and one page that applies them. */
+function assertLoose(section: SectionRef | null): void {
+  if (section) throw new AppException(ErrorCodes.CONFLICT, ON_ITS_SECTION_MESSAGE);
+}
 
 /** Every status when the reader named none: the bank hides the archived, a work record cannot. */
 function asBankQuery(query: AuthoringHistoryQuery): QuestionListQuery {

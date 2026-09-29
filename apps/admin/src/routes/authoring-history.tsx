@@ -53,6 +53,13 @@ import { AssignmentTestPicker } from '../components/assignment-scope-picker';
 /** Their own typing work, which is the only assignment a work record is about. */
 const TYPIST_SCOPE = { role: ASSIGNMENT_ROLES.TYPIST, mine: true } as const;
 
+/** A question written for a section is changed on that section's page, under its rules. */
+function editPathOf(question: QuestionSummary): string {
+  const section = question.writtenFor;
+  if (!section) return ROUTES.AUTHORING_QUESTION(question.id);
+  return ROUTES.TYPING_SECTION_QUESTION(section.testId, section.baseConfigSectionId, question.id);
+}
+
 function historyColumns(): DataTableColumn<QuestionSummary>[] {
   return [
     {
@@ -61,7 +68,7 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
       className: 'max-w-md',
       cell: (question) => (
         <div>
-          <Link to={ROUTES.AUTHORING_QUESTION(question.id)} className={linkVariants()}>
+          <Link to={editPathOf(question)} className={linkVariants()}>
             <TruncatedText>{question.stemPreview}</TruncatedText>
           </Link>
           {question.questionCode ? (
@@ -165,7 +172,7 @@ function HistoryActions({ question }: Readonly<{ question: QuestionSummary }>) {
     <>
       <RowActions label="Actions for this question">
         <DropdownMenuItem asChild>
-          <Link to={ROUTES.AUTHORING_QUESTION(question.id)}>
+          <Link to={editPathOf(question)}>
             <Pencil aria-hidden />
             Edit
           </Link>

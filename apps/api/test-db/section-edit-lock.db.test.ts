@@ -186,17 +186,18 @@ describe('the section edit lock', () => {
   });
 
   it('lets the holder back in, and their fifteen minutes start again', async () => {
-    const { authoring } = await build();
+    const { authoring, work } = await build();
     const section = await aSection();
     const written = await authoring.create(draft(), TYPIST, section.typing.id);
 
-    const again = await authoring.update(
+    const again = await work.edit(
+      pairOf(section),
       written.question.id,
       draft({ stem: { en: 'What is 25% of 200?' } }),
-      TYPIST,
+      viewer(TYPIST),
     );
 
-    assert.equal(again.question.id, written.question.id);
+    assert.equal(again.id, written.question.id);
   });
 
   it('hands it to a super admin, who then holds it against the admin who had it', async () => {
@@ -215,7 +216,13 @@ describe('the section edit lock', () => {
     assert.equal(stolen.id, written.question.id);
 
     await assert.rejects(
-      () => authoring.update(written.question.id, draft({ stem: { en: 'Mine again' } }), TYPIST),
+      () =>
+        work.edit(
+          pairOf(section),
+          written.question.id,
+          draft({ stem: { en: 'Mine again' } }),
+          viewer(TYPIST),
+        ),
       conflictSaying('Chandra'),
     );
   });

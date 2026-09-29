@@ -724,6 +724,13 @@ export function adminClient(core: ApiCore) {
           input,
         ),
 
+      remove: (testId: string, sectionId: string, questionId: string): Promise<NoContent> =>
+        write(
+          'DELETE',
+          ADMIN_SECTION_WORK_ROUTES.question(testId, sectionId, questionId),
+          noContentSchema,
+        ),
+
       /** The cross-test warning, read before the edit rather than reported after it. */
       otherTests: (
         testId: string,

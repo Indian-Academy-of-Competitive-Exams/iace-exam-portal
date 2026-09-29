@@ -89,7 +89,7 @@ export type SendBackBody = z.infer<typeof sendBackSchema>;
 
 export const ADMIN_SECTION_WORK_ROUTES = {
   one: (testId: string, sectionId: string) => `/admin/sections/${testId}/${sectionId}`,
-  /** GET reads one question; PATCH saves it under the viewer's own rule. */
+  /** GET reads one question; PATCH saves it under the viewer's own rule; DELETE takes back a typed one. */
   question: (testId: string, sectionId: string, questionId: string) =>
     `/admin/sections/${testId}/${sectionId}/questions/${questionId}`,
   otherTests: (testId: string, sectionId: string, questionId: string) =>

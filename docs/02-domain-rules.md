@@ -436,6 +436,10 @@ and needs no mapping at all.
   Rewording a question — its content, options or key, from any screen — drops its ticks on every
   draft, whether its paper holds the question now or it was taken off and may come back, and sends
   a released whole section holding it back to its reader the same way.
+- **A question written for a section is changed and deleted only on that section's page**, under
+  the rule of the viewer's seat there; the typist's own editor holds only what they typed straight
+  into the bank. A typist whose role passed to somebody else only reads; one stood down with nobody
+  after them still fixes and deletes what they typed, since nobody else can.
 - **A test owner changes a question only when the section is back with them**: a picked section
   before it is handed over, or any section once its reader has released it — and never once the
   test is offered.

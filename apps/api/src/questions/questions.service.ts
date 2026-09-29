@@ -64,6 +64,7 @@ const QUESTION_INCLUDE = {
   assignment: {
     select: {
       testId: true,
+      baseConfigSectionId: true,
       test: { select: { title: true } },
       baseConfigSection: { select: { name: true } },
     },
@@ -491,6 +492,7 @@ export class QuestionsService {
       await this.deleteUnused(tx, [id]);
     }, TX_LIMITS.SHORT);
 
+    this.auditContext.setEntityId(id);
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
 
@@ -816,6 +818,7 @@ function toSummary(row: QuestionRow): QuestionSummary {
       ? {
           testId: row.assignment.testId,
           testTitle: row.assignment.test.title,
+          baseConfigSectionId: row.assignment.baseConfigSectionId,
           sectionName: row.assignment.baseConfigSection.name,
         }
       : null,

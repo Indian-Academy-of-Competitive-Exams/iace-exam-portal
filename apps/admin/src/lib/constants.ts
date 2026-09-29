@@ -60,6 +60,9 @@ import {
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
+/** The question a section page opens on. */
+export const SECTION_QUESTION_PARAM = 'q';
+
 /** Route paths. Referenced by the router, the guards and every navigate(). */
 export const ROUTES = {
   HOME: '/',
@@ -84,6 +87,8 @@ export const ROUTES = {
   TYPING_SECTION: (testId: string, sectionId: string) =>
     `/authoring/assignments/tests/${testId}/sections/${sectionId}`,
   TYPING_SECTION_PATTERN: '/authoring/assignments/tests/:testId/sections/:sectionId',
+  TYPING_SECTION_QUESTION: (testId: string, sectionId: string, questionId: string) =>
+    `/authoring/assignments/tests/${testId}/sections/${sectionId}?${SECTION_QUESTION_PARAM}=${encodeURIComponent(questionId)}`,
   READING_SECTION: (testId: string, sectionId: string) =>
     `/proofreading/assignments/tests/${testId}/sections/${sectionId}`,
   READING_SECTION_PATTERN: '/proofreading/assignments/tests/:testId/sections/:sectionId',

@@ -472,7 +472,12 @@ export const questionSummarySchema = z.object({
   inUse: z.boolean(),
   /** The section it was first written for. Null for a question typed outside any assignment. */
   writtenFor: z
-    .object({ testId: z.string(), testTitle: z.string().nullable(), sectionName: z.string() })
+    .object({
+      testId: z.string(),
+      testTitle: z.string().nullable(),
+      baseConfigSectionId: z.string(),
+      sectionName: z.string(),
+    })
     .nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),

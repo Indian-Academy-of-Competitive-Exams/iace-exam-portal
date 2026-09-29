@@ -136,7 +136,10 @@ async function aSection(source: PaperSource = PAPER_SOURCES.FRAMED) {
     });
   const typed = async () => {
     const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await prisma.question.update({ where: { id: question.id }, data: { assignmentId: typing.id } });
+    await prisma.question.update({
+      where: { id: question.id },
+      data: { assignmentId: typing.id, createdById: TYPIST },
+    });
     return question;
   };
   const handToReader = () =>
@@ -272,6 +275,69 @@ describe('SectionWorkService — who may change a question, and when', () => {
     const read = await work.one(pair, viewer(READER));
     assert.equal(read.seatReplaced, true);
     assert.equal(read.questions[0]?.editable, false);
+  });
+});
+
+describe('SectionWorkService — a typist the section passed on from', () => {
+  /** The failure this prevents: a replaced typist rewriting or deleting what the new typist now holds. */
+  it('refuses the replaced typist’s edit and delete, and lets the one after them work', async () => {
+    const { work } = await build();
+    const { catalog, pair, typing, typed } = await aSection();
+    const question = await typed();
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date() },
+    });
+    await assign(catalog, pair.testId, pair.baseConfigSectionId, STRANGER, ASSIGNMENT_ROLES.TYPIST);
+
+    await assert.rejects(
+      () => work.edit(pair, question.id, draft(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    await assert.rejects(
+      () => work.remove(pair, question.id, viewer(TYPIST)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    assert.equal(await prisma.question.count({ where: { id: question.id } }), 1);
+
+    const fixed = await work.edit(pair, question.id, draft(), viewer(STRANGER));
+    assert.equal(fixed.id, question.id);
+  });
+
+  /** The failure this prevents: a typist stood down with nobody after them locked out of their own drafts. */
+  it('lets a typist stood down with no successor keep fixing what they typed', async () => {
+    const { work } = await build();
+    const { pair, typing, typed } = await aSection();
+    const kept = await typed();
+    const dropped = await typed();
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date() },
+    });
+
+    const fixed = await work.edit(pair, kept.id, draft(), viewer(TYPIST));
+    assert.equal(fixed.id, kept.id);
+    await work.remove(pair, dropped.id, viewer(TYPIST));
+    assert.equal(await prisma.question.count({ where: { id: dropped.id } }), 0);
+  });
+});
+
+describe('SectionWorkService.remove', () => {
+  /** The failure this prevents: a question on the section deleted by somebody who may not change it. */
+  it('deletes a typist’s own draft, and refuses one a test owner cannot change', async () => {
+    const { work } = await build();
+    const { pair, typed } = await aSection();
+    const mistake = await typed();
+    const draftOnly = await typed();
+
+    await assert.rejects(
+      () => work.remove(pair, draftOnly.id, viewer(OWNER, OWNS)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    await work.remove(pair, mistake.id, viewer(TYPIST));
+
+    assert.equal(await prisma.question.count({ where: { id: mistake.id } }), 0);
+    assert.equal(await prisma.question.count({ where: { id: draftOnly.id } }), 1);
   });
 });
 
