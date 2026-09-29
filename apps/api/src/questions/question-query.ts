@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   QUESTION_SORTS,
   QUESTION_STATUS,
+  START_GRACE_MS,
   WRITTEN_FOR,
   type QuestionListQuery,
   type QuestionSort,
@@ -10,16 +11,19 @@ import { matchFilters } from '../common/match-filters';
 import { drawableFor } from './question-core';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
-/** Spec §3: reachable is `min(Test.opensAt, min(TestProgramUnlock.opensAt)) <= now`, a program opening earlier than its test included. */
-export const reachableTest = (now: Date): Prisma.TestWhereInput => ({
-  // The offer watermark itself, not `status <> DRAFT`: a never-offered draft can be set INACTIVE.
-  finalizedAt: { not: null },
-  OR: [
-    { opensAt: null },
-    { opensAt: { lte: now } },
-    { programUnlocks: { some: { opensAt: { lte: now } } } },
-  ],
-});
+/** `testIsOpen` as a where: its earliest opening, a program's included, less `START_GRACE_MS` is at or before now. */
+export const reachableTest = (now: Date): Prisma.TestWhereInput => {
+  const sittable = new Date(now.getTime() + START_GRACE_MS);
+  return {
+    // The offer watermark itself, not `status <> DRAFT`: a never-offered draft can be set INACTIVE.
+    finalizedAt: { not: null },
+    OR: [
+      { opensAt: null },
+      { opensAt: { lte: sittable } },
+      { programUnlocks: { some: { opensAt: { lte: sittable } } } },
+    ],
+  };
+};
 
 /** A civil day in Asia/Kolkata is a whole day, not the instant its name would parse to. */
 export function writtenBetween(from: string | undefined, to: string | undefined) {

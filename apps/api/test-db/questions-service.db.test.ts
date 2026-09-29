@@ -10,6 +10,7 @@ import {
   ErrorCodes,
   QUESTION_STATUS,
   QUESTION_TYPE,
+  START_GRACE_MS,
   TEST_STATUS,
   WRITTEN_FOR,
   plainTextOf,
@@ -697,6 +698,27 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     assert.equal((await versions()).length, 1, 'offered but not yet open must not force a version');
     assert.equal(edited.version, 1);
     assert.equal(await currentVersionOf(created.id), versionId);
+  });
+
+  /** THE failure this prevents: at 09:57 a 10:00 paper is already being sat, and an in-place edit moved its answer key under the sitters. */
+  it('appends a version once an offered test is inside its start grace, before the hour strikes', async () => {
+    const { questions } = await build();
+    const created = await questions.create(draft(), ADMIN);
+    const versionId = await currentVersionOf(created.id);
+    const { testId } = await pinnedOn(created.id, versionId);
+    await prisma.test.update({
+      where: { id: testId },
+      data: {
+        status: TEST_STATUS.ACTIVE,
+        finalizedAt: new Date(),
+        opensAt: new Date(Date.now() + START_GRACE_MS / 2),
+      },
+    });
+
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
+
+    assert.equal(edited.version, 2, 'a sitting may already have begun on this paper');
+    assert.equal((await versions()).length, 2);
   });
 
   /** `testIsOpen` treats a null opening as open now, everywhere else in this codebase — so here too. */
