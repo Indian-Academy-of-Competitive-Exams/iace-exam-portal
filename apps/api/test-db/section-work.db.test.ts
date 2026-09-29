@@ -397,6 +397,57 @@ describe('SectionWorkService.remove', () => {
     assert.equal(await prisma.question.count({ where: { id: mistake.id } }), 0);
     assert.equal(await prisma.question.count({ where: { id: draftOnly.id } }), 1);
   });
+
+  /** The failure this prevents: a Delete the screen offers and the server refuses, or the other way round. */
+  it('offers Delete exactly where it is taken: not on another’s draft, a placed question, or to the reader', async () => {
+    const { work } = await build();
+    const { pair, typed, onPaper, typistDone } = await aSection();
+    const own = await typed();
+    const theirs = await typed();
+    await prisma.question.update({ where: { id: theirs.id }, data: { createdById: CHIEF } });
+    const placed = await typed();
+    await onPaper(placed);
+    const deletable = async (who: SectionViewer) =>
+      new Map((await work.one(pair, who)).questions.map((row) => [row.questionId, row.deletable]));
+
+    assert.deepEqual(
+      await deletable(viewer(TYPIST)),
+      new Map([
+        [placed.id, false],
+        [own.id, true],
+        [theirs.id, false],
+      ]),
+    );
+    for (const id of [theirs.id, placed.id]) {
+      await assert.rejects(
+        () => work.remove(pair, id, viewer(TYPIST)),
+        refusedWith(ErrorCodes.FORBIDDEN),
+      );
+    }
+
+    await typistDone();
+    assert.deepEqual(await deletable(viewer(READER)), new Map([[placed.id, false]]));
+    await assert.rejects(
+      () => work.remove(pair, placed.id, viewer(READER)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    assert.equal(await prisma.question.count({ where: { id: { in: [theirs.id, placed.id] } } }), 2);
+  });
+
+  it('offers the last typist, stood down, Delete on their own drafts', async () => {
+    const { work } = await build();
+    const { pair, typing, typed } = await aSection();
+    const own = await typed();
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date() },
+    });
+
+    const [row] = (await work.one(pair, viewer(TYPIST))).questions;
+
+    assert.equal(row?.questionId, own.id);
+    assert.equal(row?.deletable, true);
+  });
 });
 
 /** One good row, written out as CSV: the section import reads the bank's own sheet. */

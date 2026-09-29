@@ -175,6 +175,7 @@ export class SectionWorkService {
         typed: question.typed,
         review: question.review,
         editable: this.editable(context, question),
+        deletable: this.deletable(context, question),
       })),
     };
   }
@@ -259,8 +260,7 @@ export class SectionWorkService {
   async remove(pair: Pair, questionId: string, viewer: SectionViewer): Promise<void> {
     const context = await this.load(pair, viewer);
     const question = await this.requireScoped(context, questionId);
-    const own = viewer.isSuperAdmin || question.createdById === viewer.id;
-    if (!question.typed || !own || !this.editable(context, question)) {
+    if (!this.deletable(context, question)) {
       throw new AppException(ErrorCodes.FORBIDDEN, NOT_DELETABLE_MESSAGE);
     }
     await takeSectionEditLock(this.redis, this.prisma, pair, viewer);
@@ -517,6 +517,13 @@ export class SectionWorkService {
       if (own.handedAt && !own.finalizedAt && question.order !== null) return true;
     }
     return context.ownerWrites && withOwner(context);
+  }
+
+  /** A draft typed here by the viewer, off the paper, that they may still change; a paper row is never deleted. */
+  private deletable(context: Context, question: ScopedQuestion): boolean {
+    const { viewer } = context;
+    const own = viewer.isSuperAdmin || question.createdById === viewer.id;
+    return question.typed && question.order === null && own && this.editable(context, question);
   }
 
   private async requireScoped(context: Context, questionId: string): Promise<ScopedQuestion> {

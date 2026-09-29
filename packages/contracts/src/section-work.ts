@@ -56,6 +56,8 @@ export const sectionQuestionSchema = z.object({
   review: questionReviewSchema,
   /** Whether THIS viewer may change it now — the server's rule, so the screen cannot disagree. */
   editable: z.boolean(),
+  /** Whether THIS viewer may delete it now: a draft of theirs, typed here, off the paper, still theirs to change. */
+  deletable: z.boolean(),
 });
 export type SectionQuestion = z.infer<typeof sectionQuestionSchema>;
 

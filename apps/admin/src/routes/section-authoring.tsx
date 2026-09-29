@@ -334,7 +334,8 @@ function contextOf(
       text: 'This test has been offered, so its questions no longer change here.',
     };
   }
-  if (work.seatReplaced) {
+  // A stood-down last typist still fixes their drafts, so "you can still read it" would be wrong.
+  if (work.seatReplaced && !work.questions.some((question) => question.editable)) {
     const dropped = work.history.some(
       (row) => row.id === work.seatAssignmentId && row.sectionDropped,
     );
@@ -489,7 +490,7 @@ function CardActions({
       </Button>
     );
   }
-  if (seat.typing && question.order === null) {
+  if (question.deletable) {
     return <DeleteQuestion work={work} question={question} />;
   }
   return null;
