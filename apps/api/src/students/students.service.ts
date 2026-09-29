@@ -36,7 +36,7 @@ import { NotificationsService } from '../notifications';
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
-import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
+import { readinessOf, type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 import { everyTermMatches } from '../common/search-terms';
 import { HOLDS_OWN_ACCESS } from './own-access';
@@ -362,8 +362,7 @@ export class StudentsService {
               },
             },
             // Recomputed from the MERGED profile, not the patch: editing only the mother's name must not decide readiness on that field alone.
-            preTestReady: isPreTestReady(nextProfile as never),
-            profileCompleted: isProfileCompleted(nextProfile as never),
+            ...readinessOf(nextProfile),
           }
         : {}),
     };
@@ -404,7 +403,7 @@ export class StudentsService {
     return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
 
-  /** Points a profile at a stored document and recomputes `profileCompleted`. */
+  /** Points a profile at a stored document and recomputes the readiness flags. */
   async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
     const student = await this.prisma.student.findUnique({
       where: { id },
@@ -420,7 +419,7 @@ export class StudentsService {
         profile: {
           upsert: { create: { [column]: key }, update: { [column]: key } },
         },
-        profileCompleted: isProfileCompleted(nextProfile as never),
+        ...readinessOf(nextProfile),
       },
     });
   }

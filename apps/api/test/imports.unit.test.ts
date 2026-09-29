@@ -114,6 +114,7 @@ const context = (over: Partial<ImportContext> = {}): ImportContext => ({
         enrolledCourses: [],
         enrolledExams: [],
         programs: ['SSC FOUNDATION'],
+        profile: null,
       },
     ],
     // Added by an admin and never signed in: this one still needs a starting PIN.
@@ -127,6 +128,7 @@ const context = (over: Partial<ImportContext> = {}): ImportContext => ({
         enrolledCourses: [],
         enrolledExams: [],
         programs: [],
+        profile: null,
       },
     ],
   ]),

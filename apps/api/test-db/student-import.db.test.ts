@@ -34,6 +34,9 @@ const sheet = (...rows: string[]) => Buffer.from([HEADERS, ...rows].join('\n'));
 
 const ADMIN = randomUUID();
 
+const withProfile = (...rows: string[]) =>
+  Buffer.from([`${HEADERS},Date of Birth,Gender`, ...rows].join('\n'));
+
 const branchOf = async (mobile: string) =>
   (await prisma.student.findFirstOrThrow({ where: { mobile } })).currentBranchId;
 
@@ -62,5 +65,43 @@ describe('the branch a roster import writes', () => {
 
     assert.equal(result.skipped, 1);
     assert.equal(await prisma.student.count(), 0);
+  });
+});
+
+describe('the readiness flags a roster import writes', () => {
+  const flagsOf = async (mobile: string) => {
+    const row = await prisma.student.findFirstOrThrow({ where: { mobile } });
+    return { preTestReady: row.preTestReady, profileCompleted: row.profileCompleted };
+  };
+
+  it('completes a profile whose photo was already on file when the sheet fills DOB and gender', async () => {
+    const student = await makeStudent(prisma, {
+      mobile: '9000000001',
+      studentType: STUDENT_TYPE.NON_IACE,
+    });
+    await prisma.studentProfile.create({
+      data: { studentId: student.id, photoUrl: 'documents/photo.jpg' },
+    });
+
+    await importer().commitStudents(
+      withProfile('9000000001,NON-IACE,,SSC,,,2003-04-11,FEMALE'),
+      ADMIN,
+    );
+
+    assert.deepEqual(await flagsOf('9000000001'), { preTestReady: false, profileCompleted: true });
+  });
+
+  it("readies a student for a test when the sheet adds the DOB to both parents' names", async () => {
+    const student = await makeStudent(prisma, {
+      mobile: '9000000001',
+      studentType: STUDENT_TYPE.NON_IACE,
+    });
+    await prisma.studentProfile.create({
+      data: { studentId: student.id, motherName: 'Lakshmi', fatherName: 'Ravi' },
+    });
+
+    await importer().commitStudents(withProfile('9000000001,NON-IACE,,SSC,,,2003-04-11,'), ADMIN);
+
+    assert.deepEqual(await flagsOf('9000000001'), { preTestReady: true, profileCompleted: false });
   });
 });

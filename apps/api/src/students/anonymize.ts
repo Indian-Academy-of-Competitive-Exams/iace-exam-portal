@@ -5,6 +5,7 @@
  * only the person goes out of it.
  */
 import { Prisma } from '@prisma/client';
+import { readinessOf } from './student-flags';
 
 /** Not a real number: `mobileSchema` demands a leading 6-9, so nothing live can collide with it. */
 export const TOMBSTONE_MOBILE = '0000000000';
@@ -21,6 +22,8 @@ export function anonymizedStudent(at: Date): Prisma.StudentUncheckedUpdateInput 
     isActive: false,
     deletedAt: at,
     anonymizedAt: at,
+    // The profile is emptied beside this row, so neither gate is met any longer.
+    ...readinessOf(null),
   };
 }
 

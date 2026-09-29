@@ -26,7 +26,7 @@ import { planProgramImport } from './program-import';
 import { EventsService } from '../events';
 import { ProgramsService } from '../access';
 
-import { isPreTestReady } from '../students';
+import { readinessOf, type ProfileCompletionFields } from '../students';
 import {
   importFileKey,
   readUploadedTable,
@@ -36,6 +36,15 @@ import {
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
 import { toDateColumn } from '../common/time/institute-day';
+
+/** The profile columns the readiness flags read. */
+const READINESS_PROFILE_SELECT = {
+  motherName: true,
+  fatherName: true,
+  dob: true,
+  gender: true,
+  photoUrl: true,
+} as const;
 
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
@@ -70,8 +79,10 @@ export class ImportsService {
 
   /** Applies the plan. Re-plans from the same input rather than trusting a preview the client sends back: the file may have changed, and a client that can hand us a plan can hand us any plan. */
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
+    const table = await readUploadedTable(file);
+    const context = await this.contextFor(table);
     // Re-judged against the scope on COMMIT too: a preview is not a permission check.
-    const plan = await this.planStudents(await readUploadedTable(file));
+    const plan = planStudentImport(table, context);
     // Only rows that were actually written: a PIN texted for a row that failed opens nothing.
     const issued: StartingPin[] = [];
 
@@ -98,7 +109,8 @@ export class ImportsService {
             ? { pinHash: minted.get(row.mobile)?.hash, pinIsDefault: true }
             : {};
 
-          const done = await this.writeRow(row, startingPin);
+          const stored = context.existingByMobile.get(row.mobile)?.profile ?? null;
+          const done = await this.writeRow(row, startingPin, stored);
           if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
           else outcome.counts.updated += 1;
           outcome.rowActions.push(done);
@@ -245,6 +257,7 @@ export class ImportsService {
   private async writeRow(
     row: StudentImportRow,
     startingPin: { pinHash?: string; pinIsDefault?: boolean },
+    storedProfile: ProfileCompletionFields | null,
   ): Promise<{ entityId: string; action: AuditAction }> {
     const { mobile, studentType } = row;
     if (mobile === null || studentType === null) {
@@ -252,8 +265,7 @@ export class ImportsService {
     }
 
     const profile = profileData(row);
-    // Never downgraded: a row not carrying all three leaves whatever was already true.
-    const readiness = isPreTestReady(row.profile) ? { preTestReady: true } : {};
+    const readiness = readinessOf({ ...storedProfile, ...profile });
     const access = accessOf(row, studentType);
 
     if (row.existingStudentId) {
@@ -358,6 +370,7 @@ export class ImportsService {
               enrolledCourses: true,
               enrolledExams: true,
               programs: true,
+              profile: { select: READINESS_PROFILE_SELECT },
             },
           }),
     ]);
@@ -374,6 +387,7 @@ export class ImportsService {
             enrolledCourses: student.enrolledCourses,
             enrolledExams: student.enrolledExams,
             programs: student.programs,
+            profile: student.profile,
           },
         ]),
       ),

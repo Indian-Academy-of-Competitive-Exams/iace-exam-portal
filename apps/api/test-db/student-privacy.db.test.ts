@@ -110,6 +110,19 @@ describe('erasure is anonymisation', () => {
     assert.equal(receipt.attemptsKept, 1);
   });
 
+  it('leaves neither readiness flag set on a profile it emptied', async () => {
+    const student = await makeStudent(prisma);
+    await prisma.student.update({
+      where: { id: student.id },
+      data: { preTestReady: true, profileCompleted: true },
+    });
+
+    await build().anonymize(student.id);
+
+    const row = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
+    assert.deepEqual([row.preTestReady, row.profileCompleted], [false, false]);
+  });
+
   /** The bug this prevents: an erased account still answering with its live token. */
   it('asks for the sessions to go, the same signal a deactivation sends', async () => {
     const events = new FakeEventBus();

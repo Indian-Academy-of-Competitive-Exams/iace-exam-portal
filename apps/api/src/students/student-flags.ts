@@ -30,3 +30,11 @@ export function isProfileCompleted(profile: ProfileCompletionFields | null | und
   if (!profile) return false;
   return present(profile.photoUrl) && present(profile.dob) && present(profile.gender);
 }
+
+/** Both flags off the profile as a write LEAVES it — stored merged with incoming — so every writer applies one rule. */
+export function readinessOf(profile: ProfileCompletionFields | null | undefined): {
+  preTestReady: boolean;
+  profileCompleted: boolean;
+} {
+  return { preTestReady: isPreTestReady(profile), profileCompleted: isProfileCompleted(profile) };
+}

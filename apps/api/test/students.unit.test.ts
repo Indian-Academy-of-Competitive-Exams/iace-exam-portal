@@ -8,7 +8,7 @@ import {
   studentSummarySchema,
   updateStudentSchema,
 } from '@iace/contracts';
-import { isPreTestReady, isProfileCompleted } from '../src/students/student-flags';
+import { isPreTestReady, isProfileCompleted, readinessOf } from '../src/students/student-flags';
 
 /** The flag rules and the privacy boundary. Both are the sort of thing that looks obviously right in review and is wrong in production, so they are asserted rather than read. */
 
@@ -73,6 +73,33 @@ describe('isProfileCompleted', () => {
     };
     assert.equal(isPreTestReady(preTestOnly), true);
     assert.equal(isProfileCompleted(preTestOnly), false);
+  });
+});
+
+/** One rule for every writer: the flags follow the profile the write leaves, never the fields it touched. */
+describe('readinessOf', () => {
+  const complete = {
+    motherName: 'Lakshmi',
+    fatherName: 'Ravi',
+    dob: '2003-04-11',
+    gender: 'FEMALE',
+    photoUrl: 'documents/photo.jpg',
+  };
+
+  it('reads both flags off one profile, each by its own fields', () => {
+    assert.deepEqual(readinessOf(complete), { preTestReady: true, profileCompleted: true });
+    assert.deepEqual(readinessOf({ ...complete, photoUrl: null }), {
+      preTestReady: true,
+      profileCompleted: false,
+    });
+    assert.deepEqual(readinessOf({ ...complete, motherName: null }), {
+      preTestReady: false,
+      profileCompleted: true,
+    });
+  });
+
+  it('sets neither for a profile with nothing on file', () => {
+    assert.deepEqual(readinessOf(null), { preTestReady: false, profileCompleted: false });
   });
 });
 
