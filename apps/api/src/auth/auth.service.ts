@@ -249,8 +249,7 @@ export class AuthService {
   /** Rotating refresh: every use mints a new pair, and the old token only answers a retry inside the grace window. */
   async refresh(refreshToken: string): Promise<AuthTokens> {
     const claims = await this.tokens.verifyRefresh(refreshToken);
-    const identity = await this.loadIdentity(claims.actor, claims.sub);
-    if (!identity)
+    if (!(await this.mayRefresh(claims.actor, claims.sub)))
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Account is no longer available');
 
     const nextRefresh = await this.tokens.signRefresh({
@@ -269,8 +268,8 @@ export class AuthService {
     );
 
     const accessToken = await this.tokens.signAccess({
-      sub: identity.id,
-      actor: identity.actor,
+      sub: claims.sub,
+      actor: claims.actor,
       sid: claims.sid,
     });
 
@@ -358,6 +357,17 @@ export class AuthService {
       hasDefaultPin: student.pinIsDefault,
       isTestBlocked: student.isTestBlocked,
     };
+  }
+
+  /** Whether the account is still there, and no more: every sitting refreshes mid-paper, so this reads one column. */
+  private async mayRefresh(actor: ActorType, id: string): Promise<boolean> {
+    if (actor !== ActorTypes.STUDENT) return (await this.admins.identityOf(id)) !== null;
+
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      select: { isActive: true },
+    });
+    return student?.isActive === true;
   }
 
   private async loadIdentity(actor: ActorType, id: string): Promise<AuthIdentity | null> {
