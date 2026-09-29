@@ -26,7 +26,6 @@ import { planProgramImport } from './program-import';
 import { EventsService } from '../events';
 import { ProgramsService } from '../access';
 
-import { readinessOf, type ProfileCompletionFields } from '../students';
 import {
   importFileKey,
   readUploadedTable,
@@ -36,15 +35,6 @@ import {
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
 import { toDateColumn } from '../common/time/institute-day';
-
-/** The profile columns the readiness flags read. */
-const READINESS_PROFILE_SELECT = {
-  motherName: true,
-  fatherName: true,
-  dob: true,
-  gender: true,
-  photoUrl: true,
-} as const;
 
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
@@ -109,8 +99,7 @@ export class ImportsService {
             ? { pinHash: minted.get(row.mobile)?.hash, pinIsDefault: true }
             : {};
 
-          const stored = context.existingByMobile.get(row.mobile)?.profile ?? null;
-          const done = await this.writeRow(row, startingPin, stored);
+          const done = await this.writeRow(row, startingPin);
           if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
           else outcome.counts.updated += 1;
           outcome.rowActions.push(done);
@@ -257,7 +246,6 @@ export class ImportsService {
   private async writeRow(
     row: StudentImportRow,
     startingPin: { pinHash?: string; pinIsDefault?: boolean },
-    storedProfile: ProfileCompletionFields | null,
   ): Promise<{ entityId: string; action: AuditAction }> {
     const { mobile, studentType } = row;
     if (mobile === null || studentType === null) {
@@ -265,7 +253,6 @@ export class ImportsService {
     }
 
     const profile = profileData(row);
-    const readiness = readinessOf({ ...storedProfile, ...profile });
     const access = accessOf(row, studentType);
 
     if (row.existingStudentId) {
@@ -278,8 +265,6 @@ export class ImportsService {
           // The branch follows the sheet, and only a NON_IACE row reaches here without one.
           ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
           ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
-          // Only a row that changes the profile restates the flags, so it cannot undo a save made mid-import.
-          ...(profile ? readiness : {}),
           ...startingPin,
         },
       });
@@ -292,7 +277,6 @@ export class ImportsService {
         fullName: row.fullName,
         ...access,
         ...(profile ? { profile: { create: profile } } : {}),
-        ...readiness,
         ...startingPin,
       },
     });
@@ -371,7 +355,6 @@ export class ImportsService {
               enrolledCourses: true,
               enrolledExams: true,
               programs: true,
-              profile: { select: READINESS_PROFILE_SELECT },
             },
           }),
     ]);
@@ -388,7 +371,6 @@ export class ImportsService {
             enrolledCourses: student.enrolledCourses,
             enrolledExams: student.enrolledExams,
             programs: student.programs,
-            profile: student.profile,
           },
         ]),
       ),

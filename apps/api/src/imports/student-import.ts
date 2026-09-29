@@ -23,7 +23,6 @@ import {
 } from '@iace/contracts';
 import { toIsoDate, type CsvRow, type CsvTable } from '../common/importing';
 import { studentBranchBlocker } from '../branches';
-import { type ProfileCompletionFields } from '../students';
 
 /** Decides what a roster file WOULD do, without doing any of it. */
 
@@ -49,8 +48,6 @@ export interface ImportContext {
       enrolledCourses: ExamCourse[];
       enrolledExams: string[];
       programs: string[];
-      /** What the readiness flags read, as stored: the commit merges the row over it. */
-      profile: ProfileCompletionFields | null;
     }
   >;
   /** Canonical branch name → the branch. Active only: a retired one takes no new students. */

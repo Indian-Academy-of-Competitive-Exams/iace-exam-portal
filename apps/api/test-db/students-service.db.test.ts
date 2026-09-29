@@ -23,6 +23,7 @@ import {
   FakeCodeCatalog,
   FakeEventBus,
   FakeMessageSender,
+  FakeStorage,
   fakeStartingPins,
 } from '../test/support/fakes';
 import {
@@ -104,7 +105,7 @@ async function serviceWith(over: Bench = {}) {
     auditContext,
     service: new StudentsService(
       prisma,
-      undefined as unknown as StorageService,
+      new FakeStorage() as unknown as StorageService,
       exams.asService(),
       new BranchesService(prisma, new AuditContext()),
       fakeStartingPins(sender),
@@ -154,6 +155,53 @@ describe('StudentsService.list — access of their own, one rule for the filter 
       none.items.map((student) => student.id),
       [examOnly.id],
     );
+  });
+});
+
+/** The flags are read off the profile, so the filter, the row's badge and the detail cannot disagree with it. */
+describe('StudentsService — readiness read off the profile', () => {
+  const parents = { motherName: 'Lakshmi', fatherName: 'Ravi', dob: new Date('2003-04-11') };
+
+  it('filters and shows each flag by its own fields, a student with no profile row as neither', async () => {
+    const { service } = await serviceWith({ student: null });
+    const bare = await makeStudent(prisma);
+    const preTest = await makeStudent(prisma);
+    const complete = await makeStudent(prisma);
+    await prisma.studentProfile.createMany({
+      data: [
+        { studentId: preTest.id, ...parents },
+        { studentId: complete.id, ...parents, gender: 'FEMALE', photoUrl: 'documents/photo.jpg' },
+      ],
+    });
+    const listed = (filters: Record<string, string>) =>
+      service
+        .list(studentListQuerySchema.parse(filters))
+        .then((page) => page.items.map((student) => student.id).toSorted());
+
+    assert.deepEqual(await listed({ preTestReady: 'true' }), [preTest.id, complete.id].toSorted());
+    assert.deepEqual(await listed({ preTestReady: 'false' }), [bare.id]);
+    assert.deepEqual(await listed({ profileCompleted: 'true' }), [complete.id]);
+    assert.deepEqual(await listed({ profileCompleted: 'false' }), [bare.id, preTest.id].toSorted());
+
+    const flags = async (id: string) => {
+      const detail = await service.detail(id);
+      return [detail.preTestReady, detail.profileCompleted];
+    };
+    assert.deepEqual(await flags(bare.id), [false, false]);
+    assert.deepEqual(await flags(preTest.id), [true, false]);
+    assert.deepEqual(await flags(complete.id), [true, true]);
+  });
+
+  /** THE failure a stored flag allowed: a profile saved without restating it left the badge stale. */
+  it('reads a profile edit straight back, with nothing else to keep in step', async () => {
+    const { service } = await serviceWith();
+
+    const saved = await service.update(STUDENT, {
+      profile: { motherName: 'Lakshmi', fatherName: 'Ravi', dob: '2003-04-11' },
+    });
+    const cleared = await service.update(STUDENT, { profile: { motherName: null } });
+
+    assert.deepEqual([saved.preTestReady, cleared.preTestReady], [true, false]);
   });
 });
 
@@ -748,7 +796,7 @@ describe('StudentsService — the seams other modules come through', () => {
   const profileOf = () => prisma.studentProfile.findUnique({ where: { studentId: STUDENT } });
 
   /** A stale `false` keeps nudging the student to upload something they just uploaded. */
-  it('stores a document key and recomputes profileCompleted from the merged profile', async () => {
+  it('stores a document key, and the profile it completes reads as completed', async () => {
     const { service } = await serviceWith();
     await prisma.studentProfile.create({
       data: {
@@ -765,7 +813,7 @@ describe('StudentsService — the seams other modules come through', () => {
     await service.saveDocumentKey(STUDENT, 'photoUrl', 'students/stu_1/photo-2.jpg');
 
     assert.equal((await profileOf())?.photoUrl, 'students/stu_1/photo-2.jpg');
-    assert.equal((await row()).profileCompleted, true);
+    assert.equal((await service.detail(STUDENT)).profileCompleted, true);
   });
 
   it('leaves the flag false while anything is still missing, and refuses a student who is not there', async () => {
@@ -774,7 +822,7 @@ describe('StudentsService — the seams other modules come through', () => {
     await service.saveDocumentKey(STUDENT, 'photoUrl', 'students/stu_1/photo-1.jpg');
 
     assert.equal((await profileOf())?.photoUrl, 'students/stu_1/photo-1.jpg');
-    assert.equal((await row()).profileCompleted, false);
+    assert.equal((await service.detail(STUDENT)).profileCompleted, false);
     await assert.rejects(
       () => service.saveDocumentKey(randomUUID(), 'photoUrl', 'k'),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,

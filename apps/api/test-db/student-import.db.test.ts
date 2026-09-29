@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { STUDENT_TYPE } from '@iace/contracts';
+import { STUDENT_TYPE, readinessOf } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
 import {
@@ -88,10 +88,13 @@ describe('the branch a roster import writes', () => {
   });
 });
 
-describe('the readiness flags a roster import writes', () => {
+describe('the readiness a roster import leaves', () => {
   const flagsOf = async (mobile: string) => {
-    const row = await prisma.student.findFirstOrThrow({ where: { mobile } });
-    return { preTestReady: row.preTestReady, profileCompleted: row.profileCompleted };
+    const row = await prisma.student.findFirstOrThrow({
+      where: { mobile },
+      include: { profile: true },
+    });
+    return readinessOf(row.profile);
   };
 
   it('completes a profile whose photo was already on file when the sheet fills DOB and gender', async () => {

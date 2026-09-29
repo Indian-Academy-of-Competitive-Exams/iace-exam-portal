@@ -3,6 +3,7 @@ import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/co
 import { matchFilters } from '../common/match-filters';
 import { everyTermMatches } from '../common/search-terms';
 import { HOLDS_OWN_ACCESS } from './own-access';
+import { readinessWhere } from './student-flags';
 
 /** Turns the roster's filters into a Prisma query. */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
@@ -14,8 +15,10 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
 
   if (query.isActive !== undefined) add({ isActive: query.isActive });
   if (query.isTestBlocked !== undefined) add({ isTestBlocked: query.isTestBlocked });
-  if (query.preTestReady !== undefined) add({ preTestReady: query.preTestReady });
-  if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
+  if (query.preTestReady !== undefined) add(readinessWhere('preTestReady', query.preTestReady));
+  if (query.profileCompleted !== undefined) {
+    add(readinessWhere('profileCompleted', query.profileCompleted));
+  }
 
   // The branch a student attends is a column of its own — no join.
   if (query.branchId) add({ currentBranchId: { in: query.branchId } });

@@ -3,12 +3,16 @@ import { describe, it } from 'node:test';
 import {
   AppException,
   createStudentSchema,
+  readinessOf,
   STUDENT_TYPE,
   studentDetailSchema,
   studentSummarySchema,
   updateStudentSchema,
 } from '@iace/contracts';
-import { isPreTestReady, isProfileCompleted, readinessOf } from '../src/students/student-flags';
+
+type Profile = Parameters<typeof readinessOf>[0];
+const isPreTestReady = (profile: Profile) => readinessOf(profile).preTestReady;
+const isProfileCompleted = (profile: Profile) => readinessOf(profile).profileCompleted;
 
 /** The flag rules and the privacy boundary. Both are the sort of thing that looks obviously right in review and is wrong in production, so they are asserted rather than read. */
 
@@ -76,7 +80,7 @@ describe('isProfileCompleted', () => {
   });
 });
 
-/** One rule for every writer: the flags follow the profile the write leaves, never the fields it touched. */
+/** One rule for every reader: each flag follows its own fields of the profile as stored. */
 describe('readinessOf', () => {
   const complete = {
     motherName: 'Lakshmi',

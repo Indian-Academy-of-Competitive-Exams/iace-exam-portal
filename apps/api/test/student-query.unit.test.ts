@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { STUDENT_SORTS, studentListQuerySchema, type StudentListQuery } from '@iace/contracts';
 import { studentOrderBy, studentWhere } from '../src/students/student-query';
 import { HOLDS_OWN_ACCESS } from '../src/students/own-access';
+import { readinessWhere } from '../src/students/student-flags';
 
 /** Parses like a real request would, so the tests exercise the coercions too. */
 const query = (params: Record<string, string> = {}): StudentListQuery =>
@@ -35,15 +36,14 @@ describe('studentWhere — an absent filter narrows nothing', () => {
 describe('studentWhere — three-state filters', () => {
   /** `false` is a question, not a default. A control offering any/yes/no must be able to ask for "no", so absent and false cannot collapse into each other. */
   it('tells absent apart from false, for every boolean filter', () => {
-    for (const field of [
-      'isActive',
-      'isTestBlocked',
-      'preTestReady',
-      'profileCompleted',
-    ] as const) {
+    for (const field of ['isActive', 'isTestBlocked'] as const) {
       assert.equal(conditionsFor().length, 0, `${field} must be absent by default`);
       assertHas({ [field]: 'false' }, { [field]: false });
       assertHas({ [field]: 'true' }, { [field]: true });
+    }
+    for (const flag of ['preTestReady', 'profileCompleted'] as const) {
+      assertHas({ [flag]: 'false' }, readinessWhere(flag, false));
+      assertHas({ [flag]: 'true' }, readinessWhere(flag, true));
     }
   });
 

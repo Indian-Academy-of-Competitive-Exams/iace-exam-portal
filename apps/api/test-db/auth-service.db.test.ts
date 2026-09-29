@@ -72,11 +72,8 @@ async function signUp(ctx: Ctx, mobile: string, pinCode: string) {
   return ctx.auth.setStudentPin(mobile, ticket.setupToken, pinCode, NO_DEVICE);
 }
 
-const setStudent = (data: {
-  isActive?: boolean;
-  isTestBlocked?: boolean;
-  preTestReady?: boolean;
-}) => prisma.student.updateMany({ where: { mobile: MOBILE }, data });
+const setStudent = (data: { isActive?: boolean; isTestBlocked?: boolean }) =>
+  prisma.student.updateMany({ where: { mobile: MOBILE }, data });
 
 const grant = (featureKey: FeatureKey) =>
   prisma.adminFeaturePermission.create({
@@ -533,7 +530,14 @@ describe('AuthService — refresh and me', () => {
     const ctx = build();
     const session = await signUp(ctx, MOBILE, '4813');
     const claims = await ctx.tokens.verifyAccess(session.tokens.accessToken);
-    await setStudent({ preTestReady: true });
+    await prisma.studentProfile.create({
+      data: {
+        studentId: claims.sub,
+        motherName: 'Lakshmi',
+        fatherName: 'Ravi',
+        dob: new Date('2003-04-11'),
+      },
+    });
 
     const identity = await ctx.auth.me({
       id: claims.sub,

@@ -77,6 +77,38 @@ export type StudentType = z.infer<typeof studentTypeSchema>;
 /** The same values as a list, for building a picker without restating them — as `GENDERS` does. */
 export const STUDENT_TYPES = studentTypeSchema.options;
 
+/** The profile fields each readiness flag asks for. Derived on every read and never stored, so no writer can leave one stale. */
+export const READINESS_FIELDS = {
+  /** The LIGHT gate: prompted before a test, never blocking, so it asks for three fields and not the whole profile. */
+  preTestReady: ['motherName', 'fatherName', 'dob'],
+  /** Aadhaar and PAN are not here: their images are never stored and nothing verifies them yet, so the nudge would never end. */
+  profileCompleted: ['photoUrl', 'dob', 'gender'],
+} as const;
+export type ReadinessFlag = keyof typeof READINESS_FIELDS;
+export type ReadinessField = (typeof READINESS_FIELDS)[ReadinessFlag][number];
+
+/** A space passes a NOT NULL check and fails a human one: the gate exists to collect a real answer. */
+const answered = (value: unknown): boolean =>
+  value !== null && value !== undefined && (typeof value !== 'string' || value.trim() !== '');
+
+/** Both flags off a stored profile row; a student with no row yet is neither. */
+export function readinessOf(
+  profile: Partial<Record<ReadinessField, unknown>> | null | undefined,
+): Record<ReadinessFlag, boolean> {
+  const filled = (flag: ReadinessFlag) =>
+    profile != null && READINESS_FIELDS[flag].every((field) => answered(profile[field]));
+  return { preTestReady: filled('preTestReady'), profileCompleted: filled('profileCompleted') };
+}
+
+/** The columns `readinessOf` reads, for a query that selects no more than it needs. */
+export const READINESS_PROFILE_SELECT = {
+  motherName: true,
+  fatherName: true,
+  dob: true,
+  photoUrl: true,
+  gender: true,
+} as const satisfies Record<ReadinessField, true>;
+
 export const studentSummarySchema = z.object({
   id: z.string(),
   mobile: z.string(),

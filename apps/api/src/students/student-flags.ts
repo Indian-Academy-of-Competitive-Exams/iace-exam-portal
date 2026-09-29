@@ -1,40 +1,14 @@
-/** The two derived flags on Student, in one place. */
-
-/** The minimal set the pre-test gate asks for. */
-export interface PreTestFields {
-  motherName?: string | null;
-  fatherName?: string | null;
-  dob?: Date | string | null;
-}
-
-/** Everything `profileCompleted` looks at, per prisma/schema.prisma. */
-export interface ProfileCompletionFields extends PreTestFields {
-  gender?: string | null;
-  photoUrl?: string | null;
-}
+import { type Prisma } from '@prisma/client';
+import { READINESS_FIELDS, type ReadinessFlag } from '@iace/contracts';
 
 /** The `StudentProfile` columns an uploaded file lands in. */
 export type ProfileDocumentColumn = 'photoUrl' | 'tenthMarksheetUrl';
 
-const present = (value: unknown): boolean =>
-  value !== null && value !== undefined && (typeof value !== 'string' || value.trim() !== '');
-
-/** Mother's name + father's name + DOB. This is the LIGHT gate — prompted before a test, never blocking — so it deliberately asks for three fields and not the whole profile. */
-export function isPreTestReady(profile: PreTestFields | null | undefined): boolean {
-  if (!profile) return false;
-  return present(profile.motherName) && present(profile.fatherName) && present(profile.dob);
-}
-
-/** The FULL profile: photo, DOB and gender. Aadhaar and PAN are NOT here — their images are never stored, and their verified flags are set by a review this codebase does not run yet, so asking for them would leave the nudge on forever. Optional throughout — it drives a nudge and nothing else. */
-export function isProfileCompleted(profile: ProfileCompletionFields | null | undefined): boolean {
-  if (!profile) return false;
-  return present(profile.photoUrl) && present(profile.dob) && present(profile.gender);
-}
-
-/** Both flags off the profile as a write LEAVES it — stored merged with incoming — so every writer applies one rule. */
-export function readinessOf(profile: ProfileCompletionFields | null | undefined): {
-  preTestReady: boolean;
-  profileCompleted: boolean;
-} {
-  return { preTestReady: isPreTestReady(profile), profileCompleted: isProfileCompleted(profile) };
+/** `readinessOf` as a roster filter. Not-null is its whole rule here, because every writer clears a blank answer to null. */
+export function readinessWhere(flag: ReadinessFlag, wanted: boolean): Prisma.StudentWhereInput {
+  const answered: Prisma.StudentProfileWhereInput = Object.fromEntries(
+    READINESS_FIELDS[flag].map((field) => [field, { not: null }]),
+  );
+  const ready: Prisma.StudentWhereInput = { profile: { is: answered } };
+  return wanted ? ready : { NOT: ready };
 }

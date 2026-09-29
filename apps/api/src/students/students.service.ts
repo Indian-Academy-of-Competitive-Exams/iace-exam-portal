@@ -5,15 +5,18 @@ import {
   BLOCKED_ENROLMENT_MESSAGE,
   ErrorCodes,
   NOTIFICATION_TYPE,
+  READINESS_PROFILE_SELECT,
   STUDENT_TYPE,
   educationEntrySchema,
   fieldDiff,
   pastExamEntrySchema,
+  readinessOf,
   type EnrolmentStanding,
   type ExamCourse,
   type Gender,
   type CreateStudentBody,
   type Paginated,
+  type ReadinessField,
   type ReportSitting,
   type StudentDetail,
   type StudentListQuery,
@@ -37,7 +40,7 @@ import { NotificationsService } from '../notifications';
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
-import { readinessOf, type ProfileDocumentColumn } from './student-flags';
+import { type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 import { everyTermMatches } from '../common/search-terms';
 import { HOLDS_OWN_ACCESS } from './own-access';
@@ -97,6 +100,7 @@ export class StudentsService {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.student.findMany({
         where,
+        include: { profile: { select: READINESS_PROFILE_SELECT } },
         orderBy: studentOrderBy(query.sort),
         ...pageArgs(query),
       }),
@@ -341,21 +345,13 @@ export class StudentsService {
 
   /** A patch: an omitted key is left alone, an explicit null clears the field. */
   async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
-    const student = await this.prisma.student.findFirst({
-      where: { id },
-      include: { profile: true },
-    });
+    const student = await this.prisma.student.findFirst({ where: { id } });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     await this.assertPatchUsable(student, input);
     const currentBranchId = await this.branchAfter(student, input);
 
     const profilePatch = input.profile;
-    // Spread of the EXISTING profile then the patch: readiness is decided on the merged result, not on the handful of fields this request touched.
-    const nextProfile = profilePatch
-      ? { ...student.profile, ...stripUndefined(profilePatch) }
-      : student.profile;
-
     const updatedColumns: Prisma.StudentUncheckedUpdateInput = {
       ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
       ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
@@ -371,8 +367,6 @@ export class StudentsService {
                 update: toProfileData(profilePatch),
               },
             },
-            // Recomputed from the MERGED profile, not the patch: editing only the mother's name must not decide readiness on that field alone.
-            ...readinessOf(nextProfile),
           }
         : {}),
     };
@@ -413,24 +407,13 @@ export class StudentsService {
     return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
 
-  /** Points a profile at a stored document and recomputes the readiness flags. */
+  /** Points a profile at a stored document. */
   async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
-    const student = await this.prisma.student.findUnique({
-      where: { id },
-      include: { profile: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
-    const nextProfile = { ...student.profile, [column]: key };
+    await this.assertExists(id);
 
     await this.prisma.student.update({
       where: { id },
-      data: {
-        profile: {
-          upsert: { create: { [column]: key }, update: { [column]: key } },
-        },
-        ...readinessOf(nextProfile),
-      },
+      data: { profile: { upsert: { create: { [column]: key }, update: { [column]: key } } } },
     });
   }
 
@@ -507,8 +490,7 @@ export class StudentsService {
       isActive: boolean;
       isTestBlocked: boolean;
       pinIsDefault: boolean;
-      preTestReady: boolean;
-      profileCompleted: boolean;
+      profile: Partial<Record<ReadinessField, unknown>> | null;
       createdAt: Date;
     },
     hasOwnAccess: boolean,
@@ -525,8 +507,7 @@ export class StudentsService {
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
       hasDefaultPin: row.pinIsDefault,
-      preTestReady: row.preTestReady,
-      profileCompleted: row.profileCompleted,
+      ...readinessOf(row.profile),
       createdAt: row.createdAt.toISOString(),
     };
   }

@@ -572,8 +572,6 @@ Table Student {
   pinHash text
   pinIsDefault boolean [not null, default: true]
   fullName text
-  preTestReady boolean [not null, default: false]
-  profileCompleted boolean [not null, default: false]
   isActive boolean [not null, default: true]
   isTestBlocked boolean [not null, default: false]
   deletedAt timestamptz(3)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, ErrorCodes } from '@iace/contracts';
+import { AppException, ErrorCodes, readinessOf } from '@iace/contracts';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE } from '../src/students/anonymize';
 import { DOMAIN_EVENTS } from '../src/common/events';
@@ -112,15 +112,24 @@ describe('erasure is anonymisation', () => {
 
   it('leaves neither readiness flag set on a profile it emptied', async () => {
     const student = await makeStudent(prisma);
-    await prisma.student.update({
-      where: { id: student.id },
-      data: { preTestReady: true, profileCompleted: true },
+    await prisma.studentProfile.create({
+      data: {
+        studentId: student.id,
+        motherName: 'Lakshmi',
+        fatherName: 'Ravi',
+        dob: new Date('2003-04-11'),
+        gender: 'FEMALE',
+        photoUrl: 'documents/photo.jpg',
+      },
     });
 
     await build().anonymize(student.id);
 
-    const row = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
-    assert.deepEqual([row.preTestReady, row.profileCompleted], [false, false]);
+    const row = await prisma.student.findUniqueOrThrow({
+      where: { id: student.id },
+      include: { profile: true },
+    });
+    assert.deepEqual(readinessOf(row.profile), { preTestReady: false, profileCompleted: false });
   });
 
   /** The bug this prevents: an erased account still answering with its live token. */

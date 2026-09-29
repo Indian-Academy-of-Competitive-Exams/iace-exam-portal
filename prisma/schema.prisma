@@ -747,30 +747,28 @@ model AttemptSheet {
 // (WHERE deletedAt IS NULL) written in the migration, so a soft-deleted row
 // releases its number.
 model Student {
-  id               String       @id @default(uuid(7)) @db.Uuid
-  mobile           String
-  externalRef      String?
-  studentType      StudentType
-  enrolledCourses  ExamCourse[] @default([])
+  id              String       @id @default(uuid(7)) @db.Uuid
+  mobile          String
+  externalRef     String?
+  studentType     StudentType
+  enrolledCourses ExamCourse[] @default([])
   // Program.code values — the student is a candidate for these.
-  programs         String[]     @default([])
+  programs        String[]     @default([])
   // Exam.code values, app-validated against Exam.
-  enrolledExams    String[]     @default([])
-  currentBranchId  String?      @db.Uuid
-  pinHash          String?
-  pinIsDefault     Boolean      @default(true)
-  fullName         String?
-  preTestReady     Boolean      @default(false)
-  profileCompleted Boolean      @default(false)
-  isActive         Boolean      @default(true)
-  isTestBlocked    Boolean      @default(false)
-  deletedAt        DateTime?    @db.Timestamptz(3)
+  enrolledExams   String[]     @default([])
+  currentBranchId String?      @db.Uuid
+  pinHash         String?
+  pinIsDefault    Boolean      @default(true)
+  fullName        String?
+  isActive        Boolean      @default(true)
+  isTestBlocked   Boolean      @default(false)
+  deletedAt       DateTime?    @db.Timestamptz(3)
   // Set by an erasure request. deletedAt says the account is closed; this says the PII is gone,
   // and the two are separate facts a regulator asks about separately.
-  anonymizedAt     DateTime?    @db.Timestamptz(3)
-  createdById      String?      @db.Uuid
-  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  anonymizedAt    DateTime?    @db.Timestamptz(3)
+  createdById     String?      @db.Uuid
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
   profile           StudentProfile?
   currentBranch     Branch?              @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
@@ -800,7 +798,7 @@ model Student {
 }
 
 // Aadhaar/PAN images are never stored here — only the verification status.
-// Writes to motherName/fatherName/dob must recompute Student.preTestReady.
+// The readiness flags are read off these columns (READINESS_FIELDS), never stored.
 model StudentProfile {
   id                String    @id @default(uuid(7)) @db.Uuid
   studentId         String    @unique @db.Uuid

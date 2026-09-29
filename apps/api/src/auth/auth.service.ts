@@ -3,7 +3,9 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  READINESS_PROFILE_SELECT,
   STUDENT_TYPE,
+  readinessOf,
   type ActorType,
   type AuthIdentity,
   type AuthSessionResponse,
@@ -13,7 +15,7 @@ import {
   type PinSetupTicket,
   type StudentIdentity,
 } from '@iace/contracts';
-import { type Student } from '@prisma/client';
+import { type Prisma, type Student } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminsService } from '../admins';
 import { OtpService } from './otp/otp.service';
@@ -32,6 +34,13 @@ import { isRecordNotFound } from '../common/prisma-errors';
 
 /** Owns no table (docs/03 §5): it READS `Student` for credentials, which the students module owns. */
 const DEACTIVATED_MESSAGE = 'This account has been deactivated';
+
+/** An identity carries the readiness flags, which are read off the profile rather than stored. */
+const IDENTITY_INCLUDE = {
+  profile: { select: READINESS_PROFILE_SELECT },
+} as const satisfies Prisma.StudentInclude;
+
+type IdentityRow = Prisma.StudentGetPayload<{ include: typeof IDENTITY_INCLUDE }>;
 
 @Injectable()
 export class AuthService {
@@ -101,6 +110,7 @@ export class AuthService {
             // Signed themselves up, so they are outside the institute: ONLINE is a branch of ours.
             studentType: STUDENT_TYPE.NON_IACE,
           },
+          include: IDENTITY_INCLUDE,
         });
 
     // A new PIN ends every session opened with the old one — that is most of the point of a reset — and clears any lockout the student hit first.
@@ -162,6 +172,7 @@ export class AuthService {
         // Theirs now, whatever it was before. This is what stops an imported student being asked to change a PIN they have just chosen.
         pinIsDefault: false,
       },
+      include: IDENTITY_INCLUDE,
     });
 
     await this.sessions.revokeAll(ActorTypes.STUDENT, studentId);
@@ -179,7 +190,10 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     await this.pin.assertNotLocked(mobile);
 
-    const student = await this.prisma.student.findFirst({ where: { mobile, deletedAt: null } });
+    const student = await this.prisma.student.findFirst({
+      where: { mobile, deletedAt: null },
+      include: IDENTITY_INCLUDE,
+    });
     const ok = student?.pinHash
       ? await this.pin.verify(student.pinHash, pin)
       : await this.pin.burnVerifyTime().then(() => false);
@@ -289,11 +303,12 @@ export class AuthService {
 
   /** Announces a PIN change, AFTER the sessions are already revoked. */
   /** Written only while still active: an admin deactivating them mid-reset must win, not be overwritten. */
-  private async replaceStudentPin(id: string, pinHash: string): Promise<Student> {
+  private async replaceStudentPin(id: string, pinHash: string): Promise<IdentityRow> {
     try {
       return await this.prisma.student.update({
         where: { id, isActive: true },
         data: { pinHash, pinIsDefault: false },
+        include: IDENTITY_INCLUDE,
       });
     } catch (error) {
       if (isRecordNotFound(error))
@@ -333,14 +348,13 @@ export class AuthService {
   }
 
   /** `preTestReady` rides along on every identity read. */
-  private studentIdentity(student: Student): StudentIdentity {
+  private studentIdentity(student: IdentityRow): StudentIdentity {
     return {
       actor: ActorTypes.STUDENT,
       id: student.id,
       mobile: student.mobile,
       fullName: student.fullName,
-      preTestReady: student.preTestReady,
-      profileCompleted: student.profileCompleted,
+      ...readinessOf(student.profile),
       hasDefaultPin: student.pinIsDefault,
       isTestBlocked: student.isTestBlocked,
     };
@@ -348,7 +362,10 @@ export class AuthService {
 
   private async loadIdentity(actor: ActorType, id: string): Promise<AuthIdentity | null> {
     if (actor === ActorTypes.STUDENT) {
-      const student = await this.prisma.student.findUnique({ where: { id } });
+      const student = await this.prisma.student.findUnique({
+        where: { id },
+        include: IDENTITY_INCLUDE,
+      });
       if (!student?.isActive) return null;
       return this.studentIdentity(student);
     }

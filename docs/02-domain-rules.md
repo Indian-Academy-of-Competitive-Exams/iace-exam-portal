@@ -284,7 +284,8 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   left `SUBMITTED` and unscored is queued again by the sweeper under the same id, and a sitting
   nobody ended is ended by it.
 - The pre-test gate is minimal — mother's name, father's name, date of birth. It **prompts**, and
-  `profileCompleted` only drives a nudge. Neither blocks a sitting.
+  `profileCompleted` only drives a nudge. Neither blocks a sitting, and neither is stored: both are
+  read off the profile (`READINESS_FIELDS`) wherever a student is read.
 - The in-exam screen replicates the government CBT faithfully; it is the one thing students expect to
   match. Everything around it is this repo's own design system.
 - **Every active test is watched live.** The ops screen exists to verify who is in a hall and to
