@@ -273,6 +273,20 @@ describe('AuthoringService — a typist the section passed on from', () => {
     const fixed = await authoring.update(question.id, draft({ stem: { en: 'Fixed' } }), THEIRS);
     assert.equal(fixed.question.id, question.id);
   });
+
+  /** The failure this prevents: a typist stood down with nobody after them locked out of their own drafts. */
+  it('lets a typist stood down with no successor keep fixing what they typed', async () => {
+    const authoring = await build();
+    const earlier = await makeAssignment(MINE);
+    const { question } = await authoring.create(draft(), MINE, earlier.id);
+    await prisma.questionAssignment.update({
+      where: { id: earlier.id },
+      data: { replacedAt: new Date() },
+    });
+
+    const fixed = await authoring.update(question.id, draft({ stem: { en: 'Still mine' } }), MINE);
+    assert.equal(fixed.question.id, question.id);
+  });
 });
 
 describe('AuthoringService.remove', () => {

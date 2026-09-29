@@ -46,7 +46,7 @@ export async function requireOwnAssignment(
   return { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
 }
 
-/** Only the section's typist now: before Done they fix anything they wrote; after it, only what was sent back. */
+/** Not once another typist holds the section; before Done they fix anything they wrote, after it only what was sent back. */
 export async function assertTypistMayEdit(
   prisma: PrismaService,
   section: SectionRef,
@@ -57,7 +57,7 @@ export async function assertTypistMayEdit(
     where: { ...section, role: ASSIGNMENT_ROLES.TYPIST, replacedAt: null },
     select: { assigneeId: true, finalizedAt: true },
   });
-  if (!caller.isSuperAdmin && typing?.assigneeId !== caller.id) {
+  if (!caller.isSuperAdmin && typing && typing.assigneeId !== caller.id) {
     throw new AppException(ErrorCodes.FORBIDDEN, PASSED_ON_MESSAGE);
   }
   if (!typing?.finalizedAt) return;
