@@ -136,7 +136,7 @@ export class MeController {
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(pushSubscriptionSchema)) body: PushSubscriptionBody,
   ): Promise<void> {
-    return this.push.subscribe(user.id, body);
+    return this.push.subscribe(user.id, user.sessionId, body);
   }
 
   @Delete('push-subscription')
@@ -155,7 +155,7 @@ export class MeController {
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(pushDeviceSchema)) body: PushDeviceBody,
   ): Promise<void> {
-    return this.push.registerDevice(user.id, body);
+    return this.push.registerDevice(user.id, user.sessionId, body);
   }
 
   @Delete('push-device')

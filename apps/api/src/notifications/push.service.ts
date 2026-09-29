@@ -6,12 +6,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DeliveryChannel, DeliveryStatus, Prisma, type NotificationType } from '@prisma/client';
 import {
+  ActorTypes,
   isAllowedPushEndpoint,
   NOTIFICATION_INBOX_PATH,
   type PushDeviceBody,
   type PushSubscriptionBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { redisKeys } from '../redis/redis.keys';
 import { AppConfigService } from '../config/app-config.service';
 import { FcmSender } from './fcm.sender';
 import { PUSH_OUTCOMES, WebPushSender, type PushOutcome } from './web-push.sender';
@@ -33,6 +36,7 @@ export class PushService {
     private readonly config: AppConfigService,
     private readonly sender: WebPushSender,
     private readonly fcm: FcmSender,
+    private readonly redis: RedisService,
   ) {}
 
   /** Null is a channel nothing can carry, which the screen shows differently from one switched off. */
@@ -41,8 +45,13 @@ export class PushService {
   }
 
   /** Keyed on the endpoint the browser gave: the same device resubscribing is the same row. */
-  async subscribe(studentId: string, body: PushSubscriptionBody): Promise<void> {
-    const keys = { p256dh: body.p256dh, auth: body.auth, userAgent: body.userAgent ?? null };
+  async subscribe(studentId: string, sessionId: string, body: PushSubscriptionBody): Promise<void> {
+    const keys = {
+      p256dh: body.p256dh,
+      auth: body.auth,
+      userAgent: body.userAgent ?? null,
+      sessionId,
+    };
 
     await this.prisma.pushSubscription.upsert({
       where: { endpoint: body.endpoint },
@@ -57,8 +66,8 @@ export class PushService {
   }
 
   /** Keyed on the token FCM issued: the same phone re-registering is the same row, moved if it must be. */
-  async registerDevice(studentId: string, body: PushDeviceBody): Promise<void> {
-    const device = { platform: body.platform, deviceName: body.deviceName ?? null };
+  async registerDevice(studentId: string, sessionId: string, body: PushDeviceBody): Promise<void> {
+    const device = { platform: body.platform, deviceName: body.deviceName ?? null, sessionId };
 
     await this.prisma.pushDevice.upsert({
       where: { token: body.token },
@@ -106,33 +115,66 @@ export class PushService {
       this.sender.isConfigured
         ? this.prisma.pushSubscription.findMany({
             where: { studentId },
-            select: { studentId: true, endpoint: true, p256dh: true, auth: true },
+            select: { studentId: true, endpoint: true, p256dh: true, auth: true, sessionId: true },
           })
         : [],
       this.fcm.isConfigured
         ? this.prisma.pushDevice.findMany({
             where: { studentId },
-            select: { studentId: true, token: true },
+            select: { studentId: true, token: true, sessionId: true },
           })
         : [],
     ]);
 
+    const signedOut = await this.signedOut([...subscriptions, ...devices]);
+    const live = (target: SessionBound) => !signedOut.has(sessionKey(target));
     // Stored before this host rule existed, or never valid: dropped like a dead one, never POSTed to.
-    const refused = subscriptions.filter((target) => !isAllowedPushEndpoint(target.endpoint));
+    const refused = subscriptions.filter(
+      (target) => !isAllowedPushEndpoint(target.endpoint) || !live(target),
+    );
+    const orphaned = devices.filter((device) => !live(device));
     if (refused.length > 0) {
       await this.prisma.pushSubscription.deleteMany({
         where: { endpoint: { in: refused.map((target) => target.endpoint) } },
+      });
+    }
+    if (orphaned.length > 0) {
+      await this.prisma.pushDevice.deleteMany({
+        where: { token: { in: orphaned.map((device) => device.token) } },
       });
     }
 
     return {
       decided: new Set(decided.map((row) => ledgerKey(row.notificationId, row.channel))),
       browsers: groupBy(
-        subscriptions.filter((target) => isAllowedPushEndpoint(target.endpoint)),
+        subscriptions.filter((target) => isAllowedPushEndpoint(target.endpoint) && live(target)),
         (target) => target.studentId,
       ),
-      phones: groupBy(devices, (device) => device.studentId),
+      phones: groupBy(
+        devices.filter((device) => live(device)),
+        (device) => device.studentId,
+      ),
     };
+  }
+
+  /** The sessions a page's targets were registered from that have since ended, in one read. */
+  private async signedOut(targets: readonly SessionBound[]): Promise<Set<string>> {
+    const bound = [
+      ...new Map(
+        targets.flatMap((target) =>
+          target.sessionId === null ? [] : [[sessionKey(target), target] as const],
+        ),
+      ).values(),
+    ];
+    if (bound.length === 0) return new Set();
+    const found = await this.redis.mgetJson<unknown>(
+      bound.map((target) =>
+        redisKeys.session(ActorTypes.STUDENT, target.studentId, target.sessionId ?? ''),
+      ),
+    );
+    return new Set(
+      bound.flatMap((target, index) => (found[index] === null ? [sessionKey(target)] : [])),
+    );
   }
 
   /** Two channels, each booked on its own ledger row: a phone reached is not a browser reached. */
@@ -216,6 +258,15 @@ const PUSH_CHANNELS: DeliveryChannel[] = [DeliveryChannel.WEB_PUSH, DeliveryChan
 const PUSH_LANES = 8;
 
 type WebTarget = { endpoint: string; p256dh: string; auth: string };
+
+/** A push target and the sign-in it came from; null is a row from before the session was kept. */
+interface SessionBound {
+  studentId: string;
+  sessionId: string | null;
+}
+
+const sessionKey = (target: SessionBound): string =>
+  `${target.studentId}:${target.sessionId ?? ''}`;
 
 interface Reach {
   decided: ReadonlySet<string>;

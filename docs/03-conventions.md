@@ -314,8 +314,10 @@ Built and in use. Reach for these rather than adding a second of any of them.
   a `PushSubscription` row exists only because the student granted permission, and revoking it
   deletes the row. **The absence of a subscription is the refusal**, which is why push records no
   skip and costs no table. A phone works the same way: a `PushDevice` row exists only because the
-  student allowed notifications, and signing out drops it. What a student still controls is their
-  browser, their phone's own settings, and their bell.
+  student allowed notifications. Both remember the session that registered them, and a push goes
+  only to a target whose session is still live, deleting the rest — so sign-out, a replaced session,
+  a revoke or a PIN reset stops pushes on a shared machine without the client's help. What a
+  student still controls is their browser, their phone's own settings, and their bell.
 - **WhatsApp is future scope, wired and off.** One vendor — Interakt, which resells Meta's Cloud
   API — and no selector between two: carrying a spare provider bought a config switch nobody would
   flip mid-incident, and cost a second set of credentials to keep valid. The channel routes nowhere

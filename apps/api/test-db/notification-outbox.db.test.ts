@@ -18,6 +18,7 @@ import {
   FakeFcmSender,
   FakeMessageSender,
   FakePushSender,
+  FakeRedis,
   FakeQueue,
   fakeQueueFailures,
 } from '../test/support/fakes';
@@ -39,6 +40,7 @@ function build() {
     new FakeConfig().asService(),
     new FakePushSender(false) as never,
     new FakeFcmSender(false) as never,
+    new FakeRedis().asService(),
   );
   // Nothing here opens a test, so the audience it would fan out to is deliberately empty.
   const access = { studentsReaching: () => Promise.resolve([]) } as never;
