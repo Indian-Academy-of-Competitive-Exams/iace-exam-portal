@@ -50,6 +50,8 @@ export const sectionQuestionSchema = z.object({
   difficulty: difficultyLevelSchema,
   /** Its place on the paper; null for a question typed for the section and not chosen yet. */
   order: z.number().int().nullable(),
+  /** Written under a typist's row on this section — what the typist's Done chooses from. */
+  typed: z.boolean(),
   review: questionReviewSchema,
   /** Whether THIS viewer may change it now — the server's rule, so the screen cannot disagree. */
   editable: z.boolean(),

@@ -571,6 +571,9 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
 
 export const testQueryKey = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
 
+export const sectionWorkQueryKey = (testId: string, sectionId: string) =>
+  [...QUERY_KEYS.PROOFREADING, 'work', testId, sectionId] as const;
+
 export const studentSittingsQueryKey = (studentId: string, search: string) =>
   [...QUERY_KEYS.STUDENT, studentId, 'sittings', search] as const;
 

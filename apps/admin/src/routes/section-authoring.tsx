@@ -48,6 +48,7 @@ import {
   REVIEW_STATE_LABELS,
   ROUTES,
   SEND_BACK_REASON_LABELS,
+  sectionWorkQueryKey,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SectionThreadButton } from '../components/section-thread';
@@ -76,9 +77,6 @@ const REASON_ORDER = [
   SEND_BACK_REASONS.ANSWER_OPTION,
 ] as const;
 
-const workKey = (testId: string, sectionId: string) =>
-  [...QUERY_KEYS.PROOFREADING, 'work', testId, sectionId] as const;
-
 /** What the viewer can do right now, read off the section once for the page and every card. */
 function seatOf(work: SectionWork) {
   const own = work.seatReplaced ? null : work.seat;
@@ -95,7 +93,7 @@ export function SectionAuthoringPage() {
   const [search, setSearch] = useSearchParams();
   const queryClient = useQueryClient();
   const work = useQuery({
-    queryKey: workKey(testId, sectionId),
+    queryKey: sectionWorkQueryKey(testId, sectionId),
     queryFn: () => api.admin.sectionWork.one(testId, sectionId),
     retry: false,
   });
@@ -108,7 +106,7 @@ export function SectionAuthoringPage() {
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING });
   }, [queryClient]);
   const replace = useCallback(
-    (next: SectionWork) => queryClient.setQueryData(workKey(testId, sectionId), next),
+    (next: SectionWork) => queryClient.setQueryData(sectionWorkQueryKey(testId, sectionId), next),
     [queryClient, testId, sectionId],
   );
   const follow = useCallback(
@@ -173,7 +171,7 @@ function SectionWorkspace({
         cardOf(work, question, index, seat, onChanged),
       ),
       query: (id) => ({
-        queryKey: [...workKey(testId, sectionId), id, QUERY_SCOPES.HELD],
+        queryKey: [...sectionWorkQueryKey(testId, sectionId), id, QUERY_SCOPES.HELD],
         queryFn: async (): Promise<Held> => {
           const question = await api.admin.sectionWork.question(testId, sectionId, id);
           return {
@@ -522,7 +520,7 @@ function DeleteQuestion({
       await Promise.all([
         // Exact: the deleted question's own read sits under this key, and refetching it would 404.
         queryClient.invalidateQueries({
-          queryKey: workKey(work.testId, work.baseConfigSectionId),
+          queryKey: sectionWorkQueryKey(work.testId, work.baseConfigSectionId),
           exact: true,
         }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),

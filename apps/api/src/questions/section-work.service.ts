@@ -156,6 +156,7 @@ export class SectionWorkService {
         preview: question.preview,
         difficulty: question.difficulty,
         order: question.order,
+        typed: question.typed,
         review: question.review,
         editable: this.editable(context, question),
       })),

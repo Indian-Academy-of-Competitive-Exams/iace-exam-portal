@@ -5,8 +5,7 @@ import {
   DIFFICULTY_LEVELS,
   sectionQuota,
   type Assignment,
-  type QuestionSummary,
-  PAGE_SIZE_MAX,
+  type SectionQuestion,
 } from '@iace/contracts';
 import {
   Alert,
@@ -26,21 +25,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
-
-/** Every question written for a section, oldest first, however many pages that takes. */
-async function sectionQuestions(assignmentId: string): Promise<QuestionSummary[]> {
-  const all: QuestionSummary[] = [];
-  for (let page = 1; ; page += 1) {
-    const read = await api.admin.authoring.history({
-      assignmentId: [assignmentId],
-      page,
-      pageSize: PAGE_SIZE_MAX,
-    });
-    all.push(...read.items);
-    if (all.length >= read.total || read.items.length === 0) return all.reverse();
-  }
-}
+import { QUERY_KEYS, sectionWorkQueryKey } from '../../lib/constants';
 
 /** A typist's Done: exactly the section's questions onto its paper, the rest to the bank or deleted. */
 export function TypistDoneDialog({
@@ -59,27 +44,31 @@ function DoneDialog({
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [discarded, setDiscarded] = useState<ReadonlySet<string>>(new Set());
 
-  const written = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'section', assignment.id, 'all'],
-    queryFn: () => sectionQuestions(assignment.id),
+  const { testId, baseConfigSectionId } = assignment;
+  const work = useQuery({
+    queryKey: sectionWorkQueryKey(testId, baseConfigSectionId),
+    queryFn: () => api.admin.sectionWork.one(testId, baseConfigSectionId),
   });
-  const rows = written.data ?? [];
+  const rows = work.data?.questions.filter((question) => question.typed) ?? [];
 
   const gaps = selectionGaps(assignment, rows, chosen);
-  const leftover = rows.filter((row) => !chosen.has(row.id));
-  const deleting = leftover.filter((row) => discarded.has(row.id)).length;
+  const leftover = rows.filter((row) => !chosen.has(row.questionId));
+  const deleting = leftover.filter((row) => discarded.has(row.questionId)).length;
 
   const done = useMutation({
     meta: { success: `${assignment.sectionName} marked done.` },
     mutationFn: () =>
       api.admin.assignments.done(assignment.id, {
         selected: [...chosen],
-        discard: leftover.filter((row) => discarded.has(row.id)).map((row) => row.id),
+        discard: leftover
+          .filter((row) => discarded.has(row.questionId))
+          .map((row) => row.questionId),
       }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING }),
       ]);
       onClose();
     },
@@ -120,10 +109,10 @@ function DoneDialog({
           <DataTable
             columns={columns}
             rows={rows}
-            rowKey={(row) => row.id}
-            isLoading={written.isLoading}
-            isError={written.isError}
-            onRetry={() => void written.refetch()}
+            rowKey={(row) => row.questionId}
+            isLoading={work.isLoading}
+            isError={work.isError}
+            onRetry={() => void work.refetch()}
             empty="Nothing written for this section yet"
             selection={{
               selected: chosen,
@@ -158,13 +147,13 @@ function columnsOf(
   chosen: ReadonlySet<string>,
   discarded: ReadonlySet<string>,
   toggleDiscard: (id: string) => void,
-): DataTableColumn<QuestionSummary>[] {
+): DataTableColumn<SectionQuestion>[] {
   return [
     {
       key: 'stem',
       header: 'Question',
       className: 'max-w-sm',
-      cell: (row) => <TruncatedText>{row.stemPreview}</TruncatedText>,
+      cell: (row) => <TruncatedText>{row.preview}</TruncatedText>,
     },
     {
       key: 'difficulty',
@@ -175,11 +164,11 @@ function columnsOf(
       key: 'discard',
       header: 'Delete',
       cell: (row) =>
-        chosen.has(row.id) ? null : (
+        chosen.has(row.questionId) ? null : (
           <Checkbox
-            aria-label={`Delete “${row.stemPreview}” instead of keeping it in the bank`}
-            checked={discarded.has(row.id)}
-            onChange={() => toggleDiscard(row.id)}
+            aria-label={`Delete “${row.preview}” instead of keeping it in the bank`}
+            checked={discarded.has(row.questionId)}
+            onChange={() => toggleDiscard(row.questionId)}
           />
         ),
     },
@@ -192,13 +181,13 @@ function leftoverNotice(leftover: number, deleting: number): string {
   return deleting > 0 ? `${kept} ${plural(deleting, 'question')} will be deleted.` : kept;
 }
 
-const chosenLevels = (rows: readonly QuestionSummary[], chosen: ReadonlySet<string>) =>
-  rows.filter((row) => chosen.has(row.id)).map((row) => row.difficulty);
+const chosenLevels = (rows: readonly SectionQuestion[], chosen: ReadonlySet<string>) =>
+  rows.filter((row) => chosen.has(row.questionId)).map((row) => row.difficulty);
 
 /** What stands between this choice and Done, in the words the server would refuse it with. */
 function selectionGaps(
   assignment: Assignment,
-  rows: readonly QuestionSummary[],
+  rows: readonly SectionQuestion[],
   chosen: ReadonlySet<string>,
 ): string[] {
   const needed = assignment.sectionQuestionCount;
@@ -221,7 +210,7 @@ function selectionGaps(
 
 function mixBadges(
   assignment: Assignment,
-  rows: readonly QuestionSummary[],
+  rows: readonly SectionQuestion[],
   chosen: ReadonlySet<string>,
 ) {
   if (!assignment.sectionMix) return null;
