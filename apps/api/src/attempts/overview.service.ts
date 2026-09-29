@@ -71,7 +71,7 @@ export class StudentOverviewService {
         stat === null
           ? { ...NO_SITTINGS, ...percentiles }
           : {
-              testsAttempted: stat.testsAttempted,
+              testsAttempted: sittingsOf(stat),
               testsEvaluated: stat.testsEvaluated,
               retakeCount: stat.retakeCount,
               ...percentiles,
@@ -111,14 +111,11 @@ export class StudentOverviewService {
       stats.map((stat) => [
         stat.studentId,
         {
-          testsAttempted: stat.testsAttempted,
+          testsAttempted: sittingsOf(stat),
           testsEvaluated: stat.testsEvaluated,
           avgScore: perSitting(Number(stat.sumScore), stat.testsEvaluated),
-          accuracy:
-            stat.totalAnswered === 0
-              ? null
-              : round2((stat.totalCorrect / stat.totalAnswered) * 100),
-          avgTimeSec: perSitting(Number(stat.sumTimeSec), stat.testsAttempted),
+          accuracy: accuracyOf(stat),
+          avgTimeSec: perSitting(Number(stat.sumTimeSec), sittingsOf(stat)),
           lastAttemptAt: stat.lastAttemptAt,
           subjectAccuracy: new Map(),
         },
@@ -157,6 +154,16 @@ export interface StudentRollups {
 }
 
 type SubjectStatRow = Prisma.StudentSubjectStatGetPayload<{ select: typeof SUBJECT_SELECT }>;
+
+/** Every evaluated sitting: the ranked ones and the retakes are the two kinds there are. */
+const sittingsOf = (stat: { testsEvaluated: number; retakeCount: number }) =>
+  stat.testsEvaluated + stat.retakeCount;
+
+/** Percent right of the questions answered, a skip being neither. */
+function accuracyOf(stat: { totalCorrect: number; totalWrong: number }): number | null {
+  const answered = stat.totalCorrect + stat.totalWrong;
+  return answered === 0 ? null : round2((stat.totalCorrect / answered) * 100);
+}
 
 /** One entry per subject carrying its scope rows, so a scope filter costs no second call. */
 function subjectsOf(rows: readonly SubjectStatRow[]): SubjectStanding[] {

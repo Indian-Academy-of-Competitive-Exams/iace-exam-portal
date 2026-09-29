@@ -161,7 +161,7 @@ describe('RollupService — a sweep and a rebuild that overlap', () => {
     release.open();
     await scoring;
 
-    assert.equal((await studentStat(studentId))?.testsAttempted, 2);
+    assert.equal((await studentStat(studentId))?.testsEvaluated, 2);
   });
 });
 
@@ -188,6 +188,6 @@ describe('RollupService — a rebuild that lands before the fold it overtakes', 
     await rollup.rebuildStudent(studentId);
     await rollup.sweepCohorts();
 
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1);
+    assert.equal((await studentStat(studentId))?.testsEvaluated, 1);
   });
 });

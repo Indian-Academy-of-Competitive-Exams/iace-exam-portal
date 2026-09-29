@@ -1145,12 +1145,11 @@ model NotificationDelivery {
 // applied inline. Averages are derived on read.
 // ============================================================================
 
+// Sittings are testsEvaluated + retakeCount and answered is totalCorrect + totalWrong, summed on read.
 model StudentStat {
   studentId        String    @id @db.Uuid
-  testsAttempted   Int       @default(0)
   testsEvaluated   Int       @default(0)
   sumScore         Decimal   @default(0) @db.Decimal(16, 2)
-  totalAnswered    Int       @default(0)
   totalCorrect     Int       @default(0)
   totalWrong       Int       @default(0)
   totalUnattempted Int       @default(0)
@@ -1171,7 +1170,6 @@ model StudentSubjectStat {
   scope      TestScope
   attempted  Int       @default(0)
   correct    Int       @default(0)
-  wrong      Int       @default(0)
   sumTimeSec BigInt    @default(0)
   computedAt DateTime  @db.Timestamptz(3)
 
@@ -1207,18 +1205,16 @@ model TestSectionStat {
   @@index([baseConfigSectionId])
 }
 
-// Item analysis and distractor counts for a test's paper, from its graded sittings.
+// Item analysis and distractor counts; attempted (correct + wrong) and the p-value are derived on read.
 model TestQuestionStat {
   testId          String   @db.Uuid
   paperQuestionId String   @db.Uuid
   questionId      String   @db.Uuid
-  attemptedCount  Int      @default(0)
   correctCount    Int      @default(0)
   wrongCount      Int      @default(0)
   skippedCount    Int      @default(0)
   sumTimeSec      BigInt   @default(0)
   optionCounts    Json?
-  pValue          Decimal? @db.Decimal(5, 4)
   computedAt      DateTime @db.Timestamptz(3)
 
   test          Test          @relation(fields: [testId], references: [id], onDelete: Cascade)

@@ -34,10 +34,8 @@ function stat(studentId: string, over: StatInput = {}) {
   return prisma.studentStat.create({
     data: {
       studentId,
-      testsAttempted: 5,
       testsEvaluated: over.testsEvaluated ?? 4,
       sumScore: over.sumScore ?? 260,
-      totalAnswered: 300,
       totalCorrect: 200,
       totalWrong: 100,
       totalUnattempted: 120,
@@ -94,6 +92,7 @@ describe('StudentOverviewService standing', () => {
     assert.equal(overview.standing.avgScore, 65);
     assert.equal(overview.standing.testsEvaluated, 4);
     assert.equal(overview.standing.retakeCount, 1);
+    assert.equal(overview.standing.testsAttempted, 5, 'every sitting is ranked or a retake');
   });
 
   /** The failure this prevents: a percentile saved at scoring, which drifts as others sit the paper. */

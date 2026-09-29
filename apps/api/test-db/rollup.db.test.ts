@@ -116,9 +116,9 @@ const testStat = (testId: string) => prisma.testStat.findUnique({ where: { testI
 async function attemptedOn(testId: string): Promise<number> {
   const rows = await prisma.testQuestionStat.findMany({
     where: { testId },
-    select: { attemptedCount: true },
+    select: { correctCount: true, wrongCount: true },
   });
-  return rows.reduce((total, row) => total + row.attemptedCount, 0);
+  return rows.reduce((total, row) => total + row.correctCount + row.wrongCount, 0);
 }
 
 /** The 15 minutes, without waiting them out: the pass reads the stamp and nothing else. */
@@ -162,7 +162,7 @@ describe('RollupService — counting one sitting in', () => {
     const rolled = await testStat(paper.testId);
     assert.equal(rolled?.evaluatedCount, 1);
     assert.equal(await sectionMarksOn(paper.testId), 3.5);
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1);
+    assert.equal((await studentStat(studentId))?.testsEvaluated, 1);
   });
 
   it('writes the marks the scorer worked out, not a second opinion of them', async () => {
@@ -177,7 +177,6 @@ describe('RollupService — counting one sitting in', () => {
       [student?.totalCorrect, student?.totalWrong, student?.totalUnattempted],
       [2, 1, 1],
     );
-    assert.equal(student?.totalAnswered, 3);
     assert.equal(num(student?.sumTimeSec), 120);
   });
 
@@ -194,24 +193,15 @@ describe('RollupService — counting one sitting in', () => {
     );
     assert.equal(rows.length, 4);
     assert.deepEqual(
-      measured.map((row) => [
-        row?.attemptedCount,
-        row?.correctCount,
-        row?.skippedCount,
-        num(row?.pValue),
-      ]),
+      measured.map((row) => [row?.correctCount, row?.wrongCount, row?.skippedCount]),
       [
-        [1, 1, 0, 1],
-        [1, 0, 0, 0],
-        [0, 0, 1, null],
-        [1, 1, 0, 1],
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 0, 0],
       ],
     );
     assert.deepEqual(measured[0]?.optionCounts, { [RIGHT]: 1 });
-    assert.equal(
-      measured.every((row) => row?.pValue === null || Number(row?.pValue) <= 1),
-      true,
-    );
   });
 
   it('splits a sitting across the subjects it served', async () => {
@@ -224,11 +214,11 @@ describe('RollupService — counting one sitting in', () => {
     const rows = await prisma.studentSubjectStat.findMany({ where: { studentId } });
     const tallyOf = (subjectId: string | undefined) => {
       const row = rows.find((held) => held.subjectId === subjectId);
-      return [row?.attempted, row?.correct, row?.wrong];
+      return [row?.attempted, row?.correct];
     };
     assert.equal(rows.length, 2);
-    assert.deepEqual(tallyOf(paper.items[0]?.subjectId), [2, 1, 1]);
-    assert.deepEqual(tallyOf(paper.items[2]?.subjectId), [1, 1, 0]);
+    assert.deepEqual(tallyOf(paper.items[0]?.subjectId), [2, 1]);
+    assert.deepEqual(tallyOf(paper.items[2]?.subjectId), [1, 1]);
   });
 });
 
@@ -340,7 +330,7 @@ describe('RollupService — who the cohort is', () => {
 
     assert.equal((await testStat(paper.testId))?.evaluatedCount, 1);
     const student = await studentStat(first.studentId);
-    assert.equal(student?.testsAttempted, 2);
+    assert.equal(student?.testsEvaluated, 1);
     assert.equal(student?.retakeCount, 1);
     const rows = await prisma.studentSubjectStat.findMany({
       where: { studentId: first.studentId },
@@ -435,7 +425,7 @@ describe('RollupService — rebuilding a scope', () => {
     const scored = new Map(sittings.map((row) => [row.studentId, Number(row.score ?? 0)]));
     const students = await prisma.studentStat.findMany();
     assert.equal(
-      students.every((row) => row.testsAttempted === 1),
+      students.every((row) => row.testsEvaluated === 1),
       true,
     );
     // The drop moved every student's marks too, so their own totals must have followed.
@@ -566,7 +556,7 @@ describe('RollupService — the student watermark a re-score can leave behind', 
     });
     await built.rollup.sweepCohorts();
 
-    assert.equal((await studentStat(studentId))?.testsAttempted, 0);
+    assert.equal((await studentStat(studentId))?.testsEvaluated, 0);
   });
 
   /** Bounded like the cohort arm: a student who is not behind must not be replayed every pass. */
@@ -608,7 +598,7 @@ describe('RollupQueue — asking for the counting nobody else will', () => {
     await built.scoring.score(attemptId);
 
     assert.equal((await testStat(paper.testId))?.evaluatedCount, 1);
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1);
+    assert.equal((await studentStat(studentId))?.testsEvaluated, 1);
   });
 });
 
@@ -640,10 +630,10 @@ describe('RollupService — rebuilding a student who sits more than one kind of 
     assert.equal(reasoning.length, 2, 'one row for each kind of paper the subject was sat on');
     const tally = (scope: TestScope) => {
       const row = reasoning.find((held) => held.scope === scope);
-      return { attempted: row?.attempted, correct: row?.correct, wrong: row?.wrong };
+      return { attempted: row?.attempted, correct: row?.correct };
     };
-    assert.deepEqual(tally(TEST_SCOPE.FULL), { attempted: 2, correct: 2, wrong: 0 });
-    assert.deepEqual(tally(TEST_SCOPE.SECTIONAL), { attempted: 2, correct: 0, wrong: 2 });
+    assert.deepEqual(tally(TEST_SCOPE.FULL), { attempted: 2, correct: 2 });
+    assert.deepEqual(tally(TEST_SCOPE.SECTIONAL), { attempted: 2, correct: 0 });
   });
 
   /** A rebuild writes outright, so it must land on exactly what the incremental fold had built. */

@@ -842,10 +842,8 @@ Table NotificationDelivery {
 
 Table StudentStat {
   studentId uuid [pk]
-  testsAttempted integer [not null, default: 0]
   testsEvaluated integer [not null, default: 0]
   sumScore decimal(16, 2) [not null, default: 0]
-  totalAnswered integer [not null, default: 0]
   totalCorrect integer [not null, default: 0]
   totalWrong integer [not null, default: 0]
   totalUnattempted integer [not null, default: 0]
@@ -862,7 +860,6 @@ Table StudentSubjectStat {
   scope TestScope [not null]
   attempted integer [not null, default: 0]
   correct integer [not null, default: 0]
-  wrong integer [not null, default: 0]
   sumTimeSec bigint [not null, default: 0]
   computedAt timestamptz(3) [not null]
   indexes {
@@ -894,13 +891,11 @@ Table TestQuestionStat {
   testId uuid [not null]
   paperQuestionId uuid [not null]
   questionId uuid [not null]
-  attemptedCount integer [not null, default: 0]
   correctCount integer [not null, default: 0]
   wrongCount integer [not null, default: 0]
   skippedCount integer [not null, default: 0]
   sumTimeSec bigint [not null, default: 0]
   optionCounts jsonb
-  pValue decimal(5, 4)
   computedAt timestamptz(3) [not null]
   indexes {
     (testId, paperQuestionId) [pk]

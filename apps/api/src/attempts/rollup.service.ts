@@ -15,7 +15,6 @@ import {
   addToStudentTotals,
   cohortSittingsOf,
   emptyStudentTotals,
-  pValueOf,
   type FoldableAttempt,
   type QuestionTotals,
   type StudentTotals,
@@ -337,19 +336,15 @@ export class RollupService {
   ): Promise<void> {
     await tx.$executeRaw`
       INSERT INTO "StudentStat" (
-        "studentId", "testsAttempted", "testsEvaluated", "sumScore", "totalAnswered",
-        "totalCorrect", "totalWrong", "totalUnattempted", "sumTimeSec", "retakeCount",
-        "lastAttemptAt", "computedAt")
+        "studentId", "testsEvaluated", "sumScore", "totalCorrect", "totalWrong",
+        "totalUnattempted", "sumTimeSec", "retakeCount", "lastAttemptAt", "computedAt")
       VALUES (
-        ${studentId}::uuid, ${totals.testsAttempted}, ${totals.testsEvaluated},
-        ${totals.sumScore}, ${totals.totalAnswered}, ${totals.totalCorrect}, ${totals.totalWrong},
-        ${totals.totalUnattempted}, ${BigInt(totals.sumTimeSec)}, ${totals.retakeCount},
-        ${totals.lastAttemptAt}::timestamptz, ${now})
+        ${studentId}::uuid, ${totals.testsEvaluated}, ${totals.sumScore}, ${totals.totalCorrect},
+        ${totals.totalWrong}, ${totals.totalUnattempted}, ${BigInt(totals.sumTimeSec)},
+        ${totals.retakeCount}, ${totals.lastAttemptAt}::timestamptz, ${now})
       ON CONFLICT ("studentId") DO UPDATE SET
-        "testsAttempted" = "StudentStat"."testsAttempted" + EXCLUDED."testsAttempted",
         "testsEvaluated" = "StudentStat"."testsEvaluated" + EXCLUDED."testsEvaluated",
         "sumScore" = "StudentStat"."sumScore" + EXCLUDED."sumScore",
-        "totalAnswered" = "StudentStat"."totalAnswered" + EXCLUDED."totalAnswered",
         "totalCorrect" = "StudentStat"."totalCorrect" + EXCLUDED."totalCorrect",
         "totalWrong" = "StudentStat"."totalWrong" + EXCLUDED."totalWrong",
         "totalUnattempted" = "StudentStat"."totalUnattempted" + EXCLUDED."totalUnattempted",
@@ -374,19 +369,17 @@ export class RollupService {
 
     await tx.$executeRaw`
       INSERT INTO "StudentSubjectStat" (
-        "studentId", "subjectId", "scope", "attempted", "correct", "wrong", "sumTimeSec", "computedAt")
+        "studentId", "subjectId", "scope", "attempted", "correct", "sumTimeSec", "computedAt")
       SELECT ${studentId}::uuid, * FROM unnest(
         ${rows.map((row) => row.subjectId)}::uuid[],
         ${rows.map((row) => row.scope)}::"TestScope"[],
         ${rows.map((row) => row.attempted)}::int[],
         ${rows.map((row) => row.correct)}::int[],
-        ${rows.map((row) => row.wrong)}::int[],
         ${rows.map((row) => BigInt(row.sumTimeSec))}::bigint[],
         ${rows.map(() => now)}::timestamptz[])
       ON CONFLICT ("studentId", "subjectId", "scope") DO UPDATE SET
         "attempted" = "StudentSubjectStat"."attempted" + EXCLUDED."attempted",
         "correct" = "StudentSubjectStat"."correct" + EXCLUDED."correct",
-        "wrong" = "StudentSubjectStat"."wrong" + EXCLUDED."wrong",
         "sumTimeSec" = "StudentSubjectStat"."sumTimeSec" + EXCLUDED."sumTimeSec",
         "computedAt" = EXCLUDED."computedAt"`;
   }
@@ -400,10 +393,8 @@ export class RollupService {
     await tx.studentStat.update({
       where: { studentId },
       data: {
-        testsAttempted: totals.testsAttempted,
         testsEvaluated: totals.testsEvaluated,
         sumScore: totals.sumScore,
-        totalAnswered: totals.totalAnswered,
         totalCorrect: totals.totalCorrect,
         totalWrong: totals.totalWrong,
         totalUnattempted: totals.totalUnattempted,
@@ -423,7 +414,6 @@ export class RollupService {
         scope: subject.scope,
         attempted: subject.attempted,
         correct: subject.correct,
-        wrong: subject.wrong,
         sumTimeSec: BigInt(subject.sumTimeSec),
         computedAt: now,
       })),
@@ -493,7 +483,6 @@ function questionColumns(question: QuestionTotals, now: Date) {
     ...question,
     sumTimeSec: BigInt(question.sumTimeSec),
     optionCounts: question.optionCounts as Prisma.InputJsonValue,
-    pValue: pValueOf(question.correctCount, question.attemptedCount),
     computedAt: now,
   };
 }

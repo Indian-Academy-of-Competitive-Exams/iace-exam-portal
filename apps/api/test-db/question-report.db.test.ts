@@ -94,10 +94,9 @@ async function sittings() {
         testId: paper.testId,
         paperQuestionId: first?.paperQuestionId ?? '',
         questionId: first?.questionId ?? '',
-        pValue: 0.8,
-        attemptedCount: 8,
         skippedCount: 2,
         correctCount: 6,
+        wrongCount: 2,
         sumTimeSec: 300,
         optionCounts: { o1: 6, o3: 2 },
         computedAt,
@@ -106,10 +105,9 @@ async function sittings() {
         testId: paper.testId,
         paperQuestionId: second?.paperQuestionId ?? '',
         questionId: second?.questionId ?? '',
-        pValue: 0.2,
-        attemptedCount: 5,
         skippedCount: 5,
         correctCount: 1,
+        wrongCount: 4,
         sumTimeSec: 400,
         optionCounts: { o2: 1, o3: 4 },
         computedAt,
@@ -171,7 +169,7 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     // 105 seconds against a cohort averaging 125 of them.
     assert.equal(report.paceIndex, 0.84);
     const first = report.questions[0];
-    assert.equal(first?.accuracy, 0.8);
+    assert.equal(first?.accuracy, 0.75);
     assert.equal(first?.attemptRate, 0.8);
     assert.equal(first?.cohortAverageTimeSec, 30);
   });

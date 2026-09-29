@@ -18,9 +18,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService } from './leaderboard.service';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
-import { elapsedSeconds, numberOrNull } from './attempt-report';
+import { elapsedSeconds } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { optionCountsIn, optionsIn } from './rollup-fold';
+import { optionCountsIn, optionsIn, pValueOf } from './rollup-fold';
 import { topperOf, type TopperTimes } from './topper';
 import {
   paceIndexOf,
@@ -158,11 +158,10 @@ export class QuestionReportService {
       where: { testId },
       select: {
         paperQuestionId: true,
-        attemptedCount: true,
         skippedCount: true,
         correctCount: true,
+        wrongCount: true,
         sumTimeSec: true,
-        pValue: true,
         optionCounts: true,
       },
     });
@@ -170,11 +169,11 @@ export class QuestionReportService {
       rows.map((row) => [
         row.paperQuestionId,
         {
-          attemptedCount: row.attemptedCount,
+          attemptedCount: row.correctCount + row.wrongCount,
           skippedCount: row.skippedCount,
           correctCount: row.correctCount,
           sumTimeSec: Number(row.sumTimeSec),
-          pValue: numberOrNull(row.pValue),
+          pValue: pValueOf(row.correctCount, row.wrongCount),
           optionCounts: optionCountsIn(row.optionCounts),
         },
       ]),

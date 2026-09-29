@@ -124,7 +124,7 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
     const scored = scoring.score(attempt.id);
     await reached;
     // The scorer's fold is written but not committed: nothing outside its transaction can see it yet.
-    assert.equal((await studentStat(studentId))?.testsAttempted ?? 0, 0);
+    assert.equal((await studentStat(studentId))?.testsEvaluated ?? 0, 0);
 
     const voided = resolution.void(attempt.id, { reason: REASON, regrantRanked: false }, ADMIN);
     const raced = await Promise.race([
@@ -137,7 +137,7 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
     await scored;
     await voided;
 
-    assert.equal((await studentStat(studentId))?.testsAttempted, 1, "the scorer's fold committed");
+    assert.equal((await studentStat(studentId))?.testsEvaluated, 1, "the scorer's fold committed");
     const row = await prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } });
     assert.equal(row.status, ATTEMPT_STATUS.VOIDED);
 
@@ -147,7 +147,7 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
     await new RollupService(prisma).rebuildStudent(studentId);
     const reversed = await studentStat(studentId);
     assert.equal(
-      reversed?.testsAttempted,
+      reversed?.testsEvaluated,
       0,
       'the voided sitting no longer counts toward the student',
     );

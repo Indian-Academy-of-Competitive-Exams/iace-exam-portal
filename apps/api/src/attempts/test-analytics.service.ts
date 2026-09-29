@@ -20,7 +20,7 @@ import { timeSpentIn } from './answer-sheet';
 import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
 import { cohortCurveOf } from './cohort-curve';
-import { optionCountsIn, optionsIn } from './rollup-fold';
+import { optionCountsIn, optionsIn, pValueOf } from './rollup-fold';
 import { RollupQueue } from './rollup-queue';
 import { topperIdOf } from './topper';
 import {
@@ -36,13 +36,11 @@ const NO_TEST = 'No such test';
 const ITEM_SELECT = {
   paperQuestionId: true,
   questionId: true,
-  attemptedCount: true,
   correctCount: true,
   wrongCount: true,
   skippedCount: true,
   sumTimeSec: true,
   optionCounts: true,
-  pValue: true,
   paperQuestion: {
     select: {
       order: true,
@@ -180,12 +178,12 @@ function toItemTotals(row: ItemRow): ItemTotals {
     baseConfigSectionId: paper.baseConfigSectionId,
     questionCode: paper.question.questionCode,
     stemPreview: stemPreviewOf((paper.questionVersion.content as LocalizedContent | null) ?? {}),
-    attemptedCount: row.attemptedCount,
+    attemptedCount: row.correctCount + row.wrongCount,
     correctCount: row.correctCount,
     wrongCount: row.wrongCount,
     skippedCount: row.skippedCount,
     sumTimeSec: Number(row.sumTimeSec),
-    pValue: numberOrNull(row.pValue),
+    pValue: pValueOf(row.correctCount, row.wrongCount),
     options,
     optionCounts: optionCountsIn(row.optionCounts),
   };

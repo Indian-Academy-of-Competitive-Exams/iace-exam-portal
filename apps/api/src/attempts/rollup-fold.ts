@@ -38,15 +38,12 @@ export interface SubjectTotals {
   scope: TestScope;
   attempted: number;
   correct: number;
-  wrong: number;
   sumTimeSec: number;
 }
 
 export interface StudentTotals {
-  testsAttempted: number;
   testsEvaluated: number;
   sumScore: number;
-  totalAnswered: number;
   totalCorrect: number;
   totalWrong: number;
   totalUnattempted: number;
@@ -59,7 +56,6 @@ export interface StudentTotals {
 export interface QuestionTotals {
   paperQuestionId: string;
   questionId: string;
-  attemptedCount: number;
   correctCount: number;
   wrongCount: number;
   skippedCount: number;
@@ -69,10 +65,8 @@ export interface QuestionTotals {
 
 export function emptyStudentTotals(): StudentTotals {
   return {
-    testsAttempted: 0,
     testsEvaluated: 0,
     sumScore: 0,
-    totalAnswered: 0,
     totalCorrect: 0,
     totalWrong: 0,
     totalUnattempted: 0,
@@ -85,11 +79,9 @@ export function emptyStudentTotals(): StudentTotals {
 
 /** Every evaluated sitting counts here — a retake is still work a student did. */
 export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttempt): StudentTotals {
-  totals.testsAttempted += 1;
   totals.totalCorrect += attempt.correctCount;
   totals.totalWrong += attempt.wrongCount;
   totals.totalUnattempted += attempt.unattemptedCount;
-  totals.totalAnswered += attempt.correctCount + attempt.wrongCount;
   totals.sumTimeSec += timeSpentOn(attempt);
   totals.lastAttemptAt = maxOf(totals.lastAttemptAt, attempt.submittedAt);
 
@@ -106,10 +98,11 @@ export function addToStudentTotals(totals: StudentTotals, attempt: FoldableAttem
   return totals;
 }
 
-/** How often each question was got right, to four places. Nothing measured is not a zero. */
-export function pValueOf(correctCount: number, attemptedCount: number): number | null {
-  if (attemptedCount === 0) return null;
-  return Math.round((correctCount / attemptedCount) * P_VALUE_STEPS) / P_VALUE_STEPS;
+/** Right over answered, to four places. Nothing measured is not a zero. */
+export function pValueOf(correctCount: number, wrongCount: number): number | null {
+  const answered = correctCount + wrongCount;
+  if (answered === 0) return null;
+  return Math.round((correctCount / answered) * P_VALUE_STEPS) / P_VALUE_STEPS;
 }
 
 /** The `Json?` column read back as counts. Anything that is not a count is not one. */
@@ -142,13 +135,11 @@ function addToSubject(
     scope: attempt.scope,
     attempted: 0,
     correct: 0,
-    wrong: 0,
     sumTimeSec: 0,
   };
   held.sumTimeSec += question.timeSpentSec;
   if (question.isCorrect !== null) held.attempted += 1;
   if (question.isCorrect === true) held.correct += 1;
-  if (question.isCorrect === false) held.wrong += 1;
   subjects.set(key, held);
 }
 
@@ -161,7 +152,6 @@ export function addToQuestion(
   const held = questions.get(question.paperQuestionId) ?? {
     paperQuestionId: question.paperQuestionId,
     questionId: question.questionId,
-    attemptedCount: 0,
     correctCount: 0,
     wrongCount: 0,
     skippedCount: 0,
@@ -170,7 +160,6 @@ export function addToQuestion(
   };
   held.sumTimeSec += question.timeSpentSec;
   if (question.isCorrect === null) held.skippedCount += 1;
-  else held.attemptedCount += 1;
   if (question.isCorrect === true) held.correctCount += 1;
   if (question.isCorrect === false) held.wrongCount += 1;
   if (question.selectedOptionId !== null) {
@@ -191,5 +180,4 @@ export function maxOf<T extends number | Date>(held: T | null, found: T | null):
   return held === null || found > held ? found : held;
 }
 
-/** `Decimal(5,4)`, so a p-value is stored to the place the column keeps. */
 const P_VALUE_STEPS = 10_000;

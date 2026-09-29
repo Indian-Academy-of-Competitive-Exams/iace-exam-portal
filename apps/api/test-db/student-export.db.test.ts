@@ -284,11 +284,11 @@ describe('GET admin/students/export', () => {
     await prisma.studentStat.create({
       data: {
         studentId: asha.id,
-        testsAttempted: 3,
         testsEvaluated: 2,
+        retakeCount: 1,
         sumScore: 90,
-        totalAnswered: 40,
         totalCorrect: 30,
+        totalWrong: 10,
         sumTimeSec: 3600,
         computedAt,
       },
@@ -354,7 +354,7 @@ describe('rollupsFor past the bind limit', () => {
     for (const { at, correct } of placed) {
       const { id } = await offline(branchId);
       ids[at] = id;
-      await prisma.studentStat.create({ data: { studentId: id, testsAttempted: 1, computedAt } });
+      await prisma.studentStat.create({ data: { studentId: id, testsEvaluated: 1, computedAt } });
       await prisma.studentSubjectStat.create({
         data: {
           studentId: id,
