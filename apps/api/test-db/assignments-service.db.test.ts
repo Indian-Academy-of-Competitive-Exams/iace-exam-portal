@@ -1624,6 +1624,14 @@ describe('AssignmentsService — a reader gets a whole section', () => {
         checkedAt: new Date(),
       })),
     });
+    await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
+    await assert.rejects(
+      () => assignments.finalize(reading.id, reader.id),
+      refusedWith(ErrorCodes.CONFLICT),
+      'the test was offered, so its reading is over',
+    );
+    await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: null } });
+
     const released = await assignments.finalize(reading.id, reader.id);
     assert.ok(released.finalizedAt);
   });

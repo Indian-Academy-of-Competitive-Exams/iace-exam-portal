@@ -862,6 +862,17 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
   });
 
+  /** The failure this prevents: a picked paper's typist, who only fixes, closing the section as if typed. */
+  it('refuses Done on a picked section, and writes nothing', async () => {
+    const { done, typingDone } = await typed(['q1', 'q2'], { paperSource: PAPER_SOURCES.PICKED });
+
+    const error = await refused(done(['q1', 'q2']));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(await typingDone(), null);
+    assert.deepEqual(await heldIds(), []);
+  });
+
   it('refuses a choice outside the section’s difficulty split, naming the gap', async () => {
     const mix = { sections: { [idFor('sec_2')]: { mix: { LOW: 1, MEDIUM: 1, HIGH: 0 } } } };
     const { done } = await typed(['q1', 'q2'], { questionPoolFilter: mix });

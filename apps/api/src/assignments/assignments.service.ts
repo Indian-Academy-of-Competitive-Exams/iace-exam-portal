@@ -53,6 +53,7 @@ const PASSED_ON_MESSAGE =
   'This section has passed to somebody else, so it is no longer yours to release.';
 const LEFT_TEST_MESSAGE = 'This section left the test, so there is nothing of it to release.';
 const NOT_HANDED_MESSAGE = 'This section has not reached you yet.';
+const READING_OVER_MESSAGE = 'This test has been offered, so its reading is over.';
 const ALREADY_HOLDS_MESSAGE = 'This admin already holds that role on this section.';
 const HAS_WORKED_MESSAGE =
   'Work has been done under this assignment, so it stays on the record. Give the role to somebody else instead.';
@@ -520,6 +521,7 @@ export class AssignmentsService {
       );
     }
     if (!row.handedAt) throw notWhole(NOT_HANDED_MESSAGE);
+    if (row.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, READING_OVER_MESSAGE);
     await this.assertSectionWhole(row);
     await this.assertEveryQuestionChecked(row);
 
