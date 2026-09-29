@@ -36,7 +36,7 @@ export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
               <td>{section.name}</td>
               <td>{section.questionCount}</td>
               {states.map((state) => (
-                <td key={state}>{view.sectionCounts[section.id]?.[state] ?? 0}</td>
+                <td key={state}>{view.sectionCounts(section.id)[state]}</td>
               ))}
             </tr>
           ))}

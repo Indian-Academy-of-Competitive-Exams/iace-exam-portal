@@ -4,12 +4,7 @@
  * Nothing here holds state: every value and every callback comes off the view.
  */
 import { Eraser, FileText, Flag, Info, Maximize, Send } from 'lucide-react';
-import {
-  TEST_UI,
-  type ExamTemplateConfig,
-  type PaletteCounts,
-  type SectionEffort,
-} from '@iace/contracts';
+import { TEST_UI, type ExamTemplateConfig, type PaletteCounts } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -106,13 +101,7 @@ function Timer({ view, config }: Readonly<ExamSlotProps>) {
 }
 
 /** What a section costs so far, without opening it — the one thing its tab cannot show. */
-function sectionTally(
-  effort: SectionEffort | undefined,
-  counts: PaletteCounts | undefined,
-): string | null {
-  if (!effort) return null;
-  if (!counts) return `${effort.attempted} attempted · ${effort.unattempted} unattempted`;
-
+function sectionTally(counts: PaletteCounts): string {
   // The same five states the palette draws, so the tab and the grid never disagree.
   return PALETTE_LEGEND.filter((entry) => counts[entry.state] > 0)
     .map((entry) => `${counts[entry.state]} ${entry.label.toLowerCase()}`)
@@ -124,10 +113,7 @@ export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-exam-border px-exam">
       <TabsList className="border-exam-border">
         {view.sections.map((section) => {
-          const tally = sectionTally(
-            view.effort.find((row) => row.id === section.id),
-            view.sectionCounts[section.id],
-          );
+          const tally = sectionTally(view.sectionCounts(section.id));
           const trigger = (
             <TabsTrigger
               value={section.id}
@@ -192,7 +178,7 @@ export function Palette({ view }: Readonly<ExamSlotProps>) {
       questionIds={view.questions.map((row) => row.questionId)}
       answers={view.answers}
       currentId={view.question?.questionId ?? null}
-      counts={view.sectionCounts[view.sectionId] ?? view.counts}
+      counts={view.sectionCounts(view.sectionId)}
       forwardOnly={view.forwardOnly}
       canOpen={view.canOpen}
       onOpen={view.openQuestion}

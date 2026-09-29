@@ -27,12 +27,7 @@ import {
 } from '@iace/contracts';
 import { shouldRetrySubmit, submitRetryDelayMs } from '../autosave-policy';
 import { type FullscreenHandle } from './focus-guard';
-import {
-  isTakenOver,
-  useAttemptState,
-  type AnswerIntent,
-  type AttemptStateDeps,
-} from './use-attempt-state';
+import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
 import type { ExamView } from './exam-view';
 
 /** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
@@ -44,10 +39,6 @@ export interface ExamEngineDeps extends AttemptStateDeps {
 /** What the sitting knows about itself the moment it ends, before anything has been marked. */
 export interface EndedSitting {
   attemptId: string;
-  answered: number;
-  unanswered: number;
-  markedForReview: number;
-  total: number;
   sections: SectionEffort[];
 }
 
@@ -109,8 +100,6 @@ export function useExamView(
     paper.questions.map((row) => row.questionId),
     state.answers,
   );
-  // One tally, read live by the section bar and handed on unchanged when the paper goes in.
-  const effort = sectionEffort(paper.sections, paper.questions, state.answers);
   const sectionCounts = sectionPaletteCounts(paper.sections, paper.questions, state.answers);
 
   const submit = useMutation({
@@ -124,9 +113,8 @@ export function useExamView(
     },
     retry: shouldRetrySubmit,
     retryDelay: submitRetryDelayMs,
-    onError: (error) => {
+    onError: () => {
       ending.current = false;
-      if (isTakenOver(error)) state.standDown();
     },
     onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done; nothing waits on the refetch.
@@ -135,11 +123,7 @@ export function useExamView(
       await focus.exit();
       onEnded({
         attemptId: submitted.attemptId,
-        sections: effort,
-        answered: counts[ANSWER_STATE.ANSWERED] + counts[ANSWER_STATE.ANSWERED_MARKED],
-        unanswered: counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED],
-        markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
-        total: paper.questions.length,
+        sections: sectionEffort(paper.sections, paper.questions, state.answers),
       });
     },
   });
@@ -204,11 +188,8 @@ export function useExamView(
     testUi: paper.testUi,
 
     sections: paper.sections,
-    effort,
     sectionId,
-    section,
     reachable,
-    sectional,
     forwardOnly,
 
     questions: inSection,
@@ -220,7 +201,7 @@ export function useExamView(
     marked: isReviewState(current ? state.answers[current.questionId]?.state : undefined),
     answers: state.answers,
     counts,
-    sectionCounts,
+    sectionCounts: (id) => sectionCounts[id] ?? counts,
 
     clock,
     sectionSec: sectional

@@ -78,7 +78,7 @@ export function QuestionPalette({
                     {PALETTE_LEGEND[state].label}
                   </Text>
                   <Text className="text-sm font-semibold tabular-nums text-exam-ink">
-                    {(view.sectionCounts[view.sectionId] ?? view.counts)[state]}
+                    {view.sectionCounts(view.sectionId)[state]}
                   </Text>
                 </View>
               ),

@@ -11,7 +11,6 @@ import type {
   LanguageMode,
   LiveAnswer,
   PaletteCounts,
-  SectionEffort,
   TestUi,
 } from '@iace/contracts';
 
@@ -50,13 +49,9 @@ export interface ExamView {
   testUi: TestUi;
 
   sections: readonly ExamSection[];
-  /** Per section, live: what a hover on its tab says without opening it. */
-  effort: readonly SectionEffort[];
   sectionId: string;
-  section: ExamSection | undefined;
   /** The sections a candidate may open now — under a sectional clock, exactly one. */
   reachable: readonly string[];
-  sectional: boolean;
   /** A seat left is closed for good: no palette jump back, and nothing to mark for review. */
   forwardOnly: boolean;
 
@@ -70,7 +65,7 @@ export interface ExamView {
   /** The whole paper, which is what submit counts against. */
   counts: PaletteCounts;
   /** Per section, because a palette only ever draws the section it is standing in. */
-  sectionCounts: Readonly<Record<string, PaletteCounts>>;
+  sectionCounts: (sectionId: string) => PaletteCounts;
 
   /** The server's deadline. A skin counts down to it and never computes one. */
   clock: ExamClock;

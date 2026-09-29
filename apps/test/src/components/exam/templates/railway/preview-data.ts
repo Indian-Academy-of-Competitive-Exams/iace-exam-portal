@@ -106,7 +106,10 @@ const PREVIEW_ANSWERS: Readonly<Record<string, LiveAnswer>> = {
 };
 
 export function previewView(): ExamView {
-  const questionIds = PREVIEW_QUESTIONS.map((row) => row.questionId);
+  const counts = paletteCounts(
+    PREVIEW_QUESTIONS.map((row) => row.questionId),
+    PREVIEW_ANSWERS,
+  );
   const noop = () => undefined;
 
   return {
@@ -117,11 +120,8 @@ export function previewView(): ExamView {
     testUi: TEST_UI.CBT,
 
     sections: [SECTION],
-    effort: [],
     sectionId: SECTION_ID,
-    section: SECTION,
     reachable: [SECTION_ID],
-    sectional: false,
     forwardOnly: false,
 
     questions: PREVIEW_QUESTIONS,
@@ -130,8 +130,8 @@ export function previewView(): ExamView {
     selectedOptionId: null,
     marked: false,
     answers: PREVIEW_ANSWERS,
-    counts: paletteCounts(questionIds, PREVIEW_ANSWERS),
-    sectionCounts: { [SECTION_ID]: paletteCounts(questionIds, PREVIEW_ANSWERS) },
+    counts,
+    sectionCounts: () => counts,
 
     clock: {
       endsAt: new Date(Date.now() + PAPER_SEC * 1000).toISOString(),
