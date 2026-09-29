@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   ASSIGNMENT_ROLES,
+  ActorTypes,
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
@@ -24,6 +25,11 @@ import {
 import { AuditContext } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
 import { AdminsService } from '../src/admins/admins.service';
+import { BaseConfigsService } from '../src/configs/base-configs.service';
+import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { PaperService } from '../src/tests/paper.service';
+import { TypistDoneController } from '../src/tests/tests.controller';
+import type { AuthenticatedUser } from '../src/common/security';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { QuestionsService } from '../src/questions/questions.service';
@@ -103,11 +109,25 @@ async function build() {
   );
   const storage = new FakeStorage() as never;
   const imports = new QuestionImportService(prisma, storage, new AuditService(prisma, storage));
-  return {
-    questions,
-    work: new SectionWorkService(prisma, redis, questions, assignments, imports),
-  };
+  const work = new SectionWorkService(prisma, redis, questions, assignments, imports);
+  const bus = new FakeEventBus().asService();
+  const configs = new BaseConfigsService(
+    prisma,
+    new ExamStagesService(prisma, audit, bus),
+    audit,
+    redis,
+    bus,
+  );
+  const paper = new PaperService(prisma, configs, audit, redis, questions);
+  return { questions, work, done: new TypistDoneController(paper, work) };
 }
+
+/** A signed-in admin as the Done route receives one. */
+const signedIn = (seat: SectionViewer): AuthenticatedUser => ({
+  ...seat,
+  actor: ActorTypes.ADMIN,
+  sessionId: randomUUID(),
+});
 
 const assign = (
   catalog: Catalog,
@@ -330,6 +350,36 @@ describe('SectionWorkService — a typist the section passed on from', () => {
   });
 });
 
+describe('SectionWorkService — a section nobody types any more', () => {
+  /** The failure this prevents: an earlier typist regaining every draft once the last one is stood down. */
+  it('leaves its drafts to its last typist alone', async () => {
+    const { work } = await build();
+    const { catalog, pair, typing, typed } = await aSection();
+    const question = await typed();
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date() },
+    });
+    await prisma.questionAssignment.create({
+      data: {
+        ...pair,
+        baseConfigId: catalog.baseConfigId,
+        assigneeId: STRANGER,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        createdAt: new Date(Date.now() + 1000),
+        replacedAt: new Date(Date.now() + 2000),
+      },
+    });
+
+    await assert.rejects(
+      () => work.edit(pair, question.id, draft(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    const fixed = await work.edit(pair, question.id, draft(), viewer(STRANGER));
+    assert.equal(fixed.id, question.id);
+  });
+});
+
 describe('SectionWorkService.remove', () => {
   /** The failure this prevents: a question on the section deleted by somebody who may not change it. */
   it('deletes a typist’s own draft, and refuses one a test owner cannot change', async () => {
@@ -402,6 +452,55 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
   });
 
   /** The failure this prevents: new typing on a job that is over, or on a paper nobody types. */
+  /** The failure this prevents: a super admin who once held the role refused what they may do for anyone. */
+  it('has a super admin who once typed the section act through whoever types it now', async () => {
+    const { work } = await build();
+    const { catalog, pair, typing } = await aSection();
+    await prisma.questionAssignment.create({
+      data: {
+        ...pair,
+        baseConfigId: catalog.baseConfigId,
+        assigneeId: CHIEF,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        createdAt: new Date(Date.now() - 2000),
+        replacedAt: new Date(Date.now() - 1000),
+      },
+    });
+
+    const written = await work.create(pair, draft(), viewer(CHIEF, {}, true));
+
+    const row = await prisma.question.findUniqueOrThrow({ where: { id: written.id } });
+    assert.equal(row.assignmentId, typing.id);
+  });
+
+  /** The failure this prevents: a section's paper chosen by somebody who is not typing it. */
+  it('takes Done from its typist, and refuses the reader, an owner, a stranger and a replaced typist', async () => {
+    const { done } = await build();
+    const { catalog, pair, typing, typed } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { questionCount: 1 },
+    });
+    const question = await typed();
+    const body = { selected: [question.id], discard: [] };
+    const doneBy = (who: SectionViewer) =>
+      done.done(pair.testId, pair.baseConfigSectionId, body, signedIn(who));
+
+    for (const who of [viewer(READER), viewer(OWNER, OWNS)]) {
+      await assert.rejects(() => doneBy(who), refusedWith(ErrorCodes.FORBIDDEN));
+    }
+    await assert.rejects(() => doneBy(viewer(STRANGER)), refusedWith(ErrorCodes.NOT_FOUND));
+    const finished = await doneBy(viewer(TYPIST));
+    assert.ok(finished.typist?.finalizedAt);
+
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date(), finalizedAt: null },
+    });
+    await assign(catalog, pair.testId, pair.baseConfigSectionId, STRANGER, ASSIGNMENT_ROLES.TYPIST);
+    await assert.rejects(() => doneBy(viewer(TYPIST)), refusedWith(ErrorCodes.NOT_FOUND));
+  });
+
   it('refuses typing once the typist is replaced or done, and on a picked paper', async () => {
     const { work } = await build();
     const { pair, typing } = await aSection();

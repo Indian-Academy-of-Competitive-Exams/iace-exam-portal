@@ -234,7 +234,7 @@ export class AssignmentsService {
     const rows = await this.prisma.questionAssignment.findMany({
       where: { testId, baseConfigSectionId },
       include: ASSIGNMENT_INCLUDE,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     const written = await this.sectionWrittenCounts(rows);
     return rows.map((row) => toAssignment(row, written.get(sectionKey(row)) ?? NO_COUNTS));

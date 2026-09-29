@@ -447,8 +447,9 @@ and needs no mapping at all.
   a released whole section holding it back to its reader the same way.
 - **A question written for a section is changed and deleted only on that section's page**, under
   the rule of the viewer's seat there; the typist's own editor holds only what they typed straight
-  into the bank. A typist whose role passed to somebody else only reads; one stood down with nobody
-  after them still fixes and deletes what they typed, since nobody else can.
+  into the bank. A typist whose role passed to somebody else only reads; the section's last typist,
+  stood down with nobody after them, still fixes the section's drafts and deletes their own, since
+  nobody else can. A super admin acts through whoever holds a role now.
 - **A test owner changes a question only when the section is back with them**: a picked section
   before it is handed over, or any section once its reader has released it — and never once the
   test is offered.

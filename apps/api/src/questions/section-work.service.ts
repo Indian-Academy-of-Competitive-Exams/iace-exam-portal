@@ -550,11 +550,11 @@ export class SectionWorkService {
   }
 }
 
-/** The viewer's own row in a role, replaced or not, or for a super admin whoever holds it now. */
+/** For a super admin whoever holds the role now, a seat they once left included; else the viewer's own row in it. */
 function actingAs(context: Context, role: AssignmentRole): Assignment {
-  if (context.mine?.role === role) return context.mine;
   const holder = role === ASSIGNMENT_ROLES.TYPIST ? context.typist : context.reader;
   if (holder && context.viewer.isSuperAdmin) return holder;
+  if (context.mine?.role === role) return context.mine;
   const only = role === ASSIGNMENT_ROLES.TYPIST ? TYPING_ONLY_MESSAGE : READERS_ONLY_MESSAGE;
   throw new AppException(ErrorCodes.FORBIDDEN, only);
 }
@@ -574,11 +574,12 @@ function typingRow(context: Context): Assignment {
 const heldNow = (context: Context): Assignment | null =>
   context.mine?.replacedAt === null ? context.mine : null;
 
-/** The row held now, or a typist's last one when nobody took the seat after them: their drafts are nobody else's. */
+/** The row held now, or the section's last typist row when nobody took the seat after it: those drafts are nobody else's. */
 function typingOrHeld(context: Context): Assignment | null {
   const held = heldNow(context);
   if (held || context.typist) return held;
-  return context.mine?.role === ASSIGNMENT_ROLES.TYPIST ? context.mine : null;
+  const last = context.rows.filter((row) => row.role === ASSIGNMENT_ROLES.TYPIST).at(-1);
+  return last && last.id === context.mine?.id ? last : null;
 }
 
 /** Picked and not yet handed on, or released by its reader: then the section is back with its owner. */
