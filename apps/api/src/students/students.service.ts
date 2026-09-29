@@ -39,6 +39,7 @@ import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 import { everyTermMatches } from '../common/search-terms';
+import { HOLDS_OWN_ACCESS } from './own-access';
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
@@ -109,9 +110,14 @@ export class StudentsService {
       this.prisma.student.count({ where }),
     ]);
 
+    const holding = await this.prisma.student.findMany({
+      where: { id: { in: rows.map((row) => row.id) }, ...HOLDS_OWN_ACCESS },
+      select: { id: true },
+    });
+    const own = new Set(holding.map((row) => row.id));
     return paged(
       query,
-      rows.map((row) => this.toSummary(row)),
+      rows.map((row) => this.toSummary(row, own.has(row.id))),
       total,
     );
   }
@@ -165,9 +171,10 @@ export class StudentsService {
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    const own = await this.prisma.student.count({ where: { id, ...HOLDS_OWN_ACCESS } });
 
     return {
-      ...this.toSummary(student),
+      ...this.toSummary(student, own > 0),
       programs: student.programs,
       events: student.eventCandidacies.map((candidacy) => candidacy.event),
       currentBranchId: student.currentBranchId,
@@ -493,21 +500,24 @@ export class StudentsService {
     });
   }
 
-  private toSummary(row: {
-    id: string;
-    mobile: string;
-    fullName: string | null;
-    studentType: StudentType;
-    enrolledExams: string[];
-    enrolledCourses: ExamCourse[];
-    isActive: boolean;
-    isTestBlocked: boolean;
-    pinHash: string | null;
-    pinIsDefault: boolean;
-    preTestReady: boolean;
-    profileCompleted: boolean;
-    createdAt: Date;
-  }): StudentSummary {
+  private toSummary(
+    row: {
+      id: string;
+      mobile: string;
+      fullName: string | null;
+      studentType: StudentType;
+      enrolledExams: string[];
+      enrolledCourses: ExamCourse[];
+      isActive: boolean;
+      isTestBlocked: boolean;
+      pinHash: string | null;
+      pinIsDefault: boolean;
+      preTestReady: boolean;
+      profileCompleted: boolean;
+      createdAt: Date;
+    },
+    hasOwnAccess: boolean,
+  ): StudentSummary {
     return {
       id: row.id,
       mobile: row.mobile,
@@ -515,6 +525,7 @@ export class StudentsService {
       studentType: row.studentType,
       enrolledExams: row.enrolledExams,
       enrolledCourses: row.enrolledCourses,
+      hasOwnAccess,
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
       // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is not a sign-in.

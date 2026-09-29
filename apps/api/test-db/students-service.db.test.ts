@@ -8,6 +8,7 @@ import {
   ErrorCodes,
   STUDENT_TYPE,
   studentSittingsQuerySchema,
+  studentListQuerySchema,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
@@ -123,6 +124,36 @@ const refusedOn =
   (field: string, code: string = ErrorCodes.VALIDATION_ERROR) =>
   (error: unknown) =>
     AppException.is(error) && error.code === code && Boolean(error.fieldErrors?.[field]);
+
+describe('StudentsService.list — access of their own, one rule for the filter and the badge', () => {
+  /** The failure this prevents: the badge (exams only) and the filter beside it (exams or programs) disagreeing, and both disagreeing with the resolver. */
+  it('counts a grant and a course at a branch, and not an exam alone', async () => {
+    const { service } = await serviceWith({ student: null });
+    const examOnly = await makeStudent(prisma, { enrolledExams: ['SSC CGL'] });
+    const granted = await makeStudent(prisma);
+    const catalog = await makeCatalog(prisma);
+    await prisma.studentGrant.create({
+      data: { studentId: granted.id, testSeriesId: catalog.testSeriesId },
+    });
+    const placed = await makeStudent(prisma, {
+      currentBranchId: PHYSICAL.id,
+      enrolledCourses: ['SSC'],
+    });
+
+    const listed = await service.list(studentListQuerySchema.parse({}));
+    const own = new Map(listed.items.map((student) => [student.id, student.hasOwnAccess]));
+    assert.deepEqual(
+      [own.get(examOnly.id), own.get(granted.id), own.get(placed.id)],
+      [false, true, true],
+    );
+
+    const none = await service.list(studentListQuerySchema.parse({ noAccess: 'true' }));
+    assert.deepEqual(
+      none.items.map((student) => student.id),
+      [examOnly.id],
+    );
+  });
+});
 
 describe('StudentsService.enrolmentOf — what a student reads on their own profile', () => {
   it('resolves every code the student carries to the catalog name for it', async () => {

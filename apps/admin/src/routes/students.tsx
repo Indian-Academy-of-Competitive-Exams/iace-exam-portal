@@ -81,9 +81,6 @@ const STATUS_QUERY: Record<
   defaultpin: { hasDefaultPin: 'true' },
 };
 
-/** Nothing of their own to reach a series by. An explicit grant is a row this list cannot see. */
-const hasNoOwnAccess = (student: StudentSummary): boolean => student.enrolledExams.length === 0;
-
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentColumns(): DataTableColumn<StudentSummary>[] {
   return [
@@ -98,11 +95,11 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
       key: 'access',
       header: 'Access',
       cell: (s) =>
-        hasNoOwnAccess(s) ? (
-          // Neither enrolled nor granted isn't the same as "no access" — GLOBAL reaches everyone and this query can't see that.
-          <Badge variant="warning">No enrolment or grant</Badge>
-        ) : (
+        s.hasOwnAccess ? (
           <AccessCell student={s} />
+        ) : (
+          // Nothing of their own is not "no access": a free series reaches everyone.
+          <Badge variant="warning">No access of their own</Badge>
         ),
     },
     {
@@ -128,7 +125,7 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
   ];
 }
 
-// What a student reaches tests through: their exam enrolments, the first shown and the rest behind a count.
+// The exams a student is enrolled for, the first shown and the rest behind a count.
 function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
   const labels = [...new Set(student.enrolledExams)];
 

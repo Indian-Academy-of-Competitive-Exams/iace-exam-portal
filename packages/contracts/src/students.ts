@@ -82,10 +82,12 @@ export const studentSummarySchema = z.object({
   mobile: z.string(),
   fullName: z.string().nullable(),
   studentType: studentTypeSchema,
-  /** `Exam.code` values. A series is reached by matching one, with no membership row. */
+  /** `Exam.code` values: what a student is enrolled for. Reach comes through courses, programs, events and grants. */
   enrolledExams: z.array(z.string()),
   /** A whole course, for a student coached across every exam in it rather than one. */
   enrolledCourses: z.array(examCourseSchema),
+  /** Reaches a series through something of their own, by the resolver's rule; FREE series reach everyone regardless. */
+  hasOwnAccess: z.boolean(),
   isActive: z.boolean(),
   /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
   isTestBlocked: z.boolean(),

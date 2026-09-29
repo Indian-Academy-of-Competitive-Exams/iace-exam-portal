@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 import { everyTermMatches } from '../common/search-terms';
+import { HOLDS_OWN_ACCESS } from './own-access';
 
 /** Turns the roster's filters into a Prisma query. */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
@@ -43,13 +44,8 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   return and.length === 0 ? {} : { AND: and };
 }
 
-/** Access a student carries themselves: an exam enrolment or a program. A grant is a row of its own, and FREE reaches everyone anyway. */
 function ownAccessFilter(hasNoneOfTheirOwn: boolean): Prisma.StudentWhereInput {
-  const noneOfTheirOwn = {
-    enrolledExams: { isEmpty: true },
-    programs: { isEmpty: true },
-  } satisfies Prisma.StudentWhereInput;
-  return hasNoneOfTheirOwn ? noneOfTheirOwn : { NOT: noneOfTheirOwn };
+  return hasNoneOfTheirOwn ? { NOT: HOLDS_OWN_ACCESS } : HOLDS_OWN_ACCESS;
 }
 
 /** Matches `hasSignedIn` exactly — a PIN the institute set does not count, or the filter and the badge beside it would disagree. */

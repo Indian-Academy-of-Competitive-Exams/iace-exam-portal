@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { STUDENT_SORTS, studentListQuerySchema, type StudentListQuery } from '@iace/contracts';
 import { studentOrderBy, studentWhere } from '../src/students/student-query';
+import { HOLDS_OWN_ACCESS } from '../src/students/own-access';
 
 /** Parses like a real request would, so the tests exercise the coercions too. */
 const query = (params: Record<string, string> = {}): StudentListQuery =>
@@ -57,16 +58,10 @@ describe('studentWhere — three-state filters', () => {
     assert.equal(conditionsFor().length, 0);
   });
 
-  /** "Reaches no test" is enrolments AND programs, not one of them. Reading either alone fires on students who are perfectly well placed, which makes the amber badge meaningless. */
-  it('reads noAccess as "no enrolment AND no program", both ways round', () => {
-    assertHas(
-      { noAccess: 'true' },
-      { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } },
-    );
-    assertHas(
-      { noAccess: 'false' },
-      { NOT: { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } } },
-    );
+  /** The badge beside it reads the same rule, so "no access of their own" means one thing on the screen. */
+  it('reads noAccess as the one own-access rule, both ways round', () => {
+    assertHas({ noAccess: 'true' }, { NOT: HOLDS_OWN_ACCESS });
+    assertHas({ noAccess: 'false' }, HOLDS_OWN_ACCESS);
   });
 });
 
@@ -144,9 +139,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
     const params = { branchId: 'b1', noAccess: 'false' };
 
     assertHas(params, { currentBranchId: { in: ['b1'] } });
-    assertHas(params, {
-      NOT: { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } },
-    });
+    assertHas(params, HOLDS_OWN_ACCESS);
   });
 
   /** The likeliest one to be hit: pick "Never signed in", then type a name. The status filter used to disappear and the search ran across everyone. */
