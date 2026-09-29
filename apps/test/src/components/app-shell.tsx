@@ -18,7 +18,7 @@ import {
   UNREAD_QUERY_KEY,
   USER_MENU_ITEMS,
 } from '../lib/constants';
-import { onPushReceived, rebindPushSubscription, unsubscribeFromPush } from '../lib/pwa';
+import { onPushReceived, rebindOncePerLoad, unsubscribeFromPush } from '../lib/pwa';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
@@ -42,7 +42,7 @@ export function AppShell() {
   );
 
   // Best effort: a browser that cannot re-register simply goes without push until the switch is set again.
-  useEffect(() => void rebindPushSubscription().catch(() => undefined), []);
+  useEffect(() => void rebindOncePerLoad().catch(() => undefined), []);
 
   // A rising count is a new notification the lists have not got; a falling one is the reader reading them.
   const total = unread.data?.total ?? null;

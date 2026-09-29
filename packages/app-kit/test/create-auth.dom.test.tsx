@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
-import { AppException, ErrorCodes, type AuthIdentity } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  type AuthIdentity,
+  type AuthSessionResponse,
+} from '@iace/contracts';
 import { createAuth } from '../src/create-auth';
 import { createTokenStore } from '../src/token-store';
 import { fakeStorage } from './support/fake-storage';
@@ -45,6 +50,43 @@ describe('createAuth', () => {
 
     assert.equal(client.getQueryData(['me', 'catalog']), undefined);
     assert.equal(tokenStore.get(), null);
+    client.clear();
+  });
+
+  /** A push target is bound to one session, so a PIN change's new session must claim it as a sign-in does. */
+  it('tells the app of every sign-in, including a session swapped in place', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+    let told = 0;
+    const hooked = createAuth<AuthIdentity>({
+      actor: 'STUDENT',
+      queryKey: ['auth', 'me'],
+      tokenStore: createTokenStore('iace.test.hook', fakeStorage()),
+      signOutSignal: { emit: () => undefined, subscribe: () => () => undefined },
+      endpoints: { me: () => new Promise(() => undefined), logout: () => Promise.resolve() },
+      onSignedIn: () => (told += 1),
+    });
+    let signIn: (session: AuthSessionResponse) => void = () => undefined;
+    function Probe() {
+      signIn = hooked.useAuth().signIn;
+      return null;
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <hooked.AuthProvider>
+          <Probe />
+        </hooked.AuthProvider>
+      </QueryClientProvider>,
+    );
+    const session = (accessToken: string) =>
+      ({
+        tokens: { accessToken, refreshToken: 'r', expiresInSec: 900 },
+        identity: { actor: 'STUDENT' },
+      }) as AuthSessionResponse;
+
+    act(() => signIn(session('signed-in')));
+    act(() => signIn(session('after-pin-change')));
+
+    assert.equal(told, 2);
     client.clear();
   });
 

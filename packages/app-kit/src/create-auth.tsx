@@ -37,6 +37,8 @@ export interface CreateAuthOptions<TIdentity extends AuthIdentity, TExtra extend
   };
   /** App-specific reads over the identity, merged into the context value. */
   extend?: (identity: TIdentity | null) => TExtra;
+  /** Runs on every sign-in and every session swapped in place, such as a PIN change's. */
+  onSignedIn?: () => void;
 }
 
 const ME_RETRIES = 1;
@@ -54,7 +56,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
   AuthProvider: (props: Readonly<{ children: ReactNode }>) => ReactNode;
   useAuth: () => AuthState<TIdentity> & TExtra;
 } {
-  const { actor, queryKey, tokenStore, signOutSignal, endpoints, extend } = options;
+  const { actor, queryKey, tokenStore, signOutSignal, endpoints, extend, onSignedIn } = options;
 
   const AuthContext = createContext<(AuthState<TIdentity> & TExtra) | null>(null);
 
@@ -101,6 +103,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
         tokenStore.set(session.tokens);
         setHasToken(true);
         queryClient.setQueryData(queryKey, session.identity);
+        onSignedIn?.();
       },
       [queryClient],
     );

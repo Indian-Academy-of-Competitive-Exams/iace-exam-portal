@@ -9,7 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ACCOUNT_ROUTES } from './nav';
 import { UNREAD_QUERY_KEY } from './constants';
 import { loadNotifications } from './notifications';
-import { registerPushDevice } from './push-device';
+import { registerOncePerProcess } from './push-device';
 
 /** Shown while the app is open too: a student reading one screen is not told to look elsewhere. */
 const WHILE_OPEN = {
@@ -24,7 +24,7 @@ export function usePushDevice(signedIn: boolean): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (signedIn) void registerPushDevice();
+    if (signedIn) void registerOncePerProcess();
   }, [signedIn]);
 
   useEffect(() => {

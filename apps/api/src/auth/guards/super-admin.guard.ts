@@ -16,15 +16,15 @@ export class SuperAdminGuard implements CanActivate {
     if (!required) return true;
 
     const { user } = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
-    if (user?.actor !== ActorTypes.ADMIN || !user.isSuperAdmin) {
-      throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin can change this');
-    }
-    // Being a super admin is not enough if the account is switched off — see the same check in FeaturePermissionGuard.
-    if (!user.isActive) {
+    // Switched off first: a deactivated admin's identity carries no bypass, so this is where they learn why.
+    if (user?.actor === ActorTypes.ADMIN && !user.isActive) {
       throw new AppException(
         ErrorCodes.FORBIDDEN,
         'Your account has been deactivated. Ask a super admin to restore it',
       );
+    }
+    if (user?.actor !== ActorTypes.ADMIN || !user.isSuperAdmin) {
+      throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin can change this');
     }
     return true;
   }

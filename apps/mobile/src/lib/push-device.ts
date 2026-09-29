@@ -15,8 +15,11 @@ const FCM_TOKEN_TYPE = 'android';
 /** The token this phone last registered, so signing out drops the one the server actually holds. */
 let registered: string | null = null;
 
+let boundThisProcess = false;
+
 /** On every sign-in, not once per process: the server binds the token to the session now open. */
 export async function registerPushDevice(): Promise<void> {
+  boundThisProcess = true;
   // Expo Go throws on a token since SDK 53, and iOS hands back an APNs token FCM cannot address.
   if (IN_EXPO_GO || !Device.isDevice || Platform.OS !== 'android') return;
 
@@ -33,6 +36,11 @@ export async function registerPushDevice(): Promise<void> {
   } catch {
     // A phone that could not register is a phone without push, never a phone that cannot sign in.
   }
+}
+
+/** For a session restored from storage at launch; a sign-in registers through the auth hook instead. */
+export function registerOncePerProcess(): Promise<void> {
+  return boundThisProcess ? Promise.resolve() : registerPushDevice();
 }
 
 /** Called BEFORE the session ends, or the server would keep pushing this student's bell to it. */

@@ -2,6 +2,7 @@ import { ActorTypes, type StudentIdentity } from '@iace/contracts';
 import { createAuth } from '@iace/app-kit';
 import { browserSignOutSignal } from '@iace/app-kit/browser';
 import { api, tokenStore } from '../lib/api';
+import { rebindPushSubscription } from '../lib/pwa';
 import { ME_QUERY_KEY } from '../lib/constants';
 
 /** This app's session: actor, cache key, client. `ActorTypes.STUDENT` is load-bearing — an admin's JWT is valid but not a session here. */
@@ -16,4 +17,5 @@ export const { AuthProvider, useAuth } = createAuth<StudentIdentity>({
       await api.auth.logout();
     },
   },
+  onSignedIn: () => void rebindPushSubscription().catch(() => undefined),
 });

@@ -112,11 +112,19 @@ export async function subscribeToPush(publicKey: string): Promise<PushSubscripti
   return toSubscriptionInput(subscription);
 }
 
-/** On every signed-in load: the server binds a subscription to one session, so a new one must claim it again. */
+let boundThisLoad = false;
+
+/** On every sign-in: the server binds a subscription to one session, so a new one must claim it again. */
 export async function rebindPushSubscription(): Promise<void> {
+  boundThisLoad = true;
   const subscription = await currentPushSubscription();
   const input = subscription ? toSubscriptionInput(subscription) : null;
   if (input) await api.me.subscribeToPush(input);
+}
+
+/** For a session restored from storage — once a load, never per navigation, or every sitting's end would write. */
+export function rebindOncePerLoad(): Promise<void> {
+  return boundThisLoad ? Promise.resolve() : rebindPushSubscription();
 }
 
 /** Both sides, and before sign-out too: a row left behind sends this student's bell to the next one. */

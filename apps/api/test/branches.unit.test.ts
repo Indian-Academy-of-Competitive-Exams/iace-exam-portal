@@ -137,14 +137,15 @@ describe('SuperAdminGuard', () => {
   const superAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: true, isActive: true };
   const plainAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: false, isActive: true };
   const student = { actor: ActorTypes.STUDENT, isSuperAdmin: false, isActive: true };
-  const deactivatedSuperAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: true, isActive: false };
+  // As the identity reports a switched-off super admin: no bypass left, only the flag.
+  const deactivated = { actor: ActorTypes.ADMIN, isSuperAdmin: false, isActive: false };
 
   it('lets a super admin through', () => {
     assert.equal(guardFor(true, superAdmin)(), true);
   });
 
-  it('refuses a DEACTIVATED super admin — being one is not enough if switched off', () => {
-    assert.throws(guardFor(true, deactivatedSuperAdmin), (error: unknown) => {
+  it('refuses a DEACTIVATED admin with the reason, not a bare refusal', () => {
+    assert.throws(guardFor(true, deactivated), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, ErrorCodes.FORBIDDEN);
       assert.match(error.message, /deactivated/i);
