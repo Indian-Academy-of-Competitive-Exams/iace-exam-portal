@@ -216,6 +216,32 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(await prisma.studentStat.count(), 0);
   });
 
+  /** The failure this prevents: a job that read the paper before a drop putting back the old marks. */
+  it('lands nothing from a scorer that read an older paper than the marks already written', async () => {
+    const { paper, attemptId } = await sitting();
+    await processor.score(attemptId);
+    // Its terms are the paper before the drop, as a worker that read it first still holds them.
+    const olderPaper = new PaperSheetService(prisma);
+    await olderPaper.termsOf(paper.testId, 0);
+    const overtaken = new ScoringProcessor(
+      afterTheRead(prisma, async () => {
+        await disposeQuestion(prisma, paper, 1, PAPER_QUESTION_STATUS.DROPPED);
+        await processor.score(attemptId);
+      }),
+      new RollupQueue(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
+      fakeQueueFailures(),
+      olderPaper,
+      new RollupService(prisma),
+    );
+
+    assert.equal(await overtaken.score(attemptId), null);
+
+    const row = await attemptRow(attemptId);
+    assert.equal(row.scoredRevision, 1);
+    assert.equal(Number(row.score), 4, 'the drop pays the wrong answer, and those marks stand');
+  });
+
   it('reports an attempt that does not exist rather than throwing at the worker', async () => {
     assert.equal(await processor.score(uid()), null);
   });
@@ -236,8 +262,8 @@ describe('ScoringProcessor — what it writes', () => {
   });
 });
 
-/** The real client, standing the sitting down between the scorer's read and its write. */
-function voidingAfterTheRead(client: PrismaService, attemptId: string): PrismaService {
+/** The real client, with `then` run once right after the scorer's first read of the sitting. */
+function afterTheRead(client: PrismaService, then: () => Promise<void>): PrismaService {
   let armed = true;
   return new Proxy(client, {
     get(target, key) {
@@ -254,14 +280,21 @@ function voidingAfterTheRead(client: PrismaService, attemptId: string): PrismaSe
               delegate,
               args,
             );
-            await client.attempt.update({
-              where: { id: attemptId },
-              data: { status: ATTEMPT_STATUS.VOIDED, voidedAt: new Date() },
-            });
+            await then();
             return read;
           };
         },
       });
     },
+  });
+}
+
+/** The real client, standing the sitting down between the scorer's read and its write. */
+function voidingAfterTheRead(client: PrismaService, attemptId: string): PrismaService {
+  return afterTheRead(client, async () => {
+    await client.attempt.update({
+      where: { id: attemptId },
+      data: { status: ATTEMPT_STATUS.VOIDED, voidedAt: new Date() },
+    });
   });
 }

@@ -279,7 +279,7 @@ describe('a drop, re-scored by the sweep', () => {
     await hall.drop();
     await hall.sweeper.process();
     await hall.drainScoring();
-    // A finished job no longer holds its id, so a sitting still behind would be asked for again here.
+    // The drained jobs left the fake, so a sitting still behind would show here as a fresh ask.
     await hall.sweeper.process();
 
     assert.deepEqual(hall.scoringJobs.jobs, [], 'nothing is behind the paper once the sweep ran');

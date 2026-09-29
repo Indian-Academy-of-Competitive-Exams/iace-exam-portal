@@ -93,7 +93,7 @@ export class ScoringProcessor extends WorkerHost {
     const served = scorableOf(attempt, terms);
     const scored = scorePaper(served);
     const written = await this.persist(attempt, scored, terms, served);
-    // Stood down while this ran: counting it now would fold a void sitting back in.
+    // Stood down, or overtaken by a newer paper's marks: counting it now would count the wrong ones.
     if (!written.applied) return null;
 
     if (!written.first) await this.recount(attempt);
@@ -134,7 +134,7 @@ export class ScoringProcessor extends WorkerHost {
     }, TX_LIMITS.SHORT);
   }
 
-  /** Claim, marks and verdicts in ONE statement. Null when the status moved under it. */
+  /** Claim, marks and verdicts in ONE statement. Null when the status moved, or newer marks landed. */
   private async mark(
     tx: Prisma.TransactionClient,
     attempt: ScoringRow,
@@ -160,6 +160,8 @@ export class ScoringProcessor extends WorkerHost {
           "updatedAt" = ${now}
         FROM held h
         WHERE a."id" = h."id" AND a."status" = ANY(${[...SCORABLE]}::"AttemptStatus"[])
+          -- A scorer that read an older paper than the marks already written must not put them back.
+          AND a."scoredRevision" <= ${attempt.test.paperRevision}
         RETURNING h.first
       ), sheet AS (
         UPDATE "AttemptSheet" SET
