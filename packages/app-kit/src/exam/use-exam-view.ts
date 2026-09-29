@@ -76,7 +76,7 @@ export function useExamView(
   const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;
   const reachable = openSections(paper.sections, sectional, state.sections);
   // Drawn but inert until the server says which section is open: the one on screen may already be closed.
-  const inert = sectional && !state.sectionsSeeded;
+  const inert = sectional && !state.sectionsSettled;
 
   // A reload must land where the sitting really is, not the paper's first section.
   if (sectional && reachable[0] !== undefined && reachable[0] !== sectionId) {
@@ -84,14 +84,14 @@ export function useExamView(
   }
 
   const firstReachable = reachable[0];
-  const { sectionsSeeded, sections: heldSections, enterSection } = state;
+  const { sectionsSettled, sections: heldSections, enterSection } = state;
   // Stamps a section's clock the first time it is truly known to have never been opened.
   useEffect(() => {
-    if (!sectional || !sectionsSeeded) return;
+    if (!sectional || !sectionsSettled) return;
     if (firstReachable === undefined || heldSections[firstReachable] !== undefined) return;
     const allowed = paper.sections.find((row) => row.id === firstReachable)?.durationSec;
     if (allowed !== null && allowed !== undefined) enterSection(firstReachable, allowed);
-  }, [sectional, sectionsSeeded, firstReachable, heldSections, paper.sections, enterSection]);
+  }, [sectional, sectionsSettled, firstReachable, heldSections, paper.sections, enterSection]);
 
   const section = paper.sections.find((row) => row.id === sectionId);
   const inSection = paper.questions.filter((row) => row.baseConfigSectionId === sectionId);
@@ -103,8 +103,8 @@ export function useExamView(
   const { open } = state;
   // Landed on, not moved to, and only once the server has said where the sitting is: before, it may be a closed section.
   useEffect(() => {
-    if (sectionsSeeded && onScreen !== undefined) open(onScreen);
-  }, [sectionsSeeded, onScreen, open]);
+    if (sectionsSettled && onScreen !== undefined) open(onScreen);
+  }, [sectionsSettled, onScreen, open]);
   const counts = paletteCounts(
     paper.questions.map((row) => row.questionId),
     state.answers,

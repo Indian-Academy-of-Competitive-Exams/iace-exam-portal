@@ -69,8 +69,8 @@ const answersFrom = (queued: readonly AnswerChange[]): Record<string, LiveAnswer
 export interface AttemptStateHandle {
   answers: Readonly<Record<string, LiveAnswer>>;
   sections: Readonly<Record<string, SectionProgress>>;
-  /** True once the server's own section state has arrived — before it, "never opened" is not knowable. */
-  sectionsSeeded: boolean;
+  /** True once the section state is settled — the server answered, or never will. Before it, "never opened" is unknowable. */
+  sectionsSettled: boolean;
   /** The clock as the last save left it, so an extension reaches the screen without a reload. */
   clock: ExamClock | null;
   /** True while a save is in flight; the screen says "Saving…" and never blocks on it. */
@@ -135,8 +135,8 @@ export function useAttemptState(
   const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
-  // False until the GET below answers: before it, a screen cannot tell "never opened" from "not yet known".
-  const [sectionsSeeded, setSectionsSeeded] = useState(false);
+  // False until the GET below settles: before it, a screen cannot tell "never opened" from "not yet known".
+  const [sectionsSettled, setSectionsSettled] = useState(false);
   const [clock, setClock] = useState<ExamClock | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
@@ -188,13 +188,16 @@ export function useAttemptState(
           // Merged under, never over: an answer given while this flew is the newer one.
           commit({ ...held.answers, ...answersNow.current });
           setSections((mine) => ({ ...held.sections, ...mine }));
-          setSectionsSeeded(true);
+          setSectionsSettled(true);
           seeded.current = true;
           // Never backwards: a flush racing this GET may already have moved the counter on.
           revision.current = seedRevision(revision.current, held.revision);
         },
         (error: unknown) => {
-          if (live && isWorthAskingAgain(error)) again = setTimeout(seed, autosaveDelayMs());
+          if (!live) return;
+          // Never a dead paper: the sitting goes on with what this device holds, and a save is still the server's to refuse.
+          setSectionsSettled(true);
+          if (isWorthAskingAgain(error)) again = setTimeout(seed, autosaveDelayMs());
         },
       );
     void seed();
@@ -451,7 +454,7 @@ export function useAttemptState(
   return {
     answers,
     sections,
-    sectionsSeeded,
+    sectionsSettled,
     clock,
     isSaving,
     hasUnsaved,

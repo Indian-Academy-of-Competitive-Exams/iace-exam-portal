@@ -530,8 +530,11 @@ test('a seed that failed is asked again until the held answers land', async (t) 
     mock.timers.reset();
   });
 
-  await act(async () => void (await Promise.resolve()));
-  assert.equal(result.current.sectionsSeeded, false, 'not seeded yet');
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.equal(result.current.sectionsSettled, true, 'answerable while the retry is still to come');
 
   await act(async () => {
     mock.timers.tick(31_000);
@@ -539,10 +542,11 @@ test('a seed that failed is asked again until the held answers land', async (t) 
   });
   assert.equal(asked, 2);
   assert.equal(result.current.answers.q1?.selectedOptionId, 'opt-1', 'the held answer is drawn');
-  assert.equal(result.current.sectionsSeeded, true);
+  assert.equal(result.current.sectionsSettled, true);
 });
 
-test('a seed the server refused is not asked again', async (t) => {
+/** The failure this prevents: a refused seed leaving a sectional paper inert for the whole sitting. */
+test('a seed the server refused is not asked again, and does not hold the paper shut', async (t) => {
   mock.timers.enable({ apis: ['setTimeout'] });
   let asked = 0;
   const api = {
@@ -555,7 +559,7 @@ test('a seed the server refused is not asked again', async (t) => {
     },
   } as unknown as AppApiClient;
   const deps = depsFor(api);
-  const { unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
   t.after(() => {
     unmount();
     mock.timers.reset();
@@ -567,6 +571,7 @@ test('a seed the server refused is not asked again', async (t) => {
     await Promise.resolve();
   });
   assert.equal(asked, 1);
+  assert.equal(result.current.sectionsSettled, true, 'the sitting is answerable anyway');
 });
 
 /** The failure this prevents: a full store killing autosave for the rest of the sitting. */
