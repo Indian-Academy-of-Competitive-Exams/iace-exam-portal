@@ -3,6 +3,7 @@ import { Link } from 'expo-router';
 import {
   ATTEMPT_STATUS,
   TEST_BUCKET,
+  instituteDateTimeLabel,
   instituteDayLabel,
   type StudentCatalogTest,
 } from '@iace/contracts';
@@ -115,6 +116,8 @@ const paperLine = (test: StudentCatalogTest) =>
 /** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
+    // Startable with its opening still ahead is the grace, and then the MINUTE is the useful fact.
+    if (test.canStart) return `Opens ${instituteDateTimeLabel(test.opensAt)} — you can begin now`;
     return `Opens ${instituteDayLabel(test.opensAt)}`;
   }
   return 'Any time';

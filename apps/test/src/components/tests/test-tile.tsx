@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Button, Card, StatRow, TruncatedText, cn, linkVariants } from '@iace/ui';
 import {
+  instituteDateTimeLabel,
   instituteDayLabel,
   ATTEMPT_STATUS,
   TEST_BUCKET,
@@ -133,5 +134,7 @@ function pillOf(label: string, result?: TestResult): string {
 /** A test opens and never shuts, so the only date worth naming is one still ahead. */
 function opensOn(test: StudentCatalogTest, now: Date): string | null {
   if (test.opensAt === null || Date.parse(test.opensAt) <= now.getTime()) return null;
+  // Startable with its opening still ahead is the grace, and then the MINUTE is the useful fact.
+  if (test.canStart) return `${instituteDateTimeLabel(test.opensAt)} — you can begin now`;
   return instituteDayLabel(test.opensAt);
 }
