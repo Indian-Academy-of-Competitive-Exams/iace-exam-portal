@@ -67,18 +67,18 @@ export interface ScoringJobData {
   testId: string;
 }
 
-/** The REQUEST's own: a redelivery is the same job, while a re-score is a new one that runs. */
-export function scoringJobId(requestId: string): string {
-  return `${QUEUE_NAMES.SCORING}-${requestId}`;
+/** Keyed on the sitting for a first score, on the outbox row for a re-score: asking twice queues once. */
+export function scoringJobId(key: string): string {
+  return `${QUEUE_NAMES.SCORING}-${key}`;
 }
 
-/** How long an ended sitting may sit unscored before the sweeper asks for a score again. */
+/** Unscored this long is a backlog the gauge reports, and a re-score this stale is asked for again. */
 export const SCORING_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 /** How many stranded events one relay pass hands on. */
 export const RELAY_BATCH = 200;
 
-/** How long an event must sit before a SWEEP takes it: its writer may still be finishing. */
+/** How long a sweep leaves a request or an ended sitting to its own writer before queuing it itself. */
 export const RELAY_GRACE_SEC = 30;
 
 /** What a rollup job is: one sitting to fold in, one test or student to rebuild, or every table. */

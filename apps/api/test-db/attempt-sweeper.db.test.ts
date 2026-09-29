@@ -199,6 +199,23 @@ describe('AttemptSweeperProcessor — asking again for the never-scored', () => 
   });
 });
 
+describe('AttemptSweeperProcessor — two clocks for an unscored sitting', () => {
+  /** A minute unscored is queued again, since its own add may have been lost, but is no backlog yet. */
+  it('queues one ended a minute ago again without calling it a backlog', async () => {
+    const [id] = await unscored(1);
+    await prisma.attempt.update({
+      where: { id },
+      data: { submittedAt: new Date(Date.now() - 60 * 1000) },
+    });
+    const { sweeper, scoring, metrics } = build();
+
+    await sweeper.process();
+
+    assert.equal(scoring.jobs.length, 1);
+    assert.deepEqual(metrics.scoringBacklog, [0]);
+  });
+});
+
 describe('AttemptSweeperProcessor — the clock the cohort counting runs on', () => {
   /** Nothing else asks any more: a first evaluation counts its own student and waits for this. */
   it('asks for a cohort counting pass on every sweep', async () => {

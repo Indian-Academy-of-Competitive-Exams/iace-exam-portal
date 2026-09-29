@@ -107,7 +107,11 @@ export class AttemptSweeperProcessor extends WorkerHost {
   private async askAgainForUnscored(now: Date = new Date()): Promise<void> {
     const settled = new Date(now.getTime() - SCORING_RETRY_AFTER_MS);
     this.metrics.setScoringBacklog(await this.unscoredCount(settled));
-    await this.outbox.queue(await this.neverScored(now));
+    const unscored = await this.neverScored(now);
+    await this.outbox.queue(unscored);
+    // Most are a job still in the queue, swallowed by its id; a count that stays up is a lost one.
+    if (unscored.length > 0)
+      this.logger.warn(`Queued ${unscored.length} ended, unscored sittings again`);
     await this.askAgainForRescores(settled);
   }
 
