@@ -24,6 +24,14 @@ export function isMalformedValue(error: Prisma.PrismaClientKnownRequestError): b
   );
 }
 
+/** An update or delete whose `where` matched no row — gone, or no longer in the state it required. */
+export function isRecordNotFound(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND
+  );
+}
+
 /** Postgres killed one of two crossing transactions; only a raw query carries the code in `meta`. */
 export function isDeadlock(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientUnknownRequestError) {

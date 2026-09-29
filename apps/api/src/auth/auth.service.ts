@@ -28,8 +28,11 @@ import {
   type PinResetReason,
 } from '../common/events';
 import { type DeviceContext } from './auth.types';
+import { isRecordNotFound } from '../common/prisma-errors';
 
 /** Owns no table (docs/03 §5): it READS `Student` for credentials, which the students module owns. */
+const DEACTIVATED_MESSAGE = 'This account has been deactivated';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -62,7 +65,7 @@ export class AuthService {
       select: { pinHash: true, isActive: true },
     });
     if (student && !student.isActive) {
-      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
+      throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
     }
 
     return {
@@ -83,19 +86,13 @@ export class AuthService {
     // Not an upsert: `mobile` is unique only among live rows, which is a partial index Prisma cannot address. The same index still refuses a second row if two signups race here.
     const existing = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
-      select: { id: true, isActive: true },
+      select: { id: true },
     });
-    // Refused before the write: deactivated since the OTP was verified, their old PIN must stay theirs.
-    if (existing && !existing.isActive)
-      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
 
     const pinHash = await this.pin.hash(pin);
     // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or replacing the one an import gave them.
     const student = existing
-      ? await this.prisma.student.update({
-          where: { id: existing.id },
-          data: { pinHash, pinIsDefault: false },
-        })
+      ? await this.replaceStudentPin(existing.id, pinHash)
       : await this.prisma.student.create({
           data: {
             mobile,
@@ -191,8 +188,7 @@ export class AuthService {
       await this.pin.registerFailure(mobile);
       throw new AppException(ErrorCodes.PIN_INVALID, 'Incorrect mobile number or PIN');
     }
-    if (!student.isActive)
-      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
+    if (!student.isActive) throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
 
     await this.pin.clearFailures(mobile);
 
@@ -292,6 +288,20 @@ export class AuthService {
   // ==========================================================================
 
   /** Announces a PIN change, AFTER the sessions are already revoked. */
+  /** Written only while still active: an admin deactivating them mid-reset must win, not be overwritten. */
+  private async replaceStudentPin(id: string, pinHash: string): Promise<Student> {
+    try {
+      return await this.prisma.student.update({
+        where: { id, isActive: true },
+        data: { pinHash, pinIsDefault: false },
+      });
+    } catch (error) {
+      if (isRecordNotFound(error))
+        throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
+      throw error;
+    }
+  }
+
   private announcePinReset(studentId: string, mobile: string, reason: PinResetReason): void {
     this.events.emit(DOMAIN_EVENTS.STUDENT_PIN_RESET, { studentId, mobile, reason });
   }
