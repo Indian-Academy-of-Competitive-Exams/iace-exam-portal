@@ -3,7 +3,12 @@
  * gated half is passed in already fetched or not at all: nothing here can reach a key it was not
  * handed, which is what keeps the ungated read honest.
  */
-import { type OptionShare, type QuestionReportRow, type QuestionOption } from '@iace/contracts';
+import {
+  COHORT_COMPARISON_FLOOR,
+  type OptionShare,
+  type QuestionReportRow,
+  type QuestionOption,
+} from '@iace/contracts';
 import { type TopperQuestion } from './topper';
 
 /** A `TestQuestionStat` row as the report reads it — counts only, never an option's verdict. */
@@ -61,13 +66,13 @@ export function questionReportRow(
   };
 }
 
-/** Whole paper against whole paper: a per-question ratio would compare two different denominators. */
+/** Whole paper against whole paper, and only over a cohort past the floor: under it, the field is you. */
 export function paceIndexOf(
   yourTimeSec: number,
   cohortSumTimeSec: number,
   cohortSize: number,
 ): number | null {
-  if (cohortSize === 0) return null;
+  if (cohortSize < COHORT_COMPARISON_FLOOR) return null;
   const average = cohortSumTimeSec / cohortSize;
   // A cohort with no clock is not a cohort that was quick: there is no comparison to draw.
   if (!Number.isFinite(average) || average === 0) return null;

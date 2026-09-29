@@ -1,8 +1,8 @@
 /**
- * The per-question table for one sitting. TWO reads again, and for the same reason the score card
- * and the review are two: the first never loads a `questionVersion`, so no key can reach it; the
- * second does, and runs only past `solutionsAreOpen`. The cohort's own columns come off the rollup
- * tables and nowhere else — a question no job has counted yet reads as a dash, never as a scan.
+ * The per-question table for one sitting. ONE read of the paper carries the sheet and its key, and
+ * it runs only past the gate the review shares: a sitting not yet marked is refused before any
+ * `questionVersion` loads. The cohort's own columns come off the rollup tables and nowhere else — a
+ * question no job has counted yet reads as a dash, never as a scan.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -16,6 +16,7 @@ import {
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { LeaderboardService } from './leaderboard.service';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { elapsedSeconds, numberOrNull } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
@@ -57,7 +58,7 @@ const REPORT_SELECT = {
   },
 } as const satisfies Prisma.AttemptSelect;
 
-/** The KEY. A second read, reached only past the gate — never a join onto the one above. */
+/** The KEY, read with the sheet's rows and reached only past the marked-sitting gate. */
 const KEY_ROW_SELECT = {
   questionId: true,
   question: { select: { type: true } },
@@ -79,7 +80,10 @@ type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
 
 @Injectable()
 export class QuestionReportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderboard: LeaderboardService,
+  ) {}
 
   async forAttempt(studentId: string, attemptId: string): Promise<QuestionReport> {
     const attempt = await this.prisma.attempt.findFirst({
@@ -92,7 +96,7 @@ export class QuestionReportService {
     }
 
     // One read of the paper serves both the sheet and its key.
-    const [cohort, paper, topper, rows] = await Promise.all([
+    const [cohort, paper, topper, rows, sittings] = await Promise.all([
       this.cohortItems(attempt.testId),
       this.paperTotals(attempt.testId),
       topperOf(this.prisma, attempt.testId),
@@ -101,10 +105,17 @@ export class QuestionReportService {
         orderBy: { order: 'asc' },
         select: REPORT_ROW_SELECT,
       }),
+      this.leaderboard.cohortSize(attempt.testId),
     ]);
     const served = servedSheet(rows, attempt, attempt.test.baseConfig.shuffleQuestions);
 
-    return this.assemble(attempt, served, { cohort, paper, topper, keyed: keyOf(rows) });
+    return this.assemble(attempt, served, {
+      cohort,
+      paper,
+      topper,
+      keyed: keyOf(rows),
+      sittings,
+    });
   }
 
   private assemble(
@@ -115,9 +126,10 @@ export class QuestionReportService {
       paper: { evaluatedCount: number; sumTimeSec: number };
       topper: TopperTimes;
       keyed: ReadonlyMap<string, KeyedQuestion>;
+      sittings: number;
     },
   ): QuestionReport {
-    // The first sitter is their own cohort, and a pace index of exactly 1.00 against themselves.
+    // The same floor `paceIndexOf` holds, over the n the rolled columns were counted from.
     const compared = held.paper.evaluatedCount >= COHORT_COMPARISON_FLOOR;
     const questions = served.map((row) =>
       questionReportRow(
@@ -133,10 +145,8 @@ export class QuestionReportService {
       attemptId: attempt.id,
       testId: attempt.testId,
       testTitle: attempt.test.title,
-      cohortSize: held.paper.evaluatedCount,
-      paceIndex: compared
-        ? paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount)
-        : null,
+      cohortSize: held.sittings,
+      paceIndex: paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount),
       sections: attempt.test.baseConfig.sections,
       questions,
     };

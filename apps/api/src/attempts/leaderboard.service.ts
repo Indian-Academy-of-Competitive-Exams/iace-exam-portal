@@ -1,7 +1,7 @@
 /** Rank and percentile, counted live from Postgres on every read. Nothing is saved. */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { standingsSql, type StandingRow } from './ranking-sql';
+import { cohortSizeSql, standingsSql, type StandingRow } from './ranking-sql';
 
 /** One sitting's place in its cohort, as of this read. */
 export interface Standing {
@@ -24,6 +24,14 @@ export class LeaderboardService {
   async standing(testId: string, attemptId: string): Promise<Standing | null> {
     const [row] = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ attemptId }));
     return row?.test_id === testId ? standingOf(row) : null;
+  }
+
+  /** The cohort a standing on this test is out of, counted now — a retake's reader still sees it. */
+  async cohortSize(testId: string): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<Pick<StandingRow, 'cohort_size'>[]>(
+      cohortSizeSql(testId),
+    );
+    return row?.cohort_size ?? 0;
   }
 
   /** Every graded sitting of one student, each against its own test's cohort, keyed by sitting. */

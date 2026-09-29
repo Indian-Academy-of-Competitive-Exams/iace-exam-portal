@@ -61,6 +61,14 @@ export function standingsSql(where: StandingsWhere): Prisma.Sql {
   `;
 }
 
+/** How many sittings `standingsSql` ranks on one test: the n every standing on it is out of. */
+export function cohortSizeSql(testId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT COUNT(*)::int AS cohort_size FROM "Attempt"
+    WHERE "testId" = ${testId}::uuid AND ${IN_COHORT}
+  `;
+}
+
 /** A seat on one test's board: the podium and the reader's neighbourhood, ranked in SQL. */
 export interface TestBoardRow {
   attempt_id: string;

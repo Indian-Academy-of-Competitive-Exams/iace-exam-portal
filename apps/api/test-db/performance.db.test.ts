@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   ATTEMPT_STATUS,
+  COHORT_COMPARISON_FLOOR,
   DIFFICULTY_LEVEL,
   ErrorCodes,
   PERFORMANCE_SCOPES,
@@ -193,6 +194,28 @@ describe('the performance report — one sitting', () => {
     const { cohort } = await ofAttempt(student, older);
 
     assert.deepEqual([cohort?.rank, cohort?.cohortSize], [2, 2]);
+  });
+
+  /** The failure this prevents: a pace here that the Questions tab, under its floor, draws as a dash. */
+  it('sets a pace only once the rollup has counted enough sittings to compare against', async () => {
+    const { first, student, older } = await world();
+    const clocked = (evaluatedCount: number) =>
+      prisma.testStat.upsert({
+        where: { testId: first.testId },
+        create: {
+          testId: first.testId,
+          evaluatedCount,
+          sumTimeSec: evaluatedCount * 95,
+          computedAt: new Date(),
+        },
+        update: { evaluatedCount, sumTimeSec: evaluatedCount * 95 },
+      });
+
+    await clocked(COHORT_COMPARISON_FLOOR - 1);
+    assert.equal((await ofAttempt(student, older)).paceIndex, null);
+
+    await clocked(COHORT_COMPARISON_FLOOR);
+    assert.equal((await ofAttempt(student, older)).paceIndex, 1);
   });
 
   /** The one guarantee that must hold at every scope and on both paths. */

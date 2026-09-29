@@ -6,6 +6,7 @@ import {
   QUESTION_TYPE,
   questionReportSchema,
 } from '@iace/contracts';
+import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { QuestionReportService } from '../src/attempts/question-report.service';
 import { RollupService } from '../src/attempts/rollup.service';
@@ -41,7 +42,8 @@ const processor = new ScoringProcessor(
   new RollupService(prisma),
 );
 
-const service = new QuestionReportService(prisma);
+const leaderboard = new LeaderboardService(prisma);
+const service = new QuestionReportService(prisma, leaderboard);
 
 async function sat(paper: Paper, timeSpent: readonly number[]) {
   const student = await makeStudent(prisma);
@@ -167,7 +169,6 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
     const report = await service.forAttempt(mine.studentId, mine.attemptId);
 
     assert.equal(questionReportSchema.safeParse(report).success, true);
-    assert.equal(report.cohortSize, 10);
     // 105 seconds against a cohort averaging 125 of them.
     assert.equal(report.paceIndex, 0.84);
     const first = report.questions[0];
@@ -214,7 +215,6 @@ describe('QuestionReportService — the floor the comparison waits for', () => {
 
     const report = await service.forAttempt(mine.studentId, mine.attemptId);
 
-    assert.equal(report.cohortSize, COHORT_COMPARISON_FLOOR - 1);
     assert.equal(report.paceIndex, null, 'a pace of 1.00 against yourself is not a comparison');
     assert.deepEqual(
       report.questions.map((row) => [row.accuracy, row.attemptRate, row.topperTimeSec]),
@@ -231,6 +231,19 @@ describe('QuestionReportService — the floor the comparison waits for', () => {
       [true, false, null, false],
     );
     questionReportSchema.parse(report);
+  });
+});
+
+describe('QuestionReportService — the sittings it names', () => {
+  /** The failure this prevents: "10 sittings" here beside "rank 2 of 2" on the score card. */
+  it('counts them live, the n the score card ranks out of, however far the rollup lags', async () => {
+    const { mine, testId } = await sittings();
+
+    const report = await service.forAttempt(mine.studentId, mine.attemptId);
+    const standing = await leaderboard.standing(testId, mine.attemptId);
+
+    assert.equal(report.cohortSize, 2);
+    assert.equal(report.cohortSize, standing?.cohortSize);
   });
 });
 
