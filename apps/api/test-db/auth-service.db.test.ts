@@ -10,9 +10,10 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   STUDENT_TYPE,
-  type AdminPermissions,
+  type FeatureKey,
 } from '@iace/contracts';
-import { type AdminsService } from '../src/admins';
+import { AdminsService } from '../src/admins';
+import { AuditContext } from '../src/audit';
 import { AuthService } from '../src/auth/auth.service';
 import { OtpService } from '../src/auth/otp/otp.service';
 import { PinService } from '../src/auth/pin/pin.service';
@@ -22,7 +23,6 @@ import { DOMAIN_EVENTS, PIN_RESET_REASONS } from '../src/common/events';
 import { DomainEventBus } from '../src/common/events/domain-event-bus';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import {
-  FakeAdminsService,
   FakeConfig,
   FakeEventBus,
   FakeLeaderboard,
@@ -44,17 +44,13 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-function build(
-  grants: Record<string, AdminPermissions> = {},
-  bus: { asService(): DomainEventBus } = new FakeEventBus(),
-) {
+function build(bus: { asService(): DomainEventBus } = new FakeEventBus()) {
   const redis = new FakeRedis();
   const config = new FakeConfig();
   const sender = new FakeMessageSender();
   const metrics = new FakeMetrics();
   const tokens = new TokenService(new JwtService({}), config.asService());
   const sessions = new SessionService(redis.asService());
-  const adminsFacade = new FakeAdminsService(grants);
   const auth = new AuthService(
     prisma,
     new OtpService(redis.asService(), config.asService(), sender, metrics.asService()),
@@ -62,9 +58,9 @@ function build(
     tokens,
     sessions,
     bus.asService(),
-    adminsFacade as unknown as AdminsService,
+    new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
   );
-  return { auth, tokens, sessions, redis, sender, adminsFacade };
+  return { auth, tokens, sessions, redis, sender };
 }
 
 type Ctx = ReturnType<typeof build>;
@@ -81,6 +77,11 @@ const setStudent = (data: {
   isTestBlocked?: boolean;
   preTestReady?: boolean;
 }) => prisma.student.updateMany({ where: { mobile: MOBILE }, data });
+
+const grant = (featureKey: FeatureKey) =>
+  prisma.adminFeaturePermission.create({
+    data: { adminId: DEFAULT_ADMIN_ID, featureKey, level: PERMISSION_LEVELS.WRITE },
+  });
 
 const admin = (over: { id?: string; isSuperAdmin?: boolean; isActive?: boolean } = {}) =>
   prisma.admin.create({
@@ -272,7 +273,7 @@ describe('student.pin_reset', () => {
 
   it('is announced when a forgotten PIN is reset by OTP, and again when a known one is changed', async () => {
     const events = new FakeEventBus();
-    const ctx = build({}, events);
+    const ctx = build(events);
     const session = await resetPinByOtp(ctx, '1234');
 
     await ctx.auth.changeStudentPin(session.identity.id, '1234', '5678', NO_DEVICE);
@@ -289,7 +290,7 @@ describe('student.pin_reset', () => {
   /** An event is a fact that happened; a refused change is not one. */
   it('is not announced when the current PIN is wrong', async () => {
     const events = new FakeEventBus();
-    const ctx = build({}, events);
+    const ctx = build(events);
     const session = await resetPinByOtp(ctx, '1234');
 
     await ctx.auth
@@ -306,7 +307,7 @@ describe('student.pin_reset', () => {
       throw new Error('the notifications handler is broken');
     });
     const bus = new DomainEventBus(emitter);
-    const ctx = build({}, { asService: () => bus });
+    const ctx = build({ asService: () => bus });
 
     const session = await resetPinByOtp(ctx, '1234');
 
@@ -398,9 +399,8 @@ describe('AuthService — admin', () => {
 
   it('signs in a known active admin and carries their grants', async () => {
     await admin();
-    const ctx = build({
-      [DEFAULT_ADMIN_ID]: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
-    });
+    await grant(FEATURE_KEYS.QUESTION_MANAGEMENT);
+    const ctx = build();
 
     const identity = await verified(ctx);
 
@@ -410,12 +410,29 @@ describe('AuthService — admin', () => {
     });
   });
 
+  /** Authority is read per request, so a revoke is never held back by a token still in hand. */
+  it('mints an access token that names who and which session, and nothing they could lose', async () => {
+    await admin({ isSuperAdmin: true });
+    const ctx = build();
+    await ctx.auth.requestAdminOtp(ADMIN_EMAIL);
+
+    const { tokens } = await ctx.auth.verifyAdminOtp(ADMIN_EMAIL, ctx.sender.lastCode, NO_DEVICE);
+
+    const payload = JSON.parse(
+      Buffer.from(tokens.accessToken.split('.')[1] ?? '', 'base64url').toString(),
+    ) as Record<string, unknown>;
+    assert.deepEqual(
+      ['isSuperAdmin', 'isActive', 'permissions'].filter((claim) => claim in payload),
+      [],
+    );
+    assert.equal(payload.sub, DEFAULT_ADMIN_ID);
+  });
+
   /** Refusing here would answer a real account with "invalid credentials"; they get in and are told. */
   it('signs in a DEACTIVATED admin, and hands them nothing', async () => {
     await admin({ isActive: false });
-    const ctx = build({
-      [DEFAULT_ADMIN_ID]: { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
-    });
+    await grant(FEATURE_KEYS.STUDENT_MANAGEMENT);
+    const ctx = build();
 
     const identity = await verified(ctx);
 
@@ -433,14 +450,25 @@ describe('AuthService — admin', () => {
     assert.ok(ctx.sender.lastCode, 'a deactivated admin must still receive a code');
   });
 
-  it('does not look up grants for a super admin — they bypass every check', async () => {
-    await admin({ id: randomUUID(), isSuperAdmin: true });
+  it('hands a super admin the bypass and no grants — they need none', async () => {
+    await admin({ isSuperAdmin: true });
+    await grant(FEATURE_KEYS.STUDENT_MANAGEMENT);
     const ctx = build();
 
     const identity = await verified(ctx);
 
+    assert.equal(identity.actor === ActorTypes.ADMIN ? identity.isSuperAdmin : null, true);
     assert.deepEqual(identity.actor === ActorTypes.ADMIN ? identity.permissions : null, {});
-    assert.deepEqual(ctx.adminsFacade.calls, [], 'a super admin needs no grant query');
+  });
+
+  /** Switched off means no bypass either: every raw super-admin check downstream reads this flag. */
+  it('hands a deactivated super admin no bypass', async () => {
+    await admin({ isSuperAdmin: true, isActive: false });
+    const ctx = build();
+
+    const identity = await verified(ctx);
+
+    assert.equal(identity.actor === ActorTypes.ADMIN ? identity.isSuperAdmin : null, false);
   });
 
   /** Admins cannot self-register, so "we sent it" to an address with no account is a lie that costs a ticket. */

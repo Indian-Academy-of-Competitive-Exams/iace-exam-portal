@@ -844,8 +844,7 @@ model Admin {
   sectionComments   SectionComment[]
 }
 
-// One row per feature an admin holds, at one level. featureKey mirrors the code-owned
-// FEATURE_KEYS enum and is app-validated — there is no Feature table and the UI never registers a key.
+// One row per feature an admin holds, at one level; featureKey is code-owned (FEATURE_KEYS), never a table.
 model AdminFeaturePermission {
   adminId    String          @db.Uuid
   featureKey String

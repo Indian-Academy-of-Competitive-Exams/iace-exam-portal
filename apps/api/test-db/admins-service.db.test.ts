@@ -14,7 +14,6 @@ import {
   type PermissionLevel,
 } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
-import { AdminAccessService } from '../src/auth/admin-access.service';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { type PrismaService } from '../src/prisma/prisma.service';
@@ -43,6 +42,21 @@ const grantsOf = (adminId: string) =>
 
 const grant = (adminId: string, featureKey: FeatureKey, level: PermissionLevel) =>
   prisma.adminFeaturePermission.create({ data: { adminId, featureKey, level } });
+
+const notFound = (e: unknown) => AppException.is(e) && e.code === ErrorCodes.NOT_FOUND;
+
+/** Returns once some statement waits on a row lock, or once `work` settles without ever having to. */
+async function blockedOrSettled(work: Promise<unknown>): Promise<void> {
+  let settled = false;
+  void work.finally(() => (settled = true));
+  for (let tries = 0; tries < 200 && !settled; tries += 1) {
+    const [waiting] = await prisma.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_stat_activity
+      WHERE "wait_event_type" = 'Lock' AND "datname" = current_database()`;
+    if ((waiting?.n ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 /** The second grant written inside the save throws, the way a dropped connection would. */
 function failingOnSecondWrite(): PrismaService {
@@ -149,16 +163,46 @@ describe('AdminsService — permissions, saved in one request', () => {
   });
 
   /** Deactivation prunes every grant; a save must not hand them back. */
-  it('refuses a deactivated admin', async () => {
+  it('refuses a deactivated admin, and one who does not exist', async () => {
     const { service } = build();
     const admin = await makeAdmin(prisma, { isActive: false });
+    const students = { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE };
 
-    await assert.rejects(
-      service.setPermissions(admin.id, {
-        [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
-      }),
-      (e: unknown) => AppException.is(e) && e.code === ErrorCodes.NOT_FOUND,
+    await assert.rejects(service.setPermissions(admin.id, students), notFound);
+    await assert.rejects(service.setPermissions(randomUUID(), students), notFound);
+    assert.deepEqual(await grantsOf(admin.id), []);
+  });
+
+  /** The failure this prevents: a deactivation committing mid-save, leaving a switched-off admin holding grants. */
+  it('waits out a deactivation in flight, then refuses rather than writing grants back', async () => {
+    const { service } = build();
+    const admin = await makeAdmin(prisma);
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let deactivated = (): void => undefined;
+    const locked = new Promise<void>((resolve) => (deactivated = resolve));
+    const deactivating = prisma.$transaction(
+      async (tx) => {
+        await tx.admin.update({ where: { id: admin.id }, data: { isActive: false } });
+        await tx.adminFeaturePermission.deleteMany({ where: { adminId: admin.id } });
+        deactivated();
+        await held;
+      },
+      { timeout: 10_000 },
     );
+    await locked;
+
+    const saving = service
+      .setPermissions(admin.id, { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    await blockedOrSettled(saving);
+    release();
+    await deactivating;
+
+    assert.ok(notFound(await saving), 'the save must see the deactivation it waited for');
     assert.deepEqual(await grantsOf(admin.id), []);
   });
 
@@ -529,14 +573,13 @@ describe('AdminsService.setActive — the isActive diff', () => {
   });
 });
 
-describe('AdminAccessService — what an admin may do, read on every request', () => {
+describe('AdminsService.identityOf — what an admin may do, read on every request', () => {
   /** The failure this prevents: a revoked permission honoured until the token next refreshed, up to 15 minutes. */
   it('drops a revoked grant on the very next read, and reaches nothing once deactivated', async () => {
     const { service } = build();
-    const access = new AdminAccessService(prisma, service);
     const admin = await makeAdmin(prisma);
     const writes = async () => {
-      const authority = await access.current(admin.id);
+      const authority = await service.identityOf(admin.id);
       assert.ok(authority);
       return can(authority, FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
     };
@@ -552,6 +595,6 @@ describe('AdminAccessService — what an admin may do, read on every request', (
     await students(PERMISSION_LEVELS.WRITE);
     await prisma.admin.update({ where: { id: admin.id }, data: { isActive: false } });
     assert.equal(await writes(), false);
-    assert.equal(await access.current(randomUUID()), null);
+    assert.equal(await service.identityOf(randomUUID()), null);
   });
 });

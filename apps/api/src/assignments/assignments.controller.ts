@@ -161,7 +161,6 @@ export class AssignmentsController {
   ): Promise<SectionComment[]> {
     return this.thread.forSection(testId, sectionId, {
       id: user.id,
-      isSuperAdmin: user.isSuperAdmin,
       managesTests: can(user, FEATURE_KEYS.TEST_MANAGEMENT),
     });
   }

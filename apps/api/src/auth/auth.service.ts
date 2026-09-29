@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import {
-  type AdminPermissions,
   ActorTypes,
   AppException,
   ErrorCodes,
@@ -224,20 +223,9 @@ export class AuthService {
     await this.otp.verify(ActorTypes.ADMIN, email, code);
 
     // Deliberately NOT gated on isActive.
-    const admin = await this.prisma.admin.findUnique({ where: { email } });
-    if (!admin) {
-      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
-    }
-
-    const identity: AuthIdentity = {
-      actor: ActorTypes.ADMIN,
-      id: admin.id,
-      email: admin.email,
-      fullName: admin.fullName,
-      isSuperAdmin: admin.isSuperAdmin,
-      isActive: admin.isActive,
-      ...(await this.adminGrants(admin)),
-    };
+    const admin = await this.prisma.admin.findUnique({ where: { email }, select: { id: true } });
+    const identity = admin && (await this.admins.identityOf(admin.id));
+    if (!identity) throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
 
     return { tokens: await this.issue(identity, device), identity };
   }
@@ -353,27 +341,6 @@ export class AuthService {
       return this.studentIdentity(student);
     }
 
-    const admin = await this.prisma.admin.findUnique({ where: { id } });
-    if (!admin) return null;
-    return {
-      actor: ActorTypes.ADMIN,
-      id: admin.id,
-      email: admin.email,
-      fullName: admin.fullName,
-      isSuperAdmin: admin.isSuperAdmin,
-      isActive: admin.isActive,
-      ...(await this.adminGrants(admin)),
-    };
-  }
-
-  /** What a token carries about one admin. A super admin bypasses, so their grants stay empty. */
-  private async adminGrants(admin: {
-    id: string;
-    isSuperAdmin: boolean;
-    isActive: boolean;
-  }): Promise<{ permissions: AdminPermissions }> {
-    // A deactivated admin reaches nothing, not merely no permissions.
-    if (!admin.isActive || admin.isSuperAdmin) return { permissions: {} };
-    return { permissions: await this.admins.permissionsFor(admin.id) };
+    return this.admins.identityOf(id);
   }
 }

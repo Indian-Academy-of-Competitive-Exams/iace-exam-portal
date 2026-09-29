@@ -23,8 +23,7 @@ const NOT_YOURS_TO_REWORD = 'You can only reword what you wrote yourself.';
 /** Who asks to read a thread: the controller knows their grants, the service knows the section. */
 export interface ThreadReader {
   id: string;
-  isSuperAdmin: boolean;
-  /** Holds TEST_MANAGEMENT, so reads every section of every test it builds. */
+  /** Holds TEST_MANAGEMENT — a super admin always does — so reads every section of every test. */
   managesTests: boolean;
 }
 
@@ -118,7 +117,7 @@ export class SectionThreadService {
     baseConfigSectionId: string,
     reader: ThreadReader,
   ): Promise<void> {
-    if (reader.isSuperAdmin || reader.managesTests) return;
+    if (reader.managesTests) return;
     const held = await this.prisma.questionAssignment.count({
       where: { testId, baseConfigSectionId, assigneeId: reader.id },
     });

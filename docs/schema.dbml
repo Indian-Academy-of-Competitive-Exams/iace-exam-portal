@@ -393,6 +393,7 @@ Table Question {
     (tags)
     (questionCode)
     (status)
+    (createdAt, id)
   }
 }
 
@@ -631,7 +632,7 @@ Table AdminFeaturePermission {
   featureKey text [not null]
   level PermissionLevel [not null]
   indexes {
-    (adminId, featureKey, level) [pk]
+    (adminId, featureKey) [pk]
     (featureKey)
   }
 }
@@ -702,6 +703,7 @@ Table EventCandidate {
   indexes {
     (eventId, studentId) [pk]
     (studentId)
+    (eventId, createdAt)
   }
 }
 
@@ -795,6 +797,7 @@ Table Notification {
   announcementId uuid
   isRead boolean [not null, default: false]
   openedVia DeliveryChannel
+  pushedAt timestamptz(3)
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (studentId, createdAt, isRead)
@@ -922,6 +925,7 @@ Table PushSubscription {
   p256dh text [not null]
   auth text [not null]
   userAgent text
+  sessionId uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   lastSeenAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -935,6 +939,7 @@ Table PushDevice {
   token text [unique, not null]
   platform DevicePlatform [not null]
   deviceName text
+  sessionId uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   lastSeenAt timestamptz(3) [not null, default: `now()`]
   indexes {
@@ -954,6 +959,7 @@ Table SavedQuestion {
     (studentId, createdAt)
     (attemptId)
     (paperQuestionId)
+    (questionId)
   }
 }
 

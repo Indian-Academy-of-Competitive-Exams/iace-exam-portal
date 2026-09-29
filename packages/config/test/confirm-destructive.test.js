@@ -38,7 +38,7 @@ ruleTester.run('confirm-destructive', confirmDestructive, {
       errors: [{ messageId: 'noConfirm' }],
     },
     {
-      code: screen('api.admin.features.revoke(id, key); return <p />;'),
+      code: screen('api.admin.admins.setPermissions(id, changes); return <p />;'),
       errors: [{ messageId: 'noConfirm' }],
     },
     {

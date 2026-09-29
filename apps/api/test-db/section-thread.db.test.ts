@@ -30,7 +30,6 @@ const refusedWith = (code: string) => (error: unknown) =>
 /** A reader by who they are and what they hold; nobody manages tests unless a case says so. */
 const reader = (id: string, over: Partial<ThreadReader> = {}): ThreadReader => ({
   id,
-  isSuperAdmin: false,
   managesTests: false,
   ...over,
 });
@@ -167,7 +166,7 @@ describe('SectionThreadService', () => {
 
     assert.equal(said.authorName, 'The Boss');
     assert.deepEqual(
-      (await thread.forSection(testId, sectionId, reader(BOSS, { isSuperAdmin: true }))).map(
+      (await thread.forSection(testId, sectionId, reader(BOSS, { managesTests: true }))).map(
         (row) => row.body,
       ),
       ['Ship it.'],
@@ -197,14 +196,13 @@ describe('SectionThreadService — who reads a thread', () => {
     return staffed;
   }
 
-  it('reads it to either assignee, a test owner and a super admin', async () => {
+  it('reads it to either assignee and to whoever manages tests', async () => {
     const { thread, testId, sectionId } = await discussed();
 
     for (const allowed of [
       reader(TYPIST),
       reader(READER),
       reader(STRANGER, { managesTests: true }),
-      reader(BOSS, { isSuperAdmin: true }),
     ]) {
       const rows = await thread.forSection(testId, sectionId, allowed);
       assert.deepEqual(

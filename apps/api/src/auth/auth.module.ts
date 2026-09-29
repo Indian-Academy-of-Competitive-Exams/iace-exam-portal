@@ -8,7 +8,6 @@ import { EventsModule } from '../common/events';
 import { MessagingModule } from '../common/messaging';
 import { AdminSessionsListener } from './admin-sessions.listener';
 import { StudentSessionsListener } from './student-sessions.listener';
-import { AdminAccessService } from './admin-access.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
@@ -25,7 +24,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     PrismaModule,
     RedisModule,
     EventsModule,
-    // Auth reads an admin's grants to put them in a token.
+    // Who an admin is and what they may do is AdminsService's one read, for the guard and the identity alike.
     AdminsModule,
     // The OTP is one outbound message among several to come; auth no longer owns the delivery channel, only the decision to send.
     MessagingModule,
@@ -34,7 +33,6 @@ import { API_ROLES, onRole } from '../config/api-role';
   controllers: onRole([API_ROLES.CORE], [AuthController]),
   providers: [
     AuthService,
-    AdminAccessService,
     TokenService,
     SessionService,
     AdminSessionsListener,
@@ -44,7 +42,6 @@ import { API_ROLES, onRole } from '../config/api-role';
     StartingPinService,
   ],
   exports: [
-    AdminAccessService,
     // AuthService for the student's own PIN change: it owns verification, the lockout ladder, session revocation and token issuance, and MeController must not reimplement any of the four.
     AuthService,
     TokenService,

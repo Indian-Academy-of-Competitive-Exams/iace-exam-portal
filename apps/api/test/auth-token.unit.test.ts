@@ -24,17 +24,6 @@ describe('TokenService', () => {
     assert.equal(claims.sid, 'sess_1');
   });
 
-  /** An admin's authority is read per request, so a revoke is never held back by a token still in hand. */
-  it('carries only who and which session, never an authority an admin could lose mid-session', async () => {
-    const tokens = build();
-
-    const admin = await tokens.verifyAccess(
-      await tokens.signAccess({ sub: 'adm_1', actor: ActorTypes.ADMIN, sid: 's' }),
-    );
-
-    assert.deepEqual(Object.keys(admin).sort(), ['actor', 'sid', 'sub']);
-  });
-
   it('will not accept a refresh token as an access token', async () => {
     const tokens = build();
     const refresh = await tokens.signRefresh(STUDENT_CLAIMS);

@@ -15,7 +15,7 @@ import {
   type AdminPermissions,
 } from '@iace/contracts';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
-import { type AdminAccessService } from '../src/auth/admin-access.service';
+import { type AdminsService } from '../src/admins';
 import { ActorGuard } from '../src/auth/guards/actor.guard';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
 import { Actors, Public, RequiresFeature, type AuthenticatedUser } from '../src/common/security';
@@ -80,10 +80,10 @@ describe('JwtAuthGuard', () => {
     const tokens = new TokenService(new JwtService({}), config.asService());
     const sessions = new SessionService(redis.asService());
     const authorities = new Map<string, AdminAuthority>();
-    const access = {
-      current: (id: string) => Promise.resolve(authorities.get(id) ?? null),
-    } as unknown as AdminAccessService;
-    const guard = new JwtAuthGuard(new Reflector(), tokens, sessions, access);
+    const admins = {
+      identityOf: (id: string) => Promise.resolve(authorities.get(id) ?? null),
+    } as unknown as AdminsService;
+    const guard = new JwtAuthGuard(new Reflector(), tokens, sessions, admins);
     return { guard, tokens, sessions, redis, authorities };
   }
 

@@ -173,12 +173,12 @@ function AdminPanel({
   const save = useMutation({
     meta: { success: `Access updated for ${admin.email}.` },
     mutationFn: () => api.admin.admins.setPermissions(admin.id, Object.fromEntries(draft)),
-    // The save applies whole or not at all, so a failed one keeps the draft to try again.
-    onSuccess: () => {
-      setDraft(new Map<FeatureKey, Level>());
+    // The save applies whole or not at all, so a failed one keeps the draft; the refetch shows why.
+    onSuccess: () => setDraft(new Map<FeatureKey, Level>()),
+    onSettled: () => {
+      setConfirming(false);
       onSaved();
     },
-    onSettled: () => setConfirming(false),
   });
 
   const heldCount = features.filter((f) => admin.permissions[f.key] !== undefined).length;

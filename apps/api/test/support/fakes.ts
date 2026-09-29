@@ -1,4 +1,4 @@
-import { type AdminPermissions, AppException, ErrorCodes } from '@iace/contracts';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
@@ -541,17 +541,6 @@ export const NO_DEVICE: DeviceContext = {
   userAgent: null,
   client: null,
 };
-
-/** The admins facade as auth sees it: the grant map a token carries. */
-export class FakeAdminsService {
-  readonly calls: string[] = [];
-  constructor(private readonly grants: Record<string, AdminPermissions> = {}) {}
-
-  permissionsFor(adminId: string): Promise<AdminPermissions> {
-    this.calls.push(adminId);
-    return Promise.resolve(this.grants[adminId] ?? {});
-  }
-}
 
 // --------------------------------------------------------------------------- Admins / features /
 // grants ---------------------------------------------------------------------------

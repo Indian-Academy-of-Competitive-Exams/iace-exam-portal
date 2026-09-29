@@ -4,7 +4,7 @@ import { type Request } from 'express';
 import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { TokenService } from '../token.service';
 import { SessionService } from '../session.service';
-import { AdminAccessService } from '../admin-access.service';
+import { AdminsService } from '../../admins';
 import { IS_PUBLIC_KEY, type AuthenticatedUser } from '../../common/security';
 
 /** Applied globally (see AppModule's APP_GUARD); routes opt out with @Public(). */
@@ -14,7 +14,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
-    private readonly access: AdminAccessService,
+    private readonly admins: AdminsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -40,12 +40,19 @@ export class JwtAuthGuard implements CanActivate {
     // An admin's grants are read now, not from the token, so a revoke bites on the next request; a student has none.
     const authority =
       claims.actor === ActorTypes.ADMIN
-        ? await this.access.current(claims.sub)
+        ? await this.admins.identityOf(claims.sub)
         : { isSuperAdmin: false, isActive: true, permissions: {} };
     if (!authority)
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Account is no longer available');
 
-    request.user = { id: claims.sub, actor: claims.actor, sessionId: claims.sid, ...authority };
+    request.user = {
+      id: claims.sub,
+      actor: claims.actor,
+      sessionId: claims.sid,
+      isSuperAdmin: authority.isSuperAdmin,
+      isActive: authority.isActive,
+      permissions: authority.permissions,
+    };
     return true;
   }
 }

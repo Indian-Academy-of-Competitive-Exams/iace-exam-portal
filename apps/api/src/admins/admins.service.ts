@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import {
+  ActorTypes,
   ADMIN_ROLES,
   AppException,
   ErrorCodes,
@@ -11,6 +12,7 @@ import {
   fieldDiff,
   satisfiesLevel,
   type Admin as AdminDto,
+  type AdminIdentity,
   type AdminListQuery,
   type AdminPermissions,
   type AdminRole,
@@ -59,7 +61,33 @@ export class AdminsService {
   // The facade auth consumes
   // ==========================================================================
 
-  /** The grant map the guard reads per request. A stored key that code no longer defines is dropped rather than carried. */
+  /** Who an admin is and what they may do right now, in one read — the guard and the signed-in identity both ask here. */
+  async identityOf(adminId: string): Promise<AdminIdentity | null> {
+    const admin = await this.prisma.admin.findUnique({
+      where: { id: adminId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isSuperAdmin: true,
+        isActive: true,
+        permissions: { select: { featureKey: true, level: true } },
+      },
+    });
+    if (!admin) return null;
+    // A deactivated admin reaches nothing — not even the bypass — and a super admin needs no grants.
+    return {
+      actor: ActorTypes.ADMIN,
+      id: admin.id,
+      email: admin.email,
+      fullName: admin.fullName,
+      isActive: admin.isActive,
+      isSuperAdmin: admin.isActive && admin.isSuperAdmin,
+      permissions: admin.isActive && !admin.isSuperAdmin ? permissionsIn(admin.permissions) : {},
+    };
+  }
+
+  /** One admin's explicit grants, whatever their standing. */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
     return (await this.grantsByAdmin([adminId])).get(adminId) ?? {};
   }
@@ -224,7 +252,7 @@ export class AdminsService {
     const keys = Object.keys(changes) as FeatureKey[];
     const { admin, before } = await this.prisma.$transaction(async (tx) => {
       // Locked, so a deactivation cannot land between the check and the writes and have its pruned grants written back.
-      await tx.$queryRaw`SELECT 1 FROM "Admin" WHERE "id" = ${adminId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT 1 FROM "Admin" WHERE "id" = ${adminId}::uuid FOR NO KEY UPDATE`;
       const admin = await tx.admin.findUnique({ where: { id: adminId } });
       if (!admin?.isActive) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
       const before = (await this.grantsByAdmin([adminId], tx)).get(adminId) ?? {};
@@ -275,9 +303,7 @@ export class AdminsService {
     });
 
     for (const row of rows) {
-      const key = asFeatureKey(row.featureKey);
-      if (key === null) continue;
-      byAdmin.set(row.adminId, { ...byAdmin.get(row.adminId), [key]: row.level });
+      byAdmin.set(row.adminId, { ...byAdmin.get(row.adminId), ...permissionsIn([row]) });
     }
     return byAdmin;
   }
@@ -317,6 +343,17 @@ export class AdminsService {
 /** A stored key code no longer defines. Dropped rather than trusted — the guard reads this map. */
 function asFeatureKey(value: string): FeatureKey | null {
   return (FEATURE_KEY_VALUES as readonly string[]).includes(value) ? (value as FeatureKey) : null;
+}
+
+function permissionsIn(
+  rows: readonly { featureKey: string; level: PermissionLevel }[],
+): AdminPermissions {
+  return Object.fromEntries(
+    rows.flatMap((row) => {
+      const key = asFeatureKey(row.featureKey);
+      return key === null ? [] : [[key, row.level] as const];
+    }),
+  );
 }
 
 function auditFieldsOf(row: AdminRow): {
