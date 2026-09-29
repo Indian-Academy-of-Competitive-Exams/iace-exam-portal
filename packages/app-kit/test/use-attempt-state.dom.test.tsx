@@ -867,3 +867,34 @@ test("the paper goes in with a hung save's answers once it has waited long enoug
 
   assert.deepEqual(carried, ['q1', 'q2']);
 });
+
+/** The failure this prevents: the old screen's late ack deleting what the remounted one has queued since. */
+test('a save that lands after its screen unmounted leaves the stored queue alone', async () => {
+  const storage = fakeStorage();
+  let land = () => {};
+  const slow = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number }) => {
+        await new Promise<void>((resolve) => (land = resolve));
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+  const before = renderHook(() => useAttemptState('attempt-1', depsFor(slow, storage)));
+  act(() => before.result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  let flying: Promise<boolean> = Promise.resolve(true);
+  act(() => void (flying = before.result.current.flush()));
+  before.unmount();
+
+  const after = renderHook(() => useAttemptState('attempt-1', depsFor(slow, storage)));
+  act(() => after.result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  await act(async () => {
+    land();
+    await flying;
+  });
+  const kept = storage.getItem(QUEUE_KEY);
+  after.unmount();
+
+  assert.ok(kept?.includes('q2'), `the queue still holds q2: ${kept}`);
+});

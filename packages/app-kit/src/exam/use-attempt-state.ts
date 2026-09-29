@@ -152,6 +152,7 @@ export function useAttemptState(
   const inFlight = useRef<Promise<boolean> | null>(null);
   const seeded = useRef(false);
   const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onScreen = useRef(true);
 
   const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
@@ -186,6 +187,8 @@ export function useAttemptState(
   }, [attemptId, commit]);
 
   const keepQueue = useCallback(() => {
+    // Unmounted, the stored queue belongs to whichever screen mounts next: a late ack must not clear it.
+    if (!onScreen.current) return;
     const { answerQueue } = mounted.current;
     const key = queueKeyFor(answerQueue, attemptId);
     try {
@@ -346,8 +349,12 @@ export function useAttemptState(
   // The first question is open from the moment the paper is on screen, not from the first click.
   useEffect(() => {
     openedAt.current = Date.now();
+    onScreen.current = true;
     // Unmounted, a save still in the air is left to land; only its give-up timer goes.
-    return () => clearTimeout(giveUp.current);
+    return () => {
+      onScreen.current = false;
+      clearTimeout(giveUp.current);
+    };
   }, []);
 
   const record = useCallback(
