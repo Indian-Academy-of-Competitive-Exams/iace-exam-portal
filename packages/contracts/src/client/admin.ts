@@ -9,7 +9,6 @@ import {
   authoringDuplicateSchema,
   authoringSaveResultSchema,
   authoringStatsSchema,
-  type AuthoringCreateInput,
   type AuthoringHistoryQueryInput,
   type AuthoringDuplicate,
   type AuthoringSaveResult,
@@ -234,7 +233,6 @@ import {
   assignmentWithTestSchema,
   questionOnOtherTestSchema,
   sectionCommentSchema,
-  sectionEditLockSchema,
   sectionProgressRowSchema,
   type Assignment,
   type AssignableAdmin,
@@ -250,7 +248,6 @@ import {
   type MineAssignmentsQueryInput,
   type QuestionOnOtherTest,
   type SectionComment,
-  type SectionEditLock,
   type SectionProgressQueryInput,
   type SectionProgressRow,
   type TypistDoneInput,
@@ -619,7 +616,7 @@ export function adminClient(core: ApiCore) {
       detail: (id: string): Promise<QuestionDetail> =>
         get(ADMIN_AUTHORING_ROUTES.get(id), questionDetailSchema),
 
-      create: (input: AuthoringCreateInput): Promise<AuthoringSaveResult> =>
+      create: (input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
         write('POST', ADMIN_AUTHORING_ROUTES.create, authoringSaveResultSchema, input),
       // A POST for a read: the key is folded from the whole draft, which no query string carries.
       duplicate: (input: QuestionDraftInput, exceptId?: string): Promise<AuthoringDuplicate> =>
@@ -633,22 +630,6 @@ export function adminClient(core: ApiCore) {
 
       remove: (id: string): Promise<NoContent> =>
         write('DELETE', ADMIN_AUTHORING_ROUTES.remove(id), noContentSchema),
-
-      previewImport: (assignmentId: string, file: File): Promise<QuestionImportPlan> =>
-        write(
-          'POST',
-          ADMIN_AUTHORING_ROUTES.importPreview(assignmentId),
-          questionImportPlanSchema,
-          fileBody(file),
-        ),
-
-      commitImport: (assignmentId: string, importLogId: string): Promise<QuestionImportResult> =>
-        write(
-          'POST',
-          ADMIN_AUTHORING_ROUTES.importCommit(assignmentId),
-          questionImportResultSchema,
-          { importLogId },
-        ),
     },
 
     questions: {
@@ -775,6 +756,76 @@ export function adminClient(core: ApiCore) {
           ADMIN_SECTION_WORK_ROUTES.fixed(testId, sectionId, questionId),
           sectionWorkSchema,
         ),
+
+      /** A question typed for the section, landing under its typist's row. */
+      create: (
+        testId: string,
+        sectionId: string,
+        input: QuestionDraftInput,
+      ): Promise<QuestionDetail> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.questions(testId, sectionId),
+          questionDetailSchema,
+          input,
+        ),
+
+      /** A sheet of questions straight into the section, rather than loose in the bank. */
+      previewImport: (testId: string, sectionId: string, file: File): Promise<QuestionImportPlan> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.importPreview(testId, sectionId),
+          questionImportPlanSchema,
+          fileBody(file),
+        ),
+
+      commitImport: (
+        testId: string,
+        sectionId: string,
+        importLogId: string,
+      ): Promise<QuestionImportResult> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.importCommit(testId, sectionId),
+          questionImportResultSchema,
+          { importLogId },
+        ),
+
+      done: (testId: string, sectionId: string, input: TypistDoneInput): Promise<SectionWork> =>
+        write('POST', ADMIN_SECTION_WORK_ROUTES.done(testId, sectionId), sectionWorkSchema, input),
+
+      release: (testId: string, sectionId: string): Promise<SectionWork> =>
+        write('POST', ADMIN_SECTION_WORK_ROUTES.release(testId, sectionId), sectionWorkSchema),
+
+      /** The section thread, oldest first — a discussion is read in the order it was said. */
+      comments: (testId: string, sectionId: string): Promise<SectionComment[]> =>
+        get(ADMIN_SECTION_WORK_ROUTES.comments(testId, sectionId), sectionCommentSchema.array()),
+
+      comment: (
+        testId: string,
+        sectionId: string,
+        input: CreateSectionCommentInput,
+      ): Promise<SectionComment> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.comments(testId, sectionId),
+          sectionCommentSchema,
+          input,
+        ),
+
+      /** Rewording one, which only its own author does. */
+      editComment: (
+        testId: string,
+        sectionId: string,
+        commentId: string,
+        input: EditSectionCommentInput,
+      ): Promise<SectionComment> =>
+        write(
+          'PATCH',
+          ADMIN_SECTION_WORK_ROUTES.comment(testId, sectionId, commentId),
+          sectionCommentSchema,
+          input,
+        ),
     },
 
     /** Who types a section and who reads it, and the queue each of them works from. */
@@ -795,16 +846,6 @@ export function adminClient(core: ApiCore) {
       progress: (query: SectionProgressQueryInput = {}): Promise<Paginated<SectionProgressRow>> =>
         list(ADMIN_ASSIGNMENTS_ROUTES.progress, query, sectionProgressRowSchema),
 
-      /** The row a queue link opens, read on its own so a long queue never hides it. */
-      one: (id: string): Promise<AssignmentWithTest> =>
-        get(ADMIN_ASSIGNMENTS_ROUTES.one(id), assignmentWithTestSchema),
-
-      finalize: (id: string): Promise<Assignment> =>
-        write('PATCH', ADMIN_ASSIGNMENTS_ROUTES.finalize(id), assignmentSchema),
-
-      done: (id: string, input: TypistDoneInput): Promise<Assignment> =>
-        write('POST', ADMIN_ASSIGNMENTS_ROUTES.done(id), assignmentSchema, input),
-
       assignable: (query: AssignableQueryInput): Promise<AssignableAdmin[]> =>
         get(
           `${ADMIN_ASSIGNMENTS_ROUTES.assignable}${queryString({ ...query })}`,
@@ -823,40 +864,6 @@ export function adminClient(core: ApiCore) {
         get(
           `${ADMIN_ASSIGNMENTS_ROUTES.sectionsOf(testId)}${queryString({ ...query })}`,
           assignmentSectionSchema.array(),
-        ),
-
-      /** Who holds the section right now — read on load, so the warning lands before the work. */
-      sectionLock: (testId: string, sectionId: string): Promise<SectionEditLock> =>
-        get(ADMIN_ASSIGNMENTS_ROUTES.sectionLock(testId, sectionId), sectionEditLockSchema),
-
-      /** The section thread, oldest first — a discussion is read in the order it was said. */
-      comments: (testId: string, sectionId: string): Promise<SectionComment[]> =>
-        get(ADMIN_ASSIGNMENTS_ROUTES.comments(testId, sectionId), sectionCommentSchema.array()),
-
-      comment: (
-        testId: string,
-        sectionId: string,
-        input: CreateSectionCommentInput,
-      ): Promise<SectionComment> =>
-        write(
-          'POST',
-          ADMIN_ASSIGNMENTS_ROUTES.comments(testId, sectionId),
-          sectionCommentSchema,
-          input,
-        ),
-
-      /** Rewording one, which only its own author does. */
-      editComment: (
-        testId: string,
-        sectionId: string,
-        commentId: string,
-        input: EditSectionCommentInput,
-      ): Promise<SectionComment> =>
-        write(
-          'PATCH',
-          ADMIN_ASSIGNMENTS_ROUTES.editComment(testId, sectionId, commentId),
-          sectionCommentSchema,
-          input,
         ),
     },
 

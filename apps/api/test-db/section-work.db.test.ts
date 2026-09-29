@@ -9,6 +9,7 @@ import {
   FEATURE_KEYS,
   PAPER_SOURCES,
   PERMISSION_LEVELS,
+  QUESTION_IMPORT_COLUMNS,
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
@@ -18,10 +19,13 @@ import {
   type AssignmentRole,
   type PaperSource,
   type QuestionDraftInput,
+  type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
+import { AuditService } from '../src/audit/audit.service';
 import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
+import { QuestionImportService } from '../src/questions/question-import.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { SectionWorkService, type SectionViewer } from '../src/questions/section-work.service';
 import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
@@ -95,10 +99,14 @@ async function build() {
   const questions = new QuestionsService(prisma, audit, new FakeStorage() as never);
   const assignments = new AssignmentsService(
     prisma,
-    redis,
     new AdminsService(prisma, audit, new FakeEventBus().asService()),
   );
-  return { questions, work: new SectionWorkService(prisma, redis, questions, assignments) };
+  const storage = new FakeStorage() as never;
+  const imports = new QuestionImportService(prisma, storage, new AuditService(prisma, storage));
+  return {
+    questions,
+    work: new SectionWorkService(prisma, redis, questions, assignments, imports),
+  };
 }
 
 const assign = (
@@ -338,6 +346,161 @@ describe('SectionWorkService.remove', () => {
 
     assert.equal(await prisma.question.count({ where: { id: mistake.id } }), 0);
     assert.equal(await prisma.question.count({ where: { id: draftOnly.id } }), 1);
+  });
+});
+
+/** One good row, written out as CSV: the section import reads the bank's own sheet. */
+function oneRowSheet(): Buffer {
+  const row: Partial<Record<QuestionImportColumnKey, string>> = {
+    subject: 'Quantitative Aptitude',
+    difficulty: 'medium',
+    stem_en: 'What is 30% of 150?',
+    option1_en: '25',
+    option2_en: '45',
+    option3_en: '35',
+    option4_en: '40',
+    correct_option: '2',
+  };
+  const cells = (pick: (column: (typeof QUESTION_IMPORT_COLUMNS)[number]) => string) =>
+    QUESTION_IMPORT_COLUMNS.map(pick).join(',');
+  const line = cells((column) => row[column.key as QuestionImportColumnKey] ?? '');
+  return Buffer.from([cells((column) => column.header), line].join('\n'));
+}
+
+describe('SectionWorkService — writes taken under the seat the caller holds', () => {
+  /** The failure this prevents: a question landing in a section under somebody else's typing job. */
+  it('types under the typist’s own row, a super admin’s under its holder’s, and nobody else’s', async () => {
+    const { work } = await build();
+    const { pair, typing } = await aSection();
+
+    const own = await work.create(pair, draft(), viewer(TYPIST));
+    const chiefs = await work.create(
+      pair,
+      draft({ stem: { en: 'What is 10% of 150?' } }),
+      viewer(CHIEF, {}, true),
+    );
+    const under = await prisma.question.findMany({
+      where: { id: { in: [own.id, chiefs.id] } },
+      select: { assignmentId: true },
+    });
+    assert.deepEqual(
+      under.map((row) => row.assignmentId),
+      [typing.id, typing.id],
+    );
+
+    const another = draft({ stem: { en: 'What is 40% of 150?' } });
+    for (const who of [viewer(READER), viewer(OWNER, OWNS)]) {
+      await assert.rejects(
+        () => work.create(pair, another, who),
+        refusedWith(ErrorCodes.FORBIDDEN),
+      );
+    }
+    await assert.rejects(
+      () => work.create(pair, another, viewer(STRANGER)),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+
+  /** The failure this prevents: new typing on a job that is over, or on a paper nobody types. */
+  it('refuses typing once the typist is replaced or done, and on a picked paper', async () => {
+    const { work } = await build();
+    const { pair, typing } = await aSection();
+    const picked = await aSection(PAPER_SOURCES.PICKED);
+
+    await assert.rejects(
+      () => work.create(picked.pair, draft(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { finalizedAt: new Date() },
+    });
+    await assert.rejects(
+      () => work.create(pair, draft(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date() },
+    });
+    await assert.rejects(
+      () => work.previewImport(pair, oneRowSheet(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 0);
+  });
+
+  it('imports a sheet into the section under the typist’s row, and refuses the reader', async () => {
+    const { work } = await build();
+    const { pair, typing } = await aSection();
+
+    await assert.rejects(
+      () => work.previewImport(pair, oneRowSheet(), viewer(READER)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    const plan = await work.previewImport(pair, oneRowSheet(), viewer(TYPIST));
+    await assert.rejects(
+      () => work.commitImport(pair, plan.importLogId, viewer(READER)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    const result = await work.commitImport(pair, plan.importLogId, viewer(TYPIST));
+
+    assert.equal(result.created, 1);
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 1);
+  });
+
+  /** The failure this prevents: a section released by somebody who is not reading it. */
+  it('releases through the reader’s own row, a super admin through its holder’s, and nobody else', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { questionCount: 1 },
+    });
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+    await work.check(pair, question.id, viewer(READER));
+
+    for (const who of [viewer(TYPIST), viewer(OWNER, OWNS)]) {
+      await assert.rejects(() => work.release(pair, who), refusedWith(ErrorCodes.FORBIDDEN));
+    }
+    const released = await work.release(pair, viewer(READER));
+    assert.ok(released.reader?.finalizedAt);
+    const again = await work.release(pair, viewer(CHIEF, {}, true));
+    assert.ok(again.reader?.finalizedAt);
+  });
+
+  it('refuses a release by a reader the section passed on from', async () => {
+    const { work } = await build();
+    const { catalog, pair, reading, typistDone } = await aSection();
+    await typistDone();
+    await prisma.questionAssignment.update({
+      where: { id: reading.id },
+      data: { replacedAt: new Date() },
+    });
+    await assign(
+      catalog,
+      pair.testId,
+      pair.baseConfigSectionId,
+      STRANGER,
+      ASSIGNMENT_ROLES.PROOFREADER,
+    );
+
+    await assert.rejects(
+      () => work.release(pair, viewer(READER)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+  });
+
+  it('names whoever is editing the section, with the section itself', async () => {
+    const { work } = await build();
+    const { pair } = await aSection();
+    assert.equal((await work.one(pair, viewer(READER))).editingBy, null);
+
+    await work.create(pair, draft(), viewer(TYPIST));
+
+    assert.equal((await work.one(pair, viewer(READER))).editingBy?.adminId, TYPIST);
   });
 });
 

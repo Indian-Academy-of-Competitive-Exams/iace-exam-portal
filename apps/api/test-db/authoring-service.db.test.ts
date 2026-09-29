@@ -16,7 +16,7 @@ import {
 import { AuditContext } from '../src/audit';
 import { AuthoringService } from '../src/questions/authoring.service';
 import { QuestionsService } from '../src/questions/questions.service';
-import { FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   makeBankQuestion,
@@ -49,7 +49,7 @@ async function build(seeded: Seeded[] = []) {
     });
   }
   const questions = new QuestionsService(prisma, new AuditContext(), new FakeStorage() as never);
-  return new AuthoringService(prisma, new FakeRedis().asService(), questions);
+  return new AuthoringService(prisma, questions);
 }
 
 const draft = (over: Partial<QuestionDraftInput> = {}) =>
@@ -88,6 +88,17 @@ async function makeAssignment(assigneeId: string) {
 
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
+
+/** A question typed for a section, as its section page leaves it. */
+async function typedFor(
+  authoring: AuthoringService,
+  assignmentId: string,
+  over: Partial<QuestionDraftInput> = {},
+) {
+  const { question } = await authoring.create(draft(over), MINE);
+  await prisma.question.update({ where: { id: question.id }, data: { assignmentId } });
+  return question;
+}
 
 describe('AuthoringService.create', () => {
   it('writes the question and its first version, credited to the author', async () => {
@@ -153,64 +164,12 @@ describe('AuthoringService.create', () => {
   });
 });
 
-describe('AuthoringService.create — assignment provenance', () => {
-  it('ties a created question to the caller’s own assignment', async () => {
-    const authoring = await build();
-    const assignment = await makeAssignment(MINE);
-
-    const { question } = await authoring.create(draft(), MINE, assignment.id);
-
-    const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
-    assert.equal(row.assignmentId, assignment.id);
-  });
-
-  /** Not theirs reads as not there: the same guard `finalize` uses on the assignment itself. */
-  it('refuses an assignment that is not the caller’s own', async () => {
-    const authoring = await build();
-    const assignment = await makeAssignment(THEIRS);
-
-    await assert.rejects(
-      () => authoring.create(draft(), MINE, assignment.id),
-      refusedWith(ErrorCodes.NOT_FOUND),
-    );
-    assert.equal(await prisma.question.count(), 0);
-  });
-
-  /** The override: a super admin types into a section whoever holds it, or nobody does. */
-  it('lets a super admin write against an assignment that is not theirs', async () => {
-    const authoring = await build();
-    const assignment = await makeAssignment(THEIRS);
-
-    const { question } = await authoring.create(draft(), MINE, assignment.id, true);
-
-    const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
-    assert.equal(row.assignmentId, assignment.id);
-  });
-});
-
-describe('AuthoringService — after Done', () => {
-  /** The failure this prevents: a question typed after Done slipping into a paper the reader has. */
-  it('refuses a new question into a section already marked done', async () => {
-    const authoring = await build();
-    const assignment = await makeAssignment(MINE);
-    await prisma.questionAssignment.update({
-      where: { id: assignment.id },
-      data: { finalizedAt: new Date() },
-    });
-
-    await assert.rejects(
-      () => authoring.create(draft(), MINE, assignment.id),
-      refusedWith(ErrorCodes.CONFLICT),
-    );
-  });
-});
-
 describe('AuthoringService — a question written for a section', () => {
   /** The failure this prevents: a second road round the section's rules, for a replaced typist above all. */
   it('refuses to change or delete it here, which its section page does', async () => {
     const authoring = await build();
     const assignment = await makeAssignment(MINE);
-    const { question } = await authoring.create(draft(), MINE, assignment.id);
+    const question = await typedFor(authoring, assignment.id);
 
     await assert.rejects(
       () => authoring.update(question.id, draft({ stem: { en: 'Changed off the page' } }), MINE),
@@ -293,12 +252,8 @@ describe('AuthoringService.history', () => {
     const authoring = await build();
     const mine = await makeAssignment(MINE);
     const other = await makeAssignment(MINE);
-    const { question } = await authoring.create(draft(), MINE, mine.id);
-    await authoring.create(
-      draft({ stem: { en: 'A different question entirely?' } }),
-      MINE,
-      other.id,
-    );
+    const question = await typedFor(authoring, mine.id);
+    await typedFor(authoring, other.id, { stem: { en: 'A different question entirely?' } });
 
     const page = await authoring.history(query({ assignmentId: mine.id }), MINE);
 
@@ -312,7 +267,7 @@ describe('AuthoringService.history', () => {
   it('carries the test a question was written for', async () => {
     const authoring = await build();
     const mine = await makeAssignment(MINE);
-    await authoring.create(draft(), MINE, mine.id);
+    await typedFor(authoring, mine.id);
 
     const [row] = (await authoring.history(query(), MINE)).items;
 
@@ -334,12 +289,8 @@ describe('AuthoringService.history', () => {
     const authoring = await build();
     const mine = await makeAssignment(MINE);
     const elsewhere = await makeAssignment(MINE);
-    const { question } = await authoring.create(draft(), MINE, mine.id);
-    await authoring.create(
-      draft({ stem: { en: 'Written for another test entirely?' } }),
-      MINE,
-      elsewhere.id,
-    );
+    const question = await typedFor(authoring, mine.id);
+    await typedFor(authoring, elsewhere.id, { stem: { en: 'Written for another test entirely?' } });
 
     const testId = (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: mine.id } }))
       .testId;
@@ -354,7 +305,7 @@ describe('AuthoringService.history', () => {
   it('reads no assignment asked for as every assignment', async () => {
     const authoring = await build();
     const one = await makeAssignment(MINE);
-    await authoring.create(draft(), MINE, one.id);
+    await typedFor(authoring, one.id);
     await authoring.create(draft({ stem: { en: 'Written outside any section?' } }), MINE);
 
     assert.equal((await authoring.history(query(), MINE)).total, 2);

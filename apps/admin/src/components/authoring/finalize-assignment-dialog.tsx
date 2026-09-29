@@ -21,7 +21,8 @@ export function FinalizeAssignmentDialog({
 
   const finalize = useMutation({
     meta: { success: `${assignment?.sectionName ?? 'Section'} marked read.` },
-    mutationFn: (id: string) => api.admin.assignments.finalize(id),
+    mutationFn: (row: AssignmentWithTest) =>
+      api.admin.sectionWork.release(row.testId, row.baseConfigSectionId),
     onSuccess: () => {
       onFinalized();
       onClose();
@@ -36,7 +37,7 @@ export function FinalizeAssignmentDialog({
       description={`This covers ${plural(count, 'question')} in ${test}. You cannot edit them afterwards, and the test is one section closer to being offered.`}
       confirmLabel="Mark read"
       loading={finalize.isPending}
-      onConfirm={() => assignment?.id && finalize.mutate(assignment.id)}
+      onConfirm={() => assignment && finalize.mutate(assignment)}
     />
   );
 }

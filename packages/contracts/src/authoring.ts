@@ -44,12 +44,6 @@ export const authoringHistoryQuerySchema = paginationQuerySchema.extend({
 export type AuthoringHistoryQuery = z.infer<typeof authoringHistoryQuerySchema>;
 export type AuthoringHistoryQueryInput = z.input<typeof authoringHistoryQuerySchema>;
 
-/** A create ties the question to the section it was written for — refused if not the caller's own. */
-export const authoringCreateSchema = questionDraftSchema.extend({
-  assignmentId: z.string().nullable().optional(),
-});
-export type AuthoringCreateInput = z.infer<typeof authoringCreateSchema>;
-
 /** One institute day's output, so a gap in the run reads as a zero rather than as no data. */
 const authoringDaySchema = z.object({
   date: dateOnlySchema,
@@ -95,9 +89,4 @@ export const ADMIN_AUTHORING_ROUTES = {
   update: (id: string) => `/admin/authoring/questions/${id}`,
   remove: (id: string) => `/admin/authoring/questions/${id}`,
   duplicate: '/admin/authoring/duplicate',
-  /** A sheet of questions straight into the section, rather than loose in the bank. */
-  importPreview: (assignmentId: string) =>
-    `/admin/authoring/assignments/${assignmentId}/import/preview`,
-  importCommit: (assignmentId: string) =>
-    `/admin/authoring/assignments/${assignmentId}/import/commit`,
 } as const;

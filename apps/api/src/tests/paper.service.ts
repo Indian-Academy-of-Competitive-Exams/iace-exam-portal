@@ -345,25 +345,24 @@ export class PaperService {
   }
 
   /** A typist's one hand-over: exactly the section's count, inside its mix, becomes its paper. */
-  async typistDone(assignmentId: string, body: TypistDoneBody, editor: Editor): Promise<void> {
+  async typistDone(assignmentId: string, body: TypistDoneBody): Promise<void> {
     const typing = await this.prisma.questionAssignment.findUnique({
       where: { id: assignmentId },
       select: {
         role: true,
-        assigneeId: true,
         finalizedAt: true,
         replacedAt: true,
         testId: true,
         baseConfigSectionId: true,
       },
     });
-    const theirs = typing?.assigneeId === editor.id || (editor.isSuperAdmin ?? false);
-    if (typing?.role !== ASSIGNMENT_ROLES.TYPIST || typing.replacedAt || !theirs) {
+    if (typing?.role !== ASSIGNMENT_ROLES.TYPIST || typing.replacedAt) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     }
     if (typing.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_DONE_MESSAGE);
 
     const { testId } = typing;
+    this.auditContext.setEntityId(testId);
     const test = await this.requireTest(testId);
     this.assertAssemblable(test);
     if (!doneOpen({ ...typing, test })) {

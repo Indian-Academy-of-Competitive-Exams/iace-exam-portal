@@ -12,11 +12,14 @@ import {
   can,
   type AdminAuthority,
   type Assignment,
+  type AssignmentRole,
   type DifficultyLevel,
   type LocalizedContent,
   type PaperSource,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionImportPlan,
+  type QuestionImportResult,
   type QuestionOnOtherTest,
   type QuestionReview,
   type SectionQuestion,
@@ -26,9 +29,10 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { takeSectionEditLock } from '../common/edit-lock';
+import { sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
 import { AssignmentsService } from '../assignments';
 import { stemPreviewOf } from './question-core';
+import { QuestionImportService } from './question-import.service';
 import { reachableTest } from './question-query';
 import { QuestionsService } from './questions.service';
 
@@ -84,6 +88,13 @@ const WITH_TYPIST_MESSAGE = 'This question is with the typist until they mark it
 const NO_TYPIST_MESSAGE = 'This section has no typist to send a question back to.';
 const NOT_SENT_BACK_MESSAGE = 'This question was not sent back to you.';
 const TYPISTS_ONLY_MESSAGE = "Only this section's typist marks a question fixed.";
+const TYPING_ONLY_MESSAGE = "Only this section's typist does that.";
+const NO_LONGER_TYPING_MESSAGE =
+  'This section is no longer yours, so nothing new is typed into it.';
+const NOTHING_TO_TYPE_MESSAGE =
+  'This test is picked from the bank, so its sections are not typed. Fix what is sent back to you.';
+const SECTION_HANDED_OVER_MESSAGE =
+  'You have marked this section done. New questions go to the bank, not this paper.';
 
 const UNCHECKED_REVIEW: QuestionReview = {
   state: REVIEW_STATES.UNCHECKED,
@@ -123,6 +134,7 @@ export class SectionWorkService {
     private readonly redis: RedisService,
     private readonly questions: QuestionsService,
     private readonly assignments: AssignmentsService,
+    private readonly imports: QuestionImportService,
   ) {}
 
   async one(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
@@ -132,7 +144,10 @@ export class SectionWorkService {
   /** A review write changes nothing `load` read, so an action answers from the context it checked. */
   private async workOf(context: Context): Promise<SectionWork> {
     const { pair } = context;
-    const scoped = await this.scoped(context);
+    const [scoped, editingBy] = await Promise.all([
+      this.scoped(context),
+      sectionEditingBy(this.redis, this.prisma, pair),
+    ]);
     const history = context.rows.filter((row) => row.replacedAt !== null);
     return {
       testId: pair.testId,
@@ -149,6 +164,7 @@ export class SectionWorkService {
       seat: context.seat,
       seatAssignmentId: context.mine?.id ?? null,
       seatReplaced: context.mine?.replacedAt !== null && context.mine !== null,
+      editingBy,
       questions: scoped.map((question): SectionQuestion => ({
         questionId: question.id,
         preview: question.preview,
@@ -159,6 +175,44 @@ export class SectionWorkService {
         editable: this.editable(context, question),
       })),
     };
+  }
+
+  /** The typist row a Done is taken under; its own state is the Done's to judge. */
+  async actingTypist(pair: Pair, viewer: SectionViewer): Promise<Assignment> {
+    return actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.TYPIST);
+  }
+
+  /** A question typed for the section, under the open typing job the viewer acts through. */
+  async create(pair: Pair, draft: QuestionDraft, viewer: SectionViewer): Promise<QuestionDetail> {
+    const typing = typingRow(await this.load(pair, viewer));
+    await takeSectionEditLock(this.redis, this.prisma, pair, viewer);
+    return this.questions.create(draft, viewer.id, { assignmentId: typing.id });
+  }
+
+  /** The bank's sheet, previewed for this section: the run is the previewer's own from here on. */
+  async previewImport(
+    pair: Pair,
+    file: Buffer,
+    viewer: SectionViewer,
+  ): Promise<QuestionImportPlan> {
+    typingRow(await this.load(pair, viewer));
+    return this.imports.preview(file, viewer.id);
+  }
+
+  async commitImport(
+    pair: Pair,
+    importLogId: string,
+    viewer: SectionViewer,
+  ): Promise<QuestionImportResult> {
+    const typing = typingRow(await this.load(pair, viewer));
+    return this.imports.commit(importLogId, { assignmentId: typing.id, actorId: viewer.id });
+  }
+
+  /** The reader's release, under the reading job the viewer acts through. */
+  async release(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
+    const reading = actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.PROOFREADER);
+    await this.assignments.finalize(reading.id);
+    return this.one(pair, viewer);
   }
 
   /** One question of the section — the list is not the authority, this is. */
@@ -483,6 +537,26 @@ export class SectionWorkService {
       where: { testId_questionId: { testId, questionId } },
     });
   }
+}
+
+/** The viewer's own row in a role, replaced or not, or for a super admin whoever holds it now. */
+function actingAs(context: Context, role: AssignmentRole): Assignment {
+  if (context.mine?.role === role) return context.mine;
+  const holder = role === ASSIGNMENT_ROLES.TYPIST ? context.typist : context.reader;
+  if (holder && context.viewer.isSuperAdmin) return holder;
+  const only = role === ASSIGNMENT_ROLES.TYPIST ? TYPING_ONLY_MESSAGE : READERS_ONLY_MESSAGE;
+  throw new AppException(ErrorCodes.FORBIDDEN, only);
+}
+
+/** A typing job still open: held, on a typed paper, and not yet done. */
+function typingRow(context: Context): Assignment {
+  const row = actingAs(context, ASSIGNMENT_ROLES.TYPIST);
+  if (row.replacedAt) throw new AppException(ErrorCodes.FORBIDDEN, NO_LONGER_TYPING_MESSAGE);
+  if (context.test.paperSource !== PAPER_SOURCES.FRAMED) {
+    throw new AppException(ErrorCodes.CONFLICT, NOTHING_TO_TYPE_MESSAGE);
+  }
+  if (row.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, SECTION_HANDED_OVER_MESSAGE);
+  return row;
 }
 
 /** The row the viewer holds right now; a replaced one only reads. */

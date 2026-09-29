@@ -95,7 +95,7 @@ function Thread({
 
   const thread = useQuery({
     queryKey: sectionThreadKey(testId, sectionId),
-    queryFn: () => api.admin.assignments.comments(testId, sectionId),
+    queryFn: () => api.admin.sectionWork.comments(testId, sectionId),
   });
   const rows = thread.data ?? [];
 
@@ -107,11 +107,11 @@ function Thread({
   const say = useMutation({
     mutationFn: ({ body, images, editingId }: Composing) =>
       editingId === null
-        ? api.admin.assignments.comment(testId, sectionId, {
+        ? api.admin.sectionWork.comment(testId, sectionId, {
             body,
             images: images.map((image) => image.key),
           })
-        : api.admin.assignments.editComment(testId, sectionId, editingId, { body }),
+        : api.admin.sectionWork.editComment(testId, sectionId, editingId, { body }),
     onSuccess: settle,
   });
 

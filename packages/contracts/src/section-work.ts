@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { assignmentSchema } from './assignments';
+import { editLockHolderSchema } from './common';
 import { difficultyLevelSchema } from './questions';
 import { paperSourceSchema } from './tests';
 
@@ -76,6 +77,8 @@ export const sectionWorkSchema = z.object({
   /** The viewer's own row, when their seat is one; replaced means they only read now. */
   seatAssignmentId: z.string().nullable(),
   seatReplaced: z.boolean(),
+  /** Who holds the section's edit lock now, read with the section so the warning lands before the work. */
+  editingBy: editLockHolderSchema.nullable(),
   questions: sectionQuestionSchema.array(),
 });
 export type SectionWork = z.infer<typeof sectionWorkSchema>;
@@ -87,8 +90,26 @@ export const sendBackSchema = z.object({
 export type SendBackInput = z.input<typeof sendBackSchema>;
 export type SendBackBody = z.infer<typeof sendBackSchema>;
 
+const sectionPath = (testId: string, sectionId: string) => `/admin/sections/${testId}/${sectionId}`;
+
+/** Every read and write of one section, the caller's seat on it resolved by the server. */
 export const ADMIN_SECTION_WORK_ROUTES = {
-  one: (testId: string, sectionId: string) => `/admin/sections/${testId}/${sectionId}`,
+  one: sectionPath,
+  /** POST types a question for the section, under its typist's row. */
+  questions: (testId: string, sectionId: string) => `${sectionPath(testId, sectionId)}/questions`,
+  importPreview: (testId: string, sectionId: string) =>
+    `${sectionPath(testId, sectionId)}/import/preview`,
+  importCommit: (testId: string, sectionId: string) =>
+    `${sectionPath(testId, sectionId)}/import/commit`,
+  /** A typist's one hand-over: the chosen questions become the section's paper. */
+  done: (testId: string, sectionId: string) => `${sectionPath(testId, sectionId)}/done`,
+  /** A reader's "I've read this". */
+  release: (testId: string, sectionId: string) => `${sectionPath(testId, sectionId)}/release`,
+  /** GET reads the section thread; POST to the same path adds to it. */
+  comments: (testId: string, sectionId: string) => `${sectionPath(testId, sectionId)}/comments`,
+  /** Rewording one, which only its own author does. */
+  comment: (testId: string, sectionId: string, commentId: string) =>
+    `${sectionPath(testId, sectionId)}/comments/${commentId}`,
   /** GET reads one question; PATCH saves it under the viewer's own rule; DELETE takes back a typed one. */
   question: (testId: string, sectionId: string, questionId: string) =>
     `/admin/sections/${testId}/${sectionId}/questions/${questionId}`,

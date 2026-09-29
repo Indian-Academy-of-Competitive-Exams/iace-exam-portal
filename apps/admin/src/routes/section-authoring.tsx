@@ -166,7 +166,6 @@ function SectionWorkspace({
   const { testId, baseConfigSectionId: sectionId } = work;
 
   const source = useMemo((): WorkspaceSource => {
-    const typist = work.typist;
     return {
       cards: work.questions.map((question, index) =>
         cardOf(work, question, index, seat, onChanged),
@@ -192,24 +191,24 @@ function SectionWorkspace({
       },
       subjectLocked: work.sectionSubjectId !== null,
       checkDuplicates: seat.typing,
-      create:
-        seat.typing && typist
-          ? {
-              header: {
-                subjectId: work.sectionSubjectId ?? '',
-                topicId: '',
-                difficulty: DIFFICULTY_LEVEL.MEDIUM,
-                tags: '',
-              },
-              save: async (held) => {
-                await api.admin.authoring.create({
-                  ...toDraft(held.state, held.header),
-                  assignmentId: typist.id,
-                });
-                await onSettle();
-              },
-            }
-          : undefined,
+      create: seat.typing
+        ? {
+            header: {
+              subjectId: work.sectionSubjectId ?? '',
+              topicId: '',
+              difficulty: DIFFICULTY_LEVEL.MEDIUM,
+              tags: '',
+            },
+            save: async (held) => {
+              await api.admin.sectionWork.create(
+                testId,
+                sectionId,
+                toDraft(held.state, held.header),
+              );
+              await onSettle();
+            },
+          }
+        : undefined,
     };
   }, [work, seat, testId, sectionId, onChanged, onSettle]);
 
@@ -308,7 +307,7 @@ function SectionTitle({ work }: Readonly<{ work: SectionWork }>) {
 /** Where the section stands, in the words each seat reads it by — only when there is something to say. */
 function SectionState({ work }: Readonly<{ work: SectionWork }>) {
   const state = contextOf(work);
-  const elsewhere = useEditingElsewhere(work.testId, work.baseConfigSectionId);
+  const elsewhere = useEditingElsewhere(work);
   if (!state && !elsewhere) return null;
   return (
     <div className="flex flex-none flex-col gap-2 border-b border-border bg-surface px-4 py-2">
@@ -322,14 +321,10 @@ function SectionState({ work }: Readonly<{ work: SectionWork }>) {
   );
 }
 
-/** Who else is in this section right now, read once on load so the warning lands before the work. */
-function useEditingElsewhere(testId: string, sectionId: string): string | null {
+/** Who else is in this section right now, read with it so the warning lands before the work. */
+function useEditingElsewhere(work: SectionWork): string | null {
   const { identity } = useAuth();
-  const lock = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'lock', testId, sectionId],
-    queryFn: () => api.admin.assignments.sectionLock(testId, sectionId),
-  });
-  const editingBy = lock.data?.editingBy;
+  const { editingBy } = work;
   if (!editingBy || editingBy.adminId === identity?.id) return null;
   return editingBy.fullName ?? 'Another admin';
 }
@@ -672,9 +667,9 @@ function ProgressPanel({
         <Holder holder={work.typist} earlier={earlierOf(work, 'TYPIST')} />
         <Stat label="Written" value={`${counts.written} of ${work.questionCount}`} />
         <Stat label="Sent back to fix" value={counts.sentBack} />
-        {seat.typing && work.typist ? (
+        {seat.typing ? (
           <Button asChild size="sm" variant="outline">
-            <Link to={ROUTES.AUTHORING_IMPORT(work.typist.id)}>
+            <Link to={ROUTES.AUTHORING_IMPORT(work.testId, work.baseConfigSectionId)}>
               <Upload aria-hidden />
               Import sheet
             </Link>

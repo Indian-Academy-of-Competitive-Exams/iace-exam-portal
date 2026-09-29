@@ -29,15 +29,12 @@ import {
   type Paginated,
   type PaperSource,
   type SectionProgressQuery,
-  type SectionEditLock,
   type SectionProgressRow,
   type SectionRoleProgress,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
 import { AdminsService } from '../admins';
-import { sectionEditingBy } from '../common/edit-lock';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
@@ -215,7 +212,6 @@ const roleLabel = (role: AssignmentRole): string =>
 export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
     private readonly admins: AdminsService,
   ) {}
 
@@ -370,19 +366,6 @@ export class AssignmentsService {
     return typed + reviewed + said + edited === 0;
   }
 
-  /** One row by id. Not theirs reads as not there, unless they own the institute. */
-  async one(id: string, adminId: string, isSuperAdmin: boolean): Promise<AssignmentWithTest> {
-    const row = await this.prisma.questionAssignment.findUnique({
-      where: { id },
-      include: WITH_TEST_INCLUDE,
-    });
-    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    }
-    const written = await this.sectionWrittenCounts([row]);
-    return toAssignmentWithTest(row, written.get(sectionKey(row)) ?? NO_COUNTS);
-  }
-
   /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
   async mine(adminId: string, query: MineAssignmentsQuery): Promise<Paginated<AssignmentWithTest>> {
     const due = dueBounds(query);
@@ -499,18 +482,13 @@ export class AssignmentsService {
     return sectionsOf(test).map((section) => ({ id: section.id, name: section.name }));
   }
 
-  /** Who holds the section right now, so a screen warns before the work rather than at the save. */
-  async sectionLock(testId: string, baseConfigSectionId: string): Promise<SectionEditLock> {
-    const editingBy = await sectionEditingBy(this.redis, this.prisma, {
-      testId,
-      baseConfigSectionId,
+  /** A reader's release, by the row the section resolved. Idempotent: a repeat restamps. A typist uses Done. */
+  async finalize(id: string): Promise<Assignment> {
+    const row = await this.prisma.questionAssignment.findUnique({
+      where: { id },
+      include: ASSIGNMENT_INCLUDE,
     });
-    return { editingBy };
-  }
-
-  /** A reader's release. Idempotent: a repeat restamps rather than erroring. A typist uses Done. */
-  async finalize(id: string, adminId: string, isSuperAdmin = false): Promise<Assignment> {
-    const row = await this.requireOwn(id, adminId, isSuperAdmin);
+    if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
     if (row.role === ASSIGNMENT_ROLES.TYPIST) {
       throw new AppException(ErrorCodes.CONFLICT, CHOOSE_WITH_DONE_MESSAGE);
     }
@@ -567,22 +545,6 @@ export class AssignmentsService {
     if (unchecked > 0) {
       throw notWhole(`${unchecked} of this section's questions are not checked yet.`);
     }
-  }
-
-  /** Not theirs reads as not there. */
-  private async requireOwn(
-    id: string,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<AssignmentRow> {
-    const row = await this.prisma.questionAssignment.findUnique({
-      where: { id },
-      include: ASSIGNMENT_INCLUDE,
-    });
-    if (!row || (row.assigneeId !== adminId && !isSuperAdmin)) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
-    }
-    return row;
   }
 
   /** Every assignment on a row's own (test, section), not just the row's — the typist's work counts for the reader. */

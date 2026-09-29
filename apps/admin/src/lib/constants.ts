@@ -77,10 +77,6 @@ export const ROUTES = {
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
   QUESTION_NEW: '/questions/new',
-  /** Addresses from before the authoring page, kept so a bookmark still lands. */
-  WORK: '/work',
-  SECTION_PATTERN: '/work/tests/:testId/sections/:sectionId',
-  SECTION_QUESTION_PATTERN: '/work/tests/:testId/sections/:sectionId/questions/:questionId',
   /** The reader's own queue; the typist's is AUTHORING_ASSIGNMENTS. */
   PROOFREADING_ASSIGNMENTS: '/proofreading/assignments',
   /** One section's authoring page, entered as its typist, its reader or the test's owner. */
@@ -95,11 +91,6 @@ export const ROUTES = {
   TEST_SECTION: (testId: string, sectionId: string) => `/tests/${testId}/sections/${sectionId}`,
   TEST_SECTION_PATTERN: '/tests/:testId/sections/:sectionId',
   SECTION_PROGRESS: '/tests/section-progress',
-  PROOFREADING_SECTION_PATTERN: '/proofreading/assignments/:assignmentId',
-  PROOFREADING_OF_SECTION_PATTERN: '/proofreading/sections/:testId/:sectionId',
-  PROOFREADING_QUESTION_PATTERN: '/proofreading/assignments/:assignmentId/questions/:questionId',
-  PROOFREADING_SECTION_QUESTION_PATTERN:
-    '/proofreading/sections/:testId/:sectionId/questions/:questionId',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
@@ -113,11 +104,10 @@ export const ROUTES = {
   AUTHORING_HISTORY: '/authoring/history',
   /** The typist's own queue, and the editor under it — nested, so the rail marks the row it came from. */
   AUTHORING_ASSIGNMENTS: '/authoring/assignments',
-  AUTHORING_FOR_ASSIGNMENT: (assignmentId: string) => `/authoring/assignments/${assignmentId}`,
-  AUTHORING_FOR_ASSIGNMENT_PATTERN: '/authoring/assignments/:assignmentId',
   /** A sheet of questions straight into the section it was written for. */
-  AUTHORING_IMPORT: (assignmentId: string) => `/authoring/assignments/${assignmentId}/import`,
-  AUTHORING_IMPORT_PATTERN: '/authoring/assignments/:assignmentId/import',
+  AUTHORING_IMPORT: (testId: string, sectionId: string) =>
+    `/authoring/assignments/tests/${testId}/sections/${sectionId}/import`,
+  AUTHORING_IMPORT_PATTERN: '/authoring/assignments/tests/:testId/sections/:sectionId/import',
   /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
   BASE_CONFIGS: '/tests/configs',
   BASE_CONFIG_NEW: '/tests/configs/new',

@@ -37,7 +37,6 @@ import {
   type MineAssignmentsQuery,
   type Paginated,
   type SectionComment,
-  type SectionEditLock,
   type SectionProgressQuery,
   type SectionProgressRow,
 } from '@iace/contracts';
@@ -66,10 +65,7 @@ const THREAD_FEATURES = [...ASSIGNEE_FEATURES, FEATURE_KEYS.TEST_MANAGEMENT] as 
 @Controller('admin/assignments')
 @Actors(ActorTypes.ADMIN)
 export class AssignmentsController {
-  constructor(
-    private readonly assignments: AssignmentsService,
-    private readonly thread: SectionThreadService,
-  ) {}
+  constructor(private readonly assignments: AssignmentsService) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId')
@@ -126,23 +122,6 @@ export class AssignmentsController {
     return this.assignments.sectionChoices(testId, query, user.id, user.isSuperAdmin);
   }
 
-  /** Read on load, never polled: it says who is in the section before the work starts. */
-  @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
-  @Get('tests/:testId/sections/:sectionId/lock')
-  sectionLock(
-    @Param('testId') testId: string,
-    @Param('sectionId') sectionId: string,
-  ): Promise<SectionEditLock> {
-    return this.assignments.sectionLock(testId, sectionId);
-  }
-
-  /** A reader's "I've read this". A typist's hand-over is Done, which chooses the paper. */
-  @RequiresFeature(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/finalize')
-  finalize(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Assignment> {
-    return this.assignments.finalize(id, user.id, user.isSuperAdmin);
-  }
-
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @HttpCode(HttpStatus.OK)
   @Delete(':id')
@@ -151,9 +130,24 @@ export class AssignmentsController {
   }
 
   /** Who a role can be given to — the same key `assign` itself requires, never the admin directory. */
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get('assignable')
+  assignable(
+    @Query(new ZodQuery(assignableQuerySchema)) query: AssignableQuery,
+  ): Promise<AssignableAdmin[]> {
+    return this.assignments.assignable(query.role);
+  }
+}
+
+/** A section's thread, addressed the way every other write on the section is. */
+@Controller('admin/sections/:testId/:sectionId/comments')
+@Actors(ActorTypes.ADMIN)
+export class SectionThreadController {
+  constructor(private readonly thread: SectionThreadService) {}
+
   /** The whole thread, unpaged — for the section's own assignees, test owners and a super admin. */
   @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
-  @Get('tests/:testId/sections/:sectionId/comments')
+  @Get()
   comments(
     @Param('testId') testId: string,
     @Param('sectionId') sectionId: string,
@@ -167,7 +161,7 @@ export class AssignmentsController {
 
   /** The guard only says they work here; the service says whether this section is theirs. */
   @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.WRITE)
-  @Post('tests/:testId/sections/:sectionId/comments')
+  @Post()
   @HttpCode(HttpStatus.CREATED)
   comment(
     @Param('testId') testId: string,
@@ -180,7 +174,7 @@ export class AssignmentsController {
 
   /** Its own author and nobody else, which the service decides — the guard only says they work here. */
   @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.WRITE)
-  @Patch('tests/:testId/sections/:sectionId/comments/:commentId')
+  @Patch(':commentId')
   editComment(
     @Param('testId') testId: string,
     @Param('sectionId') sectionId: string,
@@ -189,23 +183,5 @@ export class AssignmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SectionComment> {
     return this.thread.editComment(testId, sectionId, commentId, body, user.id);
-  }
-
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get('assignable')
-  assignable(
-    @Query(new ZodQuery(assignableQuerySchema)) query: AssignableQuery,
-  ): Promise<AssignableAdmin[]> {
-    return this.assignments.assignable(query.role);
-  }
-
-  /** Last, so `mine`, `progress`, `assignable` and `tests/:testId` are never read as an assignment id. */
-  @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.READ)
-  @Get(':id')
-  one(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<AssignmentWithTest> {
-    return this.assignments.one(id, user.id, user.isSuperAdmin);
   }
 }

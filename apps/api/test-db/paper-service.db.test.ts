@@ -855,11 +855,10 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
       data: { assignmentId: assignment.id },
     });
     const done = (selected: string[], discard: string[] = []) =>
-      service.typistDone(
-        assignment.id,
-        { selected: selected.map(idFor), discard: discard.map(idFor) },
-        { id: typist.id },
-      );
+      service.typistDone(assignment.id, {
+        selected: selected.map(idFor),
+        discard: discard.map(idFor),
+      });
     const typingDone = async () =>
       (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: assignment.id } }))
         .finalizedAt;
@@ -1000,11 +999,7 @@ describe('PaperService — a section reaches its proof-reader', () => {
     });
 
     assert.equal(await handedAt(reading.id), null);
-    await service.typistDone(
-      typing.id,
-      { selected: [idFor('q1'), idFor('q2')], discard: [] },
-      { id: typist.id },
-    );
+    await service.typistDone(typing.id, { selected: [idFor('q1'), idFor('q2')], discard: [] });
 
     assert.notEqual(await handedAt(reading.id), null);
   });

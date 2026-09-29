@@ -240,7 +240,7 @@ function useSaveQuestion(
     mutationFn: () =>
       questionId
         ? api.admin.authoring.update(questionId, draft)
-        : api.admin.authoring.create({ ...draft, assignmentId: null }),
+        : api.admin.authoring.create(draft),
     onSuccess: async (result) => {
       onSaved(result);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });

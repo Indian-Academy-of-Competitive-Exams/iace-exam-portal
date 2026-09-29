@@ -14,10 +14,11 @@ import {
   type QuestionDraftInput,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { AuthoringService } from '../src/questions/authoring.service';
+import { AuditService } from '../src/audit/audit.service';
 import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { SectionWorkService, type SectionViewer } from '../src/questions/section-work.service';
+import { QuestionImportService } from '../src/questions/question-import.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { EDIT_LOCK_TTL_SEC } from '../src/redis/redis.keys';
 import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
@@ -53,12 +54,13 @@ async function build() {
   const questions = new QuestionsService(prisma, audit, new FakeStorage() as never);
   const redis = new FakeRedis();
   const admins = new AdminsService(prisma, audit, new FakeEventBus().asService());
-  const assignments = new AssignmentsService(prisma, redis.asService(), admins);
+  const assignments = new AssignmentsService(prisma, admins);
+  const storage = new FakeStorage() as never;
+  const imports = new QuestionImportService(prisma, storage, new AuditService(prisma, storage));
   return {
     redis,
     questions,
-    authoring: new AuthoringService(prisma, redis.asService(), questions),
-    work: new SectionWorkService(prisma, redis.asService(), questions, assignments),
+    work: new SectionWorkService(prisma, redis.asService(), questions, assignments, imports),
   };
 }
 
@@ -168,16 +170,16 @@ const refusedWith = (code: string) => (error: unknown) =>
 
 describe('the section edit lock', () => {
   it('names whoever is already in the section rather than just refusing', async () => {
-    const { authoring, work } = await build();
+    const { work } = await build();
     const section = await aSection();
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
-    await markDone(section, written.question);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await markDone(section, written);
 
     await assert.rejects(
       () =>
         work.edit(
           pairOf(section),
-          written.question.id,
+          written.id,
           draft({ stem: { en: 'The reader’s fix' } }),
           viewer(READER),
         ),
@@ -186,40 +188,40 @@ describe('the section edit lock', () => {
   });
 
   it('lets the holder back in, and their fifteen minutes start again', async () => {
-    const { authoring, work } = await build();
+    const { work } = await build();
     const section = await aSection();
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
 
     const again = await work.edit(
       pairOf(section),
-      written.question.id,
+      written.id,
       draft({ stem: { en: 'What is 25% of 200?' } }),
       viewer(TYPIST),
     );
 
-    assert.equal(again.id, written.question.id);
+    assert.equal(again.id, written.id);
   });
 
   it('hands it to a super admin, who then holds it against the admin who had it', async () => {
-    const { authoring, work } = await build();
+    const { work } = await build();
     const section = await aSection();
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
-    await markDone(section, written.question);
-    await sentBack(section, written.question.id);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await markDone(section, written);
+    await sentBack(section, written.id);
 
     const stolen = await work.edit(
       pairOf(section),
-      written.question.id,
+      written.id,
       draft({ stem: { en: 'A super admin’s fix' } }),
       viewer(CHIEF, true),
     );
-    assert.equal(stolen.id, written.question.id);
+    assert.equal(stolen.id, written.id);
 
     await assert.rejects(
       () =>
         work.edit(
           pairOf(section),
-          written.question.id,
+          written.id,
           draft({ stem: { en: 'Mine again' } }),
           viewer(TYPIST),
         ),
@@ -228,66 +230,66 @@ describe('the section edit lock', () => {
   });
 
   it('lapses once nobody has written in the section for fifteen minutes', async () => {
-    const { authoring, work, redis } = await build();
+    const { work, redis } = await build();
     const section = await aSection();
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
-    await markDone(section, written.question);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await markDone(section, written);
 
     redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
 
     const fixed = await work.edit(
       pairOf(section),
-      written.question.id,
+      written.id,
       draft({ stem: { en: 'The reader’s fix' } }),
       viewer(READER),
     );
-    assert.equal(fixed.id, written.question.id);
+    assert.equal(fixed.id, written.id);
   });
 });
 
 describe('SectionWorkService — a section nobody was given to read', () => {
   it('opens to a super admin', async () => {
-    const { authoring, work } = await build();
+    const { work } = await build();
     const section = await aSection({ withReader: false });
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
-    await markDone(section, written.question);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await markDone(section, written);
 
     const opened = await work.one(pairOf(section), viewer(CHIEF, true));
 
     assert.deepEqual(
       opened.questions.map((row) => row.questionId),
-      [written.question.id],
+      [written.id],
     );
   });
 
   it('fixes a question through that section, and keeps its status', async () => {
-    const { authoring, work } = await build();
+    const { work } = await build();
     const section = await aSection({ withReader: false });
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
-    await markDone(section, written.question);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await markDone(section, written);
 
     const fixed = await work.edit(
       pairOf(section),
-      written.question.id,
+      written.id,
       draft({ stem: { en: 'What is 25% of 200?' } }),
       viewer(CHIEF, true),
     );
 
-    assert.equal(fixed.status, written.question.status);
+    assert.equal(fixed.status, written.status);
     assert.match(plainTextOf(fixed.content.en?.stem), /25% of 200/);
   });
 
   /** The section is no licence to reach the bank through it. */
   it('refuses a question that is not in the section named', async () => {
-    const { authoring, work } = await build();
+    const { work } = await build();
     const section = await aSection({ withReader: false });
-    const written = await authoring.create(draft(), TYPIST, section.typing.id);
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
 
     await assert.rejects(
       () =>
         work.edit(
           { testId: section.testId, baseConfigSectionId: section.otherSectionId },
-          written.question.id,
+          written.id,
           draft(),
           viewer(CHIEF, true),
         ),

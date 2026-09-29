@@ -38,16 +38,22 @@ import { saveBlob } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { ImportWorkspace } from '../components/authoring/import-workspace';
 
-/** The same sheet either way; a section's typist previews and commits through authoring. */
-function intakeFor(into: string | null) {
+/** The section a typist's import lands in; null for the bank. */
+interface IntoSection {
+  testId: string;
+  sectionId: string;
+}
+
+/** The same sheet either way; a section's typist previews and commits through the section. */
+function intakeFor(into: IntoSection | null) {
   return {
     preview: (file: File) =>
       into
-        ? api.admin.authoring.previewImport(into, file)
+        ? api.admin.sectionWork.previewImport(into.testId, into.sectionId, file)
         : api.admin.imports.previewQuestions(file),
     commit: (_file: File | null, plan: QuestionImportPlan) =>
       into
-        ? api.admin.authoring.commitImport(into, plan.importLogId)
+        ? api.admin.sectionWork.commitImport(into.testId, into.sectionId, plan.importLogId)
         : api.admin.imports.commitQuestions(plan.importLogId),
   };
 }
@@ -60,12 +66,12 @@ function importedText({ created, duplicates, invalid, leftOut }: QuestionImportR
 function ImportOutcome({
   result,
   into,
-}: Readonly<{ result: QuestionImportResult; into: string | null }>) {
+}: Readonly<{ result: QuestionImportResult; into: IntoSection | null }>) {
   return (
     <>
       {importedText(result)}{' '}
       <Link
-        to={into ? ROUTES.AUTHORING_FOR_ASSIGNMENT(into) : ROUTES.QUESTIONS}
+        to={into ? ROUTES.TYPING_SECTION(into.testId, into.sectionId) : ROUTES.QUESTIONS}
         className={linkVariants({ variant: 'inline' })}
       >
         {into ? 'Back to the section' : 'View questions'}
@@ -91,10 +97,10 @@ function SheetTour() {
 
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
-  const { assignmentId } = useParams<{ assignmentId?: string }>();
+  const { testId, sectionId } = useParams<{ testId?: string; sectionId?: string }>();
   const queryClient = useQueryClient();
   // The same sheet either way; the section is only where the questions land.
-  const into = assignmentId ?? null;
+  const into = testId && sectionId ? { testId, sectionId } : null;
 
   const template = useMutation({
     mutationFn: () => api.admin.imports.questionTemplate(),

@@ -7,6 +7,8 @@
 export { QuestionsModule } from './questions.module';
 export { QuestionsService } from './questions.service';
 export { TaxonomyService } from './taxonomy.service';
+/** A section's seat is resolved once, here, for the writes other modules own — the typist's Done. */
+export { SectionWorkService } from './section-work.service';
 /** How a stem is shortened for a row is the bank's own rule, so a paper borrows it rather than its own. */
 export { stemPreviewOf } from './question-core';
 /** Content that carries images is the bank's shape, so signing one is the bank's rule to lend. */

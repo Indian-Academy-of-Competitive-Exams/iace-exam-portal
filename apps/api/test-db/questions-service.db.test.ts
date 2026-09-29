@@ -27,7 +27,7 @@ import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
-import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   fourOptions,
@@ -831,7 +831,6 @@ describe('QuestionsService.update — reworded words are read again', () => {
     const { questions, questionId, readingId } = await readAndReleased();
     const assignments = new AssignmentsService(
       prisma,
-      new FakeRedis().asService(),
       new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
     );
 

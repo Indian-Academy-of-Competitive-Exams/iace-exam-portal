@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { ASSIGNMENT_ROLES } from '@iace/contracts';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { PageErrorBoundary } from '@iace/ui';
@@ -60,9 +60,6 @@ const SectionAuthoringPage = React.lazy(() =>
   import('./routes/section-authoring').then((module) => ({
     default: module.SectionAuthoringPage,
   })),
-);
-const SectionRedirect = React.lazy(() =>
-  import('./routes/section-redirect').then((module) => ({ default: module.SectionRedirect })),
 );
 const AuthoringEditorPage = React.lazy(() =>
   import('./routes/authoring-editor').then((module) => ({ default: module.AuthoringEditorPage })),
@@ -170,10 +167,6 @@ export function App() {
           <Route path={ROUTES.TAXONOMY} element={whileLoading(<TaxonomyPage />)} />
           <Route path={ROUTES.QUESTION_PATTERN} element={whileLoading(<QuestionFormPage />)} />
           <Route path={ROUTES.QUESTION_EDIT_PATTERN} element={whileLoading(<BankQuestionPage />)} />
-          <Route
-            path={ROUTES.WORK}
-            element={<Navigate replace to={ROUTES.AUTHORING_ASSIGNMENTS} />}
-          />
           {[
             ROUTES.TYPING_SECTION_PATTERN,
             ROUTES.READING_SECTION_PATTERN,
@@ -181,25 +174,10 @@ export function App() {
           ].map((path) => (
             <Route key={path} path={path} element={whileLoading(<SectionAuthoringPage />)} />
           ))}
-          {[ROUTES.SECTION_PATTERN, ROUTES.SECTION_QUESTION_PATTERN].map((path) => (
-            <Route key={path} path={path} element={whileLoading(<SectionRedirect />)} />
-          ))}
           <Route
             path={ROUTES.PROOFREADING_ASSIGNMENTS}
             element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />)}
           />
-          {[
-            ROUTES.PROOFREADING_SECTION_PATTERN,
-            ROUTES.PROOFREADING_OF_SECTION_PATTERN,
-            ROUTES.PROOFREADING_QUESTION_PATTERN,
-            ROUTES.PROOFREADING_SECTION_QUESTION_PATTERN,
-          ].map((path) => (
-            <Route
-              key={path}
-              path={path}
-              element={whileLoading(<SectionRedirect role={ASSIGNMENT_ROLES.PROOFREADER} />)}
-            />
-          ))}
           <Route path={ROUTES.AUTHORING_EDITOR} element={whileLoading(<AuthoringEditorPage />)} />
           {/* Before the :id route, or "history" would be read as a question id. */}
           <Route path={ROUTES.AUTHORING_HISTORY} element={whileLoading(<AuthoringHistoryPage />)} />
@@ -207,14 +185,9 @@ export function App() {
             path={ROUTES.AUTHORING_ASSIGNMENTS}
             element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />)}
           />
-          {/* Before the :assignmentId route, or "import" is read as an assignment id. */}
           <Route
             path={ROUTES.AUTHORING_IMPORT_PATTERN}
             element={whileLoading(<ImportQuestionsPage />)}
-          />
-          <Route
-            path={ROUTES.AUTHORING_FOR_ASSIGNMENT_PATTERN}
-            element={whileLoading(<SectionRedirect />)}
           />
           <Route
             path={ROUTES.AUTHORING_EDITOR_PATTERN}

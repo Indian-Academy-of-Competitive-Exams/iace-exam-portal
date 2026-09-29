@@ -18,10 +18,7 @@ import {
   type QuestionSummary,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
-import { takeSectionEditLock } from '../common/edit-lock';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
-import { requireOwnAssignment, type SectionRef } from './assignment-guard';
 import { computeStemHash } from './question-core';
 import { writtenBetween } from './question-query';
 import { QuestionsService } from './questions.service';
@@ -31,21 +28,12 @@ import { QuestionsService } from './questions.service';
 export class AuthoringService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
     private readonly questions: QuestionsService,
   ) {}
 
-  async create(
-    draft: QuestionDraft,
-    adminId: string,
-    assignmentId: string | null = null,
-    isSuperAdmin = false,
-  ): Promise<AuthoringSaveResult> {
-    if (assignmentId) {
-      const section = await this.assertOwnAssignment(assignmentId, adminId, isSuperAdmin);
-      await this.claimSection(section, adminId, isSuperAdmin);
-    }
-    const question = await this.questions.create(draft, adminId, { assignmentId });
+  /** Straight into the bank; a section's question is typed on its section page. */
+  async create(draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
+    const question = await this.questions.create(draft, adminId);
     return { question };
   }
 
@@ -141,18 +129,8 @@ export class AuthoringService {
     return this.questions.duplicateOf(computeStemHash(draft), exceptId);
   }
 
-  /** Taken BEFORE any write: Redis does not roll back, so a claim inside one is a claim nobody releases. */
-  private async claimSection(
-    section: SectionRef | null,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<void> {
-    if (section === null) return;
-    await takeSectionEditLock(this.redis, this.prisma, section, { id: adminId, isSuperAdmin });
-  }
-
   /** Not theirs reads as not there: an author has no business learning what another one wrote. */
-  private async assertTheirs(id: string, adminId: string): Promise<SectionRef | null> {
+  private async assertTheirs(id: string, adminId: string): Promise<SectionRef> {
     const row = await this.prisma.question.findFirst({
       where: { id, createdById: adminId },
       select: { assignment: { select: { testId: true, baseConfigSectionId: true } } },
@@ -160,23 +138,18 @@ export class AuthoringService {
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
     return row.assignment;
   }
-
-  private assertOwnAssignment(
-    id: string,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<SectionRef> {
-    return requireOwnAssignment(this.prisma, id, adminId, isSuperAdmin);
-  }
 }
 
 const SEVEN_DAYS = 7;
+
+/** The section a question was written for; null for one typed straight into the bank. */
+type SectionRef = { testId: string; baseConfigSectionId: string } | null;
 
 const ON_ITS_SECTION_MESSAGE =
   "This question was written for a section, so it is changed on that section's page.";
 
 /** A section's question has its own rules for who changes it and when, and one page that applies them. */
-function assertLoose(section: SectionRef | null): void {
+function assertLoose(section: SectionRef): void {
   if (section) throw new AppException(ErrorCodes.CONFLICT, ON_ITS_SECTION_MESSAGE);
 }
 

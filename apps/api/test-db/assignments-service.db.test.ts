@@ -62,7 +62,7 @@ function build() {
     new FakeEventBus().asService(),
   );
   return {
-    assignments: new AssignmentsService(prisma, new FakeRedis().asService(), admins),
+    assignments: new AssignmentsService(prisma, admins),
     admins,
     tests: new TestsService(
       prisma,
@@ -349,11 +349,7 @@ describe('AssignmentsService — one lock order, Test before its rows', () => {
       body({ baseConfigSectionId: section.id, assigneeId, role: ASSIGNMENT_ROLES.PROOFREADER });
     await assignments.assign(test.id, reading(first.id), first.id);
     const order: string[] = [];
-    const watched = new AssignmentsService(
-      watchingLocks(order),
-      new FakeRedis().asService(),
-      admins,
-    );
+    const watched = new AssignmentsService(watchingLocks(order), admins);
 
     await watched.assign(test.id, reading(second.id), second.id);
 
@@ -391,7 +387,7 @@ describe('AssignmentsService — a hand-over reads the role as it is under the l
         };
       },
     });
-    const racing = new AssignmentsService(reopenedMidway, new FakeRedis().asService(), admins);
+    const racing = new AssignmentsService(reopenedMidway, admins);
 
     const next = await racing.assign(test.id, reading(second.id), second.id);
 
@@ -435,7 +431,7 @@ describe('AssignmentsService — a role its section took with it', () => {
       (error: unknown) => AppException.is(error) && /left the test/.test(error.message),
     );
     await assert.rejects(
-      () => assignments.finalize(standing.id, third.id, false),
+      () => assignments.finalize(standing.id),
       (error: unknown) => AppException.is(error) && /left the test/.test(error.message),
     );
   });
@@ -575,10 +571,7 @@ describe('AssignmentsService — a typist hands over with Done, not finalize', (
       typist.id,
     );
 
-    await assert.rejects(
-      () => assignments.finalize(created.id, typist.id),
-      refusedWith(ErrorCodes.CONFLICT),
-    );
+    await assert.rejects(() => assignments.finalize(created.id), refusedWith(ErrorCodes.CONFLICT));
   });
 });
 
@@ -1005,7 +998,7 @@ describe('AssignmentsService — section progress', () => {
       }),
       typist.id,
     );
-    const reading = await assignments.assign(
+    await assignments.assign(
       test.id,
       body({
         baseConfigSectionId: section.id,
@@ -1023,10 +1016,14 @@ describe('AssignmentsService — section progress', () => {
     }
 
     const rows = await progress(assignments);
-    const asReader = await assignments.one(reading.id, reader.id, false);
+    const [asReader] = await queue(assignments, reader.id);
 
     assert.equal(rows[0]?.writtenCount, 2);
-    assert.equal(asReader.writtenCount, 2, 'the reader waits on the section, not on their own row');
+    assert.equal(
+      asReader?.writtenCount,
+      2,
+      'the reader waits on the section, not on their own row',
+    );
   });
 
   it('gives a PICKED test both roles: its typist fixes what the reader sends back', async () => {
@@ -1169,59 +1166,7 @@ describe('AssignmentsService — section progress', () => {
   });
 });
 
-describe('AssignmentsService — one', () => {
-  it('hands an admin their own row and refuses somebody else’s', async () => {
-    const { assignments } = build();
-    const catalog = await makeCatalog(prisma);
-    const test = await framed(catalog, { title: 'Mock 01' });
-    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
-    const typist = await makeAdmin(prisma);
-    const stranger = await makeAdmin(prisma);
-    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const row = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-
-    const own = await assignments.one(row.id, typist.id, false);
-
-    assert.equal(own.testTitle, 'Mock 01');
-    assert.equal(own.sectionName, 'Reasoning');
-    await assert.rejects(
-      () => assignments.one(row.id, stranger.id, false),
-      refusedWith(ErrorCodes.NOT_FOUND),
-    );
-  });
-
-  /** The same override f88acce gave every other gate: whoever owns the institute reads any row. */
-  it('hands a super admin somebody else’s row', async () => {
-    const { assignments } = build();
-    const catalog = await makeCatalog(prisma);
-    const test = await framed(catalog);
-    const section = await makeSection(prisma, catalog);
-    const typist = await makeAdmin(prisma);
-    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const row = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    const superAdmin = await makeAdmin(prisma, { isSuperAdmin: true });
-
-    const seen = await assignments.one(row.id, superAdmin.id, true);
-
-    assert.equal(seen.id, row.id);
-  });
-
+describe('AssignmentsService — the section a row is on', () => {
   /** What the editor opens pre-configured on: the section names the subject, not the typist. */
   it('carries the section’s subject, and null where the section names none', async () => {
     const { assignments } = build();
@@ -1255,11 +1200,9 @@ describe('AssignmentsService — one', () => {
       typist.id,
     );
 
-    assert.equal(
-      (await assignments.one(onNamed.id, typist.id, false)).sectionSubjectId,
-      subject.id,
-    );
-    assert.equal((await assignments.one(onOpen.id, typist.id, false)).sectionSubjectId, null);
+    const byId = new Map((await queue(assignments, typist.id)).map((row) => [row.id, row]));
+    assert.equal(byId.get(onNamed.id)?.sectionSubjectId, subject.id);
+    assert.equal(byId.get(onOpen.id)?.sectionSubjectId, null);
   });
 });
 
@@ -1283,8 +1226,8 @@ describe('AssignmentsService — finalizing', () => {
     );
 
     await wholePaper(catalog, test.id, section.id);
-    const first = await assignments.finalize(created.id, reader.id);
-    const second = await assignments.finalize(created.id, reader.id);
+    const first = await assignments.finalize(created.id);
+    const second = await assignments.finalize(created.id);
 
     assert.ok(first.finalizedAt);
     assert.ok(second.finalizedAt);
@@ -1292,56 +1235,6 @@ describe('AssignmentsService — finalizing', () => {
       new Date(second.finalizedAt) >= new Date(first.finalizedAt),
       'a second reading never predates the first',
     );
-  });
-
-  /** Not theirs reads as not there: the same guard authoring.service.ts uses for a draft. */
-  it('refuses finalizing someone else’s assignment', async () => {
-    const { assignments } = build();
-    const catalog = await makeCatalog(prisma);
-    const test = await framed(catalog);
-    const section = await makeSection(prisma, catalog);
-    const reader = await makeAdmin(prisma);
-    const somebodyElse = await makeAdmin(prisma);
-    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const created = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
-
-    await assert.rejects(
-      () => assignments.finalize(created.id, somebodyElse.id),
-      refusedWith(ErrorCodes.NOT_FOUND),
-    );
-  });
-
-  /** The override: somebody has to be able to close a row whose assignee never will. */
-  it('lets a super admin finalize the row it refuses everybody else', async () => {
-    const { assignments } = build();
-    const catalog = await makeCatalog(prisma);
-    const test = await framed(catalog);
-    const section = await makeSection(prisma, catalog);
-    const reader = await makeAdmin(prisma);
-    const superAdmin = await makeAdmin(prisma, { isSuperAdmin: true });
-    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const created = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
-
-    await wholePaper(catalog, test.id, section.id);
-    const finalized = await assignments.finalize(created.id, superAdmin.id, true);
-
-    assert.ok(finalized.finalizedAt);
   });
 });
 
@@ -1588,10 +1481,10 @@ describe('AssignmentsService — a reader gets a whole section', () => {
 
   /** The failure this prevents: a section released before every question on it was looked at. */
   it('refuses release before the section reaches the reader, while short, and while unchecked', async () => {
-    const { assignments, catalog, test, section, typing, reading, reader } = await bothRoles();
+    const { assignments, catalog, test, section, typing, reading } = await bothRoles();
 
     await assert.rejects(
-      () => assignments.finalize(reading.id, reader.id),
+      () => assignments.finalize(reading.id),
       refusedWith(ErrorCodes.CONFLICT),
       'nothing has reached the reader yet',
     );
@@ -1601,14 +1494,14 @@ describe('AssignmentsService — a reader gets a whole section', () => {
       data: { handedAt: new Date() },
     });
     await assert.rejects(
-      () => assignments.finalize(reading.id, reader.id),
+      () => assignments.finalize(reading.id),
       refusedWith(ErrorCodes.CONFLICT),
       'the paper is short',
     );
 
     await fillPaper(catalog, test.id, section.id);
     await assert.rejects(
-      () => assignments.finalize(reading.id, reader.id),
+      () => assignments.finalize(reading.id),
       (error: unknown) => AppException.is(error) && /not checked yet/.test(error.message),
     );
 
@@ -1626,13 +1519,13 @@ describe('AssignmentsService — a reader gets a whole section', () => {
     });
     await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
     await assert.rejects(
-      () => assignments.finalize(reading.id, reader.id),
+      () => assignments.finalize(reading.id),
       refusedWith(ErrorCodes.CONFLICT),
       'the test was offered, so its reading is over',
     );
     await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: null } });
 
-    const released = await assignments.finalize(reading.id, reader.id);
+    const released = await assignments.finalize(reading.id);
     assert.ok(released.finalizedAt);
   });
 

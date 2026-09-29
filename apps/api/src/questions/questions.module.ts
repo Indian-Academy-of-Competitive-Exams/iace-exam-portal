@@ -46,6 +46,6 @@ import { API_ROLES, onRole } from '../config/api-role';
     SectionWorkService,
     StemRehashService,
   ],
-  exports: [QuestionsService, TaxonomyService],
+  exports: [QuestionsService, TaxonomyService, SectionWorkService],
 })
 export class QuestionsModule {}

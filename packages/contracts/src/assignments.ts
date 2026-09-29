@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { adminRoleSchema } from './admins';
-import { csvIdQuery, editLockHolderSchema, optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { dateOnlySchema } from './students';
 import { difficultyMixSchema } from './tests';
@@ -173,12 +173,6 @@ export const assignmentSectionsQuerySchema = z.object(assignmentScopeShape);
 export type AssignmentSectionsQuery = z.infer<typeof assignmentSectionsQuerySchema>;
 export type AssignmentSectionsQueryInput = z.input<typeof assignmentSectionsQuerySchema>;
 
-/** Who is editing one section right now, or nobody. Read before the work, not at the save. */
-export const sectionEditLockSchema = z.object({
-  editingBy: editLockHolderSchema.nullable(),
-});
-export type SectionEditLock = z.infer<typeof sectionEditLockSchema>;
-
 /** id and name only — a picker needs someone to choose, not the directory `admins.list` guards. */
 export const assignableAdminSchema = z.object({
   id: z.string(),
@@ -275,20 +269,6 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   tests: '/admin/assignments/tests',
   /** The chosen test's sections, unpaged — a base config holds a dozen, never a page's worth. */
   sectionsOf: (testId: string) => `/admin/assignments/tests/${testId}/sections`,
-  /** Whoever holds the section's advisory lock, so a screen warns before the work begins. */
-  sectionLock: (testId: string, baseConfigSectionId: string) =>
-    `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/lock`,
-  /** One row by id, for the screen a queue row opens — a super admin reaches anybody's. */
-  one: (id: string) => `/admin/assignments/${id}`,
-  finalize: (id: string) => `/admin/assignments/${id}/finalize`,
-  /** A typist's one hand-over: the chosen questions become the section's paper. */
-  done: (id: string) => `/admin/assignments/${id}/done`,
   /** Who a role can be given to — active admins already holding the feature key it needs. */
   assignable: '/admin/assignments/assignable',
-  /** GET reads the section thread; POST to the same path adds to it. */
-  comments: (testId: string, baseConfigSectionId: string) =>
-    `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/comments`,
-  /** Rewording one, which only its own author does. */
-  editComment: (testId: string, baseConfigSectionId: string, commentId: string) =>
-    `/admin/assignments/tests/${testId}/sections/${baseConfigSectionId}/comments/${commentId}`,
 } as const;

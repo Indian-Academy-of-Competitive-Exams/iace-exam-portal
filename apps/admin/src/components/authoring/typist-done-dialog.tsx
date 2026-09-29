@@ -60,7 +60,7 @@ function DoneDialog({
   const done = useMutation({
     meta: { success: `${assignment.sectionName} marked done.` },
     mutationFn: () =>
-      api.admin.assignments.done(assignment.id, {
+      api.admin.sectionWork.done(testId, baseConfigSectionId, {
         selected: [...chosen],
         discard: leftover
           .filter((row) => discarded.has(row.questionId))

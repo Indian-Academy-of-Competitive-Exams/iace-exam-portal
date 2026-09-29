@@ -43,7 +43,7 @@ import {
   type SetPaperQuestionStatusBody,
   type RemovePaperQuestionsQuery,
   typistDoneSchema,
-  type Assignment,
+  type SectionWork,
   type TypistDoneBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
@@ -52,7 +52,7 @@ import { Audit } from '../audit';
 import { TestsService } from './tests.service';
 import { PaperService } from './paper.service';
 import { OfferingService } from './offering.service';
-import { AssignmentsService } from '../assignments';
+import { SectionWorkService } from '../questions';
 
 /** The tests built from a stage's blueprints. Gated on TEST_MANAGEMENT, like the configs are. */
 @Controller('admin/tests')
@@ -224,24 +224,27 @@ export class SeriesTestsController {
 }
 
 /** A typist's Done lands here because its effect is the paper, which this module owns. */
-@Controller('admin/assignments')
+@Controller('admin/sections/:testId/:sectionId')
 @Actors(ActorTypes.ADMIN)
 export class TypistDoneController {
   constructor(
     private readonly paper: PaperService,
-    private readonly assignments: AssignmentsService,
+    private readonly work: SectionWorkService,
   ) {}
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)
-  @Post(':id/done')
+  @Post('done')
   @HttpCode(HttpStatus.OK)
   async done(
-    @Param('id') id: string,
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
     @Body(new ZodBody(typistDoneSchema)) body: TypistDoneBody,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<Assignment> {
-    await this.paper.typistDone(id, body, user);
-    return this.assignments.one(id, user.id, user.isSuperAdmin);
+  ): Promise<SectionWork> {
+    const pair = { testId, baseConfigSectionId: sectionId };
+    const typing = await this.work.actingTypist(pair, user);
+    await this.paper.typistDone(typing.id, body);
+    return this.work.one(pair, user);
   }
 }

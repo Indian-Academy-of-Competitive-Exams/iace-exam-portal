@@ -24,7 +24,6 @@ import {
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
 import { AuditService } from '../audit';
-import { requireOwnAssignment } from './assignment-guard';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { buildContent, type BuiltQuestion } from './question-core';
@@ -111,27 +110,6 @@ export class QuestionImportService {
         ]),
       ),
     );
-  }
-
-  /** The same sheet, landing in one section rather than loose in the bank. */
-  async previewForAssignment(
-    assignmentId: string,
-    file: Buffer,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<QuestionImportPlan> {
-    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
-    return this.preview(file, adminId);
-  }
-
-  async commitForAssignment(
-    assignmentId: string,
-    importLogId: string,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<QuestionImportResult> {
-    await requireOwnAssignment(this.prisma, assignmentId, adminId, isSuperAdmin);
-    return this.commit(importLogId, { assignmentId, actorId: adminId });
   }
 
   async commit(importLogId: string, into: ImportTarget = {}): Promise<QuestionImportResult> {
