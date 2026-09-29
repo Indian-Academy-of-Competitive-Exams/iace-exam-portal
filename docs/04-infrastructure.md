@@ -38,11 +38,13 @@ from 26 September 2026.** Splitting the data stores off the API box is partly re
 box becomes disposable and live sittings survive replacing it — and partly measurement: a bench
 with Postgres on loopback measures a topology production will never have.
 
-**The front door changed on 25 September 2026.** This file described an Application Load Balancer
-in front of ECS Fargate. It now describes **Caddy on EC2**, because an ALB is what makes Fargate
-practical — tasks register themselves in a target group as they scale — and without one the pair
-stops making sense. Whether production goes back to Fargate is **open**, and §3 says what decides
-it.
+**The compute is settled and Fargate is not coming back, decided 29 September 2026.** Until
+25 September this file described an Application Load Balancer in front of ECS Fargate. It now
+describes **Docker Compose on EC2 behind Caddy**, in staging and in production, and that is a
+decision rather than a stage: an ALB is what makes Fargate practical — tasks register themselves in
+a target group as they scale — so the two go together or not at all, and at this platform's ceiling
+one box serves eight times the load `CLAUDE.md` asks for. §3 carries the arithmetic. Nothing in
+this file is shaped to keep a migration back open.
 
 ---
 
@@ -85,9 +87,10 @@ account, so that is a signup step rather than a footnote.
 ECR, 2 GB runs the three containers with room. Size for the hardest thing you do that day, then
 resize down — forty cents for the privilege.
 
-For comparison, the ALB + Fargate shape this file used to describe came to ~$142 for production
-alone. The saving is the load balancer, the Fargate premium and the NAT instance; what it costs is
-boxes you own and a failure domain per box (§3, §4).
+For comparison, the shape this file used to describe — an ALB in front of Fargate — came to ~$142
+for production alone. The saving is the load balancer, the Fargate premium and the NAT instance;
+what it costs is boxes you own and a failure domain per box (§3, §4). It is recorded as a price,
+not as an option.
 
 **Two AWS Budgets, and they are free.** One at the total above, one anomaly detector. Every alarm
 in §9 watches something that is running; none watches something that should have stopped, and on a
@@ -123,7 +126,7 @@ membership. It carries a public address only so it can pull images.
 **RDS** sits in the private subnet, reachable from the API boxes' security group on 5432.
 
 **No NAT.** Both boxes are public-subnet, so nothing needs a gateway to reach SMS, push, Sentry or
-ECR — which removes the `t4g.nano` and its address that the ALB shape needed.
+ECR — which removes the `t4g.nano` and its address the ALB shape would have needed.
 
 A student's browser resolves the domain at Route 53, loads the two SPAs and question images from
 CloudFront, and sends every API call to Box A.
@@ -210,12 +213,16 @@ of eight. The cache is 15 minutes; a start storm is minutes. This is an ops rule
 free, and the code alternative (serving a seconds-stale catalog while one request rebuilds) has not
 been built.
 
-**Open: whether production returns to Fargate.** The staging box (§12) is where that gets decided,
-with one number. Simulate an 8,000-candidate event at the intended production size and read the CPU:
-under 50% and one box is plenty, so Fargate's autoscaling solves a problem that does not exist;
-50–80% and you need headroom; over 80%, or more than one box, and two boxes need something in front
-of them — which is an ALB, and once there is an ALB, Fargate is nearly free to adopt. Nothing in
-this file forecloses it: the Dockerfile, the env and the three roles are identical either way.
+**Settled: production is EC2, and a second box is bought for availability rather than capacity.**
+The question this section used to leave open — whether production returns to Fargate — is closed,
+and the paragraph above closes it: one box at `t4g.2xlarge` serves roughly eight times the ceiling
+`CLAUDE.md` sets, so autoscaling would be solving a problem this platform does not have, and the
+scheduler, the ALB and the per-task premium would all be bought for it. What the staging box (§12)
+still measures is the SIZE of the production box, not its shape — simulate an 8,000-candidate event
+at the intended size and read the CPU: under 50% and it is right, 50–80% and the next size up is,
+over 80% and the event needs a scheduled resize (§13). When a second box is eventually wanted, the
+reason is that one Caddy on one box is a single point of failure, and the answer is a warm standby
+behind a Route 53 health check (§4).
 
 ## 4. Ingress
 
@@ -240,9 +247,12 @@ matcher names that exact path, never a `/me/performance*` wildcard. `GET
 use, so the matcher lists leaf suffixes like `/me/attempts/*/state` rather than a blanket
 `/me/attempts/*`.
 
-**What this gives up, stated plainly:** an ALB is multi-node and self-healing; one Caddy on one box
-is not. A reboot is an outage, and at 10–30 events a month that has to be scheduled around. The
-escape hatch is Route 53 health-checked failover to a second box, or the ALB.
+**What this gives up, stated plainly:** a load balancer is multi-node and self-healing; one Caddy on
+one box is not. A reboot is an outage, and at 10–30 events a month that has to be scheduled around.
+**The one escape hatch this file keeps open is a warm standby behind a Route 53 health check** —
+a second box running the same compose file, a health check at $0.50 a month, and the Elastic IP or
+the record moved to it. That is the thing to build if an outage ever costs more than it costs; it
+is not a load balancer, and it does not bring a scheduler with it.
 
 **Let's Encrypt will not issue for `*.amazonaws.com`** — those names are on the Public Suffix List
 and blocked. So an AWS-provided EC2 hostname cannot have HTTPS, which matters because the student
@@ -373,8 +383,9 @@ Scaled to 8,000 candidates they would put an event at roughly 64–120 Mbps and 
 ## 8. Networking
 
 **No NAT, and nothing to run.** Both boxes sit in the public subnet with an address of their own, so
-outbound — SMS, WhatsApp, push, Sentry, log shipping, ECR, image pulls — needs no gateway. The ALB
-shape needed a `t4g.nano` NAT instance at $6.42 because its compute was private; this one does not.
+outbound — SMS, WhatsApp, push, Sentry, log shipping, ECR, image pulls — needs no gateway. The
+shape this file used to describe needed a `t4g.nano` NAT instance at $6.42 because its compute was
+private; this one does not.
 
 What replaces it is **security groups, not subnets**. Box A takes 80 and 443 from the world and 22
 from one address. Box B takes 5432 and 6379 **from Box A's security group** and nothing else — by
@@ -391,9 +402,9 @@ platform actually sends.
 ## 9. Logs, metrics and alarms
 
 The API has 35 log statements and **none on the request path**, so CloudWatch ingest stays inside
-the free 5 GB. Containers log through Docker's `awslogs` driver, kept 14 days. **Caddy's access log
-replaces the ALB's** — a JSON line per request to a file, shipped the same way; there is no S3
-lifecycle to configure because there is no load balancer writing to a bucket.
+the free 5 GB. Containers log through Docker's `awslogs` driver, kept 14 days. **Caddy's access log is the access
+log** — a JSON line per request to a file, shipped the same way, with no bucket and no S3 lifecycle
+to configure because nothing writes access logs to a bucket.
 
 About ten alarms at $0.10 each. **The list changed with the front door**, and an alarm on a metric
 that no longer exists is worse than no alarm:
@@ -407,8 +418,9 @@ that no longer exists is worse than no alarm:
 | Valkey memory and evictions    | One custom metric, $0.30                                                                   |
 | **CloudFront bytes out**       | The one line that can move the bill by an order of magnitude (§15)                         |
 
-**No ALB 5xx, no unhealthy-target count, no ECS running count** — those metrics do not exist on this
-shape. Anything that used to depend on them is now the app's own `/metrics` or an EC2 status check.
+**There is no ALB 5xx, no unhealthy-target count and no ECS running count to alarm on, and there
+will not be** — those metrics belong to a shape this platform does not run. Everything that would
+have depended on them is the app's own `/metrics` or an EC2 status check.
 
 `/metrics` already publishes what an event needs watching — latency and error rate, submits, queue
 depth and oldest wait, job failures, Redis memory and evictions, live sittings not yet in Postgres,
@@ -447,13 +459,65 @@ Diagrams are re-encoded to WebP in the admin's browser before upload (`75868e0`)
 Lifecycle: imports expire at 90 days, audit archives move to Glacier at 90, incomplete uploads
 abort at 7.
 
-## 11. Secrets, DNS and the registry
+## 11. Environment, secrets, DNS and the registry
 
-- **SSM Parameter Store, standard SecureString** for every secret — free, versioned, read by ECS at
-  task start. Secrets Manager would be $0.40 each for rotation nothing here uses. The KMS key is the
-  AWS-managed one; a customer-managed key is $1 for no gain.
-- **No S3 keys exist in production.** The task role signs, and `S3_ACCESS_KEY_ID` /
-  `S3_SECRET_ACCESS_KEY` are optional (`847db3e`); MinIO still needs the pair locally.
+**The environment file is the unit, not the variable.** One file per environment, at
+`deploy/.env` on its box, owned by root and `chmod 600`. Compose reads it twice and for two
+different reasons: `--env-file` resolves the `${...}` substitutions in `compose.yml`, and each
+service's `env_file` hands the same file to the container as its process environment.
+
+**Nothing in the API fetches configuration at boot.** There is no task definition and no secret
+pulled at start: `apps/api/src/config/env.schema.ts` validates `process.env` and nothing else,
+which is exactly why the same file behaves identically on a laptop and on a box. Anything that
+made the API read AWS to start would also make it unable to start when AWS is the thing that is
+broken.
+
+**Three files, and only one of them is real.**
+
+| File                  | Tracked                          | What it is                                                                                            |
+| --------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `.env.example`        | yes                              | Every variable the schema knows, with `dev_only_` secrets — local development, and the reference list |
+| `deploy/.env.example` | yes                              | The deployed subset, carrying the arithmetic beside the pool size and the heaps                       |
+| `deploy/.env`         | **never** — `.gitignore` line 32 | The real one. It exists on the box and in SSM, and nowhere else                                       |
+
+**Per-role values are deliberately not in the file.** `API_ROLE`, `UV_THREADPOOL_SIZE`,
+`NODE_OPTIONS`, `cpus` and `mem_limit` are set per service in `compose.yml`, because they differ by
+role and the file cannot know which of the three containers is reading it. The file carries only
+what all three share.
+
+**The SPAs have no runtime environment at all.** `VITE_API_URL` is substituted at compile time
+(§14), so for them an environment is a BUILD rather than a variable, and a staging artifact cannot
+be promoted to production.
+
+**SSM Parameter Store holds the master copy, and nothing reads it at runtime.** One SecureString
+per environment at `/iace/<env>/env`, holding the whole file:
+
+```bash
+aws ssm put-parameter --name /iace/staging/env --type SecureString --overwrite --value file://deploy/.env
+aws ssm get-parameter --name /iace/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
+```
+
+That one command is what makes §2's disposable box true: a replacement pulls its environment
+instead of being reassembled by hand at the worst possible moment. **A Standard-tier parameter caps
+at 4 KB**, which a fully commented file is close enough to trip — strip the comments before pushing,
+or pay $0.05 a month for the Advanced tier. Standard SecureStrings are otherwise free, where
+Secrets Manager is $0.40 each for a rotation nothing here uses, and the KMS key is the AWS-managed
+one; a customer-managed key is $1 for no gain.
+
+**The instance role is the one credential that never lands in the file.** The box carries an
+instance profile, the AWS SDK finds it on its own, and `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
+stay unset in production (`847db3e`) — the API refuses a half-pair, and MinIO locally is the only
+thing that needs the pair at all. That profile carries four things and no more: the media bucket,
+`ssm:GetParameter` on `/iace/<env>/*` with `kms:Decrypt` on the AWS-managed key, CloudWatch Logs
+write for the `awslogs` driver, and ECR read.
+
+**What production refuses to boot without**, each refusal naming its own variable rather than
+surfacing as a mystery 500 an hour into a live test: `connection_limit` on `DATABASE_URL`, a
+non-empty `CORS_ORIGINS`, a `METRICS_TOKEN`, `TRUST_PROXY_HOPS` above zero, a Valkey that cannot
+evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` still carrying the
+`dev_only_` prefix `.env.example` publishes. It additionally **warns** when the heap in
+`NODE_OPTIONS` does not match the container's memory limit, naming the role that is wrong.
+
 - **Route 53**, $0.50 a month: a free ALIAS to CloudFront for the SPAs, and an A record per
   environment to its API box's Elastic IP. **Caddy gets the API certificate itself** (§4), so ACM
   is needed only in us-east-1 for CloudFront, where it is free. The Elastic IP is also the failover
@@ -549,6 +613,8 @@ worst-case invoice.
 6. Recreate the API containers. Each is `tini`-led, so SIGTERM closes Nest and the container exits
    (`b2029d4`). **There is no draining on this shape** — `docker compose up -d` recreates with a
    gap, which is the cost of not having a load balancer.
+7. **If `deploy/.env` changed, push it back to SSM in the same breath** (§11). A box and its master
+   copy that disagree is a failure you only discover while replacing the box.
 
 A new service worker installs but **does not activate until every tab of the old one closes** —
 there is no `skipWaiting`, deliberately, because a bundle swapped under a sitting in progress is
@@ -586,8 +652,8 @@ Never during an event window, and never a migration that moves data without the 
   before `AttemptSheet` and are gone. Revisit above ~100 Mbps sustained.
 - **Archiving old answer sheets** and pruning read notifications, when the database passes ~200 GB.
 - **PgBouncer, when connections rather than load become the limit.** Not needed on one box: the
-  §6 pools fit `db.t4g.small` even at `t4g.2xlarge`. It arrives with Fargate autoscaling (§3), a
-  second API box, or pools past ~80% of `max_connections`, and runs beside the API containers.
+  §6 pools fit `db.t4g.small` even at `t4g.2xlarge`. It arrives with a second API box or pools past
+  ~80% of `max_connections`, and runs beside the API containers.
   Measured 28 September 2026 with PgBouncer 1.25.2 in transaction mode: all of `pnpm test:db`
   passes through it unchanged, and the scoring bench runs ~1,390 a second against ~1,360 direct.
   Three settings make that true. `max_prepared_statements = 200` (above Prisma's per-connection

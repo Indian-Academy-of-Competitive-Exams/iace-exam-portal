@@ -1,7 +1,7 @@
 # Deploying
 
-Three boxes and an RDS instance. `docs/04-infrastructure.md` is the why, the sizing and the money;
-this is the how.
+Three boxes and an RDS instance — **EC2 and Docker Compose, settled, with no Fargate behind it**
+(`docs/04-infrastructure.md` §3). That file is the why, the sizing and the money; this is the how.
 
 ```
 Box A / A′   Caddy + exam + core + worker     deploy/compose.yml
@@ -21,6 +21,37 @@ S3 + CloudFront  the two SPAs                  deploy/publish-spas.sh
 - **The API box needs 4 GB to build.** `pnpm install` plus the Prisma client wants it. Launch
   `t4g.medium`, and drop to `small` later once images come from ECR.
 
+## The environment file
+
+One file per environment, and it is the only place a credential lives on the box.
+
+```bash
+cp deploy/.env.example deploy/.env     # fill it in; openssl rand -base64 48 for each secret
+sudo chown root:root deploy/.env && sudo chmod 600 deploy/.env
+```
+
+**Push it to SSM the moment it is right, and again every time it changes.** That copy is what a
+replacement box pulls, and it is the difference between a three-minute recovery and rebuilding
+secrets by hand at the worst possible moment:
+
+```bash
+aws ssm put-parameter --name /iace/staging/env --type SecureString --overwrite --value file://deploy/.env
+```
+
+On a new box, one command brings the environment with it:
+
+```bash
+aws ssm get-parameter --name /iace/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
+```
+
+A Standard-tier parameter caps at **4 KB**, so strip the comments before pushing or pay $0.05 a
+month for the Advanced tier. Nothing reads SSM at runtime — the API validates `process.env` and
+nothing else, so the box boots whether or not AWS answers.
+
+**No S3 key pair on a real box.** Leave `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` unset and
+attach an instance profile carrying the media bucket, `ssm:GetParameter` on `/iace/<env>/*` with
+`kms:Decrypt`, CloudWatch Logs write, and ECR read. `docs/04-infrastructure.md` §11 is the why.
+
 ## Box B — Valkey
 
 ```bash
@@ -33,7 +64,6 @@ address rather than every interface — the security group is the real lock, thi
 ## Box A — the API
 
 ```bash
-cp deploy/.env.example deploy/.env      # fill it in; openssl rand -base64 48 for each secret
 docker compose -f deploy/compose.yml --env-file deploy/.env up -d --build
 ```
 

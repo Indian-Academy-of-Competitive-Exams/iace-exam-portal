@@ -147,10 +147,10 @@ flowchart TB
     WK --> PG
 ```
 
-The API holds no per-request state, so it runs 1→N identical containers behind a load balancer.
-Everything hot during a live test is in Redis; everything durable is in Postgres. Scoring and bulk
-imports run off the request path in BullMQ workers, so a spike of thousands of submissions queues
-instead of blocking.
+The API holds no per-request state, so it runs 1→N identical containers behind one front door
+(Caddy, `04` §4). Everything hot during a live test is in Redis; everything durable is in Postgres.
+Scoring and bulk imports run off the request path in BullMQ workers, so a spike of thousands of
+submissions queues instead of blocking.
 
 ## 5. Live-test scaling — the make-or-break
 
@@ -218,26 +218,29 @@ small Postgres plus one Redis plus a few API containers carrying the load.
 
 ## 6. Deployment topology
 
-A handful of managed services, containerised so nothing is tied to a single host. Sizes, costs and
-the release runbook are `docs/04-infrastructure.md`; this table is what each piece is for.
+**EC2 with Docker Compose, behind Caddy — settled, and not a stage on the way to Fargate**
+(`04` §3). A handful of managed services around it, and one image that runs the same on a laptop
+and on the box. Sizes, costs and the release runbook are `docs/04-infrastructure.md`; this table is
+what each piece is for.
 
-| Service                 | Role                                      | Notes                                                                                            |
-| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| EC2 (ARM) + Docker      | Runs the API containers                   | Three from one image, chosen by `API_ROLE`: exam, core, and exactly one worker.                  |
-| Caddy                   | TLS and path routing to the API           | On the same box. Not an ALB — see `04` §4 for what that gives up.                                |
-| RDS (PostgreSQL)        | Durable data                              | Single instance. A read replica only when reads actually strain it.                              |
-| Valkey on EC2           | Live sitting state, queues, sessions      | One node, saving to disk. Losing it loses in-flight sittings, not scored ones.                   |
-| S3                      | Question images, content, import files    | Private bucket. Content images are read on a stable CDN url, private files presigned (`04` §10). |
-| CloudFront              | CDN for static assets and question images | In front of S3 and the SPAs.                                                                     |
-| S3 + CloudFront         | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                                      |
-| Route 53                | DNS                                       | Caddy gets the API's certificate itself; CloudFront brings its own.                              |
-| SSM Parameter Store     | DB, Valkey and SMS credentials            | No secrets in code or in a committed env file — `.env.example` only. S3 uses the task role.      |
-| SMS provider (external) | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                       |
-| Web push (external)     | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.                   |
-| FCM (external)          | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.                    |
+| Service                  | Role                                      | Notes                                                                                            |
+| ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| EC2 (ARM) + Docker       | Runs the API containers                   | Three from one image, chosen by `API_ROLE`: exam, core, and exactly one worker.                  |
+| Caddy                    | TLS and path routing to the API           | On the same box, and instead of an ALB, not before one — `04` §4 states what that gives up.      |
+| RDS (PostgreSQL)         | Durable data                              | Single instance. A read replica only when reads actually strain it.                              |
+| Valkey on EC2            | Live sitting state, queues, sessions      | One node, saving to disk. Losing it loses in-flight sittings, not scored ones.                   |
+| S3                       | Question images, content, import files    | Private bucket. Content images are read on a stable CDN url, private files presigned (`04` §10). |
+| CloudFront               | CDN for static assets and question images | In front of S3 and the SPAs.                                                                     |
+| S3 + CloudFront          | Hosts the Test and Admin SPAs             | Static builds; no server rendering to host.                                                      |
+| Route 53                 | DNS                                       | Caddy gets the API's certificate itself; CloudFront brings its own.                              |
+| `deploy/.env` on the box | Every credential the API reads            | Compose hands it to the containers; nothing is fetched at boot. Master copy in SSM (`04` §11).   |
+| Instance role            | S3, SSM, CloudWatch Logs, ECR             | The one credential never written down — no S3 key pair exists in production.                     |
+| SMS provider (external)  | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                       |
+| Web push (external)      | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.                   |
+| FCM (external)           | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.                    |
 
-**Anything in front of the API must pass `x-client` and `x-device-name` through.** A load balancer or
-CDN that strips them makes every sign-in kind-less, so each new sign-in replaces all of a student's
+**Anything in front of the API must pass `x-client` and `x-device-name` through.** A proxy or CDN
+that strips them makes every sign-in kind-less, so each new sign-in replaces all of a student's
 other sessions: one session in total, not one web plus one mobile.
 
 **Deploying the ranking change.** Migration `20260911190000` holds ACCESS EXCLUSIVE on `Attempt`

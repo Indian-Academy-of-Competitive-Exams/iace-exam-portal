@@ -10,7 +10,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AppConfigService } from '../config/app-config.service';
 
-/** Undefined hands the SDK its own chain, which on Fargate is the task role. */
+/** Undefined hands the SDK its own chain, which on EC2 is the box's instance role. */
 export function signedWith(
   accessKeyId: string | undefined,
   secretAccessKey: string | undefined,

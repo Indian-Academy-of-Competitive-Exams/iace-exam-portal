@@ -247,7 +247,7 @@ export const envSchemaChecked = envSchema
   .refine(storageCanSign, {
     path: ['S3_ACCESS_KEY_ID'],
     message:
-      'and S3_SECRET_ACCESS_KEY go together, and both are required alongside S3_ENDPOINT — only AWS S3 can be reached by the task role alone',
+      'and S3_SECRET_ACCESS_KEY go together, and both are required alongside S3_ENDPOINT — only AWS S3 can be reached by the instance role alone',
   })
   .refine(corsIsClosed, {
     path: ['CORS_ORIGINS'],

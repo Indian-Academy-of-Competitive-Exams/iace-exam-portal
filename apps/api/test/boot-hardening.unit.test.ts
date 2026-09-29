@@ -282,7 +282,7 @@ describe('evictionRisk', () => {
 });
 
 describe('object storage credentials', () => {
-  /** On Fargate the task role signs, so a key pair is one fewer secret to store and rotate. */
+  /** The box's instance role signs, so a key pair is one fewer secret to store and rotate. */
   it('boots against AWS with no keys at all', () => {
     const parsed = validateEnv(
       env({ S3_ENDPOINT: '', S3_ACCESS_KEY_ID: '', S3_SECRET_ACCESS_KEY: '' }),
