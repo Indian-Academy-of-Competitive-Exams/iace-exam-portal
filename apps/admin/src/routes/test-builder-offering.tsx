@@ -342,7 +342,11 @@ export function OfferSaveDialog({
   const { saved, held, changes } = offer;
 
   const save = useMutation({
-    meta: { success: savedMessage(changes) },
+    meta: {
+      success: savedMessage(changes),
+      // A program's refusal is shown under its own row, so it needs no toast as well.
+      fields: held?.schedule.programs.map((row) => programOpeningField(row.programCode)) ?? [],
+    },
     mutationFn: async () => {
       if (held) await api.admin.tests.saveOffering(detail.id, offeringBodyOf(held));
     },

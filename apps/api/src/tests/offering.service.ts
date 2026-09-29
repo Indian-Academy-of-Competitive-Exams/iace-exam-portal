@@ -83,7 +83,7 @@ const OPENS_AT_FIELD = 'opensAt';
 const DUPLICATE_PROGRAM_OPENING = 'Each program opens a test once. Give each program one opening.';
 
 const OFFER_CHANGED_ELSEWHERE =
-  'Somebody else saved this test’s offer after you opened it. Reload it to see theirs before saving yours.';
+  'This test changed after you opened its Offer step. Reload it to see what changed before saving.';
 
 const MINUTE_MS = 60_000;
 
@@ -223,7 +223,8 @@ export class OfferingService {
 
     const moved = await this.prisma.test.update({
       where: { id: testId },
-      data: { testSeriesId: next, seriesOrder: null },
+      // An Offer step opened before the move names the series it left, so it must be refused.
+      data: { testSeriesId: next, seriesOrder: null, version: { increment: 1 } },
       select: OFFERING_SELECT,
     });
 
@@ -312,7 +313,8 @@ export class OfferingService {
       const held = stored.get(row.programCode);
       const untouched = held !== undefined && sameMinute(new Date(held), opensAt);
       const late = noLaterThanTheTest(testOpensAt, opensAt);
-      if (untouched && late === null) kept.push({ programCode: row.programCode, opensAt });
+      if (untouched && late === null)
+        kept.push({ programCode: row.programCode, opensAt: new Date(held) });
       if (untouched) continue;
 
       await this.requireProgram(tx, row.programCode);

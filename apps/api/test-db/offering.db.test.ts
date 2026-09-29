@@ -308,6 +308,17 @@ describe('OfferingService — the Offer step saves in one piece', () => {
     assert.equal((await testRow()).opensAt?.toISOString(), A_DAY_LATER);
   });
 
+  /** The failure this prevents: a step opened on one series offering the test through the one it moved to. */
+  it('refuses a save opened before the test moved to another series', async () => {
+    const { service } = await serviceWith();
+    const { version } = await testRow();
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
+
+    const error = await refused(save(service, { expectedVersion: version }));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+  });
+
   /** The screen speaks minutes, so a stored time a few seconds past one is the time it shows. */
   it('reads an opening named to the same minute as unmoved', async () => {
     const { service } = await serviceWith({ opensAt: new Date(OPENS_AT.getTime() + 30_000) }, 1);
