@@ -549,3 +549,77 @@ test('puts the batch back when the ending call fails, so the retry carries it ag
   });
   assert.deepEqual(carried, ['q1']);
 });
+
+/** The failure this prevents: a save leaving beside the submit, landing after the claim, and its answers lost. */
+test('sends no save while the paper is going in, nor after it went', async (t) => {
+  const saves: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: unknown) => {
+        saves.push(body);
+        return { revision: 1 };
+      },
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  let land = () => {};
+  const landed = new Promise<void>((resolve) => (land = resolve));
+
+  let finishing: Promise<void> = Promise.resolve();
+  act(() => void (finishing = result.current.finish(() => landed)));
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  let flushing: Promise<boolean> = Promise.resolve(false);
+  act(() => void (flushing = result.current.flush()));
+  assert.equal(saves.length, 0, 'a flush during the submit waits behind it');
+
+  await act(async () => {
+    land();
+    await finishing;
+    await flushing;
+  });
+  assert.equal(saves.length, 0, 'once the paper is in, nothing more is saved');
+});
+
+/** The failure this prevents: the submit going out while a save it did not wait for is still in the air. */
+test('goes in only once every save in the air has answered', async (t) => {
+  let unresolved = 0;
+  let releaseFirst = () => {};
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number }) => {
+        unresolved += 1;
+        if (body.revision === 1) await new Promise<void>((resolve) => (releaseFirst = resolve));
+        else await new Promise((resolve) => setTimeout(resolve, 5));
+        unresolved -= 1;
+        return { revision: body.revision };
+      },
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void result.current.flush());
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+
+  let inAirAtSubmit = -1;
+  let finishing: Promise<void> = Promise.resolve();
+  act(() => {
+    void result.current.flush();
+    finishing = result.current.finish(() => {
+      inAirAtSubmit = unresolved;
+      return Promise.resolve();
+    });
+  });
+  await act(async () => {
+    releaseFirst();
+    await finishing;
+  });
+
+  assert.equal(inAirAtSubmit, 0);
+});

@@ -195,8 +195,7 @@ describe('SubmitService', () => {
     await built.state.open(built.live);
 
     const result = await built.submit.submit(built.student, built.attemptId, {
-      revision: 1,
-      answers: [built.change()],
+      last: { revision: 1, answers: [built.change()] },
     });
 
     assert.equal(result.submittedByThisCall, true);
@@ -210,8 +209,7 @@ describe('SubmitService', () => {
     await built.state.open(built.live);
 
     const result = await built.submit.submit(built.student, built.attemptId, {
-      revision: 1,
-      answers: [built.change()],
+      last: { revision: 1, answers: [built.change()] },
     });
 
     assert.equal(result.submittedByThisCall, true);
@@ -222,10 +220,65 @@ describe('SubmitService', () => {
   it('answers a retried submit with the first outcome, batch and all', async () => {
     const built = await build({ endsAt: SOON });
     await built.state.open(built.live);
-    const body = { revision: 1, answers: [built.change()] };
+    const body = { last: { revision: 1, answers: [built.change()] } };
 
     const first = await built.submit.submit(built.student, built.attemptId, body);
     const second = await built.submit.submit(built.student, built.attemptId, body);
+
+    assert.equal(second.submittedByThisCall, false);
+    assert.equal(second.submittedAt, first.submittedAt);
+  });
+
+  /** The failure this prevents: a reloaded screen's counter restarting below the server's, so its last batch was dropped as stale. */
+  it('applies the last batch even under a revision the server has moved past', async () => {
+    const built = await build({ endsAt: SOON });
+    await built.state.open(built.live);
+    await built.state.save(built.student, built.attemptId, {
+      revision: 40,
+      answers: [built.change(built.q2)],
+    });
+
+    await built.submit.submit(built.student, built.attemptId, {
+      last: { revision: 1, answers: [built.change()] },
+    });
+
+    assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
+    assert.equal(await chosenOn(built.attemptId, built.q2), RIGHT_OPTION);
+  });
+
+  /** A late sitting whose key is gone is ended with what it holds, not refused with a 409. */
+  it('ends a late sitting whose live state is gone, dropping the batch it carries', async () => {
+    const built = await build({ endsAt: LATE });
+
+    const result = await built.submit.submit(built.student, built.attemptId, {
+      last: { revision: 1, answers: [built.change()] },
+    });
+
+    assert.equal(result.submittedByThisCall, true);
+    assert.equal(await chosenOn(built.attemptId, built.q1), null);
+  });
+
+  /** A retry racing the submit that landed: the batch meets an ended sitting, and the answer is the first outcome. */
+  it('answers a submit whose batch met a sitting another call just ended', async () => {
+    const built = await build({ endsAt: SOON });
+    await built.state.open(built.live);
+    const first = await built.submit.submit(built.student, built.attemptId);
+    await prisma.attempt.update({
+      where: { id: built.attemptId },
+      data: { status: ATTEMPT_STATUS.IN_PROGRESS },
+    });
+    const save = built.state.save.bind(built.state);
+    built.state.save = async (...args: Parameters<typeof save>) => {
+      await prisma.attempt.update({
+        where: { id: built.attemptId },
+        data: { status: ATTEMPT_STATUS.SUBMITTED },
+      });
+      return save(...args);
+    };
+
+    const second = await built.submit.submit(built.student, built.attemptId, {
+      last: { revision: 1, answers: [built.change()] },
+    });
 
     assert.equal(second.submittedByThisCall, false);
     assert.equal(second.submittedAt, first.submittedAt);

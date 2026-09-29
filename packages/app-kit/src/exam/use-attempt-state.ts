@@ -265,8 +265,8 @@ export function useAttemptState(
   }, []);
 
   const flush = useCallback(async (): Promise<boolean> => {
-    // Only when something flies: an await with nothing to wait for lets a second call slip past this one.
-    if (inFlight.current) await waitTurn();
+    // Re-checked after every wait, with nothing awaited between the last check and the take.
+    while (inFlight.current) await waitTurn();
     const idle = isIdle();
     if (stopped.current || idle) return idle;
 
@@ -279,24 +279,40 @@ export function useAttemptState(
 
   const finish = useCallback(
     async <T>(send: (batch: LastBatch | null) => Promise<T>): Promise<T> => {
-      if (inFlight.current) await waitTurn();
+      while (inFlight.current) await waitTurn();
       const idle = isIdle();
       const { changes, movedSections, requeue } = take();
       if (!idle) revision.current += 1;
+      const going = (async () => {
+        try {
+          const done = await send(
+            idle ? null : { revision: revision.current, answers: changes, sections: movedSections },
+          );
+          // The paper is in: nothing more is saved, and the device's copy has nothing left to keep.
+          stopped.current = true;
+          pending.current = new Map();
+          pendingSections.current = {};
+          return done;
+        } catch (error: unknown) {
+          requeue();
+          setHasUnsaved(true);
+          if (isTakenOver(error)) standDown();
+          throw error;
+        } finally {
+          flying.current = [];
+          keepQueue();
+        }
+      })();
+      // In the air like a save, so a flush meanwhile waits behind the paper and then finds it stopped.
+      const settled = going.then(
+        () => true,
+        () => false,
+      );
+      inFlight.current = settled;
       try {
-        const done = await send(
-          idle ? null : { revision: revision.current, answers: changes, sections: movedSections },
-        );
-        stopped.current = true;
-        return done;
-      } catch (error: unknown) {
-        requeue();
-        setHasUnsaved(true);
-        if (isTakenOver(error)) standDown();
-        throw error;
+        return await going;
       } finally {
-        flying.current = [];
-        keepQueue();
+        if (inFlight.current === settled) inFlight.current = null;
       }
     },
     [keepQueue, standDown, take, waitTurn],

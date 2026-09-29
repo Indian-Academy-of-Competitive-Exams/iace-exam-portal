@@ -118,7 +118,9 @@ export function useExamView(
       // The question still on screen has cost time too; bank it before the last batch goes.
       state.bankOpen();
       // The last batch rides the submit: one request at the deadline, and a failed one keeps it for the retry.
-      return state.finish((batch) => api.me.submitAttempt(paper.attemptId, { ...batch, tab }));
+      return state.finish((last) =>
+        api.me.submitAttempt(paper.attemptId, { tab, last: last ?? undefined }),
+      );
     },
     retry: shouldRetrySubmit,
     retryDelay: submitRetryDelayMs,

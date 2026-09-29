@@ -220,7 +220,7 @@ function sectionsAfter(
 }
 
 /** Whether a save arriving now is still in time. Past the deadline and its grace, it is not. */
-export function isInTime(held: HeldState, now: Date): boolean {
+export function isInTime(held: Pick<HeldState, 'endsAt'>, now: Date): boolean {
   return now.getTime() <= Date.parse(held.endsAt) + SAVE_GRACE_SEC * MS_PER_SECOND;
 }
 

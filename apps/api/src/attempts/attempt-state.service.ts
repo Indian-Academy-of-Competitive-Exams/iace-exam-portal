@@ -144,14 +144,19 @@ export class AttemptStateService {
     attemptId: string,
     batch: SaveAttemptStateBody,
     now: Date = new Date(),
+    { last = false }: { last?: boolean } = {},
   ): Promise<AttemptSaveAck> {
     // Judged inside the swap, against the same read the batch was applied to — the last try wins.
     let applied = false;
     const next = await this.patch(
       attemptId,
       async (held) => {
-        applied = !isStale(held, batch);
-        return answered(held, studentId, await this.inReach(held, batch), now);
+        // The batch that ends a sitting is its newest by definition, whatever counter a reloaded screen sent.
+        const sent = last
+          ? { ...batch, revision: Math.max(batch.revision, held.revision + 1) }
+          : batch;
+        applied = !isStale(held, sent);
+        return answered(held, studentId, await this.inReach(held, sent), now);
       },
       () => this.durableState(studentId, attemptId),
     );

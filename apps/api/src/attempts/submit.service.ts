@@ -31,6 +31,7 @@ const ATTEMPT_SELECT = {
   testId: true,
   status: true,
   submittedAt: true,
+  endsAt: true,
 } as const satisfies Prisma.AttemptSelect;
 
 type AttemptRow = Prisma.AttemptGetPayload<{ select: typeof ATTEMPT_SELECT }>;
@@ -67,7 +68,14 @@ export class SubmitService {
       throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
     }
 
-    await this.lastAnswers(studentId, attempt, held, body);
+    try {
+      await this.lastAnswers(studentId, attempt, held, body);
+    } catch (error) {
+      if (AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER) {
+        this.metrics.countSubmit('refused');
+      }
+      throw error;
+    }
     const ended = await this.end(attempt);
     // The spike everything downstream is sized for, counted where it actually lands.
     this.metrics.countSubmit('accepted');
@@ -79,17 +87,17 @@ export class SubmitService {
     studentId: string,
     attempt: AttemptRow,
     held: HeldState | null,
-    { revision, answers, sections, tab }: SubmitAttemptBody,
+    { last, tab }: SubmitAttemptBody,
     now: Date = new Date(),
   ): Promise<void> {
-    if (revision === undefined || attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) return;
-    if (held && !isInTime(held, now)) return;
-    await this.state.save(
-      studentId,
-      attempt.id,
-      { revision, answers: answers ?? [], sections, tab },
-      now,
-    );
+    if (!last || attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) return;
+    if (!isInTime(held ?? { endsAt: attempt.endsAt.toISOString() }, now)) return;
+    try {
+      await this.state.save(studentId, attempt.id, { ...last, tab }, now, { last: true });
+    } catch (error) {
+      // Another call ended it meanwhile: end() reports that outcome rather than refusing the retry.
+      if ((await this.require(attempt.id)).status === ATTEMPT_STATUS.IN_PROGRESS) throw error;
+    }
   }
 
   /** The sweeper's. A closed tab must not leave a sitting open forever. */
@@ -97,14 +105,15 @@ export class SubmitService {
     return this.end(await this.require(attemptId));
   }
 
-  private async end(attempt: AttemptRow, now: Date = new Date()): Promise<SubmittedAttempt> {
+  private async end(attempt: AttemptRow): Promise<SubmittedAttempt> {
     if (attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) return this.closeOff(attempt.id);
 
     // READ, never taken: the live state has to outlive a write that throws.
     const held = await this.state.read(attempt.id);
     let sheet = held ? await this.sheets.write(held, true) : null;
 
-    if (!(await this.claim(attempt, now))) return this.alreadySubmitted(attempt.id);
+    const submittedAt = await this.claim(attempt);
+    if (!submittedAt) return this.alreadySubmitted(attempt.id);
 
     // Taken only behind the claim, so a save arriving after this is refused rather than swallowed.
     const last = await this.state.take(attempt.id);
@@ -121,7 +130,7 @@ export class SubmitService {
     return {
       attemptId: attempt.id,
       status: ATTEMPT_STATUS.SUBMITTED,
-      submittedAt: now.toISOString(),
+      submittedAt: submittedAt.toISOString(),
       submittedByThisCall: true,
       answeredCount: await this.answeredOn(attempt.id, sheet),
     };
@@ -137,14 +146,15 @@ export class SubmitService {
     return answeredIn(stored?.answers);
   }
 
-  /** False when another call had already ended this sitting. */
-  private async claim(attempt: AttemptRow, now: Date): Promise<boolean> {
+  /** Stamped at the claim itself, where the sweeper's re-queue grace counts from; null when another call ended it. */
+  private async claim(attempt: AttemptRow): Promise<Date | null> {
+    const submittedAt = new Date();
     // The one gate. The request whose UPDATE still matches IN_PROGRESS wins; the other reports it.
     const claimed = await this.prisma.attempt.updateMany({
       where: { id: attempt.id, status: ATTEMPT_STATUS.IN_PROGRESS },
-      data: { status: ATTEMPT_STATUS.SUBMITTED, submittedAt: now },
+      data: { status: ATTEMPT_STATUS.SUBMITTED, submittedAt },
     });
-    return claimed.count > 0;
+    return claimed.count > 0 ? submittedAt : null;
   }
 
   /** A queue nobody can reach must not fail a submit that committed — the sweeper queues it again. */
