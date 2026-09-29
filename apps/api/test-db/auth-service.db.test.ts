@@ -256,6 +256,24 @@ describe('AuthService — signup and PIN reset', () => {
     assert.equal(await ctx.sessions.exists(ActorTypes.STUDENT, claims.sub, claims.sid), false);
   });
 
+  it('refuses a student deactivated after OTP verify, and leaves their PIN as it was', async () => {
+    const ctx = build();
+    await signUp(ctx, MOBILE, '4813');
+    const before = await prisma.student.findFirstOrThrow({ where: { mobile: MOBILE } });
+
+    ctx.redis.advanceSeconds(46);
+    await ctx.auth.requestStudentOtp(MOBILE);
+    const ticket = await ctx.auth.verifyStudentOtp(MOBILE, ctx.sender.lastCode);
+    await setStudent({ isActive: false });
+
+    await assert.rejects(
+      () => ctx.auth.setStudentPin(MOBILE, ticket.setupToken, '7261', NO_DEVICE),
+      failsWith('FORBIDDEN'),
+    );
+    const after = await prisma.student.findFirstOrThrow({ where: { mobile: MOBILE } });
+    assert.equal(after.pinHash, before.pinHash);
+  });
+
   it('refuses a deactivated account at OTP verify', async () => {
     const ctx = build();
     await makeStudent(prisma, { mobile: MOBILE, isActive: false });

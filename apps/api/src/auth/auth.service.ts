@@ -80,12 +80,16 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     await this.pin.consumeSetupToken(mobile, setupToken);
 
-    const pinHash = await this.pin.hash(pin);
     // Not an upsert: `mobile` is unique only among live rows, which is a partial index Prisma cannot address. The same index still refuses a second row if two signups race here.
     const existing = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
-      select: { id: true },
+      select: { id: true, isActive: true },
     });
+    // Refused before the write: deactivated since the OTP was verified, their old PIN must stay theirs.
+    if (existing && !existing.isActive)
+      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
+
+    const pinHash = await this.pin.hash(pin);
     // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or replacing the one an import gave them.
     const student = existing
       ? await this.prisma.student.update({
@@ -101,8 +105,6 @@ export class AuthService {
             studentType: STUDENT_TYPE.NON_IACE,
           },
         });
-    if (!student.isActive)
-      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
 
     // A new PIN ends every session opened with the old one — that is most of the point of a reset — and clears any lockout the student hit first.
     await this.sessions.revokeAll(ActorTypes.STUDENT, student.id);
