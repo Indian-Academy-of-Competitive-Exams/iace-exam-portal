@@ -535,7 +535,7 @@ model Test {
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate @default(DEFAULT)
   status             TestStatus   @default(DRAFT)
-  // Optimistic lock — offer is a conditional UPDATE ... WHERE version = $n.
+  // Moves with every paper edit, offer and Offer-step save; a save carrying an older one is refused.
   version            Int          @default(0)
   // Bumped whenever a paper row's status moves; the cache key for a sat paper's scoring terms.
   paperRevision      Int          @default(0)

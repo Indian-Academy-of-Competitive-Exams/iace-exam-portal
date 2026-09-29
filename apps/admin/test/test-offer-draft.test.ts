@@ -15,6 +15,7 @@ const draftTest = (over: Partial<OfferDraft> = {}): OfferDraft => ({
   series: { id: 'srs_1', name: 'SSC CGL Mocks' },
   schedule: { opensAt: '', programs: [] },
   offered: false,
+  version: 3,
   ...over,
 });
 
@@ -25,6 +26,7 @@ describe('the offer a test is read out of', () => {
       testSeriesName: 'SSC CGL Mocks',
       opensAt: null,
       programUnlocks: [],
+      version: 1,
     };
 
     assert.equal(savedOffer({ ...detail, status: TEST_STATUS.ACTIVE }).offered, true);
@@ -54,6 +56,7 @@ describe('what Done sends', () => {
       opensAt: '2026-09-11T12:30:00.000Z',
       programOpenings: [{ programCode: 'SSC 2026', opensAt: '2026-09-11T03:30:00.000Z' }],
       offered: true,
+      expectedVersion: 3,
     });
   });
 

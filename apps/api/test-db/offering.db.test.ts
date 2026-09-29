@@ -118,6 +118,7 @@ async function save(
         opensAt: unlock.opensAt.toISOString(),
       })),
       offered: row.status === TEST_STATUS.ACTIVE,
+      expectedVersion: row.version,
       ...over,
     },
     false,
@@ -291,6 +292,29 @@ describe('OfferingService — the Offer step saves in one piece', () => {
 
     const row = await testRow();
     assert.deepEqual([row.opensAt, row.status], [null, TEST_STATUS.DRAFT]);
+  });
+
+  /** The failure this prevents: a draft opened before another admin's save quietly undoing it. */
+  it('refuses a save made from a version another save has since moved on from', async () => {
+    const { service } = await serviceWith();
+    const { version } = await testRow();
+    await save(service, { opensAt: A_DAY_LATER });
+
+    const error = await refused(
+      save(service, { opensAt: OPENS_AT.toISOString(), expectedVersion: version }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal((await testRow()).opensAt?.toISOString(), A_DAY_LATER);
+  });
+
+  /** The screen speaks minutes, so a stored time a few seconds past one is the time it shows. */
+  it('reads an opening named to the same minute as unmoved', async () => {
+    const { service } = await serviceWith({ opensAt: new Date(OPENS_AT.getTime() + 30_000) }, 1);
+
+    await save(service, { opensAt: OPENS_AT.toISOString(), offered: false });
+
+    assert.equal((await testRow()).opensAt?.getTime(), OPENS_AT.getTime() + 30_000);
   });
 
   it('writes neither the opening nor any program opening when one program opening is refused', async () => {

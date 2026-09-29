@@ -227,7 +227,7 @@ export class TestsService {
           ...(input.questionPoolFilter === undefined
             ? {}
             : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
-          // An offer drawing from these must lose its claim, so every paper edit moves the version.
+          // An Offer step opened before this edit must be refused, so every paper edit moves the version.
           ...(movesThePaper(input) ? { version: { increment: 1 } } : {}),
         },
         include: TEST_INCLUDE,

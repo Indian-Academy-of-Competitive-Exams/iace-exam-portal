@@ -342,7 +342,7 @@ export const testSchema = z.object({
   /** Null until it is declared, and declaring it is the one-way door `assign` waits on. */
   paperSource: paperSourceSchema.nullable(),
   status: testStatusSchema,
-  /** Optimistic lock: the offer is a conditional update against it. */
+  /** Moves with every paper edit, offer and Offer-step save; a save carrying an older one is refused. */
   version: z.number().int(),
   /** Set by the first offer and never cleared: the paper is frozen iff this is set. */
   finalizedAt: z.string().nullable(),
@@ -592,6 +592,8 @@ export const saveOfferingSchema = z.object({
     z.object({ programCode: z.string().trim().min(1), opensAt: z.iso.datetime() }),
   ),
   offered: z.boolean(),
+  /** The test's version when the step was opened; a save made from an older one is refused. */
+  expectedVersion: z.number().int(),
 });
 export type SaveOfferingInput = z.input<typeof saveOfferingSchema>;
 export type SaveOfferingBody = z.infer<typeof saveOfferingSchema>;

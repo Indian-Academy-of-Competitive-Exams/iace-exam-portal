@@ -33,7 +33,8 @@ import type { OfferHold, ProgramRefusal } from './use-offer-draft';
 
 const PROGRAM_RULE = 'A program opening lets that cohort start earlier than everybody else.';
 
-const OVERTAKEN_PROGRAMS_DROPPED = "A program opening later than the test's own is dropped.";
+const OVERTAKEN_PROGRAMS_DROPPED =
+  "A program opening you have not changed, now later than the test's own, is dropped.";
 
 const EVERY_PROGRAM_DROPPED = 'Every program opening is dropped with it.';
 
@@ -341,7 +342,7 @@ export function OfferSaveDialog({
   const { saved, held, changes } = offer;
 
   const save = useMutation({
-    meta: { success: savedMessage(changes), fields: ['opensAt'] },
+    meta: { success: savedMessage(changes) },
     mutationFn: async () => {
       if (held) await api.admin.tests.saveOffering(detail.id, offeringBodyOf(held));
     },

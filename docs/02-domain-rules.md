@@ -100,8 +100,9 @@ Setup, then paper, then offer. There is no certificate step.
 - The offer freezes rows that already exist and draws nothing. The paper must hold every section at
   its exact count or the freeze rolls back naming the shortfall — a paper that is not whole leaves
   the test a draft.
-- The offer is a conditional update on the test's version. Two offers cannot both win, and a request
-  that lost writes nothing.
+- The offer runs in a transaction that holds the Test row, so two offers take turns and the second
+  finds the paper frozen. The Offer step's save carries back the test's version from when it was
+  opened; a save made from a draft another save has since overtaken is refused, never merged.
 - `finalizedAt` is the watermark that makes a repeated offer idempotent: a retired test offered again
   only changes status, and never re-freezes or re-draws its paper.
 - Offering needs a whole paper and every assignment read. The series it reaches a student through is

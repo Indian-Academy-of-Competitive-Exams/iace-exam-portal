@@ -18,6 +18,8 @@ export interface OfferDraft {
   series: OfferSeries;
   schedule: ScheduleDraft;
   offered: boolean;
+  /** The test's version when this was read, carried into the save so a stale draft is refused. */
+  version: number;
 }
 
 export interface OfferChanges {
@@ -29,13 +31,14 @@ export interface OfferChanges {
 
 export type OfferSource = Pick<
   TestDetail,
-  'testSeriesId' | 'testSeriesName' | 'status' | 'opensAt' | 'programUnlocks'
+  'testSeriesId' | 'testSeriesName' | 'status' | 'opensAt' | 'programUnlocks' | 'version'
 >;
 
 export const savedOffer = (detail: OfferSource): OfferDraft => ({
   series: { id: detail.testSeriesId, name: detail.testSeriesName },
   schedule: savedSchedule(detail),
   offered: detail.status === TEST_STATUS.ACTIVE,
+  version: detail.version,
 });
 
 export function offerChangesOf(saved: OfferDraft, held: OfferDraft): OfferChanges {
@@ -82,4 +85,5 @@ export const offeringBodyOf = (held: OfferDraft): SaveOfferingInput => ({
     .filter((row) => row.opensAt !== '')
     .map((row) => ({ programCode: row.programCode, opensAt: instantOf(row.opensAt) })),
   offered: held.offered,
+  expectedVersion: held.version,
 });

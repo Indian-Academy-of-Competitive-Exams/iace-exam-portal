@@ -33,6 +33,7 @@ const OFFERING_SELECT = {
   id: true,
   title: true,
   status: true,
+  version: true,
   finalizedAt: true,
   examStageId: true,
   opensAt: true,
@@ -80,6 +81,17 @@ const OPENS_BEFORE_THE_TEST_DOES =
 const OPENS_AT_FIELD = 'opensAt';
 
 const DUPLICATE_PROGRAM_OPENING = 'Each program opens a test once. Give each program one opening.';
+
+const OFFER_CHANGED_ELSEWHERE =
+  'Somebody else saved this test’s offer after you opened it. Reload it to see theirs before saving yours.';
+
+const MINUTE_MS = 60_000;
+
+/** The Offer step speaks minutes, so a stored time is unchanged when a save names the same minute. */
+const sameMinute = (left: Date | null, right: Date | null): boolean =>
+  left === null || right === null
+    ? left === right
+    : Math.floor(left.getTime() / MINUTE_MS) === Math.floor(right.getTime() / MINUTE_MS);
 
 type OfferingClient = Pick<Prisma.TransactionClient, 'test' | 'program' | 'testProgramUnlock'>;
 
@@ -233,6 +245,9 @@ export class OfferingService {
     await this.prisma.$transaction(async (tx) => {
       await beginPaperEdit(tx, testId);
       const test = await this.requireTest(testId, tx);
+      if (test.version !== body.expectedVersion) {
+        throw formRefusal(ErrorCodes.CONFLICT, OFFER_CHANGED_ELSEWHERE);
+      }
       const opensAt = dateOrNull(body.opensAt);
       await this.writeOpening(tx, test, opensAt, now);
       await this.writeProgramOpenings(tx, test.id, body.programOpenings, opensAt, now);
@@ -243,6 +258,7 @@ export class OfferingService {
       if (!body.offered && test.status === TEST_STATUS.ACTIVE) {
         await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.INACTIVE } });
       }
+      await tx.test.update({ where: { id: test.id }, data: { version: { increment: 1 } } });
     }, FREEZE_LIMITS);
 
     const saved = await this.requireTest(testId);
@@ -261,7 +277,7 @@ export class OfferingService {
     opensAt: Date | null,
     now: Date,
   ): Promise<void> {
-    if (opensAt?.getTime() === test.opensAt?.getTime()) return;
+    if (sameMinute(opensAt, test.opensAt)) return;
     this.assertUnsat(test, 'when it opens can no longer move');
     if (opensAt !== null) {
       assertOpeningAhead(opensAt, now, OPENS_AT_FIELD);
@@ -293,7 +309,8 @@ export class OfferingService {
     const kept: { programCode: string; opensAt: Date }[] = [];
     for (const row of rows) {
       const opensAt = new Date(row.opensAt);
-      const untouched = stored.get(row.programCode) === opensAt.toISOString();
+      const held = stored.get(row.programCode);
+      const untouched = held !== undefined && sameMinute(new Date(held), opensAt);
       const late = noLaterThanTheTest(testOpensAt, opensAt);
       if (untouched && late === null) kept.push({ programCode: row.programCode, opensAt });
       if (untouched) continue;

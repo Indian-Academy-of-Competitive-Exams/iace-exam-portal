@@ -138,8 +138,17 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
 
   it('offers, retires and offers again through the one save, and never a paper that is not whole', async () => {
     const { draft, offering, pickWholePaper } = await builder();
-    const done = (offered: boolean) =>
-      offering.saveOffering(draft.id, { opensAt: null, programOpenings: [], offered }, false);
+    const done = async (offered: boolean) =>
+      offering.saveOffering(
+        draft.id,
+        {
+          opensAt: null,
+          programOpenings: [],
+          offered,
+          expectedVersion: (await testRow(draft.id)).version,
+        },
+        false,
+      );
 
     await assert.rejects(() => done(true), AppException.is);
     assert.equal((await testRow(draft.id)).status, TEST_STATUS.DRAFT);
