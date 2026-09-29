@@ -355,8 +355,8 @@ function SittingRules({ onClose }: Readonly<{ onClose: () => void }>) {
           flags the question. Clear response removes your answer entirely.
         </Text>
         <Text className="text-sm leading-relaxed text-exam-ink">
-          Opening another question from the palette does not save the one you are on. Save it first
-          if you want it kept.
+          An option is kept the moment you choose it, so opening another question from the palette
+          keeps it too.
         </Text>
       </ScrollView>
     </View>

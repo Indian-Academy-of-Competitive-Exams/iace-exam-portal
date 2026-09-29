@@ -53,7 +53,7 @@ const FREE_RULES: readonly Rule[] = [
   CLEAR,
   {
     term: 'The palette',
-    says: 'Opens any question directly. Moving there does NOT save the question you are on.',
+    says: 'Opens any question directly. The question you leave keeps its answer.',
   },
   SUBMIT,
 ];

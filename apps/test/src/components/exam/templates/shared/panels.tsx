@@ -71,8 +71,8 @@ export function RulesPanel({
             <span className="font-medium">Clear response</span> removes your answer entirely.
           </p>
           <p>
-            Moving to another question from the palette does not save the one you are on. Save it
-            first if you want it kept.
+            An option is kept the moment you choose it, so moving to another question from the
+            palette keeps it too.
           </p>
         </div>
       </DialogContent>
