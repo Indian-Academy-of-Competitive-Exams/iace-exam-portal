@@ -49,6 +49,7 @@ async function build(stageActive = true) {
   return {
     stageId,
     events,
+    auditContext,
     programs,
     series: new TestSeriesService(
       prisma,
@@ -188,6 +189,33 @@ describe('TestSeriesService — branches are the truth about branches', () => {
   });
 
   /** THE failure this prevents: two admins on one stale list, each saving the whole array, undid each other. */
+  /** A repeated toggle once filed an audit row with nothing in it and rebuilt every catalog for nothing. */
+  it('logs a toggle as the list before and after, and one that moves nothing as nothing', async () => {
+    const { series, events, auditContext, stageId } = await build();
+    const [kept, added] = [
+      await makeBranch(prisma, 'AMEERPET'),
+      await makeBranch(prisma, 'KUKATPALLY'),
+    ];
+    const created = await series.create(draft(stageId));
+    await series.setBranches(created.id, { branchIds: [kept.id] });
+    events.forget();
+    const toggled = (enabled: boolean) =>
+      auditContext.run(async () => {
+        await series.toggleBranch(created.id, { branchId: added.id, enabled });
+        return auditContext.current();
+      });
+
+    assert.deepEqual((await toggled(true))?.changed, {
+      branchIds: { from: [kept.id], to: [kept.id, added.id] },
+    });
+    assert.equal((await toggled(true))?.unchanged, true);
+    assert.deepEqual((await toggled(false))?.changed, {
+      branchIds: { from: [kept.id, added.id], to: [kept.id] },
+    });
+    assert.equal((await toggled(false))?.unchanged, true);
+    assert.equal(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).length, 2);
+  });
+
   it('lands two toggles made from the same stale list, each on its own branch', async () => {
     const { series, stageId } = await build();
     const [kept, dropped, added] = [

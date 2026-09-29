@@ -255,7 +255,6 @@ export class TestSeriesService {
   async toggleBranch(id: string, input: ToggleSeriesBranchBody): Promise<SeriesBranch[]> {
     const series = await this.requireSeries(id);
     await this.assertBranchesLive([input.branchId]);
-
     if (input.enabled) {
       this.assertKindHoldsTogether({
         kind: series.kind,
@@ -264,19 +263,27 @@ export class TestSeriesService {
         eventId: series.eventId,
         branchIds: [...series.branchIds, input.branchId],
       });
-      await this.prisma.$executeRaw`
-        UPDATE "TestSeries"
-        SET "branchIds" = array_append("branchIds", ${input.branchId}::uuid), "updatedAt" = now()
-        WHERE "id" = ${id}::uuid AND NOT (${input.branchId}::uuid = ANY("branchIds"))`;
-    } else {
-      await this.prisma.$executeRaw`
-        UPDATE "TestSeries"
-        SET "branchIds" = array_remove("branchIds", ${input.branchId}::uuid), "updatedAt" = now()
-        WHERE "id" = ${id}::uuid`;
     }
 
-    this.auditContext.setEntityId(id);
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
+    const branch = Prisma.sql`${input.branchId}::uuid`;
+    const held = Prisma.sql`${branch} = ANY(s."branchIds")`;
+    const [next, moves] = input.enabled
+      ? [Prisma.sql`array_append(s."branchIds", ${branch})`, Prisma.sql`NOT (${held})`]
+      : [Prisma.sql`array_remove(s."branchIds", ${branch})`, held];
+    const [moved] = await this.prisma.$queryRaw<{ before: string[]; after: string[] }[]>`
+      UPDATE "TestSeries" AS s SET "branchIds" = ${next}, "updatedAt" = now()
+      FROM (SELECT "id", "branchIds" FROM "TestSeries" WHERE "id" = ${id}::uuid FOR UPDATE) AS old
+      WHERE s."id" = old."id" AND ${moves}
+      RETURNING old."branchIds" AS "before", s."branchIds" AS "after"`;
+
+    // Already on, or already off: nothing moved, so there is nothing to log and no catalog to bump.
+    this.auditContext.setPatchDiff(
+      moved ? { branchIds: { from: moved.before, to: moved.after } } : null,
+    );
+    if (moved) {
+      this.auditContext.setEntityId(id);
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
+    }
     return this.branches(id);
   }
 
