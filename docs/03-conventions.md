@@ -172,7 +172,7 @@ owns the sitting owns the derivation.
 - `tests` stamps a typist's `QuestionAssignment.finalizedAt` on Done, and the section's reader's
   `handedAt` with it; on a picked section it stamps `handedAt` at the owner's hand-over. The stamps
   and the paper rows they rest on are one fact and commit together; the leftover questions go to
-  the bank through `QuestionsService`, not by a write of `tests`' own.
+  the bank through `QuestionsService`, not by a write of `tests`' own, inside that same transaction.
 - the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
   the one crossing that is infra rather than domain: retention is a property of the buffer, not of
   the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.

@@ -378,6 +378,7 @@ export class PaperService {
     const pair = { testId, baseConfigSectionId: section.id };
     const typed = (await this.typedFor(pair)).map((question) => question.id);
     const selected = await this.assertTypedSelection(testId, typed, section, body, test);
+    const chosen = new Set([...body.selected, ...body.discard]);
 
     await this.prisma.$transaction(async (tx) => {
       await beginDraftPaperEdit(tx, testId);
@@ -392,12 +393,13 @@ export class PaperService {
         where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null, handedAt: null },
         data: { handedAt: new Date() },
       });
+      // After the paper lets go of them: a question still on it cannot be deleted.
+      await this.questions.settleTyped(
+        tx,
+        body.discard,
+        typed.filter((id) => !chosen.has(id)),
+      );
     }, TX_LIMITS.SHORT);
-
-    // After the paper lets go of them: a question still on it cannot be deleted.
-    for (const id of body.discard) await this.questions.remove(id);
-    const chosen = new Set([...body.selected, ...body.discard]);
-    await this.questions.detachFromSection(typed.filter((id) => !chosen.has(id)));
   }
 
   /** The section's rows become exactly the choice: unticked rows go, new ones join after the highest. */

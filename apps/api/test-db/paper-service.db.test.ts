@@ -159,6 +159,34 @@ const refused = async (attempt: Promise<unknown>) => {
   return error;
 };
 
+/** The real client, failing the leftovers' detach — the last write a Done makes, after the paper moved. */
+function failingDetach(): PrismaService {
+  const question = (delegate: Prisma.TransactionClient['question']) =>
+    new Proxy(delegate, {
+      get(inner, method: string | symbol) {
+        if (method !== 'updateMany') return Reflect.get(inner, method) as unknown;
+        return (args: Prisma.QuestionUpdateManyArgs) =>
+          args.data.assignmentId === null
+            ? Promise.reject(new Error('connection dropped'))
+            : inner.updateMany(args);
+      },
+    });
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) =>
+          work(
+            new Proxy(tx, {
+              get: (inner, member: string | symbol) =>
+                member === 'question' ? question(inner.question) : Reflect.get(inner, member),
+            }),
+          ),
+        );
+    },
+  });
+}
+
 /** Picked by hand, so this is how a paper is built up to the counts its config asks. */
 async function pickWholePaper(service: PaperService): Promise<void> {
   await service.addQuestions(TEST, {
@@ -801,8 +829,15 @@ describe('PaperService — where the questions come from', () => {
 
 describe("PaperService — a typed section is placed by its typist's Done", () => {
   /** A framed test whose Quant section (two questions) is Priya's, holding what she has typed. */
-  async function typed(written: readonly string[], test: Bench['test'] = {}) {
-    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED, ...test } });
+  async function typed(
+    written: readonly string[],
+    test: Bench['test'] = {},
+    client?: PrismaService,
+  ) {
+    const service = await serviceWith({
+      test: { paperSource: PAPER_SOURCES.FRAMED, ...test },
+      client,
+    });
     const typist = await makeAdmin(prisma, { fullName: 'Priya' });
     const assignment = await prisma.questionAssignment.create({
       data: {
@@ -841,6 +876,19 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
     assert.equal(await prisma.question.count({ where: { id: idFor('q3') } }), 0);
     const leftover = await prisma.question.findUniqueOrThrow({ where: { id: idFor('q4') } });
     assert.equal(leftover.assignmentId, null, 'an unticked question is an ordinary bank question');
+  });
+
+  /** The failure this prevents: a Done that dies part-way leaving the leftovers on a finished section. */
+  it('leaves nothing half-applied when a write after the paper fails', async () => {
+    const { done, typingDone } = await typed(['q1', 'q2', 'q3', 'q4'], {}, failingDetach());
+
+    await assert.rejects(done(['q1', 'q2'], ['q3']), /connection dropped/);
+
+    assert.equal(await typingDone(), null);
+    assert.deepEqual(await heldIds(), []);
+    assert.equal(await prisma.question.count({ where: { id: idFor('q3') } }), 1);
+    const leftover = await prisma.question.findUniqueOrThrow({ where: { id: idFor('q4') } });
+    assert.notEqual(leftover.assignmentId, null);
   });
 
   /** The failure this prevents: a reader handed a section short of its count. */

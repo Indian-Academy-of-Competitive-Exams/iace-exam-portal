@@ -488,28 +488,43 @@ export class QuestionsService {
         data: { currentVersionId: null },
       });
       if (claimed.count !== 1) throw questionEditedElsewhere();
-
-      if (await this.isUsed(tx, id)) {
-        throw refused(
-          'A paper or an attempt already uses this question, so it cannot be deleted.',
-          'Something already uses this question',
-        );
-      }
-
-      await tx.questionVersion.deleteMany({ where: { questionId: id } });
-      await tx.question.delete({ where: { id } });
+      await this.deleteUnused(tx, [id]);
     }, TX_LIMITS.SHORT);
 
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
 
-  /** A typist's leftover, loose in the bank from now on: an ordinary question nothing is waiting on. */
-  async detachFromSection(ids: readonly string[]): Promise<void> {
-    if (ids.length === 0) return;
-    await this.prisma.question.updateMany({
-      where: { id: { in: [...ids] } },
-      data: { assignmentId: null },
-    });
+  /** A typist's Done, inside its own transaction: the discarded go for good, the rest stay in the bank loose. */
+  async settleTyped(
+    tx: Prisma.TransactionClient,
+    discard: readonly string[],
+    detach: readonly string[],
+  ): Promise<void> {
+    if (discard.length > 0) {
+      await tx.question.updateMany({
+        where: { id: { in: [...discard] } },
+        data: { currentVersionId: null },
+      });
+      await this.deleteUnused(tx, discard);
+    }
+    if (detach.length > 0) {
+      await tx.question.updateMany({
+        where: { id: { in: [...detach] } },
+        data: { assignmentId: null },
+      });
+    }
+  }
+
+  /** Every pointer to the versions already cleared; refused before a foreign key would be. */
+  private async deleteUnused(tx: Prisma.TransactionClient, ids: readonly string[]): Promise<void> {
+    if (await this.anyUsed(tx, [...ids])) {
+      throw refused(
+        'A paper or an attempt already uses this question, so it cannot be deleted.',
+        'Something already uses this question',
+      );
+    }
+    await tx.questionVersion.deleteMany({ where: { questionId: { in: [...ids] } } });
+    await tx.question.deleteMany({ where: { id: { in: [...ids] } } });
   }
 
   /** Being depended on settles what a question IS, not being published — a drawn row carries none of it. */
