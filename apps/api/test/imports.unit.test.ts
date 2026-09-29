@@ -187,7 +187,7 @@ describe('planStudentImport', () => {
 
     assert.equal(plan.rows[0]?.action, 'create');
     assert.equal(plan.rows[1]?.action, 'skip');
-    assert.match(plan.rows[1]?.errors[0] ?? '', /Same number as line 2/);
+    assert.match(plan.rows[1]?.errors[0] ?? '', /The same number is already on line 2/);
     assert.equal(plan.summary.willCreate, 1);
   });
 

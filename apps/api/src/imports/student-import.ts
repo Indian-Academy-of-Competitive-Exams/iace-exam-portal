@@ -15,7 +15,6 @@ import {
   type BranchType,
   type ExamCourse,
   type Gender,
-  type StudentImportColumn,
   type StudentImportColumnKey,
   type StudentImportProfile,
   type StudentImportRow,
@@ -36,13 +35,6 @@ export function columnValue(row: CsvRow, key: StudentImportColumnKey): string {
     if (value !== undefined) return value;
   }
   return '';
-}
-
-/** Which of the required columns the file does not have, under any of its names. */
-function missingColumns(headers: string[]): StudentImportColumn[] {
-  return STUDENT_IMPORT_COLUMNS.filter(
-    (column) => column.required && !column.aliases.some((alias) => headers.includes(alias)),
-  );
 }
 
 export interface ImportContext {
@@ -106,16 +98,24 @@ interface SheetColumn {
   aliases: readonly string[];
 }
 
-/** A required column the sheet has under none of its names, said the way the sample file names it. */
-export function missingColumnErrors(columns: readonly SheetColumn[], headers: string[]): string[] {
-  return columns
-    .filter((column) => column.required && !column.aliases.some((alias) => headers.includes(alias)))
-    .map((column) => `That file has no ${column.header} column`);
+/** Which of the required columns the file does not have, under any of its names. */
+function missingColumns<T extends SheetColumn>(columns: readonly T[], headers: string[]): T[] {
+  return columns.filter(
+    (column) => column.required && !column.aliases.some((alias) => headers.includes(alias)),
+  );
 }
 
-/** The number and name an intake sheet carries, and the two things that stop its row. */
+/** A required column the sheet has under none of its names, said the way the sample file names it. */
+export function missingColumnErrors(columns: readonly SheetColumn[], headers: string[]): string[] {
+  return missingColumns(columns, headers).map(
+    (column) => `That file has no ${column.header} column`,
+  );
+}
+
+/** The number and name a roster row carries, and the two things that stop it: every importer reads a row's contact here. */
 export function readContact(row: CsvRow, seenInFile: Map<string, number>) {
-  const parsed = mobileSchema.safeParse(columnValue(row, 'mobile'));
+  const raw = columnValue(row, 'mobile');
+  const parsed = mobileSchema.safeParse(raw);
   const mobile = parsed.success ? parsed.data : null;
   const duplicateOf = mobile === null ? undefined : seenInFile.get(mobile);
   if (mobile !== null && duplicateOf === undefined) seenInFile.set(mobile, row.line);
@@ -125,10 +125,16 @@ export function readContact(row: CsvRow, seenInFile: Map<string, number>) {
     duplicateOf,
     fullName: columnValue(row, 'fullName').trim() || null,
     errors: [
-      parsed.success ? undefined : 'That is not a mobile number we can enter',
+      parsed.success ? undefined : unreadableMobile(raw, parsed.error?.issues[0]?.message),
       duplicateOf === undefined ? undefined : `The same number is already on line ${duplicateOf}`,
     ].filter((error): error is string => error !== undefined),
   };
+}
+
+/** A blank cell and a wrong number are different fixes, so they are different words. */
+function unreadableMobile(raw: string, reason: string | undefined): string {
+  if (raw.trim() === '') return 'No mobile number in this row';
+  return reason ?? 'That is not a mobile number we can enter';
 }
 
 export function planStudentImport(table: CsvTable, context: ImportContext): StudentImportPlan {
@@ -149,7 +155,7 @@ export function planStudentImport(table: CsvTable, context: ImportContext): Stud
 }
 
 function missingHeaders(headers: string[]): string[] {
-  const missing = missingColumns(headers);
+  const missing = missingColumns(STUDENT_IMPORT_COLUMNS, headers);
   if (missing.length === 0) return [];
 
   // Named the way the sample file names them, because that is the file the admin is looking at while reading this.
@@ -183,33 +189,6 @@ function readName(row: CsvRow): { fullName: string | null; error?: string } {
   const parsed = personNameSchema.safeParse(raw);
   if (parsed.success) return { fullName: parsed.data };
   return { fullName: null, error: parsed.error.issues[0]?.message ?? 'That name is not valid' };
-}
-
-/** The mobile column, or the reason it is not usable. */
-function readMobile(
-  row: CsvRow,
-  seenInFile: Map<string, number>,
-): { mobile: string | null; error?: string } {
-  const raw = columnValue(row, 'mobile');
-  const parsed = mobileSchema.safeParse(raw);
-
-  if (!parsed.success) {
-    return {
-      mobile: null,
-      error:
-        raw.trim() === ''
-          ? 'No mobile number in this row'
-          : (parsed.error.issues[0]?.message ?? 'That is not a valid mobile number'),
-    };
-  }
-
-  const firstSeen = seenInFile.get(parsed.data);
-  if (firstSeen !== undefined) {
-    return { mobile: parsed.data, error: `Same number as line ${firstSeen}` };
-  }
-
-  seenInFile.set(parsed.data, row.line);
-  return { mobile: parsed.data };
 }
 
 /** A cell holding several codes, split however it was written and canonicalised. */
@@ -348,7 +327,7 @@ function planRow(
   seenInFile: Map<string, number>,
 ): StudentImportRow {
   const name = readName(row);
-  const number = readMobile(row, seenInFile);
+  const contact = readContact(row, seenInFile);
   const type = readStudentType(row);
   const branch = readBranch(row, context, type.studentType);
   const courses = readCourses(row);
@@ -360,7 +339,7 @@ function planRow(
   const unknownPrograms = unknownOf(programs, context.programCodes);
 
   const { fullName } = name;
-  const { mobile } = number;
+  const { mobile } = contact;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
   // An import only adds, so the row is planned, judged and shown as what it will leave the student holding.
@@ -370,7 +349,7 @@ function planRow(
 
   const errors = [
     name.error,
-    number.error,
+    ...contact.errors,
     type.error,
     branch.error,
     courses.error,
