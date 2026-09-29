@@ -227,6 +227,7 @@ export function useExamView(
     leave: state.leave,
     takenOver: state.takenOver,
     droppedUnsaved: state.droppedUnsaved,
+    setAside: state.setAside,
 
     openQuestion: (id) => {
       if (canOpen(id)) move(id);

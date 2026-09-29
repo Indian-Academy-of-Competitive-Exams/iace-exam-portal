@@ -39,6 +39,7 @@ export { beginChoice, useStartedSitting, type BeginChoice } from './exam/start-s
 export {
   TIMER_KIND,
   submittingSays,
+  stoodDownSays,
   type ExamView,
   type ExamSubmitView,
   type ExamFullscreenView,

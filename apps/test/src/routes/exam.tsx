@@ -13,8 +13,8 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
-import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState, plural } from '@iace/ui';
-import { useExamView, useStartedSitting, type EndedSitting } from '@iace/app-kit';
+import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
+import { stoodDownSays, useExamView, useStartedSitting, type EndedSitting } from '@iace/app-kit';
 import { browserSessionStorage, useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, RESUME_PARAM, ROUTES, STORAGE_KEYS } from '../lib/constants';
@@ -114,13 +114,14 @@ function ExamHall(
   useLeaveGuard(view.hasUnsent, view.leave);
 
   if (view.takenOver) {
+    const says = stoodDownSays(view);
     return (
       <div className="p-6">
         <EmptyState
           kind={EMPTY_STATE_KINDS.REFUSED}
-          title="This paper is being answered somewhere else"
+          title={says.title}
           /* ui-copy-ok: consequence — continuing here is what stops the other one */
-          hint={takenOverSays(view.droppedUnsaved)}
+          hint={says.hint}
           action={
             <Button onClick={() => continueHere(sitting.paper.attemptId)}>Continue here</Button>
           }
@@ -130,15 +131,6 @@ function ExamHall(
   }
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
-}
-
-/** The other device's answers stand, so whatever this one had not saved is named, not silently lost. */
-function takenOverSays(dropped: number): string {
-  const kept =
-    dropped === 0
-      ? 'Your answers are saved.'
-      : `${plural(dropped, 'answer')} given here had not saved and will not be kept.`;
-  return `${kept} Continuing here stops the other tab or device.`;
 }
 
 /** Closing or reloading with answers unsent asks first; going anyway sends them on the way out. */

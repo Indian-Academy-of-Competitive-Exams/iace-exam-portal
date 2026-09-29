@@ -223,8 +223,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - **A student answers one sitting at a time, on one tab.** Starting or resuming a sitting hands it to
   the tab that asked, and stands down whichever tab held the student's last one — the same rule
   whether that was another tab, another device, or another test. A save or a submit from a tab that
-  no longer holds its sitting is refused with `SITTING_TAKEN_OVER`; nothing it already wrote is lost,
-  and the sitting it was stood down from stays live and resumable. A sitting held by nobody, because
+  no longer holds its sitting is refused: `SITTING_SET_ASIDE` when the student opened another
+  sitting, and that tab keeps what it had not saved and sends it when continued; `SITTING_TAKEN_OVER`
+  when another tab or device holds this same sitting, which is then the sitting of record, so that
+  tab drops what it never delivered and says how many answers that was. Nothing either already wrote
+  is lost, and the sitting it was stood down from stays live and resumable. A sitting held by nobody, because
   its key was rebuilt from Postgres, is adopted by the first tab back. A reclaim names its attempt
   and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
 - **A pause is credited, not stopped.** Falling silent longer than the reload grace

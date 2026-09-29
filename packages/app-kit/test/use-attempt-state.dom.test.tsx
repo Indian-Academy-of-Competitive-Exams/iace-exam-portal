@@ -445,6 +445,38 @@ test('a tab that lost the sitting drops what it never delivered, and says how mu
   assert.equal(sent.length, 0, "nothing of this tab's is sent over it");
 });
 
+/** The failure this prevents: opening a second test on the phone wiping the answers queued in the first on a laptop. */
+test('a tab set aside for another test keeps what it never saved, and sends it when continued', async (t) => {
+  const storage = fakeStorage();
+  const setAside = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_SET_ASIDE);
+      },
+    },
+  } as unknown as AppApiClient;
+  const before = renderHook(() => useAttemptState('attempt-1', depsFor(setAside, storage)));
+  await act(async () => void (await Promise.resolve()));
+  act(() => before.result.current.answer('q1', { selectedOptionId: 'mine' }));
+  await act(async () => void (await before.result.current.flush()));
+  const stood = { ...before.result.current };
+  before.unmount();
+
+  const sent: SentAnswers[] = [];
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(apiThatSaves(sent), storage)),
+  );
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+  await act(async () => void (await result.current.flush()));
+
+  assert.equal(stood.takenOver, true, 'it stopped saving');
+  assert.equal(stood.setAside, true, 'and says why');
+  assert.equal(stood.droppedUnsaved, 0);
+  assert.equal(sent[0]?.answers.find((row) => row.questionId === 'q1')?.selectedOptionId, 'mine');
+});
+
 test('standing down stops saving and says so, the same as a refused save', async (t) => {
   const calls: unknown[] = [];
   const api = {

@@ -25,7 +25,7 @@ import {
   applyBatch,
   forwardOrderOf,
   heldIn,
-  holdsSitting,
+  sittingRefusal,
   isStale,
   creditedEndsAt,
   creditedSections,
@@ -48,8 +48,6 @@ const PATCH_TRIES = 5;
 const NOT_YOURS = 'No such attempt';
 const BEING_ANSWERED = 'This sitting is being written to right now. Try again in a moment.';
 const ALREADY_ENDED = 'This sitting has ended, so nothing more can be saved to it.';
-const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
-
 /** One sitting as a flush pass read it: the bytes, and what they say (null when the key has gone). */
 export interface FlushRead {
   attemptId: string;
@@ -379,9 +377,8 @@ function answered(
 ): HeldState {
   yours(held, studentId);
   if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
-  if (!holdsSitting(held, batch.tab)) {
-    throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
-  }
+  const refused = sittingRefusal(held, batch.tab);
+  if (refused) throw refused;
   return { ...applyBatch(held, batch, now), tab: batch.tab ?? held.tab };
 }
 

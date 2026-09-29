@@ -28,11 +28,34 @@ export interface ExamSubmitView {
   retry: () => void;
 }
 
+const countOf = (count: number, noun: string): string =>
+  `${count} ${count === 1 ? noun : `${noun}s`}`;
+
 /** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
 export function submittingSays({ submit, forwardOnly }: ExamView): string {
-  const questions = submit.unanswered === 1 ? 'question' : 'questions';
   const marked = forwardOnly ? '' : ` and ${submit.markedForReview} marked for review`;
-  return `${submit.unanswered} ${questions} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
+  return `${countOf(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
+}
+
+/** Set aside keeps everything; taken over names what it drops, so nothing is lost without a word. */
+export function stoodDownSays({
+  setAside,
+  droppedUnsaved,
+}: Pick<ExamView, 'setAside' | 'droppedUnsaved'>): { title: string; hint: string } {
+  if (setAside) {
+    return {
+      title: 'Another of your tests is open',
+      hint: 'Your answers here are kept, and go up when you continue. Continuing here stops the other test.',
+    };
+  }
+  const kept =
+    droppedUnsaved === 0
+      ? 'Your answers are saved.'
+      : `${countOf(droppedUnsaved, 'answer')} given here had not saved and will not be kept.`;
+  return {
+    title: 'This paper is being answered somewhere else',
+    hint: `${kept} Continuing here stops the other tab or device.`,
+  };
 }
 
 export const TIMER_KIND = { SECTION: 'SECTION', PAPER: 'PAPER' } as const;
@@ -94,6 +117,8 @@ export interface ExamView {
   takenOver: boolean;
   /** Answers this device had not saved when it was taken over, dropped so the other device's stand. */
   droppedUnsaved: number;
+  /** Stopped because another of the student's tests was opened; nothing here was dropped. */
+  setAside: boolean;
 
   openQuestion: (questionId: string) => void;
   /** Whether that seat still opens — a screen draws the refusal rather than finding out by click. */

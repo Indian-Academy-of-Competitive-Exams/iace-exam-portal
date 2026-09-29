@@ -17,12 +17,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { answeredIn, type AnswerSheet } from './answer-sheet';
-import { holdsSitting, isInTime, type HeldState } from './attempt-state';
+import { isInTime, sittingRefusal, type HeldState } from './attempt-state';
 import { ScoringQueue } from './scoring-queue';
 import { MetricsService } from '../common/metrics';
 
 const NOT_YOURS = 'No such attempt';
-const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
 
 const ATTEMPT_SELECT = {
   id: true,
@@ -61,15 +60,20 @@ export class SubmitService {
 
     // A tab stood down elsewhere must not end a sitting the student is answering somewhere else.
     const held = await this.state.read(attemptId);
-    if (held && !holdsSitting(held, body.tab)) {
+    const refused = held && sittingRefusal(held, body.tab);
+    if (refused) {
       this.metrics.countSubmit('refused');
-      throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
+      throw refused;
     }
 
     try {
       await this.lastAnswers(studentId, attempt, held, body);
     } catch (error) {
-      if (AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER) {
+      const stoodDown =
+        AppException.is(error) &&
+        (error.code === ErrorCodes.SITTING_TAKEN_OVER ||
+          error.code === ErrorCodes.SITTING_SET_ASIDE);
+      if (stoodDown) {
         this.metrics.countSubmit('refused');
       }
       throw error;

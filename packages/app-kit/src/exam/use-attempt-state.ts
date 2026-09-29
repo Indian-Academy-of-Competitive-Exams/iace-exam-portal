@@ -44,6 +44,10 @@ export interface AttemptStateDeps {
 export const isTakenOver = (error: unknown): boolean =>
   AppException.is(error) && error.code === ErrorCodes.SITTING_TAKEN_OVER;
 
+/** A refusal because the student opened another test; this sitting is theirs to continue. */
+const isSetAside = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SITTING_SET_ASIDE;
+
 const queueKeyFor = ({ keyPrefix }: AnswerQueue, attemptId: string) => `${keyPrefix}.${attemptId}`;
 
 /** Undelivered answers outlive a reload here, because the queue they sit in does not. */
@@ -75,6 +79,8 @@ export interface AttemptStateHandle {
   hasUnsaved: boolean;
   /** True once this tab stopped holding the sitting, because it was opened somewhere else. */
   takenOver: boolean;
+  /** It stopped because the student opened another test: nothing was dropped, and it goes up when continued here. */
+  setAside: boolean;
   /** Answers this tab had not delivered when it stood down, dropped so they never land over the other device's. */
   droppedUnsaved: number;
   /** Stops saving and says why: another tab or device holds the sitting now, and this one's unsent answers go. */
@@ -138,6 +144,7 @@ export function useAttemptState(
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
   const [droppedUnsaved, setDroppedUnsaved] = useState(0);
+  const [setAside, markSetAside] = useState(false);
   const stopped = useRef(false);
   const heldElsewhere = useRef(false);
 
@@ -212,6 +219,13 @@ export function useAttemptState(
     setTakenOver(true);
   }, [keepQueue]);
 
+  // Stops without dropping anything: no other tab holds this sitting, so what is queued here is still the newest.
+  const standAside = useCallback(() => {
+    stopped.current = true;
+    markSetAside(true);
+    setTakenOver(true);
+  }, []);
+
   const unsaved = useCallback((value: boolean) => {
     lastSaveFailed.current = value;
     setHasUnsaved(value);
@@ -222,8 +236,9 @@ export function useAttemptState(
       unsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
       if (isTakenOver(error)) standDown();
+      else if (isSetAside(error)) standAside();
     },
-    [standDown, unsaved],
+    [standAside, standDown, unsaved],
   );
 
   const hasUnsent = useCallback(
@@ -456,6 +471,7 @@ export function useAttemptState(
     hasUnsaved,
     takenOver,
     droppedUnsaved,
+    setAside,
     standDown,
     answer,
     open,

@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ErrorCodes, type AppException } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
-import { heldIn, holdsSitting, type HeldState } from '../src/attempts/attempt-state';
+import {
+  heldIn,
+  holdsSitting,
+  sittingRefusal,
+  type HeldState,
+} from '../src/attempts/attempt-state';
 import { type PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
@@ -92,6 +97,24 @@ describe('holdsSitting — who may answer', () => {
   });
 });
 
+/** The client drops a tab's unsent answers only when this same sitting went elsewhere, so the two must differ. */
+describe('sittingRefusal — why a tab may not answer', () => {
+  it('says set aside when the student opened another sitting', () => {
+    assert.equal(sittingRefusal(held({ tab: null }), 'tab_a')?.code, ErrorCodes.SITTING_SET_ASIDE);
+  });
+
+  it('says taken over when another tab holds this sitting', () => {
+    assert.equal(
+      sittingRefusal(held({ tab: 'tab_b' }), 'tab_a')?.code,
+      ErrorCodes.SITTING_TAKEN_OVER,
+    );
+  });
+
+  it('refuses nothing to the tab holding it', () => {
+    assert.equal(sittingRefusal(held({ tab: 'tab_a' }), 'tab_a'), null);
+  });
+});
+
 describe('AttemptStateService — one sitting at a time, across tabs and devices', () => {
   it('stands the previous sitting down when the student opens another', async () => {
     const redis = new FakeRedis();
@@ -115,7 +138,7 @@ describe('AttemptStateService — one sitting at a time, across tabs and devices
     assert.equal(await tabOf(redis, 'att_1'), 'tab_b');
   });
 
-  it('refuses a save from the tab that was stood down', async () => {
+  it('refuses a save from the tab stood down for another sitting, as set aside', async () => {
     const redis = new FakeRedis();
     const state = serviceOn(redis);
     await state.open(sitting('att_1'), 'tab_a');
@@ -126,7 +149,7 @@ describe('AttemptStateService — one sitting at a time, across tabs and devices
       .then(() => null)
       .catch((error: AppException) => error);
 
-    assert.equal(refused?.code, ErrorCodes.SITTING_TAKEN_OVER);
+    assert.equal(refused?.code, ErrorCodes.SITTING_SET_ASIDE);
   });
 
   it('takes the sitting back when the student returns to it', async () => {

@@ -1,5 +1,7 @@
 import {
   ANSWER_STATE,
+  AppException,
+  ErrorCodes,
   furthestSeat,
   NAVIGATION_POLICY,
   type AnswerChange,
@@ -152,6 +154,18 @@ function answerFor(held: LiveAnswer | undefined, change: AnswerChange, now: Date
 export function holdsSitting(held: HeldState, tab: string | undefined): boolean {
   if (tab === undefined) return true;
   return held.tab === undefined || held.tab === tab;
+}
+
+const CONTINUED_ELSEWHERE = 'This test was continued in another tab or on another device.';
+const SET_ASIDE = 'Another of your tests was opened, so this one stopped saving here.';
+
+/** Why a tab may not answer now, or null when it may; the client keeps its unsent answers only when set aside. */
+export function sittingRefusal(held: HeldState, tab: string | undefined): AppException | null {
+  if (holdsSitting(held, tab)) return null;
+  // Null is what opening ANOTHER sitting leaves behind; a tab id means this sitting went to someone else.
+  return held.tab === null
+    ? new AppException(ErrorCodes.SITTING_SET_ASIDE, SET_ASIDE)
+    : new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
 }
 
 /** At or below the held revision is a batch a newer save already carried, not one to replay. */
