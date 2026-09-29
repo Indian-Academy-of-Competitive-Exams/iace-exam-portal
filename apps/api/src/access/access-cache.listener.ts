@@ -20,7 +20,7 @@ export class AccessCacheListener {
 
   @OnEvent(DOMAIN_EVENTS.EXAM_STAGE_CHANGED)
   onExamStageChanged(event: ExamStageChangedEvent): Promise<void> {
-    return this.bump(`stage ${event.examStageId}`);
+    return this.bump(JSON.stringify(event));
   }
 
   private async bump(what: string): Promise<void> {

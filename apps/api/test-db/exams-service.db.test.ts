@@ -228,21 +228,14 @@ describe('ExamsService — updating', () => {
   });
 
   /** The failure this prevents: a course change that moves who reaches a series, seen by nobody for 15 minutes. */
-  it('tells the catalog about every stage under a course or code change, and nothing else', async () => {
+  it('tells the catalog once about a course or code change, whatever its stages, and nothing else', async () => {
     const service = await serviceWith([{ stages: 2 }]);
-    const stages = await prisma.examStage.findMany({ where: { examId: idFor('exam_1') } });
     events.forget();
 
     await service.update(idFor('exam_1'), { name: 'SSC Combined Graduate Level' });
     await service.update(idFor('exam_1'), { course: EXAM_COURSE.RRB });
 
-    assert.deepEqual(
-      events
-        .of(DOMAIN_EVENTS.EXAM_STAGE_CHANGED)
-        .map((payload) => payload.examStageId)
-        .sort(),
-      stages.map((stage) => stage.id).sort(),
-    );
+    assert.deepEqual(events.of(DOMAIN_EVENTS.EXAM_STAGE_CHANGED), [{ examId: idFor('exam_1') }]);
   });
 });
 

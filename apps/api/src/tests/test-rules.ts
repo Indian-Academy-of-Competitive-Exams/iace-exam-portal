@@ -6,8 +6,10 @@ import {
   scopedDurationSec,
   scopedQuestionCount,
   TEST_SCOPE,
+  TEST_STATUS,
   type TestScope,
   type TestScopeRef,
+  type TestStatus,
   type TimedScopedSection,
   type UpdateTestBody,
 } from '@iace/contracts';
@@ -45,6 +47,10 @@ export function testShapeOf(row: ShapedTest): { totalQuestions: number; duration
     durationSec: scopedDurationSec(row.baseConfig.sections, row.baseConfig, row.scope, scopeRef),
   };
 }
+
+/** The held catalog carries ACTIVE tests alone, so a write to any other reaches no student. */
+export const inTheCatalog = (test: { status: TestStatus }): boolean =>
+  test.status === TEST_STATUS.ACTIVE;
 
 /** Every refusal of a series lands on the one control that chose it, so all of them are thrown alike. */
 export const seriesRefused = (message: string): AppException =>

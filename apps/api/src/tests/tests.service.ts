@@ -27,6 +27,7 @@ import {
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
   changedTestFields,
+  inTheCatalog,
   locksOutTestEdit,
   scopeRefOf,
   testShapeOf,
@@ -237,7 +238,8 @@ export class TestsService {
     this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));
 
     // The catalog and the brief hold both, and an offered test may still be renamed or re-skinned.
-    if (updated.title !== test.title || updated.examTemplate !== test.examTemplate) {
+    const shownChanged = updated.title !== test.title || updated.examTemplate !== test.examTemplate;
+    if (inTheCatalog(test) && shownChanged) {
       this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
     }
 
@@ -257,7 +259,9 @@ export class TestsService {
 
     await this.prisma.test.delete({ where: { id } });
 
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
+    if (inTheCatalog(test)) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
+    }
   }
 
   /** Chosen once and never again, super admin included: every assignment on the test rests on it. */

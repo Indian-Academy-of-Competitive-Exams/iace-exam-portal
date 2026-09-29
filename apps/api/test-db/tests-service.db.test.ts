@@ -555,7 +555,9 @@ describe('TestsService — editing and removing', () => {
 
   /** The failure this prevents: a renamed test still wearing its old title in a cached catalog. */
   it('tells the series about a rename, which the catalog carries', async () => {
-    const { service, events } = await serviceWith({ test: {} });
+    const { service, events } = await serviceWith({
+      test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
+    });
 
     await service.update(TEST, { title: 'Mock 1 (revised)' });
 
@@ -567,7 +569,9 @@ describe('TestsService — editing and removing', () => {
 
   /** The failure this prevents: an offered test re-skinned while its brief still names the old screen. */
   it('tells the series about a re-skin, which the brief carries', async () => {
-    const { service, events } = await serviceWith({ test: {} });
+    const { service, events } = await serviceWith({
+      test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
+    });
 
     await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
 
@@ -579,7 +583,9 @@ describe('TestsService — editing and removing', () => {
 
   /** The failure this prevents: a deleted test still reachable in a student's cached catalog. */
   it('tells the series that carried it that the catalog has moved', async () => {
-    const { service, events } = await serviceWith({ test: {} });
+    const { service, events } = await serviceWith({
+      test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
+    });
 
     await service.remove(TEST);
 
@@ -587,5 +593,15 @@ describe('TestsService — editing and removing', () => {
       events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
       [idFor('srs_1')],
     );
+  });
+
+  /** The failure this prevents: every API process rebuilding its catalog for a test no student sees. */
+  it('says nothing to the catalog about a draft renamed or deleted', async () => {
+    const { service, events } = await serviceWith({ test: {} });
+
+    await service.update(TEST, { title: 'Mock 1 (revised)' });
+    await service.remove(TEST);
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), []);
   });
 });

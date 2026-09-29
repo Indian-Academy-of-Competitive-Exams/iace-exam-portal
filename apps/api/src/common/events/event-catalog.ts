@@ -49,9 +49,8 @@ export interface AccessCatalogChangedEvent {
   testSeriesId: string;
 }
 
-export interface ExamStageChangedEvent {
-  examStageId: string;
-}
+/** One stage, or every stage under an exam: the catalog is rebuilt whole either way. */
+export type ExamStageChangedEvent = { examStageId: string } | { examId: string };
 
 export interface StudentSignedUpEvent {
   studentId: string;

@@ -150,13 +150,22 @@ describe('OfferingService — a test belongs to one series', () => {
     assert.deepEqual([row.testSeriesId, row.seriesOrder], [idFor('srs_2'), null]);
   });
 
-  /** A student who could reach it through srs_1 has a cached catalog that no longer holds. */
-  it('tells the catalog cache about the series it left AND the one it joined', async () => {
+  /** A student who could reach it through srs_1 has a held catalog that no longer holds. */
+  it('tells the catalog cache once when an offered test moves', async () => {
+    const { service, events } = await serviceWith({ ...FROZEN, status: TEST_STATUS.ACTIVE });
+
+    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
+
+    assert.deepEqual(catalogBusts(events), [idFor('srs_2')]);
+  });
+
+  /** The held catalog carries offered tests alone, so a draft's move rebuilds nothing. */
+  it('says nothing to the cache when a draft moves', async () => {
     const { service, events } = await serviceWith();
 
     await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
 
-    assert.deepEqual(new Set(catalogBusts(events)), new Set([idFor('srs_1'), idFor('srs_2')]));
+    assert.deepEqual(catalogBusts(events), []);
   });
 
   it('says nothing to the cache when the series it was given is the one it holds', async () => {

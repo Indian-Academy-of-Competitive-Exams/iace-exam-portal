@@ -164,7 +164,7 @@ public rollout unchanged.
 - **Nothing per student is cached.** Every catalog, brief and start reads the student's row, grants,
   event candidacies and sittings live, so a block, a grant or a submit counts on the very next
   request. Only the series side is held, once per API process, and rebuilt when
-  `access:catalog:epoch` moves — any series, test, blueprint, stage or exam write bumps it — or after 15 minutes.
+  `access:catalog:epoch` moves — any series, offered test, blueprint, stage or exam write bumps it — or after 15 minutes.
 - A `Notification` on assignment carries the series as its deep link.
 - **An import only adds access.** A roster uploaded again merges its courses, exams and programs
   into what each existing student already holds, as the program import appends its code; a blank

@@ -116,19 +116,11 @@ export class ExamsService {
 
     this.auditContext.setPatchDiff(fieldDiff(exam, { ...exam, ...changes }, AUDITED_EXAM_FIELDS));
     // The course decides who a STANDARD series under any of its stages reaches, and the code is on every card.
-    if (changes.course !== undefined || changes.code !== undefined) await this.announceStages(id);
+    if (changes.course !== undefined || changes.code !== undefined) {
+      this.events.emit(DOMAIN_EVENTS.EXAM_STAGE_CHANGED, { examId: id });
+    }
 
     return toExam(updated);
-  }
-
-  private async announceStages(examId: string): Promise<void> {
-    const stages = await this.prisma.examStage.findMany({
-      where: { examId },
-      select: { id: true },
-    });
-    for (const { id } of stages) {
-      this.events.emit(DOMAIN_EVENTS.EXAM_STAGE_CHANGED, { examStageId: id });
-    }
   }
 
   async remove(id: string): Promise<void> {

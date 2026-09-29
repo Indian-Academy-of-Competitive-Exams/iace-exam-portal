@@ -20,6 +20,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import {
   attemptsLabel,
+  inTheCatalog,
   seriesFitIssue,
   seriesRefused,
   SERIES_GONE_MESSAGE,
@@ -224,9 +225,9 @@ export class OfferingService {
       select: OFFERING_SELECT,
     });
 
-    // Both sides: the catalog a student reads is cached against the series it moved between.
-    for (const testSeriesId of [test.testSeriesId, next]) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    // One bump rebuilds every held series, the one it left included.
+    if (inTheCatalog(test)) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: next });
     }
 
     return linkOf(moved);
