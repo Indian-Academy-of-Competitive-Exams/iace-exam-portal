@@ -92,6 +92,8 @@ export interface ExamView {
   leave: () => void;
   /** This tab no longer holds the sitting: it was opened in another tab or on another device. */
   takenOver: boolean;
+  /** Answers this device had not saved when it was taken over, dropped so the other device's stand. */
+  droppedUnsaved: number;
 
   openQuestion: (questionId: string) => void;
   /** Whether that seat still opens — a screen draws the refusal rather than finding out by click. */

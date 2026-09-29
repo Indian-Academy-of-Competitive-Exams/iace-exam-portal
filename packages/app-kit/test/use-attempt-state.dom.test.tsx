@@ -398,6 +398,52 @@ test('a save refused as taken over stops saving and says so', async (t) => {
   assert.equal(calls.length, 1, 'a tab that lost the sitting does not fight for it');
 });
 
+/** The failure this prevents: Continue here replaying this tab's old answer over the one the other device gave. */
+test('a tab that lost the sitting drops what it never delivered, and says how much', async (t) => {
+  const storage = fakeStorage();
+  const refused = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_TAKEN_OVER);
+      },
+    },
+  } as unknown as AppApiClient;
+  const before = renderHook(() => useAttemptState('attempt-1', depsFor(refused, storage)));
+  await act(async () => void (await Promise.resolve()));
+  act(() => before.result.current.answer('q1', { selectedOptionId: 'mine' }));
+  await act(async () => void (await before.result.current.flush()));
+  act(() => before.result.current.answer('q2', { selectedOptionId: 'after' }));
+  const dropped = before.result.current.droppedUnsaved;
+  before.unmount();
+
+  const sent: SentAnswers[] = [];
+  const theirs = {
+    me: {
+      attemptState: async () => ({
+        answers: { q1: { state: ANSWER_STATE.ANSWERED, selectedOptionId: 'theirs' } },
+        sections: {},
+        revision: 5,
+      }),
+      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
+        sent.push(body);
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(theirs, storage)),
+  );
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+  await act(async () => void (await result.current.flush()));
+
+  assert.equal(dropped, 1, 'the takeover screen can say how many');
+  assert.equal(result.current.answers.q1?.selectedOptionId, 'theirs');
+  assert.equal(result.current.answers.q2, undefined, 'nor is anything done here after it lost');
+  assert.equal(sent.length, 0, "nothing of this tab's is sent over it");
+});
+
 test('standing down stops saving and says so, the same as a refused save', async (t) => {
   const calls: unknown[] = [];
   const api = {

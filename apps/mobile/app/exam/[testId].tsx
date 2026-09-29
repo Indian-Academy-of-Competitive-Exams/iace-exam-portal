@@ -22,6 +22,7 @@ import { examLanguagesFrom } from '../../src/lib/exam-routes';
 import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
 import { endedSittingQuery } from '../../src/lib/queries';
+import { plural } from '../../src/lib/plural';
 import { useAuth } from '../../src/providers/auth';
 import { appFocus, onBackground } from '../../src/components/exam/app-focus';
 import { ExamSkin } from '../../src/components/exam/exam-skin';
@@ -137,13 +138,22 @@ export default function ExamScreen() {
             kind={EMPTY_STATE_KINDS.REFUSED}
             title="This paper is being answered somewhere else"
             /* ui-copy-ok: consequence — continuing here is what stops the other one */
-            hint="Your answers are saved. Continuing here stops the other tab or device."
+            hint={takenOverSays(view.droppedUnsaved)}
             action={<Button onPress={continueHere}>Continue here</Button>}
           />
         </View>
       ) : null}
     </View>
   );
+}
+
+/** The other device's answers stand, so whatever this one had not saved is named, not silently lost. */
+function takenOverSays(dropped: number): string {
+  const kept =
+    dropped === 0
+      ? 'Your answers are saved.'
+      : `${plural(dropped, 'answer')} given here had not saved and will not be kept.`;
+  return `${kept} Continuing here stops the other tab or device.`;
 }
 
 /** Draws nothing: it runs the engine and hands each view up, so the skin never waits to mount. */

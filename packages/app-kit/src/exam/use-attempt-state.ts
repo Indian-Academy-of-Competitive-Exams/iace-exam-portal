@@ -69,7 +69,9 @@ export interface AttemptStateHandle {
   hasUnsaved: boolean;
   /** True once this tab stopped holding the sitting, because it was opened somewhere else. */
   takenOver: boolean;
-  /** Stops saving and says why: another tab or device holds the sitting now. */
+  /** Answers this tab had not delivered when it stood down, dropped so they never land over the other device's. */
+  droppedUnsaved: number;
+  /** Stops saving and says why: another tab or device holds the sitting now, and this one's unsent answers go. */
   standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
   answer: (questionId: string, next: AnswerIntent) => void;
@@ -129,7 +131,9 @@ export function useAttemptState(
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
+  const [droppedUnsaved, setDroppedUnsaved] = useState(0);
   const stopped = useRef(false);
+  const heldElsewhere = useRef(false);
 
   // Everything the server has not acknowledged, in the air or not; an ack takes out only the copy it carried.
   const pending = useRef(new Map<string, AnswerChange>(queued.map((c) => [c.questionId, c])));
@@ -174,20 +178,6 @@ export function useAttemptState(
     };
   }, [attemptId, commit]);
 
-  const standDown = useCallback(() => {
-    stopped.current = true;
-    setTakenOver(true);
-  }, []);
-
-  const failed = useCallback(
-    (error: unknown) => {
-      setHasUnsaved(true);
-      // Answering moved to another tab or device: this one stops rather than fighting it.
-      if (isTakenOver(error)) standDown();
-    },
-    [standDown],
-  );
-
   const keepQueue = useCallback(() => {
     const { answerQueue } = mounted.current;
     const key = queueKeyFor(answerQueue, attemptId);
@@ -198,6 +188,27 @@ export function useAttemptState(
       // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
     }
   }, [attemptId]);
+
+  const standDown = useCallback(() => {
+    stopped.current = true;
+    heldElsewhere.current = true;
+    // The device that took over is the sitting of record: what this one never delivered is not replayed over it.
+    const dropped = pending.current.size;
+    pending.current.clear();
+    pendingSections.current.clear();
+    keepQueue();
+    setDroppedUnsaved((before) => before + dropped);
+    setTakenOver(true);
+  }, [keepQueue]);
+
+  const failed = useCallback(
+    (error: unknown) => {
+      setHasUnsaved(true);
+      // Answering moved to another tab or device: this one stops rather than fighting it.
+      if (isTakenOver(error)) standDown();
+    },
+    [standDown],
+  );
 
   const hasUnsent = useCallback(
     () => pending.current.size > 0 || pendingSections.current.size > 0,
@@ -321,6 +332,7 @@ export function useAttemptState(
 
   const record = useCallback(
     (change: AnswerChange) => {
+      if (heldElsewhere.current) return;
       pending.current.set(change.questionId, change);
       keepQueue();
       const held = answersNow.current;
@@ -407,6 +419,7 @@ export function useAttemptState(
     isSaving,
     hasUnsaved,
     takenOver,
+    droppedUnsaved,
     standDown,
     answer,
     open,
