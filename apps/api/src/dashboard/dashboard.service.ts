@@ -9,6 +9,7 @@ import {
   DASHBOARD_RECENT_TESTS,
   DASHBOARD_WINDOW_ROWS,
   QUESTION_STATUS,
+  START_GRACE_MS,
   TEST_STATUS,
   rowActionListQuerySchema,
   type Dashboard,
@@ -183,19 +184,20 @@ export class DashboardService {
   }
 
   private async windows(): Promise<DashboardWindows> {
-    const now = new Date();
+    // Open from when students may begin it, which is `testIsOpen`'s grace before the hour.
+    const sittable = new Date(Date.now() + START_GRACE_MS);
     // A test in a series nobody can reach is not a window, however open its own clock is.
     const live = { status: TEST_STATUS.ACTIVE, testSeries: { isEnabled: true } } as const;
 
     const [open, upcoming] = await Promise.all([
       this.prisma.test.findMany({
-        where: { ...live, OR: [{ opensAt: null }, { opensAt: { lte: now } }] },
+        where: { ...live, OR: [{ opensAt: null }, { opensAt: { lte: sittable } }] },
         orderBy: { opensAt: WINDOW_ORDER },
         take: DASHBOARD_WINDOW_ROWS,
         select: TEST_CARD,
       }),
       this.prisma.test.findMany({
-        where: { ...live, opensAt: { gt: now } },
+        where: { ...live, opensAt: { gt: sittable } },
         orderBy: { opensAt: 'asc' },
         take: DASHBOARD_WINDOW_ROWS,
         select: TEST_CARD,

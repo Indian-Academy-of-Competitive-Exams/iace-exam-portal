@@ -8,6 +8,7 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   QUESTION_STATUS,
+  START_GRACE_MS,
   TEST_STATUS,
   type AdminPermissions,
   type FeatureKey,
@@ -258,7 +259,7 @@ describe('the sittings series and the windows', () => {
       { ...catalog, testSeriesId: hiddenSeries.id },
       { status: active, opensAt: daysFromNow(-25) },
     );
-    return { old, soon, draft, hidden, opened };
+    return { catalog, old, soon, draft, hidden, opened };
   }
 
   it('reads each point off the counted cohort, oldest first', async () => {
@@ -298,6 +299,27 @@ describe('the sittings series and the windows', () => {
     assert.equal(
       shown.some((window) => window.testId === hidden.id || window.testId === draft.id),
       false,
+    );
+  });
+
+  /** Students may begin START_GRACE_MS early, so the admin sees it as open when they do. */
+  it('counts a test inside its start grace as open, not upcoming', async () => {
+    const { catalog, old, soon } = await schedule();
+    const starting = await makeTest(prisma, catalog, {
+      status: TEST_STATUS.ACTIVE,
+      opensAt: new Date(Date.now() + START_GRACE_MS / 2),
+    });
+    const { service } = build();
+
+    const payload = await service.overview(holding(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT));
+
+    assert.deepEqual(
+      payload.windows?.open.map((window) => window.testId).toSorted(),
+      [old.id, starting.id].toSorted(),
+    );
+    assert.deepEqual(
+      payload.windows?.upcoming.map((window) => window.testId),
+      [soon.id],
     );
   });
 
