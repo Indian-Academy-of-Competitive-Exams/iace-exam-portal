@@ -23,7 +23,6 @@ import {
   type StudentSummary,
 } from '@iace/contracts';
 import {
-  Alert,
   FormCombobox,
   Badge,
   BadgeList,
@@ -421,7 +420,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const exams = useExams({ activeOnly: true, enabled: open });
-  const branch = useBranchChoice(studentType, currentBranchId);
+  const branch = useBranchChoice(studentType);
   // Displayed AND submitted, so a locked picker can never show one branch and save another.
   const chosenBranchId = branch.locked ? (branch.forcedId ?? '') : currentBranchId;
 
@@ -542,10 +541,6 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
           />
         )}
       </FormField>
-
-      {branch.droppedName ? (
-        <Alert variant="warning">Saving drops their branch, {branch.droppedName}.</Alert>
-      ) : null}
     </FormDialog>
   );
 }

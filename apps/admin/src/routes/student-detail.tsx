@@ -199,7 +199,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const programs = useWatch({ control: form.control, name: 'programs' }) ?? [];
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
-  const branch = useBranchChoice(studentType, currentBranchId);
+  const branch = useBranchChoice(studentType, form.formState.defaultValues?.currentBranchId);
   // Displayed AND submitted, so a locked picker can never show one branch and save another.
   const chosenBranchId = branch.locked ? (branch.forcedId ?? '') : currentBranchId;
   const currentBranchName = allBranches.find((option) => option.id === chosenBranchId)?.name;
@@ -260,7 +260,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               aria-invalid={invalid}
               value={programs}
               onChange={(next) => form.setValue('programs', next, { shouldDirty: true })}
-              retiredOnlyIfHeld
+              held={form.formState.defaultValues?.programs?.filter((code) => code !== undefined)}
               placeholder="No programs yet"
             />
           )}

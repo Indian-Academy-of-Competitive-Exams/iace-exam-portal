@@ -120,18 +120,18 @@ export function TestSeriesPicker({
   );
 }
 
-/** Unlike `ProgramPicker` it reaches retired programs — students are still on them; `retiredOnlyIfHeld` keeps a form from offering one the save refuses. */
+/** Unlike `ProgramPicker` it reaches retired programs — students are still on them; given `held`, a retired one shows only if saved there. */
 export function ProgramMultiPicker({
   placeholder = 'Any program',
-  retiredOnlyIfHeld = false,
+  held,
   ...props
-}: Readonly<MultiPickerProps & { retiredOnlyIfHeld?: boolean }>) {
+}: Readonly<MultiPickerProps & { held?: readonly string[] }>) {
   const programs = usePagedPicker({
     queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.FILTER],
     fetchPage: (params) => api.admin.programs.list(params),
   });
-  const offered = retiredOnlyIfHeld
-    ? programs.items.filter((program) => program.isActive || props.value.includes(program.code))
+  const offered = held
+    ? programs.items.filter((program) => program.isActive || held.includes(program.code))
     : programs.items;
 
   return (
