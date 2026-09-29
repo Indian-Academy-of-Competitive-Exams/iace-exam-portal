@@ -60,6 +60,26 @@ describe('the branch a roster import writes', () => {
     assert.equal(await branchOf('9000000001'), null);
   });
 
+  /** A branch reaches its series, so a NON-IACE row naming one put an outsider on a centre's tests. */
+  it('refuses a NON-IACE row that names a branch, and writes nothing for it', async () => {
+    const branch = await makeBranch(prisma, 'AMEERPET');
+    await makeStudent(prisma, { mobile: '9000000001', studentType: STUDENT_TYPE.OFFLINE });
+    const file = sheet('9876543210,NON-IACE,AMEERPET,SSC,,', '9000000001,NON-IACE,Ameerpet,SSC,,');
+
+    const plan = await importer().previewStudents(file);
+    const result = await importer().commitStudents(file, ADMIN);
+
+    for (const row of plan.rows) {
+      assert.match(row.errors.join(' '), /Non-IACE student has no branch/);
+    }
+    assert.equal(result.skipped, 2);
+    assert.equal(await prisma.student.count({ where: { currentBranchId: branch.id } }), 0);
+    assert.equal(
+      (await prisma.student.findFirstOrThrow({ where: { mobile: '9000000001' } })).studentType,
+      STUDENT_TYPE.OFFLINE,
+    );
+  });
+
   it('still refuses an OFFLINE row with no branch, and writes nothing for it', async () => {
     const result = await importer().commitStudents(sheet('9876543210,OFFLINE,,SSC,,'), ADMIN);
 

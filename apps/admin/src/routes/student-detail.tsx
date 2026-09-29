@@ -100,7 +100,7 @@ const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
 function accessPatch(
   values: FormValues,
   dirty: { studentType?: boolean; currentBranchId?: boolean },
-  forcedBranchId: string | undefined,
+  forcedBranchId: string | null | undefined,
 ): Pick<UpdateStudentBody, 'studentType' | 'currentBranchId'> {
   const branchPatch = () => {
     if (forcedBranchId !== undefined) return { currentBranchId: forcedBranchId };
@@ -193,8 +193,8 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
   const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
   const studentType = useWatch({ control: form.control, name: 'studentType' });
-  const branch = useBranchChoice(studentType);
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
+  const branch = useBranchChoice(studentType, currentBranchId);
   // Displayed AND submitted, so a locked picker can never show one branch and save another.
   const chosenBranchId = branch.locked ? (branch.forcedId ?? '') : currentBranchId;
   const currentBranchName = allBranches.find((option) => option.id === chosenBranchId)?.name;
@@ -269,6 +269,10 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
             />
           )}
         </FormField>
+
+        {branch.droppedName ? (
+          <Alert variant="warning">Saving drops their branch, {branch.droppedName}.</Alert>
+        ) : null}
       </div>
     </FormSection>
   );

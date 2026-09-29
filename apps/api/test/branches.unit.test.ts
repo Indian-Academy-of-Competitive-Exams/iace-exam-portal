@@ -84,10 +84,16 @@ describe('studentBranchBlocker', () => {
     assert.equal(studentBranchBlocker(STUDENT_TYPE.OFFLINE, BRANCH_TYPE.PHYSICAL), null);
   });
 
-  /** They sit outside the institute, so the question does not arise for them. */
-  it('constrains a non-IACE student to neither', () => {
-    assert.equal(studentBranchBlocker(STUDENT_TYPE.NON_IACE, BRANCH_TYPE.VIRTUAL), null);
-    assert.equal(studentBranchBlocker(STUDENT_TYPE.NON_IACE, BRANCH_TYPE.PHYSICAL), null);
+  /** A branch reaches its series, so a non-IACE student parked at one reached a centre's tests. */
+  it('keeps a non-IACE student out of every branch', () => {
+    assert.match(
+      studentBranchBlocker(STUDENT_TYPE.NON_IACE, BRANCH_TYPE.VIRTUAL) ?? '',
+      /no branch/,
+    );
+    assert.match(
+      studentBranchBlocker(STUDENT_TYPE.NON_IACE, BRANCH_TYPE.PHYSICAL) ?? '',
+      /no branch/,
+    );
   });
 });
 

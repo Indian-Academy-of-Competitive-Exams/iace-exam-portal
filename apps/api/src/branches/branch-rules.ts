@@ -33,11 +33,14 @@ export function branchEditBlocker(
 export const ONLINE_BRANCH_EXISTS_MESSAGE =
   'The online branch already exists. There can only be one.';
 
-/** Where a student sits has to agree with what kind of student they are: `AccessResolver` reads the branch alone, so an online student parked at a centre inherits that centre's schedule. NON_IACE is deliberately unconstrained — they sit outside the institute, so neither answer is wrong. */
+/** Where a student sits has to agree with what kind of student they are: `AccessResolver` reads the branch alone, so whoever holds one reaches its series — and a Non-IACE student, outside the institute, holds none. */
 export function studentBranchBlocker(
   studentType: StudentType,
   branchType: BranchType,
 ): string | null {
+  if (studentType === STUDENT_TYPE.NON_IACE) {
+    return 'A Non-IACE student has no branch. Leave it blank.';
+  }
   if (studentType === STUDENT_TYPE.ONLINE && branchType !== BRANCH_TYPE.VIRTUAL) {
     return 'An online student sits in the online branch, not at a centre.';
   }

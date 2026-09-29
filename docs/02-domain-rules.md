@@ -150,6 +150,11 @@ public rollout unchanged.
   span no stage; a series is PROGRAM exactly when it carries a program code; a series is EVENT
   exactly when it carries an event. The last two are equivalences, so neither the kind without the
   column nor the column without the kind can be written.
+- **The student type decides the branch** (`studentBranchBlocker`, the one rule every writer asks —
+  the admin create and edit and the roster import). ONLINE sits in the online branch, OFFLINE at a
+  centre, and NON-IACE at none: they are outside the institute, and a branch would hand them its
+  series. An edit is judged on the pair it leaves, so switching a student to NON-IACE is refused
+  unless the same save clears their branch.
 - **A retired branch takes no new students.** Deactivating one is a service check, not a schema
   constraint: nobody new may be placed in it and nobody may be transferred into it, while the
   students already there keep the branch and everything it reaches.
@@ -169,8 +174,8 @@ public rollout unchanged.
 - **An import only adds access.** A roster uploaded again merges its courses, exams and programs
   into what each existing student already holds, as the program import appends its code; a blank
   cell takes nothing away. Access is removed on the student's own screen. Branch and student type
-  are single values and follow the sheet; a NON-IACE row may leave the branch blank, and then holds
-  none.
+  are single values and follow the sheet; a NON-IACE row leaves the branch blank and holds none, and
+  one that names a branch is refused.
 
 ## 6. Scheduling
 

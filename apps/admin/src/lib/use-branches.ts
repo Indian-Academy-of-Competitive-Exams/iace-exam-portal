@@ -38,20 +38,32 @@ export function branchesForStudentType(branches: Branch[], studentType: StudentT
   if (studentType === STUDENT_TYPE.OFFLINE) {
     return branches.filter((branch) => branch.type !== BRANCH_TYPE.VIRTUAL);
   }
-  return branches;
+  return [];
 }
 
-/** What the branch picker shows for a student type, and whether it is the student's to choose. */
-export function useBranchChoice(studentType: StudentType) {
+/** What the branch picker shows for a student type, whether it is the student's to choose, and what a Non-IACE switch drops from `heldId`. */
+export function useBranchChoice(studentType: StudentType, heldId = '') {
+  const everyBranch = useBranches();
   const branches = branchesForStudentType(useBranches({ activeOnly: true }), studentType);
-  const locked = studentType === STUDENT_TYPE.ONLINE;
 
+  if (studentType === STUDENT_TYPE.NON_IACE) {
+    return {
+      branches,
+      locked: true,
+      forcedId: null,
+      hint: 'Non-IACE students have no branch.',
+      droppedName: everyBranch.find((branch) => branch.id === heldId)?.name,
+    };
+  }
+
+  const locked = studentType === STUDENT_TYPE.ONLINE;
   return {
     branches,
     locked,
     /** The one branch a locked picker stands on — absent until a super admin creates it. */
     forcedId: locked ? branches[0]?.id : undefined,
     hint: locked ? onlineBranchHint(branches.length > 0) : undefined,
+    droppedName: undefined,
   };
 }
 

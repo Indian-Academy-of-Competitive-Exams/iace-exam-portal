@@ -252,8 +252,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     );
   });
 
-  /** A non-IACE student sits outside the institute, so neither kind of branch is the wrong answer. */
-  it('takes an online student in the online branch, and a non-IACE one in either', async () => {
+  it('takes an online student in the online branch, and a non-IACE one at none', async () => {
     const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
 
     await service.create({
@@ -261,13 +260,26 @@ describe('StudentsService.create — the type is the caller’s, never the servi
       studentType: STUDENT_TYPE.ONLINE,
       currentBranchId: ONLINE_BRANCH.id,
     });
-    await service.create({
-      mobile: '9000000013',
-      studentType: STUDENT_TYPE.NON_IACE,
-      currentBranchId: ONLINE_BRANCH.id,
-    });
+    await service.create({ mobile: '9000000013', studentType: STUDENT_TYPE.NON_IACE });
 
-    assert.equal(await prisma.student.count({ where: { currentBranchId: ONLINE_BRANCH.id } }), 2);
+    assert.equal(await prisma.student.count({ where: { currentBranchId: ONLINE_BRANCH.id } }), 1);
+    assert.equal(await prisma.student.count({ where: { currentBranchId: null } }), 1);
+  });
+
+  /** A branch reaches its series, so a non-IACE student put at one reached that centre's tests. */
+  it('refuses a non-IACE student at any branch, under the branch field', async () => {
+    const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
+
+    for (const [mobile, currentBranchId] of [
+      ['9000000014', PHYSICAL.id],
+      ['9000000015', ONLINE_BRANCH.id],
+    ] as const) {
+      await assert.rejects(
+        () => service.create({ mobile, studentType: STUDENT_TYPE.NON_IACE, currentBranchId }),
+        refusedOn('currentBranchId'),
+      );
+    }
+    assert.equal(await prisma.student.count(), 0, 'nothing was written');
   });
 
   /** An exam code the catalog does not hold would resolve to no group while the screen reports success. */
@@ -438,6 +450,49 @@ describe('StudentsService.update — the branch has to suit the type', () => {
     });
 
     assert.equal(updated.currentBranchId, ONLINE_BRANCH.id);
+  });
+
+  it('refuses a switch to non-IACE that keeps the branch, and a branch named for a non-IACE student', async () => {
+    const { service } = await serviceWith({
+      branches,
+      student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
+    });
+
+    await assert.rejects(
+      () => service.update(STUDENT, { studentType: STUDENT_TYPE.NON_IACE }),
+      refusedOn('currentBranchId'),
+    );
+    await assert.rejects(
+      () =>
+        service.update(STUDENT, {
+          studentType: STUDENT_TYPE.NON_IACE,
+          currentBranchId: ONLINE_BRANCH.id,
+        }),
+      refusedOn('currentBranchId'),
+    );
+    const unchanged = await row();
+    assert.deepEqual(
+      [unchanged.studentType, unchanged.currentBranchId],
+      [STUDENT_TYPE.OFFLINE, PHYSICAL.id],
+    );
+  });
+
+  it('takes a switch to non-IACE that clears the branch in the same save', async () => {
+    const { service } = await serviceWith({
+      branches,
+      student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
+    });
+
+    const updated = await service.update(STUDENT, {
+      studentType: STUDENT_TYPE.NON_IACE,
+      currentBranchId: null,
+    });
+
+    assert.deepEqual([updated.studentType, updated.currentBranchId], [STUDENT_TYPE.NON_IACE, null]);
+    await assert.rejects(
+      () => service.update(STUDENT, { currentBranchId: PHYSICAL.id }),
+      refusedOn('currentBranchId'),
+    );
   });
 
   /** A row stored before the rule existed must stay editable, or nobody can even correct the branch. */
