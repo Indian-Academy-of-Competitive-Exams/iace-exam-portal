@@ -29,6 +29,7 @@ import {
   servedAnswers,
   sitPaper,
   testPrisma,
+  uid,
   type Paper,
 } from './support/database';
 
@@ -284,6 +285,17 @@ describe('AttemptsService — what cannot be sat', () => {
     const { service, student, paper } = await hall({ offered: false });
 
     await assert.rejects(() => service.start(student, paper.testId, {}), /not been offered/);
+  });
+
+  /** The bug this prevents: an id nobody may sit answering differently from an id that is not a test. */
+  it('refuses an id that is no test at all exactly as it refuses one out of reach', async () => {
+    const { service, student } = await hall({ permitted: false });
+
+    await assert.rejects(
+      () => service.start(student, uid(), {}),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN,
+      'a missing test must not be distinguishable from one the student cannot reach',
+    );
   });
 
   it('lets the resolver refuse a student who cannot reach it, and writes nothing', async () => {

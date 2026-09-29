@@ -80,15 +80,19 @@ export class AttemptsService {
   ) {}
 
   async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
-    // One read of their sittings here serves both the resume below and the slot count after it.
-    const sittings = await this.prisma.attempt.findMany({
-      where: { testId, studentId },
-      orderBy: { attemptNo: 'desc' },
-    });
+    // Independent of each other and wanted on both paths below, so they go in one wave, not two.
+    const [sittings, found] = await Promise.all([
+      // One read of their sittings serves both the resume below and the slot count after it.
+      this.prisma.attempt.findMany({
+        where: { testId, studentId },
+        orderBy: { attemptNo: 'desc' },
+      }),
+      this.findTest(testId),
+    ]);
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = sittings.find((row) => row.status === LIVE) ?? null;
     if (live && (input.resume === undefined || live.id === input.resume)) {
-      const test = await this.requireTest(testId);
+      const test = requireFound(found);
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
       const endsAt = await this.state.resume(opened(live, test), input.tab);
       // Durable too, or the sweeper would judge a resumed sitting by the deadline it walked away from.
@@ -100,9 +104,10 @@ export class AttemptsService {
     // A reclaim of a sitting handed in elsewhere must land on its result, not on a fresh paper.
     if (input.resume !== undefined) throw new AppException(ErrorCodes.SITTING_ENDED);
 
+    // Still the FIRST refusal, so a test that does not exist reads the same as one they cannot reach.
     await this.access.assertCanStart(studentId, testId);
 
-    const test = this.assertSittable(await this.requireTest(testId));
+    const test = this.assertSittable(requireFound(found));
 
     // Read, not counted: a paper may be sat any number of times, and the VOID ones still matter.
     const slots = slotsAfter(sittings.filter((row) => row.status !== LIVE));
@@ -170,13 +175,8 @@ export class AttemptsService {
     });
   }
 
-  private async requireTest(testId: string): Promise<SittableTest> {
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      include: SITTABLE_INCLUDE,
-    });
-    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-    return test;
+  private findTest(testId: string): Promise<SittableTest | null> {
+    return this.prisma.test.findUnique({ where: { id: testId }, include: SITTABLE_INCLUDE });
   }
 
   private assertSittable(test: SittableTest): SittableTest {
@@ -184,6 +184,12 @@ export class AttemptsService {
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
     return test;
   }
+}
+
+/** Pure, so the read can be hoisted into the parallel wave while the refusal stays in its order. */
+function requireFound(test: SittableTest | null): SittableTest {
+  if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+  return test;
 }
 
 type AttemptRow = Prisma.AttemptGetPayload<object>;
