@@ -408,8 +408,8 @@ describe('the trend across every test a student has sat', () => {
     assert.equal(trend.testsSat, 2);
     assert.equal(trend.points[0]?.accuracy, 50);
     const card = await reports().scoreCard(recent.studentId, old.id);
-    assert.equal(trend.sittings[0]?.maxMarks, card.maxMarks);
-    assert.equal(trend.sittings[0]?.percentage, card.percentage);
+    assert.equal(trend.sittings?.[0]?.maxMarks, card.maxMarks);
+    assert.equal(trend.sittings?.[0]?.percentage, card.percentage);
   });
 
   it('plots each sitting at its standing now, a retake at none, and nobody else’s', async () => {
@@ -487,7 +487,7 @@ describe('the trend across every test a student has sat', () => {
 
     assert.equal(trend.points.length, 20);
     assert.deepEqual(
-      trend.sittings.map((sitting) => [sitting.attemptId, sitting.score]),
+      trend.sittings?.map((sitting) => [sitting.attemptId, sitting.score]),
       sittings.map((attemptId, day) => [attemptId, day]),
     );
   });

@@ -636,7 +636,7 @@ export const performanceTrendSchema = z.object({
   testsSat: z.number().int(),
   /** The newest twenty at their standing now: a chart, never the list of what was sat. */
   points: z.array(performancePointSchema),
-  /** Every evaluated sitting, oldest first: what a tile, a picker or a paper's history reads. */
-  sittings: z.array(satSittingSchema),
+  /** Every evaluated sitting, oldest first: what a tile, a picker or a paper's history reads. Absent from an API older than the client. */
+  sittings: z.array(satSittingSchema).optional(),
 });
 export type PerformanceTrend = z.infer<typeof performanceTrendSchema>;

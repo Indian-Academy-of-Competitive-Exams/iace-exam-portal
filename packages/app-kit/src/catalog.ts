@@ -107,7 +107,7 @@ export const averageAccuracy = (points: readonly { accuracy: number }[]) => {
 /** Every sitting, oldest first, with the standing the chart counted; one older than the chart reads unranked. */
 export function everySitting(trend: PerformanceTrend | undefined): PerformancePoint[] {
   const plotted = new Map(trend?.points.map((point) => [point.attemptId, point]));
-  return (trend?.sittings ?? []).map(
+  return (trend?.sittings ?? trend?.points ?? []).map(
     (sitting) => plotted.get(sitting.attemptId) ?? { ...sitting, rank: null, percentile: null },
   );
 }
