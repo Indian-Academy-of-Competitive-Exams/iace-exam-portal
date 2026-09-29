@@ -114,7 +114,7 @@ export class AuthoringController {
     @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AuthoringSaveResult> {
-    return this.authoring.update(id, body, user.id);
+    return this.authoring.update(id, body, user.id, user.isSuperAdmin);
   }
 
   /** The typist's own mistake, taken back. `questions.remove` still refuses anything in use. */

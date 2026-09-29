@@ -238,6 +238,43 @@ describe('AuthoringService — after Done', () => {
   });
 });
 
+describe('AuthoringService — a typist the section passed on from', () => {
+  /** The failure this prevents: a replaced typist rewriting or deleting what the section's new typist now holds. */
+  it('refuses the replaced typist’s edit and delete, and lets the active typist work', async () => {
+    const authoring = await build();
+    const earlier = await makeAssignment(MINE);
+    const typed = randomUUID();
+    await makeBankQuestion(prisma, { id: typed, subjectId: BANK.QUANT, createdById: MINE });
+    await prisma.question.update({ where: { id: typed }, data: { assignmentId: earlier.id } });
+    const replaced = await prisma.questionAssignment.update({
+      where: { id: earlier.id },
+      data: { replacedAt: new Date() },
+    });
+    const now = await prisma.questionAssignment.create({
+      data: {
+        id: uid(),
+        testId: replaced.testId,
+        baseConfigId: replaced.baseConfigId,
+        baseConfigSectionId: replaced.baseConfigSectionId,
+        assigneeId: THEIRS,
+        role: ASSIGNMENT_ROLES.TYPIST,
+      },
+      select: { id: true },
+    });
+
+    await assert.rejects(
+      () => authoring.update(typed, draft({ stem: { en: 'Changed after passing on' } }), MINE),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    await assert.rejects(() => authoring.remove(typed, MINE), refusedWith(ErrorCodes.FORBIDDEN));
+    assert.equal(await prisma.question.count({ where: { id: typed } }), 1);
+
+    const { question } = await authoring.create(draft(), THEIRS, now.id);
+    const fixed = await authoring.update(question.id, draft({ stem: { en: 'Fixed' } }), THEIRS);
+    assert.equal(fixed.question.id, question.id);
+  });
+});
+
 describe('AuthoringService.remove', () => {
   /** Typing twenty-five for a target of twenty and dropping five is the point of this. */
   it('deletes a question the caller wrote', async () => {

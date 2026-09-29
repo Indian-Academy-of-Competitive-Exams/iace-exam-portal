@@ -49,9 +49,16 @@ export class AuthoringService {
     return { question };
   }
 
-  async update(id: string, draft: QuestionDraft, adminId: string): Promise<AuthoringSaveResult> {
+  async update(
+    id: string,
+    draft: QuestionDraft,
+    adminId: string,
+    isSuperAdmin = false,
+  ): Promise<AuthoringSaveResult> {
     const section = await this.assertTheirs(id, adminId);
-    if (section) await assertTypistMayEdit(this.prisma, section, id);
+    if (section) {
+      await assertTypistMayEdit(this.prisma, section, id, { id: adminId, isSuperAdmin });
+    }
     await this.claimSection(section, adminId, false);
     const question = await this.questions.update(id, draft, adminId);
     return { question };
@@ -69,6 +76,9 @@ export class AuthoringService {
       select: { assignment: { select: { testId: true, baseConfigSectionId: true } } },
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+    if (row.assignment && !isSuperAdmin) {
+      await assertTypistMayEdit(this.prisma, row.assignment, id, { id: adminId, isSuperAdmin });
+    }
 
     await this.claimSection(row.assignment, adminId, isSuperAdmin);
     await this.questions.remove(id);

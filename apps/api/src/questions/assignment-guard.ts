@@ -13,6 +13,8 @@ const NOTHING_TO_TYPE_MESSAGE =
   'This test is picked from the bank, so its sections are not typed. Fix what is sent back to you.';
 const SENT_BACK_ONLY_MESSAGE =
   'You have marked this section done, so only a question sent back to you can change now.';
+const PASSED_ON_MESSAGE =
+  'This section has passed to another typist, so its questions are no longer yours to change.';
 
 /** A typing job the caller still holds open — unless a super admin, who takes up a section nobody holds. */
 export async function requireOwnAssignment(
@@ -44,16 +46,20 @@ export async function requireOwnAssignment(
   return { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
 }
 
-/** Before Done a typist fixes anything they wrote; after it, only what the reader sent back. */
+/** Only the section's typist now: before Done they fix anything they wrote; after it, only what was sent back. */
 export async function assertTypistMayEdit(
   prisma: PrismaService,
   section: SectionRef,
   questionId: string,
+  caller: { id: string; isSuperAdmin: boolean },
 ): Promise<void> {
   const typing = await prisma.questionAssignment.findFirst({
     where: { ...section, role: ASSIGNMENT_ROLES.TYPIST, replacedAt: null },
-    select: { finalizedAt: true },
+    select: { assigneeId: true, finalizedAt: true },
   });
+  if (!caller.isSuperAdmin && typing?.assigneeId !== caller.id) {
+    throw new AppException(ErrorCodes.FORBIDDEN, PASSED_ON_MESSAGE);
+  }
   if (!typing?.finalizedAt) return;
   const sentBack = await prisma.questionReview.count({
     where: { testId: section.testId, questionId, sentBackAt: { not: null }, fixedAt: null },
