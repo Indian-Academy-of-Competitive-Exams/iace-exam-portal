@@ -80,7 +80,7 @@ export class MeService {
     const key = documentKey(studentId, kind, contentType, Date.now());
     await this.storage.upload(key, file.buffer, contentType);
 
-    // The write — and the `profileCompleted` recompute that has to go with it — belongs to the module that owns the table.
+    // The write belongs to the module that owns the table.
     await this.students.saveDocumentKey(studentId, columnFor(kind), key);
 
     // The path is `documents/:kind`, not `:id` — the interceptor's id fallback has no path param to find here, so the entity has to be named explicitly.

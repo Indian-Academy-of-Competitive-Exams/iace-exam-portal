@@ -27,6 +27,7 @@ import {
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { pageArgs, paged } from '../common/pagination';
+import { isRecordNotFound } from '../common/prisma-errors';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { StartingPinService } from '../auth';
@@ -407,14 +408,17 @@ export class StudentsService {
     return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
 
-  /** Points a profile at a stored document. */
+  /** Points a profile at a stored document; a student who is not there is refused by the write itself. */
   async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
-    await this.assertExists(id);
-
-    await this.prisma.student.update({
-      where: { id },
-      data: { profile: { upsert: { create: { [column]: key }, update: { [column]: key } } } },
-    });
+    try {
+      await this.prisma.student.update({
+        where: { id },
+        data: { profile: { upsert: { create: { [column]: key }, update: { [column]: key } } } },
+      });
+    } catch (error) {
+      if (isRecordNotFound(error)) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+      throw error;
+    }
   }
 
   /** Deactivation is reversible and keeps history; there is no hard delete. */
