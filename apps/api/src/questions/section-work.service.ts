@@ -13,8 +13,6 @@ import {
   type AdminAuthority,
   type Assignment,
   type DifficultyLevel,
-  type DifficultyMix,
-  type DrawSpec,
   type LocalizedContent,
   type PaperSource,
   type QuestionDetail,
@@ -52,7 +50,6 @@ interface Context {
     title: string | null;
     paperSource: PaperSource;
     finalizedAt: Date | null;
-    questionPoolFilter: Prisma.JsonValue;
   };
   section: { name: string; questionCount: number; subjectId: string | null };
   rows: Assignment[];
@@ -141,7 +138,6 @@ export class SectionWorkService {
       testTitle: context.test.title,
       paperSource: context.test.paperSource,
       questionCount: context.section.questionCount,
-      sectionMix: mixOf(context.test.questionPoolFilter, pair.baseConfigSectionId),
       sectionSubjectId: context.section.subjectId,
       offered: context.test.finalizedAt !== null,
       typist: context.typist,
@@ -150,7 +146,6 @@ export class SectionWorkService {
       seat: context.seat,
       seatAssignmentId: context.mine?.id ?? null,
       seatReplaced: context.mine?.replacedAt !== null && context.mine !== null,
-      ownerWrites: context.ownerWrites,
       questions: scoped.map((question): SectionQuestion => ({
         questionId: question.id,
         preview: question.preview,
@@ -322,7 +317,6 @@ export class SectionWorkService {
         baseConfigId: true,
         paperSource: true,
         finalizedAt: true,
-        questionPoolFilter: true,
       },
     });
     const section = test
@@ -483,10 +477,4 @@ function withOwner(context: Context): boolean {
   const { reader } = context;
   if (reader?.finalizedAt) return true;
   return context.test.paperSource === PAPER_SOURCES.PICKED && !reader?.handedAt;
-}
-
-/** Absent means the section draws every difficulty, not zero of each — never defaulted here. */
-function mixOf(questionPoolFilter: Prisma.JsonValue, sectionId: string): DifficultyMix | null {
-  const spec = questionPoolFilter as DrawSpec | null;
-  return spec?.sections?.[sectionId]?.mix ?? null;
 }

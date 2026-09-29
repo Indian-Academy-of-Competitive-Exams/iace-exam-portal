@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { assignmentSchema } from './assignments';
 import { difficultyLevelSchema } from './questions';
-import { difficultyMixSchema, paperSourceSchema } from './tests';
+import { paperSourceSchema } from './tests';
 
 /** One section as its typist, proof-reader or test owner works on it; `editable` is the server's call. */
 
@@ -65,7 +65,6 @@ export const sectionWorkSchema = z.object({
   testTitle: z.string().nullable(),
   paperSource: paperSourceSchema,
   questionCount: z.number().int(),
-  sectionMix: difficultyMixSchema.nullable(),
   sectionSubjectId: z.string().nullable(),
   /** The test has been offered: its paper no longer moves, and nobody but a super admin edits. */
   offered: z.boolean(),
@@ -77,8 +76,6 @@ export const sectionWorkSchema = z.object({
   /** The viewer's own row, when their seat is one; replaced means they only read now. */
   seatAssignmentId: z.string().nullable(),
   seatReplaced: z.boolean(),
-  /** The viewer may write as the test's owner (TEST_MANAGEMENT at write, or a super admin). */
-  ownerWrites: z.boolean(),
   questions: sectionQuestionSchema.array(),
 });
 export type SectionWork = z.infer<typeof sectionWorkSchema>;
