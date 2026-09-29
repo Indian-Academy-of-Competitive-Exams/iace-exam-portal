@@ -11,7 +11,7 @@ import {
   studentListQuerySchema,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { MESSAGE_KINDS } from '../src/common/messaging';
@@ -22,7 +22,6 @@ import {
   FakeCodeCatalog,
   FakeEventBus,
   FakeMessageSender,
-  FakeQueue,
   fakeStartingPins,
 } from '../test/support/fakes';
 import {
@@ -109,7 +108,7 @@ async function serviceWith(over: Bench = {}) {
       programs.asService(),
       auditContext,
       events.asService(),
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
     ),
   };
 }

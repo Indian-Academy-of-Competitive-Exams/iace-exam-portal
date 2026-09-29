@@ -4,13 +4,13 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { DOCUMENT_KINDS } from '@iace/contracts';
 import { type AccessResolverService } from '../src/access';
 import { AuditContext } from '../src/audit';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
 import { MeService } from '../src/me/me.service';
 import { type StorageService } from '../src/storage/storage.service';
 import { StudentsService } from '../src/students/students.service';
-import { FakeCodeCatalog, FakeEventBus, FakeQueue, fakeStartingPins } from '../test/support/fakes';
+import { FakeCodeCatalog, FakeEventBus, fakeStartingPins } from '../test/support/fakes';
 import { jpegBytes } from '../test/support/image-bytes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
@@ -46,7 +46,7 @@ async function build(over: { fullName?: string; motherName?: string | null } = {
     new FakeCodeCatalog().asService(),
     auditContext,
     new FakeEventBus().asService(),
-    new NotificationOutbox(new FakeQueue().asQueue()),
+    new NotificationsService(prisma),
   );
   const me = new MeService(students, storage, {} as AccessResolverService, auditContext);
   /** Runs the edit inside a live AuditContext and hands back what the interceptor would read. */

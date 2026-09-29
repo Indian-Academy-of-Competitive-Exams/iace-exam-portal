@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { DeliveryChannel, DeliveryStatus } from '@prisma/client';
+import { DeliveryChannel, DeliveryStatus, type Prisma } from '@prisma/client';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
 import {
   DELIVERY_STALE_AFTER_MS,
@@ -30,6 +30,18 @@ const service = new NotificationsService(prisma);
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
+/** A written notification with its first paid channel booked, the state the push sweep leaves it in. */
+async function booked(
+  notification: Prisma.NotificationUncheckedCreateInput,
+  channel: PaidChannel = DeliveryChannel.WHATSAPP,
+): Promise<string> {
+  const row = await prisma.notification.create({ data: notification });
+  const delivery = await prisma.notificationDelivery.create({
+    data: { notificationId: row.id, channel },
+  });
+  return delivery.id;
+}
+
 /** Every send is an announcement's: its `paidChannels` is the only place a fallback reads a chain. */
 async function build(
   escalate: PaidChannel[] = [DeliveryChannel.WHATSAPP],
@@ -46,15 +58,16 @@ async function build(
   );
   const student = await makeStudent(prisma, { mobile: MOBILE });
   const announcement = await makeAnnouncement(prisma, escalate);
-  await service.create({
-    studentId: student.id,
-    type: NOTIFICATION_TYPE.GENERIC,
-    title: 'Something happened',
-    announcementId: announcement.id,
-    escalate,
-  });
-  const [booked] = await prisma.notificationDelivery.findMany();
-  return { queue, sender, processor, deliveryId: booked?.id ?? '' };
+  const deliveryId = await booked(
+    {
+      studentId: student.id,
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: 'Something happened',
+      announcementId: announcement.id,
+    },
+    escalate[0],
+  );
+  return { queue, sender, processor, deliveryId };
 }
 
 const deliveryRow = (id: string) =>
@@ -94,17 +107,15 @@ describe('Spending on a notification', () => {
       fakeQueueFailures(),
     );
     const gone = await makeStudent(prisma, { deletedAt: new Date() });
-    await service.create({
+    const deliveryId = await booked({
       studentId: gone.id,
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
-      escalate: [DeliveryChannel.WHATSAPP],
     });
-    const [booked] = await prisma.notificationDelivery.findMany();
 
-    await processor.deliver(booked?.id ?? '', 1);
+    await processor.deliver(deliveryId, 1);
 
-    const row = await deliveryRow(booked?.id ?? '');
+    const row = await deliveryRow(deliveryId);
     assert.equal(row.status, DeliveryStatus.SKIPPED);
     assert.equal(row.skipReason, 'NO_CONTACT');
   });
@@ -207,17 +218,15 @@ describe('A channel with no template registered', () => {
       fakeQueueFailures(),
     );
     const student = await makeStudent(prisma, { mobile: MOBILE });
-    await service.create({
+    const deliveryId = await booked({
       studentId: student.id,
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
-      escalate: [DeliveryChannel.WHATSAPP],
     });
-    const [booked] = await prisma.notificationDelivery.findMany();
 
-    await processor.deliver(booked?.id ?? '', 1);
+    await processor.deliver(deliveryId, 1);
 
-    const row = await deliveryRow(booked?.id ?? '');
+    const row = await deliveryRow(deliveryId);
     assert.equal(row.status, DeliveryStatus.SKIPPED);
     assert.equal(row.skipReason, 'NO_TEMPLATE');
   });

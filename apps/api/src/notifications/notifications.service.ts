@@ -9,18 +9,7 @@ import {
   type Paginated,
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
-import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
-import { isUniqueViolation } from '../common/prisma-errors';
-import { firstChannelFor, type PaidChannel } from './notification-policy';
-
-/** What a pass hands the push sender: the row's own columns, never the intent behind it. */
-export interface WrittenNotification {
-  id: string;
-  /** Null on an admin-side notification, which no student is pushed about. */
-  studentId: string | null;
-  type: NotificationType;
-  title: string;
-}
+import { PrismaService } from '../prisma/prisma.service';
 
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
 export interface NewNotification {
@@ -34,8 +23,6 @@ export interface NewNotification {
   dedupeKey?: string;
   /** The announcement this belongs to. Its paidChannels become this message's fallback chain. */
   announcementId?: string;
-  /** Overrides the policy's chain — what an admin chose to spend on this one send. */
-  escalate?: readonly PaidChannel[];
   /** When this stops being actionable. Given one, escalation stops waiting as it approaches. */
   actBy?: Date;
   testId?: string;
@@ -58,48 +45,10 @@ interface NotificationColumns {
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Books what policy allows to be spent; idempotent on dedupeKey so the outbox may redeliver. */
-  async create(input: NewNotification): Promise<Notification & { inserted: boolean }> {
-    try {
-      const row = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.notification.create({ data: toRow(input) });
-
-        // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
-        const channel = firstChannelFor(input.escalate);
-        if (channel) {
-          await tx.notificationDelivery.create({ data: { notificationId: created.id, channel } });
-        }
-        return created;
-      }, TX_LIMITS.SHORT);
-
-      return { ...toNotification(row), inserted: true };
-    } catch (error) {
-      const already = isUniqueViolation(error) ? await this.byDedupeKey(input) : null;
-      if (!already) throw error;
-
-      return { ...toNotification(already), inserted: false };
-    }
-  }
-
-  /** A page at once, for the hall's worth of results one pass claims. Nothing here buys a channel. */
-  async createMany(inputs: readonly NewNotification[]): Promise<WrittenNotification[]> {
-    if (inputs.length === 0) return [];
-
-    // skipDuplicates on the dedupe key is what makes a redelivered page land once.
-    return this.prisma.notification.createManyAndReturn({
-      data: inputs.map(toRow),
-      skipDuplicates: true,
-      select: { id: true, studentId: true, type: true, title: true },
-    });
-  }
-
-  /** Only ever reached after a unique violation, so the row it looks for is already there. */
-  private async byDedupeKey(input: NewNotification): Promise<NotificationColumns | null> {
-    if (!input.dedupeKey) return null;
-
-    return this.prisma.notification.findFirst({
-      where: { studentId: input.studentId, dedupeKey: input.dedupeKey },
-    });
+  /** Written with the caller's transaction, so the fact and the bell row commit together; the push sweep finds it after. */
+  async tell(db: Prisma.TransactionClient, ...inputs: readonly NewNotification[]): Promise<void> {
+    // skipDuplicates on the dedupe key is what makes a replayed fact land once.
+    await db.notification.createMany({ data: inputs.map(toRow), skipDuplicates: true });
   }
 
   /** Null for a student who has been anonymised or removed — nothing to text, and nothing wrong. */
@@ -157,7 +106,6 @@ function toNotification(row: NotificationColumns): Notification {
   };
 }
 
-/** One mapping for both writers, so a page and a single row can never disagree about a column. */
 function toRow(input: NewNotification): Prisma.NotificationCreateManyInput {
   return {
     studentId: input.studentId,

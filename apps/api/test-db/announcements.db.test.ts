@@ -9,8 +9,8 @@ import {
 } from '@iace/contracts';
 import { DeliveryChannel } from '@prisma/client';
 import { AnnouncementsService } from '../src/notifications/announcements.service';
-import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
-import { FakeConfig, FakeQueue } from '../test/support/fakes';
+import { NotificationsService } from '../src/notifications/notifications.service';
+import { FakeConfig } from '../test/support/fakes';
 import {
   makeAdmin,
   makeAnnouncement,
@@ -37,7 +37,7 @@ const service = new AnnouncementsService(
     NOTIFICATION_COST_SMS_PAISE: 18,
     NOTIFICATION_MAX_RECIPIENTS: 10,
   }).asService(),
-  new NotificationOutbox(new FakeQueue().asQueue()),
+  new NotificationsService(prisma),
 );
 
 /** One branch of `students`, and an admin to send as. Parsed through the real schema's defaults. */
@@ -59,8 +59,7 @@ async function branchOf(students = 3) {
   return { admin, roster, audience, draft };
 }
 
-const requestsWritten = () =>
-  prisma.outboxEvent.findMany({ where: { eventType: NOTIFICATION_REQUEST.EVENT_TYPE } });
+const messagesWritten = () => prisma.notification.findMany();
 
 describe('Pricing an announcement before it is sent', () => {
   it('costs nothing when it is in-app only', async () => {
@@ -95,13 +94,13 @@ describe('Pricing an announcement before it is sent', () => {
 });
 
 describe('Sending an announcement', () => {
-  it('writes the record and one request per recipient, together', async () => {
+  it('writes the record and one message per recipient, together', async () => {
     const { admin, draft } = await branchOf();
 
     await service.send(draft(), admin.id);
 
     assert.equal(await prisma.announcement.count(), 1);
-    assert.equal((await requestsWritten()).length, 3, 'one request per student in the cohort');
+    assert.equal((await messagesWritten()).length, 3, 'one message per student in the cohort');
   });
 
   /** The failure this prevents: a mistargeted broadcast becoming an invoice instead of an error. */
@@ -122,18 +121,16 @@ describe('Sending an announcement', () => {
   });
 
   /** What the admin chose to spend on IS the fallback chain for every message in the send. */
-  it('carries the chosen channels onto every request', async () => {
+  it('ties every message to the send whose channels are its chain', async () => {
     const { admin, draft } = await branchOf(2);
 
     const sent = await service.send(draft(['WHATSAPP', 'SMS']), admin.id);
 
-    const requests = await requestsWritten();
-    assert.equal(requests.length, 2);
-    for (const event of requests) {
-      const payload = event.payload as { escalate?: string[]; announcementId?: string };
-      assert.deepEqual(payload.escalate, ['WHATSAPP', 'SMS']);
-      assert.equal(payload.announcementId, sent.id);
-    }
+    const messages = await messagesWritten();
+    assert.equal(messages.length, 2);
+    assert.ok(messages.every((message) => message.announcementId === sent.id));
+    const chain = await prisma.announcement.findUniqueOrThrow({ where: { id: sent.id } });
+    assert.deepEqual(chain.paidChannels, ['WHATSAPP', 'SMS']);
   });
 });
 

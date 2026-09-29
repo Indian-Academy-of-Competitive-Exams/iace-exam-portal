@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { DeliveryChannel } from '@prisma/client';
 import { AppException, ErrorCodes, NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import {
@@ -11,7 +10,7 @@ import {
   testPrisma,
 } from './support/database';
 
-/** A notification is written from a durable request, so the guarantee is one row per fact. */
+/** A notification is written with the fact it tells of, so the guarantee is one row per fact. */
 
 const PAGE = { page: 1, pageSize: 20, unreadOnly: undefined };
 
@@ -89,74 +88,57 @@ describe('NotificationsService — one student’s own bell', () => {
     const student = await makeStudent(prisma);
     const { testSeriesId } = await makeCatalog(prisma);
 
-    const created = await service.create({
+    await service.tell(prisma, {
       studentId: student.id,
       type: NOTIFICATION_TYPE.GRANT_ADDED,
       title: 'A test series was added to your account',
       testSeriesId,
     });
 
+    const [created] = (await service.list(student.id, PAGE)).items;
+    assert.ok(created);
     assert.equal(typeof created.createdAt, 'string');
     assert.equal(created.body, null);
     assert.equal(created.testId, null);
   });
 });
 
-describe('Writing a notification books what may be spent on it', () => {
-  /** No IN_APP row either: the notification itself IS that delivery, and mirroring it doubles the table. */
-  it('books nothing at all for any kind, because no kind pays by default', async () => {
+describe('Telling a student', () => {
+  /** No delivery row either: the notification itself IS the in-app delivery, and paying is a per-send choice. */
+  it('writes the row they read at once, for every kind, booking nothing', async () => {
     const student = await makeStudent(prisma);
 
     for (const type of Object.values(NOTIFICATION_TYPE)) {
-      await service.create({ studentId: student.id, type, title: 'Something happened' });
+      await service.tell(prisma, { studentId: student.id, type, title: 'Something happened' });
     }
 
-    assert.equal(await prisma.notification.count(), Object.values(NOTIFICATION_TYPE).length);
     assert.equal(
-      await prisma.notificationDelivery.count(),
-      0,
-      'in-app first: paying is a per-send decision',
+      (await service.list(student.id, PAGE)).total,
+      Object.values(NOTIFICATION_TYPE).length,
     );
+    assert.equal(await prisma.notificationDelivery.count(), 0);
   });
 
-  /** The one way money is spent now: an admin chose it for this send, and the chain is honoured. */
-  it('books the channel an override leads with', async () => {
+  /** The failure this prevents: a student told of a grant, a result or an enrolment that never committed. */
+  it('commits or rolls back with the write that caused it', async () => {
     const student = await makeStudent(prisma);
 
-    await service.create({
-      studentId: student.id,
-      type: NOTIFICATION_TYPE.GENERIC,
-      title: 'Branch closed tomorrow',
-      escalate: [DeliveryChannel.WHATSAPP],
-    });
-
-    const booked = await prisma.notificationDelivery.findMany();
-    assert.deepEqual(
-      booked.map((delivery) => delivery.channel),
-      [DeliveryChannel.WHATSAPP],
+    await assert.rejects(
+      prisma.$transaction(async (tx) => {
+        await service.tell(tx, {
+          studentId: student.id,
+          type: NOTIFICATION_TYPE.GRANT_ADDED,
+          title: 'A test series was added to your account',
+        });
+        throw new Error('the grant failed');
+      }),
+      /the grant failed/,
     );
+
+    assert.equal(await prisma.notification.count(), 0);
   });
 
-  /** The escalate list is a FALLBACK chain: booking it all at once would buy both messages. */
-  it('books only the first of a chain, never the whole of it', async () => {
-    const student = await makeStudent(prisma);
-
-    await service.create({
-      studentId: student.id,
-      type: NOTIFICATION_TYPE.GENERIC,
-      title: 'Branch closed tomorrow',
-      escalate: [DeliveryChannel.WHATSAPP, DeliveryChannel.SMS],
-    });
-
-    const booked = await prisma.notificationDelivery.findMany();
-    assert.deepEqual(
-      booked.map((delivery) => delivery.channel),
-      [DeliveryChannel.WHATSAPP],
-      'SMS is what WhatsApp falls back TO, not something sent beside it',
-    );
-  });
-
-  /** What makes the outbox safe to redeliver: the loser reads back the row it lost to. */
+  /** What makes a replayed fact harmless: a re-scored sitting does not ring the bell twice. */
   it('writes one row when the same fact arrives twice', async () => {
     const student = await makeStudent(prisma);
     const fact = {
@@ -164,19 +146,12 @@ describe('Writing a notification books what may be spent on it', () => {
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
       dedupeKey: 'result:att_1',
-      escalate: [DeliveryChannel.WHATSAPP],
     };
 
-    const first = await service.create(fact);
-    const second = await service.create(fact);
+    await service.tell(prisma, fact);
+    await service.tell(prisma, fact);
 
     assert.equal(await prisma.notification.count(), 1);
-    assert.equal(second.id, first.id, 'the redelivery reads back the row it lost to');
-    assert.equal(
-      await prisma.notificationDelivery.count(),
-      1,
-      'and does not book a second paid message',
-    );
   });
 
   /** An ad-hoc announcement has no natural key, so saying it twice must remain possible. */
@@ -188,8 +163,8 @@ describe('Writing a notification books what may be spent on it', () => {
       title: 'Branch closed tomorrow',
     };
 
-    await service.create(adHoc);
-    await service.create(adHoc);
+    await service.tell(prisma, adHoc);
+    await service.tell(prisma, adHoc);
 
     assert.equal(await prisma.notification.count(), 2);
   });

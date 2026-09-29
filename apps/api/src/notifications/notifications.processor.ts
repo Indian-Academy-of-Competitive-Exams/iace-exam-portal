@@ -1,13 +1,14 @@
 /**
- * Turns a relayed request into the row a student reads, and books whatever the policy allows to
- * be spent reaching them. Re-reads the outbox row rather than trusting the job, so a redelivery
- * cannot send what an older payload said.
+ * Pushes what producers have written. A producer writes the bell row inside its own transaction;
+ * this sweep claims the rows nobody has pushed yet, books the paid chain an announcement chose,
+ * queues it behind the grace window, and only then pushes — the free channel is best effort.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job, type Queue } from 'bullmq';
 import { DeliveryStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { type NotificationType } from '@iace/contracts';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import {
   NOTIFICATION_JOBS,
   RELAY_BATCH,
@@ -16,36 +17,39 @@ import {
   keyedJob,
   notificationDeliveryJobId,
   type NotificationDeliveryJobData,
-  type NotificationJobData,
 } from '../queue/queues';
-import { NotificationsService, type WrittenNotification } from './notifications.service';
-import { PAID_CHANNELS, escalationFor } from './notification-policy';
+import {
+  PAID_CHANNELS,
+  escalationFor,
+  firstChannelFor,
+  type PaidChannel,
+} from './notification-policy';
 import { PushService } from './push.service';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { TestOpeningService } from './test-opening.service';
-import {
-  NOTIFICATION_REQUEST,
-  NotificationOutbox,
-  parseIntent,
-  type NotificationIntent,
-} from './notification-outbox';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { MS_PER_SECOND } from '../common/time/units';
 
 /** A bound on one pass, so a backlog is drained by several jobs rather than one that never ends. */
-const WRITE_PAGES_PER_PASS = 25;
+const PUSH_PAGES_PER_PASS = 25;
+
+/** A claimed row, with the chain its announcement chose beside it — empty for everything else. */
+interface Claimed {
+  id: string;
+  studentId: string | null;
+  type: NotificationType;
+  title: string;
+  actBy: Date | null;
+  paidChannels: PaidChannel[] | null;
+}
 
 @Injectable()
 @Processor(QUEUE_NAMES.NOTIFICATIONS, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.NOTIFICATIONS].concurrency,
 })
 export class NotificationsProcessor extends WorkerHost {
-  private readonly logger = new Logger(NotificationsProcessor.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
-    private readonly outbox: NotificationOutbox,
     private readonly push: PushService,
     private readonly openings: TestOpeningService,
     private readonly deliveryRepair: NotificationDeliveryProcessor,
@@ -66,83 +70,34 @@ export class NotificationsProcessor extends WorkerHost {
     this.failures.connectionError(QUEUE_NAMES.NOTIFICATIONS, error);
   }
 
-  async process(job: Job<NotificationJobData>): Promise<void> {
-    if (job.name === NOTIFICATION_JOBS.SWEEP) {
-      await this.outbox.relay();
-      await this.deliveryRepair.repairStalled();
-      return;
-    }
+  async process(job: Job): Promise<void> {
     if (job.name === NOTIFICATION_JOBS.TESTS_OPENED) {
       await this.openings.sweep();
       return;
     }
-    // WRITE is a job queued before this deploy: drained as a pass, which claims its row anyway.
-    await this.writePending();
+    // The sweep, or a write job queued before this deploy: either way the rows are already written.
+    await this.pushPending();
+    if (job.name === NOTIFICATION_JOBS.SWEEP) await this.deliveryRepair.repairStalled();
   }
 
   /** One pass drains what it finds: a page at a time, so a backlog does not wait out a sweep each. */
-  async writePending(): Promise<number> {
-    let written = 0;
-    for (let page = 0; page < WRITE_PAGES_PER_PASS; page += 1) {
-      const claimed = await this.writePage();
-      written += claimed;
+  async pushPending(): Promise<number> {
+    let pushed = 0;
+    for (let page = 0; page < PUSH_PAGES_PER_PASS; page += 1) {
+      const claimed = await this.pushPage();
+      pushed += claimed;
       if (claimed < RELAY_BATCH) break;
     }
-    return written;
+    return pushed;
   }
 
-  /** One page: written, then marked processed — a replay skips the push for a row it did not insert. */
-  private async writePage(): Promise<number> {
-    const rows = await this.prisma.outboxEvent.findMany({
-      where: { eventType: NOTIFICATION_REQUEST.EVENT_TYPE, processedAt: null },
-      orderBy: { createdAt: 'asc' },
-      take: RELAY_BATCH,
-      select: { id: true, payload: true },
-    });
+  private async pushPage(): Promise<number> {
+    const rows = await this.claimPage();
     if (rows.length === 0) return 0;
 
-    const unreadable = rows.filter((row) => parseIntent(row.payload) === null).map((row) => row.id);
-    if (unreadable.length > 0) {
-      // Marked with the page: a request nothing can act on would block every request behind it.
-      this.logger.error(`Notification requests carry no usable intent: ${unreadable.join(', ')}`);
-    }
-
-    const intents = rows
-      .map((row) => parseIntent(row.payload))
-      .filter((intent): intent is NotificationIntent => intent !== null);
-
-    // A paid send is an admin's, rare, and walks a fallback chain — it keeps the one-at-a-time path.
-    for (const intent of intents.filter((intent) => (intent.escalate?.length ?? 0) > 0)) {
-      await this.writeOne(intent);
-    }
-    const free = intents.filter((intent) => (intent.escalate?.length ?? 0) === 0);
-    await this.pushAll(await this.notifications.createMany(free));
-
-    await this.prisma.outboxEvent.updateMany({
-      where: { id: { in: rows.map((row) => row.id) } },
-      data: { processedAt: new Date() },
-    });
-    return rows.length;
-  }
-
-  /** The chain a paid send walks needs its own booked row, so this one is written on its own. */
-  private async writeOne(intent: NotificationIntent): Promise<void> {
-    const written = await this.notifications.create(intent);
-    // A row this pass did not insert was already pushed by whichever pass did — pushing again is the bug.
-    if (written.inserted) {
-      await this.push.deliver({
-        notificationId: written.id,
-        studentId: intent.studentId,
-        type: intent.type,
-        title: intent.title,
-      });
-    }
-    await this.schedule(written.id, intent);
-  }
-
-  private async pushAll(written: readonly WrittenNotification[]): Promise<void> {
+    await this.schedule(rows);
     await this.push.deliverAll(
-      written.flatMap((row) =>
+      rows.flatMap((row) =>
         row.studentId === null
           ? []
           : [
@@ -155,25 +110,63 @@ export class NotificationsProcessor extends WorkerHost {
             ],
       ),
     );
+    return rows.length;
+  }
+
+  /** Claimed and booked together, so a row is never pushed twice nor left with its paid chain unbooked. */
+  private claimPage(): Promise<Claimed[]> {
+    return this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Claimed[]>`
+        WITH claimed AS (
+          UPDATE "Notification" SET "pushedAt" = now()
+          WHERE "id" IN (
+            SELECT "id" FROM "Notification" WHERE "pushedAt" IS NULL
+            ORDER BY "createdAt" LIMIT ${RELAY_BATCH}
+            FOR UPDATE SKIP LOCKED)
+          RETURNING "id", "studentId", "type", "title", "actBy", "announcementId")
+        SELECT c."id", c."studentId", c."type"::text AS "type", c."title", c."actBy",
+          a."paidChannels"::text[] AS "paidChannels"
+        FROM claimed c LEFT JOIN "Announcement" a ON a."id" = c."announcementId"`;
+
+      // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
+      const firsts = rows.flatMap((row) => {
+        const channel = firstChannelFor(row.paidChannels ?? []);
+        return channel ? [{ notificationId: row.id, channel }] : [];
+      });
+      await tx.notificationDelivery.createMany({ data: firsts, skipDuplicates: true });
+      return rows;
+    }, TX_LIMITS.SHORT);
   }
 
   /** The grace window: the free channels get this long before a paid one is bought. */
-  private async schedule(notificationId: string, intent: NotificationIntent): Promise<void> {
+  private async schedule(rows: readonly Claimed[]): Promise<void> {
+    const paid = new Map(
+      rows.filter((row) => (row.paidChannels?.length ?? 0) > 0).map((row) => [row.id, row]),
+    );
+    if (paid.size === 0) return;
+
     // The BOOKED rows are the truth about what may be spent; policy only says how long to wait.
     const booked = await this.prisma.notificationDelivery.findMany({
-      // Paid only: a free channel is sent where it is booked, and has no fallback chain to walk.
-      where: { notificationId, status: DeliveryStatus.PENDING, channel: { in: PAID_CHANNELS } },
-      select: { id: true },
+      where: {
+        notificationId: { in: [...paid.keys()] },
+        status: DeliveryStatus.PENDING,
+        channel: { in: PAID_CHANNELS },
+      },
+      select: { id: true, notificationId: true },
     });
-    if (booked.length === 0) return;
 
-    const plan = escalationFor(intent.actBy ?? null, new Date(), intent.escalate);
-
+    const now = new Date();
     for (const row of booked) {
+      const notification = paid.get(row.notificationId);
+      const plan = escalationFor(
+        notification?.actBy ?? null,
+        now,
+        notification?.paidChannels ?? [],
+      );
       await this.deliveries.add(
         QUEUE_NAMES.NOTIFICATION_DELIVERY,
         { deliveryId: row.id },
-        // Keyed on the row, so a redelivered write schedules the same job rather than a second buy.
+        // Keyed on the row, so a swept-again notification schedules the same job rather than a second buy.
         {
           ...keyedJob(notificationDeliveryJobId(row.id)),
           delay: plan.deferSec * MS_PER_SECOND,

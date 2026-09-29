@@ -12,7 +12,6 @@ import {
   TESTS_OPENED_SWEEP_EVERY_MS,
 } from '../queue/queues';
 import { NotificationsService } from './notifications.service';
-import { NotificationOutbox } from './notification-outbox';
 import { NotificationsProcessor } from './notifications.processor';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { NotificationPruneProcessor } from './notification-prune.processor';
@@ -39,7 +38,6 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
   providers: [
     AnnouncementsService,
     NotificationsService,
-    NotificationOutbox,
     ...onRole(
       [API_ROLES.WORKER],
       [NotificationsProcessor, NotificationDeliveryProcessor, NotificationPruneProcessor],
@@ -50,7 +48,7 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
     NotificationListener,
     WebPushSender,
   ],
-  exports: [NotificationsService, NotificationOutbox, PushService],
+  exports: [NotificationsService, PushService],
 })
 export class NotificationsModule implements OnModuleInit {
   constructor(

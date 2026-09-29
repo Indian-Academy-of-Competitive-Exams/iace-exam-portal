@@ -13,7 +13,7 @@ import {
   type StudentSignedUpEvent,
 } from '../common/events';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationOutbox, type NotificationIntent } from './notification-outbox';
+import { NotificationsService, type NewNotification } from './notifications.service';
 
 @Injectable()
 export class NotificationListener {
@@ -21,7 +21,7 @@ export class NotificationListener {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly outbox: NotificationOutbox,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @OnEvent(DOMAIN_EVENTS.STUDENT_SIGNED_UP)
@@ -50,10 +50,10 @@ export class NotificationListener {
     });
   }
 
-  /** No transaction to join: the fact has already committed, so the outbox row is its own write. */
-  private async tell(intent: NotificationIntent): Promise<void> {
+  /** No transaction to join: the fact has already committed, so the bell row is its own write. */
+  private async tell(intent: NewNotification): Promise<void> {
     try {
-      await this.outbox.request(this.prisma, intent);
+      await this.notifications.tell(this.prisma, intent);
     } catch (error) {
       this.logger.error(`Student ${intent.studentId} was not told: ${intent.type}`, error);
     }

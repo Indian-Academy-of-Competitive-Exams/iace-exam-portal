@@ -215,8 +215,10 @@ recounted by a periodic pass that finds its own work (`docs/02` §9).
 **Notifications left the bus for the same reason.** They used to be `@OnEvent` handlers that
 swallowed their own failure, so a result-ready could be lost between the scoring that produced it
 and the row a student reads, with nothing to retry it and nothing to say it had gone. Each producer
-now writes a `notification.requested` outbox row inside its OWN transaction — the fact and the
-intent to tell somebody commit together — and `NotificationOutbox` relays it.
+now writes the `Notification` row itself, through `NotificationsService.tell`, inside its OWN
+transaction — the fact and the bell row commit together, and the dedupe key makes a replay land
+once. A sweep claims the rows with no `pushedAt` (`SKIP LOCKED`), books the paid channel an
+announcement chose, and pushes them.
 
 This inverts one guarantee deliberately. A notification that cannot be written now FAILS the write
 that caused it, where before it was swallowed. That is the point: rolling the grant back is

@@ -6,7 +6,7 @@ import { sectionScoresIn } from '../src/attempts/score-paper';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
-import { NOTIFICATION_REQUEST, NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
@@ -34,7 +34,7 @@ after(() => prisma.$disconnect());
 const processor = new ScoringProcessor(
   prisma,
   new RollupQueue(new FakeQueue().asQueue()),
-  new NotificationOutbox(new FakeQueue().asQueue()),
+  new NotificationsService(prisma),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
   new RollupService(prisma),
@@ -60,12 +60,7 @@ const attemptRow = (id: string) => prisma.attempt.findUniqueOrThrow({ where: { i
 
 const served = (attemptId: string) => servedAnswers(prisma, attemptId);
 
-const notificationIn = async () => {
-  const [row] = await prisma.outboxEvent.findMany({
-    where: { eventType: NOTIFICATION_REQUEST.EVENT_TYPE },
-  });
-  return row?.payload as Record<string, unknown> | undefined;
-};
+const notificationIn = async () => (await prisma.notification.findMany())[0];
 
 const marks = async (attemptId: string) =>
   (await served(attemptId)).map((row) => [row.isCorrect, Number(row.marksAwarded)]);
@@ -204,7 +199,7 @@ describe('ScoringProcessor — what it writes', () => {
     const voided = new ScoringProcessor(
       voidingAfterTheRead(prisma, attemptId),
       new RollupQueue(new FakeQueue().asQueue()),
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),

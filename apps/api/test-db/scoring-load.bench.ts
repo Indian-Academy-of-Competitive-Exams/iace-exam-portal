@@ -10,7 +10,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { PaperSheetService, SHEET_ROW_SELECT } from '../src/attempts/paper-sheet.service';
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { sheetOf } from '../src/attempts/answer-sheet';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import { RIGHT_OPTION, makePaper, resetDatabase, testPrisma, uid } from './support/database';
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   const processor = new ScoringProcessor(
     prisma,
     new RollupQueue(new FakeQueue().asQueue()),
-    new NotificationOutbox(new FakeQueue().asQueue()),
+    new NotificationsService(prisma),
     fakeQueueFailures(),
     new PaperSheetService(prisma),
     new RollupService(prisma),

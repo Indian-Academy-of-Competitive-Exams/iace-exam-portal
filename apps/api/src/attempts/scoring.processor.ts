@@ -13,7 +13,7 @@ import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { timeTakenSec } from './leaderboard-score';
 import { RollupQueue } from './rollup-queue';
-import { NotificationOutbox } from '../notifications';
+import { NotificationsService } from '../notifications';
 import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
@@ -55,7 +55,7 @@ export class ScoringProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rollup: RollupQueue,
-    private readonly notifications: NotificationOutbox,
+    private readonly notifications: NotificationsService,
     private readonly failures: QueueFailures,
     private readonly papers: PaperSheetService,
     private readonly rollups: RollupService,
@@ -179,7 +179,7 @@ export class ScoringProcessor extends WorkerHost {
 
   private async announce(tx: Prisma.TransactionClient, attempt: ScoringRow): Promise<void> {
     // Same transaction as the marks: a student whose result committed is always one we owe a word to.
-    await this.notifications.request(tx, {
+    await this.notifications.tell(tx, {
       studentId: attempt.studentId,
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
@@ -197,7 +197,7 @@ export class ScoringProcessor extends WorkerHost {
   ): Promise<void> {
     if (Number(attempt.score ?? 0) === score) return;
 
-    await this.notifications.request(tx, {
+    await this.notifications.tell(tx, {
       studentId: attempt.studentId,
       type: NOTIFICATION_TYPE.RESULT_UPDATED,
       title: 'Your result has been updated',

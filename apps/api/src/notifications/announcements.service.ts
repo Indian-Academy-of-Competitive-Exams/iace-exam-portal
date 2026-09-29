@@ -30,8 +30,8 @@ import {
   type ExportColumn,
 } from '../common/exporting';
 import { studentCardsOf, studentWhere, type StudentCard } from '../students';
-import { SKIP_REASONS, type PaidChannel } from './notification-policy';
-import { NotificationOutbox, type NotificationIntent } from './notification-outbox';
+import { SKIP_REASONS } from './notification-policy';
+import { NotificationsService, type NewNotification } from './notifications.service';
 
 /** How many recipients one fan-out writes per statement. */
 const CHUNK = 1000;
@@ -49,7 +49,7 @@ export class AnnouncementsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
-    private readonly outbox: NotificationOutbox,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Asked before sending and again at send, because the roster moves between the two. */
@@ -115,9 +115,9 @@ export class AnnouncementsService {
         });
 
         for (const batch of chunked(recipients)) {
-          await this.outbox.requestMany(
+          await this.notifications.tell(
             tx,
-            batch.map((student) => this.intentFor(student.id, announcement.id, input)),
+            ...batch.map((student) => this.intentFor(student.id, announcement.id, input)),
           );
         }
         return announcement.id;
@@ -133,7 +133,7 @@ export class AnnouncementsService {
     studentId: string,
     announcementId: string,
     input: CreateAnnouncementBody,
-  ): NotificationIntent {
+  ): NewNotification {
     return {
       studentId,
       type: NOTIFICATION_TYPE.GENERIC,
@@ -142,7 +142,6 @@ export class AnnouncementsService {
       data: { message: input.body },
       dedupeKey: `announcement:${announcementId}`,
       announcementId,
-      escalate: [...input.paidChannels] as PaidChannel[],
     };
   }
 

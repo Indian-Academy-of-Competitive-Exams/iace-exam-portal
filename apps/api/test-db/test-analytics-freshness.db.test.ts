@@ -8,7 +8,7 @@ import { RollupQueue } from '../src/attempts/rollup-queue';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {
@@ -41,7 +41,7 @@ function build() {
     scoring: new ScoringProcessor(
       prisma,
       outbox,
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),

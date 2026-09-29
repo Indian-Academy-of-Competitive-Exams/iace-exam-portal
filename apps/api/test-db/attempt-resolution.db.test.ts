@@ -7,7 +7,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -56,12 +56,12 @@ function stallingScorer(
             work(
               new Proxy(tx as object, {
                 get(txTarget, txKey) {
-                  if (txKey !== 'outboxEvent') return Reflect.get(txTarget, txKey) as unknown;
+                  if (txKey !== 'notification') return Reflect.get(txTarget, txKey) as unknown;
                   const delegate = Reflect.get(txTarget, txKey) as object;
                   return new Proxy(delegate, {
                     get(delTarget, method) {
                       const call = Reflect.get(delTarget, method) as unknown;
-                      if (method !== 'create') return call;
+                      if (method !== 'createMany') return call;
                       return async (...args: unknown[]) => {
                         const result = await (call as (...a: unknown[]) => Promise<unknown>).apply(
                           delTarget,
@@ -107,7 +107,7 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
     const scoring = new ScoringProcessor(
       stallingScorer(prisma, gate, markReached),
       new RollupQueue(new FakeQueue().asQueue()),
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),

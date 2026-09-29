@@ -14,7 +14,7 @@ import { PerformanceAnalyticsService } from '../src/attempts/performance.service
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
@@ -42,7 +42,7 @@ after(() => prisma.$disconnect());
 const processor = new ScoringProcessor(
   prisma,
   new RollupQueue(new FakeQueue().asQueue()),
-  new NotificationOutbox(new FakeQueue().asQueue()),
+  new NotificationsService(prisma),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
   new RollupService(prisma),

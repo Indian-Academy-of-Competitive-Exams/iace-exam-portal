@@ -10,7 +10,6 @@ import {
   jobOptionsFor,
   keyedJob,
   notificationDeliveryJobId,
-  notificationJobId,
   rollupRebuildJobId,
   rollupRebuildStudentJobId,
   scoringJobId,
@@ -59,7 +58,6 @@ describe('queue policy', () => {
       scoringJobId(cuid),
       rollupRebuildJobId(cuid),
       rollupRebuildStudentJobId(cuid),
-      notificationJobId(cuid),
       notificationDeliveryJobId(cuid),
     ];
 

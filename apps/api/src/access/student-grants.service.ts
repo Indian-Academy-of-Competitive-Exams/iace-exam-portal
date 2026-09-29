@@ -24,7 +24,7 @@ import {
 } from '../common/exporting';
 import { studentCardsOf, type StudentCard } from '../students';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
-import { NotificationOutbox } from '../notifications';
+import { NotificationsService } from '../notifications';
 import { REACH_SELECT, reachableBy } from './access-resolver.service';
 
 /** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
@@ -101,7 +101,7 @@ export class StudentGrantsService {
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
-    private readonly notifications: NotificationOutbox,
+    private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -238,7 +238,7 @@ export class StudentGrantsService {
 
       // Only what the grant CHANGED is told: re-reading a roster must not ring the bell again.
       if (!already) {
-        await this.notifications.request(tx, {
+        await this.notifications.tell(tx, {
           studentId,
           type: NOTIFICATION_TYPE.GRANT_ADDED,
           title: 'A test series was added to your account',

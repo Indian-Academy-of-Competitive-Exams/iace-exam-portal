@@ -123,20 +123,12 @@ export function rollupRebuildStudentJobId(studentId: string): string {
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
 export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
 
-/** Writing one request, or sweeping up whatever a crash left unrelayed. */
+/** The push sweep, and the sweep that notices tests opening by the clock. */
 export const NOTIFICATION_JOBS = {
-  WRITE: 'write-notification',
-  WRITE_PENDING: 'write-pending',
   SWEEP: 'relay-sweep',
   /** Finds tests that have opened since anybody was last told, and tells whoever reaches them. */
   TESTS_OPENED: 'tests-opened-sweep',
 } as const;
-
-/** One id for the whole pass: a hall's worth of results asks for one write, not one each. */
-export const NOTIFICATION_WRITE_JOB_ID = `${QUEUE_NAMES.NOTIFICATIONS}-write-pending`;
-
-/** Long enough to collect a burst, short enough that a student is told while it is news. */
-export const NOTIFICATION_WRITE_DELAY_MS = 5 * 1000;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
 export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;
@@ -144,19 +136,9 @@ export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;
 /** A test opening is not to the minute; five is soon enough and a fifth of the wake-ups. */
 export const TESTS_OPENED_SWEEP_EVERY_MS = 5 * 60 * 1000;
 
-/** Ids only, like every other job: the worker re-reads the outbox row it is about to act on. */
-export interface NotificationJobData {
-  eventId?: string;
-}
-
 /** One delivery row to attempt. The worker re-reads it, so a stale retry cannot send a stale message. */
 export interface NotificationDeliveryJobData {
   deliveryId: string;
-}
-
-/** The EVENT's own: a redelivered relay is the same job, so one fact notifies once. */
-export function notificationJobId(eventId: string): string {
-  return `${QUEUE_NAMES.NOTIFICATIONS}-${eventId}`;
 }
 
 /** The DELIVERY ROW's own, so a re-queued escalation cannot buy the same message twice. */

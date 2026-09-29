@@ -1067,7 +1067,7 @@ model Notification {
   body      String?
   // Template variables, so a message can be re-rendered for any channel from the row alone.
   data      Json?
-  // The natural key of the FACT behind this, which is what makes a redelivered outbox row harmless.
+  // The natural key of the FACT behind this, which is what makes a replayed write land once.
   dedupeKey String?
   // When what this is about stops being actionable. Null means waiting costs the student nothing.
   actBy     DateTime?        @db.Timestamptz(3)
@@ -1078,6 +1078,8 @@ model Notification {
   isRead         Boolean          @default(false)
   // Which channel actually brought them back, so the policy stops being an assumption.
   openedVia      DeliveryChannel?
+  // Stamped when the push sweep claims the row; the sweep finds its work through a partial index on null.
+  pushedAt       DateTime?        @db.Timestamptz(3)
   createdAt      DateTime         @default(now()) @db.Timestamptz(3)
 
   student      Student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)

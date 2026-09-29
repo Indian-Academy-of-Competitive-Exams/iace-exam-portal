@@ -9,7 +9,7 @@ import { TestStatus } from '@prisma/client';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { type AccessResolverService } from '../access';
-import { NotificationOutbox } from './notification-outbox';
+import { NotificationsService } from './notifications.service';
 
 /** One student at a time would be one transaction each; this is the fan-out the announcer uses. */
 const CHUNK = 500;
@@ -32,7 +32,7 @@ export class TestOpeningService {
       ),
     )
     private readonly access: AccessResolverService,
-    private readonly outbox: NotificationOutbox,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Returns how many tests it spoke about, so a caller can tell a quiet sweep from a stuck one. */
@@ -68,9 +68,9 @@ export class TestOpeningService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const batch of chunked(recipients)) {
-        await this.outbox.requestMany(
+        await this.notifications.tell(
           tx,
-          batch.map((studentId) => ({
+          ...batch.map((studentId) => ({
             studentId,
             type: NOTIFICATION_TYPE.TEST_ASSIGNED,
             title: test.title ?? 'A new test is open',

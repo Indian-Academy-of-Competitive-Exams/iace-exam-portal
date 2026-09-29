@@ -31,7 +31,7 @@ import { ExamsService } from '../configs';
 import { type ProgramsService } from '../access';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
-import { NotificationOutbox } from '../notifications';
+import { NotificationsService } from '../notifications';
 
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
@@ -91,7 +91,7 @@ export class StudentsService {
     private readonly programs: ProgramsService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
-    private readonly notifications: NotificationOutbox,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ==========================================================================
@@ -384,7 +384,7 @@ export class StudentsService {
       // Only what was ADDED: an un-enrolment is not news, and the whole array is not what changed.
       const added = addedTo(before.enrolledExams, auditFieldsOf(row).enrolledExams);
       if (added.length > 0) {
-        await this.notifications.request(tx, {
+        await this.notifications.tell(tx, {
           studentId: id,
           type: NOTIFICATION_TYPE.ENROLLMENT_ADDED,
           title: 'You have been enrolled in a new exam',

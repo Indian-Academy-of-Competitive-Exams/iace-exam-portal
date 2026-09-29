@@ -15,8 +15,8 @@ import { AccessResolverService } from '../src/access/access-resolver.service';
 import { ExamStagesService } from '../src/configs';
 import { AuditContext, AuditService } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
-import { FakeEventBus, FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { NotificationsService } from '../src/notifications/notifications.service';
+import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   makeAdmin,
   makeBranch,
@@ -61,7 +61,7 @@ async function build(stageActive = true) {
       prisma,
       auditContext,
       events.asService(),
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
       new AuditService(prisma, new FakeStorage() as never),
     ),
   };

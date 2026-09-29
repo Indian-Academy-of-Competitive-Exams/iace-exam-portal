@@ -7,7 +7,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { cohortShapeOf, flagYours } from '../src/attempts/performance-analytics';
 import { cohortCurveOf } from '../src/attempts/cohort-curve';
-import { NotificationOutbox } from '../src/notifications/notification-outbox';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
@@ -42,7 +42,7 @@ function build(rollupClient: PrismaService = prisma) {
     scoring: new ScoringProcessor(
       prisma,
       outbox,
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
@@ -243,7 +243,7 @@ describe('RollupService — sweeping the cohorts that changed', () => {
     const scoring = new ScoringProcessor(
       failingOnceOnStatWrite(prisma),
       new RollupQueue(new FakeQueue().asQueue()),
-      new NotificationOutbox(new FakeQueue().asQueue()),
+      new NotificationsService(prisma),
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
