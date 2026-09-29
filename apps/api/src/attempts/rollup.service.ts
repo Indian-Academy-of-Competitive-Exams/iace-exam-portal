@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
+import { IN_COHORT, RANK_ORDER } from './ranking-sql';
 import {
   addToQuestion,
   addToStudentTotals,
@@ -210,23 +211,21 @@ export class RollupService {
   ): Promise<void> {
     await tx.$executeRaw`
       WITH sat AS (
-        SELECT a."id", a."score", a."evaluatedAt", a."attemptNo",
+        SELECT a."id", a."score", a."timeTakenSec",
                COALESCE((
                  SELECT sum((part->>5)::bigint)
                  FROM jsonb_array_elements(COALESCE(a."sectionScores", '[]'::jsonb)) part
                ), 0) AS "timeSec"
         FROM "Attempt" a
-        WHERE a."testId" = ${testId}::uuid
-          AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
-          AND a."isGraded"
+        WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
       )
       INSERT INTO "TestStat" (
         "testId", "evaluatedCount", "sumScore", "maxScore", "minScore",
         "sumTimeSec", "topperAttemptId", "computedAt")
       SELECT ${testId}::uuid, count(*)::int, COALESCE(sum("score"), 0),
              max("score"), min("score"), COALESCE(sum("timeSec"), 0)::bigint,
-             -- The fold kept the first sitting to reach the maximum, and a replay has to agree.
-             (SELECT "id" FROM sat ORDER BY "score" DESC, "evaluatedAt", "attemptNo" LIMIT 1),
+             -- The board's rank 1, so the topper an admin reads is the one students see first.
+             (SELECT "id" FROM sat ORDER BY ${RANK_ORDER} LIMIT 1),
              ${now}
       FROM sat
       ON CONFLICT ("testId") DO UPDATE SET

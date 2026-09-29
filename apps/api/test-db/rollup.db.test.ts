@@ -5,6 +5,7 @@ import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
+import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { cohortShapeOf, flagYours } from '../src/attempts/performance-analytics';
 import { cohortCurveOf } from '../src/attempts/cohort-curve';
 import { NotificationsService } from '../src/notifications/notifications.service';
@@ -60,7 +61,13 @@ const paperOf = (scope: TestScope = TEST_SCOPE.FULL) =>
 async function sat(
   paper: Paper,
   chosen: readonly (string | null)[],
-  over: { studentId?: string; attemptNo?: number; isGraded?: boolean } = {},
+  over: {
+    studentId?: string;
+    attemptNo?: number;
+    isGraded?: boolean;
+    startedAt?: Date;
+    submittedAt?: Date;
+  } = {},
 ) {
   const studentId = over.studentId ?? (await makeStudent(prisma)).id;
   const attempt = await sitPaper(prisma, { paper, studentId, chosen, ...over });
@@ -376,6 +383,23 @@ describe('RollupService — the curve it draws', () => {
     assert.equal(num(rolled?.minScore), -1.5);
     assert.equal(rolled?.topperAttemptId, top.attemptId);
     assert.equal(rolled?.evaluatedCount, 3);
+  });
+
+  it('names as topper the sitting the board ranks first when two tie on marks', async () => {
+    const built = build();
+    const paper = await paperOf();
+    const submittedAt = new Date('2026-08-24T05:00:00.000Z');
+    const taking = (minutes: number) => ({
+      submittedAt,
+      startedAt: new Date(submittedAt.getTime() - minutes * 60_000),
+    });
+    const first = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT], taking(50));
+    const quicker = await sat(paper, [RIGHT, RIGHT, RIGHT, RIGHT], taking(20));
+    for (const { attemptId } of [first, quicker]) await counted(built, attemptId);
+
+    const board = new LeaderboardService(prisma);
+    assert.equal((await board.standing(paper.testId, quicker.attemptId))?.rank, 1);
+    assert.equal((await testStat(paper.testId))?.topperAttemptId, quicker.attemptId);
   });
 });
 

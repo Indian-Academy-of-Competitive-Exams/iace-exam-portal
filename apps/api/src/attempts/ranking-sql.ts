@@ -8,7 +8,10 @@ import { LEADERBOARD_NEIGHBOURS, LEADERBOARD_PODIUM } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 
 /** Unqualified, so it binds to the nearest `Attempt` in scope — the inner one inside the LATERAL. */
-const IN_COHORT = Prisma.sql`"isGraded" AND "status" = 'EVALUATED' AND "score" IS NOT NULL`;
+export const IN_COHORT = Prisma.sql`"isGraded" AND "status" = 'EVALUATED' AND "score" IS NOT NULL`;
+
+/** The board's order, unqualified like `IN_COHORT`: marks, then less time, then id; no time is slowest. */
+export const RANK_ORDER = Prisma.sql`"score" DESC, "timeTakenSec" ASC NULLS LAST, "id" ASC`;
 
 /** One chosen sitting's standing in its own test's cohort. */
 export interface StandingRow {
@@ -69,12 +72,12 @@ export interface TestBoardRow {
   is_you: boolean;
 }
 
-/** ASC keeps NULLS LAST, so a sitting with no recorded time sits where its standing counts it. */
+/** The podium and the reader's neighbourhood, seated in `RANK_ORDER`. */
 export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
   return Prisma.sql`
     WITH ranked AS (
       SELECT a."id", a."studentId", a."score",
-             (ROW_NUMBER() OVER (ORDER BY a."score" DESC, a."timeTakenSec" ASC, a."id" ASC))::int AS rank,
+             (ROW_NUMBER() OVER (ORDER BY ${RANK_ORDER}))::int AS rank,
              (COUNT(*) OVER ())::int AS cohort
       FROM "Attempt" a
       WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
@@ -104,7 +107,7 @@ export function testResultsSql(testId: string): Prisma.Sql {
   return Prisma.sql`
     WITH ranked AS (
       SELECT a."id",
-             (ROW_NUMBER() OVER (ORDER BY a."score" DESC, a."timeTakenSec" ASC NULLS LAST, a."id" ASC))::int AS rank,
+             (ROW_NUMBER() OVER (ORDER BY ${RANK_ORDER}))::int AS rank,
              sitting_percentile(
                RANK() OVER (ORDER BY a."score" ASC) - 1,
                COUNT(*) OVER (PARTITION BY a."score"),
