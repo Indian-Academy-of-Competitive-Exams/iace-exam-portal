@@ -14,7 +14,6 @@ import {
   type Assignment,
   type BaseConfigSection,
   type DrawSpec,
-  type PaperRow,
   type PaperSource,
   type SectionDrawSpec,
   type TestDetail,
@@ -261,9 +260,7 @@ function TestPaperScreen({
             paperSource={detail.paperSource}
             section={section}
             spec={spec.sections[section.id] ?? {}}
-            rows={
-              paper.sections.find((row) => row.baseConfigSectionId === section.id)?.questions ?? []
-            }
+            onPaper={paper.sections.find((row) => row.baseConfigSectionId === section.id)}
             held={onThePaper}
             editable={canEditPaper && !framed}
             disposable={canDispose}
@@ -401,7 +398,7 @@ function PaperSection({
   paperSource,
   section,
   spec,
-  rows,
+  onPaper,
   held,
   editable,
   disposable,
@@ -417,7 +414,8 @@ function PaperSection({
   paperSource: PaperSource | null;
   section: BaseConfigSection;
   spec: SectionDrawSpec;
-  rows: readonly PaperRow[];
+  /** The section as the paper holds it, and whether its hand-over would be taken now. */
+  onPaper: TestPaper['sections'][number] | undefined;
   /** Every question the whole paper holds, since one sits on it once wherever it was put. */
   held: ReadonlySet<string>;
   editable: boolean;
@@ -432,6 +430,7 @@ function PaperSection({
   reader: Assignment | null;
 }>) {
   const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
+  const rows = onPaper?.questions ?? [];
   const released = Boolean(reader?.finalizedAt);
   const withReader = Boolean(reader?.handedAt) && !released;
   const framed = paperSource === PAPER_SOURCES.FRAMED;
@@ -492,7 +491,7 @@ function PaperSection({
   }
 
   const handOver =
-    picking && awaitsHandOver(reader, rows.length, section.questionCount) ? (
+    picking && onPaper?.canHandOver ? (
       <HandOverButton testId={testId} section={section} onChanged={onChanged} />
     ) : null;
 
@@ -572,10 +571,6 @@ function FillButton({
     </Tooltip>
   );
 }
-
-/** A full picked section whose reader has not been handed it yet. */
-const awaitsHandOver = (reader: Assignment | null, held: number, wanted: number): boolean =>
-  reader !== null && !reader.handedAt && held >= wanted;
 
 /** Where a typed section stands before its reader releases it to the owner. */
 function whereTypedWorkIs(typist: Assignment | null, reader: Assignment | null): string {

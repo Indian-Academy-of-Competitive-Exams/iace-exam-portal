@@ -159,6 +159,15 @@ export function AssignStep({
     [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id);
 
   const held = paper.data ? heldBySection(paper.data) : null;
+  const handable = new Set(
+    paper.data?.sections.filter((one) => one.canHandOver).map((one) => one.baseConfigSectionId) ??
+      [],
+  );
+  // Who holds a role and what the paper holds both decide the hand-over, so a change re-reads both.
+  const reread = () => {
+    void assignments.refetch();
+    void paper.refetch();
+  };
 
   return (
     <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
@@ -171,8 +180,8 @@ export function AssignStep({
       <DataTable
         columns={columnsOf({
           testId: detail.id,
-          source: detail.paperSource,
           held,
+          handable,
           mayComment,
           // An offered paper takes nobody new and loses nobody: there is nothing left to type or read.
           onAssign: detail.finalizedAt ? null : setAssigning,
@@ -192,15 +201,11 @@ export function AssignStep({
           section={assigning.section}
           role={assigning.role}
           onClose={() => setAssigning(null)}
-          onAssigned={() => assignments.refetch()}
+          onAssigned={reread}
         />
       ) : null}
 
-      <RemoveDialog
-        assignment={removing}
-        onClose={() => setRemoving(null)}
-        onRemoved={() => assignments.refetch()}
-      />
+      <RemoveDialog assignment={removing} onClose={() => setRemoving(null)} onRemoved={reread} />
 
       <HandOverDialog
         testId={detail.id}
@@ -230,8 +235,9 @@ function PaperCell({
 
 interface ColumnsInput {
   testId: string;
-  source: PaperSource;
   held: ReadonlyMap<string, number> | null;
+  /** Sections whose hand-over the server would take now. */
+  handable: ReadonlySet<string>;
   mayComment: (row: SectionRow) => boolean;
   onAssign: ((target: AssignTarget) => void) | null;
   onRemove: ((assignment: Assignment) => void) | null;
@@ -240,8 +246,8 @@ interface ColumnsInput {
 
 function columnsOf({
   testId,
-  source,
   held,
+  handable,
   mayComment,
   onAssign,
   onRemove,
@@ -316,24 +322,13 @@ function columnsOf({
           testId={testId}
           row={row}
           onRemove={onRemove}
-          onHandOver={handOverFor(row, source, held, onHandOver)}
+          onHandOver={
+            handable.has(row.section.id) && onHandOver ? () => onHandOver(row.section) : null
+          }
         />
       ),
     },
   ];
-}
-
-/** Offered only where it would succeed: a picked section, full, with a reader it has not reached. */
-function handOverFor(
-  row: SectionRow,
-  source: PaperSource,
-  held: ReadonlyMap<string, number> | null,
-  onHandOver: ((section: BaseConfigSection) => void) | null,
-): (() => void) | null {
-  const reader = row.proofreader;
-  const full = (held?.get(row.section.id) ?? 0) >= row.section.questionCount;
-  const ready = source === PAPER_SOURCES.PICKED && full && reader && !reader.handedAt;
-  return ready && onHandOver ? () => onHandOver(row.section) : null;
 }
 
 /** Framed or picked, chosen in a dialog the first time the paper is opened, and never again. */

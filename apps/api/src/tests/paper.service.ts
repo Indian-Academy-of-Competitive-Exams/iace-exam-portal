@@ -119,7 +119,7 @@ export class PaperService {
   async read(testId: string): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     const config = await this.configs.detail(test.baseConfigId);
-    return this.paperOf(test.id, this.scopedOf(test, config));
+    return this.paperOf(test, this.scopedOf(test, config));
   }
 
   /** Several at once, numbered from the section's current highest order; every one resolved and checked before any write. */
@@ -207,7 +207,7 @@ export class PaperService {
       await reopenReadingIfUnchecked(tx, testId, section.id);
     }, TX_LIMITS.SHORT);
 
-    return this.paperOf(testId, this.scopedOf(test, config));
+    return this.paperOf(test, this.scopedOf(test, config));
   }
 
   /** Tops a hand-picked section up to its count from its own spec: the draw only ever ADDS. */
@@ -233,7 +233,7 @@ export class PaperService {
     });
     const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id];
     const added = await this.drawRemainder(testId, section, spec, rows, test.paperSource);
-    if (added.length === 0) return this.paperOf(testId, this.scopedOf(test, config));
+    if (added.length === 0) return this.paperOf(test, this.scopedOf(test, config));
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
@@ -250,7 +250,7 @@ export class PaperService {
       await reopenReadingIfUnchecked(tx, testId, section.id);
     }, TX_LIMITS.SHORT);
 
-    return this.paperOf(testId, this.scopedOf(test, config));
+    return this.paperOf(test, this.scopedOf(test, config));
   }
 
   /** What the section still lacks. The engine hands the pins back, so only the new rows survive. */
@@ -341,7 +341,7 @@ export class PaperService {
       await reopenReadingIfUnchecked(tx, testId, row.baseConfigSectionId);
     }, TX_LIMITS.SHORT);
 
-    return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+    return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
   /** A typist's one hand-over: exactly the section's count, inside its mix, becomes its paper. */
@@ -389,7 +389,7 @@ export class PaperService {
       await this.placeTyped(tx, test, section, selected);
       // The same fact from the reader's side: the section has reached them.
       await tx.questionAssignment.updateMany({
-        where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null, handedAt: null },
+        where: { ...pair, ...ACTIVE_READER, handedAt: null },
         data: { handedAt: new Date() },
       });
       // After the paper lets go of them: a question still on it cannot be deleted.
@@ -493,33 +493,26 @@ export class PaperService {
     const test = await this.requireTest(testId);
     await takeTestEditLock(this.redis, this.prisma, testId, editor);
     this.assertAssemblable(test);
-    if (test.paperSource !== PAPER_SOURCES.PICKED) {
-      throw new AppException(ErrorCodes.CONFLICT, HANDED_AT_DONE_MESSAGE);
-    }
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
     const pair = { testId, baseConfigSectionId };
-    const held = await this.prisma.paperQuestion.count({ where: pair });
-    if (held < section.questionCount) {
-      const short = `${section.name} holds ${held} of its ${section.questionCount} questions. Fill it before handing it over.`;
-      throw formRefusal(ErrorCodes.CONFLICT, short);
-    }
+    const [held, reader] = await Promise.all([
+      this.prisma.paperQuestion.count({ where: pair }),
+      this.prisma.questionAssignment.findFirst({
+        where: { ...pair, ...ACTIVE_READER },
+        select: { handedAt: true },
+      }),
+    ]);
+    const gap = handOverGap(test, section, held, reader);
+    if (gap) throw formRefusal(ErrorCodes.CONFLICT, gap);
     const handed = await this.prisma.questionAssignment.updateMany({
-      where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null, handedAt: null },
+      where: { ...pair, ...ACTIVE_READER, handedAt: null },
       data: { handedAt: new Date() },
     });
-    if (handed.count === 0) {
-      const reading = await this.prisma.questionAssignment.count({
-        where: { ...pair, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null },
-      });
-      throw new AppException(
-        ErrorCodes.CONFLICT,
-        reading === 0 ? NO_READER_MESSAGE : ALREADY_HANDED_MESSAGE,
-      );
-    }
-    return this.paperOf(testId, this.scopedOf(test, config));
+    if (handed.count === 0) throw formRefusal(ErrorCodes.CONFLICT, ALREADY_HANDED_MESSAGE);
+    return this.paperOf(test, this.scopedOf(test, config));
   }
 
   /** Dropped, leaving its section short of the count its config asks for until one is drawn. */
@@ -544,7 +537,7 @@ export class PaperService {
       await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
     }, TX_LIMITS.SHORT);
 
-    return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+    return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
   /** The only change an OFFERED paper allows; before that a question is edited, never withdrawn. */
@@ -587,7 +580,7 @@ export class PaperService {
         `Question ${row.questionId} on test ${testId} is ${status} across ${asked.rows} paper rows; ${asked.sittings} sittings to re-score`,
       );
     }
-    return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+    return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
   private async requireRow(testId: string, rowId: string) {
@@ -735,26 +728,35 @@ export class PaperService {
   }
 
   private async paperOf(
-    testId: string,
+    test: HandOverTest & { id: string },
     sections: BaseConfigDetail['sections'],
   ): Promise<TestPaper> {
-    const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId },
-      include: PAPER_INCLUDE,
-      orderBy: { order: 'asc' },
-    });
+    const [rows, readers] = await Promise.all([
+      this.prisma.paperQuestion.findMany({
+        where: { testId: test.id },
+        include: PAPER_INCLUDE,
+        orderBy: { order: 'asc' },
+      }),
+      this.prisma.questionAssignment.findMany({
+        where: { testId: test.id, ...ACTIVE_READER },
+        select: { baseConfigSectionId: true, handedAt: true },
+      }),
+    ]);
+    const readerOf = new Map(readers.map((reader) => [reader.baseConfigSectionId, reader]));
 
     return {
-      testId,
+      testId: test.id,
       totalQuestions: rows.length,
-      sections: sections.map((section) => ({
-        baseConfigSectionId: section.id,
-        name: section.name,
-        order: section.order,
-        questionCount: section.questionCount,
-        questions: rows
-          .filter((row) => row.baseConfigSectionId === section.id)
-          .map((row) => ({
+      sections: sections.map((section) => {
+        const held = rows.filter((row) => row.baseConfigSectionId === section.id);
+        const reader = readerOf.get(section.id) ?? null;
+        return {
+          baseConfigSectionId: section.id,
+          name: section.name,
+          order: section.order,
+          questionCount: section.questionCount,
+          canHandOver: handOverGap(test, section, held.length, reader) === null,
+          questions: held.map((row) => ({
             id: row.id,
             testId: row.testId,
             baseConfigId: row.baseConfigId,
@@ -776,7 +778,8 @@ export class PaperService {
               ),
             },
           })),
-      })),
+        };
+      }),
     };
   }
 
@@ -806,6 +809,28 @@ export class PaperService {
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }
+}
+
+/** The reader a paper's hand-over and Done reach: whoever holds the reading now. */
+const ACTIVE_READER = { role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null } as const;
+
+type HandOverTest = { paperSource: PaperSource | null; finalizedAt: Date | null };
+
+/** Why a picked section cannot reach its reader now, or null once it can — the hand-over and the paper's flag read this. */
+function handOverGap(
+  test: HandOverTest,
+  section: { name: string; questionCount: number },
+  held: number,
+  reader: { handedAt: Date | null } | null,
+): string | null {
+  if (test.finalizedAt) return OFFERED_TEST_MESSAGE;
+  if (test.paperSource !== PAPER_SOURCES.PICKED) return HANDED_AT_DONE_MESSAGE;
+  if (held < section.questionCount) {
+    return `${section.name} holds ${held} of its ${section.questionCount} questions. Fill it before handing it over.`;
+  }
+  if (!reader) return NO_READER_MESSAGE;
+  if (reader.handedAt) return ALREADY_HANDED_MESSAGE;
+  return null;
 }
 
 /** Picking IS choosing where questions come from, so it waits on the decision — a super admin makes it, not skips it. */

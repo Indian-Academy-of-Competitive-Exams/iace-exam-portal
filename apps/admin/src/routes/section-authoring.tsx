@@ -212,10 +212,6 @@ function SectionWorkspace({
     };
   }, [work, seat, testId, sectionId, onChanged, onSettle]);
 
-  const allChecked =
-    work.questions.length >= work.questionCount &&
-    work.questions.every((question) => question.review.state === REVIEW_STATES.CHECKED);
-
   const extra = (
     <>
       {seat.typing ? (
@@ -224,7 +220,7 @@ function SectionWorkspace({
           Mark done
         </Button>
       ) : null}
-      {seat.reading && allChecked ? (
+      {work.canRelease ? (
         <Button type="button" size="sm" variant="outline" onClick={() => setReleasing(true)}>
           <Send aria-hidden />
           Release

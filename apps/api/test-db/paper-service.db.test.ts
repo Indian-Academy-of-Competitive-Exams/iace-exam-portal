@@ -1034,6 +1034,46 @@ describe('PaperService — a section reaches its proof-reader', () => {
     );
   });
 
+  /** The failure this prevents: a Hand over action the server then refuses, or none where it would be taken. */
+  it('offers the hand-over on the paper only while the server would take it', async () => {
+    const service = await serviceWith();
+    const offered = async () =>
+      (await service.read(TEST)).sections.find(
+        (section) => section.baseConfigSectionId === idFor('sec_2'),
+      )?.canHandOver;
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q1'), idFor('q2')],
+    });
+
+    assert.equal(await offered(), false, 'nobody reads it yet');
+    const reading = await reader();
+    assert.equal(await offered(), true);
+    await service.removeQuestions(TEST, [(await rows())[1]?.id ?? '']);
+    assert.equal(await offered(), false, 'the section is short');
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_2'),
+      questionIds: [idFor('q3')],
+    });
+    const paper = await service.handOver(TEST, idFor('sec_2'));
+
+    assert.equal(
+      paper.sections.find((section) => section.baseConfigSectionId === idFor('sec_2'))?.canHandOver,
+      false,
+      'it is with its reader now',
+    );
+    assert.notEqual(await handedAt(reading.id), null);
+  });
+
+  it('never offers it on a typed section', async () => {
+    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+    await reader();
+
+    const paper = await service.read(TEST);
+
+    assert.ok(paper.sections.every((section) => !section.canHandOver));
+  });
+
   it('never by the owner on a typed section, or to nobody', async () => {
     const typedTest = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
     assert.equal(

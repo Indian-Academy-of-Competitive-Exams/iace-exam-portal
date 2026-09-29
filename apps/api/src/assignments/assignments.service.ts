@@ -500,8 +500,13 @@ export class AssignmentsService {
     }
     if (!row.handedAt) throw notWhole(NOT_HANDED_MESSAGE);
     if (row.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, READING_OVER_MESSAGE);
-    await this.assertSectionWhole(row);
-    await this.assertEveryQuestionChecked(row);
+    const section = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
+    const gap = await this.releaseGap(
+      section,
+      row.test.paperSource,
+      row.baseConfigSection.questionCount,
+    );
+    if (gap) throw notWhole(gap);
 
     // Re-reading is the same fact restated: the stamp moves, so a section read again is covered again.
     const updated = await this.prisma.questionAssignment.update({
@@ -512,12 +517,15 @@ export class AssignmentsService {
     return this.withWrittenCount(updated);
   }
 
-  /** A reader always gets a whole section: typed ones at the typist's Done, and every one at its count. */
-  private async assertSectionWhole(row: AssignmentRow): Promise<void> {
-    const section = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
+  /** Why a reader cannot release the section yet, or null once they can: whole at its count, and every question checked. */
+  async releaseGap(
+    section: { testId: string; baseConfigSectionId: string },
+    paperSource: PaperSource | null,
+    needed: number,
+  ): Promise<string | null> {
     // A picked section's typist only fixes what comes back, so it never finishes the section.
-    const typed = row.test.paperSource === PAPER_SOURCES.FRAMED;
-    const [typing, onPaper] = await Promise.all([
+    const typed = paperSource === PAPER_SOURCES.FRAMED;
+    const [typing, onPaper, unchecked] = await Promise.all([
       typed
         ? this.prisma.questionAssignment.count({
             where: {
@@ -529,22 +537,16 @@ export class AssignmentsService {
           })
         : 0,
       this.prisma.paperQuestion.count({ where: section }),
+      this.prisma.paperQuestion.count({
+        where: { ...uncheckedOn(section.testId), baseConfigSectionId: section.baseConfigSectionId },
+      }),
     ]);
-    const needed = row.baseConfigSection.questionCount;
-    if (typing > 0) throw notWhole('Its typist has not marked this section done yet.');
+    if (typing > 0) return 'Its typist has not marked this section done yet.';
     if (onPaper < needed) {
-      throw notWhole(`The paper holds ${onPaper} of the ${needed} questions this section needs.`);
+      return `The paper holds ${onPaper} of the ${needed} questions this section needs.`;
     }
-  }
-
-  /** Released means every question on the paper was looked at and passed, not only most of them. */
-  private async assertEveryQuestionChecked(row: AssignmentRow): Promise<void> {
-    const unchecked = await this.prisma.paperQuestion.count({
-      where: { ...uncheckedOn(row.testId), baseConfigSectionId: row.baseConfigSectionId },
-    });
-    if (unchecked > 0) {
-      throw notWhole(`${unchecked} of this section's questions are not checked yet.`);
-    }
+    if (unchecked > 0) return `${unchecked} of this section's questions are not checked yet.`;
+    return null;
   }
 
   /** Every assignment on a row's own (test, section), not just the row's — the typist's work counts for the reader. */

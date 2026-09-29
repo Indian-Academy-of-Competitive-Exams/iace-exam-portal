@@ -522,6 +522,8 @@ const paperSectionSchema = z.object({
   name: z.string(),
   order: z.number().int(),
   questionCount: z.number().int(),
+  /** A picked section, whole, with a reader it has not reached: its owner's hand-over would be taken now. */
+  canHandOver: z.boolean(),
   questions: z.array(paperRowSchema),
 });
 

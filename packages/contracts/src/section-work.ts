@@ -77,6 +77,8 @@ export const sectionWorkSchema = z.object({
   /** The viewer's own row, when their seat is one; replaced means they only read now. */
   seatAssignmentId: z.string().nullable(),
   seatReplaced: z.boolean(),
+  /** The viewer reads this section and its release would be taken now: whole, and every question checked. */
+  canRelease: z.boolean(),
   /** Who holds the section's edit lock now, read with the section so the warning lands before the work. */
   editingBy: editLockHolderSchema.nullable(),
   questions: sectionQuestionSchema.array(),

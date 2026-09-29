@@ -471,6 +471,32 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     assert.ok(again.reader?.finalizedAt);
   });
 
+  /** The failure this prevents: a Release button the server then refuses, or none where it would be taken. */
+  it('offers the release only to its reader, once the section is whole and every question checked', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { questionCount: 2 },
+    });
+    const first = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    const second = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(first);
+    await typistDone();
+    const offered = async (id: string) => (await work.one(pair, viewer(id))).canRelease;
+
+    await work.check(pair, first.id, viewer(READER));
+    assert.equal(await offered(READER), false, 'the paper is short');
+    await onPaper(second);
+    assert.equal(await offered(READER), false, 'a question is not checked');
+    await work.check(pair, second.id, viewer(READER));
+    assert.equal(await offered(READER), true);
+    assert.equal(await offered(TYPIST), false, 'only its reader releases it');
+
+    await work.release(pair, viewer(READER));
+    assert.equal(await offered(READER), false, 'released already');
+  });
+
   it('refuses a release by a reader the section passed on from', async () => {
     const { work } = await build();
     const { catalog, pair, reading, typistDone } = await aSection();

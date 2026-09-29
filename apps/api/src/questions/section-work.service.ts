@@ -144,9 +144,10 @@ export class SectionWorkService {
   /** A review write changes nothing `load` read, so an action answers from the context it checked. */
   private async workOf(context: Context): Promise<SectionWork> {
     const { pair } = context;
-    const [scoped, editingBy] = await Promise.all([
+    const [scoped, editingBy, canRelease] = await Promise.all([
       this.scoped(context),
       sectionEditingBy(this.redis, this.prisma, pair),
+      this.canRelease(context),
     ]);
     const history = context.rows.filter((row) => row.replacedAt !== null);
     return {
@@ -164,6 +165,7 @@ export class SectionWorkService {
       seat: context.seat,
       seatAssignmentId: context.mine?.id ?? null,
       seatReplaced: context.mine?.replacedAt !== null && context.mine !== null,
+      canRelease,
       editingBy,
       questions: scoped.map((question): SectionQuestion => ({
         questionId: question.id,
@@ -213,6 +215,15 @@ export class SectionWorkService {
     const reading = actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.PROOFREADER);
     await this.assignments.finalize(reading.id);
     return this.one(pair, viewer);
+  }
+
+  /** The release's own rule, asked of the viewer's reading: the screen offers only what would be taken. */
+  private async canRelease(context: Context): Promise<boolean> {
+    const own = heldNow(context);
+    if (own?.role !== ASSIGNMENT_ROLES.PROOFREADER || !own.canMarkRead) return false;
+    const { pair, test, section } = context;
+    const gap = await this.assignments.releaseGap(pair, test.paperSource, section.questionCount);
+    return gap === null;
   }
 
   /** One question of the section — the list is not the authority, this is. */
