@@ -44,7 +44,7 @@ import { requireFile, type UploadedSheet } from '../common/importing/upload';
 import { sendErrorRows } from '../common/importing';
 import { QuestionImportService } from './question-import.service';
 
-/** The bank's run and a section's alike: the run is its previewer's, whichever key they previewed it under. */
+/** The bank's importer and a section's read one sheet; a run is its previewer's, whichever key they held. */
 const RUN_KEYS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHORING] as const;
 
 @Controller('imports/questions')
@@ -52,7 +52,7 @@ const RUN_KEYS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHOR
 export class QuestionImportController {
   constructor(private readonly imports: QuestionImportService) {}
 
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(RUN_KEYS, PERMISSION_LEVELS.READ)
   @Get('template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${QUESTION_IMPORT_TEMPLATE_FILENAME}"`)

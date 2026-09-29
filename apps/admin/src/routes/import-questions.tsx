@@ -32,7 +32,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, sectionWorkQueryKey } from '../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
 import { saveBlob } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
@@ -111,10 +111,18 @@ export function ImportQuestionsPage() {
     ...intakeFor(into),
     writes: (plan) => plan.summary.willCreate,
     success: (data) => importedText(data as QuestionImportResult),
-    onCommitted: () =>
-      queryClient.invalidateQueries({
-        queryKey: into ? QUERY_KEYS.AUTHORING : QUERY_KEYS.QUESTIONS,
-      }),
+    onCommitted: () => {
+      if (!into) {
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
+        return;
+      }
+      for (const queryKey of [QUERY_KEYS.AUTHORING, QUERY_KEYS.ASSIGNMENTS]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+      // Exact: the section's list gained questions; no card's own read changed.
+      const section = sectionWorkQueryKey(into.testId, into.sectionId);
+      void queryClient.invalidateQueries({ queryKey: section, exact: true });
+    },
   });
 
   const plan = intake.plan;
