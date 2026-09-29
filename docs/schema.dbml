@@ -874,11 +874,7 @@ Table TestStat {
   testId uuid [pk]
   evaluatedCount integer [not null, default: 0]
   sumTimeSec bigint [not null, default: 0]
-  topperAttemptId uuid
   computedAt timestamptz(3) [not null]
-  indexes {
-    (topperAttemptId)
-  }
 }
 
 Table TestSectionStat {
@@ -1014,7 +1010,6 @@ Ref: StudentStat.studentId > Student.id [delete: cascade]
 Ref: StudentSubjectStat.studentId > Student.id [delete: cascade]
 Ref: StudentSubjectStat.subjectId > Subject.id
 Ref: TestStat.testId > Test.id [delete: cascade]
-Ref: TestStat.topperAttemptId > Attempt.id
 Ref: TestSectionStat.testId > Test.id [delete: cascade]
 Ref: TestSectionStat.baseConfigSectionId > BaseConfigSection.id
 Ref: TestQuestionStat.testId > Test.id [delete: cascade]

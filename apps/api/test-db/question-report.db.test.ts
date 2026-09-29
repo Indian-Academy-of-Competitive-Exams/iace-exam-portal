@@ -45,7 +45,7 @@ const processor = new ScoringProcessor(
 const leaderboard = new LeaderboardService(prisma);
 const service = new QuestionReportService(prisma, leaderboard);
 
-async function sat(paper: Paper, timeSpent: readonly number[]) {
+async function sat(paper: Paper, timeSpent: readonly number[], startedAt?: Date) {
   const student = await makeStudent(prisma);
   const attempt = await sitPaper(prisma, {
     paper,
@@ -53,6 +53,7 @@ async function sat(paper: Paper, timeSpent: readonly number[]) {
     chosen: [RIGHT_OPTION, 'o3', null, null],
     typed: [null, null, null, TYPED_GUESS],
     timeSpent,
+    ...(startedAt && { startedAt, submittedAt: new Date(startedAt.getTime() + 60_000) }),
   });
   await processor.score(attempt.id);
   return { studentId: student.id, attemptId: attempt.id };
@@ -74,7 +75,8 @@ async function sittings() {
     ],
   });
   const mine = await sat(paper, [40, 50, 5, 10]);
-  const topper = await sat(paper, [20, 20, 20, 20]);
+  // The same marks in a minute, so the board seats them first.
+  const topper = await sat(paper, [20, 20, 20, 20], new Date('2026-08-24T05:00:00.000Z'));
   const [first, second] = paper.items;
   const computedAt = new Date();
   await prisma.testStat.create({
@@ -83,7 +85,6 @@ async function sittings() {
       // The item rows below describe ten sittings, so the cohort is open to compare against.
       evaluatedCount: 10,
       sumTimeSec: 1250,
-      topperAttemptId: topper.attemptId,
       computedAt,
     },
   });

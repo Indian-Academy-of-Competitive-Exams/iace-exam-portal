@@ -834,7 +834,7 @@ export const PERFORMANCE_ROUTES = {
 // describes the ranked cohort by construction.
 // ============================================================================
 
-/** Who topped the paper, off `TestStat.topperAttemptId`. Null until a first sitting is evaluated. */
+/** Who topped the paper: the board's rank 1, counted live. Null until a sitting is ranked. */
 const testTopperSchema = z.object({
   attemptId: z.string(),
   studentId: z.string(),

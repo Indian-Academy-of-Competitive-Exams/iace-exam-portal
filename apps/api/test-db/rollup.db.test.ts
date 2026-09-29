@@ -8,6 +8,7 @@ import { RollupQueue } from '../src/attempts/rollup-queue';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { cohortShapeOf, flagYours } from '../src/attempts/performance-analytics';
 import { cohortCurveOf } from '../src/attempts/cohort-curve';
+import { topperIdOf } from '../src/attempts/topper';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
@@ -387,7 +388,7 @@ describe('RollupService — the curve it draws', () => {
     const curve = await cohortCurveOf(prisma, paper.testId);
 
     assert.deepEqual([curve.topperScore, curve.lowestScore], [8, -1.5]);
-    assert.equal(rolled?.topperAttemptId, top.attemptId);
+    assert.equal(await topperIdOf(prisma, paper.testId), top.attemptId);
     assert.equal(rolled?.evaluatedCount, 3);
   });
 
@@ -405,7 +406,7 @@ describe('RollupService — the curve it draws', () => {
 
     const board = new LeaderboardService(prisma);
     assert.equal((await board.standing(paper.testId, quicker.attemptId))?.rank, 1);
-    assert.equal((await testStat(paper.testId))?.topperAttemptId, quicker.attemptId);
+    assert.equal(await topperIdOf(prisma, paper.testId), quicker.attemptId);
   });
 });
 

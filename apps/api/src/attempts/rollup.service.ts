@@ -9,7 +9,7 @@ import { ATTEMPT_STATUS, COHORT_COUNT_EVERY_MIN } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { IN_COHORT, RANK_ORDER } from './ranking-sql';
+import { IN_COHORT } from './ranking-sql';
 import {
   addToQuestion,
   addToStudentTotals,
@@ -198,7 +198,6 @@ export class RollupService {
     );
   }
 
-  /** One statement, so the counts and the topper describe one snapshot of the cohort. */
   private async writeTestTotals(
     tx: Prisma.TransactionClient,
     testId: string,
@@ -206,25 +205,19 @@ export class RollupService {
   ): Promise<void> {
     await tx.$executeRaw`
       WITH sat AS (
-        SELECT a."id", a."score", a."timeTakenSec",
-               COALESCE((
-                 SELECT sum((part->>5)::bigint)
-                 FROM jsonb_array_elements(COALESCE(a."sectionScores", '[]'::jsonb)) part
-               ), 0) AS "timeSec"
+        SELECT COALESCE((
+          SELECT sum((part->>5)::bigint)
+          FROM jsonb_array_elements(COALESCE(a."sectionScores", '[]'::jsonb)) part
+        ), 0) AS "timeSec"
         FROM "Attempt" a
         WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
       )
-      INSERT INTO "TestStat" (
-        "testId", "evaluatedCount", "sumTimeSec", "topperAttemptId", "computedAt")
-      SELECT ${testId}::uuid, count(*)::int, COALESCE(sum("timeSec"), 0)::bigint,
-             -- The board's rank 1, so the topper an admin reads is the one students see first.
-             (SELECT "id" FROM sat ORDER BY ${RANK_ORDER} LIMIT 1),
-             ${now}
+      INSERT INTO "TestStat" ("testId", "evaluatedCount", "sumTimeSec", "computedAt")
+      SELECT ${testId}::uuid, count(*)::int, COALESCE(sum("timeSec"), 0)::bigint, ${now}
       FROM sat
       ON CONFLICT ("testId") DO UPDATE SET
         "evaluatedCount" = EXCLUDED."evaluatedCount",
         "sumTimeSec" = EXCLUDED."sumTimeSec",
-        "topperAttemptId" = EXCLUDED."topperAttemptId",
         "computedAt" = EXCLUDED."computedAt"`;
   }
 

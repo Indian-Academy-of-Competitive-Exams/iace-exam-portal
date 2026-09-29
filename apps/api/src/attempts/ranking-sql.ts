@@ -13,6 +13,16 @@ export const IN_COHORT = Prisma.sql`"isGraded" AND "status" = 'EVALUATED' AND "s
 /** The board's order, unqualified like `IN_COHORT`: marks, then less time, then id; no time is slowest. */
 export const RANK_ORDER = Prisma.sql`"score" DESC, "timeTakenSec" ASC NULLS LAST, "id" ASC`;
 
+/** The board's rank 1 alone: `RANK_ORDER` is `Attempt_ranking_idx`'s own order, so one index probe. */
+export function rankOneSql(testId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT "id" FROM "Attempt"
+    WHERE "testId" = ${testId}::uuid AND ${IN_COHORT}
+    ORDER BY ${RANK_ORDER}
+    LIMIT 1
+  `;
+}
+
 /** One chosen sitting's standing in its own test's cohort. */
 export interface StandingRow {
   attempt_id: string;

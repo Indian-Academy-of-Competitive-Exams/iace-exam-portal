@@ -334,8 +334,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 Every aggregate stores **sums and counts, never averages**; averages are derived on read.
 
 **A rollup holds only what a read cannot count cheaply.** A test's spread — its mean, highest,
-lowest and curve — is one grouped read of its ranked sittings, counted live like rank, so
-`TestStat` keeps only the count and the time a series of tests is read by without a scan each.
+lowest and curve — is one grouped read of its ranked sittings, and its topper is the board's rank 1,
+one probe of the ranking index; both are counted live like rank, so `TestStat` keeps only the count
+and the time a series of tests is read by without a scan each.
 
 **The two halves are counted differently, because their writes land differently.** A student's own
 aggregates touch one row per student, so five thousand concurrent scorers contend on none of them:

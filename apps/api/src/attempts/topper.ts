@@ -1,13 +1,13 @@
 /**
- * The paper's topper, read for their CLOCK. `TestStat.topperAttemptId` already names them, so this
- * is one read per report rather than one per row. The select reads their answers too, to decode
- * the sheet, but only time and marks ever leave this file — a topper is right often enough that
- * their answers would be a key.
+ * The paper's topper — the board's rank 1 — read for their CLOCK, once per report rather than once
+ * per row. The select reads their answers too, to decode the sheet, but only time and marks ever
+ * leave this file — a topper is right often enough that their answers would be a key.
  */
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
+import { rankOneSql } from './ranking-sql';
 import { sectionScoresIn } from './score-paper';
 
 /** No `questionVersion`: the sheet is read to decode it, but only time and marks leave here. */
@@ -24,7 +24,7 @@ export interface TopperQuestion {
   marksAwarded: number | null;
 }
 
-/** What the topper spent, keyed the two ways a report needs it. Empty when no rollup names one. */
+/** What the topper spent, keyed the two ways a report needs it. Empty while nobody is ranked. */
 export interface TopperTimes {
   byPaperQuestion: ReadonlyMap<string, TopperQuestion>;
   bySection: ReadonlyMap<string, number>;
@@ -35,16 +35,18 @@ export const NO_TOPPER: TopperTimes = {
   bySection: new Map(),
 };
 
-/** Null until the rollup has folded a sitting in, which is the same moment a curve appears. */
+/** Counted live like every rank, so the topper a report names is the one the board seats first. */
+export async function topperIdOf(prisma: PrismaService, testId: string): Promise<string | null> {
+  const [top] = await prisma.$queryRaw<{ id: string }[]>(rankOneSql(testId));
+  return top?.id ?? null;
+}
+
 export async function topperOf(prisma: PrismaService, testId: string): Promise<TopperTimes> {
-  const stat = await prisma.testStat.findUnique({
-    where: { testId },
-    select: { topperAttemptId: true },
-  });
-  if (stat?.topperAttemptId == null) return NO_TOPPER;
+  const topperId = await topperIdOf(prisma, testId);
+  if (topperId === null) return NO_TOPPER;
 
   const topper = await prisma.attempt.findUnique({
-    where: { id: stat.topperAttemptId },
+    where: { id: topperId },
     select: TOPPER_SELECT,
   });
   if (topper === null) return NO_TOPPER;

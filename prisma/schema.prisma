@@ -718,7 +718,6 @@ model Attempt {
   test           Test            @relation(fields: [testId], references: [id])
   student        Student         @relation(fields: [studentId], references: [id])
   sheet          AttemptSheet?
-  topperOf       TestStat[]
   savedQuestions SavedQuestion[]
 
   @@unique([testId, studentId, attemptNo])
@@ -1182,19 +1181,15 @@ model StudentSubjectStat {
   @@id([studentId, subjectId, scope])
 }
 
-// The spread (mean, highest, lowest) is counted live off the ranked sittings, never stored here.
+// The spread (mean, highest, lowest) and the topper are counted live, never stored here.
 model TestStat {
-  testId          String   @id @db.Uuid
+  testId         String   @id @db.Uuid
   // The ranked cohort: one sitting a student, and every figure below is over exactly these.
-  evaluatedCount  Int      @default(0)
-  sumTimeSec      BigInt   @default(0)
-  topperAttemptId String?  @db.Uuid
-  computedAt      DateTime @db.Timestamptz(3)
+  evaluatedCount Int      @default(0)
+  sumTimeSec     BigInt   @default(0)
+  computedAt     DateTime @db.Timestamptz(3)
 
-  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
-  topperAttempt Attempt? @relation(fields: [topperAttemptId], references: [id])
-
-  @@index([topperAttemptId])
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 }
 
 model TestSectionStat {

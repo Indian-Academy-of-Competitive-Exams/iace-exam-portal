@@ -22,6 +22,7 @@ import { boardName } from './leaderboard-board';
 import { cohortCurveOf } from './cohort-curve';
 import { optionCountsIn, optionsIn } from './rollup-fold';
 import { RollupQueue } from './rollup-queue';
+import { topperIdOf } from './topper';
 import {
   itemsOf,
   sectionsOf,
@@ -58,7 +59,6 @@ const STAT_SELECT = {
   evaluatedCount: true,
   sumTimeSec: true,
   computedAt: true,
-  topperAttemptId: true,
 } as const satisfies Prisma.TestStatSelect;
 
 @Injectable()
@@ -72,9 +72,10 @@ export class TestAnalyticsService {
   async forTest(testId: string): Promise<TestAnalytics> {
     const test = await this.requireTest(testId);
 
-    const [stat, live, sections, items, attemptCount, reachedCount] = await Promise.all([
+    const [stat, live, topper, sections, items, attemptCount, reachedCount] = await Promise.all([
       this.prisma.testStat.findUnique({ where: { testId }, select: STAT_SELECT }),
       cohortCurveOf(this.prisma, testId),
+      this.topperOf(testId),
       this.sectionsOf(testId),
       this.itemsOf(testId),
       // Every sitting, ranked or not, on [testId, status]: the rollup holds only the ranked cohort.
@@ -85,12 +86,10 @@ export class TestAnalyticsService {
     return {
       testId: test.id,
       title: test.title,
-      summary: summaryOf(
-        stat && { ...stat, sumTimeSec: Number(stat.sumTimeSec) },
-        live,
-        await this.topperOf(stat?.topperAttemptId ?? null),
-        { attemptCount, reachedCount },
-      ),
+      summary: summaryOf(stat && { ...stat, sumTimeSec: Number(stat.sumTimeSec) }, live, topper, {
+        attemptCount,
+        reachedCount,
+      }),
       sections: sectionsOf(sections),
       items: itemsOf(items),
     };
@@ -147,7 +146,8 @@ export class TestAnalyticsService {
   }
 
   /** The topper by name, which an admin may see where the student board shows only a board name. */
-  private async topperOf(attemptId: string | null): Promise<TestTopper | null> {
+  private async topperOf(testId: string): Promise<TestTopper | null> {
+    const attemptId = await topperIdOf(this.prisma, testId);
     if (attemptId === null) return null;
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
