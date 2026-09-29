@@ -82,7 +82,7 @@ export class SubmitService {
     return ended;
   }
 
-  /** The screen's last batch, by the save's own rules; past the deadline's grace it is dropped as a late save is. */
+  /** The screen's last batch, saved as the newest; past the deadline's grace, by the key or the row, it is dropped as late. */
   private async lastAnswers(
     studentId: string,
     attempt: AttemptRow,

@@ -353,6 +353,8 @@ OOM-killed Valkey mid-event loses up to a second of answers.
 
 - **ElastiCache Serverless cannot be used at all** — no parameter groups, so the policy cannot be
   set, and BullMQ's own documentation rules it out.
+- **The live sitting assumes one node.** The flusher's `MGET` and its settle script span
+  `attempt:state:*` and `attempt:dirty` with no hash tags, so Cluster mode would refuse them.
 - A node-based `cache.t4g.small` is $23.94 and comes back **empty** after a node failure; no
   current ElastiCache engine writes to disk.
 
@@ -602,19 +604,24 @@ worst-case invoice.
    (731 MB, 163 MB pulled). The Prisma CLI is only in the migration image.
 2. Build the SPAs. **`VITE_API_URL` is substituted at compile time**, so an environment is a build,
    not a variable — a staging artifact cannot be promoted to production.
-3. Upload the SPAs: hashed assets **first**, with `max-age=31536000, immutable`; then `index.html`,
+3. Run the **migrate** image to completion. It runs `prisma migrate deploy` and exits, and the API
+   containers do not start until it has.
+4. Recreate the API containers. Each is `tini`-led, so SIGTERM closes Nest and the container exits
+   (`b2029d4`). **There is no draining on this shape** — `docker compose up -d` recreates with a
+   gap, which is the cost of not having a load balancer.
+5. Upload the SPAs: hashed assets **first**, with `max-age=31536000, immutable`; then `index.html`,
    `sw.js` and the manifest with `no-cache`. The other order serves a shell pointing at chunks that
    are not there yet. Invalidate those three paths only — `/*` evicts the whole asset cache for
    nothing, and 1,000 invalidation paths a month are free.
-4. **Old `/assets` files are never deleted.** A tab opened before the deploy still lazy-loads a
+6. **Old `/assets` files are never deleted.** A tab opened before the deploy still lazy-loads a
    chunk by its old name; keeping them costs about a cent a year.
-5. Run the **migrate** image to completion. It runs `prisma migrate deploy` and exits, and the API
-   containers do not start until it has.
-6. Recreate the API containers. Each is `tini`-led, so SIGTERM closes Nest and the container exits
-   (`b2029d4`). **There is no draining on this shape** — `docker compose up -d` recreates with a
-   gap, which is the cost of not having a load balancer.
 7. **If `deploy/.env` changed, push it back to SSM in the same breath** (§11). A box and its master
    copy that disagree is a failure you only discover while replacing the box.
+
+**The API goes before the SPAs.** An old tab stays on its old bundle until every tab closes, so the
+API must take the previous client's requests anyway; the reverse is not true — a new bundle meeting
+the old API can send a field the old API strips, and a submit's `last` batch was exactly that: the
+sitting ended, the client was told it had, and the answers it carried were gone.
 
 A new service worker installs but **does not activate until every tab of the old one closes** —
 there is no `skipWaiting`, deliberately, because a bundle swapped under a sitting in progress is

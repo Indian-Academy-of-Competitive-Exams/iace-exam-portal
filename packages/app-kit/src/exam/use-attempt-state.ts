@@ -137,6 +137,7 @@ export function useAttemptState(
   const openQuestion = useRef<string | null>(null);
   const revision = useRef(0);
   const inFlight = useRef<Promise<boolean> | null>(null);
+  const finishing = useRef(false);
   // The batch in the air: kept on the device too, or a reload before its answer loses it.
   const flying = useRef<AnswerChange[]>([]);
   const seeded = useRef(false);
@@ -283,6 +284,7 @@ export function useAttemptState(
       const idle = isIdle();
       const { changes, movedSections, requeue } = take();
       if (!idle) revision.current += 1;
+      finishing.current = true;
       const going = (async () => {
         try {
           const done = await send(
@@ -299,6 +301,7 @@ export function useAttemptState(
           if (isTakenOver(error)) standDown();
           throw error;
         } finally {
+          finishing.current = false;
           flying.current = [];
           keepQueue();
         }
@@ -405,7 +408,8 @@ export function useAttemptState(
 
   // Fire and forget, on keepalive: the page is gone before any answer could be read.
   const leave = useCallback(() => {
-    if (stopped.current) return;
+    // The paper going in carries everything unsent itself; a keepalive save beside it is one more write.
+    if (stopped.current || finishing.current) return;
     bankOpen();
     if (!hasUnsent()) return;
     revision.current += 1;

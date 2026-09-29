@@ -39,7 +39,6 @@ import {
   type HeldState,
 } from './attempt-state';
 
-/** Outlives the longest sitting by a wide margin: the flusher must still find a finished one. */
 /** The key IS the pause: while it lives a sitting can be come back to, and past it there is nothing to read. */
 const STATE_TTL_SEC = PAUSE_LIMIT_SEC;
 
@@ -160,7 +159,7 @@ export class AttemptStateService {
       },
       () => this.durableState(studentId, attemptId),
     );
-    // Marked AFTER the write: a flush that takes the mark then reads the key is sure to see this state.
+    // Marked AFTER the write: a flush that unmarks this sitting has seen this state or a later one.
     await this.markDirty(attemptId);
 
     return { ...acked(next, now), applied };

@@ -111,7 +111,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
     await this.outbox.queue(unscored);
     // Most are a job still in the queue, swallowed by its id; a count that stays up is a lost one.
     if (unscored.length > 0)
-      this.logger.warn(`Queued ${unscored.length} ended, unscored sittings again`);
+      this.logger.log(`Queued ${unscored.length} ended, unscored sittings again`);
     await this.askAgainForRescores(settled);
   }
 

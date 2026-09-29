@@ -161,14 +161,6 @@ export class FakeRedis {
       const entry = this.live(key);
       return Promise.resolve(entry?.value instanceof Set ? entry.value.size : 0);
     },
-
-    spop: (key: string, count: number): Promise<string[]> => {
-      const entry = this.live(key);
-      if (!(entry?.value instanceof Set)) return Promise.resolve([]);
-      const taken = [...entry.value].slice(0, count);
-      for (const member of taken) entry.value.delete(member);
-      return Promise.resolve(taken);
-    },
   };
 
   // --- the typed helpers RedisService adds on top ---------------------------
