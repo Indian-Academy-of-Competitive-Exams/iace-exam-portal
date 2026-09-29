@@ -4,8 +4,10 @@ import {
   ErrorCodes,
   TEST_BUCKET,
   instituteDayLabel,
+  isSat,
   testAction,
   testBucket,
+  testIsOpen,
   type PerformancePoint,
   type PerformanceTrend,
   type StudentCatalogSeries,
@@ -34,9 +36,7 @@ export interface SeriesProgress {
 
 export function seriesProgress(series: StudentCatalogSeries): SeriesProgress {
   const total = series.tests.length;
-  const done = series.tests.filter(
-    (test) => test.attemptStatus !== null && test.attemptStatus !== ATTEMPT_STATUS.IN_PROGRESS,
-  ).length;
+  const done = series.tests.filter((test) => isSat(test.attemptStatus)).length;
   return { total, done, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
 }
 
@@ -138,7 +138,7 @@ export function resultsByTest(
 
 /** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
 export function shutReason(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
+  if (!testIsOpen(test.opensAt, now)) return 'Not open yet';
   return 'Waiting its turn';
 }
 

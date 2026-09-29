@@ -23,6 +23,7 @@ import {
   dispositionRates,
   instituteWallTime,
   percentLabel,
+  testIsOpen,
   type PerformancePoint,
   type StudentOverview,
 } from '@iace/contracts';
@@ -348,7 +349,7 @@ const resultLine = (point: PerformancePoint) =>
 
 function whenLine(row: Sittable, now: Date): string | null {
   const { opensAt } = row.test;
-  if (opensAt === null || Date.parse(opensAt) <= now.getTime()) return null;
+  if (opensAt === null || testIsOpen(opensAt, now)) return null;
 
   return `opens ${instituteDateTimeLabel(opensAt)}`;
 }

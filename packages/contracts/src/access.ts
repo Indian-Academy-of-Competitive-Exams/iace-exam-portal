@@ -440,9 +440,12 @@ export type TestBucket = (typeof TEST_BUCKET)[keyof typeof TEST_BUCKET];
 
 const SAT = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
+/** A sitting that counts as done: it files the test under Done and lets an in-order series move on. */
+export const isSat = (status: AttemptStatus | null): boolean => status !== null && SAT.has(status);
+
 export function testBucket(test: StudentCatalogTest): TestBucket {
   // Sat comes first: a test with retakes left is still startable, and Done is where it belongs.
-  if (test.attemptStatus !== null && SAT.has(test.attemptStatus)) return TEST_BUCKET.DONE;
+  if (isSat(test.attemptStatus)) return TEST_BUCKET.DONE;
 
   return test.canStart ? TEST_BUCKET.OPEN : TEST_BUCKET.LATER;
 }

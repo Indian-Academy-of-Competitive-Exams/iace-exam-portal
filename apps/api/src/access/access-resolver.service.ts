@@ -14,6 +14,7 @@ import {
   TEST_SERIES_KIND,
   TEST_STATUS,
   type TestSeriesKind,
+  isSat,
   testIsOpen,
   scopedSections,
   scopedDurationSec,
@@ -23,9 +24,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
-
-/** A sitting that counts as done — for the series that unlocks in order, and for the test list. */
-const FINISHED = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
 /** The safety net under the counter: a write that changes a held field without bumping it lasts this long at most. */
 const CATALOG_MAX_AGE_MS = 15 * 60 * 1000;
@@ -483,13 +481,10 @@ function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
   };
 }
 
-const isFinished = (status: AttemptStatus | null): boolean =>
-  status !== null && FINISHED.has(status);
-
 function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
   // In order means: the first one not yet sat is open, and everything past it waits its turn.
   const waiting = series.sequentialTests
-    ? series.tests.findIndex((test) => !isFinished(test.attemptStatus))
+    ? series.tests.findIndex((test) => !isSat(test.attemptStatus))
     : NONE_WAITING;
 
   return {

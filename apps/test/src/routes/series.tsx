@@ -30,6 +30,7 @@ import {
   TEST_BUCKET,
   testAction,
   testBucket,
+  testIsOpen,
   type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
@@ -205,7 +206,7 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
 
 /** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
+  if (test.opensAt !== null && !testIsOpen(test.opensAt, now)) {
     return `Opens ${instituteDateTimeLabel(test.opensAt)}`;
   }
   return 'Any time';
