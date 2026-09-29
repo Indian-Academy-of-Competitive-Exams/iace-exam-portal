@@ -3,7 +3,6 @@
  * chosen template draw it — the screen itself decides nothing about how a
  * sitting behaves, and a skin decides nothing about what it saves.
  */
-import { useEffect } from 'react';
 import {
   Link,
   Navigate,
@@ -15,7 +14,7 @@ import {
 import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import { stoodDownSays, useExamView, useStartedSitting, type EndedSitting } from '@iace/app-kit';
-import { browserSessionStorage, useFullscreen } from '@iace/app-kit/browser';
+import { browserSessionStorage, useFullscreen, useLeaveGuard } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, RESUME_PARAM, ROUTES, STORAGE_KEYS } from '../lib/constants';
 import { tabId } from '../lib/tab-id';
@@ -111,7 +110,7 @@ function ExamHall(
     tab: tabId(),
     answerQueue: { storage: browserSessionStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
   });
-  useLeaveGuard(view.hasUnsent, view.leave);
+  const releaseLeave = useLeaveGuard(view.hasUnsent, view.leave);
 
   if (view.takenOver) {
     const says = stoodDownSays(view);
@@ -123,7 +122,15 @@ function ExamHall(
           /* ui-copy-ok: consequence — continuing here is what stops the other one */
           hint={says.hint}
           action={
-            <Button onClick={() => continueHere(sitting.paper.attemptId)}>Continue here</Button>
+            <Button
+              onClick={() => {
+                // What is unsent here is the next load's to settle, so this reload asks nothing.
+                releaseLeave();
+                continueHere(sitting.paper.attemptId);
+              }}
+            >
+              Continue here
+            </Button>
           }
         />
       </div>
@@ -131,23 +138,6 @@ function ExamHall(
   }
 
   return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
-}
-
-/** Closing or reloading with answers unsent asks first; going anyway sends them on the way out. */
-function useLeaveGuard(hasUnsent: () => boolean, leave: () => void) {
-  useEffect(() => {
-    // The browser writes the prompt itself; all a page may do is ask for it.
-    const ask = (event: BeforeUnloadEvent) => {
-      if (hasUnsent()) event.preventDefault();
-    };
-    window.addEventListener('beforeunload', ask);
-    // pagehide, not unload: it fires on mobile browsers and when the page goes into the back-forward cache.
-    window.addEventListener('pagehide', leave);
-    return () => {
-      window.removeEventListener('beforeunload', ask);
-      window.removeEventListener('pagehide', leave);
-    };
-  }, [hasUnsent, leave]);
 }
 
 /** Names the sitting, so a paper handed in elsewhere lands on its result instead of restarting. */

@@ -69,6 +69,7 @@ export { StreakFigure } from './streak-figure';
 export { ProtectedRoute } from './protected-route';
 export { useFilters } from './use-filters';
 export { useFullscreen, type FullscreenHandle } from './use-fullscreen';
+export { useLeaveGuard } from './use-leave-guard';
 export { useMediaQuery, DESKTOP_QUERY } from './app-shell/use-media-query';
 export { useFilterSpec, type FilterSpecState, type ListValues } from './use-filter-spec';
 export { useImportScreen, type ImportScreenState } from './use-import-screen';
