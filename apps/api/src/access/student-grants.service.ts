@@ -18,7 +18,7 @@ import {
 } from '../common/exporting';
 import { studentCardsOf, type StudentCard } from '../students';
 import { NotificationsService } from '../notifications';
-import { REACH_SELECT, reachableBy, seriesSources } from './access-resolver.service';
+import { AccessResolverService } from './access-resolver.service';
 
 interface GrantRow {
   student: StudentCard;
@@ -50,6 +50,7 @@ export class StudentGrantsService {
     private readonly auditContext: AuditContext,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly access: AccessResolverService,
   ) {}
 
   async exportForSeries(testSeriesId: string): Promise<{ workbook: Buffer; rows: number }> {
@@ -87,44 +88,21 @@ export class StudentGrantsService {
     return { workbook, rows: rows.length };
   }
 
-  /** Every series this student reaches and what opens each, read the way the resolver reads it. */
+  /** Every series this student reaches and what opens each: the resolver's own reach, and when each grant was made. */
   async reachedSeries(studentId: string): Promise<StudentSeriesAccess[]> {
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null },
-      select: REACH_SELECT,
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
-    const rows = await this.prisma.testSeries.findMany({
-      where: reachableBy(studentId, student),
-      select: {
-        id: true,
-        name: true,
-        kind: true,
-        programCode: true,
-        branchIds: true,
-        examStage: { select: { exam: { select: { course: true } } } },
-        grants: { where: { studentId }, select: { createdAt: true } },
-        event: { select: { candidates: { where: { studentId }, select: { studentId: true } } } },
-      },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    });
-
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      sources: seriesSources({
-        series: {
-          kind: row.kind,
-          programCode: row.programCode,
-          course: row.examStage?.exam.course ?? null,
-          branchIds: row.branchIds,
-          granted: row.grants.length > 0,
-          isCandidate: (row.event?.candidates.length ?? 0) > 0,
-        },
-        student,
+    const [reached, grants] = await Promise.all([
+      this.access.seriesReachedBy(studentId),
+      this.prisma.studentGrant.findMany({
+        where: { studentId },
+        select: { testSeriesId: true, createdAt: true },
       }),
-      grantedAt: row.grants[0]?.createdAt.toISOString() ?? null,
+    ]);
+    if (!reached) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    const grantedAt = new Map(grants.map((grant) => [grant.testSeriesId, grant.createdAt]));
+    return reached.map((row) => ({
+      ...row,
+      grantedAt: grantedAt.get(row.id)?.toISOString() ?? null,
     }));
   }
 

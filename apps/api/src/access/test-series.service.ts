@@ -18,7 +18,7 @@ import {
 import { matchFilters } from '../common/match-filters';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService, REACH_SELECT, reachableBy } from './access-resolver.service';
+import { AccessResolverService } from './access-resolver.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
@@ -77,17 +77,11 @@ export class TestSeriesService {
     private readonly events: DomainEventBus,
   ) {}
 
-  /** Prisma ANDs the keys inside NOT, so this is the exact complement of "already reaches it". */
   private async outOfReachOf(studentId?: string): Promise<Prisma.TestSeriesWhereInput[]> {
     if (studentId === undefined) return [];
 
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null },
-      select: REACH_SELECT,
-    });
-    if (!student) return [];
-
-    return [{ NOT: reachableBy(studentId, student) }];
+    const reached = await this.access.seriesReachedBy(studentId);
+    return reached ? [{ id: { notIn: reached.map((row) => row.id) } }] : [];
   }
 
   async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {

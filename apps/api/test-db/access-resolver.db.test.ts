@@ -6,9 +6,11 @@ import {
   DEFAULT_EXAM_COURSE,
   EXAM_COURSE,
   ErrorCodes,
+  STUDENT_SERIES_SOURCE,
   TEST_SERIES_KIND,
   TEST_SERIES_KINDS,
   TEST_STATUS,
+  testSeriesListQuerySchema,
   type AttemptStatus,
   type StudentCatalog,
   type TestSeriesKind,
@@ -16,9 +18,15 @@ import {
 } from '@iace/contracts';
 import { AccessCacheListener } from '../src/access/access-cache.listener';
 import { AccessResolverService } from '../src/access/access-resolver.service';
+import { ProgramsService } from '../src/access/programs.service';
+import { StudentGrantsService } from '../src/access/student-grants.service';
+import { TestSeriesService } from '../src/access/test-series.service';
+import { AuditContext, AuditService } from '../src/audit';
+import { ExamStagesService } from '../src/configs';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
-import { FakeRedis } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   makeBranch,
   makeCatalog,
@@ -707,7 +715,7 @@ describe('reading about a test', () => {
   });
 });
 
-/** The mirror of `reachableBy`: everyone counted here reaches the series reading the other way. */
+/** The mirror of `seriesSources`: everyone counted here reaches the series reading the other way. */
 describe('AccessResolverService.audienceCount', () => {
   const counted = (seriesId: string) => resolverOn().audienceCount(seriesId);
 
@@ -780,5 +788,85 @@ describe('AccessResolverService.audienceCount', () => {
     await studentAt(at, { isActive: false });
 
     assert.equal(await counted(seriesId), 0);
+  });
+});
+
+/** The admin page and the grant picker read the resolver's own rule, so they cannot drift from what the student sees. */
+describe('what an admin reads a student reaching', () => {
+  const grantsOn = () =>
+    new StudentGrantsService(
+      prisma,
+      new AuditContext(),
+      new NotificationsService(prisma),
+      new AuditService(prisma, new FakeStorage() as never),
+      resolverOn(),
+    );
+
+  const pickerFor = async (studentId: string) => {
+    const auditContext = new AuditContext();
+    const events = new FakeEventBus().asService();
+    const service = new TestSeriesService(
+      prisma,
+      new ExamStagesService(prisma, auditContext, events),
+      new ProgramsService(prisma, auditContext),
+      resolverOn(),
+      auditContext,
+      events,
+    );
+    const page = await service.list(
+      testSeriesListQuerySchema.parse({ pageSize: '100', notReachedBy: studentId }),
+    );
+    return page.items.map((row) => row.id).toSorted();
+  };
+
+  it('lists the series the catalog lists, each with the route that reaches it', async () => {
+    const at = await place();
+    const standard = await series(at, { name: 'A standard' });
+    const program = await series(at, { name: 'B program', kind: TEST_SERIES_KIND.PROGRAM });
+    const event = await series(at, { name: 'C event', kind: TEST_SERIES_KIND.EVENT });
+    const granted = await series(at, { name: 'D granted', branchIds: [uid()] });
+    const elsewhere = await series(at, { name: 'E elsewhere', branchIds: [uid()] });
+    const off = await series(at, { name: 'F off', isEnabled: false });
+    const student = await studentAt(at, { programs: [PROGRAM] });
+    await prisma.eventCandidate.create({ data: { eventId: at.event, studentId: student } });
+    await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: granted } });
+
+    const admin = await grantsOn().reachedSeries(student);
+
+    assert.deepEqual(
+      admin.map((row) => row.id),
+      await reached(student),
+    );
+    assert.deepEqual(
+      admin.map((row) => [row.id, row.sources]),
+      [
+        [standard, [STUDENT_SERIES_SOURCE.COURSE]],
+        [program, [STUDENT_SERIES_SOURCE.PROGRAM]],
+        [event, [STUDENT_SERIES_SOURCE.EVENT]],
+        [granted, [STUDENT_SERIES_SOURCE.GRANT]],
+      ],
+    );
+    assert.deepEqual(
+      admin.filter((row) => row.grantedAt !== null).map((row) => row.id),
+      [granted],
+    );
+    assert.deepEqual(
+      await pickerFor(student),
+      [elsewhere, off, at.catalog.testSeriesId].toSorted(),
+    );
+  });
+
+  /** Deactivation empties the student's own catalog; the admin deciding whether to reactivate them still needs the list. */
+  it('shows a deactivated student what they would reach, and reads an unknown one as missing', async () => {
+    const { at, seriesId } = await reachable();
+    const off = await studentAt(at, { isActive: false });
+
+    await refused(resolverOn().catalog(off, NOW), ErrorCodes.NOT_FOUND);
+    assert.deepEqual(
+      (await grantsOn().reachedSeries(off)).map((row) => row.id),
+      [seriesId],
+    );
+    assert.deepEqual(await pickerFor(off), [at.catalog.testSeriesId]);
+    await refused(grantsOn().reachedSeries(uid()), ErrorCodes.NOT_FOUND);
   });
 });

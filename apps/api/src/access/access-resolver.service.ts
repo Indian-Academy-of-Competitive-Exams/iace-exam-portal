@@ -82,6 +82,13 @@ type SharedSeries = Prisma.TestSeriesGetPayload<{ select: typeof SHARED_SELECT }
 /** One test as every student reaching it sees it, before their own programs and sittings are applied. */
 export type ReachableTest = SharedSeries['tests'][number];
 
+/** One series a student reaches, and every route that reaches it. */
+export interface SeriesReach {
+  id: string;
+  name: string;
+  sources: StudentSeriesSource[];
+}
+
 interface HeldCatalog {
   epoch: number;
   builtAt: number;
@@ -191,6 +198,24 @@ export class AccessResolverService {
     return test;
   }
 
+  /** What the admin screens show a student reaching: a deactivated one still reads what they would reach. Null when there is no such student. */
+  async seriesReachedBy(studentId: string): Promise<SeriesReach[] | null> {
+    const [student, series] = await Promise.all([
+      this.prisma.student.findFirst({
+        where: { id: studentId, deletedAt: null },
+        select: REACH_FACTS,
+      }),
+      this.shared(),
+    ]);
+    if (!student) return null;
+
+    const reach = reachFrom(student);
+    return series.flatMap((row) => {
+      const sources = sourcesOf(row, reach);
+      return sources.length > 0 ? [{ id: row.id, name: row.name, sources }] : [];
+    });
+  }
+
   /** Everyone one series reaches, which is the catalog read backwards. Ids only: the caller fans out. */
   async studentsReaching(testSeriesId: string): Promise<string[]> {
     const series = await this.prisma.testSeries.findUnique({
@@ -286,21 +311,22 @@ function reachFrom(student: Prisma.StudentGetPayload<{ select: typeof REACH_FACT
   };
 }
 
+function sourcesOf(row: SharedSeries, reach: Reach): StudentSeriesSource[] {
+  return seriesSources({
+    series: {
+      kind: row.kind,
+      programCode: row.programCode,
+      course: row.examStage?.exam.course ?? null,
+      branchIds: row.branchIds,
+      granted: reach.grantedSeries.has(row.id),
+      isCandidate: row.eventId !== null && reach.events.has(row.eventId),
+    },
+    student: reach,
+  });
+}
+
 function reachedBy(series: readonly SharedSeries[], reach: Reach): SharedSeries[] {
-  return series.filter(
-    (row) =>
-      seriesSources({
-        series: {
-          kind: row.kind,
-          programCode: row.programCode,
-          course: row.examStage?.exam.course ?? null,
-          branchIds: row.branchIds,
-          granted: reach.grantedSeries.has(row.id),
-          isCandidate: row.eventId !== null && reach.events.has(row.eventId),
-        },
-        student: reach,
-      }).length > 0,
-  );
+  return series.filter((row) => sourcesOf(row, reach).length > 0);
 }
 
 function catalogOf(series: readonly SharedSeries[], standing: Standing, now: Date): StudentCatalog {
@@ -318,43 +344,7 @@ function counterOf(raw: string | null | undefined): number {
   return Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
-/** The student columns `reachableBy` weighs, so every reader selects exactly what it takes. */
-export const REACH_SELECT = {
-  currentBranchId: true,
-  programs: true,
-  enrolledCourses: true,
-} as const satisfies Prisma.StudentSelect;
-
-/** One where-input for reach, asked by the admin readers; a grant overrides every kind but the switch. */
-export function reachableBy(
-  studentId: string,
-  student: Readonly<{
-    currentBranchId: string | null;
-    programs: string[];
-    enrolledCourses: ExamCourse[];
-  }>,
-): Prisma.TestSeriesWhereInput {
-  const automatic: Prisma.TestSeriesWhereInput[] = [
-    { kind: TEST_SERIES_KIND.FREE },
-    ...(student.currentBranchId !== null && student.enrolledCourses.length > 0
-      ? [
-          {
-            kind: TEST_SERIES_KIND.STANDARD,
-            branchIds: { has: student.currentBranchId },
-            examStage: { exam: { course: { in: student.enrolledCourses } } },
-          },
-        ]
-      : []),
-    ...(student.programs.length > 0
-      ? [{ kind: TEST_SERIES_KIND.PROGRAM, programCode: { in: student.programs } }]
-      : []),
-    { kind: TEST_SERIES_KIND.EVENT, event: { candidates: { some: { studentId } } } },
-  ];
-
-  return { isEnabled: true, OR: [{ grants: { some: { studentId } } }, ...automatic] };
-}
-
-/** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
+/** What a series reaches by, and what a student carries, as `seriesSources` weighs the two. */
 interface ReachPairing {
   series: Readonly<{
     kind: TestSeriesKind;
@@ -371,7 +361,7 @@ interface ReachPairing {
   }>;
 }
 
-/** Mirrors `reachableBy` arm for arm, in memory: a kind decides the automatic route, and a grant adds one. */
+/** The one rule for reach, read from a student's side: a kind decides the automatic route, and a grant adds one. */
 export function seriesSources({ series, student }: ReachPairing): StudentSeriesSource[] {
   const automatic: Partial<Record<TestSeriesKind, boolean>> = {
     [TEST_SERIES_KIND.FREE]: true,
@@ -399,7 +389,7 @@ const SOURCE_OF_KIND: Readonly<Record<TestSeriesKind, StudentSeriesSource>> = {
   [TEST_SERIES_KIND.EVENT]: STUDENT_SERIES_SOURCE.EVENT,
 };
 
-/** What a series reaches, as a STUDENT filter. The mirror of `reachableBy`; edit the two together. */
+/** What a series reaches, as a STUDENT filter. The mirror of `seriesSources`; edit the two together. */
 function audienceOf(
   series: Readonly<{
     id: string;

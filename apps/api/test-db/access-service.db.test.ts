@@ -45,6 +45,7 @@ async function build(stageActive = true) {
   const auditContext = new AuditContext();
   const events = new FakeEventBus();
   const programs = new ProgramsService(prisma, auditContext);
+  const resolver = new AccessResolverService(prisma, new FakeRedis().asService());
   return {
     stageId,
     events,
@@ -53,7 +54,7 @@ async function build(stageActive = true) {
       prisma,
       new ExamStagesService(prisma, auditContext, events.asService()),
       programs,
-      new AccessResolverService(prisma, new FakeRedis().asService()),
+      resolver,
       auditContext,
       events.asService(),
     ),
@@ -62,6 +63,7 @@ async function build(stageActive = true) {
       auditContext,
       new NotificationsService(prisma),
       new AuditService(prisma, new FakeStorage() as never),
+      resolver,
     ),
   };
 }
@@ -687,6 +689,7 @@ describe('StudentGrantsService — the escape hatch', () => {
       new AuditContext(),
       unwritable,
       new AuditService(prisma, new FakeStorage() as never),
+      new AccessResolverService(prisma, new FakeRedis().asService()),
     );
 
     await assert.rejects(
