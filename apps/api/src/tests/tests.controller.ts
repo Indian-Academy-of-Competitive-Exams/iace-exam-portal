@@ -190,12 +190,6 @@ export class TestsController {
     return this.offering.saveOffering(id, body, user.isSuperAdmin);
   }
 
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get(':id/series')
-  series(@Param('id') id: string): Promise<TestSeriesLink> {
-    return this.offering.series(id);
-  }
-
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/series')

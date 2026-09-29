@@ -83,7 +83,7 @@ async function serviceWith(test: TestFields = {}, sittings = 0) {
     });
   }
   const events = new FakeEventBus();
-  const finalizer = new FinalizeService(prisma, events.asService());
+  const finalizer = new FinalizeService();
   return {
     events,
     service: new OfferingService(prisma, events.asService(), new AuditContext(), finalizer),
@@ -148,16 +148,6 @@ describe('OfferingService — a test belongs to one series', () => {
     });
     const row = await testRow();
     assert.deepEqual([row.testSeriesId, row.seriesOrder], [idFor('srs_2'), null]);
-  });
-
-  it('reads back the series a test is already in', async () => {
-    const { service } = await serviceWith();
-
-    assert.deepEqual(await service.series(TEST), {
-      testSeriesId: idFor('srs_1'),
-      name: 'SSC CGL 2026 — Full length',
-      order: 1,
-    });
   });
 
   /** A student who could reach it through srs_1 has a cached catalog that no longer holds. */

@@ -10,11 +10,8 @@ import {
   TEST_STATUS,
   type OfferResult,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
-import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { uncheckedOn } from '../assignments';
 import { paperCompletenessIssues, scopeRefOf } from './test-rules';
-import { beginPaperEdit } from './begin-paper-edit';
 import { formRefusal } from '../common/form-refusal';
 
 const OFFER_SELECT = {
@@ -22,7 +19,6 @@ const OFFER_SELECT = {
   baseConfigId: true,
   finalizedAt: true,
   status: true,
-  testSeriesId: true,
   scope: true,
   scopeRef: true,
 } as const satisfies Prisma.TestSelect;
@@ -57,23 +53,6 @@ type ReadingClient = Pick<Prisma.TransactionClient, 'questionAssignment' | 'pape
 /** Offers a test: the paper rows already exist, so this freezes them rather than writing them. */
 @Injectable()
 export class FinalizeService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly events: DomainEventBus,
-  ) {}
-
-  /** On its own: the Test row locked, then the same offer the Offer step's save makes. */
-  async offer(testId: string, isSuperAdmin = false): Promise<OfferResult> {
-    const offered = await this.prisma.$transaction(async (tx) => {
-      await beginPaperEdit(tx, testId);
-      return this.offerWithin(tx, testId, isSuperAdmin);
-    }, FREEZE_LIMITS);
-    const { testSeriesId } = await this.requireTest(testId);
-    // The series carrying it: the catalog a student reads is cached against it.
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-    return offered;
-  }
-
   /** Inside a transaction that already holds the Test row, so no paper edit can land between the gates and the freeze. */
   async offerWithin(
     tx: Prisma.TransactionClient,
@@ -190,11 +169,5 @@ export class FinalizeService {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });
-  }
-
-  private async requireTest(id: string): Promise<OfferRow> {
-    const test = await this.prisma.test.findUnique({ where: { id }, select: OFFER_SELECT });
-    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-    return test;
   }
 }

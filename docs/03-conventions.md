@@ -205,7 +205,7 @@ does not run.
 | `student.signed_up`      | auth, on the signup that created the row                                                                      | students (records the platform consent)             | wired     |
 | `student.pin_reset`      | auth, both reset paths                                                                                        | —                                                   | announced |
 | `student.access_changed` | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | —                                                   | announced |
-| `access.catalog_changed` | access (series write), tests (finalize, every offering write, a rename or re-skin)                            | access (every API process rebuilds its held series) | wired     |
+| `access.catalog_changed` | access (series write), tests (every offering write, a rename or re-skin)                                      | access (every API process rebuilds its held series) | wired     |
 | `exam_stage.changed`     | configs (a stage rename, an exam's code or course, an edit to a blueprint a test is built on)                 | access (as above)                                   | wired     |
 
 Submit and scoring do not go through the bus: a submitted sitting goes to the BullMQ scoring queue

@@ -200,10 +200,6 @@ export class OfferingService {
     private readonly finalizer: FinalizeService,
   ) {}
 
-  async series(testId: string): Promise<TestSeriesLink> {
-    return linkOf(await this.requireTest(testId));
-  }
-
   /** One column, so the test's own clock is untouched by a move and cannot be re-saved away. */
   async moveToSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink> {
     const test = await this.requireTest(testId);

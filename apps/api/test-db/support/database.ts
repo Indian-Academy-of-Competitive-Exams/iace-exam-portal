@@ -26,6 +26,7 @@ import {
   type QuestionStatus,
   type QuestionType,
   type LiveAnswer,
+  type OfferResult,
   type PaperSource,
   type StudentType,
   type TestScope,
@@ -34,6 +35,8 @@ import {
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { sheetOf, servedSheet } from '../../src/attempts/answer-sheet';
 import { SHEET_ROW_SELECT } from '../../src/attempts/paper-sheet.service';
+import { beginPaperEdit } from '../../src/tests/begin-paper-edit';
+import { FinalizeService, FREEZE_LIMITS } from '../../src/tests/finalize.service';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -435,6 +438,18 @@ export async function makePaper(prisma: PrismaService, input: PaperInput): Promi
     });
   }
   return { testId: test.id, catalog, scope, sectionIds, items };
+}
+
+/** The freeze as the Offer step's save runs it: the Test row held first, in one transaction. */
+export function offerTest(
+  prisma: PrismaService,
+  testId: string,
+  isSuperAdmin = false,
+): Promise<OfferResult> {
+  return prisma.$transaction(async (tx) => {
+    await beginPaperEdit(tx, testId);
+    return new FinalizeService().offerWithin(tx, testId, isSuperAdmin);
+  }, FREEZE_LIMITS);
 }
 
 export interface SitInput {

@@ -9,13 +9,12 @@ import {
   TEST_STATUS,
   type TestStatus,
 } from '@iace/contracts';
-import { FinalizeService } from '../src/tests/finalize.service';
-import { FakeEventBus } from '../test/support/fakes';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import {
   makeAdmin,
   makePaper,
   makeQuestion,
+  offerTest,
   resetDatabase,
   testPrisma,
   uid,
@@ -23,7 +22,6 @@ import {
 } from './support/database';
 
 const prisma = testPrisma();
-const service = new FinalizeService(prisma, new FakeEventBus().asService());
 
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
@@ -113,8 +111,7 @@ describe('FinalizeService — a reading covers the paper, not just the section',
     await readSection(paper, 0, [swappedIn?.questionId ?? '']);
     await readSection(paper, 1);
 
-    const error = await service
-      .offer(paper.testId)
+    const error = await offerTest(prisma, paper.testId)
       .then(() => null)
       .catch((thrown: unknown) => thrown);
 
@@ -148,8 +145,7 @@ describe('FinalizeService — a reading covers the paper, not just the section',
       },
     });
 
-    const error = await new FinalizeService(swappedMidway, new FakeEventBus().asService())
-      .offer(paper.testId)
+    const error = await offerTest(swappedMidway, paper.testId)
       .then(() => null)
       .catch((thrown: unknown) => thrown);
 
@@ -163,7 +159,7 @@ describe('FinalizeService — a reading covers the paper, not just the section',
     await readSection(paper, 0);
     await readSection(paper, 1);
 
-    await service.offer(paper.testId);
+    await offerTest(prisma, paper.testId);
 
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
   });
@@ -173,7 +169,7 @@ describe('FinalizeService — the offer freezes the paper', () => {
   it('stamps the test, opens it, and bumps the optimistic version in one write', async () => {
     const paper = await draft();
 
-    const result = await service.offer(paper.testId);
+    const result = await offerTest(prisma, paper.testId);
 
     assert.equal(result.finalizedByThisCall, true);
     assert.equal(result.frozenQuestions, 5);
@@ -188,7 +184,7 @@ describe('FinalizeService — the offer freezes the paper', () => {
   it('leaves the config alone, because nobody is sitting anything yet', async () => {
     const paper = await draft();
 
-    await service.offer(paper.testId);
+    await offerTest(prisma, paper.testId);
 
     assert.equal((await configRow(paper)).locked, false);
   });
@@ -198,8 +194,8 @@ describe('FinalizeService — a second offer', () => {
   it('is a no-op that reports the first one’s outcome', async () => {
     const paper = await draft();
 
-    const first = await service.offer(paper.testId);
-    const second = await service.offer(paper.testId);
+    const first = await offerTest(prisma, paper.testId);
+    const second = await offerTest(prisma, paper.testId);
 
     assert.equal(first.finalizedByThisCall, true);
     assert.equal(second.finalizedByThisCall, false);
@@ -210,7 +206,10 @@ describe('FinalizeService — a second offer', () => {
   it('lets exactly one of two concurrent offers do the work', async () => {
     const paper = await draft();
 
-    const results = await Promise.all([service.offer(paper.testId), service.offer(paper.testId)]);
+    const results = await Promise.all([
+      offerTest(prisma, paper.testId),
+      offerTest(prisma, paper.testId),
+    ]);
 
     // Both read version 0; only the one whose conditional update still matched may write.
     assert.equal(results.filter((result) => result.finalizedByThisCall).length, 1);
@@ -220,13 +219,13 @@ describe('FinalizeService — a second offer', () => {
   /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
   it('opens a retired test again without re-freezing its paper', async () => {
     const paper = await draft();
-    const first = await service.offer(paper.testId);
+    const first = await offerTest(prisma, paper.testId);
     await prisma.test.update({
       where: { id: paper.testId },
       data: { status: TEST_STATUS.INACTIVE },
     });
 
-    const again = await service.offer(paper.testId);
+    const again = await offerTest(prisma, paper.testId);
 
     assert.equal(again.status, TEST_STATUS.ACTIVE);
     assert.equal(again.finalizedByThisCall, false);
@@ -240,7 +239,7 @@ describe('FinalizeService — a scoped test is judged by its own sections alone'
   it('offers a SECTIONAL test whose one scoped section is full', async () => {
     const paper = await sectionalDraft(3);
 
-    const result = await service.offer(paper.testId);
+    const result = await offerTest(prisma, paper.testId);
 
     assert.equal(result.finalizedByThisCall, true);
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
@@ -250,8 +249,7 @@ describe('FinalizeService — a scoped test is judged by its own sections alone'
   it('still refuses a SECTIONAL test whose scoped section is short, naming only that section', async () => {
     const paper = await sectionalDraft(2);
 
-    const error = await service
-      .offer(paper.testId)
+    const error = await offerTest(prisma, paper.testId)
       .then(() => null)
       .catch((thrown: unknown) => thrown);
 
@@ -267,7 +265,7 @@ describe('FinalizeService — what it refuses to offer', () => {
     const paper = await draft([0, 0]);
 
     await assert.rejects(
-      () => service.offer(paper.testId),
+      () => offerTest(prisma, paper.testId),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.VALIDATION_ERROR,
     );
     const test = await testRow(paper);
@@ -279,7 +277,7 @@ describe('FinalizeService — what it refuses to offer', () => {
   it('refuses a section short of the count its config asks for, and puts the claim back', async () => {
     const paper = await draft([3, 1]);
 
-    await assert.rejects(() => service.offer(paper.testId), /Quant holds 1 of the 2/);
+    await assert.rejects(() => offerTest(prisma, paper.testId), /Quant holds 1 of the 2/);
 
     // The refusal happens INSIDE the transaction, so nothing it had already written survives.
     const test = await testRow(paper);
@@ -289,7 +287,7 @@ describe('FinalizeService — what it refuses to offer', () => {
 
   it('refuses a test that does not exist', async () => {
     await assert.rejects(
-      () => service.offer(uid()),
+      () => offerTest(prisma, uid()),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });

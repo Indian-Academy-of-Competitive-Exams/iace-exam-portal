@@ -28,7 +28,6 @@ import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
-import { FinalizeService } from '../src/tests/finalize.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
@@ -36,6 +35,7 @@ import {
   makeAdmin,
   makeCatalog,
   makePaper,
+  offerTest,
   makeQuestion,
   makeSection,
   makeSubject,
@@ -1348,7 +1348,6 @@ describe('AssignmentsService — finalizing', () => {
 describe('the offer gate', () => {
   it('refuses while a section is still being proof-read, then allows once finalized', async () => {
     const { assignments } = build();
-    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
     await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
@@ -1368,7 +1367,7 @@ describe('the offer gate', () => {
     );
 
     await assert.rejects(
-      () => finalizer.offer(paper.testId),
+      () => offerTest(prisma, paper.testId),
       (error: unknown) =>
         AppException.is(error) &&
         error.code === ErrorCodes.VALIDATION_ERROR &&
@@ -1376,7 +1375,7 @@ describe('the offer gate', () => {
     );
 
     await releasedNow(created.id);
-    const result = await finalizer.offer(paper.testId);
+    const result = await offerTest(prisma, paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });
@@ -1384,7 +1383,6 @@ describe('the offer gate', () => {
   /** The shape the gate exists for: a typist finishing does not by itself clear the section. */
   it('with both roles assigned, the typist finalising is not enough — the reader still has to', async () => {
     const { assignments } = build();
-    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
     await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
@@ -1417,7 +1415,7 @@ describe('the offer gate', () => {
     await finalizedNow(typistRow.id);
 
     await assert.rejects(
-      () => finalizer.offer(paper.testId),
+      () => offerTest(prisma, paper.testId),
       (error: unknown) =>
         AppException.is(error) &&
         error.code === ErrorCodes.VALIDATION_ERROR &&
@@ -1425,7 +1423,7 @@ describe('the offer gate', () => {
     );
 
     await releasedNow(readerRow.id);
-    const result = await finalizer.offer(paper.testId);
+    const result = await offerTest(prisma, paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });
@@ -1433,7 +1431,6 @@ describe('the offer gate', () => {
   /** The override: a test cannot be unshippable because one person's row will never be finalized. */
   it('lets a super admin offer over a section nobody has marked read', async () => {
     const { assignments } = build();
-    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
     await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
@@ -1453,10 +1450,10 @@ describe('the offer gate', () => {
     );
 
     await assert.rejects(
-      () => finalizer.offer(paper.testId),
+      () => offerTest(prisma, paper.testId),
       refusedWith(ErrorCodes.VALIDATION_ERROR),
     );
-    const result = await finalizer.offer(paper.testId, true);
+    const result = await offerTest(prisma, paper.testId, true);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });
@@ -1464,7 +1461,6 @@ describe('the offer gate', () => {
   /** A picked section's typist only fixes what comes back, so theirs is no job the offer waits on. */
   it('offers a picked test whose typist never finished anything', async () => {
     const { assignments } = build();
-    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
     await prisma.test.update({
       where: { id: paper.testId },
@@ -1486,14 +1482,13 @@ describe('the offer gate', () => {
       typist.id,
     );
 
-    const result = await finalizer.offer(paper.testId);
+    const result = await offerTest(prisma, paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });
 
   /** This replaces nothing: a test with no assignments offers exactly as it does today. */
   it('does not block a test that never had any assignments', async () => {
-    const finalizer = new FinalizeService(prisma, new FakeEventBus().asService());
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
     await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
@@ -1501,7 +1496,7 @@ describe('the offer gate', () => {
       data: { questionCount: 1 },
     });
 
-    const result = await finalizer.offer(paper.testId);
+    const result = await offerTest(prisma, paper.testId);
 
     assert.equal(result.status, TEST_STATUS.ACTIVE);
   });

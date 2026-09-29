@@ -19,6 +19,7 @@ import {
   makeBuilder,
   makeSitting,
   makeStudent,
+  offerTest,
   resetDatabase,
   testPrisma,
 } from './support/database';
@@ -86,13 +87,7 @@ async function builder() {
     paper,
     bank,
     seriesId,
-    finalizer: new FinalizeService(prisma, events.asService()),
-    offering: new OfferingService(
-      prisma,
-      events.asService(),
-      audit,
-      new FinalizeService(prisma, events.asService()),
-    ),
+    offering: new OfferingService(prisma, events.asService(), audit, new FinalizeService()),
     /** Picked by hand, so this is how a paper is built up to the counts its config asks. */
     pickWholePaper: async () => {
       await paper.addQuestions(draft.id, {
@@ -114,7 +109,7 @@ const testRow = (id: string) => prisma.test.findUniqueOrThrow({ where: { id } })
 
 describe('the Phase-2 milestone — a config becomes a publishable mock', () => {
   it('walks config -> draft -> paper -> series -> offered', async () => {
-    const { draft, paper, finalizer, offering, pickWholePaper, seriesId } = await builder();
+    const { draft, paper, offering, pickWholePaper, seriesId } = await builder();
     assert.equal(draft.status, TEST_STATUS.DRAFT);
     assert.equal(draft.totalQuestions, 5);
 
@@ -122,7 +117,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal((await paper.read(draft.id)).totalQuestions, 5);
 
     await offering.moveToSeries(draft.id, { testSeriesId: seriesId });
-    const frozen = await finalizer.offer(draft.id);
+    const frozen = await offerTest(prisma, draft.id);
 
     // A publishable mock: frozen, carried by a series, and offered — one call does all three.
     assert.equal(frozen.finalizedByThisCall, true);
@@ -165,11 +160,11 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
 
 describe('the invariants Phase 2 must not have broken', () => {
   it('one paper per sitting: once it is sat it cannot be edited, and a second offer does nothing', async () => {
-    const { draft, paper, finalizer, pickWholePaper, bank } = await builder();
+    const { draft, paper, pickWholePaper, bank } = await builder();
     await pickWholePaper();
-    await finalizer.offer(draft.id);
+    await offerTest(prisma, draft.id);
 
-    assert.equal((await finalizer.offer(draft.id)).finalizedByThisCall, false);
+    assert.equal((await offerTest(prisma, draft.id)).finalizedByThisCall, false);
 
     const before = await rowsOf(draft.id);
     await makeSitting(prisma, {
@@ -193,9 +188,9 @@ describe('the invariants Phase 2 must not have broken', () => {
 
   /** The failure this prevents: a live paper moving under students who can already reach it. */
   it('refuses every paper edit once the test has been offered, sat or not', async () => {
-    const { draft, paper, finalizer, pickWholePaper, bank } = await builder();
+    const { draft, paper, pickWholePaper, bank } = await builder();
     await pickWholePaper();
-    await finalizer.offer(draft.id);
+    await offerTest(prisma, draft.id);
     const [first] = await rowsOf(draft.id);
     const conflict = (error: unknown) =>
       AppException.is(error) && error.code === ErrorCodes.CONFLICT;
