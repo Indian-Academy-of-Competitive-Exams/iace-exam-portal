@@ -879,13 +879,14 @@ test('a save the server never answers is given up, and its answers wait for the 
   });
 
   act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
-  act(() => void result.current.flush());
+  let delivered: boolean | 'waiting' = 'waiting';
+  act(() => void result.current.flush().then((landed) => (delivered = landed)));
   await act(async () => {
     mock.timers.tick(SAVE_TIMEOUT_MS);
     await settle();
   });
 
-  assert.equal(result.current.isSaving, false, 'given up');
+  assert.equal(delivered, false, 'given up, as a failed save');
   assert.equal(result.current.hasUnsaved, true, 'and said so');
   assert.equal(result.current.hasUnsent(), true, 'its answers kept for the next save');
 });

@@ -13,8 +13,8 @@ export const AUTOSAVE_JITTER_MS = 5_000;
 /** Enough unsaved answers that waiting for the timer risks losing real work. */
 export const AUTOSAVE_AT_COUNT = 20;
 
-/** A save given up after this is an ordinary failed one; under the 20s floor between ticks, so no tick queues behind it. */
-export const SAVE_TIMEOUT_MS = 15_000;
+/** Only a dead request lasts this long: saves already queue behind each other, and the submit waits FINISH_WAIT_MS at most. */
+export const SAVE_TIMEOUT_MS = 45_000;
 
 /** How long the paper waits on a save in the air: its 1s+2s+4s retries still land inside the server's 30s grace. */
 export const FINISH_WAIT_MS = 5_000;
