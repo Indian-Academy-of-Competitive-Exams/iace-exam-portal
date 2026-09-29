@@ -9,12 +9,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
 import { Text } from '../ui/text';
-import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
+import { solutionsQuery } from '../../lib/queries';
 import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { ReviewContent } from '../review/review-content';
-import { type ReviewedQuestion } from '@iace/app-kit';
 
 export function SavedQuestionSheet({
   saved,
@@ -74,26 +73,16 @@ export function SavedQuestionSheet({
   );
 }
 
-/** The two reads the review screen already makes, cached per sitting so a second row is free. */
+/** The review screen's own read, cached per sitting so a second row is free. */
 function useSatQuestion(saved: SavedQuestion) {
   const attemptId = saved.attemptId ?? '';
-
-  const card = useQuery({ ...scoreCardQuery(attemptId), enabled: attemptId !== '' });
-  const solutions = useQuery({
-    ...solutionsQuery(attemptId),
-    enabled: attemptId !== '',
-    retry: false,
-  });
-
-  const mine = card.data?.questions.find((row) => row.questionId === saved.questionId);
-  const keyed = solutions.data?.questions.find((row) => row.questionId === saved.questionId);
-  const question: ReviewedQuestion | undefined = mine ? { ...mine, ...keyed } : undefined;
+  const solutions = useQuery({ ...solutionsQuery(attemptId), enabled: attemptId !== '' });
 
   return {
-    question,
+    question: solutions.data?.questions.find((row) => row.questionId === saved.questionId),
     languages: solutions.data?.languages ?? ['EN'],
-    isLoading: card.isLoading,
-    isError: card.isError,
-    retry: () => void card.refetch(),
+    isLoading: solutions.isLoading,
+    isError: solutions.isError,
+    retry: () => void solutions.refetch(),
   };
 }

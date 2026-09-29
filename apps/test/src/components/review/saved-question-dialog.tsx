@@ -14,34 +14,20 @@ import {
   EMPTY_STATE_KINDS,
   SkeletonParagraph,
 } from '@iace/ui';
-import { scoreCardQuery, solutionsQuery } from '../../lib/queries';
-import { type ReviewedQuestion } from '@iace/app-kit';
+import { solutionsQuery } from '../../lib/queries';
 import { ReviewQuestion } from './review-paper';
 
-/** The two reads the review screen already makes, cached per sitting so a second row is free. */
+/** The review screen's own read, cached per sitting so a second row is free. */
 function useSatQuestion(saved: SavedQuestion) {
   const attemptId = saved.attemptId ?? '';
-
-  const card = useQuery({
-    ...scoreCardQuery(attemptId),
-    enabled: attemptId !== '',
-  });
-  const solutions = useQuery({
-    ...solutionsQuery(attemptId),
-    enabled: attemptId !== '',
-    retry: false,
-  });
-
-  const mine = card.data?.questions.find((row) => row.questionId === saved.questionId);
-  const keyed = solutions.data?.questions.find((row) => row.questionId === saved.questionId);
-  const question: ReviewedQuestion | undefined = mine ? { ...mine, ...keyed } : undefined;
+  const solutions = useQuery({ ...solutionsQuery(attemptId), enabled: attemptId !== '' });
 
   return {
-    question,
+    question: solutions.data?.questions.find((row) => row.questionId === saved.questionId),
     languages: solutions.data?.languages ?? ['EN'],
-    isLoading: card.isLoading,
-    isError: card.isError,
-    retry: () => void card.refetch(),
+    isLoading: solutions.isLoading,
+    isError: solutions.isError,
+    retry: () => void solutions.refetch(),
   };
 }
 
