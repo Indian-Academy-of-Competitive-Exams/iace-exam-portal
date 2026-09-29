@@ -42,6 +42,7 @@ import { isUniqueViolation } from '../common/prisma-errors';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { uncheckedOn } from './unread-questions';
+import { doneOpen, readOpen } from './assignment-gates';
 import { formRefusal } from '../common/form-refusal';
 import { everyTermMatches } from '../common/search-terms';
 
@@ -593,14 +594,7 @@ export class AssignmentsService {
       where: {
         OR: sections.map(({ testId, baseConfigSectionId }) => ({ testId, baseConfigSectionId })),
       },
-      select: {
-        id: true,
-        testId: true,
-        baseConfigSectionId: true,
-        role: true,
-        finalizedAt: true,
-        replacedAt: true,
-      },
+      select: { id: true, testId: true, baseConfigSectionId: true },
     });
     const ids = held.map((row) => row.id);
     const written =
@@ -618,17 +612,7 @@ export class AssignmentsService {
       const key = sectionKey(row);
       const so_far = bySection.get(key);
       if (!so_far) continue;
-      bySection.set(key, {
-        writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0),
-        typistDone:
-          row.role === ASSIGNMENT_ROLES.TYPIST && !row.replacedAt
-            ? row.finalizedAt !== null
-            : so_far.typistDone,
-        readerDone:
-          row.role === ASSIGNMENT_ROLES.PROOFREADER && !row.replacedAt
-            ? row.finalizedAt !== null
-            : so_far.readerDone,
-      });
+      bySection.set(key, { writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0) });
     }
     return bySection;
   }
@@ -747,11 +731,9 @@ const sectionKey = (row: { testId: string; baseConfigSectionId: string }): strin
 /** What a section holds, counted across every assignment on it. */
 export interface SectionCounts {
   writtenCount: number;
-  typistDone: boolean | null;
-  readerDone: boolean | null;
 }
 
-const NO_COUNTS: SectionCounts = { writtenCount: 0, typistDone: null, readerDone: null };
+const NO_COUNTS: SectionCounts = { writtenCount: 0 };
 
 function toAssignment(
   row: AssignmentRow,
@@ -769,8 +751,8 @@ function toAssignment(
     dueAt: row.dueAt?.toISOString() ?? null,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     writtenCount: counts.writtenCount,
-    typistDone: counts.typistDone,
-    readerDone: counts.readerDone,
+    canMarkDone: doneOpen(row),
+    canMarkRead: readOpen(row),
     testOffered: row.test.finalizedAt !== null,
     handedAt: row.handedAt?.toISOString() ?? null,
     replacedAt: row.replacedAt?.toISOString() ?? null,

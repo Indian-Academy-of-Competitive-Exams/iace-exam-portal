@@ -748,6 +748,54 @@ describe('AssignmentsService — mine', () => {
     assert.equal(outstanding[0]?.baseConfigSectionId, sectionB.id);
   });
 
+  /** The failure this prevents: a queue offering Mark read before the section reached its reader, or Done on a picked paper. */
+  it('offers Done on a typed section alone, and Mark read only once the section is handed over', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const typed = await framed(catalog);
+    const picked = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    const reader = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    for (const test of [typed, picked]) {
+      await assignments.assign(
+        test.id,
+        body({ baseConfigSectionId: section.id, assigneeId: typist.id }),
+        typist.id,
+      );
+      await assignments.assign(
+        test.id,
+        body({
+          baseConfigSectionId: section.id,
+          assigneeId: reader.id,
+          role: ASSIGNMENT_ROLES.PROOFREADER,
+        }),
+        reader.id,
+      );
+    }
+    await prisma.questionAssignment.updateMany({
+      where: { testId: picked.id, role: ASSIGNMENT_ROLES.PROOFREADER },
+      data: { handedAt: new Date() },
+    });
+
+    const gates = async (adminId: string) =>
+      new Map(
+        (await queue(assignments, adminId)).map((row) => [
+          row.testId,
+          { done: row.canMarkDone, read: row.canMarkRead },
+        ]),
+      );
+    const typing = await gates(typist.id);
+    const reading = await gates(reader.id);
+
+    assert.deepEqual(typing.get(typed.id), { done: true, read: false });
+    assert.deepEqual(typing.get(picked.id), { done: false, read: false });
+    assert.deepEqual(reading.get(typed.id), { done: false, read: false });
+    assert.deepEqual(reading.get(picked.id), { done: false, read: true });
+  });
+
   /** The queue is per-assignee for everybody but a super admin: another's row and an unheld section are both absent. */
   it('shows an ordinary admin their own rows and nothing else', async () => {
     const { assignments } = build();

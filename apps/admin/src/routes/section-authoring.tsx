@@ -6,7 +6,6 @@ import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
-  PAPER_SOURCES,
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
@@ -83,20 +82,9 @@ const workKey = (testId: string, sectionId: string) =>
 /** What the viewer can do right now, read off the section once for the page and every card. */
 function seatOf(work: SectionWork) {
   const own = work.seatReplaced ? null : work.seat;
-  const reader = work.reader;
-  const typist = work.typist;
   return {
-    reading:
-      own === SECTION_SEATS.READER &&
-      !work.offered &&
-      Boolean(reader?.handedAt) &&
-      !reader?.finalizedAt,
-    typing:
-      own === SECTION_SEATS.TYPIST &&
-      !work.offered &&
-      work.paperSource === PAPER_SOURCES.FRAMED &&
-      Boolean(typist) &&
-      !typist?.finalizedAt,
+    reading: own === SECTION_SEATS.READER && Boolean(work.reader?.canMarkRead),
+    typing: own === SECTION_SEATS.TYPIST && Boolean(work.typist?.canMarkDone),
     fixing: own === SECTION_SEATS.TYPIST && !work.offered,
   };
 }

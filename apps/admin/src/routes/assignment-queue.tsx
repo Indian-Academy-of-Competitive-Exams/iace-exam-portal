@@ -57,7 +57,6 @@ interface RowMoves {
   onRead: (row: AssignmentWithTest) => void;
 }
 
-/** What an outstanding row can do next: a typist marks done; a reader, once the typist has, reads or sends back. */
 /** Where the section stands for this row's holder, in the words each role uses. */
 function stateOf(row: AssignmentWithTest): { label: string; variant: BadgeProps['variant'] } {
   if (row.sectionDropped) return { label: 'Section dropped', variant: 'neutral' };
@@ -79,18 +78,15 @@ function StateBadge({ row }: Readonly<{ row: AssignmentWithTest }>) {
 }
 
 function RowMenu({ row, moves }: Readonly<{ row: AssignmentWithTest; moves: RowMoves }>) {
-  if (row.finalizedAt || row.replacedAt) return null;
-  if (isTypist(row.role)) {
-    return (
-      <RowActions label={`Actions for ${row.sectionName}`}>
-        <DropdownMenuItem onSelect={() => moves.onDone(row)}>Mark done</DropdownMenuItem>
-      </RowActions>
-    );
-  }
-  if (row.typistDone === false) return null;
+  if (!row.canMarkDone && !row.canMarkRead) return null;
   return (
     <RowActions label={`Actions for ${row.sectionName}`}>
-      <DropdownMenuItem onSelect={() => moves.onRead(row)}>Mark read</DropdownMenuItem>
+      {row.canMarkDone ? (
+        <DropdownMenuItem onSelect={() => moves.onDone(row)}>Mark done</DropdownMenuItem>
+      ) : null}
+      {row.canMarkRead ? (
+        <DropdownMenuItem onSelect={() => moves.onRead(row)}>Mark read</DropdownMenuItem>
+      ) : null}
     </RowActions>
   );
 }

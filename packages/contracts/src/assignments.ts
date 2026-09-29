@@ -32,10 +32,10 @@ export const assignmentSchema = z.object({
   finalizedAt: z.string().nullable(),
   /** Questions written under ANY assignment on this section — a section fact, not this row's own. */
   writtenCount: z.number().int(),
-  /** Whether the section's typist has pressed Done. Null where nobody types it — a picked paper. */
-  typistDone: z.boolean().nullable(),
-  /** Whether the section's reader has marked it read. Null where nobody has been given it to read. */
-  readerDone: z.boolean().nullable(),
+  /** The typist's Done would be taken now — the server's gate, so a screen never offers a refused one. */
+  canMarkDone: z.boolean(),
+  /** The reader's release would be taken now, short of the section being whole and checked. */
+  canMarkRead: z.boolean(),
   /** On a proof-reader's row: when the section reached them. Null while it is still with others. */
   handedAt: z.string().nullable(),
   /** Set once the role ended, passed on or its section dropped; the row stays as the record. */

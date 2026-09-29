@@ -41,7 +41,7 @@ import { beginDraftPaperEdit, beginPaperEdit } from './begin-paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
 import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
-import { reopenReadingIfUnchecked } from '../assignments';
+import { doneOpen, reopenReadingIfUnchecked } from '../assignments';
 import { AuditContext } from '../audit';
 import { formRefusal } from '../common/form-refusal';
 
@@ -62,6 +62,8 @@ const TYPED_SECTION_MESSAGE =
   "A typed section's paper is what its typist chose at Done. Send the section back to change it.";
 const ALREADY_DONE_MESSAGE = 'This section is already marked done.';
 const HANDED_AT_DONE_MESSAGE = "A typed section reaches its proof-reader at its typist's Done.";
+const HANDED_AT_HAND_OVER_MESSAGE =
+  'A picked section reaches its proof-reader when its owner hands it over, not at a Done.';
 const NO_READER_MESSAGE = 'Give this section a proof-reader before handing it over.';
 const ALREADY_HANDED_MESSAGE = 'This section is already with its proof-reader.';
 const NOT_WRITTEN_HERE_MESSAGE = 'Choose only questions written for this section.';
@@ -364,6 +366,9 @@ export class PaperService {
     const { testId } = typing;
     const test = await this.requireTest(testId);
     this.assertAssemblable(test);
+    if (!doneOpen({ ...typing, test })) {
+      throw new AppException(ErrorCodes.CONFLICT, HANDED_AT_HAND_OVER_MESSAGE);
+    }
     const config = await this.configs.detail(test.baseConfigId);
     const section = this.scopedOf(test, config).find(
       (row) => row.id === typing.baseConfigSectionId,
