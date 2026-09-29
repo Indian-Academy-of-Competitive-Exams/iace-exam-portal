@@ -284,7 +284,7 @@ export function createApiCore(options: ApiClientOptions) {
     path: string,
     schema: ZodType<T>,
     body?: unknown,
-    extra: Pick<RequestOptions<T>, 'keepalive'> = {},
+    extra: Pick<RequestOptions<T>, 'keepalive' | 'signal'> = {},
   ) => request(path, { method, body, schema, ...extra });
   // A list query may carry its caller's AbortSignal: it rides the fetch, never the query string.
   const list = <T>(path: string, query: object, schema: ZodType<T>) => {

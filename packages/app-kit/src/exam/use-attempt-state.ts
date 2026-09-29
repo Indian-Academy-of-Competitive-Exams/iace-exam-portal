@@ -16,7 +16,13 @@ import {
   type SectionProgress,
 } from '@iace/contracts';
 import { type AppApiClient } from '../api-client';
-import { autosaveDelayMs, seedRevision, shouldFlushNow } from '../autosave-policy';
+import {
+  autosaveDelayMs,
+  FINISH_WAIT_MS,
+  SAVE_TIMEOUT_MS,
+  seedRevision,
+  shouldFlushNow,
+} from '../autosave-policy';
 import { isWorthAskingAgain } from '../query-client';
 import { type KeyValueStorage } from '../token-store';
 
@@ -145,6 +151,7 @@ export function useAttemptState(
   const revision = useRef(0);
   const inFlight = useRef<Promise<boolean> | null>(null);
   const seeded = useRef(false);
+  const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
@@ -254,9 +261,15 @@ export function useAttemptState(
     revision.current += 1;
     const batch = unsentBatch();
     setIsSaving(true);
+    const abandon = new AbortController();
+    giveUp.current = setTimeout(() => abandon.abort(), SAVE_TIMEOUT_MS);
     try {
       const { api, tab } = mounted.current;
-      const saved = await api.me.saveAttemptState(attemptId, { ...batch, tab });
+      const saved = await api.me.saveAttemptState(
+        attemptId,
+        { ...batch, tab },
+        { signal: abandon.signal },
+      );
       revision.current = seedRevision(revision.current, saved.revision);
       // Answering is also a clock check: the deadline it answers with is the one that counts.
       setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
@@ -269,6 +282,7 @@ export function useAttemptState(
       failed(error);
       return false;
     } finally {
+      clearTimeout(giveUp.current);
       setIsSaving(false);
     }
   }, [acknowledge, attemptId, failed, unsentBatch]);
@@ -283,7 +297,11 @@ export function useAttemptState(
 
   const finish = useCallback(
     async <T>(send: (batch: LastBatch | null) => Promise<T>): Promise<T> => {
-      while (inFlight.current) await inFlight.current;
+      // Behind a save in the air, but not for long: the last batch carries its answers too.
+      const giveUpAt = Date.now() + FINISH_WAIT_MS;
+      while (inFlight.current && Date.now() < giveUpAt) {
+        await settledWithin(inFlight.current, giveUpAt - Date.now());
+      }
       const wasStopped = stopped.current;
       // Nothing is saved beside the paper going in, nor after it went.
       stopped.current = true;
@@ -328,6 +346,8 @@ export function useAttemptState(
   // The first question is open from the moment the paper is on screen, not from the first click.
   useEffect(() => {
     openedAt.current = Date.now();
+    // Unmounted, a save still in the air is left to land; only its give-up timer goes.
+    return () => clearTimeout(giveUp.current);
   }, []);
 
   const record = useCallback(
@@ -481,6 +501,15 @@ function visitFor(
 function stateFor(option: string | null, marked: boolean): AnswerState {
   if (option !== null) return marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED;
   return marked ? ANSWER_STATE.MARKED_REVIEW : ANSWER_STATE.NOT_ANSWERED;
+}
+
+/** Settles when `run` does or after `ms`, whichever comes first. */
+function settledWithin(run: Promise<unknown>, ms: number): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return Promise.race([run, late]).finally(() => clearTimeout(timer));
 }
 
 /** An epoch ref as an instant. Zero means the clock never started, which is not a time to record. */

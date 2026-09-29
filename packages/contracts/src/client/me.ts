@@ -165,7 +165,7 @@ export function meClient(core: ApiCore) {
     saveAttemptState: (
       attemptId: string,
       input: SaveAttemptStateInput,
-      extra: { keepalive?: boolean } = {},
+      extra: { keepalive?: boolean; signal?: AbortSignal } = {},
     ): Promise<AttemptSaveAck> =>
       write('PATCH', ME_ATTEMPT_ROUTES.state(attemptId), attemptSaveAckSchema, input, extra),
 

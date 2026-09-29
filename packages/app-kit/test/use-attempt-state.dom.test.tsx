@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { ANSWER_STATE, AppException, ErrorCodes, type ExamClock } from '@iace/contracts';
 import { useAttemptState } from '../src/exam/use-attempt-state';
+import { FINISH_WAIT_MS, SAVE_TIMEOUT_MS } from '../src/autosave-policy';
 import type { AppApiClient, KeyValueStorage } from '../src';
 import { fakeStorage } from './support/fake-storage';
 
@@ -795,4 +796,74 @@ test('goes in only once every save in the air has answered', async (t) => {
   });
 
   assert.equal(inAirAtSubmit, 0);
+});
+
+/** Lets a mocked timer's callback, and the promise chain it starts, run to the end. */
+async function settle() {
+  for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+}
+
+/** The failure this prevents: a save that never answers holding every later save, and the submit, behind it. */
+test('a save the server never answers is given up, and its answers wait for the next', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: (_id: string, _body: unknown, extra: { signal?: AbortSignal } = {}) =>
+        new Promise((_resolve, reject) => {
+          extra.signal?.addEventListener('abort', () =>
+            reject(new AppException(ErrorCodes.INTERNAL, 'gone', { httpStatus: 0 })),
+          );
+        }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void result.current.flush());
+  await act(async () => {
+    mock.timers.tick(SAVE_TIMEOUT_MS);
+    await settle();
+  });
+
+  assert.equal(result.current.isSaving, false, 'given up');
+  assert.equal(result.current.hasUnsaved, true, 'and said so');
+  assert.equal(result.current.hasUnsent(), true, 'its answers kept for the next save');
+});
+
+/** The failure this prevents: the deadline's submit waiting forever on a save that hung. */
+test("the paper goes in with a hung save's answers once it has waited long enough", async (t) => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: () => new Promise(() => undefined),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  act(() => void result.current.flush());
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  let carried: string[] | null = null;
+  act(
+    () =>
+      void result.current.finish(async (batch) => {
+        carried = (batch?.answers ?? []).map((change) => change.questionId);
+      }),
+  );
+  await act(async () => {
+    mock.timers.tick(FINISH_WAIT_MS);
+    await settle();
+  });
+
+  assert.deepEqual(carried, ['q1', 'q2']);
 });
