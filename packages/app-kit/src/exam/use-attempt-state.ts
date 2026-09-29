@@ -50,14 +50,61 @@ const isSetAside = (error: unknown): boolean =>
 
 const queueKeyFor = ({ keyPrefix }: AnswerQueue, attemptId: string) => `${keyPrefix}.${attemptId}`;
 
+/** The part of an answer another device can change: the choice and the flag, not the seconds. */
+interface AnswerMark {
+  option: string | null;
+  marked: boolean;
+}
+
+const BLANK: AnswerMark = { option: null, marked: false };
+
+const markOf = (
+  answer: { selectedOptionId?: string | null; state?: AnswerState } | undefined,
+): AnswerMark => ({
+  option: answer?.selectedOptionId ?? null,
+  marked: isReviewState(answer?.state),
+});
+
+const sameMark = (a: AnswerMark, b: AnswerMark): boolean =>
+  a.option === b.option && a.marked === b.marked;
+
+/** The unsent changes, and what the server held for each when this tab last heard: a resume compares the two. */
+interface StoredQueue {
+  changes: AnswerChange[];
+  known: Record<string, AnswerMark>;
+}
+
 /** Undelivered answers outlive a reload here, because the queue they sit in does not. */
-function queuedIn(queue: AnswerQueue, attemptId: string): AnswerChange[] {
+function queuedIn(queue: AnswerQueue, attemptId: string): StoredQueue {
   try {
     const held = queue.storage.getItem(queueKeyFor(queue, attemptId));
-    return held === null ? [] : (JSON.parse(held) as AnswerChange[]);
+    if (held === null) return { changes: [], known: {} };
+    const parsed = JSON.parse(held) as StoredQueue | AnswerChange[];
+    // A queue written before the server's copy was kept beside it has nothing to compare, so it is resent.
+    return Array.isArray(parsed) ? { changes: parsed, known: {} } : parsed;
   } catch {
-    return [];
+    return { changes: [], known: {} };
   }
+}
+
+/** Queued changes the server has moved away from since this tab last heard, and how many of them were answers. */
+function outrunIn(
+  stored: StoredQueue,
+  pending: ReadonlyMap<string, AnswerChange>,
+  held: Readonly<Record<string, LiveAnswer>>,
+): { outrun: string[]; answers: number } {
+  const outrun: string[] = [];
+  let answers = 0;
+  for (const change of stored.changes) {
+    const was = stored.known[change.questionId];
+    if (was === undefined || pending.get(change.questionId) !== change) continue;
+    const now = markOf(held[change.questionId]);
+    const mine = markOf(change);
+    if (sameMark(now, was) || sameMark(now, mine)) continue;
+    outrun.push(change.questionId);
+    if (!sameMark(mine, was)) answers += 1;
+  }
+  return { outrun, answers };
 }
 
 const answersFrom = (queued: readonly AnswerChange[]): Record<string, LiveAnswer> =>
@@ -77,13 +124,15 @@ export interface AttemptStateHandle {
   isSaving: boolean;
   /** True once a save has failed and not yet succeeded — the one thing a student must see. */
   hasUnsaved: boolean;
-  /** True once this tab stopped holding the sitting, because it was opened somewhere else. */
+  /** True once this tab stopped holding the sitting: it was opened somewhere else, or another test was. */
   takenOver: boolean;
-  /** It stopped because the student opened another test: nothing was dropped, and it goes up when continued here. */
+  /** It stopped because another of the student's tests was opened, not because this one went elsewhere. */
   setAside: boolean;
-  /** Answers this tab had not delivered when it stood down, dropped so they never land over the other device's. */
+  /** Answers given here and never saved that another device changed since, dropped on resume so its copy stands. */
   droppedUnsaved: number;
-  /** Stops saving and says why: another tab or device holds the sitting now, and this one's unsent answers go. */
+  /** The screen has told the student about the dropped answers. */
+  dismissDropped: () => void;
+  /** Stops saving and says why; what is unsent stays, for the next resume to send or drop. */
   standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
   answer: (questionId: string, next: AnswerIntent) => void;
@@ -135,7 +184,9 @@ export function useAttemptState(
   const mounted = useRef(deps);
   // Read once, at mount: what a save could not deliver before a reload is queued and drawn again.
   const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
-  const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
+  const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() =>
+    answersFrom(queued.changes),
+  );
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
   // False until the GET below answers: before it, a screen cannot tell "never opened" from "not yet known".
   const [sectionsSeeded, setSectionsSeeded] = useState(false);
@@ -149,10 +200,12 @@ export function useAttemptState(
   const heldElsewhere = useRef(false);
 
   // Everything the server has not acknowledged, in the air or not; an ack takes out only the copy it carried.
-  const pending = useRef(new Map<string, AnswerChange>(queued.map((c) => [c.questionId, c])));
+  const pending = useRef(
+    new Map<string, AnswerChange>(queued.changes.map((c) => [c.questionId, c])),
+  );
   const pendingSections = useRef(new Map<string, SectionProgress>());
-  // The questions whose unacknowledged change is an answer, not only a visit; a reloaded queue counts what carries one.
-  const answeredUnsaved = useRef(new Set(queued.filter(carriesAnswer).map((c) => c.questionId)));
+  // What this tab last knew the server to hold, per question; a question absent from it is blank once seeded.
+  const serverKnown = useRef(new Map<string, AnswerMark>(Object.entries(queued.known)));
   // What the screen draws, current mid-handler: a state updater may not have run when the next write reads it.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const openedAt = useRef(0);
@@ -169,6 +222,25 @@ export function useAttemptState(
     setAnswers(next);
   }, []);
 
+  const keepQueue = useCallback(() => {
+    // Unmounted, the stored queue belongs to whichever screen mounts next: a late ack must not clear it.
+    if (!onScreen.current) return;
+    const { answerQueue } = mounted.current;
+    const key = queueKeyFor(answerQueue, attemptId);
+    const known: Record<string, AnswerMark> = {};
+    for (const questionId of pending.current.keys()) {
+      const was = serverKnown.current.get(questionId) ?? (seeded.current ? BLANK : undefined);
+      if (was !== undefined) known[questionId] = was;
+    }
+    const stored: StoredQueue = { changes: [...pending.current.values()], known };
+    try {
+      if (pending.current.size === 0) answerQueue.storage.removeItem(key);
+      else answerQueue.storage.setItem(key, JSON.stringify(stored));
+    } catch {
+      // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
+    }
+  }, [attemptId]);
+
   // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
     let live = true;
@@ -177,11 +249,25 @@ export function useAttemptState(
       mounted.current.api.me.attemptState(attemptId).then(
         (held) => {
           if (!live) return;
+          const { outrun, answers: lost } = outrunIn(queued, pending.current, held.answers);
+          const mine = { ...answersNow.current };
+          for (const questionId of outrun) {
+            pending.current.delete(questionId);
+            delete mine[questionId];
+          }
+          serverKnown.current = new Map(
+            Object.entries(held.answers).map(([questionId, answer]) => [
+              questionId,
+              markOf(answer),
+            ]),
+          );
+          seeded.current = true;
+          if (outrun.length > 0) keepQueue();
+          if (lost > 0) setDroppedUnsaved(lost);
           // Merged under, never over: an answer given while this flew is the newer one.
-          commit({ ...held.answers, ...answersNow.current });
+          commit({ ...held.answers, ...mine });
           setSections((mine) => ({ ...held.sections, ...mine }));
           setSectionsSeeded(true);
-          seeded.current = true;
           // Never backwards: a flush racing this GET may already have moved the counter on.
           revision.current = seedRevision(revision.current, held.revision);
         },
@@ -194,38 +280,13 @@ export function useAttemptState(
       live = false;
       clearTimeout(again);
     };
-  }, [attemptId, commit]);
+  }, [attemptId, commit, keepQueue, queued]);
 
-  const keepQueue = useCallback(() => {
-    // Unmounted, the stored queue belongs to whichever screen mounts next: a late ack must not clear it.
-    if (!onScreen.current) return;
-    const { answerQueue } = mounted.current;
-    const key = queueKeyFor(answerQueue, attemptId);
-    try {
-      if (pending.current.size === 0) answerQueue.storage.removeItem(key);
-      else answerQueue.storage.setItem(key, JSON.stringify([...pending.current.values()]));
-    } catch {
-      // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
-    }
-  }, [attemptId]);
-
-  const standDown = useCallback(() => {
+  // Whether the queue still stands is known only on resume, once the server says what was written since.
+  const standDown = useCallback((forAnotherTest = false) => {
     stopped.current = true;
     heldElsewhere.current = true;
-    // The device that took over is the sitting of record: what this one never delivered is not replayed over it.
-    const dropped = answeredUnsaved.current.size;
-    answeredUnsaved.current.clear();
-    pending.current.clear();
-    pendingSections.current.clear();
-    keepQueue();
-    setDroppedUnsaved((before) => before + dropped);
-    setTakenOver(true);
-  }, [keepQueue]);
-
-  // Stops without dropping anything: no other tab holds this sitting, so what is queued here is still the newest.
-  const standAside = useCallback(() => {
-    stopped.current = true;
-    markSetAside(true);
+    markSetAside(forAnotherTest);
     setTakenOver(true);
   }, []);
 
@@ -239,9 +300,9 @@ export function useAttemptState(
       unsaved(true);
       // Answering moved to another tab or device: this one stops rather than fighting it.
       if (isTakenOver(error)) standDown();
-      else if (isSetAside(error)) standAside();
+      else if (isSetAside(error)) standDown(true);
     },
-    [standAside, standDown, unsaved],
+    [standDown, unsaved],
   );
 
   const hasUnsent = useCallback(
@@ -261,9 +322,9 @@ export function useAttemptState(
   const acknowledge = useCallback(
     (batch: LastBatch) => {
       for (const change of batch.answers) {
+        serverKnown.current.set(change.questionId, markOf(change));
         if (pending.current.get(change.questionId) === change) {
           pending.current.delete(change.questionId);
-          answeredUnsaved.current.delete(change.questionId);
         }
       }
       for (const [sectionId, progress] of Object.entries(batch.sections)) {
@@ -340,7 +401,6 @@ export function useAttemptState(
           const done = await send(idle ? null : unsentBatch());
           // The paper is in: the device's copy has nothing left to keep.
           pending.current.clear();
-          answeredUnsaved.current.clear();
           pendingSections.current.clear();
           keepQueue();
           return done;
@@ -429,7 +489,6 @@ export function useAttemptState(
       const seenAt = seenAtOf(openedAt);
       openedAt.current = Date.now();
       record(changeFor(questionId, answersNow.current[questionId], next, spent, seenAt));
-      answeredUnsaved.current.add(questionId);
       // Between saves only, and not after one failed: the timer retries, rather than every tap.
       if (!inFlight.current && !lastSaveFailed.current && shouldFlushNow(pending.current.size)) {
         void flush();
@@ -477,6 +536,7 @@ export function useAttemptState(
     hasUnsaved,
     takenOver,
     droppedUnsaved,
+    dismissDropped: useCallback(() => setDroppedUnsaved(0), []),
     setAside,
     standDown,
     answer,
@@ -490,9 +550,6 @@ export function useAttemptState(
     leave,
   };
 }
-
-const carriesAnswer = (change: AnswerChange): boolean =>
-  (change.selectedOptionId ?? null) !== null || isReviewState(change.state);
 
 /** What the bottom bar produces, before the server decides what it really means. */
 function changeFor(

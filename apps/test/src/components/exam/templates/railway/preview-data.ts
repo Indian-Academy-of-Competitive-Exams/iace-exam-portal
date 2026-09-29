@@ -149,6 +149,7 @@ export function previewView(): ExamView {
     leave: noop,
     takenOver: false,
     droppedUnsaved: 0,
+    dismissDropped: noop,
     setAside: false,
 
     openQuestion: noop,

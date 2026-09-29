@@ -5,7 +5,7 @@
  */
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, ConfirmDialog } from '@iace/ui';
-import { submittingSays, type ExamView } from '@iace/app-kit';
+import { droppedSays, submittingSays, type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
 import { useLockedZoom } from './lock-zoom';
 import { RailwayLayout } from '../templates/railway/layout';
@@ -33,6 +33,10 @@ export function ExamShell({
       <Skin view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
 
       {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
+
+      {view.droppedUnsaved > 0 ? (
+        <DroppedNotice says={droppedSays(view.droppedUnsaved)} onDismiss={view.dismissDropped} />
+      ) : null}
 
       {/* The railway skin asks over the paper, as its original does; every other skin gets this. */}
       <ConfirmDialog
@@ -64,6 +68,22 @@ function FullscreenNag({
           </Button>
           <Button type="button" variant="ghost" onClick={fullscreen.ignore}>
             Carry on without it
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Over the paper, because the answers it names are already gone from it. */
+function DroppedNotice({ says, onDismiss }: Readonly<{ says: string; onDismiss: () => void }>) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">
+      <div className="flex max-w-md flex-col gap-4">
+        <Alert variant="warning">{says}</Alert>
+        <div>
+          <Button type="button" onClick={onDismiss}>
+            Carry on
           </Button>
         </div>
       </div>

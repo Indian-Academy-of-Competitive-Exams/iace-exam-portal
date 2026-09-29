@@ -8,7 +8,7 @@ import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
-import { submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { droppedSays, submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Alert } from '../ui/alert';
 import { Button } from '../ui/button';
@@ -253,6 +253,9 @@ function SittingFoot({
   onCloseRules: () => void;
 }>) {
   const { submit, fullscreen } = view;
+  const dropped = view.droppedUnsaved > 0;
+  // iOS presents one Modal at a time, so a warning stands every other one down.
+  const interrupting = fullscreen.nagging || dropped;
 
   return (
     <Fragment>
@@ -285,15 +288,10 @@ function SittingFoot({
         )}
       </View>
 
-      {/* iOS presents one Modal at a time, so the focus warning stands the other two down. */}
-      <QuestionPalette
-        view={view}
-        open={paletteOpen && !fullscreen.nagging}
-        onClose={onClosePalette}
-      />
+      <QuestionPalette view={view} open={paletteOpen && !interrupting} onClose={onClosePalette} />
 
       <ConfirmDialog
-        open={submit.asking && !fullscreen.nagging}
+        open={submit.asking && !interrupting}
         // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Submit this test?"
         description={submittingSays(view)}
@@ -304,7 +302,7 @@ function SittingFoot({
       />
 
       <Modal
-        visible={rulesOpen && !fullscreen.nagging}
+        visible={rulesOpen && !interrupting}
         animationType="slide"
         onRequestClose={onCloseRules}
       >
@@ -322,6 +320,18 @@ function SittingFoot({
             {`${leftTheApp(fullscreen.exits)} Your paper is still running and the clock has not stopped.`}
           </Alert>
           <Button onPress={fullscreen.ignore}>Return to the paper</Button>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={dropped && !fullscreen.nagging}
+        animationType="fade"
+        onRequestClose={view.dismissDropped}
+      >
+        <View className="flex-1 justify-center gap-4 bg-exam-surface p-6">
+          <Alert variant="warning">{droppedSays(view.droppedUnsaved)}</Alert>
+          <Button onPress={view.dismissDropped}>Carry on</Button>
         </View>
       </Modal>
     </Fragment>

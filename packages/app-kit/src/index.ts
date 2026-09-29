@@ -40,6 +40,7 @@ export {
   TIMER_KIND,
   submittingSays,
   stoodDownSays,
+  droppedSays,
   type ExamView,
   type ExamSubmitView,
   type ExamFullscreenView,

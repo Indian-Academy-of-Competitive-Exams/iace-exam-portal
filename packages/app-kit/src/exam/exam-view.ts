@@ -37,26 +37,22 @@ export function submittingSays({ submit, forwardOnly }: ExamView): string {
   return `${countOf(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
 }
 
-/** Set aside keeps everything; taken over names what it drops, so nothing is lost without a word. */
-export function stoodDownSays({
-  setAside,
-  droppedUnsaved,
-}: Pick<ExamView, 'setAside' | 'droppedUnsaved'>): { title: string; hint: string } {
-  if (setAside) {
-    return {
-      title: 'Another of your tests is open',
-      hint: 'Your answers here are kept, and go up when you continue. Continuing here stops the other test.',
-    };
-  }
-  const kept =
-    droppedUnsaved === 0
-      ? 'Your answers are saved.'
-      : `${countOf(droppedUnsaved, 'answer')} given here had not saved and will not be kept.`;
-  return {
-    title: 'This paper is being answered somewhere else',
-    hint: `${kept} Continuing here stops the other tab or device.`,
-  };
+/** The stand-down screen's words; what is unsent here is settled on continuing, not before. */
+export function stoodDownSays({ setAside }: Pick<ExamView, 'setAside'>): {
+  title: string;
+  hint: string;
+} {
+  return setAside
+    ? { title: 'Another of your tests is open', hint: 'Continuing here stops the other test.' }
+    : {
+        title: 'This paper is being answered somewhere else',
+        hint: 'Continuing here stops the other tab or device.',
+      };
 }
+
+/** Said once on resuming, naming the answers another device's newer copy replaced. */
+export const droppedSays = (count: number): string =>
+  `${countOf(count, 'answer')} given here had not saved, and another device has changed ${count === 1 ? 'it' : 'them'} since. Its copy stands.`;
 
 export const TIMER_KIND = { SECTION: 'SECTION', PAPER: 'PAPER' } as const;
 
@@ -117,6 +113,7 @@ export interface ExamView {
   takenOver: boolean;
   /** Answers this device had not saved when it was taken over, dropped so the other device's stand. */
   droppedUnsaved: number;
+  dismissDropped: () => void;
   /** Stopped because another of the student's tests was opened; nothing here was dropped. */
   setAside: boolean;
 

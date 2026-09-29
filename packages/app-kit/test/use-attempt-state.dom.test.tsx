@@ -399,73 +399,140 @@ test('a save refused as taken over stops saving and says so', async (t) => {
   assert.equal(calls.length, 1, 'a tab that lost the sitting does not fight for it');
 });
 
-/** The failure this prevents: Continue here replaying this tab's old answer over the one the other device gave. */
-test('a tab that lost the sitting drops what it never delivered, and says how much', async (t) => {
-  const storage = fakeStorage();
-  const refused = {
-    me: {
-      attemptState: attemptStateStub,
-      saveAttemptState: async () => {
-        throw new AppException(ErrorCodes.SITTING_TAKEN_OVER);
+/** One sitting as the server holds it, answered from whichever tab holds the claim; the others are refused. */
+function sharedSitting() {
+  const held = {
+    answers: {} as Record<string, { state: string; selectedOptionId: string | null }>,
+    revision: 0,
+    tab: 'laptop' as string | null,
+  };
+  const apiFor = (tab: string) =>
+    ({
+      me: {
+        attemptState: async () => ({
+          answers: { ...held.answers },
+          sections: {},
+          revision: held.revision,
+        }),
+        saveAttemptState: async (
+          _id: string,
+          body: { revision: number } & {
+            answers: Array<{ questionId: string; state: string; selectedOptionId?: string | null }>;
+          },
+        ) => {
+          if (held.tab !== tab) {
+            throw new AppException(
+              held.tab === null ? ErrorCodes.SITTING_SET_ASIDE : ErrorCodes.SITTING_TAKEN_OVER,
+            );
+          }
+          if (body.revision <= held.revision) return { revision: held.revision, applied: false };
+          for (const change of body.answers) {
+            held.answers[change.questionId] = {
+              state: change.state,
+              selectedOptionId: change.selectedOptionId ?? null,
+            };
+          }
+          held.revision = body.revision;
+          return { revision: held.revision, applied: true };
+        },
       },
-    },
-  } as unknown as AppApiClient;
-  const before = renderHook(() => useAttemptState('attempt-1', depsFor(refused, storage)));
-  await act(async () => void (await Promise.resolve()));
-  act(() => before.result.current.answer('q1', { selectedOptionId: 'mine' }));
-  await act(async () => void (await before.result.current.flush()));
-  act(() => before.result.current.answer('q2', { selectedOptionId: 'after' }));
-  const dropped = before.result.current.droppedUnsaved;
-  before.unmount();
+    }) as unknown as AppApiClient;
+  return { held, apiFor, claim: (tab: string | null) => (held.tab = tab) };
+}
 
-  const sent: SentAnswers[] = [];
-  const theirs = {
-    me: {
-      attemptState: async () => ({
-        answers: { q1: { state: ANSWER_STATE.ANSWERED, selectedOptionId: 'theirs' } },
-        sections: {},
-        revision: 5,
-      }),
-      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
-        sent.push(body);
-        return { revision: body.revision, applied: true };
-      },
-    },
-  } as unknown as AppApiClient;
-  const { result, unmount } = renderHook(() =>
-    useAttemptState('attempt-1', depsFor(theirs, storage)),
+const seat = (sitting: ReturnType<typeof sharedSitting>, tab: string, storage = fakeStorage()) =>
+  renderHook(() =>
+    useAttemptState('attempt-1', {
+      api: sitting.apiFor(tab),
+      tab,
+      answerQueue: { storage, keyPrefix: 'test.queued' },
+    }),
   );
-  t.after(unmount);
-  await act(async () => void (await Promise.resolve()));
-  await act(async () => void (await result.current.flush()));
 
-  assert.equal(dropped, 1, 'the takeover screen can say how many');
-  assert.equal(result.current.answers.q1?.selectedOptionId, 'theirs');
-  assert.equal(result.current.answers.q2, undefined, 'nor is anything done here after it lost');
-  assert.equal(sent.length, 0, "nothing of this tab's is sent over it");
-});
+const landed = () => act(async () => void (await Promise.resolve()));
 
-/** The failure this prevents: plain moves between questions reported as answers that will not be kept. */
-test('the takeover count is the answers given here, not the questions only passed through', async (t) => {
-  const refused = {
-    me: {
-      attemptState: attemptStateStub,
-      saveAttemptState: async () => {
-        throw new AppException(ErrorCodes.SITTING_TAKEN_OVER);
-      },
-    },
-  } as unknown as AppApiClient;
-  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(refused)));
-  t.after(unmount);
-  await act(async () => void (await Promise.resolve()));
+const RESUMES = [
+  { how: 'another test was opened on the phone', standsDown: null, other: 'phone' },
+  { how: 'a second tab in the same browser took it', standsDown: 'tab-2', other: 'tab-2' },
+] as const;
 
-  act(() => {
-    for (const questionId of ['q1', 'q2', 'q3', 'q4', 'q5', 'q6']) result.current.open(questionId);
+for (const { how, standsDown, other } of RESUMES) {
+  /** The failure this prevents: Continue here replaying this tab's old answer over the one given elsewhere since. */
+  test(`an unsent answer changed elsewhere since is dropped on resume, the rest resent (${how})`, async (t) => {
+    const sitting = sharedSitting();
+    const storage = fakeStorage();
+    const laptop = seat(sitting, 'laptop', storage);
+    await landed();
+    sitting.claim(standsDown);
+    act(() => laptop.result.current.answer('q1', { selectedOptionId: 'laptop-old' }));
+    act(() => laptop.result.current.answer('q2', { selectedOptionId: 'laptop-only' }));
+    await act(async () => void (await laptop.result.current.flush()));
+    const stoodDown = laptop.result.current.takenOver;
+    act(() => laptop.result.current.answer('q3', { selectedOptionId: 'after-it-stopped' }));
+    laptop.unmount();
+
+    sitting.claim(other);
+    const elsewhere = seat(sitting, other);
+    await landed();
+    act(() => elsewhere.result.current.answer('q1', { selectedOptionId: 'elsewhere-new' }));
+    await act(async () => void (await elsewhere.result.current.flush()));
+    elsewhere.unmount();
+
+    sitting.claim('laptop');
+    const resumed = seat(sitting, 'laptop', storage);
+    t.after(resumed.unmount);
+    await landed();
+    await act(async () => void (await resumed.result.current.flush()));
+
+    assert.equal(stoodDown, true);
+    assert.equal(
+      sitting.held.answers.q1?.selectedOptionId,
+      'elsewhere-new',
+      'the newer copy stands',
+    );
+    assert.equal(resumed.result.current.answers.q1?.selectedOptionId, 'elsewhere-new');
+    assert.equal(resumed.result.current.droppedUnsaved, 1, 'and the screen can say what went');
+    assert.equal(
+      sitting.held.answers.q2?.selectedOptionId,
+      'laptop-only',
+      'untouched elsewhere, so sent',
+    );
+    assert.equal(resumed.result.current.answers.q3, undefined, 'nothing is taken after it stopped');
   });
-  act(() => result.current.answer('q6', { selectedOptionId: 'opt-6' }));
-  await act(async () => void (await result.current.flush()));
+}
 
-  assert.equal(result.current.droppedUnsaved, 1);
+/** The failure this prevents: plain moves, or an answer already saved, reported as answers that were not kept. */
+test('the dropped count is answers given here and not saved, not visits or saved answers', async (t) => {
+  const sitting = sharedSitting();
+  const storage = fakeStorage();
+  const laptop = seat(sitting, 'laptop', storage);
+  await landed();
+  act(() => laptop.result.current.answer('q1', { selectedOptionId: 'saved' }));
+  await act(async () => void (await laptop.result.current.flush()));
+  act(() => {
+    for (const questionId of ['q1', 'q2', 'q3', 'q4']) laptop.result.current.open(questionId);
+  });
+  act(() => laptop.result.current.answer('q4', { selectedOptionId: 'unsaved' }));
+  sitting.claim('phone');
+  await act(async () => void (await laptop.result.current.flush()));
+  laptop.unmount();
+
+  const phone = seat(sitting, 'phone');
+  await landed();
+  act(() => {
+    for (const questionId of ['q1', 'q2', 'q3', 'q4']) {
+      phone.result.current.answer(questionId, { selectedOptionId: 'phone' });
+    }
+  });
+  await act(async () => void (await phone.result.current.flush()));
+  phone.unmount();
+
+  sitting.claim('laptop');
+  const resumed = seat(sitting, 'laptop', storage);
+  t.after(resumed.unmount);
+  await landed();
+
+  assert.equal(resumed.result.current.droppedUnsaved, 1);
 });
 
 /** The failure this prevents: opening a second test on the phone wiping the answers queued in the first on a laptop. */
@@ -636,9 +703,11 @@ test('keeps the batch in the air on the device until the server answers it', asy
   act(() => void result.current.flush());
   act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
 
-  const kept = JSON.parse(storage.getItem(QUEUE_KEY) ?? '[]') as { questionId: string }[];
+  const kept = JSON.parse(storage.getItem(QUEUE_KEY) ?? '{}') as {
+    changes?: { questionId: string }[];
+  };
   assert.deepEqual(
-    kept.map((change) => change.questionId).sort((a, b) => a.localeCompare(b)),
+    (kept.changes ?? []).map((change) => change.questionId).sort((a, b) => a.localeCompare(b)),
     ['q1', 'q2'],
   );
 });
