@@ -24,7 +24,7 @@ function sitting(start: number, run: (harness: ReturnType<typeof mountCountdown>
 function mountCountdown(start: number) {
   const clock = handClock(start);
   const expiries = { count: 0 };
-  // A fresh function on every render, exactly as useExamView rebuilds outOfTime and endSection.
+  // A fresh function on every render, exactly as useExamView rebuilds timer.onExpire.
   const freshCallback = () => () => {
     expiries.count += 1;
   };

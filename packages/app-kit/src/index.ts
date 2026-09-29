@@ -35,7 +35,13 @@ export {
   type ExamSitting,
   type EndedSitting,
 } from './exam/use-exam-view';
-export type { ExamView, ExamSubmitView, ExamFullscreenView } from './exam/exam-view';
+export {
+  TIMER_KIND,
+  type ExamView,
+  type ExamSubmitView,
+  type ExamFullscreenView,
+  type ExamTimerView,
+} from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
 export { isMarkingPending } from './marking';

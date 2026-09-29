@@ -17,7 +17,7 @@ import {
   type ExamQuestion,
   type LiveAnswer,
 } from '@iace/contracts';
-import { type ExamView } from '@iace/app-kit';
+import { TIMER_KIND, type ExamView } from '@iace/app-kit';
 
 const PAPER_SEC = 90 * 60;
 const SECTION_ID = 'sec-alp';
@@ -133,12 +133,15 @@ export function previewView(): ExamView {
     counts,
     sectionCounts: () => counts,
 
-    clock: {
-      endsAt: new Date(Date.now() + PAPER_SEC * 1000).toISOString(),
-      serverNow: new Date().toISOString(),
-      arrivedAt: Date.now(),
+    timer: {
+      kind: TIMER_KIND.PAPER,
+      clock: {
+        endsAt: new Date(Date.now() + PAPER_SEC * 1000).toISOString(),
+        serverNow: new Date().toISOString(),
+        arrivedAt: Date.now(),
+      },
+      onExpire: noop,
     },
-    sectionSec: null,
 
     isSaving: false,
     hasUnsaved: false,
@@ -154,8 +157,6 @@ export function previewView(): ExamView {
     markAndNext: noop,
     clearResponse: noop,
     openSection: noop,
-    endSection: noop,
-    outOfTime: noop,
 
     submit: {
       asking: false,

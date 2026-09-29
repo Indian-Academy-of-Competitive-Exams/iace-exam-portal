@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { isReviewState, type ExamClock } from '@iace/contracts';
-import { useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
+import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
 import { Alert, Badge, Button, cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
@@ -206,16 +206,11 @@ function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {
   );
 }
 
-/** One clock: a sectional paper counts the section it stands in, a composite one the paper. */
-function RailwayTimer({ view }: Readonly<{ view: ExamView }>) {
-  return view.sectionSec === null ? (
-    <RailwayPaperClock clock={view.clock} onExpire={view.outOfTime} />
+function RailwayTimer({ view: { timer } }: Readonly<{ view: ExamView }>) {
+  return timer.kind === TIMER_KIND.SECTION ? (
+    <RailwaySectionClock key={timer.key} allowedSec={timer.allowedSec} onExpire={timer.onExpire} />
   ) : (
-    <RailwaySectionClock
-      key={view.sectionId}
-      allowedSec={view.sectionSec}
-      onExpire={view.endSection}
-    />
+    <RailwayPaperClock clock={timer.clock} onExpire={timer.onExpire} />
   );
 }
 

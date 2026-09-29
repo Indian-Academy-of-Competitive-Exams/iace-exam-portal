@@ -2,8 +2,19 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ExamPaper, ExamQuestion, SectionProgress } from '@iace/contracts';
-import { useExamView, type AppApiClient, type ExamEngineDeps, type FullscreenHandle } from '../src';
+import {
+  TIMER_TEMPLATE,
+  type ExamPaper,
+  type ExamQuestion,
+  type SectionProgress,
+} from '@iace/contracts';
+import {
+  TIMER_KIND,
+  useExamView,
+  type AppApiClient,
+  type ExamEngineDeps,
+  type FullscreenHandle,
+} from '../src';
 import { fakeStorage } from './support/fake-storage';
 
 const client = new QueryClient({
@@ -83,12 +94,12 @@ function apiWith(
   } as unknown as AppApiClient;
 }
 
-function mounted(api: AppApiClient) {
+function mounted(api: AppApiClient, sitting: ExamPaper = paper()) {
   const deps = depsFor(api);
   return renderHook(
     () =>
       useExamView(
-        { paper: paper(), arrivedAt: Date.now(), title: null, watermark: '', onEnded: () => {} },
+        { paper: sitting, arrivedAt: Date.now(), title: null, watermark: '', onEnded: () => {} },
         deps,
       ),
     {
@@ -166,11 +177,14 @@ test('ending the paper twice before the next render submits it once', async (t) 
       },
     },
   } as unknown as AppApiClient;
-  const { result, unmount } = mounted(api);
+  const { result, unmount } = mounted(api, {
+    ...paper(),
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+  });
   t.after(unmount);
 
   await act(async () => {
-    result.current.outOfTime();
+    result.current.timer.onExpire();
     result.current.submit.confirm();
     await Promise.resolve();
   });
@@ -179,4 +193,36 @@ test('ending the paper twice before the next render submits it once', async (t) 
   });
 
   assert.equal(submitted, 1);
+});
+
+/** The failure this prevents: a section spent to 0 read as "no section clock", so it never closes on reload. */
+test('the engine picks the one clock: the section while it has time allowed, else the paper', async (t) => {
+  const timerOf = async (sitting: ExamPaper, sections: Record<string, SectionProgress> = {}) => {
+    const { result, unmount } = mounted(apiWith(sections), sitting);
+    t.after(unmount);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    return result.current.timer;
+  };
+  const untimed = paper().sections.map((row) => ({ ...row, durationSec: null }));
+
+  const composite = await timerOf({ ...paper(), timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE });
+  assert.equal(composite.kind, TIMER_KIND.PAPER);
+  assert.equal((await timerOf({ ...paper(), sections: untimed })).kind, TIMER_KIND.PAPER);
+
+  const fresh = await timerOf(paper());
+  assert.deepEqual(fresh.kind === TIMER_KIND.SECTION && [fresh.key, fresh.allowedSec], [
+    'sec1',
+    1800,
+  ]);
+
+  const spent = await timerOf(paper(), {
+    sec1: { remainingSec: 0, closed: false, openedAt: '2026-09-01T04:00:00.000Z' },
+  });
+  assert.deepEqual(
+    spent.kind === TIMER_KIND.SECTION && [spent.key, spent.allowedSec],
+    ['sec1', 0],
+    'a section with its time spent keeps its own clock, which expires on arrival',
+  );
 });

@@ -18,7 +18,7 @@ import {
   Watermark,
   cn,
 } from '@iace/ui';
-import { type ExamView } from '@iace/app-kit';
+import { TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
@@ -78,25 +78,17 @@ export function Header({
   );
 }
 
-/** One clock a sitting: composite counts the paper, sectional counts the section it stands in. */
-function Timer({ view, config }: Readonly<ExamSlotProps>) {
-  if (view.sectionSec !== null) {
-    return (
-      <SectionTimer
-        key={view.sectionId}
-        allowedSec={view.sectionSec}
-        onExpire={view.endSection}
-        labelled={config.timerFormat === 'LABELLED'}
-      />
-    );
-  }
-
-  return (
-    <ExamTimer
-      clock={view.clock}
-      onExpire={view.outOfTime}
-      labelled={config.timerFormat === 'LABELLED'}
+function Timer({ view: { timer }, config }: Readonly<ExamSlotProps>) {
+  const labelled = config.timerFormat === 'LABELLED';
+  return timer.kind === TIMER_KIND.SECTION ? (
+    <SectionTimer
+      key={timer.key}
+      allowedSec={timer.allowedSec}
+      onExpire={timer.onExpire}
+      labelled={labelled}
     />
+  ) : (
+    <ExamTimer clock={timer.clock} onExpire={timer.onExpire} labelled={labelled} />
   );
 }
 

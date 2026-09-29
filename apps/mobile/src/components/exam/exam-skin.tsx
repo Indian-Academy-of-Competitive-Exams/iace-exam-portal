@@ -8,7 +8,7 @@ import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
-import { type ExamView } from '@iace/app-kit';
+import { TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { plural } from '../../lib/plural';
 import { Alert } from '../ui/alert';
@@ -92,12 +92,11 @@ function OpeningBar() {
   );
 }
 
-/** One clock a sitting: composite counts the paper, sectional counts the section it stands in. */
-function SittingClock({ view }: Readonly<{ view: ExamView }>) {
-  return view.sectionSec === null ? (
-    <ExamTimer clock={view.clock} onExpire={view.outOfTime} />
+function SittingClock({ view: { timer } }: Readonly<{ view: ExamView }>) {
+  return timer.kind === TIMER_KIND.SECTION ? (
+    <SectionTimer key={timer.key} allowedSec={timer.allowedSec} onExpire={timer.onExpire} />
   ) : (
-    <SectionTimer key={view.sectionId} allowedSec={view.sectionSec} onExpire={view.endSection} />
+    <ExamTimer clock={timer.clock} onExpire={timer.onExpire} />
   );
 }
 

@@ -28,6 +28,13 @@ export interface ExamSubmitView {
   retry: () => void;
 }
 
+export const TIMER_KIND = { SECTION: 'SECTION', PAPER: 'PAPER' } as const;
+
+/** The one clock on screen, chosen by the engine: a skin draws the kind it is handed. */
+export type ExamTimerView =
+  | { kind: typeof TIMER_KIND.SECTION; key: string; allowedSec: number; onExpire: () => void }
+  | { kind: typeof TIMER_KIND.PAPER; clock: ExamClock; onExpire: () => void };
+
 /** Leaving full screen is asked about; a skin cannot decide not to. */
 export interface ExamFullscreenView {
   nagging: boolean;
@@ -67,10 +74,8 @@ export interface ExamView {
   /** Per section, because a palette only ever draws the section it is standing in. */
   sectionCounts: (sectionId: string) => PaletteCounts;
 
-  /** The server's deadline. A skin counts down to it and never computes one. */
-  clock: ExamClock;
-  /** How long this section allows, or null when one clock covers the paper. */
-  sectionSec: number | null;
+  /** The section's clock under a sectional timer, else the server's deadline for the paper. */
+  timer: ExamTimerView;
 
   isSaving: boolean;
   hasUnsaved: boolean;
@@ -91,10 +96,6 @@ export interface ExamView {
   markAndNext: () => void;
   clearResponse: () => void;
   openSection: (sectionId: string) => void;
-  /** The section's clock ran out: it shuts for good and the next open one takes over. */
-  endSection: () => void;
-  /** The paper's clock ran out. */
-  outOfTime: () => void;
 
   submit: ExamSubmitView;
   fullscreen: ExamFullscreenView;

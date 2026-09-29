@@ -28,7 +28,7 @@ import {
 import { shouldRetrySubmit, submitRetryDelayMs } from '../autosave-policy';
 import { type FullscreenHandle } from './focus-guard';
 import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
-import type { ExamView } from './exam-view';
+import { TIMER_KIND, type ExamTimerView, type ExamView } from './exam-view';
 
 /** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
 export interface ExamEngineDeps extends AttemptStateDeps {
@@ -169,6 +169,15 @@ export function useExamView(
     if (current) state.answer(current.questionId, forwardOnly ? { ...next, marked: false } : next);
   };
 
+  // Null is "no clock of its own" and falls to the paper's; a section spent to 0 still counts, and closes.
+  const sectionSec = sectional
+    ? sectionLeftSec(section?.durationSec, state.sections[sectionId]?.openedAt, clock.serverNow)
+    : null;
+  const timer: ExamTimerView =
+    sectionSec === null
+      ? { kind: TIMER_KIND.PAPER, clock, onExpire: end }
+      : { kind: TIMER_KIND.SECTION, key: sectionId, allowedSec: sectionSec, onExpire: endSection };
+
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
   // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
   const nagging =
@@ -203,10 +212,7 @@ export function useExamView(
     counts,
     sectionCounts: (id) => sectionCounts[id] ?? counts,
 
-    clock,
-    sectionSec: sectional
-      ? sectionLeftSec(section?.durationSec, state.sections[sectionId]?.openedAt, clock.serverNow)
-      : null,
+    timer,
 
     isSaving: state.isSaving,
     hasUnsaved: state.hasUnsaved,
@@ -234,8 +240,6 @@ export function useExamView(
     },
     clearResponse: () => record({ selectedOptionId: null }),
     openSection,
-    endSection,
-    outOfTime: end,
 
     submit: {
       asking: asking && !state.takenOver,
