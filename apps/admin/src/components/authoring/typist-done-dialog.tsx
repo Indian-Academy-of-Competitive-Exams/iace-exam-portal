@@ -68,7 +68,11 @@ function DoneDialog({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING }),
+        // Exact: a card Done just detached or deleted would refetch into a "No such question" toast.
+        queryClient.invalidateQueries({
+          queryKey: sectionWorkQueryKey(testId, baseConfigSectionId),
+          exact: true,
+        }),
       ]);
       onClose();
     },
