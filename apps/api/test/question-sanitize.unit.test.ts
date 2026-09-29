@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   DIFFICULTY_LEVEL,
-  QUESTION_STATUS,
   QUESTION_TYPE,
   latexIn,
   plainTextOf,
@@ -20,7 +19,6 @@ function mcq(over: Partial<QuestionDraft> = {}): QuestionDraft {
     subjectId: 'sub_quant',
     topicId: null,
     difficulty: DIFFICULTY_LEVEL.MEDIUM,
-    status: QUESTION_STATUS.ACTIVE,
     questionCode: null,
     stem: { en: '<p>What is 20% of 150?</p>' },
     solution: {},

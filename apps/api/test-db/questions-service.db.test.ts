@@ -125,9 +125,6 @@ const TYPED = {
   answerKey: { mode: ANSWER_MODE.EXACT, answers: { en: '30' } },
 };
 
-const live = (over: Partial<QuestionDraftInput> = {}) =>
-  draft({ status: QUESTION_STATUS.ACTIVE, ...over });
-
 const questionRow = (id: string) => prisma.question.findUniqueOrThrow({ where: { id } });
 
 const versions = () => prisma.questionVersion.findMany({ orderBy: { version: 'asc' } });
@@ -287,7 +284,7 @@ describe('QuestionsService.create', () => {
 describe('QuestionsService — retiring and status', () => {
   it('retires a question without deleting it, and puts it back into circulation', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
     const archived = await questions.archive(created.id);
     assert.equal(archived.status, QUESTION_STATUS.ARCHIVED);
@@ -395,7 +392,7 @@ describe('QuestionsService.update — what versioning is for', () => {
   /** A paper on a reached test pins a version; rewriting the row it points at would move it under a student. */
   it('inserts a new version and leaves the one a paper already pinned untouched', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const [pinned] = await versions();
     const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
     await openedAgo(testId);
@@ -443,7 +440,7 @@ describe('QuestionsService.update — what versioning is for', () => {
   /** The failure this prevents: a save that did not name a status putting an archived question back into papers. */
   it('leaves an archived question archived when the save does not name a status', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     await questions.archive(created.id);
 
     const edited = await questions.update(created.id, draft({ questionCode: 'QA-002' }), ADMIN);
@@ -456,10 +453,10 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** A draft is a working copy: saving it ten times must not leave ten versions to read through. */
   it('rewrites the one version a draft already has', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1);
     assert.equal(edited.version, 1);
@@ -473,10 +470,10 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** Without a version bump to read, the trail would say a draft was saved and nothing else. */
   it('records what the draft now says, though its version number did not move', async () => {
     const { questions, audit } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
     const { changed } = await recording(audit, () =>
-      questions.update(created.id, live({ stem: REWORDED }), ADMIN),
+      questions.update(created.id, draft({ stem: REWORDED }), ADMIN),
     );
 
     assert.deepEqual(changed?.['stem.EN'], {
@@ -490,13 +487,13 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** The failure this prevents: a fixed typo logging an empty diff, so the history was blank. */
   it('logs one field for a one-option edit, not an empty diff and not the whole content', async () => {
     const { questions, audit } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const retyped = draft().options.map((option) =>
       option.position === 3 ? { ...option, text: { ...option.text, hi: '३५' } } : option,
     );
 
     const { changed } = await recording(audit, () =>
-      questions.update(created.id, live({ options: retyped }), ADMIN),
+      questions.update(created.id, draft({ options: retyped }), ADMIN),
     );
 
     assert.deepEqual(Object.keys(changed ?? {}), ['option.3.HI']);
@@ -506,9 +503,9 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** Every word on the row can be the second admin's, so the row should not still credit the first. */
   it('credits the admin who rewrote the draft, not the one who opened it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
-    await questions.update(created.id, live({ stem: REWORDED }), OTHER_ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), OTHER_ADMIN);
 
     assert.equal((await versions())[0]?.createdById, OTHER_ADMIN);
   });
@@ -516,9 +513,9 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** An attempt stores the option id it was shown, and a revision is still an edit of that row. */
   it('keeps the option ids a revision inherits', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.deepEqual(
       edited.options.map((option) => option.id),
@@ -528,10 +525,10 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
 
   it('rewrites a published question in place while nothing has drawn it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(edited.version, 1);
     assert.equal((await versions()).length, 1);
@@ -541,11 +538,11 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** An unreached paper is not the belt status used to be — its version still rewrites in place. */
   it('rewrites in place a version an unreached paper holds, and the paper follows it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     await heldBy('paper', created.id, versionId);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(edited.version, 1);
     assert.equal((await versions()).length, 1);
@@ -569,14 +566,14 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
   /** Publishing is no longer the freeze — a paper students can reach is. */
   it('keeps revising in place after publishing, while nothing reachable pins it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
-    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
     assert.equal((await versions()).length, 1);
 
-    await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
+    await questions.unarchive(created.id);
     const published = await questions.update(
       created.id,
-      live({ stem: { en: 'What is 25% of 200?', hi: 'x' } }),
+      draft({ stem: { en: 'What is 25% of 200?', hi: 'x' } }),
       ADMIN,
     );
 
@@ -588,11 +585,11 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
 describe('QuestionsService.update — revisability follows reachability', () => {
   it('rewrites in place while the test that pins the version is still a draft', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     await pinnedOn(created.id, versionId);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1, 'an unopened paper must not force a new version');
     assert.equal(edited.version, 1);
@@ -601,12 +598,12 @@ describe('QuestionsService.update — revisability follows reachability', () => 
 
   it('appends once the test that pins it has opened', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     const { testId } = await pinnedOn(created.id, versionId);
     await openedAgo(testId);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(edited.version, 2);
     assert.equal((await versions()).length, 2);
@@ -628,7 +625,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
 
   it('appends when only a program unlock has opened, not the test itself', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
     const program = await prisma.program.create({
       data: { id: uid(), code: uid(), name: 'Morning batch' },
@@ -646,21 +643,21 @@ describe('QuestionsService.update — revisability follows reachability', () => 
       data: { testId, programCode: program.code, opensAt: new Date(Date.now() - 60_000) },
     });
 
-    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 2, 'a program opens earlier than its test');
   });
 
   it('leaves a test that has not been offered unreachable, whatever its opensAt', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
     await prisma.test.update({
       where: { id: testId },
       data: { opensAt: new Date(Date.now() - 60_000) },
     });
 
-    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1, 'a DRAFT test reaches nobody, past opensAt or not');
   });
@@ -668,14 +665,14 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   /** The bug this prevents: retiring a half-built test pinning its questions as if it had been offered. */
   it('leaves a never-offered test unreachable once an admin retires it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
     await prisma.test.update({
       where: { id: testId },
       data: { status: TEST_STATUS.INACTIVE, opensAt: new Date(Date.now() - 60_000) },
     });
 
-    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1, 'no offer, so no student ever reached this paper');
   });
@@ -683,7 +680,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   /** The design's central case: offered, so no longer DRAFT, but its own clock has not struck yet. */
   it('rewrites in place while an offered test has not opened yet', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     const { testId } = await pinnedOn(created.id, versionId);
     await prisma.test.update({
@@ -695,7 +692,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
       },
     });
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal((await versions()).length, 1, 'offered but not yet open must not force a version');
     assert.equal(edited.version, 1);
@@ -705,7 +702,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   /** `testIsOpen` treats a null opening as open now, everywhere else in this codebase — so here too. */
   it('appends once an offered test with no opening set at all is reachable now', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     const { testId } = await pinnedOn(created.id, versionId);
     await prisma.test.update({
@@ -713,7 +710,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
       data: { status: TEST_STATUS.ACTIVE, finalizedAt: new Date() },
     });
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(edited.version, 2, 'a null opensAt opens the test now, not never');
     assert.equal((await versions()).length, 2);
@@ -721,12 +718,12 @@ describe('QuestionsService.update — revisability follows reachability', () => 
 
   it('rewrites in place a version two unreached papers both pin, reaching them together', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     await pinnedOn(created.id, versionId);
     await pinnedOn(created.id, versionId);
 
-    const edited = await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(edited.version, 1);
     assert.equal(
@@ -747,11 +744,11 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   /** The failure this prevents: a sheet's stored position decoding against an array of the old length. */
   it('shortens the pinning paper’s optionIds when an in-place rewrite drops an option', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     await pinnedOn(created.id, versionId);
 
-    await questions.update(created.id, live({ options: THREE_OPTIONS }), ADMIN);
+    await questions.update(created.id, draft({ options: THREE_OPTIONS }), ADMIN);
 
     const rewritten = await prisma.questionVersion.findUniqueOrThrow({ where: { id: versionId } });
     const optionIds = (rewritten.options as unknown as { id: string }[]).map((option) => option.id);
@@ -770,7 +767,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
   /** A whole section of one question on a draft, released by a reader who ticked it. */
   async function readAndReleased() {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
     const { baseConfigId, baseConfigSectionId } = await prisma.paperQuestion.findFirstOrThrow({
       where: { questionId: created.id },
@@ -813,7 +810,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
   it('drops the tick and hands a released section back to its reader', async () => {
     const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
 
-    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+    await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(await checkedAt(), null);
     assert.equal(await releasedAt(), null);
@@ -824,7 +821,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
     const { questions, questionId, checkedAt } = await readAndReleased();
     await prisma.paperQuestion.deleteMany({ where: { questionId } });
 
-    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+    await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(await checkedAt(), null);
   });
@@ -838,7 +835,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
       new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
     );
 
-    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+    await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
 
     await assert.rejects(() => assignments.remove(readingId), conflict);
   });
@@ -849,7 +846,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
     const reached = await pinnedOn(questionId, await currentVersionOf(questionId));
     await openedAgo(reached.testId);
 
-    await questions.update(questionId, live({ stem: REWORDED }), ADMIN);
+    await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
 
     assert.equal(await checkedAt(), null);
   });
@@ -857,7 +854,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
   it('keeps the tick on a save that changes no words', async () => {
     const { questions, questionId, checkedAt, releasedAt } = await readAndReleased();
 
-    await questions.update(questionId, live({ difficulty: DIFFICULTY_LEVEL.HIGH }), ADMIN);
+    await questions.update(questionId, draft({ difficulty: DIFFICULTY_LEVEL.HIGH }), ADMIN);
 
     assert.notEqual(await checkedAt(), null);
     assert.notEqual(await releasedAt(), null);
@@ -867,10 +864,10 @@ describe('QuestionsService.update — reworded words are read again', () => {
 describe('QuestionsService.versions — the chain, and who sat which wording', () => {
   it('reads newest first, naming the hand behind each link and the papers pinning it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
     await openedAgo(testId);
-    await questions.update(created.id, live({ stem: REWORDED }), OTHER_ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), OTHER_ADMIN);
     const sat = await prisma.test.findUniqueOrThrow({
       where: { id: testId },
       select: { title: true },
@@ -904,18 +901,18 @@ describe('QuestionsService — being depended on settles what a question is', ()
   /** The failure this prevents: a Quant question served inside the Reasoning section that drew it. */
   it('refuses to move a question a paper has drawn to another subject', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     await heldBy('paper', created.id, await currentVersionOf(created.id));
 
-    await assert.rejects(() => questions.update(created.id, live(ELSEWHERE), ADMIN), conflict);
+    await assert.rejects(() => questions.update(created.id, draft(ELSEWHERE), ADMIN), conflict);
     assert.equal((await questionRow(created.id)).subjectId, BANK.QUANT);
   });
 
   it('lets a question nothing has drawn be moved to another subject', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
-    const moved = await questions.update(created.id, live(ELSEWHERE), ADMIN);
+    const moved = await questions.update(created.id, draft(ELSEWHERE), ADMIN);
 
     assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
   });
@@ -923,18 +920,18 @@ describe('QuestionsService — being depended on settles what a question is', ()
   /** The failure this prevents: the scorer reads a typed answer off a paper that pinned four options. */
   it('refuses to retype a question a paper has drawn', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     await heldBy('paper', created.id, await currentVersionOf(created.id));
 
-    await assert.rejects(() => questions.update(created.id, live(TYPED), ADMIN), conflict);
+    await assert.rejects(() => questions.update(created.id, draft(TYPED), ADMIN), conflict);
     assert.equal((await questionRow(created.id)).type, QUESTION_TYPE.SINGLE_MCQ);
   });
 
   it('lets a question nothing has drawn be retyped', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
-    const retyped = await questions.update(created.id, live(TYPED), ADMIN);
+    const retyped = await questions.update(created.id, draft(TYPED), ADMIN);
 
     assert.equal(retyped.type, QUESTION_TYPE.TEXT_FIELD);
   });
@@ -946,7 +943,7 @@ describe('QuestionsService — finding a question again', () => {
     const { questions } = await build();
     // What the editor and the importer both write for "Ram & Shyam".
     await questions.create(
-      live({ stem: { en: '<p>Is Ram &amp; Shyam a pair?</p>', hi: '<p>राम और श्याम?</p>' } }),
+      draft({ stem: { en: '<p>Is Ram &amp; Shyam a pair?</p>', hi: '<p>राम और श्याम?</p>' } }),
       ADMIN,
     );
 
@@ -959,18 +956,18 @@ describe('QuestionsService — finding a question again', () => {
   it('finds a question by its stem, by its code, and by a tag', async () => {
     const { questions } = await build();
     await questions.create(
-      live({ stem: { en: '<p>Compound interest on a sum</p>', hi: '<p>चक्रवृद्धि ब्याज</p>' } }),
+      draft({ stem: { en: '<p>Compound interest on a sum</p>', hi: '<p>चक्रवृद्धि ब्याज</p>' } }),
       ADMIN,
     );
     await questions.create(
-      live({
+      draft({
         questionCode: 'RRB-JE-0042',
         stem: { en: '<p>Speed of a train</p>', hi: '<p>रेल की गति</p>' },
       }),
       ADMIN,
     );
     await questions.create(
-      live({
+      draft({
         tags: ['mensuration drill'],
         stem: { en: '<p>Area of a trapezium</p>', hi: '<p>समलम्ब का क्षेत्रफल</p>' },
       }),
@@ -991,7 +988,7 @@ describe('QuestionsService — finding a question again', () => {
   /** An archived twin is not in the list the admin is sent back to, so the error has to say so. */
   it('says where the duplicate is when it is out of circulation', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     await questions.archive(created.id);
 
     await assert.rejects(
@@ -1009,7 +1006,7 @@ describe('QuestionsService — finding a question again', () => {
 describe('QuestionsService — what the screen is told', () => {
   it('says a question nothing points at can still be undone', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
     assert.equal(created.inUse, false);
     assert.equal((await questions.list(listQuery())).items[0]?.inUse, false);
@@ -1018,7 +1015,7 @@ describe('QuestionsService — what the screen is told', () => {
   /** The screen offers Delete and Return to draft off this, so it must agree with the rules. */
   it('says a question a paper has drawn cannot', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     await heldBy('paper', created.id, await currentVersionOf(created.id));
 
     assert.equal((await questions.list(listQuery())).items[0]?.inUse, true);
@@ -1028,22 +1025,22 @@ describe('QuestionsService — what the screen is told', () => {
   /** The failure this prevents: a form open since before somebody else's save overwriting it. */
   it('refuses a save built on a screen somebody has since changed, and takes one that is current', async () => {
     const { questions } = await build();
-    const stale = await questions.create(live(), ADMIN);
-    await questions.update(stale.id, live({ stem: REWORDED }), ADMIN);
+    const stale = await questions.create(draft(), ADMIN);
+    await questions.update(stale.id, draft({ stem: REWORDED }), ADMIN);
     const current = await questions.detail(stale.id);
 
     await assert.rejects(
       () =>
         questions.update(
           stale.id,
-          live({ expectedUpdatedAt: stale.updatedAt, questionCode: 'QA-9' }),
+          draft({ expectedUpdatedAt: stale.updatedAt, questionCode: 'QA-9' }),
           ADMIN,
         ),
       conflict,
     );
     const saved = await questions.update(
       stale.id,
-      live({ stem: REWORDED, expectedUpdatedAt: current.updatedAt, questionCode: 'QA-9' }),
+      draft({ stem: REWORDED, expectedUpdatedAt: current.updatedAt, questionCode: 'QA-9' }),
       ADMIN,
     );
 
@@ -1080,7 +1077,7 @@ describe('QuestionsService — what the screen is told', () => {
 describe('QuestionsService.remove — the one hard delete', () => {
   it('deletes a question nobody has used, and its versions with it', async () => {
     const { questions, audit } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
     const { changed } = await recording(audit, () => questions.remove(created.id));
 
@@ -1093,7 +1090,7 @@ describe('QuestionsService.remove — the one hard delete', () => {
   for (const status of [QUESTION_STATUS.ACTIVE, QUESTION_STATUS.ARCHIVED] as const) {
     it(`deletes an unreferenced question that is ${status}`, async () => {
       const { questions } = await build();
-      const created = await questions.create(live(), ADMIN);
+      const created = await questions.create(draft(), ADMIN);
       if (status === QUESTION_STATUS.ARCHIVED) await questions.archive(created.id);
 
       await questions.remove(created.id);
@@ -1107,7 +1104,7 @@ describe('QuestionsService.remove — the one hard delete', () => {
   for (const holder of HOLDERS) {
     it(`refuses a draft that a ${holder} already keys on`, async () => {
       const { questions } = await build();
-      const created = await questions.create(live(), ADMIN);
+      const created = await questions.create(draft(), ADMIN);
       await heldBy(holder, created.id, await currentVersionOf(created.id));
 
       await assert.rejects(() => questions.remove(created.id), conflict);
@@ -1120,16 +1117,6 @@ describe('QuestionsService.remove — the one hard delete', () => {
     const { questions } = await build();
 
     await assert.rejects(() => questions.remove(randomUUID()), missing);
-  });
-
-  /** Every other path refuses ARCHIVED as a destination; creating straight into it is the last door. */
-  it('refuses to create a question that is already archived', async () => {
-    const { questions } = await build();
-
-    await assert.rejects(
-      () => questions.create(draft({ status: QUESTION_STATUS.ARCHIVED }), ADMIN),
-      conflict,
-    );
   });
 });
 
@@ -1167,10 +1154,10 @@ describe('QuestionsService.update — a save that changes nothing', () => {
       },
     });
     const { questions } = await build([], racing);
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
     await assert.rejects(
-      () => questions.update(created.id, live({ stem: REWORDED }), ADMIN),
+      () => questions.update(created.id, draft({ stem: REWORDED }), ADMIN),
       conflict,
     );
     const stored = await versions();
@@ -1181,10 +1168,10 @@ describe('QuestionsService.update — a save that changes nothing', () => {
 
   it('writes no version when the content is byte for byte what is stored', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
 
-    const saved = await questions.update(created.id, live(), ADMIN);
+    const saved = await questions.update(created.id, draft(), ADMIN);
 
     assert.equal((await versions()).length, 1);
     assert.equal(saved.version, 1);
@@ -1194,10 +1181,10 @@ describe('QuestionsService.update — a save that changes nothing', () => {
   /** Re-crediting a draft on every save would hand it to whoever opened it last. */
   it('leaves a draft credited to whoever actually wrote it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     const [written] = await versions();
 
-    await questions.update(created.id, live(), OTHER_ADMIN);
+    await questions.update(created.id, draft(), OTHER_ADMIN);
 
     const [after] = await versions();
     assert.equal(after?.createdById, ADMIN);
@@ -1207,11 +1194,11 @@ describe('QuestionsService.update — a save that changes nothing', () => {
   /** Tags live on the question, not the version, so retagging is not a new version of anything. */
   it('changes what the question row holds without versioning it', async () => {
     const { questions } = await build();
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
 
     const saved = await questions.update(
       created.id,
-      live({ tags: ['ssc cgl'], difficulty: DIFFICULTY_LEVEL.HIGH }),
+      draft({ tags: ['ssc cgl'], difficulty: DIFFICULTY_LEVEL.HIGH }),
       ADMIN,
     );
 
@@ -1240,11 +1227,11 @@ describe('QuestionsService.update — a save that changes nothing', () => {
   for (const [what, over] of ONLY) {
     it(`versions a published question when only ${what} changed`, async () => {
       const { questions } = await build();
-      const created = await questions.create(live(), ADMIN);
+      const created = await questions.create(draft(), ADMIN);
       const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
       await openedAgo(testId);
 
-      const saved = await questions.update(created.id, live(over), ADMIN);
+      const saved = await questions.update(created.id, draft(over), ADMIN);
 
       assert.equal((await versions()).length, 2);
       assert.equal(saved.version, 2);
@@ -1482,10 +1469,10 @@ describe('QuestionsService.update — one lock order, Test before Question', () 
   it('locks the tests holding the question before it claims the question row', async () => {
     const order: string[] = [];
     const { questions } = await build([], watchingLocks(order));
-    const created = await questions.create(live(), ADMIN);
+    const created = await questions.create(draft(), ADMIN);
     await heldBy('paper', created.id, await currentVersionOf(created.id));
 
-    await questions.update(created.id, live({ stem: REWORDED }), ADMIN);
+    await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
     assert.deepEqual(order, [LOCK_ORDER.TESTS, LOCK_ORDER.QUESTION]);
   });

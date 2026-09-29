@@ -28,7 +28,6 @@ import {
   QUESTION_IMAGE_MAX_BYTES,
   questionAvailabilityQuerySchema,
   questionListQuerySchema,
-  setQuestionStatusSchema,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
@@ -39,7 +38,6 @@ import {
   type QuestionListQuery,
   type QuestionSummary,
   type QuestionVersionSummary,
-  type SetQuestionStatusBody,
 } from '@iace/contracts';
 import {
   Actors,
@@ -164,17 +162,6 @@ export class QuestionsController {
     return this.questions.update(id, body, user.id);
   }
 
-  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/status')
-  setStatus(
-    @Param('id') id: string,
-    @Body(new ZodBody(setQuestionStatusSchema)) body: SetQuestionStatusBody,
-  ): Promise<QuestionDetail> {
-    return this.questions.setStatus(id, body);
-  }
-
-  /** The soft remove. Named rather than a status body, so the trail says what was meant. */
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @HttpCode(HttpStatus.OK)

@@ -3,7 +3,6 @@ import { describe, it } from 'node:test';
 import {
   ANSWER_MODE,
   DIFFICULTY_LEVEL,
-  QUESTION_STATUS,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
   plainTextOf,
@@ -44,7 +43,6 @@ function mcq(over: Partial<QuestionDraft> = {}): QuestionDraft {
     subjectId: SUBJECT,
     topicId: TOPIC,
     difficulty: DIFFICULTY_LEVEL.MEDIUM,
-    status: QUESTION_STATUS.ACTIVE,
     questionCode: null,
     stem: { en: 'What is 20% of 150?' },
     solution: {},

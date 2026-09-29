@@ -189,13 +189,7 @@ export class SectionWorkService {
       id: viewer.id,
       isSuperAdmin: viewer.isSuperAdmin,
     });
-
-    const current = await this.prisma.question.findUniqueOrThrow({
-      where: { id: questionId },
-      select: { status: true },
-    });
-    // Working a section is no route to retiring a question: the status stays the bank's.
-    return this.questions.update(questionId, { ...draft, status: current.status }, viewer.id);
+    return this.questions.update(questionId, draft, viewer.id);
   }
 
   /** Which other tests hold this question, asked before the edit rather than reported after it. */

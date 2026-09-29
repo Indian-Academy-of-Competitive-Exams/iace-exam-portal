@@ -25,7 +25,6 @@ import {
   type QuestionSummary,
   type QuestionVersionSummary,
   type RichContent,
-  type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
 import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
@@ -285,7 +284,6 @@ export class QuestionsService {
     createdById: string,
     options: WriteOptions = {},
   ): Promise<QuestionDetail> {
-    assertIntakeStatus(draft.status);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, null);
 
@@ -451,13 +449,13 @@ export class QuestionsService {
     return version.id;
   }
 
-  async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
+  private async setStatus(id: string, status: QuestionStatus): Promise<QuestionDetail> {
     const question = await this.require(id);
     const updated = await this.prisma.$transaction(async (tx) => {
       // Pinned, so a decision made against a status somebody has since changed is refused.
       const claimed = await tx.question.updateMany({
         where: { id, updatedAt: question.updatedAt },
-        data: { status: body.status },
+        data: { status },
       });
       if (claimed.count !== 1) throw questionEditedElsewhere();
 
@@ -471,12 +469,12 @@ export class QuestionsService {
 
   /** The soft remove: out of circulation and out of the bank, reversible and losing nothing. */
   archive(id: string): Promise<QuestionDetail> {
-    return this.setStatus(id, { status: QUESTION_STATUS.ARCHIVED });
+    return this.setStatus(id, QUESTION_STATUS.ARCHIVED);
   }
 
   /** Back into circulation, which is the only place an archived question can go. */
   unarchive(id: string): Promise<QuestionDetail> {
-    return this.setStatus(id, { status: QUESTION_STATUS.ACTIVE });
+    return this.setStatus(id, QUESTION_STATUS.ACTIVE);
   }
 
   /** The one hard delete: a question nobody drew, nobody sat and nothing measured, at any status. */
@@ -557,8 +555,6 @@ export class QuestionsService {
       subjectId: draft.subjectId,
       topicId: draft.topicId ?? null,
       difficulty: draft.difficulty,
-      // Omitted means "leave it": ACTIVE on create, and an archived question stays archived.
-      ...(draft.status === undefined ? {} : { status: draft.status }),
       questionCode: draft.questionCode ?? null,
       tags: draft.tags,
       stemHash: built.stemHash,
@@ -655,12 +651,6 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
     fieldErrors[key].push(issue.message);
   }
   return fieldErrors;
-}
-
-/** ARCHIVED is a retirement, so nothing arrives in it — the one status a question cannot start in. */
-function assertIntakeStatus(status: QuestionStatus | undefined): void {
-  if (status !== QUESTION_STATUS.ARCHIVED) return;
-  throw refused('A question cannot be created as archived.', 'Create it as active, then retire it');
 }
 
 /** A form open since before somebody else's save would write its stale fields over theirs. */

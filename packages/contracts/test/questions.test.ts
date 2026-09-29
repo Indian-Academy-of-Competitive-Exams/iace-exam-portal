@@ -57,11 +57,6 @@ describe('questionDraftSchema', () => {
     assert.deepEqual(parsed.tags, []);
   });
 
-  /** NOT defaulted, deliberately: a defaulted status would turn every save that omits it into an un-archive, putting a retired question back into the next paper. */
-  it('leaves an omitted status absent rather than assuming ACTIVE', () => {
-    assert.equal(questionDraftSchema.parse(draft()).status, undefined);
-  });
-
   it('accepts a multilingual draft', () => {
     const parsed = questionDraftSchema.parse(
       draft({

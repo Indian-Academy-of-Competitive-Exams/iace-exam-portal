@@ -224,7 +224,6 @@ import {
   type QuestionListQueryInput,
   type QuestionSummary,
   type QuestionVersionSummary,
-  type SetQuestionStatusInput,
   type Subject,
   type SubjectListQueryInput,
   type Topic,
@@ -714,10 +713,6 @@ export function adminClient(core: ApiCore) {
 
       update: (id: string, input: QuestionDraftInput): Promise<QuestionDetail> =>
         write('PATCH', ADMIN_QUESTION_ROUTES.update(id), questionDetailSchema, input),
-
-      /** ARCHIVED retires a question: it is drawn into no future paper. */
-      setStatus: (id: string, input: SetQuestionStatusInput): Promise<QuestionDetail> =>
-        write('PATCH', ADMIN_QUESTION_ROUTES.setStatus(id), questionDetailSchema, input),
 
       /** The soft remove: out of circulation and out of the bank, losing nothing. */
       archive: (id: string): Promise<QuestionDetail> =>

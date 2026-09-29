@@ -365,8 +365,6 @@ export const questionDraftSchema = z.object({
   subjectId: z.string().min(1, 'Choose a subject'),
   topicId: z.string().nullable().optional(),
   difficulty: difficultyLevelSchema,
-  /** Optional, NOT defaulted: an edit that omits it must leave the status where it is, or every save would quietly put an archived question back into circulation. */
-  status: questionStatusSchema.optional(),
   questionCode: questionCodeSchema.nullable().optional(),
   stem: localizedTextSchema,
   solution: localizedTextSchema.optional(),
@@ -552,15 +550,6 @@ export const questionExportQuerySchema = questionListQuerySchema.omit({
 });
 export type QuestionExportQuery = z.infer<typeof questionExportQuerySchema>;
 export type QuestionExportQueryInput = z.input<typeof questionExportQuerySchema>;
-
-/** ARCHIVED retires a question rather than deleting it: hidden from the bank and drawn into no future paper, while every paper that already pinned a version is untouched. */
-/** A page of drafts is 100 at most, so a bulk decision can never be larger than what was shown. */
-
-export const setQuestionStatusSchema = z.object({
-  status: questionStatusSchema,
-});
-export type SetQuestionStatusInput = z.input<typeof setQuestionStatusSchema>;
-export type SetQuestionStatusBody = z.infer<typeof setQuestionStatusSchema>;
 
 // ============================================================================
 // The import sheet. These columns are the ONE definition of the format: the
@@ -775,7 +764,6 @@ export const ADMIN_QUESTION_ROUTES = {
   get: (id: string) => `/admin/questions/${id}`,
   versions: (id: string) => `/admin/questions/${id}/versions`,
   update: (id: string) => `/admin/questions/${id}`,
-  setStatus: (id: string) => `/admin/questions/${id}/status`,
   archive: (id: string) => `/admin/questions/${id}/archive`,
   unarchive: (id: string) => `/admin/questions/${id}/unarchive`,
   remove: (id: string) => `/admin/questions/${id}`,
