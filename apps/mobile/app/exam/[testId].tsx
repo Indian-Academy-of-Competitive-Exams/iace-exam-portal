@@ -7,23 +7,17 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { AppException, ErrorCodes, type ExamQuestion, type LiveAttempt } from '@iace/contracts';
+import { useQueryClient } from '@tanstack/react-query';
+import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
 import {
-  paperFor,
   useExamView,
+  useStartedSitting,
   type EndedSitting,
   type ExamSitting,
   type ExamView,
 } from '@iace/app-kit';
 import { api } from '../../src/lib/api';
-import {
-  attemptPaperQueryKey,
-  CATALOG_QUERY_KEY,
-  EXAM_LANGUAGES_PARAM,
-  startedAttemptQueryKey,
-  STORAGE_KEYS,
-} from '../../src/lib/constants';
+import { CATALOG_QUERY_KEY, EXAM_LANGUAGES_PARAM, STORAGE_KEYS } from '../../src/lib/constants';
 import { examLanguagesFrom } from '../../src/lib/exam-routes';
 import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
@@ -53,36 +47,12 @@ export default function ExamScreen() {
   // The sitting Continue here names, so one handed in elsewhere is never restarted as a fresh paper.
   const [resume, setResume] = useState<string>();
 
-  const attempt = useQuery({
-    queryKey: startedAttemptQueryKey(testId),
-    queryFn: () => {
-      const languages = examLanguagesFrom(languagesParam);
-      // None survived the URL: the server picks, as it does for a web start with no choice made.
-      return api.me.startAttempt(testId, {
-        languages: languages.length > 0 ? languages : undefined,
-        tab,
-        resume,
-      });
-    },
-    enabled: testId !== '',
-    // The sitting is started once; a refetch would be a second start, which the server resumes.
-    staleTime: Infinity,
-    retry: false,
-  });
-
-  const started = attempt.data ?? null;
-  const attemptId = started?.id ?? '';
-  const paper = useQuery({
-    queryKey: attemptPaperQueryKey(attemptId),
-    // Stamped where the payload LANDS, never in a render: that instant is the clock's anchor.
-    queryFn: async () => ({
-      paper: started
-        ? await paperFor(started, queryClient, api.me.attemptPaper)
-        : await api.me.attemptPaper(attemptId),
-      arrivedAt: Date.now(),
-    }),
-    enabled: attemptId !== '',
-    staleTime: Infinity,
+  const languages = examLanguagesFrom(languagesParam);
+  const { attempt, paper, forget } = useStartedSitting(api, testId, {
+    // None survived the URL: the server picks, as it does for a web start with no choice made.
+    languages: languages.length > 0 ? languages : undefined,
+    tab,
+    resume,
   });
 
   const onEnded = useCallback(
@@ -94,16 +64,14 @@ export default function ExamScreen() {
     [queryClient, router],
   );
 
+  const startedId = attempt.data?.id;
   // The one intended second start: removing the cached start while mounted refetches it with this tab.
   const continueHere = useCallback(() => {
-    setResume(queryClient.getQueryData<LiveAttempt>(startedAttemptQueryKey(testId))?.id);
-    forgetSitting(queryClient, testId);
+    setResume(startedId);
+    forget();
     setView(null);
     setReclaims((count) => count + 1);
-  }, [queryClient, testId]);
-
-  // On unmount, never in onEnded: a still-mounted query rebuilds what was removed, and that fetch IS a second start.
-  useEffect(() => () => forgetSitting(queryClient, testId), [queryClient, testId]);
+  }, [forget, startedId]);
 
   // Android's Back would drop a running paper; in a sitting the only way out is handing it in.
   useEffect(() => {
@@ -175,15 +143,6 @@ export default function ExamScreen() {
       ) : null}
     </View>
   );
-}
-
-/** A cached start is the attempt as it WAS: a handed-in one would draw a paper where nothing saves. */
-function forgetSitting(queryClient: QueryClient, testId: string): void {
-  const started = queryClient.getQueryData<LiveAttempt>(startedAttemptQueryKey(testId));
-  if (started) {
-    queryClient.removeQueries({ queryKey: attemptPaperQueryKey(started.id), exact: true });
-  }
-  queryClient.removeQueries({ queryKey: startedAttemptQueryKey(testId), exact: true });
 }
 
 /** Draws nothing: it runs the engine and hands each view up, so the skin never waits to mount. */

@@ -9,12 +9,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   contentLanguageOf,
   LANGUAGE_LABELS,
-  LANGUAGE_MODE,
   languagesFor,
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
-import { isBriefRefused } from '@iace/app-kit';
+import { beginChoice, isBriefRefused } from '@iace/app-kit';
 import { Text } from '../../../src/components/ui/text';
 import { briefQuery, testPaperQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
@@ -116,10 +115,7 @@ function InstructionsContent({
     );
   }
 
-  const dual = paper.languageMode === LANGUAGE_MODE.DUAL;
-  // A paper offering one language has nothing to choose, so it arrives chosen rather than skippable.
-  const chosen = language || soleLanguageOf(paper);
-  const ready = declared && (dual || chosen !== '');
+  const { dual, chosen, ready, languages } = beginChoice(paper, language, declared);
 
   return (
     <Fragment>
@@ -150,10 +146,7 @@ function InstructionsContent({
 
       <Declaration declared={declared} onChange={onDeclaredChange} />
 
-      <Button
-        disabled={!ready}
-        onPress={() => onBegin(dual ? paper.languages : [chosen as LanguageCode])}
-      >
+      <Button disabled={!ready} onPress={() => onBegin(languages)}>
         I am ready to begin
       </Button>
     </Fragment>
@@ -243,9 +236,6 @@ function Declaration({
     </View>
   );
 }
-
-const soleLanguageOf = (paper: ExamBrief): LanguageCode | '' =>
-  paper.languages.length === 1 ? (paper.languages[0] ?? '') : '';
 
 const dualLanguageNote = (paper: ExamBrief) =>
   `This paper is shown in ${paper.languages.map((code) => LANGUAGE_LABELS[contentLanguageOf(code)]).join(' and ')} together. There is nothing to choose.`;

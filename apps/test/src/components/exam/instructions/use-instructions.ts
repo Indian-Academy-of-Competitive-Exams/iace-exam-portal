@@ -5,12 +5,8 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  LANGUAGE_MODE,
-  NAVIGATION_POLICY,
-  type ExamBrief,
-  type LanguageCode,
-} from '@iace/contracts';
+import { NAVIGATION_POLICY, type ExamBrief, type LanguageCode } from '@iace/contracts';
+import { beginChoice } from '@iace/app-kit';
 import { ROUTES } from '../../../lib/constants';
 
 const INSTRUCTION_STEPS = ['GENERAL', 'PAPER'] as const;
@@ -44,10 +40,7 @@ export function useInstructions(
   const [declared, setDeclared] = useState(false);
   const [language, setLanguage] = useState<LanguageCode | ''>('');
 
-  const dual = brief.languageMode === LANGUAGE_MODE.DUAL;
-  // A paper offering one language has nothing to choose, so it arrives chosen rather than skippable.
-  const chosen = language || (brief.languages.length === 1 ? (brief.languages[0] ?? '') : '');
-  const ready = declared && (dual || chosen !== '');
+  const { dual, chosen, ready, languages } = beginChoice(brief, language, declared);
 
   return {
     brief,
@@ -64,6 +57,6 @@ export function useInstructions(
     declared,
     declare: setDeclared,
     ready,
-    begin: () => onBegin(dual ? brief.languages : [chosen as LanguageCode]),
+    begin: () => onBegin(languages),
   };
 }

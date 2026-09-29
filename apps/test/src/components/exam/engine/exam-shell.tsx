@@ -4,8 +4,8 @@
  * without them — and the data attribute is what scopes that skin's tokens.
  */
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
-import { Alert, Button, ConfirmDialog, plural } from '@iace/ui';
-import { type ExamView } from '@iace/app-kit';
+import { Alert, Button, ConfirmDialog } from '@iace/ui';
+import { submittingSays, type ExamView } from '@iace/app-kit';
 import { Layout } from '../templates/shared/layout';
 import { useLockedZoom } from './lock-zoom';
 import { RailwayLayout } from '../templates/railway/layout';
@@ -47,13 +47,6 @@ export function ExamShell({
       />
     </div>
   );
-}
-
-/** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
-function submittingSays(view: ExamView): string {
-  const { submit } = view;
-  const marked = view.forwardOnly ? '' : ` and ${submit.markedForReview} marked for review`;
-  return `${plural(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
 }
 
 /** The default skin's warning: the design system's own alert, over the paper it interrupts. */

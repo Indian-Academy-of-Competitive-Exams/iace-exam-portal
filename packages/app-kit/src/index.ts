@@ -35,8 +35,10 @@ export {
   type ExamSitting,
   type EndedSitting,
 } from './exam/use-exam-view';
+export { beginChoice, useStartedSitting, type BeginChoice } from './exam/start-sitting';
 export {
   TIMER_KIND,
+  submittingSays,
   type ExamView,
   type ExamSubmitView,
   type ExamFullscreenView,
@@ -83,8 +85,6 @@ export {
   briefQueryKey,
   ACTIVE_DEVICES_QUERY_KEY,
   SYSTEM_CHECK_QUERY_KEY,
-  startedAttemptQueryKey,
-  attemptPaperQueryKey,
   testPaperQueryKey,
   createStudentQueries,
 } from './student-queries';

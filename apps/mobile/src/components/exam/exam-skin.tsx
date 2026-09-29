@@ -8,9 +8,8 @@ import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
-import { TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
-import { plural } from '../../lib/plural';
 import { Alert } from '../ui/alert';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/confirm-dialog';
@@ -360,13 +359,6 @@ function SittingRules({ onClose }: Readonly<{ onClose: () => void }>) {
       </ScrollView>
     </View>
   );
-}
-
-/** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
-function submittingSays(view: ExamView): string {
-  const { submit } = view;
-  const marked = view.forwardOnly ? '' : ` and ${submit.markedForReview} marked for review`;
-  return `${plural(submit.unanswered, 'question')} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
 }
 
 /** Said once without a count, because "1 times" is how a screen tells a student it is a machine. */

@@ -12,20 +12,12 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
-import { paperFor, useExamView, type EndedSitting } from '@iace/app-kit';
+import { useExamView, useStartedSitting, type EndedSitting } from '@iace/app-kit';
 import { browserSessionStorage, useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import {
-  attemptPaperQueryKey,
-  CATALOG_QUERY_KEY,
-  RESUME_PARAM,
-  ROUTES,
-  startedAttemptQueryKey,
-  STORAGE_KEYS,
-} from '../lib/constants';
+import { CATALOG_QUERY_KEY, RESUME_PARAM, ROUTES, STORAGE_KEYS } from '../lib/constants';
 import { tabId } from '../lib/tab-id';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
@@ -39,32 +31,12 @@ export function ExamPage() {
   const navigate = useNavigate();
   const { identity: student } = useAuth();
   const began = (useLocation().state ?? {}) as BeganWith;
-  const queryClient = useQueryClient();
   const resume = useSearchParams()[0].get(RESUME_PARAM) ?? undefined;
 
-  const attempt = useQuery({
-    queryKey: [...startedAttemptQueryKey(testId), resume],
-    queryFn: () =>
-      api.me.startAttempt(testId, { languages: began.languages, tab: tabId(), resume }),
-    enabled: testId !== '',
-    // The sitting is started once; a refetch would be a second start, which the server resumes.
-    staleTime: Infinity,
-    retry: false,
-  });
-
-  const started = attempt.data ?? null;
-  const attemptId = started?.id ?? '';
-  const paper = useQuery({
-    queryKey: attemptPaperQueryKey(attemptId),
-    // Stamped where the payload LANDS, never in a render: that instant is the clock's anchor.
-    queryFn: async () => ({
-      paper: started
-        ? await paperFor(started, queryClient, api.me.attemptPaper)
-        : await api.me.attemptPaper(attemptId),
-      arrivedAt: Date.now(),
-    }),
-    enabled: attemptId !== '',
-    staleTime: Infinity,
+  const { attempt, paper } = useStartedSitting(api, testId, {
+    languages: began.languages,
+    tab: tabId(),
+    resume,
   });
 
   if (attempt.isError) {

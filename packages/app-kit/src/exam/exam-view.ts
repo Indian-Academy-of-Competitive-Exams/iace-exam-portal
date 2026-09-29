@@ -28,6 +28,13 @@ export interface ExamSubmitView {
   retry: () => void;
 }
 
+/** A forward-only paper marks nothing for review, so its confirm does not count what cannot exist. */
+export function submittingSays({ submit, forwardOnly }: ExamView): string {
+  const questions = submit.unanswered === 1 ? 'question' : 'questions';
+  const marked = forwardOnly ? '' : ` and ${submit.markedForReview} marked for review`;
+  return `${submit.unanswered} ${questions} unanswered${marked}. Once submitted the paper closes and nothing more can be changed.`;
+}
+
 export const TIMER_KIND = { SECTION: 'SECTION', PAPER: 'PAPER' } as const;
 
 /** The one clock on screen, chosen by the engine: a skin draws the kind it is handed. */

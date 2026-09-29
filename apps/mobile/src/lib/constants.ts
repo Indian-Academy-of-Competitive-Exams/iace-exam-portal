@@ -22,7 +22,6 @@ export {
   SYSTEM_CHECK_QUERY_KEY,
   TEST_DAYS_QUERY_KEY,
   UNREAD_QUERY_KEY,
-  attemptPaperQueryKey,
   bookmarksInAttemptQueryKey,
   briefQueryKey,
   leaderboardQueryKey,
@@ -32,7 +31,6 @@ export {
   savedQueryKey,
   scoreCardQueryKey,
   solutionsQueryKey,
-  startedAttemptQueryKey,
 } from '@iace/app-kit';
 
 /** The search param carrying the language choice to `/exam/[testId]`. */
