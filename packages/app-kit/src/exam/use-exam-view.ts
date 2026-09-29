@@ -115,12 +115,10 @@ export function useExamView(
 
   const submit = useMutation({
     mutationFn: async () => {
-      // The question still on screen has cost time too; bank it before the last save goes.
+      // The question still on screen has cost time too; bank it before the last batch goes.
       state.bankOpen();
-      const delivered = await state.flush();
-      // The paper does not go in behind its own answers; the retry ladder carries them again.
-      if (!delivered) throw new Error('The last answers have not reached the server yet.');
-      return api.me.submitAttempt(paper.attemptId, { tab });
+      // The last batch rides the submit: one request at the deadline, and a failed one keeps it for the retry.
+      return state.finish((batch) => api.me.submitAttempt(paper.attemptId, { ...batch, tab }));
     },
     retry: shouldRetrySubmit,
     retryDelay: submitRetryDelayMs,

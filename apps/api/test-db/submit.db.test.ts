@@ -36,6 +36,8 @@ const NOW = new Date('2026-09-01T05:00:00.000Z');
 const ENDS_AT = new Date('2026-09-01T05:30:00.000Z');
 const HOUR_MS = 60 * 60 * 1000;
 const LATE = new Date(Date.now() - HOUR_MS);
+/** A deadline still ahead on the real clock, which is what a batch riding a submit is judged by. */
+const SOON = new Date(Date.now() + HOUR_MS);
 const SETTLED = new Date(Date.now() - HOUR_MS);
 const OLDER = new Date(Date.now() - 2 * HOUR_MS);
 const OLDEST = new Date(Date.now() - 3 * HOUR_MS);
@@ -185,6 +187,48 @@ describe('SubmitService', () => {
         removeOnFail: true,
       },
     ]);
+  });
+
+  /** One request at the deadline: the last answers the screen had not saved ride the submit itself. */
+  it('applies the last answers it carries, and ends the sitting in the one request', async () => {
+    const built = await build({ endsAt: SOON });
+    await built.state.open(built.live);
+
+    const result = await built.submit.submit(built.student, built.attemptId, {
+      revision: 1,
+      answers: [built.change()],
+    });
+
+    assert.equal(result.submittedByThisCall, true);
+    assert.equal(result.answeredCount, 1);
+    assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
+  });
+
+  /** Late is late at submit too; the sitting still ends rather than waiting for the sweeper. */
+  it('drops a batch that comes in past the deadline, and still ends the sitting', async () => {
+    const built = await build({ endsAt: LATE });
+    await built.state.open(built.live);
+
+    const result = await built.submit.submit(built.student, built.attemptId, {
+      revision: 1,
+      answers: [built.change()],
+    });
+
+    assert.equal(result.submittedByThisCall, true);
+    assert.equal(await chosenOn(built.attemptId, built.q1), null);
+  });
+
+  /** A retry of a submit that did land must not fail on the batch it carries again. */
+  it('answers a retried submit with the first outcome, batch and all', async () => {
+    const built = await build({ endsAt: SOON });
+    await built.state.open(built.live);
+    const body = { revision: 1, answers: [built.change()] };
+
+    const first = await built.submit.submit(built.student, built.attemptId, body);
+    const second = await built.submit.submit(built.student, built.attemptId, body);
+
+    assert.equal(second.submittedByThisCall, false);
+    assert.equal(second.submittedAt, first.submittedAt);
   });
 
   /** The catalog caches where the student got to, so a submitted test must leave the Open tab. */

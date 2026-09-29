@@ -79,8 +79,10 @@ export interface AttemptStateHandle {
   /** Entering a section tells the server, which stamps when its clock started. */
   enterSection: (sectionId: string, remainingSec: number) => void;
   closeSection: (sectionId: string, remainingSec: number) => void;
-  /** Pushes whatever is pending now — on a section change, and before submitting. True means every answer held at the call reached the server. */
+  /** Pushes whatever is pending now — on a section change. True means every answer held at the call reached the server. */
   flush: () => Promise<boolean>;
+  /** The paper going in: the unsent batch rides the call that ends the sitting, and nothing is saved after it. */
+  finish: <T>(send: (batch: LastBatch | null) => Promise<T>) => Promise<T>;
   /** Whether anything the student did has not reached the server yet, read at the moment of asking. */
   hasUnsent: () => boolean;
   /** The page is closing or the app backgrounding: sends everything unsent now, keeping the local copy. */
@@ -96,6 +98,13 @@ const answerOf = (change: AnswerChange, held: LiveAnswer | undefined): LiveAnswe
   // Earliest wins: a later touch is not a first one, however many times this is recomputed.
   firstActionAt: held?.firstActionAt ?? change.firstActionAt ?? null,
 });
+
+/** What a save would have carried, handed to the call that ends the sitting instead. */
+export interface LastBatch {
+  revision: number;
+  answers: AnswerChange[];
+  sections: Record<string, SectionProgress>;
+}
 
 /** What the bottom bar can say. Absent means "leave that half as it was". */
 export interface AnswerIntent {
@@ -190,19 +199,16 @@ export function useAttemptState(
     }
   }, [attemptId, unsent]);
 
-  const sendPending = useCallback(async (): Promise<boolean> => {
+  const isIdle = () =>
+    pending.current.size === 0 && Object.keys(pendingSections.current).length === 0;
+
+  // Cleared BEFORE the request, so an edit made while it flies belongs to the next batch.
+  const take = useCallback(() => {
     const changes = [...pending.current.values()];
     const movedSections = pendingSections.current;
-    if (changes.length === 0 && Object.keys(movedSections).length === 0) return true;
-
-    // Cleared BEFORE the request, so an edit made while it flies belongs to the next batch.
     pending.current = new Map();
     pendingSections.current = {};
     flying.current = changes;
-    revision.current += 1;
-    const sent = revision.current;
-    setIsSaving(true);
-
     // Under whatever arrived while this flew, never over it: that copy is the newer one.
     const requeue = () => {
       for (const change of changes) {
@@ -210,6 +216,15 @@ export function useAttemptState(
       }
       pendingSections.current = { ...movedSections, ...pendingSections.current };
     };
+    return { changes, movedSections, requeue };
+  }, []);
+
+  const sendPending = useCallback(async (): Promise<boolean> => {
+    if (isIdle()) return true;
+    const { changes, movedSections, requeue } = take();
+    revision.current += 1;
+    const sent = revision.current;
+    setIsSaving(true);
 
     try {
       const { api, tab } = mounted.current;
@@ -238,16 +253,21 @@ export function useAttemptState(
       keepQueue();
       setIsSaving(false);
     }
-  }, [attemptId, keepQueue, standDown]);
+  }, [attemptId, keepQueue, standDown, take]);
 
-  const flush = useCallback(async (): Promise<boolean> => {
-    // Waits its turn behind the batch in the air, then sends what that batch could not carry — so submit's await really is the last save.
+  // Behind the batch in the air, so what it could not carry goes next and the last call really is last.
+  const waitTurn = useCallback(async () => {
     while (inFlight.current) {
       const flying = inFlight.current;
       await flying;
       if (inFlight.current === flying) inFlight.current = null;
     }
-    const idle = pending.current.size === 0 && Object.keys(pendingSections.current).length === 0;
+  }, []);
+
+  const flush = useCallback(async (): Promise<boolean> => {
+    // Only when something flies: an await with nothing to wait for lets a second call slip past this one.
+    if (inFlight.current) await waitTurn();
+    const idle = isIdle();
     if (stopped.current || idle) return idle;
 
     const run = sendPending();
@@ -255,7 +275,32 @@ export function useAttemptState(
     const delivered = await run;
     if (inFlight.current === run) inFlight.current = null;
     return delivered;
-  }, [sendPending]);
+  }, [sendPending, waitTurn]);
+
+  const finish = useCallback(
+    async <T>(send: (batch: LastBatch | null) => Promise<T>): Promise<T> => {
+      if (inFlight.current) await waitTurn();
+      const idle = isIdle();
+      const { changes, movedSections, requeue } = take();
+      if (!idle) revision.current += 1;
+      try {
+        const done = await send(
+          idle ? null : { revision: revision.current, answers: changes, sections: movedSections },
+        );
+        stopped.current = true;
+        return done;
+      } catch (error: unknown) {
+        requeue();
+        setHasUnsaved(true);
+        if (isTakenOver(error)) standDown();
+        throw error;
+      } finally {
+        flying.current = [];
+        keepQueue();
+      }
+    },
+    [keepQueue, standDown, take, waitTurn],
+  );
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
   useEffect(() => {
@@ -373,6 +418,7 @@ export function useAttemptState(
     enterSection,
     closeSection,
     flush,
+    finish,
     hasUnsent,
     leave,
   };

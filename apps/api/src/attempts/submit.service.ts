@@ -6,13 +6,19 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
-import { AppException, ATTEMPT_STATUS, ErrorCodes, type SubmittedAttempt } from '@iace/contracts';
+import {
+  AppException,
+  ATTEMPT_STATUS,
+  ErrorCodes,
+  type SubmitAttemptBody,
+  type SubmittedAttempt,
+} from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { answeredIn, type AnswerSheet } from './answer-sheet';
-import { holdsSitting } from './attempt-state';
+import { holdsSitting, isInTime, type HeldState } from './attempt-state';
 import { ScoringOutbox } from './scoring-outbox';
 import { MetricsService } from '../common/metrics';
 
@@ -43,7 +49,11 @@ export class SubmitService {
   ) {}
 
   /** The student's own. Another student's id reads as missing, never as refused. */
-  async submit(studentId: string, attemptId: string, tab?: string): Promise<SubmittedAttempt> {
+  async submit(
+    studentId: string,
+    attemptId: string,
+    body: SubmitAttemptBody = {},
+  ): Promise<SubmittedAttempt> {
     const attempt = await this.require(attemptId);
     if (attempt.studentId !== studentId) {
       this.metrics.countSubmit('refused');
@@ -52,15 +62,34 @@ export class SubmitService {
 
     // A tab stood down elsewhere must not end a sitting the student is answering somewhere else.
     const held = await this.state.read(attemptId);
-    if (held && !holdsSitting(held, tab)) {
+    if (held && !holdsSitting(held, body.tab)) {
       this.metrics.countSubmit('refused');
       throw new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
     }
 
+    await this.lastAnswers(studentId, attempt, held, body);
     const ended = await this.end(attempt);
     // The spike everything downstream is sized for, counted where it actually lands.
     this.metrics.countSubmit('accepted');
     return ended;
+  }
+
+  /** The screen's last batch, by the save's own rules; past the deadline's grace it is dropped as a late save is. */
+  private async lastAnswers(
+    studentId: string,
+    attempt: AttemptRow,
+    held: HeldState | null,
+    { revision, answers, sections, tab }: SubmitAttemptBody,
+    now: Date = new Date(),
+  ): Promise<void> {
+    if (revision === undefined || attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) return;
+    if (held && !isInTime(held, now)) return;
+    await this.state.save(
+      studentId,
+      attempt.id,
+      { revision, answers: answers ?? [], sections, tab },
+      now,
+    );
   }
 
   /** The sweeper's. A closed tab must not leave a sitting open forever. */

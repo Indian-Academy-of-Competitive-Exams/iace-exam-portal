@@ -494,3 +494,58 @@ test('a tab that was stood down sends nothing on the way out', async (t) => {
 
   assert.equal(sent.length, 0);
 });
+
+/** One request at the deadline, not a save and then a submit: the unsent batch rides the call that ends the sitting. */
+test('hands the unsent batch to the call that ends the sitting, and saves nothing itself', async (t) => {
+  const saves: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: unknown) => {
+        saves.push(body);
+        return { revision: 1 };
+      },
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+
+  let carried: { revision: number; answers: { questionId: string }[] } | null = null;
+  await act(async () => {
+    await result.current.finish((batch) => {
+      carried = batch;
+      return Promise.resolve();
+    });
+  });
+
+  assert.equal(saves.length, 0);
+  assert.deepEqual(
+    (carried as { answers: { questionId: string }[] } | null)?.answers.map((a) => a.questionId),
+    ['q1'],
+  );
+  assert.equal(result.current.hasUnsent(), false);
+});
+
+/** The failure this prevents: a submit that failed losing the answers it carried, so the retry hands in less. */
+test('puts the batch back when the ending call fails, so the retry carries it again', async (t) => {
+  const deps = depsFor(apiThatFails([]));
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+
+  await act(async () => {
+    await assert.rejects(result.current.finish(() => Promise.reject(new Error('offline'))));
+  });
+  assert.equal(result.current.hasUnsent(), true);
+
+  const carried: string[] = [];
+  await act(async () => {
+    await result.current.finish((batch) => {
+      carried.push(...(batch?.answers ?? []).map((a) => a.questionId));
+      return Promise.resolve();
+    });
+  });
+  assert.deepEqual(carried, ['q1']);
+});

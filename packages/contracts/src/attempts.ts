@@ -175,9 +175,10 @@ export const saveAttemptStateSchema = z.object({
   tab: z.string().min(1).optional(),
 });
 
-/** Submitting names its tab too: a tab stood down elsewhere must not end a sitting in progress. */
-export const submitAttemptSchema = z.object({
-  tab: z.string().min(1).optional(),
+/** Submitting names its tab, and carries the last answers the screen had not saved: one request at the deadline. */
+export const submitAttemptSchema = saveAttemptStateSchema.partial({
+  revision: true,
+  answers: true,
 });
 export type SubmitAttemptInput = z.input<typeof submitAttemptSchema>;
 export type SubmitAttemptBody = z.infer<typeof submitAttemptSchema>;

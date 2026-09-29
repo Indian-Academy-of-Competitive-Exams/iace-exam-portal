@@ -260,8 +260,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   falls back to Postgres, which refuses anything not in progress — so a save after a submit cannot
   be accepted. A save is still taken up to 30 seconds past the deadline: a slow network is not a
   cheat.
-- **Submit's order is the design.** Answers are written before the sitting is claimed, so a write
-  that throws leaves it open with its state intact; the live state is taken behind the claim and
+- **Submit's order is the design.** The screen's last unsaved answers ride the submit and are
+  applied by the save's own rules, so the deadline costs one request, not two. Answers are written
+  before the sitting is claimed, so a write that throws leaves it open with its state intact; the live state is taken behind the claim and
   written last, so nothing scores a half-written paper; only then is it queued for scoring. A sitting
   left `SUBMITTED` and unscored is queued again by the sweeper under the same id, and a sitting
   nobody ended is ended by it.

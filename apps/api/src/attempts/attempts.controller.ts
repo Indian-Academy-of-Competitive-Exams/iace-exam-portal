@@ -69,7 +69,7 @@ export class AttemptsController {
     @Body(new ZodBody(submitAttemptSchema)) body: SubmitAttemptBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SubmittedAttempt> {
-    return this.submitter.submit(user.id, id, body.tab);
+    return this.submitter.submit(user.id, id, body);
   }
 
   /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */
