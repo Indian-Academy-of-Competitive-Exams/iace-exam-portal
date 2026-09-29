@@ -98,10 +98,11 @@ first AWS account a rehearsal instance left up for three weeks costs more than t
 alarms catch.
 
 **Internet egress is inside the free tier.** Measured 25 September 2026: a 100-question bilingual
-sitting pulls 41 KB of paper, 3 KB of score card and 56 KB of solution report gzipped — 100 KB, so
-an 8,000-candidate event is 0.8 GB and thirty events a month are ~24 GB against the free 100 GB.
-That margin is what `compression()` in `main.ts` buys; without it the same traffic is ~125 GB and
-billable.
+sitting pulls 41 KB of paper and 56 KB of solution report gzipped. Its score card, re-measured 29
+September once it carried every report tab's figures and no question, is 1 KB gzipped (2.7 KB raw)
+whatever the paper's length — under 100 KB in all, so an 8,000-candidate event is 0.8 GB and
+thirty events a month are ~24 GB against the free 100 GB. That margin is what `compression()` in
+`main.ts` buys; without it the same traffic is ~125 GB and billable.
 
 **Traffic between the boxes is free** — same VPC, same zone. It is not free of latency: §3.
 
@@ -236,11 +237,10 @@ api.iace.co.in {
 }
 ```
 
-**The split is not prefix-clean, so the matcher cannot be either.** `GET /me/performance` is exam,
-but `/me/performance/days` and `/me/performance/series` are core, so the
-matcher names that exact path, never a `/me/performance*` wildcard. `GET
-/me/attempts/:id/question-report` is core too, under the same `/me/attempts` prefix the exam routes
-use, so the matcher lists leaf suffixes like `/me/attempts/*/state` rather than a blanket
+**The split is not prefix-clean, so the matcher cannot be either.** Every `/me/performance` route
+is core, but `/me/attempts` holds both: `GET /me/attempts/:id/scorecard`, `/solutions` and
+`/question-report` are core, under the same prefix as the exam role's `/paper`, `/state` and
+`/submit`, so the matcher lists leaf suffixes like `/me/attempts/*/state` rather than a blanket
 `/me/attempts/*`.
 
 **What this gives up, stated plainly:** a load balancer is multi-node and self-healing; one Caddy on
