@@ -16,7 +16,7 @@ export function nextPageParam(lastPage: Paginated<unknown>, loadedPages: number)
 /** Pages accumulate as asked for; page size stays whatever the API serves. `queryKey` must include whatever the fetch depends on, so pages reset with it. */
 export function useInfinitePages<T>(options: {
   queryKey: QueryKey;
-  fetchPage: (page: number) => Promise<Paginated<T>>;
+  fetchPage: (page: number, signal?: AbortSignal) => Promise<Paginated<T>>;
   enabled?: boolean;
 }): {
   items: T[];
@@ -34,7 +34,7 @@ export function useInfinitePages<T>(options: {
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => fetchPage(pageParam),
+    queryFn: ({ pageParam, signal }) => fetchPage(pageParam, signal),
     getNextPageParam: (lastPage, allPages) => nextPageParam(lastPage, allPages.length),
     enabled,
   });
@@ -63,6 +63,8 @@ export interface PickerPageParams {
   page: number;
   pageSize: number;
   q: string;
+  /** Aborted when the search moves on, so a stale page is cancelled rather than downloaded. */
+  signal?: AbortSignal;
 }
 
 /** Server-side search and paging, as the props a combobox spreads; a new search restarts at page one. */
@@ -74,7 +76,8 @@ export function usePagedPicker<T>(options: {
   const [search, setSearch] = useState('');
   const pages = useInfinitePages({
     queryKey: [...options.queryKey, search],
-    fetchPage: (page) => options.fetchPage({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+    fetchPage: (page, signal) =>
+      options.fetchPage({ page, pageSize: PAGE_SIZE_MAX, q: search, signal }),
     enabled: options.enabled,
   });
 

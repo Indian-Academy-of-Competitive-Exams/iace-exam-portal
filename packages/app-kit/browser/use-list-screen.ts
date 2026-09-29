@@ -17,7 +17,7 @@ export function useListScreen<
   /** The spec's values as the endpoint wants them — one filter may set several params. */
   toQuery: (values: ListValues<TSpec>) => TFilters;
   fetchPage: (
-    params: TFilters & { page: number; pageSize: number; match?: MatchMode },
+    params: TFilters & { page: number; pageSize: number; match?: MatchMode; signal?: AbortSignal },
   ) => Promise<Paginated<TItem>>;
   enabled?: boolean;
   /** Where the values live. Defaults to the URL; a dialog passes `useLocalFilters()` instead. */

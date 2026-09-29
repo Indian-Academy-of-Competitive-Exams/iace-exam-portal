@@ -55,8 +55,11 @@ function queryFor(scope: PerformanceScope, scopeId: string): PerformanceReportQu
 function useSittings(studentId: string, search: string, enabled: boolean) {
   return useInfinitePages({
     queryKey: studentSittingsQueryKey(studentId, search),
-    fetchPage: (page) =>
-      api.admin.students.sittings(studentId, { page, pageSize: PAGE_SIZE_MAX, q: search }),
+    fetchPage: (page, signal) => {
+      // Named, not inline: the signal rides along to the client, which lifts it out of the query.
+      const query = { page, pageSize: PAGE_SIZE_MAX, q: search, signal };
+      return api.admin.students.sittings(studentId, query);
+    },
     enabled,
   });
 }

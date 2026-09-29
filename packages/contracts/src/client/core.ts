@@ -57,6 +57,8 @@ export interface RequestOptions<T> {
   anonymous?: boolean;
   /** Outlives the page: a write sent as a tab closes still reaches the server. */
   keepalive?: boolean;
+  /** Aborts the fetch: a search superseded by the next keystroke stops rather than landing late. */
+  signal?: AbortSignal;
 }
 
 /** Callers never see the envelope: every method returns `data` or throws an `AppException`. */
@@ -188,8 +190,8 @@ export function createApiCore(options: ApiClientOptions) {
     getRefreshToken() === null || !worthAskingAgain(refreshFailure);
 
   async function envelopeOf<T>(path: string, opts: RequestOptions<T>): Promise<ApiSuccess<T>> {
-    const { method = 'GET', body, schema, anonymous = false, keepalive = false } = opts;
-    const extra = keepalive ? { keepalive } : {};
+    const { method = 'GET', body, schema, anonymous = false, keepalive = false, signal } = opts;
+    const extra = { ...(keepalive ? { keepalive } : {}), ...(signal ? { signal } : {}) };
 
     if (anonymous) return parse(await send(path, method, body, null, extra), schema);
 
@@ -284,8 +286,14 @@ export function createApiCore(options: ApiClientOptions) {
     body?: unknown,
     extra: Pick<RequestOptions<T>, 'keepalive'> = {},
   ) => request(path, { method, body, schema, ...extra });
-  const list = <T>(path: string, query: object, schema: ZodType<T>) =>
-    requestPaginated(`${path}${queryString({ ...query })}`, { schema: schema.array() });
+  // A list query may carry its caller's AbortSignal: it rides the fetch, never the query string.
+  const list = <T>(path: string, query: object, schema: ZodType<T>) => {
+    const { signal, ...params } = query as { signal?: AbortSignal };
+    return requestPaginated(`${path}${queryString(params)}`, {
+      schema: schema.array(),
+      ...(signal ? { signal } : {}),
+    });
+  };
 
   return { request, requestPaginated, requestBlob, requestUploadBlob, get, write, list };
 }

@@ -47,7 +47,9 @@ export function useListQuery<TItem, TFilters extends object>(options: {
   /** Include everything the fetch depends on EXCEPT page and pageSize. */
   queryKey: QueryKey;
   filters: TFilters;
-  fetchPage: (params: TFilters & { page: number; pageSize: number }) => Promise<Paginated<TItem>>;
+  fetchPage: (
+    params: TFilters & { page: number; pageSize: number; signal?: AbortSignal },
+  ) => Promise<Paginated<TItem>>;
   enabled?: boolean;
 }): ListQueryResult<TItem> {
   const { queryKey, filters, fetchPage, enabled = true } = options;
@@ -65,7 +67,8 @@ export function useListQuery<TItem, TFilters extends object>(options: {
 
   const query = useQuery({
     queryKey: [...(Array.isArray(queryKey) ? queryKey : [queryKey]), { filters, page, pageSize }],
-    queryFn: () => fetchPage({ ...filters, page, pageSize }),
+    // The signal read here is what lets a superseded search be aborted, not just ignored.
+    queryFn: ({ signal }) => fetchPage({ ...filters, page, pageSize, signal }),
     placeholderData: keepPreviousData,
     enabled,
   });

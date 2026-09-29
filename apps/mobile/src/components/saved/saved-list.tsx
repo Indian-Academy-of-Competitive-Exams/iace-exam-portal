@@ -36,13 +36,16 @@ export function SavedList({ state }: Readonly<SavedListProps>) {
 
   const list = useInfinitePages({
     queryKey: [...savedQueryKey(), { subjectId, testId }],
-    fetchPage: (page) =>
-      api.me.savedQuestions({
+    fetchPage: (page, signal) => {
+      const query = {
         page,
         // A set-valued filter choosing nothing means EVERY one of them, never none.
         subjectId: subjectId.length > 0 ? [...subjectId] : undefined,
         testId: testId.length > 0 ? [...testId] : undefined,
-      }),
+        signal,
+      };
+      return api.me.savedQuestions(query);
+    },
   });
 
   const drop = useMutation({

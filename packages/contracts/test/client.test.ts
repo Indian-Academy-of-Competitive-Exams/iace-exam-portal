@@ -111,6 +111,27 @@ describe('typed client — success', () => {
     assert.deepEqual(kept, [true, undefined]);
   });
 
+  /** A superseded search must be abortable, and the signal is transport, not a filter. */
+  it('hands the signal of a list query to the fetch, and keeps it out of the URL', async () => {
+    const seen: { url: string; signal?: AbortSignal | null }[] = [];
+    const core = createApiCore({
+      baseUrl: 'https://api.test',
+      getAccessToken: () => 'valid',
+      getRefreshToken: () => null,
+      onTokensRefreshed: () => undefined,
+      fetchImpl: ((url: string, init?: RequestInit) => {
+        seen.push({ url, signal: init?.signal });
+        return Promise.resolve(success([], { page: 1, pageSize: 20, total: 0 }));
+      }) as unknown as typeof fetch,
+    });
+    const abort = new AbortController();
+
+    await core.list('/things', { q: 'ssc', signal: abort.signal }, schema);
+
+    assert.equal(seen[0]?.url, 'https://api.test/things?q=ssc');
+    assert.equal(seen[0]?.signal, abort.signal);
+  });
+
   it('returns data, not the envelope', async () => {
     const { api } = clientWith([success({ id: 'abc' })]);
 

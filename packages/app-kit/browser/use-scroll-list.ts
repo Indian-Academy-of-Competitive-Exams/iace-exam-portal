@@ -15,7 +15,9 @@ export function useScrollList<
   queryKey: QueryKey;
   filters: TSpec;
   toQuery: (values: ListValues<TSpec>) => TFilters;
-  fetchPage: (params: TFilters & { page: number; match?: MatchMode }) => Promise<Paginated<TItem>>;
+  fetchPage: (
+    params: TFilters & { page: number; match?: MatchMode; signal?: AbortSignal },
+  ) => Promise<Paginated<TItem>>;
   enabled?: boolean;
   store?: FilterStore;
 }): Omit<ListState<TItem>, 'values'> & { values: ListValues<TSpec>; total: number } {
@@ -26,7 +28,7 @@ export function useScrollList<
   const pages = useInfinitePages({
     // The filters are part of the key, so changing one starts the pool again rather than appending.
     queryKey: [...queryKey, filterKey(query)],
-    fetchPage: (page) => fetchPage({ ...query, page }),
+    fetchPage: (page, signal) => fetchPage({ ...query, page, signal }),
     enabled,
   });
 

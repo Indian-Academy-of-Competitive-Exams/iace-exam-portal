@@ -71,6 +71,11 @@ both.
   `fieldErrors`; `useListQuery` and the list components cover paginated-list-with-filters. The
   binding placement and behaviour rules are the `ui-conventions` skill, not this doc.
 - **Server data is TanStack Query over the typed client.** Zustand only where Query does not fit.
+- **A superseded search is aborted, not just ignored.** The list and picker hooks (`useListQuery`,
+  `useListScreen`, `useScrollList`, `useInfinitePages`, `usePagedPicker`) put TanStack's `signal`
+  into the params they hand `fetchPage`, and the client's `list()` lifts it out of the query into
+  the fetch. So a `fetchPage` forwards its params whole (`(params) => api.x.list(params)`, or
+  `{ ...params, extra }`); one that builds its own query names it first and includes `signal`.
 
 ---
 
