@@ -12,6 +12,7 @@ export * from './exams';
 export * from './configs';
 export * from './tests';
 export * from './attempts';
+export * from './exam-order';
 export * from './access';
 export * from './announcements';
 export * from './stats';

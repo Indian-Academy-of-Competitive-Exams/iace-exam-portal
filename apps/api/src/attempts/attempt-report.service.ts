@@ -23,13 +23,14 @@ import {
   scopedQuestionCount,
   scopedDurationSec,
   round2 as round,
+  seededRandom,
+  shuffle,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
-import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService, type Standing } from './leaderboard.service';

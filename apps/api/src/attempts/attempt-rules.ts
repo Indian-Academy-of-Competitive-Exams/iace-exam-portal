@@ -6,7 +6,6 @@ import {
   type LanguageMode,
   type TestStatus,
 } from '@iace/contracts';
-import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { MS_PER_SECOND } from '../common/time/units';
 
 /** The rules that decide whether a sitting may begin — pure, so no database is needed to test them. */
@@ -59,24 +58,6 @@ export function languagesFor(
   if (mode === LANGUAGE_MODE.DUAL) return [...offered];
   const first = (picked ?? []).find((language) => offered.includes(language));
   return first === undefined ? offered.slice(0, 1) : [first];
-}
-
-/** The order THIS student sees: sections in the config's order, shuffled within each one. */
-export function displayOrder<T extends { baseConfigSectionId: string }>(
-  paper: readonly T[],
-  seed: number,
-  shuffleQuestions: boolean,
-): T[] {
-  if (!shuffleQuestions) return [...paper];
-
-  const random = seededRandom(seed);
-  const bySection = new Map<string, T[]>();
-  for (const row of paper) {
-    const held = bySection.get(row.baseConfigSectionId);
-    if (held) held.push(row);
-    else bySection.set(row.baseConfigSectionId, [row]);
-  }
-  return [...bySection.values()].flatMap((rows) => shuffle(rows, random));
 }
 
 /** The deadline is the server's, computed once at start and never recomputed. */

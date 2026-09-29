@@ -2,8 +2,13 @@
  * A sitting's answers as one positional array: slot N is paper row N in `PaperQuestion.order`,
  * whatever order the screen showed. Pure, so the format can be read as a table and tested as one.
  */
-import { ANSWERED_STATES, ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts';
-import { displayOrder } from './attempt-rules';
+import {
+  ANSWERED_STATES,
+  ANSWER_STATE,
+  displayOrder,
+  type AnswerState,
+  type LiveAnswer,
+} from '@iace/contracts';
 import { MS_PER_SECOND } from '../common/time/units';
 
 /** A slot's state is its index here. Append only: a stored sheet is read for as long as it exists. */

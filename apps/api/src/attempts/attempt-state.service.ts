@@ -14,13 +14,13 @@ import {
   type AttemptSaveAck,
   type LiveAttemptState,
   type SaveAttemptStateBody,
+  displayOrder,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { answersOf } from './answer-sheet';
 import { PaperSheetService } from './paper-sheet.service';
-import { displayOrder } from './attempt-rules';
 import {
   applyBatch,
   forwardOrderOf,

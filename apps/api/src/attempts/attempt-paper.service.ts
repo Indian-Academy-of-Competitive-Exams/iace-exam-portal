@@ -14,14 +14,15 @@ import {
   type LocalizedContent,
   type QuestionOption,
   type TestScopeRef,
+  displayOrder,
+  seededRandom,
+  shuffle,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { displayOrder } from './attempt-rules';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
-import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { PaperSheetService, type ServedPaperRow } from './paper-sheet.service';
 import { optionsIn } from './rollup-fold';
 

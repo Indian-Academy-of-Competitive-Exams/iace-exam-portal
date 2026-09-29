@@ -12,7 +12,7 @@ import {
   timeSpentIn,
   verdictsOf,
 } from '../src/attempts/answer-sheet';
-import { displayOrder } from '../src/attempts/attempt-rules';
+import { displayOrder } from '@iace/contracts';
 
 const STARTED = new Date('2026-09-01T05:00:00.000Z');
 const OPTIONS = ['opt_a', 'opt_b', 'opt_c', 'opt_d'];
