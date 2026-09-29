@@ -151,6 +151,8 @@ export function useAttemptState(
   // Everything the server has not acknowledged, in the air or not; an ack takes out only the copy it carried.
   const pending = useRef(new Map<string, AnswerChange>(queued.map((c) => [c.questionId, c])));
   const pendingSections = useRef(new Map<string, SectionProgress>());
+  // The questions whose unacknowledged change is an answer, not only a visit; a reloaded queue counts what carries one.
+  const answeredUnsaved = useRef(new Set(queued.filter(carriesAnswer).map((c) => c.questionId)));
   // What the screen draws, current mid-handler: a state updater may not have run when the next write reads it.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const openedAt = useRef(0);
@@ -211,7 +213,8 @@ export function useAttemptState(
     stopped.current = true;
     heldElsewhere.current = true;
     // The device that took over is the sitting of record: what this one never delivered is not replayed over it.
-    const dropped = pending.current.size;
+    const dropped = answeredUnsaved.current.size;
+    answeredUnsaved.current.clear();
     pending.current.clear();
     pendingSections.current.clear();
     keepQueue();
@@ -260,6 +263,7 @@ export function useAttemptState(
       for (const change of batch.answers) {
         if (pending.current.get(change.questionId) === change) {
           pending.current.delete(change.questionId);
+          answeredUnsaved.current.delete(change.questionId);
         }
       }
       for (const [sectionId, progress] of Object.entries(batch.sections)) {
@@ -336,6 +340,7 @@ export function useAttemptState(
           const done = await send(idle ? null : unsentBatch());
           // The paper is in: the device's copy has nothing left to keep.
           pending.current.clear();
+          answeredUnsaved.current.clear();
           pendingSections.current.clear();
           keepQueue();
           return done;
@@ -424,6 +429,7 @@ export function useAttemptState(
       const seenAt = seenAtOf(openedAt);
       openedAt.current = Date.now();
       record(changeFor(questionId, answersNow.current[questionId], next, spent, seenAt));
+      answeredUnsaved.current.add(questionId);
       // Between saves only, and not after one failed: the timer retries, rather than every tap.
       if (!inFlight.current && !lastSaveFailed.current && shouldFlushNow(pending.current.size)) {
         void flush();
@@ -484,6 +490,9 @@ export function useAttemptState(
     leave,
   };
 }
+
+const carriesAnswer = (change: AnswerChange): boolean =>
+  (change.selectedOptionId ?? null) !== null || isReviewState(change.state);
 
 /** What the bottom bar produces, before the server decides what it really means. */
 function changeFor(

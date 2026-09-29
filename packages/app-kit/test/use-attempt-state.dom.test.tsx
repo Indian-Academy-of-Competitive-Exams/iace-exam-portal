@@ -445,6 +445,29 @@ test('a tab that lost the sitting drops what it never delivered, and says how mu
   assert.equal(sent.length, 0, "nothing of this tab's is sent over it");
 });
 
+/** The failure this prevents: plain moves between questions reported as answers that will not be kept. */
+test('the takeover count is the answers given here, not the questions only passed through', async (t) => {
+  const refused = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_TAKEN_OVER);
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(refused)));
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+
+  act(() => {
+    for (const questionId of ['q1', 'q2', 'q3', 'q4', 'q5', 'q6']) result.current.open(questionId);
+  });
+  act(() => result.current.answer('q6', { selectedOptionId: 'opt-6' }));
+  await act(async () => void (await result.current.flush()));
+
+  assert.equal(result.current.droppedUnsaved, 1);
+});
+
 /** The failure this prevents: opening a second test on the phone wiping the answers queued in the first on a laptop. */
 test('a tab set aside for another test keeps what it never saved, and sends it when continued', async (t) => {
   const storage = fakeStorage();
