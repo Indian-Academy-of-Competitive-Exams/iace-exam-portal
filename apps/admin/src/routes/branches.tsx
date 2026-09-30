@@ -133,7 +133,8 @@ export function BranchesPage() {
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
 
   const [creating, setCreating] = useState(false);
-  const branches = useBranches();
+  const list = useBranches();
+  const branches = list.branches;
   const queryClient = useQueryClient();
 
   const refresh = useCallback(
@@ -187,7 +188,9 @@ export function BranchesPage() {
         columns={columns}
         rows={branches}
         rowKey={(branch) => branch.id}
-        isLoading={false}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={list.retry}
         empty="No branches yet"
       />
     </TableFrame>

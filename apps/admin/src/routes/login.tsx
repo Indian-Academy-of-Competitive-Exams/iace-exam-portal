@@ -3,9 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { z } from 'zod';
 import { ArrowLeft, Info } from 'lucide-react';
-import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
+import { otpCodeFormSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import {
   Alert,
   Brandmark,
@@ -24,7 +23,6 @@ import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { useAuth } from '../providers/auth';
-const codeFormSchema = z.object({ code: otpCodeSchema });
 
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
 const EMAIL_FIELDS = ['email'] as const;
@@ -145,7 +143,7 @@ function CodeStep({
   onVerified: (session: Awaited<ReturnType<typeof api.auth.verifyAdminOtp>>) => void;
 }>) {
   const form = useForm({
-    resolver: zodResolver(codeFormSchema),
+    resolver: zodResolver(otpCodeFormSchema),
     defaultValues: { code: '' },
   });
 

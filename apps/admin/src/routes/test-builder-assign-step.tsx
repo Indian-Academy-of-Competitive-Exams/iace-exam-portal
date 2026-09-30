@@ -583,22 +583,6 @@ interface AssignFormValues {
   dueAt: string;
 }
 
-/** Who may hold a role — the server already narrows this to active admins holding its feature key. */
-function useAssigneeOptions(role: AssignmentRole) {
-  const assignable = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'assignable', role],
-    queryFn: () => api.admin.assignments.assignable({ role }),
-  });
-
-  return {
-    isLoading: assignable.isLoading,
-    items: (assignable.data ?? []).map((admin) => ({
-      value: admin.id,
-      label: admin.fullName ?? 'Unnamed admin',
-    })),
-  };
-}
-
 function AssignDialog({
   testId,
   section,
@@ -614,7 +598,11 @@ function AssignDialog({
 }>) {
   const form = useForm<AssignFormValues>({ defaultValues: { assigneeId: '', dueAt: '' } });
   const dueAt = useWatch({ control: form.control, name: 'dueAt' }) ?? '';
-  const assignees = useAssigneeOptions(role);
+  // The server already narrows this to active admins holding the role's feature key.
+  const assignable = useQuery({
+    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'assignable', role],
+    queryFn: () => api.admin.assignments.assignable({ role }),
+  });
   const word = ASSIGNMENT_ROLE_LABELS[role].toLowerCase();
 
   const assign = useMutation({
@@ -650,8 +638,11 @@ function AssignDialog({
         clearable={false}
         placeholder="Choose an admin"
         emptyLabel={`No admin holds ${word} access`}
-        items={assignees.items}
-        isLoading={assignees.isLoading}
+        items={(assignable.data ?? []).map((admin) => ({
+          value: admin.id,
+          label: admin.fullName ?? 'Unnamed admin',
+        }))}
+        isLoading={assignable.isLoading}
       />
 
       {/* ui-copy-ok: rule */}

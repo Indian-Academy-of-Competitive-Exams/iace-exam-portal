@@ -42,6 +42,7 @@ import {
   type BreadcrumbItem,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
 import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
@@ -184,7 +185,7 @@ function TestPaperScreen({
       meta={[
         detail.baseConfigName,
         `${chosen} of ${detail.totalQuestions} chosen`,
-        `${Math.round(detail.durationSec / 60)} minutes`,
+        durationLabel(detail.durationSec),
       ].join(' · ')}
     />
   );

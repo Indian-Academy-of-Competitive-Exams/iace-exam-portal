@@ -36,16 +36,11 @@ import {
   NumericInput,
   PageHeader,
   TableFrame,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   TruncatedText,
-  cn,
   digitsOnly,
   linkVariants,
   type DataTableColumn,
   type ListFilterMultiControl,
-  useTruncation,
 } from '@iace/ui';
 import { EventMultiPicker, ProgramMultiPicker } from '../components/access-picker';
 import { ExportButton, type ExportChoice } from '../components/export-button';
@@ -82,7 +77,12 @@ const STATUS_QUERY: Record<
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentColumns(): DataTableColumn<StudentSummary>[] {
   return [
-    { key: 'name', header: 'Student', cell: (s) => <StudentNameCell student={s} /> },
+    {
+      key: 'name',
+      header: 'Student',
+      className: 'max-w-60',
+      cell: (s) => <StudentNameCell student={s} />,
+    },
     {
       key: 'mobile',
       header: 'Mobile',
@@ -147,7 +147,7 @@ export function StudentsPage() {
   // The "Add student" button links here; reading it is what makes it work.
   const creating = searchParams.get('new') === '1';
 
-  const branches = useBranches();
+  const { branches } = useBranches();
 
   // The spec declares the URL keys, so the controls, Clear and the query cannot disagree.
   const filterSpec = [
@@ -366,24 +366,11 @@ function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
   return <Badge variant="success">Active</Badge>;
 }
 
-// Name is capped so one long one can't widen the column; the tooltip hangs off the link so hover and keyboard focus both reveal it.
 function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
-  const name = student.fullName;
-  const { ref, truncated } = useTruncation<HTMLAnchorElement>(name);
-
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Link
-          ref={ref}
-          to={ROUTES.STUDENT(student.id)}
-          className={cn(linkVariants(), 'block max-w-[15rem] truncate')}
-        >
-          {name ?? <span className="text-muted-foreground">No name yet</span>}
-        </Link>
-      </TooltipTrigger>
-      {truncated && name ? <TooltipContent>{name}</TooltipContent> : null}
-    </Tooltip>
+    <Link to={ROUTES.STUDENT(student.id)} className={linkVariants()}>
+      <TruncatedText empty="No name yet">{student.fullName}</TruncatedText>
+    </Link>
   );
 }
 
@@ -419,7 +406,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
   const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const studentType = useWatch({ control: form.control, name: 'studentType' });
-  const exams = useExams({ activeOnly: true, enabled: open });
+  const { exams } = useExams({ activeOnly: true, enabled: open });
   const branch = useBranchChoice(studentType);
 
   const create = useMutation({

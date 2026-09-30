@@ -1,7 +1,11 @@
 import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, Undo2 } from 'lucide-react';
-import { type QuestionImportPlan, type QuestionImportRow } from '@iace/contracts';
+import {
+  type QuestionImportDraft,
+  type QuestionImportPlan,
+  type QuestionImportRow,
+} from '@iace/contracts';
 import {
   Badge,
   Button,
@@ -131,7 +135,11 @@ export function ImportWorkspace({
       save: async (line, held) => {
         const draft = toDraft(held.state, held.header);
         onPlan(await api.admin.imports.saveQuestionRow(importLogId, Number(line), draft));
-        await queryClient.invalidateQueries({ queryKey: draftsKey });
+        // Only this row moved, so the sheet is patched in place and no card reads it from the server again.
+        queryClient.setQueryData(draftsKey, (sheet: QuestionImportDraft[] | undefined) =>
+          sheet?.map((row) => (row.line === Number(line) ? { ...row, draft } : row)),
+        );
+        await queryClient.invalidateQueries({ queryKey: [...draftsKey, line] });
       },
       subjectLocked: false,
       checkDuplicates: false,

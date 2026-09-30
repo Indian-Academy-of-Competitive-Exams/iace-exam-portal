@@ -20,6 +20,7 @@ import {
   Card,
   ChartFigure,
   EmptyState,
+  EMPTY_STATE_KINDS,
   LinePlot,
   MeasureBars,
   Metric,
@@ -62,9 +63,32 @@ export function DashboardPage() {
 
   return (
     <PageFrame header={header}>
-      {dashboard.data ? <Bands data={dashboard.data} /> : <DashboardSkeleton />}
+      <DashboardBody
+        data={dashboard.data}
+        isError={dashboard.isError}
+        onRetry={dashboard.refetch}
+      />
     </PageFrame>
   );
+}
+
+/** Loaded, failed, or still coming — in that order, so an outage never reads as a slow load. */
+function DashboardBody({
+  data,
+  isError,
+  onRetry,
+}: Readonly<{ data: Dashboard | undefined; isError: boolean; onRetry: () => void }>) {
+  if (data) return <Bands data={data} />;
+  if (isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load your dashboard"
+        onRetry={onRetry}
+      />
+    );
+  }
+  return <DashboardSkeleton />;
 }
 
 function Bands({ data }: Readonly<{ data: Dashboard }>) {

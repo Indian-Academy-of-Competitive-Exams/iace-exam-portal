@@ -13,6 +13,7 @@ import {
 } from '@iace/contracts';
 import {
   EmptyState,
+  EMPTY_STATE_KINDS,
   Accordion,
   Alert,
   Badge,
@@ -29,7 +30,13 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ADMIN_ROLE_LABELS, NAV_ITEMS, PAGE_SIZE_FOR_PICKERS, QUERY_KEYS } from '../lib/constants';
+import {
+  ADMIN_ROLE_LABELS,
+  NAV_ITEMS,
+  PAGE_SIZE_FOR_PICKERS,
+  QUERY_KEYS,
+  QUERY_SCOPES,
+} from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
 /** What an admin holds for one feature, with "nothing" said out loud. */
@@ -74,7 +81,7 @@ export function PermissionsPage() {
     queryFn: () => api.admin.features.list(),
   });
   const admins = useQuery({
-    queryKey: [...QUERY_KEYS.ADMINS, 'all'],
+    queryKey: [...QUERY_KEYS.ADMINS, QUERY_SCOPES.ALL],
     queryFn: () =>
       api.admin.admins.list({ page: 1, pageSize: PAGE_SIZE_FOR_PICKERS, activeOnly: 'true' }),
   });
@@ -88,6 +95,12 @@ export function PermissionsPage() {
   const registered = features.data ?? [];
   const rows = admins.data?.items ?? [];
   const isLoading = features.isPending || admins.isPending;
+  const failed = features.isError || admins.isError;
+
+  const retry = () => {
+    void features.refetch();
+    void admins.refetch();
+  };
 
   return (
     <SuperAdminOnly title="Permissions">
@@ -96,7 +109,7 @@ export function PermissionsPage() {
           <>
             <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Permissions" />
 
-            {!isLoading && registered.length === 0 ? (
+            {!isLoading && !failed && registered.length === 0 ? (
               <Alert variant="warning">
                 <span>
                   No features are defined, so there is nothing to grant. Feature keys live in the
@@ -116,13 +129,26 @@ export function PermissionsPage() {
           </div>
         ) : null}
 
+        {/* A panel without its feature list grants nothing, so either read failing takes them all. */}
         <div className="flex flex-col gap-3">
-          {rows.map((admin) => (
-            <AdminPanel key={admin.id} admin={admin} features={registered} onSaved={refresh} />
-          ))}
+          {failed
+            ? null
+            : rows.map((admin) => (
+                <AdminPanel key={admin.id} admin={admin} features={registered} onSaved={refresh} />
+              ))}
         </div>
 
-        {!isLoading && rows.length === 0 ? <EmptyState title="No active admins" /> : null}
+        {failed ? (
+          <EmptyState
+            kind={EMPTY_STATE_KINDS.FAILURE}
+            title="Could not load who holds what"
+            onRetry={retry}
+          />
+        ) : null}
+
+        {!isLoading && !failed && rows.length === 0 ? (
+          <EmptyState title="No active admins" />
+        ) : null}
       </PageFrame>
     </SuperAdminOnly>
   );

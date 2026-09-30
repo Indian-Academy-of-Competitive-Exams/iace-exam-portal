@@ -36,7 +36,7 @@ import {
   type AuthoringHeader,
   type AuthoringState,
 } from './question-scaffold';
-import { useChecked, useDuplicate } from './use-question-checks';
+import { useChecked, useDuplicate, useIssues } from './use-question-checks';
 
 /** What the box says. Held as an edit only while it differs from the saved one: that is what "unsaved" means. */
 export interface Held {
@@ -97,6 +97,10 @@ const BLANK_HEADER: AuthoringHeader = {
 };
 
 const sameHeld = (a: Held, b: Held): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+const invalid = (held: Held): boolean =>
+  validateQuestion(toDraft(held.state, held.header), taxonomyFor(held.header), mathErrorIn).length >
+  0;
 
 /** Cards either side of the one in view that keep a live editor; the rest are placeholders. */
 const LIVE_AROUND = 1;
@@ -263,17 +267,16 @@ export function AuthoringWorkspace({
 
   const draft = useMemo(() => (shown ? toDraft(shown.state, shown.header) : null), [shown]);
   const duplicate = useDuplicate(source.checkDuplicates ? draft : null, isNew ? '' : active);
-  const issues = useMemo(
-    () => (draft && shown ? validateQuestion(draft, taxonomyFor(shown.header), mathErrorIn) : []),
-    [draft, shown],
-  );
+  const issues = useIssues(draft, shown?.header);
   const dirty = active in edits;
   const canSave = !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
 
   const saveAndNext = () => {
     const held = edits[active];
-    if (held && editable) save.mutate({ key: active, held });
-    else step(1);
+    if (!held || !editable) return step(1);
+    // The button reads issues that lag the last keystroke, so the save judges what it is about to send.
+    if (invalid(held)) return;
+    save.mutate({ key: active, held });
   };
 
   const tools = (

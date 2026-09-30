@@ -35,6 +35,9 @@ import { testsKey } from './test-series-detail';
 interface MoveFormValues {
   testSeriesId: string;
 }
+
+/** The one field the server can refuse a move on, so it lands inline instead of also being toasted. */
+const MOVE_FIELDS = ['testSeriesId'] as const;
 export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) {
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -70,6 +73,8 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
+        isError={tests.isError}
+        onRetry={tests.refetch}
         empty={{
           title: 'No test in this series yet',
           hint: 'Build the first one here; its Offer step sets when it opens.',
@@ -188,7 +193,7 @@ function MoveDialog({
   const [confirming, setConfirming] = useState<ChosenSeries | null>(null);
 
   const move = useMutation({
-    meta: { success: 'Test moved.' },
+    meta: { success: 'Test moved.', fields: MOVE_FIELDS },
     mutationFn: (testSeriesId: string) =>
       api.admin.tests.moveToSeries(row.testId, { testSeriesId }),
     onSuccess: () => {
@@ -197,7 +202,7 @@ function MoveDialog({
     },
     onError: (error) => {
       setConfirming(null);
-      applyFieldErrors(error, form.setError, ['testSeriesId']);
+      applyFieldErrors(error, form.setError, MOVE_FIELDS);
     },
   });
 

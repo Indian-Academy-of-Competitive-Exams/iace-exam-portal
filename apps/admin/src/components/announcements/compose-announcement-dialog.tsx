@@ -84,7 +84,7 @@ export function ComposeAnnouncementDialog({
     defaultValues: draftForm(draft),
   });
 
-  const branches = useBranches({ enabled: open });
+  const { branches } = useBranches({ enabled: open });
 
   const branchId = useWatch({ control: form.control, name: 'audience.branchId' }) ?? [];
   const course = useWatch({ control: form.control, name: 'audience.course' }) ?? [];

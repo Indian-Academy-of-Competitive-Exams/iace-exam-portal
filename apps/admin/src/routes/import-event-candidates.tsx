@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   CANDIDATE_IMPORT_TEMPLATE_FILENAME,
   IMPORT_ACCEPTED_EXTENSIONS,
@@ -20,7 +20,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { saveBlob } from '../lib/save-blob';
+import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 
@@ -38,10 +38,10 @@ export function ImportEventCandidatesPage() {
     queryFn: () => api.admin.events.detail(id),
   });
 
-  const template = useMutation({
-    mutationFn: () => api.admin.imports.candidateTemplate(),
-    onSuccess: (blob) => saveBlob(blob, CANDIDATE_IMPORT_TEMPLATE_FILENAME),
-  });
+  const template = useTemplateDownload(
+    () => api.admin.imports.candidateTemplate(),
+    CANDIDATE_IMPORT_TEMPLATE_FILENAME,
+  );
 
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewEventCandidates(id, file),

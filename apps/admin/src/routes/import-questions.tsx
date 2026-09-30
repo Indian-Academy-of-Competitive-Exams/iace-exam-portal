@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, PanelsTopLeft, Upload } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   LANGUAGE_LABELS,
@@ -34,7 +34,7 @@ import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser'
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, sectionWorkQueryKey } from '../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
-import { saveBlob } from '../lib/save-blob';
+import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { ImportWorkspace } from '../components/authoring/import-workspace';
 
@@ -102,10 +102,10 @@ export function ImportQuestionsPage() {
   // The same sheet either way; the section is only where the questions land.
   const into = testId && sectionId ? { testId, sectionId } : null;
 
-  const template = useMutation({
-    mutationFn: () => api.admin.imports.questionTemplate(),
-    onSuccess: (blob) => saveBlob(blob, QUESTION_IMPORT_TEMPLATE_FILENAME),
-  });
+  const template = useTemplateDownload(
+    () => api.admin.imports.questionTemplate(),
+    QUESTION_IMPORT_TEMPLATE_FILENAME,
+  );
 
   const intake = useImportScreen({
     ...intakeFor(into),

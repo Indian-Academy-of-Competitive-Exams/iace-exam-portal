@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import {
   ASSIGNMENT_ROLES,
+  DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
@@ -23,12 +24,15 @@ import {
   ChartFigure,
   ConfirmDialog,
   DropdownMenuItem,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   LinePlot,
   ListView,
   Metric,
   MetricGroup,
   PageHeader,
   RowActions,
+  Skeleton,
   TableFrame,
   TruncatedText,
   linkVariants,
@@ -46,6 +50,7 @@ import {
   QUESTION_TYPE_LABELS,
   ROUTES,
 } from '../lib/constants';
+import { useDeleteQuestion } from '../lib/use-delete-question';
 import { SubjectMultiPicker } from '../components/taxonomy-picker';
 import { AssignmentMultiPicker } from '../components/assignment-picker';
 import { AssignmentTestPicker } from '../components/assignment-scope-picker';
@@ -109,7 +114,9 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
       key: 'difficulty',
       header: 'Difficulty',
       cell: (question) => (
-        <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
+        <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>
+          {DIFFICULTY_LABELS[question.difficulty]}
+        </Badge>
       ),
     },
     {
@@ -150,21 +157,13 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
   ];
 }
 
-/** Same shape the bank's own question prompts take, so both confirms read alike. */
-const DELETE_PROMPT = { title: 'Delete this question?', confirmLabel: 'Delete' } as const;
-
 /** A section's question is deleted on its section page; here only what was typed straight into the bank. */
 function HistoryActions({ question }: Readonly<{ question: QuestionSummary }>) {
   const queryClient = useQueryClient();
-  const [asking, setAsking] = useState(false);
-  const remove = useMutation({
-    meta: { success: 'Question deleted.' },
-    mutationFn: () => api.admin.authoring.remove(question.id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
-      setAsking(false);
-    },
-    onError: () => setAsking(false),
+  const deleting = useDeleteQuestion({
+    consequence: `“${question.stemPreview}” is removed from the bank for good.`,
+    remove: () => api.admin.authoring.remove(question.id),
+    onDeleted: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING }),
   });
   const deletable = !question.inUse && question.writtenFor === null;
 
@@ -178,22 +177,13 @@ function HistoryActions({ question }: Readonly<{ question: QuestionSummary }>) {
           </Link>
         </DropdownMenuItem>
         {deletable ? (
-          <DropdownMenuItem destructive onSelect={() => setAsking(true)}>
+          <DropdownMenuItem destructive onSelect={deleting.ask}>
             <Trash2 aria-hidden />
             Delete
           </DropdownMenuItem>
         ) : null}
       </RowActions>
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={setAsking}
-        title={DELETE_PROMPT.title}
-        description={`“${question.stemPreview}” is removed from the bank for good.`}
-        confirmLabel={DELETE_PROMPT.confirmLabel}
-        destructive
-        loading={remove.isPending}
-        onConfirm={() => remove.mutate()}
-      />
+      <ConfirmDialog {...deleting.confirm} />
     </>
   );
 }
@@ -212,7 +202,9 @@ function LanguageBadges({ present }: Readonly<{ present: readonly QuestionLangua
 }
 
 export function AuthoringHistoryPage() {
-  const filters = useFilters<'view'>();
+  // A section belongs to one test, so these two cascade rather than sitting side by side.
+  const filters = useFilters<'view' | 'testId' | 'assignmentId'>();
+  const testId = filters.get('testId');
   const stats = useQuery({
     queryKey: [...QUERY_KEYS.AUTHORING, 'stats'],
     queryFn: () => api.admin.authoring.stats(),
@@ -248,21 +240,33 @@ export function AuthoringHistoryPage() {
       kind: 'custom',
       label: 'Test',
       render: (control: ListFilterControl) => (
-        <AssignmentTestPicker {...control} scope={TYPIST_SCOPE} clearable />
+        <AssignmentTestPicker
+          {...control}
+          scope={TYPIST_SCOPE}
+          clearable
+          onChange={(value) =>
+            filters.set({ testId: value, ...(value === testId ? {} : { assignmentId: '' }) })
+          }
+        />
       ),
     },
     {
       key: 'assignmentId',
       kind: 'customMulti',
       label: 'Section',
-      render: (control: ListFilterMultiControl) => <AssignmentMultiPicker {...control} />,
+      render: (control: ListFilterMultiControl) => (
+        <AssignmentMultiPicker {...control} role={ASSIGNMENT_ROLES.TYPIST} testId={testId} />
+      ),
     },
     {
       key: 'difficulty',
       kind: 'multi',
       label: 'Difficulty',
       placeholder: 'Any difficulty',
-      items: DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
+      items: DIFFICULTY_LEVELS.map((level) => ({
+        value: level,
+        label: DIFFICULTY_LABELS[level],
+      })),
     },
     {
       key: 'type',
@@ -331,7 +335,7 @@ export function AuthoringHistoryPage() {
             // Its own scroller: this pane holds no table, so nothing below it takes the scroll.
             content: (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <Output stats={stats.data} />
+                <Output stats={stats.data} isError={stats.isError} onRetry={stats.refetch} />
               </div>
             ),
           },
@@ -345,8 +349,21 @@ export function AuthoringHistoryPage() {
 const HISTORY_VIEWS = { QUESTIONS: 'questions', OUTPUT: 'output' } as const;
 
 /** The author's own pace. Blue-led, because a chart in this app is never brand red. */
-function Output({ stats }: Readonly<{ stats: AuthoringStats | undefined }>) {
-  if (!stats) return null;
+function Output({
+  stats,
+  isError,
+  onRetry,
+}: Readonly<{ stats: AuthoringStats | undefined; isError: boolean; onRetry: () => void }>) {
+  if (isError && !stats) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load your output"
+        onRetry={onRetry}
+      />
+    );
+  }
+  if (!stats) return <Skeleton className="h-64 rounded-xl" />;
 
   const points = stats.daily.map((day) => ({
     key: day.date,

@@ -118,6 +118,8 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
         series={series}
         rows={branches.data ?? []}
         isLoading={canRead && branches.isLoading}
+        isError={branches.isError}
+        onRetry={branches.refetch}
         canRead={canRead}
         canWrite={canWrite}
         onSaved={refresh}
@@ -126,11 +128,13 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
   );
 }
 
-/** The three states of the list, so the card above stays one shape. */
+/** The four states of the list, so the card above stays one shape. */
 function BranchScheduleList({
   series,
   rows,
   isLoading,
+  isError,
+  onRetry,
   canRead,
   canWrite,
   onSaved,
@@ -138,6 +142,8 @@ function BranchScheduleList({
   series: TestSeriesSummary;
   rows: readonly SeriesBranch[];
   isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
   canRead: boolean;
   canWrite: boolean;
   onSaved: () => void;
@@ -160,6 +166,16 @@ function BranchScheduleList({
           <Skeleton key={key} variant="row" className="h-20 rounded-lg" />
         ))}
       </div>
+    );
+  }
+
+  if (isError && rows.length === 0) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load the branches"
+        onRetry={onRetry}
+      />
     );
   }
 

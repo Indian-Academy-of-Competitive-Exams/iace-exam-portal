@@ -1,5 +1,6 @@
 import {
   ANSWER_MODE,
+  DIFFICULTY_LABELS,
   QUESTION_TYPE,
   plainTextOf,
   type QuestionDetail,
@@ -91,7 +92,7 @@ export function QuestionFacts({ question }: Readonly<{ question: QuestionDetail 
       <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
         <StatRow label="Subject" value={question.subject.name} />
         <StatRow label="Topic" value={question.topic?.name ?? '—'} />
-        <StatRow label="Difficulty" value={question.difficulty} />
+        <StatRow label="Difficulty" value={DIFFICULTY_LABELS[question.difficulty]} />
         <StatRow label="Version" value={question.version} />
       </div>
 

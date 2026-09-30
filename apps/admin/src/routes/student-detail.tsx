@@ -193,9 +193,9 @@ function StudentStateNotice({
 
 /** Where a student sits relative to the institute — the fields access resolves through. */
 function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
-  const exams = useExams({ activeOnly: true });
+  const { exams } = useExams({ activeOnly: true });
   // Unfiltered — a student's branch may have since been retired, and must still resolve to a name, not the raw id.
-  const allBranches = useBranches();
+  const { branches: allBranches } = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
   const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
   const programs = useWatch({ control: form.control, name: 'programs' }) ?? [];

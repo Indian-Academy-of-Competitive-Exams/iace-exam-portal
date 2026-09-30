@@ -52,6 +52,7 @@ import {
   sectionWorkQueryKey,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
+import { useDeleteQuestion } from '../lib/use-delete-question';
 import { SectionThreadButton } from '../components/section-thread';
 import { OtherTestsNotice } from '../components/cross-test-warning';
 import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
@@ -99,13 +100,19 @@ export function SectionAuthoringPage() {
     retry: false,
   });
 
-  // Only the section is read again now; the queues and duplicate checks wait until they are next opened.
-  const settle = useCallback(async () => {
-    for (const queryKey of [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.AUTHORING]) {
-      void queryClient.invalidateQueries({ queryKey, refetchType: 'none' });
-    }
-    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROOFREADING });
-  }, [queryClient]);
+  // Only the section and the card just written are read again; the queues and duplicate checks wait until next opened.
+  const settle = useCallback(
+    async (savedId?: string) => {
+      for (const queryKey of [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.AUTHORING]) {
+        void queryClient.invalidateQueries({ queryKey, refetchType: 'none' });
+      }
+      const section = sectionWorkQueryKey(testId, sectionId);
+      await queryClient.invalidateQueries({ queryKey: section, exact: true });
+      if (savedId === undefined) return;
+      await queryClient.invalidateQueries({ queryKey: [...section, savedId, QUERY_SCOPES.HELD] });
+    },
+    [queryClient, testId, sectionId],
+  );
   const replace = useCallback(
     (next: SectionWork) => queryClient.setQueryData(sectionWorkQueryKey(testId, sectionId), next),
     [queryClient, testId, sectionId],
@@ -158,7 +165,7 @@ function SectionWorkspace({
   startAt: string | null;
   onActive: (key: string) => void;
   onChanged: (next: SectionWork) => void;
-  onSettle: () => Promise<void>;
+  onSettle: (savedId?: string) => Promise<void>;
 }>) {
   const seat = useMemo(() => seatOf(work), [work]);
   const [finishing, setFinishing] = useState(false);
@@ -168,7 +175,7 @@ function SectionWorkspace({
   const source = useMemo((): WorkspaceSource => {
     return {
       cards: work.questions.map((question, index) =>
-        cardOf(work, question, index, seat, onChanged),
+        cardOf(work, question, index, seat, onChanged, onSettle),
       ),
       query: (id) => ({
         queryKey: [...sectionWorkQueryKey(testId, sectionId), id, QUERY_SCOPES.HELD],
@@ -187,7 +194,7 @@ function SectionWorkspace({
           ...toDraft(held.state, held.header),
           expectedUpdatedAt: held.stamp,
         });
-        await onSettle();
+        await onSettle(id);
       },
       subjectLocked: work.sectionSubjectId !== null,
       checkDuplicates: seat.typing,
@@ -371,6 +378,7 @@ function cardOf(
   index: number,
   seat: ReturnType<typeof seatOf>,
   onChanged: (next: SectionWork) => void,
+  onSettle: (savedId?: string) => Promise<void>,
 ): WorkspaceCard {
   const { review } = question;
   return {
@@ -384,7 +392,15 @@ function cardOf(
         <Badge variant={REVIEW_BADGE[review.state]}>{REVIEW_STATE_LABELS[review.state]}</Badge>
       </>
     ),
-    actions: <CardActions work={work} question={question} seat={seat} onChanged={onChanged} />,
+    actions: (
+      <CardActions
+        work={work}
+        question={question}
+        seat={seat}
+        onChanged={onChanged}
+        onSettle={onSettle}
+      />
+    ),
     notice: <CardNotice work={work} question={question} />,
   };
 }
@@ -428,11 +444,13 @@ function CardActions({
   question,
   seat,
   onChanged,
+  onSettle,
 }: Readonly<{
   work: SectionWork;
   question: SectionQuestion;
   seat: ReturnType<typeof seatOf>;
   onChanged: (next: SectionWork) => void;
+  onSettle: (savedId?: string) => Promise<void>;
 }>) {
   const [sending, setSending] = useState(false);
   const { testId, baseConfigSectionId: sectionId } = work;
@@ -491,56 +509,37 @@ function CardActions({
     );
   }
   if (question.deletable) {
-    return <DeleteQuestion work={work} question={question} />;
+    return <DeleteQuestion work={work} question={question} onSettle={onSettle} />;
   }
   return null;
 }
-
-/** Same shape the bank's own question prompts take, so both confirms read alike. */
-const DELETE_PROMPT = { title: 'Delete this question?', confirmLabel: 'Delete' } as const;
 
 /** A typist's own mistake, taken back while it is still off the paper. */
 function DeleteQuestion({
   work,
   question,
-}: Readonly<{ work: SectionWork; question: SectionQuestion }>) {
-  const queryClient = useQueryClient();
-  const [asking, setAsking] = useState(false);
-  const remove = useMutation({
-    meta: { success: 'Question deleted.' },
-    mutationFn: () =>
-      api.admin.sectionWork.remove(work.testId, work.baseConfigSectionId, question.questionId),
-    onSuccess: async () => {
-      await Promise.all([
-        // Exact: the deleted question's own read sits under this key, and refetching it would 404.
-        queryClient.invalidateQueries({
-          queryKey: sectionWorkQueryKey(work.testId, work.baseConfigSectionId),
-          exact: true,
-        }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ASSIGNMENTS }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING }),
-      ]);
-      setAsking(false);
-    },
-  });
+  onSettle,
+}: Readonly<{
+  work: SectionWork;
+  question: SectionQuestion;
+  onSettle: (savedId?: string) => Promise<void>;
+}>) {
   const named = question.preview ? `“${question.preview}”` : 'This question';
+  // No id: the deleted question's own read sits under this section, and refetching it would 404.
+  const deleting = useDeleteQuestion({
+    consequence: `${named} is removed for good.`,
+    remove: () =>
+      api.admin.sectionWork.remove(work.testId, work.baseConfigSectionId, question.questionId),
+    onDeleted: () => onSettle(),
+  });
 
   return (
     <>
-      <Button type="button" size="sm" variant="outline" onClick={() => setAsking(true)}>
+      <Button type="button" size="sm" variant="outline" onClick={deleting.ask}>
         <Trash2 aria-hidden />
         Delete
       </Button>
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={setAsking}
-        title={DELETE_PROMPT.title}
-        description={`${named} is removed for good.`}
-        confirmLabel={DELETE_PROMPT.confirmLabel}
-        destructive
-        loading={remove.isPending}
-        onConfirm={() => remove.mutate()}
-      />
+      <ConfirmDialog {...deleting.confirm} />
     </>
   );
 }

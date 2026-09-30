@@ -5,6 +5,7 @@ import {
   type BaseConfigSection,
 } from '@iace/contracts';
 import { plural, type BadgeProps } from '@iace/ui';
+import { durationLabel } from '../lib/duration';
 
 /** What the paper screens read off a section: how full it is, and how its configuration framed it. */
 
@@ -51,7 +52,7 @@ export const sectionTally = (
 export function framingOf(section: BaseConfigSection): string {
   const parts = [`${plural(section.marksPerQuestion, 'mark')} each`];
   if (section.negativeMarks > 0) parts.push(`−${section.negativeMarks} per wrong answer`);
-  if (section.durationSec !== null) parts.push(`${Math.round(section.durationSec / 60)} minutes`);
+  if (section.durationSec !== null) parts.push(durationLabel(section.durationSec));
   if (section.meritOrQualifying === MERIT_TYPE.QUALIFYING) {
     const cutoff = section.qualifyingCutoff;
     parts.push(cutoff === null ? 'Qualifying' : `Qualifying at ${cutoff}`);

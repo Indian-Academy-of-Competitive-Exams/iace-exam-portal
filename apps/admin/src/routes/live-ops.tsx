@@ -62,6 +62,8 @@ export function LiveOpsPage() {
   const canResolve = can(FEATURE_KEYS.TEST_OPERATIONS, PERMISSION_LEVELS.WRITE);
 
   const board = useQuery({
+    // Silent: a poll every few seconds would toast an outage over and over; the panels say it once.
+    meta: { silent: true },
     queryKey: [...QUERY_KEYS.LIVE_OPS_BOARD, testId],
     queryFn: () => api.admin.liveOps.board(testId),
     enabled: testId !== '',
@@ -90,6 +92,7 @@ export function LiveOpsPage() {
             onChange={(value) => filters.set({ testId: value, panel: undefined })}
           />
           <ScoringBacklog board={board.data} />
+          <StaleBoard stale={board.isError && board.data !== undefined} />
         </div>
       }
       tabs={{
@@ -106,6 +109,8 @@ export function LiveOpsPage() {
                 total={counts?.active}
                 columns={sittingColumns}
                 isLoading={board.isLoading}
+                isError={board.isError}
+                onRetry={board.refetch}
                 empty="Nobody is sitting this test right now"
               />
             ),
@@ -120,6 +125,8 @@ export function LiveOpsPage() {
                 total={counts?.stuck}
                 columns={sittingColumns}
                 isLoading={board.isLoading}
+                isError={board.isError}
+                onRetry={board.refetch}
                 empty="Nothing is waiting to be swept"
               />
             ),
@@ -133,6 +140,8 @@ export function LiveOpsPage() {
                 rows={board.data?.recent ?? []}
                 rowKey={(row) => row.attemptId}
                 isLoading={board.isLoading}
+                isError={board.isError}
+                onRetry={board.refetch}
                 empty={testId === '' ? NO_TEST : 'No sitting has landed in the last half hour'}
                 footer={
                   <ShowingSome
@@ -158,6 +167,18 @@ function tabLabel(name: string, count: number | undefined) {
   );
 }
 
+/** Said once, beside rows that are still the last good read: a blank hall would read as an empty one. */
+function StaleBoard({ stale }: Readonly<{ stale: boolean }>) {
+  if (!stale) return null;
+
+  return (
+    <Alert variant="warning">
+      These figures stopped updating; the last read did not land. The board keeps asking every few
+      seconds.
+    </Alert>
+  );
+}
+
 /** The sweeper heals a backlog on its own, so this is a fact to know rather than a fault. */
 function ScoringBacklog({ board }: Readonly<{ board?: LiveOpsBoard }>) {
   if (!board || board.counts.awaitingScoring === 0) return null;
@@ -176,6 +197,8 @@ function SittingPanel({
   total,
   columns,
   isLoading,
+  isError,
+  onRetry,
   empty,
 }: Readonly<{
   testId: string;
@@ -183,6 +206,8 @@ function SittingPanel({
   total?: number;
   columns: DataTableColumn<LiveSitting>[];
   isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
   empty: string;
 }>) {
   return (
@@ -191,6 +216,8 @@ function SittingPanel({
       rows={rows}
       rowKey={(row) => row.attemptId}
       isLoading={isLoading}
+      isError={isError}
+      onRetry={onRetry}
       empty={testId === '' ? NO_TEST : empty}
       footer={<ShowingSome shown={rows.length} total={total} />}
     />

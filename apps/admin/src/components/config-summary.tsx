@@ -15,6 +15,7 @@ import {
   DialogTitle,
   Separator,
   StatRow,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import {
@@ -31,7 +32,12 @@ type Section = BaseConfigDetail['sections'][number];
 
 function sectionColumns(): DataTableColumn<Section>[] {
   return [
-    { key: 'name', header: 'Section', className: 'font-medium', cell: (section) => section.name },
+    {
+      key: 'name',
+      header: 'Section',
+      className: 'max-w-56 font-medium',
+      cell: (section) => <TruncatedText>{section.name}</TruncatedText>,
+    },
     {
       key: 'questions',
       header: 'Questions',

@@ -135,6 +135,8 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
       });
       queryClient.setQueryData(seriesKey(saved.id), saved);
       if (!existing) return navigate(ROUTES.TEST_SERIES_DETAIL(saved.id));
+      // The saved values become the ones Cancel returns to; without this the next Save undoes this one.
+      form.reset(valuesOf(saved));
       setIsEditing(false);
     },
     onError: (error) => {
@@ -154,7 +156,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
   /** A new series has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
   const cancel = () => {
     if (!existing) return navigate(ROUTES.TESTS);
-    form.reset();
+    form.reset(valuesOf(detail));
     setIsEditing(false);
   };
 

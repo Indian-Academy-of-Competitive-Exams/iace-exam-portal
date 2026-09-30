@@ -1,5 +1,4 @@
 import { useParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   PROGRAM_IMPORT_TEMPLATE_FILENAME,
@@ -20,17 +19,17 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { saveBlob } from '../lib/save-blob';
+import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { NAV_ITEMS } from '../lib/constants';
 
 export function ImportProgramStudentsPage() {
   const { code = '' } = useParams();
 
-  const template = useMutation({
-    mutationFn: () => api.admin.imports.programTemplate(),
-    onSuccess: (blob) => saveBlob(blob, PROGRAM_IMPORT_TEMPLATE_FILENAME),
-  });
+  const template = useTemplateDownload(
+    () => api.admin.imports.programTemplate(),
+    PROGRAM_IMPORT_TEMPLATE_FILENAME,
+  );
 
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewProgramStudents(code, file),

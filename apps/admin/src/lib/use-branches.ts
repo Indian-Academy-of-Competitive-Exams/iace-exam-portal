@@ -13,11 +13,19 @@ import { QUERY_KEYS } from './constants';
 const everyBranch = (page: Paginated<Branch>) => page.items;
 const activeBranches = (page: Paginated<Branch>) => page.items.filter((branch) => branch.isActive);
 
+/** The list plus how the read went, so a screen can tell an empty branch list from one that never loaded. */
+export interface BranchList {
+  branches: Branch[];
+  isLoading: boolean;
+  isError: boolean;
+  retry: () => void;
+}
+
 /** Unpaged and long-cached, and already scoped by the server: a branch outside theirs is not in it. */
 export function useBranches({
   activeOnly = false,
   enabled,
-}: { activeOnly?: boolean; enabled?: boolean } = {}): Branch[] {
+}: { activeOnly?: boolean; enabled?: boolean } = {}): BranchList {
   // One read for both: the server's activeOnly is exactly isActive, so a picker filters the same list.
   const query = useQuery({
     queryKey: QUERY_KEYS.BRANCHES,
@@ -27,7 +35,12 @@ export function useBranches({
     enabled,
   });
 
-  return query.data ?? [];
+  return {
+    branches: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    retry: query.refetch,
+  };
 }
 
 /** Mirrors `studentBranchBlocker` on the server, so the picker never offers a branch the save refuses. */
@@ -43,8 +56,8 @@ export function branchesForStudentType(branches: Branch[], studentType: StudentT
 
 /** What the branch picker shows for a student type, whether it is the student's to choose, and what a Non-IACE switch drops from `heldId`. */
 export function useBranchChoice(studentType: StudentType, heldId = '') {
-  const everyBranch = useBranches();
-  const branches = branchesForStudentType(useBranches({ activeOnly: true }), studentType);
+  const everyBranch = useBranches().branches;
+  const branches = branchesForStudentType(useBranches({ activeOnly: true }).branches, studentType);
 
   if (studentType === STUDENT_TYPE.NON_IACE) {
     return {

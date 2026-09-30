@@ -588,6 +588,8 @@ export const QUERY_SCOPES = {
   FILTER: 'filter',
   /** A question as the authoring workspace holds it, apart from the detail it was read from. */
   HELD: 'held',
+  /** Every row in one read, so a paged view of the same list is a separate entry. */
+  ALL: 'all',
 } as const;
 
 // The admin list the Permissions screen assigns from; past a hundred this needs a Combobox instead.

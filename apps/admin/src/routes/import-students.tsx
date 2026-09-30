@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
@@ -24,15 +23,15 @@ import {
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
-import { saveBlob } from '../lib/save-blob';
+import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 
 /** Preview, then commit. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
-  const template = useMutation({
-    mutationFn: () => api.admin.imports.studentTemplate(),
-    onSuccess: (blob) => saveBlob(blob, STUDENT_IMPORT_TEMPLATE_FILENAME),
-  });
+  const template = useTemplateDownload(
+    () => api.admin.imports.studentTemplate(),
+    STUDENT_IMPORT_TEMPLATE_FILENAME,
+  );
 
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewStudents(file),

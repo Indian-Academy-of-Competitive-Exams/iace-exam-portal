@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   DEFAULT_LANGUAGE,
@@ -19,28 +19,52 @@ const PREVIEW_DEBOUNCE_MS = 600;
 /** Longer than the preview's: this one leaves the machine, and a half-typed stem matches nothing. */
 const DUPLICATE_DEBOUNCE_MS = 900;
 
+interface Asked {
+  draft: QuestionDraft;
+  editingId: string;
+  revision: number;
+}
+
 /** Asked of the draft on screen, not of the row a save would otherwise have left behind. */
 export function useDuplicate(draft: QuestionDraft | null, editingId: string): string | null {
   // The card travels with its draft, so a debounce straddling a card switch asks nothing of the new one.
-  const [asked, setAsked] = useState<{ draft: QuestionDraft; editingId: string } | null>(null);
+  const [asked, setAsked] = useState<Asked | null>(null);
+  // Only ever forward, so no two drafts share a key; the draft itself is too big to hash every render.
+  const revision = useRef(0);
 
   useEffect(() => {
-    const timer = setTimeout(
-      () => setAsked(draft ? { draft, editingId } : null),
-      DUPLICATE_DEBOUNCE_MS,
-    );
+    const timer = setTimeout(() => {
+      revision.current += 1;
+      setAsked(draft ? { draft, editingId, revision: revision.current } : null);
+    }, DUPLICATE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [draft, editingId]);
 
   const current = asked?.editingId === editingId ? asked : null;
   const found = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', current?.draft, editingId],
+    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', editingId, current?.revision],
     queryFn: () =>
       api.admin.authoring.duplicate(current?.draft as QuestionDraft, editingId || undefined),
     enabled: current !== null && hasText(current.draft.stem[DEFAULT_LANGUAGE] ?? ''),
   });
 
   return current ? (found.data?.duplicateOf?.stemPreview ?? null) : null;
+}
+
+/** Debounced: a strict KaTeX render of every formula in every language is not a per-keystroke cost. */
+export function useIssues(draft: QuestionDraft | null, header: AuthoringHeader | undefined) {
+  const [issues, setIssues] = useState<ReturnType<typeof validateQuestion>>([]);
+
+  useEffect(() => {
+    const timer = setTimeout(
+      () =>
+        setIssues(draft && header ? validateQuestion(draft, taxonomyFor(header), mathErrorIn) : []),
+      PREVIEW_DEBOUNCE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [draft, header]);
+
+  return issues;
 }
 
 /** The rules the save and the sheet are judged by, debounced so the panel settles as you type. */
@@ -50,15 +74,7 @@ export function useChecked(
   state: AuthoringState,
   duplicate: string | null,
 ) {
-  const [issues, setIssues] = useState<ReturnType<typeof validateQuestion>>([]);
-
-  useEffect(() => {
-    const timer = setTimeout(
-      () => setIssues(validateQuestion(draft, taxonomyFor(header), mathErrorIn)),
-      PREVIEW_DEBOUNCE_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [draft, header]);
+  const issues = useIssues(draft, header);
 
   const checks = useMemo(() => {
     const missing = LANGUAGE_ORDER.filter(
