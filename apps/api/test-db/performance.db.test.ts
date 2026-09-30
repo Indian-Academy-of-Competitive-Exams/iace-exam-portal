@@ -40,13 +40,15 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
+const rollup = new RollupService(prisma);
+
 const processor = new ScoringProcessor(
   prisma,
   new RollupQueue(new FakeQueue().asQueue()),
   new NotificationsService(prisma),
   fakeQueueFailures(),
   new PaperSheetService(prisma),
-  new RollupService(prisma),
+  rollup,
 );
 
 const service = new PerformanceAnalyticsService(prisma, new LeaderboardService(prisma));
@@ -193,6 +195,24 @@ describe('the performance report — one sitting', () => {
     const { cohort } = await ofAttempt(student, older);
 
     assert.deepEqual([cohort?.rank, cohort?.cohortSize], [2, 2]);
+  });
+
+  /** The failure this prevents: a held curve outliving the recount that moved the cohort under it. */
+  it('redraws the curve once the rollup has counted a cohort that grew', async () => {
+    const sat = await world();
+    const before = await ofAttempt(sat.student, sat.older);
+    const latecomer = (await makeStudent(prisma)).id;
+    await sit(sat.first, latecomer, [RIGHT_OPTION, RIGHT_OPTION, RIGHT_OPTION], {
+      submittedAt: new Date('2026-08-21T06:00:00.000Z'),
+    });
+
+    const held = await ofAttempt(sat.student, sat.older);
+    await rollup.recountTest(sat.first.testId);
+    const after = await ofAttempt(sat.student, sat.older);
+
+    assert.equal(before.cohort?.averageScore, 3.75);
+    assert.equal(held.cohort?.averageScore, 3.75);
+    assert.equal(after.cohort?.averageScore, 4.5);
   });
 
   /** The failure this prevents: a pace here that the Questions tab, under its floor, draws as a dash. */

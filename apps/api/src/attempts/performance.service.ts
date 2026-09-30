@@ -29,7 +29,7 @@ import { scopeRefOf } from '../common/prisma-json';
 import { PrismaService } from '../prisma/prisma.service';
 import { cohortCurveOf } from './cohort-curve';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
-import { SHEET_ROW_SELECT } from './paper-sheet.service';
+import { SHEET_ROW_SELECT, hold } from './paper-sheet.service';
 import { requireStudent } from './require-student';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { elapsedSeconds, marksBySection, percentageOf, sectionsWithScores } from './attempt-report';
@@ -41,6 +41,7 @@ import {
   compositionOf,
   flagYours,
   sectionalStandingOf,
+  type CohortShape,
   type ReportedQuestion,
   type SectionCohort,
 } from './performance-analytics';
@@ -136,6 +137,8 @@ type PerformancePaperRow = Prisma.PaperQuestionGetPayload<{
 
 @Injectable()
 export class PerformanceAnalyticsService {
+  private readonly curves = new Map<string, Promise<CohortShape>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaderboard: LeaderboardService,
@@ -249,6 +252,7 @@ export class PerformanceAnalyticsService {
     standing: Standing | null,
     testStats: ReadonlyMap<string, TestStatRow>,
   ) {
+    const stat = anchor === null ? null : (testStats.get(anchor.testId) ?? null);
     const [paper, sheet, sectionCohort, topper, cohort] = await Promise.all([
       anchor === null
         ? []
@@ -265,7 +269,7 @@ export class PerformanceAnalyticsService {
           }),
       this.sectionCohort(anchor),
       anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
-      this.curveOf(query, anchor, standing),
+      this.curveOf(query, anchor, standing, stat),
     ]);
     const rows =
       anchor === null
@@ -279,7 +283,7 @@ export class PerformanceAnalyticsService {
       composition: compositionOf(rows),
       sections: sectionalStandingOf(sectionsOf(anchor, paper), sectionCohort, topper.bySection),
       time: timeUseOf(rows),
-      paceIndex: paceOf(rows, anchor === null ? null : (testStats.get(anchor.testId) ?? null)),
+      paceIndex: paceOf(rows, stat),
     };
   }
 
@@ -288,11 +292,17 @@ export class PerformanceAnalyticsService {
     query: PerformanceReportQuery,
     anchor: ReportRow | null,
     standing: Standing | null,
+    stat: TestStatRow | null,
   ): Promise<CohortCurve | null> {
     if (anchor === null || query.scope !== PERFORMANCE_SCOPES.ATTEMPT) return null;
 
     const score = Number(anchor.score ?? 0);
-    const live = await cohortCurveOf(this.prisma, anchor.testId);
+    // One cohort scan a rollup, not one a reader: the watermark that moved the cohort keys the copy.
+    const live = await hold(
+      this.curves,
+      `${anchor.testId}:${stat?.computedAt.getTime() ?? 0}`,
+      () => cohortCurveOf(this.prisma, anchor.testId),
+    );
 
     return {
       testId: anchor.testId,
@@ -375,6 +385,7 @@ const TEST_STAT_SELECT = {
   testId: true,
   evaluatedCount: true,
   sumTimeSec: true,
+  computedAt: true,
 } as const satisfies Prisma.TestStatSelect;
 
 type TestStatRow = Prisma.TestStatGetPayload<{ select: typeof TEST_STAT_SELECT }>;
