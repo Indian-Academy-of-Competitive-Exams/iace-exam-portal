@@ -6,6 +6,7 @@
 // Relative, not the '@iace/ui' specifier: Tailwind watches a config's relative imports only.
 import preset from '../../packages/ui/tailwind.preset.js';
 
+// A twin of apps/admin's today, not by contract: this follows docs/design/student, and may diverge.
 /** @type {import('tailwindcss').Config} */
 export default {
   presets: [preset],
