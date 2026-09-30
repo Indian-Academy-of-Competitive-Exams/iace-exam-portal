@@ -6,8 +6,11 @@
 #   docker compose -f deploy/valkey/compose.yml up -d valkey-staging
 #   docker compose -f deploy/valkey/compose.yml up -d            # both, once production exists
 #
-# Bound to the private address only. The security group is what keeps it private; this is the
-# second lock, so a misconfigured group does not put Valkey on the internet.
+# Three locks, because this box holds every live sitting, every session and every OTP, and it
+# carries a routable address so it can pull images: the security group, the bind to the private
+# address below, and `requirepass` — the one that still holds after somebody edits the group wrong.
+#
+#   cp deploy/valkey/.env.example deploy/valkey/.env    # compose reads it from beside this file
 
 name: iace-valkey
 
@@ -26,6 +29,11 @@ services:
       # Valkey loses up to a second of answers to the appendfsync window.
       - --maxmemory
       - ${PROD_MAXMEMORY:-1200mb}
+      - --requirepass
+      - ${VALKEY_PROD_PASSWORD:?set it in deploy/valkey/.env}
+    # valkey-cli reads this, so the healthcheck below authenticates without carrying the password.
+    environment:
+      REDISCLI_AUTH: ${VALKEY_PROD_PASSWORD}
     ports:
       - '${PRIVATE_IP}:6379:6379'
     volumes:
@@ -49,6 +57,11 @@ services:
       - noeviction
       - --maxmemory
       - ${STAGING_MAXMEMORY:-256mb}
+      # A password of its own: staging leaking must not open production's keyspace.
+      - --requirepass
+      - ${VALKEY_STAGING_PASSWORD:?set it in deploy/valkey/.env}
+    environment:
+      REDISCLI_AUTH: ${VALKEY_STAGING_PASSWORD}
     ports:
       - '${PRIVATE_IP}:6380:6379'
     volumes:

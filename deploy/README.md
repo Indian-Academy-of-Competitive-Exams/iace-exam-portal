@@ -15,9 +15,18 @@ S3 + CloudFront  the two SPAs                  deploy/publish-spas.sh
 - **One A record per environment**, pointing at that API box's Elastic IP. Caddy asks Let's
   Encrypt over the HTTP challenge, so the name must resolve and 80 and 443 must be open before you
   start. The SPAs need none — CloudFront brings its own certificate.
-- **Security groups.** Box A: 80 and 443 from the world, 22 from one address. Box B: 6379 and 6380
-  **from Box A's security group**, by group rather than CIDR, so a replacement box inherits the
-  rule. RDS: 5432 from the same group.
+- **Security groups, and no inbound SSH at all.** Box A: 80 and 443 from the world, and nothing
+  else. Box B: 6379 and 6380 **from Box A's security group**, by group rather than CIDR, so a
+  replacement box inherits the rule. RDS: 5432 from the same group.
+- **Shell in with SSM Session Manager, not a key pair.** Add `AmazonSSMManagedInstanceCore` to the
+  instance profile and `aws ssm start-session --target i-…` opens a shell with no inbound rule, no
+  key to lose and a transcript. A port-22 rule pinned to "my address" holds only until that address
+  rotates, and what happens then at 11pm is that the rule gets widened, not fixed.
+- **Require IMDSv2 at launch** —
+  `--metadata-options HttpTokens=required,HttpPutResponseHopLimit=2`. Without it one SSRF in the
+  API reaches `169.254.169.254` and leaves with the instance role; with it the attacker needs a PUT
+  first, which an SSRF usually cannot make. The hop limit is 2 because the caller is in a
+  container, one hop further out than the host.
 - **The API box needs 4 GB to build.** `pnpm install` plus the Prisma client wants it. Launch
   `t4g.medium`, and drop to `small` later once images come from ECR.
 
@@ -55,11 +64,17 @@ attach an instance profile carrying the media bucket, `ssm:GetParameter` on `/ia
 ## Box B — Valkey
 
 ```bash
-PRIVATE_IP=10.0.1.20 docker compose -f deploy/valkey/compose.yml up -d valkey-staging
+cp deploy/valkey/.env.example deploy/valkey/.env   # both passwords, then chown root + chmod 600
+docker compose -f deploy/valkey/compose.yml up -d valkey-staging
 ```
 
-Both services are defined; bring up only the one you need. `PRIVATE_IP` binds the port to the VPC
-address rather than every interface — the security group is the real lock, this is the second one.
+Compose reads `deploy/valkey/.env` from beside the compose file with no flag, so a password never
+reaches shell history. Both services are defined; bring up only the one you need.
+
+**Three locks, and the third is the one that survives a mistake.** The security group; `PRIVATE_IP`
+publishing the port on the VPC address rather than every interface; and `requirepass`. Each
+environment's password goes into that environment's `REDIS_URL` on Box A as
+`redis://:PASSWORD@10.0.1.20:6380`. Push this file to SSM as well, at `/iace/valkey/env`.
 
 ## Box A — the API
 
