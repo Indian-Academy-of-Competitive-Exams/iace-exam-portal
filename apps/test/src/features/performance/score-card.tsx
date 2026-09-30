@@ -1,0 +1,158 @@
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { EmptyState, EMPTY_STATE_KINDS, Metric, cn } from '@iace/ui';
+import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
+import { isMarkingPending, minutes } from '@iace/app-kit';
+import {
+  paperCounts,
+  type CohortCurve,
+  type ScoreCard,
+  type SectionalStanding,
+} from '@iace/contracts';
+import { scoreCardQuery } from '../../lib/queries';
+import {
+  Hero,
+  HeroFigure,
+  PageBody,
+  ReportSkeleton,
+  StatTile,
+  TileGrid,
+} from '../../components/ui';
+
+export function ScoreCardPanel() {
+  const { attemptId = '' } = useParams();
+  const card = useQuery(scoreCardQuery(attemptId));
+
+  const again = () => void card.refetch();
+
+  if (card.isLoading) return <ReportSkeleton />;
+  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
+  if (isMarkingPending(card.error)) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.EMPTY}
+        title="No marks yet"
+        // ui-copy-ok: consequence
+        hint="Your paper is handed in and safe."
+        onRetry={again}
+      />
+    );
+  }
+  if (!card.data) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your score card did not load"
+        onRetry={again}
+      />
+    );
+  }
+
+  return <Result card={card.data} />;
+}
+
+function Result({ card }: Readonly<{ card: ScoreCard }>) {
+  const attempted = card.correctCount + card.wrongCount;
+  const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
+  // A curve exists only where a cohort drew one; a retake has none to show.
+  const curve = card.cohort && card.cohort.bands.length > 0 ? card.cohort : null;
+  const counts = paperCounts(card.sections);
+
+  return (
+    <PageBody>
+      <Hero
+        eyebrow="Your result"
+        figure={<Headline card={card} />}
+        aside={<Beside card={card} accuracy={accuracy} />}
+      />
+
+      <TileGrid className="lg:grid-cols-6 xl:grid-cols-6">
+        <StatTile label="Correct" value={card.correctCount} />
+        <StatTile label="Wrong" value={card.wrongCount} />
+        <StatTile label="Unattempted" value={card.unattemptedCount} />
+        <StatTile label="Questions" value={card.totalQuestions} />
+        <StatTile label="Percentage" value={card.percentage} unit="%" />
+        <StatTile
+          label="Time taken"
+          value={minutes(card.timeTakenSec)}
+          foot={`of ${minutes(card.durationSec)}`}
+        />
+      </TileGrid>
+
+      <div className={cn('grid items-start gap-4', curve === null ? null : 'lg:grid-cols-2')}>
+        {/* Marks and Time read as one column against the crowd standing beside them. */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <MarksFigure
+            composition={card.composition}
+            counts={counts}
+            benchmark={marksAgainst(curve)}
+          />
+          <TimeFigure
+            time={card.time}
+            counts={counts}
+            paceIndex={card.paceIndex}
+            benchmark={timeAgainst(card.sections)}
+          />
+        </div>
+        {curve === null ? null : <CohortFigure cohort={curve} />}
+      </div>
+    </PageBody>
+  );
+}
+
+/** An unranked sitting has no percentile to lead with, so its marks take the headline instead. */
+function Headline({ card }: Readonly<{ card: ScoreCard }>) {
+  if (card.percentile === null) {
+    return <HeroFigure value={card.score} unit={`/ ${card.maxMarks}`} caption="marks" />;
+  }
+  return <HeroFigure value={card.percentile} unit="th" caption={beaten(card)} />;
+}
+
+/** Never the figure twice: what leads the hero is dropped from what stands beside it. */
+function Beside({ card, accuracy }: Readonly<{ card: ScoreCard; accuracy: number }>) {
+  return (
+    <>
+      {card.percentile === null ? null : (
+        <Metric
+          label="Rank"
+          value={card.rank ?? '—'}
+          unit={
+            card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
+          }
+          size="md"
+        />
+      )}
+      {card.percentile === null ? null : (
+        <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} size="md" />
+      )}
+      <Metric label="Accuracy" value={accuracy} unit="%" size="md" />
+    </>
+  );
+}
+
+/** The percentile said in people, which is the way a student actually reads it. */
+function beaten(card: ScoreCard): string {
+  if (card.rank === null || card.cohortSize === null) return 'percentile';
+  return `percentile · better than ${card.cohortSize - card.rank} of ${card.cohortSize}`;
+}
+
+/** The paper's own marks against the crowd's — the two figures a result is actually read against. */
+const marksAgainst = (curve: CohortCurve | null) =>
+  curve === null ? undefined : { average: curve.averageScore, topper: curve.topperScore };
+
+/** The topper's clock is only ever known per SECTION, so their paper is the sum of those. */
+function timeAgainst(sections: readonly SectionalStanding[]): Benchmark | undefined {
+  const measured = sections.filter((section) => section.topperTimeSec !== null);
+  if (measured.length === 0) return undefined;
+
+  return {
+    average: sumOrNull(sections.map((section) => section.cohortAverageTimeSec)),
+    topper: measured.reduce((total, section) => total + (section.topperTimeSec ?? 0), 0),
+  };
+}
+
+/** One unmeasured section makes the total a guess, so the whole comparison stands down. */
+function sumOrNull(values: readonly (number | null)[]): number | null {
+  if (values.includes(null)) return null;
+  return values.reduce((total: number, value) => total + (value ?? 0), 0);
+}

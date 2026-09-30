@@ -20,7 +20,7 @@ import {
 } from '../lib/constants';
 import { onPushReceived, rebindOncePerLoad, unsubscribeFromPush } from '../lib/pwa';
 import { useAuth } from '../providers/auth';
-import { ChangePinCard } from '../routes/account';
+import { ChangePinCard } from '../features/account/account';
 
 /** The student's shell. Same width as the admin's, so neither wastes the screen it is on. */
 export function AppShell() {

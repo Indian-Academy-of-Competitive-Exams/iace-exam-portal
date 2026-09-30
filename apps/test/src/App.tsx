@@ -4,81 +4,93 @@ import { ProtectedRoute } from '@iace/app-kit/browser';
 import { LoadingState, PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { ROUTES } from './lib/constants';
-import { LoginPage } from './routes/login';
-import { NotFoundPage } from './routes/not-found';
+import { LoginPage } from './features/auth/login';
+import { NotFoundPage } from './not-found';
 import { AppShell } from './components/app-shell';
 import { PageSkeleton, ReportSkeleton } from './components/ui';
 
 /** DEV only, and lazy so the standing paper never reaches a student's payload. */
 const RailwayPreviewPage = React.lazy(() =>
-  import('./routes/railway-preview').then((module) => ({ default: module.RailwayPreviewPage })),
+  import('./features/exam/railway-preview').then((module) => ({
+    default: module.RailwayPreviewPage,
+  })),
 );
 
 /** Every screen behind login is lazy, so the first paint pays for login and the shell alone. */
 const DashboardPage = React.lazy(() =>
-  import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
+  import('./features/dashboard/dashboard').then((module) => ({ default: module.DashboardPage })),
 );
 const OverviewPage = React.lazy(() =>
-  import('./routes/overview').then((module) => ({ default: module.OverviewPage })),
+  import('./features/performance/overview').then((module) => ({ default: module.OverviewPage })),
 );
 const ScoreCardPanel = React.lazy(() =>
-  import('./routes/score-card').then((module) => ({ default: module.ScoreCardPanel })),
+  import('./features/performance/score-card').then((module) => ({
+    default: module.ScoreCardPanel,
+  })),
 );
 const SubjectPanel = React.lazy(() =>
-  import('./routes/subject-report').then((module) => ({ default: module.SubjectPanel })),
+  import('./features/performance/subject-report').then((module) => ({
+    default: module.SubjectPanel,
+  })),
 );
 const ComparePanel = React.lazy(() =>
-  import('./routes/compare').then((module) => ({ default: module.ComparePanel })),
+  import('./features/performance/compare').then((module) => ({ default: module.ComparePanel })),
 );
 const ExamPage = React.lazy(() =>
-  import('./routes/exam').then((module) => ({ default: module.ExamPage })),
+  import('./features/exam/exam').then((module) => ({ default: module.ExamPage })),
 );
 const SolutionPanel = React.lazy(() =>
-  import('./routes/review').then((module) => ({ default: module.SolutionPanel })),
+  import('./features/review/review').then((module) => ({ default: module.SolutionPanel })),
 );
 const SavedPage = React.lazy(() =>
-  import('./routes/saved').then((module) => ({ default: module.SavedPage })),
+  import('./features/review/saved').then((module) => ({ default: module.SavedPage })),
 );
 const AccountPage = React.lazy(() =>
-  import('./routes/account').then((module) => ({ default: module.AccountPage })),
+  import('./features/account/account').then((module) => ({ default: module.AccountPage })),
 );
 const ProfilePage = React.lazy(() =>
-  import('./routes/profile').then((module) => ({ default: module.ProfilePage })),
+  import('./features/account/profile').then((module) => ({ default: module.ProfilePage })),
 );
 const TestsPage = React.lazy(() =>
-  import('./routes/tests').then((module) => ({ default: module.TestsPage })),
+  import('./features/tests/tests').then((module) => ({ default: module.TestsPage })),
 );
 const SeriesPage = React.lazy(() =>
-  import('./routes/series').then((module) => ({ default: module.SeriesPage })),
+  import('./features/tests/series').then((module) => ({ default: module.SeriesPage })),
 );
 const TestAboutPage = React.lazy(() =>
-  import('./routes/test-about').then((module) => ({ default: module.TestAboutPage })),
+  import('./features/tests/test-about').then((module) => ({ default: module.TestAboutPage })),
 );
 const TestInstructionsPage = React.lazy(() =>
-  import('./routes/test-instructions').then((module) => ({
+  import('./features/exam/test-instructions').then((module) => ({
     default: module.TestInstructionsPage,
   })),
 );
 const SubmittedPage = React.lazy(() =>
-  import('./routes/submitted').then((module) => ({ default: module.SubmittedPage })),
+  import('./features/exam/submitted').then((module) => ({ default: module.SubmittedPage })),
 );
 const QuestionReportPanel = React.lazy(() =>
-  import('./routes/question-report').then((module) => ({ default: module.QuestionReportPanel })),
+  import('./features/performance/question-report').then((module) => ({
+    default: module.QuestionReportPanel,
+  })),
 );
 const ReportShell = React.lazy(() =>
-  import('./routes/report').then((module) => ({ default: module.ReportShell })),
+  import('./features/performance/report').then((module) => ({ default: module.ReportShell })),
 );
 const ReportRedirect = React.lazy(() =>
-  import('./routes/report').then((module) => ({ default: module.ReportRedirect })),
+  import('./features/performance/report').then((module) => ({ default: module.ReportRedirect })),
 );
 const LeaderboardPage = React.lazy(() =>
-  import('./routes/leaderboard').then((module) => ({ default: module.LeaderboardPage })),
+  import('./features/leaderboard/leaderboard').then((module) => ({
+    default: module.LeaderboardPage,
+  })),
 );
 const NotificationsPage = React.lazy(() =>
-  import('./routes/notifications').then((module) => ({ default: module.NotificationsPage })),
+  import('./features/notifications/notifications').then((module) => ({
+    default: module.NotificationsPage,
+  })),
 );
 const NotificationSettingsPage = React.lazy(() =>
-  import('./routes/notification-settings').then((module) => ({
+  import('./features/notifications/notification-settings').then((module) => ({
     default: module.NotificationSettingsPage,
   })),
 );
