@@ -566,7 +566,7 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
 };
 
 /** Segments that qualify a key, shared because a picker and the list it feeds must agree. */
-export const QUERY_SCOPES = {
+const QUERY_SCOPES = {
   NAMED: 'named',
   /** A CHOOSER: it attaches something, so it offers only what is still running. */
   PICKER: 'picker',
