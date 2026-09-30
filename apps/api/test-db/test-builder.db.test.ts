@@ -115,15 +115,13 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal((await paper.read(draft.id)).totalQuestions, 5);
 
     await offering.moveToSeries(draft.id, { testSeriesId: seriesId });
-    const frozen = await offerTest(prisma, draft.id);
+    await offerTest(prisma, draft.id);
 
     // A publishable mock: frozen, carried by a series, and offered — one call does all three.
-    assert.equal(frozen.finalizedByThisCall, true);
-    assert.equal(frozen.frozenQuestions, 5);
-    assert.equal(frozen.status, TEST_STATUS.ACTIVE);
     const test = await testRow(draft.id);
     assert.ok(test.finalizedAt);
     assert.equal(test.status, TEST_STATUS.ACTIVE);
+    assert.equal(test.version, 1);
     assert.equal((await rowsOf(draft.id)).length, 5);
     // Offering freezes the PAPER. Its blueprint stops moving when somebody sits one, not here.
     const config = await prisma.baseConfig.findUniqueOrThrow({ where: { id: BUILDER.CONFIG } });
@@ -161,8 +159,10 @@ describe('the invariants Phase 2 must not have broken', () => {
     const { draft, paper, pickWholePaper, bank } = await builder();
     await pickWholePaper();
     await offerTest(prisma, draft.id);
+    const frozenAt = (await testRow(draft.id)).finalizedAt;
 
-    assert.equal((await offerTest(prisma, draft.id)).finalizedByThisCall, false);
+    await offerTest(prisma, draft.id);
+    assert.deepEqual((await testRow(draft.id)).finalizedAt, frozenAt);
 
     const before = await rowsOf(draft.id);
     await makeSitting(prisma, {

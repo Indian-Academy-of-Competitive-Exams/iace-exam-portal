@@ -20,7 +20,7 @@ import {
   type Paginated,
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
 import {
   EXPORT_DATE_FORMATS,
@@ -35,11 +35,6 @@ import { NotificationsService, type NewNotification } from './notifications.serv
 
 /** How many recipients one fan-out writes per statement. */
 const CHUNK = 1000;
-
-/** Prisma's interactive default is 5s, which a 50,000-row fan-out does not fit in. */
-const FAN_OUT_TIMEOUT_MS = 120_000;
-
-const FAN_OUT_MAX_WAIT_MS = 10_000;
 
 /** A cohort is read by id alone: nothing else about a student is what a fan-out needs. */
 const RECIPIENT_SELECT = { id: true } as const;
@@ -94,31 +89,28 @@ export class AnnouncementsService {
 
     const estimatedCostPaise = this.priceOf(recipients.length, input.paidChannels);
 
-    const id = await this.prisma.$transaction(
-      async (tx) => {
-        const announcement = await tx.announcement.create({
-          data: {
-            title: input.title,
-            body: input.body,
-            audience: input.audience as unknown as Prisma.InputJsonValue,
-            paidChannels: [...input.paidChannels],
-            recipientCount: recipients.length,
-            estimatedCostPaise,
-            createdById,
-          },
-          select: { id: true },
-        });
+    const id = await this.prisma.$transaction(async (tx) => {
+      const announcement = await tx.announcement.create({
+        data: {
+          title: input.title,
+          body: input.body,
+          audience: input.audience as unknown as Prisma.InputJsonValue,
+          paidChannels: [...input.paidChannels],
+          recipientCount: recipients.length,
+          estimatedCostPaise,
+          createdById,
+        },
+        select: { id: true },
+      });
 
-        for (const batch of chunked(recipients)) {
-          await this.notifications.tell(
-            tx,
-            ...batch.map((student) => this.intentFor(student.id, announcement.id, input)),
-          );
-        }
-        return announcement.id;
-      },
-      { maxWait: FAN_OUT_MAX_WAIT_MS, timeout: FAN_OUT_TIMEOUT_MS },
-    );
+      for (const batch of chunked(recipients)) {
+        await this.notifications.tell(
+          tx,
+          ...batch.map((student) => this.intentFor(student.id, announcement.id, input)),
+        );
+      }
+      return announcement.id;
+    }, TX_LIMITS.BULK);
 
     return this.detail(id);
   }

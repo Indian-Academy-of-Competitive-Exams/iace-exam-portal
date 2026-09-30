@@ -169,15 +169,13 @@ describe('FinalizeService — the offer freezes the paper', () => {
   it('stamps the test, opens it, and bumps the optimistic version in one write', async () => {
     const paper = await draft();
 
-    const result = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(result.finalizedByThisCall, true);
-    assert.equal(result.frozenQuestions, 5);
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
     const test = await testRow(paper);
     assert.ok(test.finalizedAt);
     assert.equal(test.status, TEST_STATUS.ACTIVE);
     assert.equal(test.version, 1);
+    assert.equal(await prisma.paperQuestion.count({ where: { testId: paper.testId } }), 5);
   });
 
   /** The failure this prevents: a blueprint stranded locked by a test nobody ever sat. */
@@ -194,43 +192,40 @@ describe('FinalizeService — a second offer', () => {
   it('is a no-op that reports the first one’s outcome', async () => {
     const paper = await draft();
 
-    const first = await offerTest(prisma, paper.testId);
-    const second = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
+    const first = await testRow(paper);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(first.finalizedByThisCall, true);
-    assert.equal(second.finalizedByThisCall, false);
-    assert.equal(second.finalizedAt, first.finalizedAt);
-    assert.equal((await testRow(paper)).version, 1);
+    const second = await testRow(paper);
+    assert.deepEqual(second.finalizedAt, first.finalizedAt);
+    assert.equal(second.version, 1);
   });
 
   it('lets exactly one of two concurrent offers do the work', async () => {
     const paper = await draft();
 
-    const results = await Promise.all([
-      offerTest(prisma, paper.testId),
-      offerTest(prisma, paper.testId),
-    ]);
+    await Promise.all([offerTest(prisma, paper.testId), offerTest(prisma, paper.testId)]);
 
     // Both read version 0; only the one whose conditional update still matched may write.
-    assert.equal(results.filter((result) => result.finalizedByThisCall).length, 1);
     assert.equal((await testRow(paper)).version, 1);
   });
 
   /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
   it('opens a retired test again without re-freezing its paper', async () => {
     const paper = await draft();
-    const first = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
+    const first = await testRow(paper);
     await prisma.test.update({
       where: { id: paper.testId },
       data: { status: TEST_STATUS.INACTIVE },
     });
 
-    const again = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
+    const again = await testRow(paper);
     assert.equal(again.status, TEST_STATUS.ACTIVE);
-    assert.equal(again.finalizedByThisCall, false);
-    assert.equal(again.finalizedAt, first.finalizedAt);
-    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+    assert.deepEqual(again.finalizedAt, first.finalizedAt);
+    assert.equal(again.version, 1);
   });
 });
 
@@ -239,9 +234,8 @@ describe('FinalizeService — a scoped test is judged by its own sections alone'
   it('offers a SECTIONAL test whose one scoped section is full', async () => {
     const paper = await sectionalDraft(3);
 
-    const result = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(result.finalizedByThisCall, true);
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
     assert.ok((await testRow(paper)).finalizedAt);
   });

@@ -1,3 +1,5 @@
+import { MS_PER_MINUTE, MS_PER_SECOND } from '../common/time/units';
+
 /** Queue names live here so producers and processors can never disagree. */
 export const QUEUE_NAMES = {
   SCORING: 'scoring',
@@ -76,7 +78,7 @@ export function rescoreJobId(attemptId: string, paperRevision: number): string {
 }
 
 /** Unscored this long is a backlog the gauge reports. */
-export const SCORING_RETRY_AFTER_MS = 5 * 60 * 1000;
+export const SCORING_RETRY_AFTER_MS = 5 * MS_PER_MINUTE;
 
 /** How many stranded events one relay pass hands on. */
 export const RELAY_BATCH = 200;
@@ -99,7 +101,7 @@ export const DRAINED_ROLLUP_JOBS = ['fold-attempt', 'fold-pending'] as const;
 export const COHORT_SWEEP_JOB_ID = `${QUEUE_NAMES.ROLLUP}-sweep-cohorts`;
 
 /** Long enough to collect a burst, short enough that a cohort figure settles while it is news. */
-export const ROLLUP_SWEEP_DELAY_MS = 5 * 1000;
+export const ROLLUP_SWEEP_DELAY_MS = 5 * MS_PER_SECOND;
 
 /** Ids only, like every other job: the worker re-reads whatever it is about to fold. */
 export interface RollupJobData {
@@ -124,7 +126,7 @@ export function rollupRebuildStudentJobId(studentId: string): string {
 }
 
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
-export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
+export const ROLLUP_REBUILD_DELAY_MS = MS_PER_MINUTE;
 
 /** The push sweep, and the sweep that notices tests opening by the clock. */
 export const NOTIFICATION_JOBS = {
@@ -134,10 +136,10 @@ export const NOTIFICATION_JOBS = {
 } as const;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
-export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;
+export const NOTIFICATION_SWEEP_EVERY_MS = MS_PER_MINUTE;
 
 /** A test opening is not to the minute; five is soon enough and a fifth of the wake-ups. */
-export const TESTS_OPENED_SWEEP_EVERY_MS = 5 * 60 * 1000;
+export const TESTS_OPENED_SWEEP_EVERY_MS = 5 * MS_PER_MINUTE;
 
 /** One delivery row to attempt. The worker re-reads it, so a stale retry cannot send a stale message. */
 export interface NotificationDeliveryJobData {
@@ -150,10 +152,10 @@ export function notificationDeliveryJobId(deliveryId: string): string {
 }
 
 /** How often the live sittings are drained to Postgres. A crash costs at most this much. */
-export const ATTEMPT_FLUSH_EVERY_MS = 60 * 1000;
+export const ATTEMPT_FLUSH_EVERY_MS = MS_PER_MINUTE;
 
 /** How often sittings past their deadline are ended. Slower: nothing is lost by ending one late. */
-export const ATTEMPT_SWEEP_EVERY_MS = 2 * 60 * 1000;
+export const ATTEMPT_SWEEP_EVERY_MS = 2 * MS_PER_MINUTE;
 
 /** 02:45 IST: the same quiet window as the prune, a quarter of an hour clear of it. */
 export const AUDIT_ARCHIVE_CRON = '15 21 * * *';

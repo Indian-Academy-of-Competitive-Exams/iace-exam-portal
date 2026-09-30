@@ -19,7 +19,8 @@ import { QuestionsService } from '../src/questions/questions.service';
 import { PaperService } from '../src/tests/paper.service';
 import { type Editor } from '../src/tests/edit-lock';
 import type { PrismaService } from '../src/prisma/prisma.service';
-import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from '../src/tests/test-rules';
+import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
+import { OFFERED_TEST_MESSAGE } from '../src/common/paper-edit';
 import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BUILDER,

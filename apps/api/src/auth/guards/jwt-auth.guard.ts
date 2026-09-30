@@ -31,10 +31,7 @@ export class JwtAuthGuard implements CanActivate {
     const claims = await this.tokens.verifyAccess(token);
 
     if (!(await this.sessions.exists(claims.actor, claims.sub, claims.sid))) {
-      const replaced = await this.sessions.replacedBy(claims.actor, claims.sub, claims.sid);
-      if (replaced)
-        throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
-      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has ended. Sign in again');
+      await this.sessions.throwEnded(claims.actor, claims.sub, claims.sid);
     }
 
     // An admin's grants are read now, not from the token, so a revoke bites on the next request; a student has none.

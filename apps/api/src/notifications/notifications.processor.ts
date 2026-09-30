@@ -5,10 +5,10 @@
  * found by `repairStalled`, which runs after the free pushes however the pass ended.
  */
 import { Injectable } from '@nestjs/common';
-import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { type Job, type Queue } from 'bullmq';
 import { DeliveryStatus } from '@prisma/client';
-import { type NotificationType } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import {
   NOTIFICATION_JOBS,
@@ -38,7 +38,6 @@ const PUSH_PAGES_PER_PASS = 25;
 interface Claimed {
   id: string;
   studentId: string | null;
-  type: NotificationType;
   title: string;
   actBy: Date | null;
   paidChannels: PaidChannel[] | null;
@@ -48,7 +47,7 @@ interface Claimed {
 @Processor(QUEUE_NAMES.NOTIFICATIONS, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.NOTIFICATIONS].concurrency,
 })
-export class NotificationsProcessor extends WorkerHost {
+export class NotificationsProcessor extends ReportingWorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
@@ -56,19 +55,9 @@ export class NotificationsProcessor extends WorkerHost {
     private readonly deliveryRepair: NotificationDeliveryProcessor,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.NOTIFICATIONS, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.NOTIFICATIONS, error);
+    super(QUEUE_NAMES.NOTIFICATIONS, failures);
   }
 
   async process(job: Job): Promise<void> {
@@ -108,7 +97,6 @@ export class NotificationsProcessor extends WorkerHost {
               {
                 notificationId: row.id,
                 studentId: row.studentId,
-                type: row.type,
                 title: row.title,
               },
             ],
@@ -128,8 +116,8 @@ export class NotificationsProcessor extends WorkerHost {
             SELECT "id" FROM "Notification" WHERE "pushedAt" IS NULL
             ORDER BY "createdAt" LIMIT ${RELAY_BATCH}
             FOR UPDATE SKIP LOCKED)
-          RETURNING "id", "studentId", "type", "title", "actBy", "announcementId")
-        SELECT c."id", c."studentId", c."type"::text AS "type", c."title", c."actBy",
+          RETURNING "id", "studentId", "title", "actBy", "announcementId")
+        SELECT c."id", c."studentId", c."title", c."actBy",
           a."paidChannels"::text[] AS "paidChannels"
         FROM claimed c LEFT JOIN "Announcement" a ON a."id" = c."announcementId"`;
 
@@ -160,23 +148,28 @@ export class NotificationsProcessor extends WorkerHost {
       select: { id: true, notificationId: true },
     });
 
+    if (booked.length === 0) return;
+
     const now = new Date();
-    for (const row of booked) {
-      const notification = paid.get(row.notificationId);
-      const plan = escalationFor(
-        notification?.actBy ?? null,
-        now,
-        notification?.paidChannels ?? [],
-      );
-      await this.deliveries.add(
-        QUEUE_NAMES.NOTIFICATION_DELIVERY,
-        { deliveryId: row.id },
-        // Keyed on the row, so a swept-again notification schedules the same job rather than a second buy.
-        {
-          ...keyedJob(notificationDeliveryJobId(row.id)),
-          delay: plan.deferSec * MS_PER_SECOND,
-        },
-      );
-    }
+    // One round trip for the page: the next page's free pushes never queue behind 200 of these.
+    await this.deliveries.addBulk(
+      booked.map((row) => {
+        const notification = paid.get(row.notificationId);
+        const plan = escalationFor(
+          notification?.actBy ?? null,
+          now,
+          notification?.paidChannels ?? [],
+        );
+        return {
+          name: QUEUE_NAMES.NOTIFICATION_DELIVERY,
+          data: { deliveryId: row.id },
+          // Keyed on the row, so a swept-again notification schedules the same job rather than a second buy.
+          opts: {
+            ...keyedJob(notificationDeliveryJobId(row.id)),
+            delay: plan.deferSec * MS_PER_SECOND,
+          },
+        };
+      }),
+    );
   }
 }

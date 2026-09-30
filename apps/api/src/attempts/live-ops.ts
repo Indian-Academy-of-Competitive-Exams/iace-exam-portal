@@ -17,21 +17,16 @@ export function watchableTestsWhere(q: string | undefined): Prisma.TestWhereInpu
 
 /** What the ops board shows, worked out without a database so the split can be read as a table. */
 
-/** Both panels come off one read, so the stuck ones are simply the first rows it returns. */
-export const SITTING_SELECT = {
-  id: true,
-  studentId: true,
-  attemptNo: true,
-  isGraded: true,
-  startedAt: true,
-  endsAt: true,
-  student: {
-    select: { fullName: true, mobile: true, currentBranch: { select: { name: true } } },
-  },
-} as const satisfies Prisma.AttemptSelect;
-
-/** A sitting row as Postgres hands it over, before the live state is laid on top. */
-export type SittingRow = Prisma.AttemptGetPayload<{ select: typeof SITTING_SELECT }>;
+/** A sitting row as the board's raw read hands it over, before the live state is laid on top. */
+export interface SittingRow {
+  id: string;
+  studentId: string;
+  attemptNo: number;
+  isGraded: boolean;
+  startedAt: Date;
+  endsAt: Date;
+  student: { fullName: string; mobile: string; currentBranch: { name: string } | null };
+}
 
 const ANSWERED = new Set<AnswerState>(ANSWERED_STATES);
 

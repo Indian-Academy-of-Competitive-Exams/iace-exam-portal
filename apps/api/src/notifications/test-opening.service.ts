@@ -5,8 +5,7 @@
  * the outbox rows, so a crash mid-fan-out replays and a finished one is never seen again.
  */
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { TestStatus } from '@prisma/client';
-import { NOTIFICATION_TYPE } from '@iace/contracts';
+import { NOTIFICATION_TYPE, TEST_STATUS } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { type AccessResolverService } from '../access';
 import { NotificationsService } from './notifications.service';
@@ -39,7 +38,7 @@ export class TestOpeningService {
   async sweep(now: Date = new Date()): Promise<number> {
     const opened = await this.prisma.test.findMany({
       where: {
-        status: TestStatus.ACTIVE,
+        status: TEST_STATUS.ACTIVE,
         announcedAt: null,
         OR: [{ opensAt: null }, { opensAt: { lte: now } }],
       },

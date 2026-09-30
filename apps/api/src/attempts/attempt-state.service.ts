@@ -17,7 +17,7 @@ import {
   displayOrder,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
+import { parseJsonOrNull, RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { answersOf } from './answer-sheet';
 import { PaperSheetService } from './paper-sheet.service';
@@ -354,13 +354,7 @@ export class AttemptStateService {
 }
 
 /** A corrupt value reads as no key at all, which is what both callers of `patch` already repair. */
-function parsedHeld(raw: string): HeldState | null {
-  try {
-    return heldIn(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
+const parsedHeld = (raw: string): HeldState | null => heldIn(parseJsonOrNull(raw));
 
 /** Another student's id reads as missing, as it does on the Postgres side. */
 function yours(held: HeldState, studentId: string): HeldState {

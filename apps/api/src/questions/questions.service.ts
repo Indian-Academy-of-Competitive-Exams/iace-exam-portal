@@ -54,6 +54,7 @@ import { questionOrderBy, questionWhere, reachableTest } from './question-query'
 import { type AuthoringCount, type ExportedQuestion } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
 import { uncheckReworded } from '../assignments';
+import { answerKeyIn, optionsIn } from '../common/prisma-json';
 
 const QUESTION_INCLUDE = {
   subject: { select: { id: true, name: true } },
@@ -122,21 +123,12 @@ export class QuestionsService {
     private readonly storage: StorageService,
   ) {}
 
+  /** One pass for the whole question: a stem and its options share images. */
   private served(detail: QuestionDetail): QuestionDetail {
-    const [only] = this.servedAll([detail]);
-    return only ?? detail;
-  }
-
-  /** One pass for a whole page: a stem and its options share images, and twenty questions share more. */
-  private servedAll(details: QuestionDetail[]): QuestionDetail[] {
-    const keys = new Set(
-      details.flatMap((detail) => mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn)),
-    );
+    const keys = new Set(mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn));
     const urls = new Map([...keys].map((key) => [key, this.storage.publicUrl(key)]));
 
-    return details.map((detail) =>
-      rewriteQuestionHtml(detail, (html) => applyImageUrls(html, urls)),
-    );
+    return rewriteQuestionHtml(detail, (html) => applyImageUrls(html, urls));
   }
 
   /** Hands back the KEY that content quotes, plus the url that will serve it from now on. */
@@ -154,29 +146,11 @@ export class QuestionsService {
     query: QuestionListQuery,
     scope?: Prisma.QuestionWhereInput,
   ): Promise<Paginated<QuestionSummary>> {
-    const [rows, total] = await this.pageOf(query, scope);
-    return paged(query, rows.map(toSummary), total);
-  }
-
-  /** The same page in FULL, images signed together — a document to read, not a table to scan. */
-  async page(
-    query: QuestionListQuery,
-    scope?: Prisma.QuestionWhereInput,
-  ): Promise<Paginated<QuestionDetail>> {
-    const [rows, total] = await this.pageOf(query, scope);
-    const items = this.servedAll(rows.map(toDetail));
-    return paged(query, items, total);
-  }
-
-  private async pageOf(
-    query: QuestionListQuery,
-    scope?: Prisma.QuestionWhereInput,
-  ): Promise<[QuestionRow[], number]> {
     const matchedIds = query.q ? await this.searchIds(query.q) : null;
     const filtered = questionWhere(query, matchedIds);
     const where = scope ? { AND: [filtered, scope] } : filtered;
 
-    return this.prisma.$transaction([
+    const [rows, total] = await this.prisma.$transaction([
       this.prisma.question.findMany({
         where,
         include: QUESTION_INCLUDE,
@@ -185,6 +159,8 @@ export class QuestionsService {
       }),
       this.prisma.question.count({ where }),
     ]);
+
+    return paged(query, rows.map(toSummary), total);
   }
 
   /** Every row the list would page through, unsigned — a cell carries the image KEY the stem hash folds. */
@@ -317,32 +293,30 @@ export class QuestionsService {
 
   /** Rewritten in place while nothing reachable pins the version; anything else gains one. */
   async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
-    const question = await this.require(id);
-    assertScreenIsCurrent(question, draft);
-    await this.assertIdentitySettled(this.prisma, question, draft);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
 
-    const row = await this.prisma.$transaction(
+    const { before, after } = await this.prisma.$transaction(
       (tx) => this.writeEdit(tx, id, draft, built, createdById),
       TX_LIMITS.SHORT,
     );
 
-    this.auditContext.setChanged(questionDiff(question, row));
+    this.auditContext.setChanged(questionDiff(before, after));
 
-    return this.served(toDetail(row));
+    return this.served(toDetail(after));
   }
 
-  /** Re-read inside the transaction, so the row this decides on is the row it goes on to write. */
+  /** Read ONLY inside the transaction, so the row this decides on is the row it goes on to write. */
   private async writeEdit(
     tx: Prisma.TransactionClient,
     id: string,
     draft: QuestionDraft,
     built: BuiltQuestion,
     createdById: string,
-  ): Promise<QuestionRow> {
+  ): Promise<{ before: QuestionRow; after: QuestionRow }> {
     const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+    assertScreenIsCurrent(question, draft);
     await this.assertIdentitySettled(tx, question, draft);
 
     // One order everywhere, Test before Question; drafts holding only its tick too, so a put-back cannot race the uncheck.
@@ -362,16 +336,17 @@ export class QuestionsService {
     if (claimed.count !== 1) throw questionEditedElsewhere();
 
     // Merged here, so what is compared below is exactly what would be written.
-    const options = optionsWithIds(built, currentOptionsOf(question));
+    const options = optionsWithIds(built, optionsIn(question.currentVersion?.options));
     const version = await this.versionFor(tx, question, built, options, createdById);
     // A reader's tick was on the old words, which no draft paper serves any more.
     if (version.reworded) await uncheckReworded(tx, id);
 
-    return tx.question.update({
+    const after = await tx.question.update({
       where: { id },
       data: { currentVersionId: version.id },
       include: QUESTION_INCLUDE,
     });
+    return { before: question, after };
   }
 
   /** A save that says the same thing writes no version, and puts no new hand on the row. */
@@ -711,12 +686,6 @@ function versionDataOf(
   };
 }
 
-/** The current version's options, parsed out of JSON. Absent or malformed reads as none. */
-function currentOptionsOf(row: WithVersion): QuestionOption[] {
-  const options = row.currentVersion?.options;
-  return Array.isArray(options) ? (options as unknown as QuestionOption[]) : [];
-}
-
 /** The union of both sides, so a language or an option that went away still diffs to null. */
 function questionDiff(before: QuestionRow, after: QuestionRow): FieldDiff | null {
   const from = auditFieldsOf(before);
@@ -736,7 +705,7 @@ function auditFieldsOf(row: QuestionRow): Record<string, unknown> {
     status: row.status,
     version: row.currentVersion?.version ?? null,
     answerKey: row.currentVersion?.answerKey ?? null,
-    correctOptionPositions: currentOptionsOf(row)
+    correctOptionPositions: optionsIn(row.currentVersion?.options)
       .filter((option) => option.isCorrect)
       .map((option) => option.position)
       .sort((a, b) => a - b),
@@ -759,7 +728,7 @@ function contentLeavesOf(row: QuestionRow): Record<string, string> {
     }
   }
 
-  for (const option of currentOptionsOf(row)) {
+  for (const option of optionsIn(row.currentVersion?.options)) {
     for (const [language, text] of Object.entries(option.text)) {
       leaves[`option.${option.position}.${language.toUpperCase()}`] = readableText(text);
     }
@@ -837,8 +806,8 @@ function toDetail(row: QuestionRow): QuestionDetail {
     ...toSummary(row),
     version: row.currentVersion?.version ?? FIRST_VERSION,
     content: contentOf(row),
-    options: currentOptionsOf(row),
-    answerKey: (row.currentVersion?.answerKey as QuestionDetail['answerKey']) ?? null,
+    options: optionsIn(row.currentVersion?.options),
+    answerKey: answerKeyIn(row.currentVersion?.answerKey),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -855,8 +824,8 @@ function toExported(row: QuestionExportRow): ExportedQuestion {
     author: row.createdBy ? (row.createdBy.fullName ?? row.createdBy.email) : null,
     createdAt: row.createdAt,
     content: contentOf(row),
-    options: currentOptionsOf(row),
-    answerKey: (row.currentVersion?.answerKey as QuestionDetail['answerKey']) ?? null,
+    options: optionsIn(row.currentVersion?.options),
+    answerKey: answerKeyIn(row.currentVersion?.answerKey),
   };
 }
 

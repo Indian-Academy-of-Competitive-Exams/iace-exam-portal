@@ -17,9 +17,13 @@ export class AttemptSheetService {
     private readonly papers: PaperSheetService,
   ) {}
 
-  /** Inside the start's own transaction: one untouched slot per paper row. */
-  async create(tx: Prisma.TransactionClient, attemptId: string, testId: string): Promise<void> {
-    const size = await tx.paperQuestion.count({ where: { testId } });
+  /** The paper is frozen before any start, so its length is read once per process, never per start. */
+  async sizeOf(testId: string): Promise<number> {
+    return (await this.papers.rowsOf(testId)).length;
+  }
+
+  /** Inside the start's own transaction: one untouched slot per paper row, sized outside it. */
+  async create(tx: Prisma.TransactionClient, attemptId: string, size: number): Promise<void> {
     await tx.attemptSheet.create({ data: { attemptId, answers: blankSheet(size) } });
   }
 

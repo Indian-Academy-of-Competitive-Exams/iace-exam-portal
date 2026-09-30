@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { type Job } from 'bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { type RowActionLog } from '@prisma/client';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,7 +42,7 @@ function nextInstituteMidnight(from: Date): Date {
 @Processor(QUEUE_NAMES.AUDIT_ARCHIVE, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.AUDIT_ARCHIVE].concurrency,
 })
-export class AuditArchiveProcessor extends WorkerHost {
+export class AuditArchiveProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(AuditArchiveProcessor.name);
 
   constructor(
@@ -50,19 +50,9 @@ export class AuditArchiveProcessor extends WorkerHost {
     private readonly storage: StorageService,
     private readonly redis: RedisService,
     private readonly audit: AuditService,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.AUDIT_ARCHIVE, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.AUDIT_ARCHIVE, error);
+    super(QUEUE_NAMES.AUDIT_ARCHIVE, failures);
   }
 
   async process(): Promise<void> {

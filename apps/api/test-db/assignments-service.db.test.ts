@@ -126,6 +126,9 @@ const sayFramed = (testId: string) =>
     select: { id: true },
   });
 
+const statusOf = async (testId: string) =>
+  (await prisma.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true } })).status;
+
 /** Done or read, reduced to its stamp, for a case about something else. */
 const finalizedNow = (id: string) =>
   prisma.questionAssignment.update({ where: { id }, data: { finalizedAt: new Date() } });
@@ -1306,9 +1309,9 @@ describe('the offer gate', () => {
     );
 
     await releasedNow(created.id);
-    const result = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
   });
 
   /** The shape the gate exists for: a typist finishing does not by itself clear the section. */
@@ -1354,9 +1357,9 @@ describe('the offer gate', () => {
     );
 
     await releasedNow(readerRow.id);
-    const result = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
   });
 
   /** The override: a test cannot be unshippable because one person's row will never be finalized. */
@@ -1384,9 +1387,9 @@ describe('the offer gate', () => {
       () => offerTest(prisma, paper.testId),
       refusedWith(ErrorCodes.VALIDATION_ERROR),
     );
-    const result = await offerTest(prisma, paper.testId, true);
+    await offerTest(prisma, paper.testId, true);
 
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
   });
 
   /** A picked section's typist only fixes what comes back, so theirs is no job the offer waits on. */
@@ -1413,9 +1416,9 @@ describe('the offer gate', () => {
       typist.id,
     );
 
-    const result = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
   });
 
   /** This replaces nothing: a test with no assignments offers exactly as it does today. */
@@ -1427,9 +1430,9 @@ describe('the offer gate', () => {
       data: { questionCount: 1 },
     });
 
-    const result = await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId);
 
-    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
   });
 });
 

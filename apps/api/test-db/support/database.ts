@@ -26,17 +26,16 @@ import {
   type QuestionStatus,
   type QuestionType,
   type LiveAnswer,
-  type OfferResult,
   type PaperSource,
   type StudentType,
   type TestScope,
   type TestStatus,
 } from '@iace/contracts';
-import { PrismaService } from '../../src/prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../../src/prisma/prisma.service';
 import { sheetOf, servedSheet } from '../../src/attempts/answer-sheet';
 import { SHEET_ROW_SELECT } from '../../src/attempts/paper-sheet.service';
-import { beginPaperEdit } from '../../src/tests/begin-paper-edit';
-import { FinalizeService, FREEZE_LIMITS } from '../../src/tests/finalize.service';
+import { beginPaperEdit } from '../../src/common/paper-edit';
+import { FinalizeService } from '../../src/tests/finalize.service';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -445,11 +444,11 @@ export function offerTest(
   prisma: PrismaService,
   testId: string,
   isSuperAdmin = false,
-): Promise<OfferResult> {
+): Promise<void> {
   return prisma.$transaction(async (tx) => {
     await beginPaperEdit(tx, testId);
     return new FinalizeService().offerWithin(tx, testId, isSuperAdmin);
-  }, FREEZE_LIMITS);
+  }, TX_LIMITS.MEDIUM);
 }
 
 export interface SitInput {

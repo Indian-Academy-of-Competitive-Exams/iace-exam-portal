@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { HELD_PAPERS, recall, remember } from '../src/attempts/paper-sheet.service';
+import { HELD_PAPERS, hold, recall, remember } from '../src/attempts/paper-sheet.service';
 
 /** Keys in the order the cache would evict them, which is the order it holds them in. */
 const heldKeys = (cache: Map<string, string>): string[] => [...cache.keys()];
@@ -50,5 +50,37 @@ describe('the paper cache’s eviction order', () => {
 
     assert.equal(recall(cache, 'paper_absent'), undefined);
     assert.deepEqual(heldKeys(cache), ['paper_0', 'paper_1']);
+  });
+});
+
+describe('the paper cache holding a read in flight', () => {
+  /** The failure this prevents: 6,000 candidates opening one paper at once each reading it themselves. */
+  it('gives every caller during a cold read the one read', async () => {
+    const cache = new Map<string, Promise<string>>();
+    let reads = 0;
+    const read = () => {
+      reads += 1;
+      return Promise.resolve('terms');
+    };
+
+    const waiting = [hold(cache, 'paper', read), hold(cache, 'paper', read)];
+
+    assert.deepEqual(await Promise.all(waiting), ['terms', 'terms']);
+    assert.equal(reads, 1);
+  });
+
+  /** The failure this prevents: one failed read answering every request for that paper for ever. */
+  it('holds no read that failed, so the next caller reads again', async () => {
+    const cache = new Map<string, Promise<string>>();
+    let reads = 0;
+    const readOnceFailing = () => {
+      reads += 1;
+      return reads === 1 ? Promise.reject(new Error('no')) : Promise.resolve('terms');
+    };
+
+    await assert.rejects(() => hold(cache, 'paper', readOnceFailing));
+
+    assert.equal(await hold(cache, 'paper', readOnceFailing), 'terms');
+    assert.equal(reads, 2);
   });
 });

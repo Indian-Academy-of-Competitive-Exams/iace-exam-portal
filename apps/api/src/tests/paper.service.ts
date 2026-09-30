@@ -22,7 +22,6 @@ import {
   type LocalizedContent,
   type PaperSource,
   type TestScope,
-  type TestScopeRef,
   type TypistDoneBody,
   scopedSections,
 } from '@iace/contracts';
@@ -36,13 +35,19 @@ import {
   type DrawnQuestion,
   type DrawSection,
 } from './draw-engine';
-import { OFFERED_TEST_MESSAGE, SAT_TEST_MESSAGE } from './test-rules';
-import { beginDraftPaperEdit, beginPaperEdit } from './begin-paper-edit';
+import { SAT_TEST_MESSAGE } from './test-rules';
+import {
+  assertSourceChosen,
+  beginDraftPaperEdit,
+  beginPaperEdit,
+  OFFERED_TEST_MESSAGE,
+} from '../common/paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
 import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { doneOpen, reopenReadingIfUnchecked } from '../assignments';
 import { AuditContext } from '../audit';
 import { formRefusal } from '../common/form-refusal';
+import { scopeRefOf } from '../common/prisma-json';
 
 const NOT_DRAWABLE_MESSAGE =
   'That question is archived, or has no version to pin, so no paper can serve it.';
@@ -51,8 +56,6 @@ const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
   'Only an offered test can have a question dropped or made a bonus. Edit the paper before offering it instead.';
 const NO_SUCH_SECTION_MESSAGE = 'No such section on this paper';
-const SOURCE_UNCHOSEN_MESSAGE =
-  'This test has not said where its questions come from yet. Choose that before picking any.';
 const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
 const SECTION_UNDER_TYPED_MESSAGE =
@@ -783,7 +786,7 @@ export class PaperService {
     test: { scope: TestScope; scopeRef: Prisma.JsonValue },
     config: BaseConfigDetail,
   ): BaseConfigDetail['sections'] {
-    const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+    const scopeRef = scopeRefOf(test);
     return [...scopedSections(config.sections, test.scope, scopeRef)];
   }
 
@@ -826,12 +829,6 @@ function handOverGap(
   if (!reader) return NO_READER_MESSAGE;
   if (reader.handedAt) return ALREADY_HANDED_MESSAGE;
   return null;
-}
-
-/** Picking IS choosing where questions come from, so it waits on the decision — a super admin makes it, not skips it. */
-function assertSourceChosen(test: { paperSource: PaperSource | null }): void {
-  if (test.paperSource !== null) return;
-  throw formRefusal(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE);
 }
 
 function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId: string } {

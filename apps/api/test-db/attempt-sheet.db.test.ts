@@ -68,7 +68,8 @@ describe('AttemptSheetService', () => {
     const { paper, attemptId, sheets } = await sitting();
     await prisma.attemptSheet.delete({ where: { attemptId } });
 
-    await prisma.$transaction((tx) => sheets.create(tx, attemptId, paper.testId));
+    const size = await sheets.sizeOf(paper.testId);
+    await prisma.$transaction((tx) => sheets.create(tx, attemptId, size));
 
     assert.deepEqual(
       (await prisma.attemptSheet.findUniqueOrThrow({ where: { attemptId } })).answers,

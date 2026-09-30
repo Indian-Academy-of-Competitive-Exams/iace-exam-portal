@@ -6,14 +6,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createSign } from 'node:crypto';
 import { AppConfigService } from '../config/app-config.service';
+import { MS_PER_MINUTE } from '../common/time/units';
 import { PUSH_OUTCOMES, type PushOutcome, type PushPayload } from './web-push.sender';
+import { parseJsonOrNull } from '../redis/redis.service';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const JWT_TTL_SEC = 3600;
 
 /** Renewed early, so a token cannot expire between the check and the send it was fetched for. */
-const RENEW_MARGIN_MS = 60_000;
+const RENEW_MARGIN_MS = MS_PER_MINUTE;
 
 /** A push service that hangs holds a worker slot a whole fan-out is waiting on. */
 const SEND_TIMEOUT_MS = 5000;
@@ -135,15 +137,11 @@ export function outcomeOf(status: number, body: string): PushOutcome {
 
 /** FCM names the reason in `error.details[].errorCode`, and repeats a coarser one in `error.status`. */
 function errorCodeOf(body: string): string | null {
-  try {
-    const parsed = JSON.parse(body) as {
-      error?: { status?: string; details?: { errorCode?: string }[] };
-    };
-    const detail = parsed.error?.details?.find((one) => typeof one.errorCode === 'string');
-    return detail?.errorCode ?? parsed.error?.status ?? null;
-  } catch {
-    return null;
-  }
+  const parsed = parseJsonOrNull<{
+    error?: { status?: string; details?: { errorCode?: string }[] };
+  }>(body);
+  const detail = parsed?.error?.details?.find((one) => typeof one.errorCode === 'string');
+  return detail?.errorCode ?? parsed?.error?.status ?? null;
 }
 
 /** RS256 over the claims Google asks for, signed with the service account's own key. */

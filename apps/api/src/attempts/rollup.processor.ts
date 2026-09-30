@@ -1,5 +1,6 @@
 /** Counting, off every request path: the cohort sweep, one bounded rebuild, or every table. */
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
 import {
@@ -13,24 +14,14 @@ import { RollupService } from './rollup.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
 
 @Processor(QUEUE_NAMES.ROLLUP, { concurrency: QUEUE_POLICY[QUEUE_NAMES.ROLLUP].concurrency })
-export class RollupProcessor extends WorkerHost {
+export class RollupProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(RollupProcessor.name);
 
   constructor(
     private readonly rollup: RollupService,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.ROLLUP, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.ROLLUP, error);
+    super(QUEUE_NAMES.ROLLUP, failures);
   }
 
   async process(job: Job<RollupJobData>): Promise<void> {

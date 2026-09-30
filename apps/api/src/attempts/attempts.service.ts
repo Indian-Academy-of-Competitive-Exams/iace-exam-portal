@@ -10,7 +10,6 @@ import {
   type StartAttemptBody,
   scopedDurationSec,
   scopedQuestionCount,
-  type TestScopeRef,
   languagesFor,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
@@ -19,6 +18,7 @@ import { AttemptStateService } from './attempt-state.service';
 import { forwardOrderOf } from './attempt-state';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { isUniqueViolation } from '../common/prisma-errors';
+import { scopeRefOf } from '../common/prisma-json';
 import { deadlineFrom, slotsAfter, testStartBlocker, type SittingSlots } from './attempt-rules';
 import { numberOrNull } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
@@ -49,12 +49,7 @@ const SITTABLE_INCLUDE = {
 
 /** The clock this test is actually sat on: its sections' time, narrowed to what its scope covers. */
 function sittingSeconds(test: SittableTest): number {
-  return scopedDurationSec(
-    test.baseConfig.sections,
-    test.baseConfig,
-    test.scope,
-    (test.scopeRef as TestScopeRef | null) ?? null,
-  );
+  return scopedDurationSec(test.baseConfig.sections, test.baseConfig, test.scope, scopeRefOf(test));
 }
 
 type SittableTest = Prisma.TestGetPayload<{ include: typeof SITTABLE_INCLUDE }>;
@@ -130,6 +125,8 @@ export class AttemptsService {
     picked: readonly LanguageCode[] | undefined,
   ) {
     const startedAt = new Date();
+    // Read before the transaction opens: 6,000 starts must not each hold one open for a count.
+    const size = await this.sheets.sizeOf(test.id);
 
     return this.prisma.$transaction(async (tx) => {
       const attempt = await tx.attempt.create({
@@ -146,7 +143,7 @@ export class AttemptsService {
         },
       });
 
-      await this.sheets.create(tx, attempt.id, test.id);
+      await this.sheets.create(tx, attempt.id, size);
 
       await this.lockTheBlueprint(tx, test);
 
@@ -224,10 +221,6 @@ function toLiveAttempt(
     startedByThisCall,
     testTitle: test.title,
     durationSec: sittingSeconds(test),
-    totalQuestions: scopedQuestionCount(
-      test.baseConfig.sections,
-      test.scope,
-      (test.scopeRef as TestScopeRef | null) ?? null,
-    ),
+    totalQuestions: scopedQuestionCount(test.baseConfig.sections, test.scope, scopeRefOf(test)),
   };
 }

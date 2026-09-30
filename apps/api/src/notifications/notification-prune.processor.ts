@@ -4,8 +4,8 @@
  * and it is named on the screen — past it an announcement reports zeros, which the Alert explains.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { type Job } from 'bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { DeliveryStatus, Prisma } from '@prisma/client';
 import { DELIVERY_RETENTION_DAYS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,24 +27,14 @@ export const DELIVERY_PRUNE_MAX_PAGES = 100;
 @Processor(QUEUE_NAMES.NOTIFICATION_PRUNE, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.NOTIFICATION_PRUNE].concurrency,
 })
-export class NotificationPruneProcessor extends WorkerHost {
+export class NotificationPruneProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(NotificationPruneProcessor.name);
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.NOTIFICATION_PRUNE, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.NOTIFICATION_PRUNE, error);
+    super(QUEUE_NAMES.NOTIFICATION_PRUNE, failures);
   }
 
   async process(): Promise<void> {

@@ -121,6 +121,10 @@ async function attemptedOn(testId: string): Promise<number> {
   return rows.reduce((total, row) => total + row.correctCount + row.wrongCount, 0);
 }
 
+/** Past the sweep's lag, without waiting it out: every sitting of the test reads as long settled. */
+const settled = (testId: string) =>
+  prisma.$executeRaw`UPDATE "Attempt" SET "updatedAt" = now() - interval '1 hour' WHERE "testId" = ${testId}::uuid`;
+
 /** The 15 minutes, without waiting them out: the pass reads the stamp and nothing else. */
 const ageTheItems = (testId: string) =>
   prisma.testQuestionStat.updateMany({ where: { testId }, data: { computedAt: new Date(0) } });
@@ -284,6 +288,33 @@ describe('RollupService — sweeping the cohorts that changed', () => {
     assert.deepEqual(await cohortRows(paper.testId), once);
   });
 
+  /** The defect this prevents: one late start on an old paper replaying every sheet of its cohort. */
+  it('leaves a counted test alone when all that changed is a start or an unmarked hand-in', async () => {
+    const built = build();
+    const paper = await paperOf();
+    const { attemptId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
+    await built.scoring.score(attemptId);
+    await built.rollup.sweepCohorts();
+    await settled(paper.testId);
+
+    assert.equal(await built.rollup.sweepCohorts(), 0);
+
+    await sitPaper(prisma, {
+      paper,
+      studentId: (await makeStudent(prisma)).id,
+      chosen: [RIGHT, null, null, null],
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+    });
+    await sat(paper, [RIGHT, RIGHT, null, null]);
+
+    assert.equal(await built.rollup.sweepCohorts(), 0);
+
+    const marked = await sat(paper, [RIGHT, RIGHT, RIGHT, null]);
+    await built.scoring.score(marked.attemptId);
+
+    assert.equal(await built.rollup.sweepCohorts(), 1);
+  });
+
   it('counts a test the sweep could not write on the pass after it', async () => {
     const paper = await paperOf();
     const { attemptId } = await sat(paper, [RIGHT, null, null, null]);
@@ -306,8 +337,8 @@ describe('RollupService — who the cohort is', () => {
 
     await counted(built, retake.attemptId);
 
-    // A pass counts every test something landed on, so the row exists and says nobody is in it.
-    assert.equal((await testStat(paper.testId))?.evaluatedCount, 0);
+    // Nothing the cohort is counted from moved, so the pass writes no rows for it at all.
+    assert.equal(await prisma.testStat.count(), 0);
     assert.equal(await prisma.testSectionStat.count(), 0);
     assert.equal(await prisma.testQuestionStat.count(), 0);
     const student = await studentStat(retake.studentId);

@@ -1312,7 +1312,7 @@ describe('QuestionsService.availability — the count a section is about to draw
   });
 });
 
-describe('QuestionsService.page — the picker asks for what the draw would find', () => {
+describe('QuestionsService.list — the picker asks for what the draw would find', () => {
   /** The failure this prevents: the picker offers a row, and fillSection then refuses it. */
   it('leaves the archived and the unversioned out of what a paper may draw', async () => {
     const { questions } = await build([
@@ -1322,7 +1322,7 @@ describe('QuestionsService.page — the picker asks for what the draw would find
       { id: 'unversioned', status: QUESTION_STATUS.ACTIVE, versioned: false },
     ]);
 
-    const page = await questions.page(listQuery({ drawable: 'true' }));
+    const page = await questions.list(listQuery({ drawable: 'true' }));
 
     assert.deepEqual(
       page.items.map((row) => row.id).sort(),
@@ -1331,15 +1331,15 @@ describe('QuestionsService.page — the picker asks for what the draw would find
   });
 });
 
-describe('QuestionsService.page — work in progress belongs to the test it was written for', () => {
+describe('QuestionsService.list — work in progress belongs to the test it was written for', () => {
   /** The failure this prevents: an unread question leaking onto somebody else's paper. */
   it('offers a section’s own authoring to its test and to no other', async () => {
     const { questions } = await build([{ id: 'typed' }, { id: 'banked' }]);
     const ours = await assignedFor(idFor('typed'));
     const other = await makeTest(prisma, await makeCatalog(prisma));
 
-    const mine = await questions.page(listQuery({ drawable: 'true', forTestId: ours }));
-    const theirs = await questions.page(listQuery({ drawable: 'true', forTestId: other.id }));
+    const mine = await questions.list(listQuery({ drawable: 'true', forTestId: ours }));
+    const theirs = await questions.list(listQuery({ drawable: 'true', forTestId: other.id }));
 
     assert.deepEqual(
       mine.items.map((row) => row.id).sort(),
@@ -1363,7 +1363,7 @@ describe('QuestionsService.page — work in progress belongs to the test it was 
       data: { finalizedAt: new Date() },
     });
 
-    const theirs = await questions.page(listQuery({ drawable: 'true', forTestId: other.id }));
+    const theirs = await questions.list(listQuery({ drawable: 'true', forTestId: other.id }));
 
     assert.deepEqual(
       theirs.items.map((row) => row.id),
@@ -1379,7 +1379,7 @@ describe('QuestionsService.page — work in progress belongs to the test it was 
 
     await prisma.questionAssignment.deleteMany({ where: { testId: ours } });
 
-    const theirs = await questions.page(listQuery({ drawable: 'true', forTestId: other.id }));
+    const theirs = await questions.list(listQuery({ drawable: 'true', forTestId: other.id }));
 
     assert.deepEqual(
       theirs.items.map((row) => row.id),
@@ -1411,17 +1411,17 @@ async function assignedFor(questionId: string): Promise<string> {
   return test.id;
 }
 
-describe('QuestionsService.page — a test’s own authoring, and the rest of the bank', () => {
+describe('QuestionsService.list — a test’s own authoring, and the rest of the bank', () => {
   /** The failure this prevents: hunting the twenty written for this test among thousands. */
   it('answers either side of the split from the assignment relation alone', async () => {
     const { questions } = await build([{ id: 'ours' }, { id: 'theirs' }, { id: 'banked' }]);
     const testId = await assignedFor(idFor('ours'));
     await assignedFor(idFor('theirs'));
 
-    const written = await questions.page(
+    const written = await questions.list(
       listQuery({ forTestId: testId, writtenFor: WRITTEN_FOR.TEST }),
     );
-    const banked = await questions.page(
+    const banked = await questions.list(
       listQuery({ forTestId: testId, writtenFor: WRITTEN_FOR.BANK }),
     );
 
@@ -1440,7 +1440,7 @@ describe('QuestionsService.page — a test’s own authoring, and the rest of th
     const { questions } = await build([{ id: 'ours' }, { id: 'banked' }]);
     const testId = await assignedFor(idFor('ours'));
 
-    const page = await questions.page(listQuery({ forTestId: testId }));
+    const page = await questions.list(listQuery({ forTestId: testId }));
 
     assert.equal(page.total, 2);
   });

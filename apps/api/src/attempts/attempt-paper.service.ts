@@ -15,7 +15,6 @@ import {
   type LanguageCode,
   type LocalizedContent,
   type QuestionOption,
-  type TestScopeRef,
   languagesFor,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,8 +22,9 @@ import { AccessResolverService } from '../access';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
-import { PaperSheetService, type ServedPaperRow } from './paper-sheet.service';
-import { optionsIn } from './rollup-fold';
+import { PaperSheetService, recall, remember, type ServedPaperRow } from './paper-sheet.service';
+import { optionsIn } from '../common/prisma-json';
+import { scopeRefOf } from '../common/prisma-json';
 
 /** Named field by field, never `include`: the sitting's own scored columns never load at all. */
 const PAPER_SELECT = {
@@ -75,6 +75,8 @@ type PaperTest = Prisma.TestGetPayload<{ select: typeof TEST_PAPER_SELECT }>;
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
 @Injectable()
 export class AttemptPaperService {
+  private readonly tests = new Map<string, { epoch: number; test: Promise<PaperTest> }>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessResolverService,
@@ -86,7 +88,7 @@ export class AttemptPaperService {
   async brief(studentId: string, testId: string): Promise<ExamBrief> {
     const test = await this.access.reachableTest(studentId, testId);
 
-    const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+    const scopeRef = scopeRefOf(test);
     // A scoped test sits its own sections; the rest belong to other tests on the same configuration.
     const covered = scopedSections(test.baseConfig.sections, test.scope, scopeRef);
 
@@ -124,11 +126,7 @@ export class AttemptPaperService {
     // The same gate a start passes, so holding the paper and beginning are open at the same instant.
     await this.access.assertCanStart(studentId, testId);
 
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      select: TEST_PAPER_SELECT,
-    });
-    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    const test = await this.testOf(testId);
 
     const config = test.baseConfig;
     return {
@@ -168,6 +166,30 @@ export class AttemptPaperService {
     };
   }
 
+  /** Held on the catalog's own counter, which every write that could move this row already bumps. */
+  private async testOf(testId: string): Promise<PaperTest> {
+    const epoch = await this.access.catalogEpoch();
+    const held = recall(this.tests, testId);
+    if (held?.epoch === epoch) return held.test;
+
+    const next = { epoch, test: this.requireTest(testId) };
+    remember(this.tests, testId, next);
+    // Not held once it fails, so the next reader retries instead of inheriting the failure.
+    next.test.catch(() => {
+      if (this.tests.get(testId) === next) this.tests.delete(testId);
+    });
+    return next.test;
+  }
+
+  private async requireTest(testId: string): Promise<PaperTest> {
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: TEST_PAPER_SELECT,
+    });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    return test;
+  }
+
   /** Everything a paper is before a sitting narrows it: sections, questions, and how it is drawn. */
   private async shapeOf(
     test: PaperTest,
@@ -187,11 +209,7 @@ export class AttemptPaperService {
       calculatorEnabled: config.calculatorEnabled,
       shuffleQuestions: config.shuffleQuestions,
       shuffleOptions: config.shuffleOptions,
-      sections: scopedSections(
-        config.sections,
-        test.scope,
-        (test.scopeRef as TestScopeRef | null) ?? null,
-      ).map((section) => ({
+      sections: scopedSections(config.sections, test.scope, scopeRefOf(test)).map((section) => ({
         id: section.id,
         name: section.name,
         order: section.order,

@@ -40,6 +40,8 @@ const reachAll = () =>
   ({
     reachableTest: () => Promise.resolve(),
     assertCanStart: () => Promise.resolve(),
+    // Bumped per case, so a held test row is never carried from one fixture into the next.
+    catalogEpoch: () => Promise.resolve(Date.now()),
   }) as never;
 
 /** No image is resolved in these fixtures; a call would mean the paper started carrying one. */

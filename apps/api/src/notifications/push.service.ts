@@ -4,7 +4,7 @@
  * the time this runs, so nothing here may throw its way back into the job that wrote it.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { DeliveryChannel, DeliveryStatus, Prisma, type NotificationType } from '@prisma/client';
+import { DeliveryChannel, DeliveryStatus, Prisma } from '@prisma/client';
 import {
   ActorTypes,
   isAllowedPushEndpoint,
@@ -23,7 +23,6 @@ import { PUSH_OUTCOMES, WebPushSender, type PushOutcome } from './web-push.sende
 export interface PushDelivery {
   notificationId: string;
   studentId: string;
-  type: NotificationType;
   title: string;
 }
 
@@ -81,12 +80,7 @@ export class PushService {
     await this.prisma.pushDevice.deleteMany({ where: { studentId, token } });
   }
 
-  /** Never throws: the caller has already written the bell, which is the source of truth. */
-  async deliver(input: PushDelivery): Promise<void> {
-    await this.deliverAll([input]);
-  }
-
-  /** A page at a time: one read of its ledger, browsers and phones, then each pushed in lanes. */
+  /** Never throws: the caller has already written the bell, which is the source of truth. A page at a time — one read of its ledger, browsers and phones, then each pushed in lanes. */
   async deliverAll(inputs: readonly PushDelivery[]): Promise<void> {
     if (inputs.length === 0) return;
     try {

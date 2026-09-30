@@ -4,7 +4,7 @@
  * the pass that recounts them, so an accumulated table and a recounted one cannot disagree.
  */
 import { type Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS, type QuestionOption, type TestScope } from '@iace/contracts';
+import { ATTEMPT_STATUS, type TestScope } from '@iace/contracts';
 
 /** The sittings a test's cohort rollups describe: `Attempt_graded_per_test_key` makes these one per student. */
 export const cohortSittingsOf = (testId: string) =>
@@ -113,11 +113,6 @@ export function optionCountsIn(stored: unknown): Record<string, number> {
     if (typeof count === 'number' && Number.isFinite(count)) counts[option] = count;
   }
   return counts;
-}
-
-/** A `questionVersion`'s options read back off its `Json` column. Anything else has none at all. */
-export function optionsIn(stored: unknown): QuestionOption[] {
-  return Array.isArray(stored) ? (stored as QuestionOption[]) : [];
 }
 
 /** Whatever `StudentSubjectStat` is keyed by, minus the student a whole totals map already is. */

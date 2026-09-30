@@ -15,7 +15,8 @@ import {
   type TestProgramUnlock,
   type TestSeriesLink,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { countsBy } from '../common/relation-counts';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import {
@@ -27,8 +28,10 @@ import {
   testShapeOf,
 } from './test-rules';
 import { formRefusal } from '../common/form-refusal';
-import { beginPaperEdit } from './begin-paper-edit';
-import { FinalizeService, FREEZE_LIMITS } from './finalize.service';
+import { beginPaperEdit } from '../common/paper-edit';
+import { FinalizeService } from './finalize.service';
+import { MS_PER_MINUTE } from '../common/time/units';
+import { byOrderThenId } from '../common/series-order';
 
 const OFFERING_SELECT = {
   id: true,
@@ -41,7 +44,6 @@ const OFFERING_SELECT = {
   testSeriesId: true,
   seriesOrder: true,
   testSeries: { select: { name: true, sequentialTests: true } },
-  _count: { select: { attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
 const SERIES_TEST_SELECT = {
@@ -70,7 +72,6 @@ const SERIES_TEST_SELECT = {
       },
     },
   },
-  _count: { select: { attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
 const dateOrNull = (value: string | null | undefined): Date | null =>
@@ -86,15 +87,16 @@ const DUPLICATE_PROGRAM_OPENING = 'Each program opens a test once. Give each pro
 const OFFER_CHANGED_ELSEWHERE =
   'This test changed after you opened its Offer step. Reload it to see what changed before saving.';
 
-const MINUTE_MS = 60_000;
-
 /** The Offer step speaks minutes, so a stored time is unchanged when a save names the same minute. */
 const sameMinute = (left: Date | null, right: Date | null): boolean =>
   left === null || right === null
     ? left === right
-    : Math.floor(left.getTime() / MINUTE_MS) === Math.floor(right.getTime() / MINUTE_MS);
+    : Math.floor(left.getTime() / MS_PER_MINUTE) === Math.floor(right.getTime() / MS_PER_MINUTE);
 
-type OfferingClient = Pick<Prisma.TransactionClient, 'test' | 'program' | 'testProgramUnlock'>;
+type OfferingClient = Pick<
+  Prisma.TransactionClient,
+  'test' | 'program' | 'testProgramUnlock' | 'attempt'
+>;
 
 const nameTakenIn = (seriesName: string, title: string) =>
   `${seriesName} already has a test called ${title}, and a name belongs to one test inside its series.`;
@@ -128,12 +130,12 @@ function programRefused(
   });
 }
 
-/** An unpositioned test sorts last, exactly as the student catalog sorts it. */
-const ORDERED_LAST = Number.MAX_SAFE_INTEGER;
-
-const byOrderThenId = (left: SeriesPosition, right: SeriesPosition): number =>
-  (left.seriesOrder ?? ORDERED_LAST) - (right.seriesOrder ?? ORDERED_LAST) ||
-  left.id.localeCompare(right.id);
+/** The catalog's own order, over the column a `Test` row names its position with. */
+const byPosition = (left: SeriesPosition, right: SeriesPosition): number =>
+  byOrderThenId(
+    { id: left.id, order: left.seriesOrder },
+    { id: right.id, order: right.seriesOrder },
+  );
 
 interface SeriesPosition {
   id: string;
@@ -155,7 +157,7 @@ function orderClash(
     if (sibling.opensAt === null || sibling.id === test.id) continue;
 
     const title = sibling.title ?? UNTITLED_TEST;
-    const place = byOrderThenId(sibling, test);
+    const place = byPosition(sibling, test);
     if (place < 0 && sibling.opensAt >= opensAt) return opensBeforeItsTurn(title);
     if (place > 0 && sibling.opensAt <= opensAt) return opensAfterItsTurn(title);
   }
@@ -208,7 +210,7 @@ export class OfferingService {
     if (next === test.testSeriesId) return linkOf(test);
 
     // A test students have sat is part of their record wherever it was offered.
-    this.assertUnsat(test, 'it cannot be moved to another series');
+    await this.assertUnsat(this.prisma, test, 'it cannot be moved to another series');
     const series = await this.assertSeriesUsable(test, next);
     await this.assertTitleFreeIn(next, series.name, test);
     const opensAt = test.opensAt;
@@ -257,7 +259,7 @@ export class OfferingService {
         await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.INACTIVE } });
       }
       await tx.test.update({ where: { id: test.id }, data: { version: { increment: 1 } } });
-    }, FREEZE_LIMITS);
+    }, TX_LIMITS.MEDIUM);
 
     const saved = await this.requireTest(testId);
     this.announce(saved);
@@ -276,7 +278,7 @@ export class OfferingService {
     now: Date,
   ): Promise<void> {
     if (sameMinute(opensAt, test.opensAt)) return;
-    this.assertUnsat(test, 'when it opens can no longer move');
+    await this.assertUnsat(tx, test, 'when it opens can no longer move');
     if (opensAt !== null) {
       assertOpeningAhead(opensAt, now, OPENS_AT_FIELD);
       if (test.testSeries.sequentialTests) {
@@ -358,6 +360,15 @@ export class OfferingService {
       select: SERIES_TEST_SELECT,
       orderBy: [{ seriesOrder: 'asc' }, { id: 'asc' }],
     });
+    // The series' own tests, not a `_count` that groups every attempt ever sat on any paper.
+    const sat = countsBy(
+      await this.prisma.attempt.groupBy({
+        by: ['testId'],
+        where: { testId: { in: rows.map((row) => row.id) } },
+        _count: true,
+      }),
+      'testId',
+    );
 
     return rows.map((row) => ({
       testId: row.id,
@@ -367,7 +378,7 @@ export class OfferingService {
       status: row.status,
       finalizedAt: row.finalizedAt?.toISOString() ?? null,
       ...testShapeOf(row),
-      attemptCount: row._count.attempts,
+      attemptCount: sat.get(row.id) ?? 0,
       paperSource: row.paperSource,
     }));
   }
@@ -434,11 +445,18 @@ export class OfferingService {
   }
 
   /** A sat test's history is fixed: `consequence` names what its attempts forbid. */
-  private assertUnsat(test: OfferingRow, consequence: string): void {
-    if (test._count.attempts === 0) return;
+  private async assertUnsat(
+    db: OfferingClient,
+    test: OfferingRow,
+    consequence: string,
+  ): Promise<void> {
+    const sat = await db.attempt.count({ where: { testId: test.id } });
+    if (sat === 0) return;
 
-    const message = `This test has ${attemptsLabel(test._count.attempts)} on it, so ${consequence}.`;
-    throw formRefusal(ErrorCodes.CONFLICT, message);
+    throw formRefusal(
+      ErrorCodes.CONFLICT,
+      `This test has ${attemptsLabel(sat)} on it, so ${consequence}.`,
+    );
   }
 
   private async requireTest(id: string, db: OfferingClient = this.prisma): Promise<OfferingRow> {

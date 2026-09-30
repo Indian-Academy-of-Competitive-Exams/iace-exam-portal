@@ -1,5 +1,5 @@
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { type Job } from 'bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { Prisma } from '@prisma/client';
 import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
@@ -23,7 +23,7 @@ import { MS_PER_SECOND } from '../common/time/units';
 @Processor(QUEUE_NAMES.ATTEMPT_SWEEP, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.ATTEMPT_SWEEP].concurrency,
 })
-export class AttemptSweeperProcessor extends WorkerHost {
+export class AttemptSweeperProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(AttemptSweeperProcessor.name);
 
   constructor(
@@ -32,20 +32,10 @@ export class AttemptSweeperProcessor extends WorkerHost {
     private readonly submit: SubmitService,
     private readonly scoring: ScoringQueue,
     private readonly rollup: RollupQueue,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
     private readonly metrics: MetricsService,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.ATTEMPT_SWEEP, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.ATTEMPT_SWEEP, error);
+    super(QUEUE_NAMES.ATTEMPT_SWEEP, failures);
   }
 
   async process(): Promise<void> {
@@ -116,30 +106,35 @@ export class AttemptSweeperProcessor extends WorkerHost {
   /** A drop or a bonus only bumps the test's revision; every sitting marked before it is found here. */
   private async askForRescores(): Promise<void> {
     let queued = 0;
-    let after: string | null = null;
+    let after: Behind | null = null;
     for (;;) {
       const page = await this.behindThePaper(after);
       await this.scoring.rescore(page);
       queued += page.length;
-      // Paged past the last id, not re-read: a queued sitting stays behind until it is marked.
-      if (page.length < RESCORE_PAGE) break;
-      after = page.at(-1)?.id ?? null;
+      const last = page.at(-1);
+      // Paged past the last row, not re-read: a queued sitting stays behind until it is marked.
+      if (last === undefined || page.length < RESCORE_PAGE) break;
+      after = last;
     }
     if (queued > 0)
       this.logger.log(`Queued ${queued} sittings to be marked against a changed paper`);
   }
 
-  private behindThePaper(after: string | null) {
-    const past = after === null ? Prisma.empty : Prisma.sql`AND a."id" > ${after}::uuid`;
-    return this.prisma.$queryRaw<{ id: string; testId: string; revision: number }[]>`
-      SELECT a."id", a."testId", t."paperRevision" AS revision
+  /** Ordered and paged on Attempt_rescore_idx's own columns, so no page sorts the set it matched. */
+  private behindThePaper(after: Behind | null) {
+    const past =
+      after === null
+        ? Prisma.empty
+        : Prisma.sql`AND (a."testId", a."scoredRevision", a."id") > (${after.testId}::uuid, ${after.stamp}::int, ${after.id}::uuid)`;
+    return this.prisma.$queryRaw<Behind[]>`
+      SELECT a."id", a."testId", a."scoredRevision" AS stamp, t."paperRevision" AS revision
       FROM "Test" t
       JOIN "Attempt" a
         ON a."testId" = t."id"
        AND ${EVALUATED}
        AND a."scoredRevision" < t."paperRevision"
       WHERE t."paperRevision" > 0 ${past}
-      ORDER BY a."id"
+      ORDER BY a."testId", a."scoredRevision", a."id"
       LIMIT ${RESCORE_PAGE}`;
   }
 
@@ -180,6 +175,14 @@ const IN_PROGRESS = Prisma.raw(`'${ATTEMPT_STATUS.IN_PROGRESS}'`);
 
 /** Literal, not a parameter: a bound enum cannot prove Attempt_rescore_idx's predicate, so the planner skips it. */
 const EVALUATED = Prisma.raw(`a."status" = '${ATTEMPT_STATUS.EVALUATED}'`);
+
+/** A sitting behind its paper: `stamp` is its own revision and the sweep's keyset, `revision` the test's. */
+interface Behind {
+  id: string;
+  testId: string;
+  stamp: number;
+  revision: number;
+}
 
 /** The never-scored arm's own ceiling: wide enough to drain 6,000 in minutes, not hours. */
 export const NEVER_SCORED_BATCH_CEILING = 1000;

@@ -6,7 +6,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS, COHORT_COUNT_EVERY_MIN } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { MS_PER_MINUTE } from '../common/time/units';
 import { servedSheet } from './answer-sheet';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { IN_COHORT } from './ranking-sql';
@@ -84,15 +85,17 @@ async function foldablesOf(
 /** Sittings replayed per round trip, so a rebuild of a 5K cohort never holds it all in memory. */
 const REBUILD_PAGE = 200;
 
-/** The cheap pair is four statements; the item pass is a page at a time and may take a while. */
-const RECOUNT_TIMEOUT_MS = 15_000;
-const REBUILD_TIMEOUT_MS = 120_000;
-
 /** How far back a pass looks past its own watermark, for a sitting that committed after it read. */
 const SWEEP_LAG = '2 minutes';
 
 /** Literals, not parameters: a cached generic plan cannot prove Attempt_student_drift_idx's predicate from one. */
 const DRIFT_STATUSES = Prisma.raw(`'${ATTEMPT_STATUS.EVALUATED}', '${ATTEMPT_STATUS.VOIDED}'`);
+
+/** What a cohort's totals are counted from. A void is in whatever its slot says: regranting CLEARS `isGraded`, and the sitting still has to come back out. */
+const MOVES_THE_COHORT = Prisma.raw(
+  `(a."status" = '${ATTEMPT_STATUS.VOIDED}'
+      OR (a."isGraded" AND a."status" = '${ATTEMPT_STATUS.EVALUATED}'))`,
+);
 
 /** Bounded so one pass cannot run for ever; the next sweep takes whatever is left. */
 const SWEEP_TESTS_PER_PASS = 50;
@@ -101,7 +104,7 @@ const SWEEP_TESTS_PER_PASS = 50;
 const SWEEP_STUDENTS_PER_PASS = 50;
 
 /** Item analysis reads every sheet, so it runs on the slower clock the report tells students about. */
-const ITEM_SWEEP_EVERY_MS = COHORT_COUNT_EVERY_MIN * 60 * 1000;
+const ITEM_SWEEP_EVERY_MS = COHORT_COUNT_EVERY_MIN * MS_PER_MINUTE;
 
 @Injectable()
 export class RollupService {
@@ -139,7 +142,7 @@ export class RollupService {
     }
   }
 
-  /** The lag is the whole guard: a sitting committed after a pass read must be swept again. */
+  /** Only what the cohort is counted from: a start, a resume or an unscored claim moves no total. */
   private async changedTests(): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT t."id"
@@ -148,6 +151,7 @@ export class RollupService {
       WHERE EXISTS (
         SELECT 1 FROM "Attempt" a
         WHERE a."testId" = t."id"
+          AND ${MOVES_THE_COHORT}
           AND a."updatedAt" > COALESCE(s."computedAt" - ${SWEEP_LAG}::interval, '-infinity'::timestamptz))
       LIMIT ${SWEEP_TESTS_PER_PASS}`;
     return rows.map((row) => row.id);
@@ -187,14 +191,11 @@ export class RollupService {
 
   /** The cheap pair, off `Attempt` alone: the marks and the packed sections carry all of it. */
   async recountTest(testId: string): Promise<void> {
-    await this.prisma.$transaction(
-      async (tx) => {
-        const now = new Date();
-        await this.writeTestTotals(tx, testId, now);
-        await this.writeSectionTotals(tx, testId, now);
-      },
-      { timeout: RECOUNT_TIMEOUT_MS },
-    );
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      await this.writeTestTotals(tx, testId, now);
+      await this.writeSectionTotals(tx, testId, now);
+    }, TX_LIMITS.MEDIUM);
   }
 
   private async writeTestTotals(
@@ -241,18 +242,15 @@ export class RollupService {
 
   /** The expensive one: every sheet of the cohort, against the paper it was served from. */
   async recountTestItems(testId: string): Promise<void> {
-    await this.prisma.$transaction(
-      async (tx) => {
-        const now = new Date();
-        const ids = await this.firstSittings(tx, testId);
-        const questions = new Map<string, QuestionTotals>();
-        await this.replay(tx, ids, (attempt) => {
-          for (const question of attempt.questions) addToQuestion(questions, question);
-        });
-        await this.writeItemTotals(tx, testId, questions, now);
-      },
-      { timeout: REBUILD_TIMEOUT_MS },
-    );
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const ids = await this.firstSittings(tx, testId);
+      const questions = new Map<string, QuestionTotals>();
+      await this.replay(tx, ids, (attempt) => {
+        for (const question of attempt.questions) addToQuestion(questions, question);
+      });
+      await this.writeItemTotals(tx, testId, questions, now);
+    }, TX_LIMITS.BULK);
   }
 
   private async writeItemTotals(
@@ -278,22 +276,19 @@ export class RollupService {
 
   /** One student's two tables, over every evaluated sitting of theirs — retakes included. */
   async rebuildStudent(studentId: string): Promise<void> {
-    await this.prisma.$transaction(
-      async (tx) => {
-        const now = new Date();
-        await tx.studentStat.upsert({
-          where: { studentId },
-          create: { studentId, computedAt: now },
-          update: { computedAt: now },
-        });
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      await tx.studentStat.upsert({
+        where: { studentId },
+        create: { studentId, computedAt: now },
+        update: { computedAt: now },
+      });
 
-        const ids = await this.evaluatedIds(tx, studentId);
-        const totals = emptyStudentTotals();
-        await this.replay(tx, ids, (attempt) => addToStudentTotals(totals, attempt));
-        await this.writeStudent(tx, studentId, totals, now);
-      },
-      { timeout: REBUILD_TIMEOUT_MS },
-    );
+      const ids = await this.evaluatedIds(tx, studentId);
+      const totals = emptyStudentTotals();
+      await this.replay(tx, ids, (attempt) => addToStudentTotals(totals, attempt));
+      await this.writeStudent(tx, studentId, totals, now);
+    }, TX_LIMITS.BULK);
   }
 
   /** Every table from scratch, which is also how sittings scored before this worker are counted. */

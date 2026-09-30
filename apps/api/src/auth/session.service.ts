@@ -9,6 +9,7 @@ import {
   type DeviceSession,
 } from '@iace/contracts';
 import { sameHex } from '../common/same-hex';
+import { MS_PER_SECOND } from '../common/time/units';
 import { parseJsonOrNull, RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import {
@@ -119,11 +120,11 @@ export class SessionService {
   }
 
   /** A session that is gone: replaced says so, anything else is an ordinary end. */
-  private async throwEnded(actor: ActorType, subjectId: string, sessionId: string): Promise<never> {
+  async throwEnded(actor: ActorType, subjectId: string, sessionId: string): Promise<never> {
     const replaced = await this.replacedBy(actor, subjectId, sessionId);
     if (replaced)
       throw new AppException(ErrorCodes.SESSION_REPLACED, undefined, { details: replaced });
-    throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has expired. Sign in again');
+    throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has ended. Sign in again');
   }
 
   async revoke(actor: ActorType, subjectId: string, sessionId: string): Promise<void> {
@@ -240,7 +241,7 @@ function rotated(
     };
   }
 
-  const graceEndsAt = Date.parse(session.rotatedAt ?? '') + REFRESH_RETRY_GRACE_SEC * 1000;
+  const graceEndsAt = Date.parse(session.rotatedAt ?? '') + REFRESH_RETRY_GRACE_SEC * MS_PER_SECOND;
   const retried =
     session.previousRefreshTokenHash !== undefined &&
     sameHex(presented, session.previousRefreshTokenHash) &&

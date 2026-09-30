@@ -1,8 +1,9 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
-import { type AnswerKeyDraft, type LocalizedContent, type QuestionOption } from '@iace/contracts';
+import { type AnswerKeyDraft, type LocalizedContent } from '@iace/contracts';
 import { API_ROLES, servesRole } from '../config/api-role';
 import { PrismaService } from '../prisma/prisma.service';
 import { STEM_HASH_VERSION, storedStemHash } from './question-core';
+import { optionsIn } from '../common/prisma-json';
 
 /** Questions read and rewritten per round trip. */
 const REHASH_BATCH = 500;
@@ -55,7 +56,7 @@ export class StemRehashService implements OnApplicationBootstrap {
           ? storedStemHash({
               type: row.type,
               content: row.currentVersion.content as LocalizedContent,
-              options: (row.currentVersion.options ?? []) as QuestionOption[],
+              options: optionsIn(row.currentVersion.options),
               answerKey: row.currentVersion.answerKey as AnswerKeyDraft | null,
             })
           : row.stemHash,

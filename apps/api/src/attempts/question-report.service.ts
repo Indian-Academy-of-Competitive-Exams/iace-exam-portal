@@ -12,7 +12,6 @@ import {
   COHORT_COMPARISON_FLOOR,
   ErrorCodes,
   QUESTION_TYPE,
-  type AnswerKey,
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,7 +19,8 @@ import { LeaderboardService } from './leaderboard.service';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { elapsedSeconds } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
-import { optionCountsIn, optionsIn, pValueOf } from './rollup-fold';
+import { optionCountsIn, pValueOf } from './rollup-fold';
+import { answerKeyIn, optionsIn } from '../common/prisma-json';
 import { topperOf, type TopperTimes } from './topper';
 import {
   paceIndexOf,
@@ -237,7 +237,8 @@ function toSat(row: ReportPaperRow): SatQuestion {
 
 /** The first answer the key accepts. A typed question has no option to point at instead. */
 function acceptedAnswerIn(stored: Prisma.JsonValue): string | null {
-  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return null;
-  const key = stored as unknown as AnswerKey;
-  return Object.values(key.answers ?? {}).find((value) => typeof value === 'string') ?? null;
+  const key = answerKeyIn(stored);
+  return key === null
+    ? null
+    : (Object.values(key.answers ?? {}).find((value) => typeof value === 'string') ?? null);
 }

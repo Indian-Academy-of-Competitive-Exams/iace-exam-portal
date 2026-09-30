@@ -4,7 +4,8 @@
  * read the bell is a message nobody needs to buy.
  */
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { type Job, type Queue } from 'bullmq';
 import { DeliveryStatus, Prisma, type DeliveryChannel } from '@prisma/client';
 import { ActorTypes, NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
@@ -25,6 +26,7 @@ import {
   type NotificationDeliveryJobData,
 } from '../queue/queues';
 import { QueueFailures } from '../common/metrics/queue-failures';
+import { MS_PER_MINUTE } from '../common/time/units';
 import { NotificationsService } from './notifications.service';
 import {
   OUTBOUND_CHANNEL,
@@ -45,7 +47,7 @@ const KIND_OF: Partial<Record<NotificationType, MessageKind>> = {
 const ATTEMPT_CAP = QUEUE_POLICY[QUEUE_NAMES.NOTIFICATION_DELIVERY].attempts;
 
 /** Worst case a booked channel legitimately waits: the 10-minute escalation defer plus its retries. */
-export const DELIVERY_STALE_AFTER_MS = 20 * 60 * 1000;
+export const DELIVERY_STALE_AFTER_MS = 20 * MS_PER_MINUTE;
 
 /** How many stuck deliveries one sweep repairs; a backlog beyond this waits for the next pass. */
 const REPAIR_BATCH = 25;
@@ -64,7 +66,7 @@ interface NotificationWithChain {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.NOTIFICATION_DELIVERY].concurrency,
   limiter: DELIVERY_RATE_LIMIT,
 })
-export class NotificationDeliveryProcessor extends WorkerHost {
+export class NotificationDeliveryProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(NotificationDeliveryProcessor.name);
 
   constructor(
@@ -73,19 +75,9 @@ export class NotificationDeliveryProcessor extends WorkerHost {
     @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.NOTIFICATION_DELIVERY, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.NOTIFICATION_DELIVERY, error);
+    super(QUEUE_NAMES.NOTIFICATION_DELIVERY, failures);
   }
 
   async process(job: Job<NotificationDeliveryJobData>): Promise<void> {

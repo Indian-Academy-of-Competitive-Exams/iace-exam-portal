@@ -1,13 +1,9 @@
 /** A sat paper, cached per process: `paper_question_sat_guard` freezes its rows, `question_version_sat_guard` their options and key. */
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
-import {
-  type AnswerKey,
-  type PaperQuestionStatus,
-  type QuestionOption,
-  type QuestionType,
-} from '@iace/contracts';
+import { type AnswerKey, type PaperQuestionStatus, type QuestionType } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { answerKeyIn, optionsIn } from '../common/prisma-json';
 
 export const SHEET_ROW_SELECT = {
   id: true,
@@ -51,15 +47,9 @@ export interface PaperTerm extends SheetPaperRow {
 }
 
 function correctOptionIdsIn(options: Prisma.JsonValue): string[] {
-  if (!Array.isArray(options)) return [];
-  return (options as unknown as QuestionOption[])
+  return optionsIn(options)
     .filter((option) => option?.isCorrect === true && typeof option.id === 'string')
     .map((option) => option.id);
-}
-
-function answerKeyIn(key: Prisma.JsonValue): AnswerKey | null {
-  if (typeof key !== 'object' || key === null || Array.isArray(key)) return null;
-  return key as unknown as AnswerKey;
 }
 
 /** Papers held at once: a worker handles a handful of tests at a time, this only bounds a long-lived process. */
@@ -83,51 +73,66 @@ export function remember<V>(held: Map<string, V>, key: string, value: V): void {
   held.set(key, value);
 }
 
+/** The PROMISE is held, not the rows: every request arriving during a cold read waits on that read. */
+export function hold<V>(
+  held: Map<string, Promise<V>>,
+  key: string,
+  read: () => Promise<V>,
+): Promise<V> {
+  const waiting = recall(held, key);
+  if (waiting) return waiting;
+
+  const next = read();
+  remember(held, key, next);
+  // Not held once it fails, so the next reader retries instead of inheriting the failure.
+  next.catch(() => {
+    if (held.get(key) === next) held.delete(key);
+  });
+  return next;
+}
+
 @Injectable()
 export class PaperSheetService {
-  private readonly rows = new Map<string, SheetPaperRow[]>();
-  private readonly terms = new Map<string, PaperTerm[]>();
-  private readonly served = new Map<string, ServedPaperRow[]>();
+  private readonly rows = new Map<string, Promise<SheetPaperRow[]>>();
+  private readonly terms = new Map<string, Promise<PaperTerm[]>>();
+  private readonly served = new Map<string, Promise<ServedPaperRow[]>>();
 
   constructor(private readonly prisma: PrismaService) {}
 
   /** Only for a test somebody has sat: an unsat paper can still change under a cached copy. */
-  async rowsOf(testId: string): Promise<SheetPaperRow[]> {
-    const held = recall(this.rows, testId);
-    if (held) return held;
-    const read = await this.prisma.paperQuestion.findMany({
-      where: { testId },
-      orderBy: { order: 'asc' },
-      select: SHEET_ROW_SELECT,
-    });
-    remember(this.rows, testId, read);
-    return read;
+  rowsOf(testId: string): Promise<SheetPaperRow[]> {
+    return hold(this.rows, testId, () =>
+      this.prisma.paperQuestion.findMany({
+        where: { testId },
+        orderBy: { order: 'asc' },
+        select: SHEET_ROW_SELECT,
+      }),
+    );
   }
 
   /** The same paper for every candidate, so it is read once. */
-  async servedOf(testId: string): Promise<ServedPaperRow[]> {
-    const held = recall(this.served, testId);
-    if (held) return held;
-    const read = await this.prisma.paperQuestion.findMany({
-      where: { testId },
-      orderBy: { order: 'asc' },
-      select: SERVED_ROW_SELECT,
-    });
-    remember(this.served, testId, read);
-    return read;
+  servedOf(testId: string): Promise<ServedPaperRow[]> {
+    return hold(this.served, testId, () =>
+      this.prisma.paperQuestion.findMany({
+        where: { testId },
+        orderBy: { order: 'asc' },
+        select: SERVED_ROW_SELECT,
+      }),
+    );
   }
 
   /** The answer key rides here: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
-  async termsOf(testId: string, paperRevision: number): Promise<PaperTerm[]> {
-    const key = `${testId}:${paperRevision}`;
-    const held = recall(this.terms, key);
-    if (held) return held;
+  termsOf(testId: string, paperRevision: number): Promise<PaperTerm[]> {
+    return hold(this.terms, `${testId}:${paperRevision}`, () => this.readTerms(testId));
+  }
+
+  private async readTerms(testId: string): Promise<PaperTerm[]> {
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId },
       orderBy: { order: 'asc' },
       select: TERMS_SELECT,
     });
-    const read = rows.map(({ question, questionVersion, marks, negativeMarks, ...row }) => ({
+    return rows.map(({ question, questionVersion, marks, negativeMarks, ...row }) => ({
       ...row,
       type: question.type,
       subjectId: question.subjectId,
@@ -136,7 +141,5 @@ export class PaperSheetService {
       correctOptionIds: correctOptionIdsIn(questionVersion.options),
       answerKey: answerKeyIn(questionVersion.answerKey),
     }));
-    remember(this.terms, key, read);
-    return read;
   }
 }

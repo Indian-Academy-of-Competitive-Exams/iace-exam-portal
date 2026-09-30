@@ -23,9 +23,9 @@ import {
   scopedDurationSec,
   scopedQuestionCount,
   type TestCalendar,
-  type TestScopeRef,
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
+import { scopeRefOf } from '../common/prisma-json';
 import { PrismaService } from '../prisma/prisma.service';
 import { cohortCurveOf } from './cohort-curve';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
@@ -198,7 +198,7 @@ export class PerformanceAnalyticsService {
     const oneSitting = { scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: attempt.id };
     const figures = await this.figuresOf(oneSitting, attempt, standing, testStats);
     const { test } = attempt;
-    const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+    const scopeRef = scopeRefOf(test);
     const score = Number(attempt.score ?? 0);
     const { maxMarks } = figures.composition;
 

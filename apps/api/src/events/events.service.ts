@@ -13,15 +13,20 @@ import {
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
+import { countsBy } from '../common/relation-counts';
 import { AuditContext } from '../audit';
 
 export const AUDITED_EVENT_FIELDS = ['name', 'description', 'isActive'] as const;
 
-const EVENT_INCLUDE = {
-  _count: { select: { candidates: true, series: true } },
-} as const satisfies Prisma.EventInclude;
+type EventRow = Prisma.EventGetPayload<object>;
 
-type EventRow = Prisma.EventGetPayload<{ include: typeof EVENT_INCLUDE }>;
+interface EventCounts {
+  candidates: number;
+  series: number;
+}
+
+/** An event created a statement ago: nothing can name it and nobody can be on its roster. */
+const NOTHING_YET: EventCounts = { candidates: 0, series: 0 };
 
 /** Owns `Event` and `EventCandidate` — who an EVENT series draws its roster from, candidate or not. */
 @Injectable()
@@ -43,26 +48,48 @@ export class EventsService {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.event.findMany({
         where,
-        include: EVENT_INCLUDE,
         orderBy: [{ name: 'asc' }],
         ...pageArgs(query),
       }),
       this.prisma.event.count({ where }),
     ]);
 
-    return paged(query, rows.map(toEvent), total);
+    const counts = await this.countsOf(rows.map((row) => row.id));
+    return paged(
+      query,
+      rows.map((row) => toEvent(row, counts.get(row.id) ?? NOTHING_YET)),
+      total,
+    );
+  }
+
+  /** The page's own events: a relation `_count` would group every candidate row for each read. */
+  private async countsOf(ids: readonly string[]): Promise<Map<string, EventCounts>> {
+    if (ids.length === 0) return new Map();
+    const where = { eventId: { in: [...ids] } };
+    const [candidates, series] = await Promise.all([
+      this.prisma.eventCandidate.groupBy({ by: ['eventId'], where, _count: true }),
+      this.prisma.testSeries.groupBy({ by: ['eventId'], where, _count: true }),
+    ]);
+    const roster = countsBy(candidates, 'eventId');
+    const naming = countsBy(series, 'eventId');
+    return new Map(
+      ids.map((id) => [id, { candidates: roster.get(id) ?? 0, series: naming.get(id) ?? 0 }]),
+    );
+  }
+
+  private async countsOfOne(id: string): Promise<EventCounts> {
+    return (await this.countsOf([id])).get(id) ?? NOTHING_YET;
   }
 
   async detail(id: string): Promise<Event> {
-    return toEvent(await this.requireEvent(id));
+    return toEvent(await this.requireEvent(id), await this.countsOfOne(id));
   }
 
   async create(input: CreateEventBody): Promise<Event> {
     const event = await this.prisma.event.create({
       data: { name: input.name, description: input.description ?? null },
-      include: EVENT_INCLUDE,
     });
-    return toEvent(event);
+    return toEvent(event, NOTHING_YET);
   }
 
   async update(id: string, input: UpdateEventBody): Promise<Event> {
@@ -74,21 +101,18 @@ export class EventsService {
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
     };
 
-    const updated = await this.prisma.event.update({
-      where: { id },
-      data: changes,
-      include: EVENT_INCLUDE,
-    });
+    const updated = await this.prisma.event.update({ where: { id }, data: changes });
 
     this.auditContext.setPatchDiff(
       fieldDiff(event, { ...event, ...changes }, AUDITED_EVENT_FIELDS),
     );
 
-    return toEvent(updated);
+    return toEvent(updated, await this.countsOfOne(id));
   }
 
   async remove(id: string): Promise<void> {
-    const named = (await this.requireEvent(id))._count.series;
+    await this.requireEvent(id);
+    const named = await this.prisma.testSeries.count({ where: { eventId: id } });
     if (named > 0) {
       const verb = named === 1 ? 'names' : 'name';
       const pronoun = named === 1 ? 'it' : 'them';
@@ -103,7 +127,8 @@ export class EventsService {
 
   /** `skipDuplicates`, so re-importing the same roster over itself adds nobody twice. */
   async addCandidates(id: string, studentIds: readonly string[]): Promise<void> {
-    const before = (await this.requireEvent(id))._count.candidates;
+    await this.requireEvent(id);
+    const before = await this.prisma.eventCandidate.count({ where: { eventId: id } });
 
     const { count } =
       studentIds.length > 0
@@ -116,7 +141,8 @@ export class EventsService {
   }
 
   async removeCandidate(id: string, studentId: string): Promise<void> {
-    const before = (await this.requireEvent(id))._count.candidates;
+    await this.requireEvent(id);
+    const before = await this.prisma.eventCandidate.count({ where: { eventId: id } });
 
     const { count } = await this.prisma.eventCandidate.deleteMany({
       where: { eventId: id, studentId },
@@ -125,7 +151,7 @@ export class EventsService {
   }
 
   private async requireEvent(id: string): Promise<EventRow> {
-    const event = await this.prisma.event.findUnique({ where: { id }, include: EVENT_INCLUDE });
+    const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new AppException(ErrorCodes.NOT_FOUND, 'No such event');
     return event;
   }
@@ -135,14 +161,14 @@ export class EventsService {
 const rosterDiff = (from: number, to: number) =>
   fieldDiff({ candidates: from }, { candidates: to }, ['candidates']);
 
-function toEvent(row: EventRow): Event {
+function toEvent(row: EventRow, counts: EventCounts): Event {
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     isActive: row.isActive,
-    candidateCount: row._count.candidates,
-    seriesCount: row._count.series,
+    candidateCount: counts.candidates,
+    seriesCount: counts.series,
     createdAt: row.createdAt.toISOString(),
   };
 }

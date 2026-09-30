@@ -4,6 +4,8 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 /** Prisma's interactive defaults (2s/5s) are a cliff a real query plan can miss; these name the two shapes a body here takes. */
 export const TX_LIMITS = {
   SHORT: { maxWait: 5_000, timeout: 10_000 },
+  /** A pass over one test's whole paper or whole cohort: few statements, each over every row of it. */
+  MEDIUM: { maxWait: 10_000, timeout: 15_000 },
   BULK: { maxWait: 10_000, timeout: 120_000 },
 } as const;
 

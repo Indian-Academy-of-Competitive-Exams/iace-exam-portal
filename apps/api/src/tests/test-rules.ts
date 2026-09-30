@@ -13,6 +13,7 @@ import {
   type TimedScopedSection,
   type UpdateTestBody,
 } from '@iace/contracts';
+import { scopeRefOf } from '../common/prisma-json';
 
 /** The rules that keep a test honest — pure, so they are testable without a database. */
 
@@ -20,11 +21,6 @@ export const SERIES_GONE_MESSAGE = 'That series no longer exists.';
 
 export const attemptsLabel = (count: number): string =>
   `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
-
-/** Prisma hands JSON back as `JsonValue`; the shape it holds is the scope's own. */
-export function scopeRefOf(row: { scopeRef: Prisma.JsonValue }): TestScopeRef | null {
-  return (row.scopeRef as TestScopeRef | null) ?? null;
-}
 
 interface ShapedTest {
   scope: TestScope;
@@ -107,9 +103,6 @@ export const PAPER_SOURCE_FIXED_MESSAGE =
 
 export const SAT_TEST_MESSAGE =
   'Students have sat this test, so its paper cannot move under their results. Only its name still changes.';
-
-export const OFFERED_TEST_MESSAGE =
-  'This test has been offered, so its paper is frozen and no longer moves. A question already on it can still be dropped or made a bonus.';
 
 type TestField = keyof UpdateTestBody;
 

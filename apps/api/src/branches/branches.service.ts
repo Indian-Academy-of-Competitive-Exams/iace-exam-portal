@@ -25,10 +25,7 @@ import {
   ONLINE_BRANCH_EXISTS_MESSAGE,
 } from './branch-rules';
 import { everyTermMatches } from '../common/search-terms';
-
-const BRANCH_INCLUDE = {
-  _count: { select: { students: true } },
-} as const satisfies Prisma.BranchInclude;
+import { countsBy } from '../common/relation-counts';
 
 interface BranchRow {
   id: string;
@@ -36,7 +33,6 @@ interface BranchRow {
   type: BranchType;
   isActive: boolean;
   createdAt: Date;
-  _count: { students: number };
 }
 
 export const AUDITED_BRANCH_FIELDS = ['name', 'isActive'] as const;
@@ -98,7 +94,6 @@ export class BranchesService {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.branch.findMany({
         where,
-        include: BRANCH_INCLUDE,
         // The online branch first: it is the one every admin is looking for by default. `desc` because VIRTUAL is declared after PHYSICAL.
         orderBy: [{ type: 'desc' }, { name: 'asc' }],
         ...pageArgs(query),
@@ -106,7 +101,12 @@ export class BranchesService {
       this.prisma.branch.count({ where }),
     ]);
 
-    return paged(query, rows.map(toBranch), total);
+    const counts = await this.studentCounts(rows.map((row) => row.id));
+    return paged(
+      query,
+      rows.map((row) => toBranch(row, counts.get(row.id) ?? 0)),
+      total,
+    );
   }
 
   async create(input: CreateBranchBody): Promise<Branch> {
@@ -126,10 +126,10 @@ export class BranchesService {
 
     const branch = await this.prisma.branch.create({
       data: { name: input.name, type: input.type },
-      include: BRANCH_INCLUDE,
     });
 
-    return toBranch(branch);
+    // Nobody can already sit in a branch created a statement ago.
+    return toBranch(branch, 0);
   }
 
   async update(id: string, input: UpdateBranchBody): Promise<Branch> {
@@ -152,24 +152,20 @@ export class BranchesService {
       ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
     };
 
-    const updated = await this.prisma.branch.update({
-      where: { id },
-      data: updatedColumns,
-      include: BRANCH_INCLUDE,
-    });
+    const updated = await this.prisma.branch.update({ where: { id }, data: updatedColumns });
 
     this.auditContext.setChanged(
       fieldDiff(branch, { ...branch, ...updatedColumns }, AUDITED_BRANCH_FIELDS),
     );
 
-    return toBranch(updated);
+    return toBranch(updated, (await this.studentCounts([id])).get(id) ?? 0);
   }
 
   async remove(id: string): Promise<void> {
     const branch = await this.requireBranch(id);
 
     const blocker = branchDeletionBlocker({
-      studentCount: branch._count.students,
+      studentCount: await this.prisma.student.count({ where: { currentBranchId: id } }),
       type: branch.type,
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
@@ -197,20 +193,33 @@ export class BranchesService {
     return this.prisma.branch.findUnique({ where: { name }, select: { id: true } });
   }
 
+  /** The page's own branches: a relation `_count` would group every student row for each read. */
+  private async studentCounts(ids: readonly string[]): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    return countsBy(
+      await this.prisma.student.groupBy({
+        by: ['currentBranchId'],
+        where: { currentBranchId: { in: [...ids] } },
+        _count: true,
+      }),
+      'currentBranchId',
+    );
+  }
+
   private async requireBranch(id: string): Promise<BranchRow> {
-    const branch = await this.prisma.branch.findUnique({ where: { id }, include: BRANCH_INCLUDE });
+    const branch = await this.prisma.branch.findUnique({ where: { id } });
     if (!branch) throw new AppException(ErrorCodes.NOT_FOUND, 'No such branch');
     return branch;
   }
 }
 
-function toBranch(row: BranchRow): Branch {
+function toBranch(row: BranchRow, studentCount: number): Branch {
   return {
     id: row.id,
     name: row.name,
     type: row.type,
     isActive: row.isActive,
-    studentCount: row._count.students,
+    studentCount,
     createdAt: row.createdAt.toISOString(),
   };
 }

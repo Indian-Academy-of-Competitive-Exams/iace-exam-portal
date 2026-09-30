@@ -19,14 +19,16 @@ import {
   scopedSections,
   scopedDurationSec,
   scopedQuestionCount,
-  type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
+import { scopeRefOf } from '../common/prisma-json';
+import { MS_PER_MINUTE } from '../common/time/units';
+import { byOrderThenId } from '../common/series-order';
 
 /** The safety net under the counter: a write that changes a held field without bumping it lasts this long at most. */
-const CATALOG_MAX_AGE_MS = 15 * 60 * 1000;
+const CATALOG_MAX_AGE_MS = 15 * MS_PER_MINUTE;
 
 /** Every enabled series and its ACTIVE tests: the same for every student, so one copy per process. */
 const SHARED_SELECT = {
@@ -245,9 +247,14 @@ export class AccessResolverService {
     await this.redis.client.incr(redisKeys.catalogEpoch);
   }
 
+  /** The counter every held copy of the catalog is keyed on, for the readers that hold one of their own. */
+  async catalogEpoch(): Promise<number> {
+    return counterOf(await this.redis.client.get(redisKeys.catalogEpoch));
+  }
+
   /** Concurrent readers share one build; a build that started before a bump carries the old counter, so it is replaced. */
   private async shared(): Promise<SharedSeries[]> {
-    const epoch = counterOf(await this.redis.client.get(redisKeys.catalogEpoch));
+    const epoch = await this.catalogEpoch();
     const held = this.held;
     // Any difference, not only a higher counter: a Valkey reset sends it backwards, and the bumps after it must still bite.
     if (held?.epoch === epoch && Date.now() - held.builtAt < CATALOG_MAX_AGE_MS) {
@@ -465,7 +472,7 @@ function opensFor(test: ReachableTest, programs: readonly string[]): Date | null
 }
 
 function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
-  const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+  const scopeRef = scopeRefOf(test);
   // A scoped test is its own sections' worth, and the catalog is what a student reads first.
   const scoped = scopedSections(test.baseConfig.sections, test.scope, scopeRef);
 
@@ -509,13 +516,4 @@ function refusalFor(test: StudentCatalogTest | undefined, now: Date): string {
   if (test && !testIsOpen(test.opensAt, now)) return 'This test has not opened yet';
 
   return 'This test is not open to you right now';
-}
-
-/** An unordered test sorts last, and the id keeps the order stable when two share one. */
-const ORDERED_LAST = Number.MAX_SAFE_INTEGER;
-
-function byOrderThenId(left: ResolvedTest, right: ResolvedTest): number {
-  return (
-    (left.order ?? ORDERED_LAST) - (right.order ?? ORDERED_LAST) || left.id.localeCompare(right.id)
-  );
 }

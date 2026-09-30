@@ -9,7 +9,6 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  type AnswerKey,
   type LanguageCode,
   type LocalizedContent,
   type PerformancePoint,
@@ -29,12 +28,15 @@ import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { percentageOf } from './attempt-report';
-import { optionsIn } from './rollup-fold';
+import { answerKeyIn, optionsIn } from '../common/prisma-json';
 
 const NOT_YOURS = 'No such sitting';
 
 /** How many sittings a trend line carries. Beyond this a chart is a smear, not a trend. */
 const TREND_LENGTH = 20;
+
+/** Sittings listed at all. Every tile, picker and retake reads them, so this is a whole history and then some — not a screenful. */
+const HISTORY_LENGTH = 500;
 const NOT_REVIEWABLE = 'This paper has not been marked yet, so there is nothing to review.';
 
 /** The paper's own terms per row; every sitting of a test was served the whole of it. */
@@ -106,11 +108,14 @@ export class AttemptReportService {
 
   /** Every sitting this student has had marked, oldest first; only the chart's newest are stood. */
   async performance(studentId: string): Promise<PerformanceTrend> {
-    const rows = await this.prisma.attempt.findMany({
+    // Read newest first under the bound, then turned round: the history a screen loses is its oldest.
+    const newest = await this.prisma.attempt.findMany({
       where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
-      orderBy: { submittedAt: { sort: 'asc', nulls: 'first' } },
+      orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
+      take: HISTORY_LENGTH,
       select: SITTING_SELECT,
     });
+    const rows = newest.reverse();
     const testIds = [...new Set(rows.map((row) => row.testId))];
     const [marks, standings] = await Promise.all([
       this.paperMarks(testIds),
@@ -214,7 +219,7 @@ function toSolutionQuestion(
     // Stem AND solution, unlike the exam paper — explaining the answer is the whole point here.
     content: narrowTo(row.questionVersion.content as LocalizedContent | null, languages),
     options: stored.map((option) => ({ ...option, text: narrowTo(option.text, languages) })),
-    answerKey: (row.questionVersion.answerKey as AnswerKey | null) ?? null,
+    answerKey: answerKeyIn(row.questionVersion.answerKey),
   };
 }
 

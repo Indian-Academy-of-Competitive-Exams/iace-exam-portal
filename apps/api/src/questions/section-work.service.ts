@@ -28,6 +28,7 @@ import {
   type SendBackBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertSourceChosen } from '../common/paper-edit';
 import { RedisService } from '../redis/redis.service';
 import { sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
 import { AssignmentsService } from '../assignments';
@@ -80,7 +81,6 @@ const OFFERED_MESSAGE = 'This test has been offered, so its questions no longer 
 const NOT_EDITABLE_MESSAGE = 'This question is not yours to change at this point in the section.';
 const NOT_DELETABLE_MESSAGE =
   'Only a question you typed for this section, and may still change, can be deleted.';
-const SOURCE_UNCHOSEN_MESSAGE = 'Say where this test gets its questions before working on it.';
 const READERS_ONLY_MESSAGE = "Only this section's proof-reader reviews its questions.";
 const NOT_HANDED_MESSAGE = 'This section has not reached you yet.';
 const RELEASED_MESSAGE = 'You have released this section, so its review is closed.';
@@ -418,7 +418,7 @@ export class SectionWorkService {
     if (!mine && !can(viewer, FEATURE_KEYS.TEST_MANAGEMENT)) {
       throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     }
-    if (!test.paperSource) throw new AppException(ErrorCodes.CONFLICT, SOURCE_UNCHOSEN_MESSAGE);
+    assertSourceChosen(test);
 
     let seat: SectionSeat = SECTION_SEATS.OWNER;
     if (mine)

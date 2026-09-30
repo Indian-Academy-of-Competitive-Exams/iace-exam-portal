@@ -8,11 +8,11 @@ import {
   PAPER_SOURCES,
   scopedSections,
   TEST_STATUS,
-  type OfferResult,
 } from '@iace/contracts';
 import { uncheckedOn } from '../assignments';
-import { paperCompletenessIssues, scopeRefOf } from './test-rules';
+import { paperCompletenessIssues } from './test-rules';
 import { formRefusal } from '../common/form-refusal';
+import { scopeRefOf } from '../common/prisma-json';
 
 const OFFER_SELECT = {
   id: true,
@@ -24,22 +24,6 @@ const OFFER_SELECT = {
 } as const satisfies Prisma.TestSelect;
 
 type OfferRow = Prisma.TestGetPayload<{ select: typeof OFFER_SELECT }>;
-
-/** Prisma's 5s default is a cliff nobody sees, so the freeze names its own. */
-export const FREEZE_LIMITS = { maxWait: 10_000, timeout: 15_000 } as const;
-
-const offerResult = (
-  testId: string,
-  finalizedAt: Date,
-  finalizedByThisCall: boolean,
-  frozenQuestions: number,
-): OfferResult => ({
-  testId,
-  finalizedAt: finalizedAt.toISOString(),
-  finalizedByThisCall,
-  frozenQuestions,
-  status: TEST_STATUS.ACTIVE,
-});
 
 const PAPER_REF_SELECT = {
   questionId: true,
@@ -58,7 +42,7 @@ export class FinalizeService {
     tx: Prisma.TransactionClient,
     testId: string,
     isSuperAdmin: boolean,
-  ): Promise<OfferResult> {
+  ): Promise<void> {
     const test = await tx.test.findUnique({ where: { id: testId }, select: OFFER_SELECT });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
@@ -68,7 +52,7 @@ export class FinalizeService {
       if (test.status !== TEST_STATUS.ACTIVE) {
         await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.ACTIVE } });
       }
-      return offerResult(test.id, test.finalizedAt, false, paper.length);
+      return;
     }
 
     await this.assertPaperIsWhole(tx, test, paper);
@@ -78,7 +62,6 @@ export class FinalizeService {
       where: { id: test.id },
       data: { finalizedAt, status: TEST_STATUS.ACTIVE, version: { increment: 1 } },
     });
-    return offerResult(test.id, finalizedAt, true, paper.length);
   }
 
   /** Every row the test holds, which is the whole of its one paper. */

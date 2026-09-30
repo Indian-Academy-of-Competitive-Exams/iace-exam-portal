@@ -23,13 +23,11 @@ import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
 import {
   PAPER_SOURCE_FIXED_MESSAGE,
-  OFFERED_TEST_MESSAGE,
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
   changedTestFields,
   inTheCatalog,
   locksOutTestEdit,
-  scopeRefOf,
   testShapeOf,
   movesThePaper,
   scopeRefIssue,
@@ -38,11 +36,13 @@ import {
   titleRefused,
   testDeletionBlocker,
 } from './test-rules';
-import { beginDraftPaperEdit } from './begin-paper-edit';
+import { beginDraftPaperEdit, OFFERED_TEST_MESSAGE } from '../common/paper-edit';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 import { formRefusal } from '../common/form-refusal';
 import { pageArgs, paged } from '../common/pagination';
 import { everyTermMatches } from '../common/search-terms';
+import { scopeRefOf } from '../common/prisma-json';
+import { countsBy } from '../common/relation-counts';
 
 const TEST_INCLUDE = {
   baseConfig: {
@@ -72,10 +72,16 @@ const TEST_INCLUDE = {
   },
   testSeries: { select: { name: true } },
   programUnlocks: { select: { programCode: true, opensAt: true } },
-  _count: { select: { attempts: true, paperQuestions: true } },
 } as const satisfies Prisma.TestInclude;
 
 type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
+
+interface TestCounts {
+  attempts: number;
+  paperQuestions: number;
+}
+
+const NO_TEST_COUNTS: TestCounts = { attempts: 0, paperQuestions: 0 };
 
 /** What a test's audit diff covers. Its shape lives on the config and is diffed there. */
 export const AUDITED_TEST_FIELDS = [
@@ -118,13 +124,46 @@ export class TestsService {
       this.prisma.test.count({ where }),
     ]);
 
-    return paged(query, rows.map(toTest), total);
+    const counts = await this.countsOf(rows.map((row) => row.id));
+    return paged(
+      query,
+      rows.map((row) => toTest(row, counts.get(row.id) ?? NO_TEST_COUNTS)),
+      total,
+    );
+  }
+
+  /** The page's own counts: a relation `_count` would group every attempt and paper row there is. */
+  private async countsOf(testIds: readonly string[]): Promise<Map<string, TestCounts>> {
+    if (testIds.length === 0) return new Map();
+    const where = { testId: { in: [...testIds] } };
+    const [attempts, paperQuestions] = await Promise.all([
+      this.prisma.attempt.groupBy({ by: ['testId'], where, _count: true }),
+      this.prisma.paperQuestion.groupBy({ by: ['testId'], where, _count: true }),
+    ]);
+    const sat = countsBy(attempts, 'testId');
+    const served = countsBy(paperQuestions, 'testId');
+    return new Map(
+      testIds.map((id) => [
+        id,
+        { attempts: sat.get(id) ?? 0, paperQuestions: served.get(id) ?? 0 },
+      ]),
+    );
+  }
+
+  private async countsOfOne(testId: string): Promise<TestCounts> {
+    return (await this.countsOf([testId])).get(testId) ?? NO_TEST_COUNTS;
+  }
+
+  /** Whether anybody has sat it, which is all the edit lock asks: one indexed row, never a count. */
+  private async anySitting(testId: string): Promise<boolean> {
+    const sat = await this.prisma.attempt.findFirst({ where: { testId }, select: { id: true } });
+    return sat !== null;
   }
 
   async detail(id: string): Promise<TestDetail> {
     const row = await this.requireTest(id);
     return {
-      ...toTest(row),
+      ...toTest(row, await this.countsOfOne(id)),
       ...toTestSchedule(row),
       baseConfig: await this.configs.detail(row.baseConfigId),
       editingBy: await testEditingBy(this.redis, this.prisma, id),
@@ -182,7 +221,7 @@ export class TestsService {
     }
 
     const changed = changedTestFields(test, input);
-    if (test._count.attempts > 0 && locksOutTestEdit(changed)) {
+    if (locksOutTestEdit(changed) && (await this.anySitting(id))) {
       throw formRefusal(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE);
     }
     const paperMoves = movesThePaper(changed);
@@ -244,7 +283,7 @@ export class TestsService {
     }
 
     return {
-      ...toTest(updated),
+      ...toTest(updated, await this.countsOfOne(id)),
       ...toTestSchedule(updated),
       baseConfig: config,
       editingBy: await testEditingBy(this.redis, this.prisma, id),
@@ -254,7 +293,8 @@ export class TestsService {
   async remove(id: string): Promise<void> {
     const test = await this.requireTest(id);
 
-    const blocker = testDeletionBlocker({ attemptCount: test._count.attempts });
+    const attemptCount = await this.prisma.attempt.count({ where: { testId: id } });
+    const blocker = testDeletionBlocker({ attemptCount });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     await this.prisma.test.delete({ where: { id } });
@@ -332,7 +372,7 @@ function toJson(
   return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue | undefined);
 }
 
-function toTest(row: TestRow): Test {
+function toTest(row: TestRow, counts: TestCounts): Test {
   return {
     id: row.id,
     title: row.title,
@@ -349,10 +389,10 @@ function toTest(row: TestRow): Test {
     status: row.status,
     version: row.version,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
-    attemptCount: row._count.attempts,
+    attemptCount: counts.attempts,
     testSeriesId: row.testSeriesId,
     testSeriesName: row.testSeries.name,
-    paperQuestionCount: row._count.paperQuestions,
+    paperQuestionCount: counts.paperQuestions,
     createdAt: row.createdAt.toISOString(),
   };
 }

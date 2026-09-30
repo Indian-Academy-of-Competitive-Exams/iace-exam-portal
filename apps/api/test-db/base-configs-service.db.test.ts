@@ -6,6 +6,8 @@ import {
   ErrorCodes,
   MERIT_TYPE,
   TIMER_TEMPLATE,
+  type BaseConfigDetail,
+  type BaseConfigSectionDraft,
   type CreateBaseConfigBody,
 } from '@iace/contracts';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
@@ -109,6 +111,31 @@ function draft(
     ],
     ...over,
   } as CreateBaseConfigBody;
+}
+
+/** The editor's own save: the whole stored paper posted back, with one column of its first section changed. */
+async function editFirstSection(
+  id: string,
+  over: Partial<BaseConfigSectionDraft>,
+): Promise<BaseConfigDetail['sections'][number]> {
+  const before = await service.detail(id);
+  const edited = await service.update(id, {
+    sections: before.sections.map((section, index) => ({
+      name: section.name,
+      order: section.order,
+      questionCount: section.questionCount,
+      marksPerQuestion: section.marksPerQuestion,
+      negativeMarks: section.negativeMarks,
+      perQuestionSec: section.perQuestionSec,
+      mandatory: section.mandatory,
+      meritOrQualifying: section.meritOrQualifying,
+      qualifyingCutoff: section.qualifyingCutoff,
+      ...(index === 0 ? over : {}),
+    })),
+  });
+  const [first] = edited.sections;
+  assert.ok(first, 'the paper still holds its first section');
+  return first;
 }
 
 describe('BaseConfigsService — creating', () => {
@@ -311,6 +338,21 @@ describe('BaseConfigsService — editing an unlocked config', () => {
       1,
       'the replaced sections are gone, not orphaned',
     );
+  });
+
+  /** The failure this prevents: a column the change check did not know about, so an edit touching only that column was dropped while the save still reported success. */
+  it('writes a save that changes one section column and leaves the rest alone', async () => {
+    const created = await service.create(draft(await makeStage(prisma)), ADMIN);
+
+    assert.equal((await editFirstSection(created.id, { perQuestionSec: 45 })).perQuestionSec, 45);
+    assert.equal((await editFirstSection(created.id, { mandatory: false })).mandatory, false);
+    const qualifying = await editFirstSection(created.id, {
+      meritOrQualifying: MERIT_TYPE.QUALIFYING,
+      qualifyingCutoff: 12,
+    });
+    assert.equal(qualifying.meritOrQualifying, MERIT_TYPE.QUALIFYING);
+    assert.equal(qualifying.qualifyingCutoff, 12);
+    assert.equal(qualifying.perQuestionSec, 45, 'the earlier columns are still on the row');
   });
 
   /** Switching the timer alone leaves sections the new template forbids, which Postgres would refuse raw. */

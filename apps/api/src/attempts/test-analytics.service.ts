@@ -20,7 +20,8 @@ import { timeSpentIn } from './answer-sheet';
 import { numberOrNull } from './attempt-report';
 import { boardName } from './leaderboard-board';
 import { cohortCurveOf } from './cohort-curve';
-import { optionCountsIn, optionsIn, pValueOf } from './rollup-fold';
+import { optionCountsIn, pValueOf } from './rollup-fold';
+import { optionsIn } from '../common/prisma-json';
 import { RollupQueue } from './rollup-queue';
 import { topperIdOf } from './topper';
 import {

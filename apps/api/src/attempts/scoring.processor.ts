@@ -1,5 +1,6 @@
 /** Evaluation, off every request path, and repeatable: scoring twice writes the same rows. */
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
@@ -49,28 +50,18 @@ interface Written {
 const SCORABLE = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
 @Processor(QUEUE_NAMES.SCORING, { concurrency: QUEUE_POLICY[QUEUE_NAMES.SCORING].concurrency })
-export class ScoringProcessor extends WorkerHost {
+export class ScoringProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(ScoringProcessor.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly rollup: RollupQueue,
     private readonly notifications: NotificationsService,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
     private readonly papers: PaperSheetService,
     private readonly rollups: RollupService,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.SCORING, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.SCORING, error);
+    super(QUEUE_NAMES.SCORING, failures);
   }
 
   async process(job: Job<ScoringJobData>): Promise<void> {

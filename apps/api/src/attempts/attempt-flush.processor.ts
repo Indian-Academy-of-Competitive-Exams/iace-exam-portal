@@ -1,5 +1,5 @@
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { type Job } from 'bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ReportingWorkerHost } from '../queue/reporting-worker-host';
 import { Logger } from '@nestjs/common';
 import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptSheetService } from './attempt-sheet.service';
@@ -13,25 +13,15 @@ export const FLUSH_LANES = 8;
 @Processor(QUEUE_NAMES.ATTEMPT_FLUSH, {
   concurrency: QUEUE_POLICY[QUEUE_NAMES.ATTEMPT_FLUSH].concurrency,
 })
-export class AttemptFlushProcessor extends WorkerHost {
+export class AttemptFlushProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(AttemptFlushProcessor.name);
 
   constructor(
     private readonly state: AttemptStateService,
     private readonly sheets: AttemptSheetService,
-    private readonly failures: QueueFailures,
+    failures: QueueFailures,
   ) {
-    super();
-  }
-
-  @OnWorkerEvent('failed')
-  onFailed(job: Job | undefined, error: Error): void {
-    this.failures.record(QUEUE_NAMES.ATTEMPT_FLUSH, job, error);
-  }
-
-  @OnWorkerEvent('error')
-  onError(error: Error): void {
-    this.failures.connectionError(QUEUE_NAMES.ATTEMPT_FLUSH, error);
+    super(QUEUE_NAMES.ATTEMPT_FLUSH, failures);
   }
 
   /** The set as the pass found it; a mark goes only after its sitting is written, so a pass that dies loses none. */

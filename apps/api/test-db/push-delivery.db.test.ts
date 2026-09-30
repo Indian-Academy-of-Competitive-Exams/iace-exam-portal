@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DeliveryChannel, DeliveryStatus, DevicePlatform, type Prisma } from '@prisma/client';
-import { ActorTypes, NOTIFICATION_INBOX_PATH, NOTIFICATION_TYPE } from '@iace/contracts';
+import { ActorTypes, NOTIFICATION_INBOX_PATH } from '@iace/contracts';
 import { PushService } from '../src/notifications/push.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeConfig, FakeFcmSender, FakePushSender, FakeRedis } from '../test/support/fakes';
@@ -64,7 +64,6 @@ async function build(sender = new FakePushSender(), fcm = new FakeFcmSender()) {
     delivery: {
       notificationId: notification.id,
       studentId: student.id,
-      type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
     },
   };
@@ -109,7 +108,7 @@ describe('Sending a notification as a push', () => {
       endpoint: 'https://fcm.googleapis.com/fcm/send/two',
     });
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(sender.sent.map((row) => row.endpoint).sort(), [
       'https://fcm.googleapis.com/fcm/send/one',
@@ -122,7 +121,7 @@ describe('Sending a notification as a push', () => {
     const { push, sender, student, delivery } = await build();
     await push.subscribe(student, SESSION, SUBSCRIPTION);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(sender.sent[0]?.payload, {
       title: 'Your result is ready',
@@ -135,7 +134,7 @@ describe('Sending a notification as a push', () => {
     const { push, student, delivery } = await build();
     await push.subscribe(student, SESSION, SUBSCRIPTION);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     const [row] = await prisma.notificationDelivery.findMany();
     assert.equal(row?.channel, DeliveryChannel.WEB_PUSH);
@@ -147,8 +146,8 @@ describe('Sending a notification as a push', () => {
     const { push, sender, student, delivery } = await build();
     await push.subscribe(student, SESSION, SUBSCRIPTION);
 
-    await push.deliver(delivery);
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
+    await push.deliverAll([delivery]);
 
     assert.equal(sender.sent.length, 1);
   });
@@ -157,7 +156,7 @@ describe('Sending a notification as a push', () => {
   it('records nothing for a student with no subscription at all', async () => {
     const { push, delivery } = await build();
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.equal(await prisma.notificationDelivery.count(), 0);
   });
@@ -166,7 +165,7 @@ describe('Sending a notification as a push', () => {
     const { push, sender, student, delivery } = await build(new FakePushSender(false));
     await push.subscribe(student, SESSION, SUBSCRIPTION);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.equal(sender.sent.length, 0);
     assert.equal(await prisma.notificationDelivery.count(), 0);
@@ -180,7 +179,7 @@ describe('When a student has turned push off in the browser', () => {
     await push.subscribe(student, SESSION, SUBSCRIPTION);
     await push.unsubscribe(student, SUBSCRIPTION.endpoint);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.equal(sender.sent.length, 0);
     assert.equal(await prisma.notificationDelivery.count(), 0);
@@ -195,7 +194,7 @@ describe('When an endpoint has gone', () => {
     await push.subscribe(student, SESSION, SUBSCRIPTION);
     await push.subscribe(student, SESSION, { ...SUBSCRIPTION, endpoint: dead });
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(await endpoints(), [SUBSCRIPTION.endpoint]);
     const [row] = await prisma.notificationDelivery.findMany();
@@ -208,7 +207,7 @@ describe('When an endpoint has gone', () => {
     );
     await push.subscribe(student, SESSION, SUBSCRIPTION);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     const [row] = await prisma.notificationDelivery.findMany();
     assert.equal(row?.status, DeliveryStatus.FAILED);
@@ -222,7 +221,7 @@ describe('When an endpoint has gone', () => {
     } as never);
     await push.subscribe(student, SESSION, SUBSCRIPTION);
 
-    await assert.doesNotReject(push.deliver(delivery));
+    await assert.doesNotReject(push.deliverAll([delivery]));
   });
 
   /** Stored before the host rule existed, or never valid: dropped like a dead one, never POSTed to. */
@@ -232,7 +231,7 @@ describe('When an endpoint has gone', () => {
     await push.subscribe(student, SESSION, SUBSCRIPTION);
     await push.subscribe(student, SESSION, { ...SUBSCRIPTION, endpoint: refused });
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(await endpoints(), [SUBSCRIPTION.endpoint]);
     assert.deepEqual(
@@ -288,7 +287,7 @@ describe('Sending a notification to a phone', () => {
     await push.registerDevice(student, SESSION, DEVICE);
     await push.registerDevice(student, SESSION, { ...DEVICE, token: 'fcm-two' });
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(fcm.sent.map((row) => row.token).sort(), ['fcm-one', 'fcm-two']);
   });
@@ -298,7 +297,7 @@ describe('Sending a notification to a phone', () => {
     const { push, fcm, student, delivery } = await build();
     await push.registerDevice(student, SESSION, DEVICE);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(fcm.sent[0]?.payload, {
       title: 'Your result is ready',
@@ -313,7 +312,7 @@ describe('Sending a notification to a phone', () => {
     await push.subscribe(student, SESSION, SUBSCRIPTION);
     await push.registerDevice(student, SESSION, DEVICE);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     const rows = await prisma.notificationDelivery.findMany();
     assert.deepEqual(rows.map((row) => row.channel).sort(), [
@@ -327,8 +326,8 @@ describe('Sending a notification to a phone', () => {
     const { push, fcm, student, delivery } = await build();
     await push.registerDevice(student, SESSION, DEVICE);
 
-    await push.deliver(delivery);
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
+    await push.deliverAll([delivery]);
 
     assert.equal(fcm.sent.length, 1);
   });
@@ -340,7 +339,7 @@ describe('Sending a notification to a phone', () => {
     );
     await push.registerDevice(student, SESSION, DEVICE);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.equal(fcm.sent.length, 0);
     assert.equal(await prisma.notificationDelivery.count(), 0);
@@ -355,7 +354,7 @@ describe('Sending a notification to a phone', () => {
     await push.registerDevice(student, SESSION, DEVICE);
     await push.registerDevice(student, SESSION, { ...DEVICE, token: 'fcm-dead' });
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     const rows = await prisma.pushDevice.findMany();
     assert.deepEqual(
@@ -374,7 +373,7 @@ describe('Sending a notification to a phone', () => {
     } as never);
     await push.registerDevice(student, SESSION, DEVICE);
 
-    await assert.doesNotReject(push.deliver(delivery));
+    await assert.doesNotReject(push.deliverAll([delivery]));
   });
 });
 
@@ -390,7 +389,7 @@ describe('A push reaches only a session that is still signed in', () => {
     });
     await push.registerDevice(student, ended, DEVICE);
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(
       sender.sent.map((row) => row.endpoint),
@@ -433,7 +432,7 @@ describe('A push reaches only a session that is still signed in', () => {
       redis.asService(),
     );
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     const kept = await prisma.pushSubscription.findUnique({
       where: { endpoint: SUBSCRIPTION.endpoint },
@@ -445,7 +444,7 @@ describe('A push reaches only a session that is still signed in', () => {
     const { push, sender, student, delivery } = await build();
     await prisma.pushSubscription.create({ data: { studentId: student, ...SUBSCRIPTION } });
 
-    await push.deliver(delivery);
+    await push.deliverAll([delivery]);
 
     assert.deepEqual(
       sender.sent.map((row) => row.endpoint),

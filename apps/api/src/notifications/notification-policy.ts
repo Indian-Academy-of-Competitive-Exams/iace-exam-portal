@@ -5,6 +5,7 @@
  */
 import { DeliveryChannel } from '@prisma/client';
 import { MESSAGE_CHANNELS, type MessageChannel } from '../common/messaging';
+import { MS_PER_SECOND } from '../common/time/units';
 
 /** Why we decided not to spend. Written to `NotificationDelivery.skipReason`. */
 export const SKIP_REASONS = {
@@ -33,8 +34,6 @@ const DEFER_SEC = 600;
 /** Waiting out the window must still leave this long to act, or we pay immediately instead. */
 export const ACTION_MARGIN_SEC = 1800;
 
-const MS = 1000;
-
 export interface EscalationPlan {
   channels: readonly PaidChannel[];
   /** Seconds to wait first. Zero means the deadline is too close to wait out. */
@@ -51,7 +50,7 @@ export function escalationFor(
 
   // Urgency belongs to the notification, not its kind: the same kind gets opposite answers.
   const leftToAct = actBy === null ? Infinity : actBy.getTime() - now.getTime();
-  const cannotWait = leftToAct <= (DEFER_SEC + ACTION_MARGIN_SEC) * MS;
+  const cannotWait = leftToAct <= (DEFER_SEC + ACTION_MARGIN_SEC) * MS_PER_SECOND;
 
   return { channels: chosen, deferSec: cannotWait ? 0 : DEFER_SEC };
 }
