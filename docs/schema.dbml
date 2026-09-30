@@ -723,6 +723,7 @@ Table ImportLog {
   source ImportSource [not null]
   actorId uuid
   fileS3Key text
+  target text
   total integer [not null, default: 0]
   created integer [not null, default: 0]
   updated integer [not null, default: 0]
