@@ -331,9 +331,20 @@ and the `SavedQuestion` volume is what would change it.
 small box. `appendonly yes` flushed every second, `maxmemory-policy noeviction`.
 
 ```
-production  :6379   maxmemory 1.2 GB
-staging     :6380   maxmemory 256 MB
+production  :6379   maxmemory 1.2 GB   requirepass
+staging     :6380   maxmemory 256 MB   requirepass
 ```
+
+**A password per process, and it is the third lock rather than the first.** Box B carries a
+routable address so it can pull its image, its security group is what keeps the internet off it,
+and `PRIVATE_IP` publishes the ports on the VPC address rather than every interface (§8).
+`requirepass` is the one that still holds when either of those is edited wrong — and what sits
+behind them is every live sitting, every session and every OTP, on the most-scanned port there is.
+A password each rather than one shared, so a staging leak cannot open production's keyspace.
+The API carries its half in `REDIS_URL` as `redis://:PASSWORD@host:port`, which ioredis parses
+itself, so no code changed for it. **`valkey-cli` does not read that URL**, so the healthcheck
+takes `REDISCLI_AUTH` from the container's environment — otherwise every container reports
+unhealthy on `NOAUTH`, and the password would be a process argument.
 
 **A process each, not one process with two database indexes.** The index would separate the
 keyspaces — which matters, because `redis.keys.ts` namespaces keys by FEATURE and BullMQ has no
@@ -385,10 +396,38 @@ outbound — SMS, WhatsApp, push, Sentry, log shipping, ECR, image pulls — nee
 shape this file used to describe needed a `t4g.nano` NAT instance at $6.42 because its compute was
 private; this one does not.
 
-What replaces it is **security groups, not subnets**. Box A takes 80 and 443 from the world and 22
-from one address. Box B takes 5432 and 6379 **from Box A's security group** and nothing else — by
-group rather than by CIDR, so a replacement or a second API box inherits the rule by membership.
-Box B's own address is egress-only in practice: nothing on the internet has a rule to reach it.
+What replaces it is **security groups, not subnets**. A public subnet is only a route table with a
+route to an internet gateway: three separate things have to line up before a packet arrives — an
+address on the interface, a security group rule, and a NACL — and the subnet is the least of them.
+Box A takes 80 and 443 from the world and **nothing else inbound**. Box B takes 6379 and 6380, and
+RDS takes 5432, **from Box A's security group** — by group rather than by CIDR, so a replacement or
+a second API box inherits the rule by membership. Box B's own address is egress-only in practice:
+nothing on the internet has a rule to reach it.
+
+**Docker cannot open a hole in a security group.** Published ports do bypass the host's own
+iptables INPUT chain, because the DNAT happens in PREROUTING before filtering — which is why `ufw`
+rules famously do not apply to containers. A security group is enforced at the network interface,
+outside the instance, so it is a real boundary here rather than a paper one.
+
+**There is no inbound SSH, and that is deliberate.** A port-22 rule pinned to one address holds
+only until that address rotates, and what happens then is that somebody widens it at 11pm rather
+than fixing it. `arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore` on the instance profile
+opens a shell through Session Manager with no inbound rule, no key pair to lose and a transcript,
+and it is free.
+
+**IMDSv2 is required at launch** —
+`--metadata-options HttpTokens=required,HttpPutResponseHopLimit=2`. A
+public-subnet box running Node is one SSRF away from handing over its instance role; IMDSv2 makes
+the attacker fetch a token with a PUT first, which an SSRF usually cannot do. The hop limit is 2
+rather than the default 1 because the caller is inside a container, one hop further out — at 1 the
+SDK in the container cannot reach the metadata service at all.
+
+**Why not a private subnet, since the question comes up.** Box A has to accept 443 from the world,
+so serving that from a private subnet needs a load balancer in a public subnet — the thing §4
+removed — plus a NAT for egress: the same ports open to the same internet, $16–25 a month more,
+and another thing to run. Box B needs egress to pull its image, and every way of giving it that
+costs more than its $3.65 address: a NAT instance is $6.42 plus an address of its own, a NAT
+gateway ~$32, and ECR and logs interface endpoints ~$22.
 
 **Between the boxes is free and fast, but not free of latency.** Same VPC and same zone, so no
 inter-AZ charge (that would be $0.01/GB each way) and no data-transfer charge at all. The cost is
@@ -399,10 +438,22 @@ platform actually sends.
 
 ## 9. Logs, metrics and alarms
 
-The API has 35 log statements and **none on the request path**, so CloudWatch ingest stays inside
-the free 5 GB. Containers log through Docker's `awslogs` driver, kept 14 days. **Caddy's access log is the access
-log** — a JSON line per request to a file, shipped the same way, with no bucket and no S3 lifecycle
-to configure because nothing writes access logs to a bucket.
+The API has no log statement on the **success** path, so CloudWatch ingest stays inside the free
+5 GB. A failure is the exception: `AllExceptionsFilter` logs a 4xx as one line, and a 5xx with its
+stack **and the request body**, which is the only record of what the caller actually sent.
+
+**A body in a log or a Sentry event goes through `apps/api/src/common/redact.ts` first**, and there
+is one of it. `instrument.ts` sets `sendDefaultPii: false` precisely so a mobile number or a PIN
+cannot leave inside a stack frame, so a body attached by hand is scrubbed by key word and capped at
+2 KB, six levels and twenty array items. Nothing logs a successful response body: at 6K students
+autosaving, the exam role alone would write tens of GB an event.
+
+Containers log to Docker's `json-file` driver, **capped in `deploy/compose.yml` at 10 MB × 3 per
+container** — the default never rotates, and Box A has 30 GB to lose. An environment that ships to
+CloudWatch overrides the driver to `awslogs` there, 14-day retention; nothing in the repo assumes
+it, so a box boots and logs whether or not AWS answers. **Caddy's access log is the access log** —
+a JSON line per request to a file, rolled by Caddy itself at 100 MiB, with no bucket and no S3
+lifecycle to configure because nothing writes access logs to a bucket.
 
 About ten alarms at $0.10 each. **The list changed with the front door**, and an alarm on a metric
 that no longer exists is worse than no alarm:
@@ -476,7 +527,8 @@ broken.
 | --------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `.env.example`        | yes                              | Every variable the schema knows, with `dev_only_` secrets — local development, and the reference list |
 | `deploy/.env.example` | yes                              | The deployed subset, carrying the arithmetic beside the pool size and the heaps                       |
-| `deploy/.env`         | **never** — `.gitignore` line 32 | The real one. It exists on the box and in SSM, and nowhere else                                       |
+| `deploy/.env`         | **never** — `.gitignore` line 32 | The real one on Box A. It exists on the box and in SSM, and nowhere else                              |
+| `deploy/valkey/.env`  | **never**                        | Box B's, carrying `PRIVATE_IP` and a `requirepass` per process (§7)                                   |
 
 **Per-role values are deliberately not in the file.** `API_ROLE`, `UV_THREADPOOL_SIZE`,
 `NODE_OPTIONS`, `cpus` and `mem_limit` are set per service in `compose.yml`, because they differ by
@@ -488,7 +540,8 @@ what all three share.
 be promoted to production.
 
 **SSM Parameter Store holds the master copy, and nothing reads it at runtime.** One SecureString
-per environment at `/iace/<env>/env`, holding the whole file:
+per environment at `/iace/<env>/env`, plus `/iace/valkey/env` for Box B, each holding a whole
+file:
 
 ```bash
 aws ssm put-parameter --name /iace/staging/env --type SecureString --overwrite --value file://deploy/.env
@@ -505,9 +558,10 @@ one; a customer-managed key is $1 for no gain.
 **The instance role is the one credential that never lands in the file.** The box carries an
 instance profile, the AWS SDK finds it on its own, and `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
 stay unset in production (`847db3e`) — the API refuses a half-pair, and MinIO locally is the only
-thing that needs the pair at all. That profile carries four things and no more: the media bucket,
+thing that needs the pair at all. That profile carries five things and no more: the media bucket,
 `ssm:GetParameter` on `/iace/<env>/*` with `kms:Decrypt` on the AWS-managed key, CloudWatch Logs
-write for the `awslogs` driver, and ECR read.
+write, ECR read, and `arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore` — which is what
+replaces the port-22 rule (§8) rather than an extra privilege for its own sake.
 
 **What production refuses to boot without**, each refusal naming its own variable rather than
 surfacing as a mystery 500 an hour into a live test: `connection_limit` on `DATABASE_URL`, a
