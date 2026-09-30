@@ -282,9 +282,18 @@ Rules for what you write next; what already exists is in the schema.
 - **What Prisma cannot express** — composite foreign keys, partial uniques, checks, triggers, GIN —
   is hand-written SQL in the migration.
 - **A partial index on an enum is read with a literal.** Prisma binds an enum as
-  `CAST($1::text AS "Enum")`, and the planner cannot prove a `WHERE "status" = 'X'` index predicate
-  from a cast parameter — the index is silently skipped. The query that should use it is raw SQL with
-  the value as `Prisma.raw` (see `ranking-sql.ts`, the sweeper, the delivery repair and prune).
+  `CAST($1::text AS "Enum")`. A **generic** plan cannot prove a `WHERE "status" = 'X'` index
+  predicate from a cast parameter, so the index is silently skipped. The query that should use it is
+  raw SQL with the value as `Prisma.raw` (see `ranking-sql.ts`, the sweeper, the delivery repair and
+  prune).
+  - **A passing EXPLAIN is not permission to bind it.** A **custom** plan knows the parameter at
+    planning time and does prove the predicate, so the same statement can use the index while it is
+    planned per execution and quietly stop once the planner settles on a generic plan. Measured
+    2026-09-30 on `live-ops`: `awaitingScoring` bound its enum and got `Attempt_unscored_idx` — 513
+    buffers, 0.82 ms — while the forced generic plan fell to `Attempt_testId_status_idx` at 1,107
+    buffers and 2.90 ms; the same file's `running`/`overdue` reads did fall back, and were rewritten
+    raw. Which plan you get is not visible from a dashboard, so the literal stays the rule and a
+    bound enum is never the evidence that one is unnecessary.
 - **Canonical names.** Branch names and exam codes are canonical (`canonicalName` in
   `packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. Normalise the
   input, never reject it — a name typed in lower case is the same branch, not a validation error.
