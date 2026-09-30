@@ -20,6 +20,7 @@ import {
   plural,
   RadioGroup,
   RadioGroupItem,
+  ReadOnlyField,
 } from '@iace/ui';
 import { EXAM_TEMPLATE_LABELS } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
@@ -359,13 +360,4 @@ function ScopeReference({
   }
 
   return null;
-}
-
-function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      <span className="flex h-9 items-center text-sm text-muted-foreground">{value}</span>
-    </div>
-  );
 }

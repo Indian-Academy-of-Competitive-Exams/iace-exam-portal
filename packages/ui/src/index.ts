@@ -9,7 +9,7 @@ export { MetricGroup } from './components/ui/metric-group';
 export { Stepper, STEPPER_STATES, type StepperStep } from './components/ui/stepper';
 export { Kbd } from './components/ui/kbd';
 export { Label } from './components/ui/label';
-export { Field, FieldRow, type FieldControl } from './components/ui/field';
+export { Field, FieldRow, ReadOnlyField, type FieldControl } from './components/ui/field';
 export { FormCombobox, FormField } from './components/ui/form-field';
 export { Accordion } from './components/ui/accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
@@ -31,6 +31,7 @@ export { Skeleton, SkeletonParagraph } from './components/ui/skeleton';
 export { Spinner, LoadingState } from './components/ui/spinner';
 export { Toaster, toast } from './components/ui/toast';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
+export { Popover, PopoverTrigger, PopoverContent } from './components/ui/popover';
 export { Sheet, SheetClose, SheetContent, SheetTitle } from './components/ui/sheet';
 export {
   Dialog,
@@ -109,7 +110,7 @@ export {
   TableCell,
   TableState,
 } from './components/ui/table';
-export { Card, CardHeader, CardTitle, CardDescription, CardContent } from './components/ui/card';
+export { Card, CardStep } from './components/ui/card';
 
 export { ThemeProvider } from './theme/theme-provider';
 export { ThemeToggle } from './theme/theme-toggle';

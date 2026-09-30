@@ -21,10 +21,7 @@ import {
   Brandmark,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  CardStep,
   FormField,
   NumericInput,
   PinField,
@@ -42,7 +39,6 @@ import {
   type OtpIntent,
 } from '@iace/app-kit';
 import { useAuth } from '../providers/auth';
-const STEP_HEADER = 'items-center pt-4 text-center';
 
 export function LoginPage() {
   const { identity: student, signIn, signedOutReason } = useAuth();
@@ -137,52 +133,45 @@ function SignInStep({
   });
 
   return (
-    <>
-      <CardHeader className={STEP_HEADER}>
-        <CardTitle>Sign in</CardTitle>
-      </CardHeader>
+    <CardStep title="Sign in">
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => login.mutate(values))}
+        noValidate
+      >
+        <MobileField form={form} name="mobile" autoFocus />
+        <PinField
+          name="pin"
+          form={form}
+          label="PIN"
+          length={PIN_LENGTH}
+          masked
+          autoComplete="current-password"
+        />
 
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => login.mutate(values))}
-          noValidate
-        >
-          <MobileField form={form} name="mobile" autoFocus />
-          <PinField
-            name="pin"
-            form={form}
-            label="PIN"
-            length={PIN_LENGTH}
-            masked
-            autoComplete="current-password"
-          />
+        <Button type="submit" loading={login.isPending}>
+          Sign in
+        </Button>
 
-          <Button type="submit" loading={login.isPending}>
-            Sign in
-          </Button>
-
-          {/* Two peer actions, weighted the same. Styling one in brand red made
-              it compete with the primary button for the same glance. */}
-          <div className="flex items-center justify-between border-t border-border pt-4 text-sm">
-            <button
-              type="button"
-              onClick={onSignUp}
-              className="rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-            >
-              Create an account
-            </button>
-            <button
-              type="button"
-              onClick={onForgotPin}
-              className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-            >
-              Forgot PIN?
-            </button>
-          </div>
-        </form>
-      </CardContent>
-    </>
+        {/* Two peer actions weighted the same: brand red made one outshout the primary button. */}
+        <div className="flex items-center justify-between border-t border-border pt-4 text-sm">
+          <button
+            type="button"
+            onClick={onSignUp}
+            className="rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            Create an account
+          </button>
+          <button
+            type="button"
+            onClick={onForgotPin}
+            className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            Forgot PIN?
+          </button>
+        </div>
+      </form>
+    </CardStep>
   );
 }
 
@@ -210,32 +199,24 @@ function MobileStep({
   });
 
   return (
-    <>
-      <CardHeader className={STEP_HEADER}>
-        <CardTitle>
-          {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
-        </CardTitle>
-        {intent === OTP_INTENTS.SIGNUP ? (
-          <CardDescription>We&apos;ll verify it, then you pick a PIN.</CardDescription>
-        ) : null}
-      </CardHeader>
+    <CardStep
+      title={intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
+      meta={intent === OTP_INTENTS.SIGNUP ? "We'll verify it, then you pick a PIN." : undefined}
+    >
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
+        noValidate
+      >
+        <MobileField form={form} name="mobile" autoFocus />
 
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
-          noValidate
-        >
-          <MobileField form={form} name="mobile" autoFocus />
+        <Button type="submit" loading={requestOtp.isPending}>
+          Send code
+        </Button>
 
-          <Button type="submit" loading={requestOtp.isPending}>
-            Send code
-          </Button>
-
-          <BackButton onClick={onBack}>Back to sign in</BackButton>
-        </form>
-      </CardContent>
-    </>
+        <BackButton onClick={onBack}>Back to sign in</BackButton>
+      </form>
+    </CardStep>
   );
 }
 
@@ -266,48 +247,46 @@ function CodeStep({
   });
 
   return (
-    <>
-      <CardHeader className={STEP_HEADER}>
-        <CardTitle>Enter the code</CardTitle>
-        <CardDescription>
+    <CardStep
+      title="Enter the code"
+      meta={
+        <>
           Sent to <span className="font-medium text-foreground tabular-nums">+91 {mobile}</span>
-        </CardDescription>
-      </CardHeader>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => verify.mutate(values))}
+        noValidate
+      >
+        <PinField
+          name="code"
+          form={form}
+          label="One-time code"
+          // The server decides how long a code is; the boxes follow it rather than assuming six.
+          length={challenge.codeLength}
+          autoFocus
+          autoComplete="one-time-code"
+        />
 
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => verify.mutate(values))}
-          noValidate
-        >
-          <PinField
-            name="code"
-            form={form}
-            label="One-time code"
-            // The server decides how long a code is; the boxes follow it rather than assuming six.
-            length={challenge.codeLength}
-            autoFocus
-            autoComplete="one-time-code"
-          />
+        {challenge.devCode ? (
+          <Alert variant="info">
+            <Info aria-hidden />
+            <span>
+              Development sender. Your code is{' '}
+              <span className="font-semibold tabular-nums">{challenge.devCode}</span>
+            </span>
+          </Alert>
+        ) : null}
 
-          {challenge.devCode ? (
-            <Alert variant="info">
-              <Info aria-hidden />
-              <span>
-                Development sender. Your code is{' '}
-                <span className="font-semibold tabular-nums">{challenge.devCode}</span>
-              </span>
-            </Alert>
-          ) : null}
+        <Button type="submit" loading={verify.isPending}>
+          Verify &amp; continue
+        </Button>
 
-          <Button type="submit" loading={verify.isPending}>
-            Verify &amp; continue
-          </Button>
-
-          <BackButton onClick={onBack}>Use a different number</BackButton>
-        </form>
-      </CardContent>
-    </>
+        <BackButton onClick={onBack}>Use a different number</BackButton>
+      </form>
+    </CardStep>
   );
 }
 
@@ -336,43 +315,39 @@ function SetPinStep({
   });
 
   return (
-    <>
-      <CardHeader className={STEP_HEADER}>
-        <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
-        <CardDescription>This is how you sign in from now on. No more codes.</CardDescription>
-      </CardHeader>
+    <CardStep
+      title={ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}
+      meta="This is how you sign in from now on. No more codes."
+    >
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => setPin.mutate(values))}
+        noValidate
+      >
+        <PinField
+          name="pin"
+          form={form}
+          label="New PIN"
+          length={PIN_LENGTH}
+          masked
+          autoFocus
+          autoComplete="new-password"
+          /* ui-copy-ok: rule */ hint="Not a run like 1234, and not all one digit"
+        />
+        <PinField
+          name="confirmPin"
+          form={form}
+          label="Confirm PIN"
+          length={PIN_LENGTH}
+          masked
+          autoComplete="new-password"
+        />
 
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => setPin.mutate(values))}
-          noValidate
-        >
-          <PinField
-            name="pin"
-            form={form}
-            label="New PIN"
-            length={PIN_LENGTH}
-            masked
-            autoFocus
-            autoComplete="new-password"
-            /* ui-copy-ok: rule */ hint="Not a run like 1234, and not all one digit"
-          />
-          <PinField
-            name="confirmPin"
-            form={form}
-            label="Confirm PIN"
-            length={PIN_LENGTH}
-            masked
-            autoComplete="new-password"
-          />
-
-          <Button type="submit" loading={setPin.isPending}>
-            Save PIN &amp; continue
-          </Button>
-        </form>
-      </CardContent>
-    </>
+        <Button type="submit" loading={setPin.isPending}>
+          Save PIN &amp; continue
+        </Button>
+      </form>
+    </CardStep>
   );
 }
 

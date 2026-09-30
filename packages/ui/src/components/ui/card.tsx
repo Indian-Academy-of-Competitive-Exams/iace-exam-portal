@@ -25,44 +25,24 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
 );
 Card.displayName = 'Card';
 
-const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('flex flex-col gap-1.5 p-6', className)} {...props} />
-  ),
-);
-CardHeader.displayName = 'CardHeader';
-
-/** `children` is required: an empty heading is announced as one and says nothing. */
-export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+export interface CardStepProps {
+  title: React.ReactNode;
+  /** A value the step carries — the number a code went to. Never a sentence about the step. */
+  meta?: React.ReactNode;
   children: React.ReactNode;
 }
 
-const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
-  ({ className, children, ...props }, ref) => (
-    <h3
-      ref={ref}
-      className={cn('text-lg font-semibold leading-none tracking-tight', className)}
-      {...props}
-    >
-      {children}
-    </h3>
-  ),
-);
-CardTitle.displayName = 'CardTitle';
+/** One stage of a card that shows a stage at a time: a centred heading, then its form. */
+function CardStep({ title, meta, children }: Readonly<CardStepProps>) {
+  return (
+    <>
+      <div className="flex flex-col items-center gap-1.5 p-6 pt-4 text-center">
+        <h3 className="text-lg font-semibold leading-none tracking-tight">{title}</h3>
+        {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
+      </div>
+      <div className="p-6 pt-0">{children}</div>
+    </>
+  );
+}
 
-const CardDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('text-sm text-muted-foreground', className)} {...props} />
-));
-CardDescription.displayName = 'CardDescription';
-
-const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
-  ),
-);
-CardContent.displayName = 'CardContent';
-
-export { Card, CardHeader, CardTitle, CardDescription, CardContent };
+export { Card, CardStep };

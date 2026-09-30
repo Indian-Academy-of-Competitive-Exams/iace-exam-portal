@@ -19,22 +19,20 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { NAV_ITEMS } from '../lib/constants';
 
 export function ImportProgramStudentsPage() {
   const { code = '' } = useParams();
 
-  const template = useTemplateDownload(
-    () => api.admin.imports.programTemplate(),
-    PROGRAM_IMPORT_TEMPLATE_FILENAME,
-  );
-
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewProgramStudents(code, file),
     commit: (file) => api.admin.imports.commitProgramStudents(code, file as File),
     writes: (plan) => plan.summary.willEnrol,
+    template: {
+      fetch: () => api.admin.imports.programTemplate(),
+      filename: PROGRAM_IMPORT_TEMPLATE_FILENAME,
+    },
     success: 'Students enrolled.',
   });
 
@@ -52,8 +50,8 @@ export function ImportProgramStudentsPage() {
           meta={code}
         />
       }
-      onDownloadTemplate={() => template.mutate()}
-      downloadingTemplate={template.isPending}
+      onDownloadTemplate={intake.downloadTemplate}
+      downloadingTemplate={intake.isDownloadingTemplate}
       dropzone={{
         accept: `${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`,
         file: intake.file,

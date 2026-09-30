@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { DIFFICULTY_LEVEL } from '@iace/contracts';
 import { api } from '../lib/api';
-import { QUERY_KEYS, QUERY_SCOPES, ROUTES } from '../lib/constants';
+import { QUERY_KEYS, ROUTES, heldQuestionQueryKey, questionQueryKey } from '../lib/constants';
 import {
   AuthoringWorkspace,
   type Held,
@@ -24,11 +24,11 @@ export function BankQuestionPage() {
     return {
       cards: id ? [{ key: id, lead, editable: true }] : [],
       query: (key) => ({
-        queryKey: [...QUERY_KEYS.QUESTION, key, QUERY_SCOPES.HELD],
+        queryKey: heldQuestionQueryKey(key),
         queryFn: async (): Promise<Held> => {
           // Through the detail's own key, so the page it was opened from has already read it.
           const question = await queryClient.fetchQuery({
-            queryKey: [...QUERY_KEYS.QUESTION, key],
+            queryKey: questionQueryKey(key),
             queryFn: () => api.admin.questions.detail(key),
           });
           return {

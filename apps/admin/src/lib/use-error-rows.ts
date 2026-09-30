@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { EXPORT_KINDS, exportFilename } from '@iace/contracts';
 import { type ImportViewProps } from '@iace/ui';
-import { saveBlob } from './save-blob';
+import { saveBlob } from '@iace/app-kit/browser';
 
 /** The previewed file posted back for the lines it would skip; nothing while none would be. */
 export function useErrorRows(

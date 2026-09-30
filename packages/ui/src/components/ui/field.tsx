@@ -48,6 +48,16 @@ export function Field({ htmlFor, label, hint, error, children, className }: Read
   );
 }
 
+/** A value the form cannot change, drawn like the fields beside it rather than as a table row. */
+export function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="flex h-9 items-center text-sm text-muted-foreground">{value}</span>
+    </div>
+  );
+}
+
 /** Two fields read as one row and stack when there is no width for both. Three is a section. */
 export function FieldRow({
   children,

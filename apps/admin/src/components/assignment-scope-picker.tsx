@@ -3,7 +3,7 @@ import { type AssignmentRole } from '@iace/contracts';
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import { assignmentSectionFilterQueryKey, assignmentTestFilterQueryKey } from '../lib/constants';
 import { type PickerProps } from './picker-props';
 
 /** Test -> section, the pair an assignment keys on: the tests page and search, the sections do not. */
@@ -26,7 +26,7 @@ export function AssignmentTestPicker({
   ...props
 }: Readonly<PickerProps & { scope: AssignmentScope }>) {
   const tests = usePagedPicker({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, QUERY_SCOPES.FILTER, 'tests', scopeKey(scope)],
+    queryKey: assignmentTestFilterQueryKey(scopeKey(scope)),
     fetchPage: (params) => api.admin.assignments.tests({ ...params, ...asQuery(scope) }),
   });
 
@@ -52,7 +52,7 @@ export function AssignmentSectionPicker({
   ...props
 }: Readonly<PickerProps & { scope: AssignmentScope; testId: string }>) {
   const sections = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, QUERY_SCOPES.FILTER, 'sections', testId, scopeKey(scope)],
+    queryKey: assignmentSectionFilterQueryKey(testId, scopeKey(scope)),
     queryFn: () => api.admin.assignments.sectionsOf(testId, asQuery(scope)),
     enabled: testId !== '',
   });

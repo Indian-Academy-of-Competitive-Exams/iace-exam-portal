@@ -31,6 +31,7 @@ function mount(
       preview: (file) => Promise.resolve({ name: file.name, writes: 2 }),
       commit: (_file, plan) => Promise.resolve(`committed ${plan.name}`),
       writes: (plan) => plan.writes,
+      template: { fetch: () => Promise.resolve(new Blob()), filename: 'template.xlsx' },
       ...overrides,
     });
     return null;

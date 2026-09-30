@@ -1,8 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { NavBadge, useNavBadge } from './nav-badges';
-import * as Popover from '@radix-ui/react-popover';
-import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
+import {
+  cn,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@iace/ui';
 import { activeNavPath, isNavItemActive, isNavSection, type NavItem } from '../../src';
 
 /** One row in the sidebar. The chevron points right: a panel opens beside, never below. */
@@ -93,9 +100,9 @@ function SectionPopover({ item, activePath }: Readonly<{ item: NavItem; activePa
 
   return (
     <li>
-      <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen}>
         <RailTooltip label={item.label} collapsed>
-          <Popover.Trigger asChild>
+          <PopoverTrigger asChild>
             <button
               type="button"
               className={cn(
@@ -107,25 +114,36 @@ function SectionPopover({ item, activePath }: Readonly<{ item: NavItem; activePa
               <Glyph item={item} collapsed />
               <span className="sr-only">{item.label}</span>
             </button>
-          </Popover.Trigger>
+          </PopoverTrigger>
         </RailTooltip>
 
-        <Popover.Portal>
-          <Popover.Content
-            side="right"
-            align="start"
-            // Aligned to its row and one step off the sidebar.
-            sideOffset={4}
-            collisionPadding={8}
-            className="z-[--z-popover] flex max-h-[--nav-panel-max-h] w-[--nav-panel-w] flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-surface p-2 shadow-lg"
-          >
-            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {item.label}
-            </p>
+        {/* Aligned to its row and one step off the sidebar. */}
+        <PopoverContent
+          side="right"
+          align="start"
+          className="flex max-h-[--nav-panel-max-h] w-[--nav-panel-w] flex-col gap-2 overflow-y-auto p-2"
+        >
+          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {item.label}
+          </p>
 
-            {loose.length > 0 ? (
+          {loose.length > 0 ? (
+            <ul className="flex flex-col gap-0.5">
+              {loose.map((child) => (
+                <li key={child.label}>
+                  <Leaf item={child} collapsed={false} activePath={activePath} onNavigate={close} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {groups.map((group) => (
+            <div key={group.label} className="flex flex-col gap-0.5">
+              <p className="px-2 py-1 text-xs font-semibold text-foreground-secondary">
+                {group.label}
+              </p>
               <ul className="flex flex-col gap-0.5">
-                {loose.map((child) => (
+                {(group.children ?? []).map((child) => (
                   <li key={child.label}>
                     <Leaf
                       item={child}
@@ -136,30 +154,10 @@ function SectionPopover({ item, activePath }: Readonly<{ item: NavItem; activePa
                   </li>
                 ))}
               </ul>
-            ) : null}
-
-            {groups.map((group) => (
-              <div key={group.label} className="flex flex-col gap-0.5">
-                <p className="px-2 py-1 text-xs font-semibold text-foreground-secondary">
-                  {group.label}
-                </p>
-                <ul className="flex flex-col gap-0.5">
-                  {(group.children ?? []).map((child) => (
-                    <li key={child.label}>
-                      <Leaf
-                        item={child}
-                        collapsed={false}
-                        activePath={activePath}
-                        onNavigate={close}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+            </div>
+          ))}
+        </PopoverContent>
+      </Popover>
     </li>
   );
 }

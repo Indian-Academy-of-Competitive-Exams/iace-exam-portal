@@ -22,7 +22,7 @@ import {
   type ListFilter,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, myAssignmentsQueryKey } from '../lib/constants';
 import { useTestSectionFilters } from '../lib/use-test-section-filters';
 import { TypistDoneDialog } from '../components/authoring/typist-done-dialog';
 import { FinalizeAssignmentDialog } from '../components/authoring/finalize-assignment-dialog';
@@ -163,7 +163,7 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
   ] as const satisfies readonly ListFilter[];
 
   const queue = useListScreen({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'mine', role],
+    queryKey: myAssignmentsQueryKey(role),
     filters,
     toQuery: (values) => ({
       role,

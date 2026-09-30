@@ -21,9 +21,7 @@ import {
 } from '@iace/ui';
 import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { api } from '../lib/api';
-import { QUERY_KEYS, SERIES_SOURCE_LABELS } from '../lib/constants';
-
-const seriesKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'series'] as const;
+import { QUERY_KEYS, SERIES_SOURCE_LABELS, studentSeriesQueryKey } from '../lib/constants';
 
 function seriesColumns(
   busy: boolean,
@@ -122,13 +120,13 @@ export function SeriesTab({ detail }: Readonly<{ detail: StudentDetail }>) {
   const name = detail.fullName ?? detail.mobile;
 
   const series = useQuery({
-    queryKey: seriesKey(studentId),
+    queryKey: studentSeriesQueryKey(studentId),
     queryFn: () => api.admin.studentSeries.list(studentId),
   });
 
   // The picker asks the server what they do NOT reach, so a grant changes its answer too.
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: seriesKey(studentId) });
+    await queryClient.invalidateQueries({ queryKey: studentSeriesQueryKey(studentId) });
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 

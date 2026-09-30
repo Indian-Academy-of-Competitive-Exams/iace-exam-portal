@@ -1,5 +1,5 @@
 import * as React from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { nearTheEnd } from '../../lib/scroll';
@@ -106,7 +106,7 @@ export function ComboboxShell({
   };
 
   const trigger = (
-    <PopoverPrimitive.Trigger asChild>
+    <PopoverTrigger asChild>
       <button
         type="button"
         id={id}
@@ -119,85 +119,82 @@ export function ComboboxShell({
         </span>
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </button>
-    </PopoverPrimitive.Trigger>
+    </PopoverTrigger>
   );
 
   // What the trigger cut, or what a caller says it is standing in for.
   const revealed = triggerTooltip ?? (labelTruncated ? triggerLabel : null);
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       {/* Always mounted: swapping the trigger out remounts the button, losing its focus and the span the measurement watches. */}
       <Tooltip>
         <TooltipTrigger asChild>{trigger}</TooltipTrigger>
         {revealed ? <TooltipContent>{revealed}</TooltipContent> : null}
       </Tooltip>
 
-      <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content
-          align="start"
-          sideOffset={4}
-          // Matches the trigger width.
-          className="z-50 w-[var(--radix-popover-trigger-width)] min-w-56 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
-        >
-          {onSearchChange ? (
-            // focus-visible, not focus-within: it autofocuses on open, and a ring then is noise.
-            <div
-              data-focus-ring="wrapper"
-              className={cn(
-                'flex items-center gap-2 border-b border-border px-3',
-                'transition-[box-shadow,border-color]',
-                'has-[:focus-visible]:border-ring has-[:focus-visible]:shadow-focus',
-              )}
-            >
-              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              {/* Debounced like SearchInput: this searches the SERVER, so an unwaited keystroke is
+      <PopoverContent
+        align="start"
+        // Matches the trigger width.
+        className="w-[var(--radix-popover-trigger-width)] min-w-56 overflow-hidden rounded-md"
+      >
+        {onSearchChange ? (
+          // focus-visible, not focus-within: it autofocuses on open, and a ring then is noise.
+          <div
+            data-focus-ring="wrapper"
+            className={cn(
+              'flex items-center gap-2 border-b border-border px-3',
+              'transition-[box-shadow,border-color]',
+              'has-[:focus-visible]:border-ring has-[:focus-visible]:shadow-focus',
+            )}
+          >
+            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            {/* Debounced like SearchInput: this searches the SERVER, so an unwaited keystroke is
                   a request nobody reads the answer to. The field itself stays instant. */}
-              <input
-                autoFocus
-                value={searchDraft}
-                onChange={(event) => typeSearch(event.target.value)}
-                placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
-                className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>
-          ) : null}
+            <input
+              autoFocus
+              value={searchDraft}
+              onChange={(event) => typeSearch(event.target.value)}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        ) : null}
 
-          {/*
+        {/*
             role="listbox" is not decoration: the rows below carry
             role="option", and an option outside a listbox is invalid ARIA — a
             screen reader announces a pile of buttons rather than a list with a
             position and a count.
           */}
-          <div // NOSONAR(typescript:S6819): a searchable, paged, popover combobox can't be a native <select>/<datalist>; role="listbox"/"option" is the ARIA APG pattern for it, unchanged from combobox.tsx.
-            role="listbox"
-            aria-multiselectable={multiple || undefined}
-            aria-label={ariaLabel ?? placeholder}
-            className="max-h-64 overflow-y-auto p-1"
-            onScroll={onScroll}
-          >
-            {children}
+        <div // NOSONAR(typescript:S6819): a searchable, paged, popover combobox can't be a native <select>/<datalist>; role="listbox"/"option" is the ARIA APG pattern for it, unchanged from combobox.tsx.
+          role="listbox"
+          aria-multiselectable={multiple || undefined}
+          aria-label={ariaLabel ?? placeholder}
+          className="max-h-64 overflow-y-auto p-1"
+          onScroll={onScroll}
+        >
+          {children}
 
-            {/* Rows in the shape of the rows that are coming, so the list does
+          {/* Rows in the shape of the rows that are coming, so the list does
                 not collapse to one line and then jump when they land. */}
-            {isLoading ? <OptionSkeleton /> : null}
-            {!isLoading && items.length === 0 ? <Status>{emptyLabel}</Status> : null}
+          {isLoading ? <OptionSkeleton /> : null}
+          {!isLoading && items.length === 0 ? <Status>{emptyLabel}</Status> : null}
 
-            {/* Only while there is another page, so a finished list says so by
+          {/* Only while there is another page, so a finished list says so by
                 showing nothing rather than a spinner that never resolves. */}
-            {hasMore ? (
-              <div className="flex items-center justify-center gap-2 py-2">
-                <Spinner />
-                <span className="text-xs text-muted-foreground">
-                  {isLoadingMore ? 'Loading more…' : 'Scroll for more'}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        </PopoverPrimitive.Content>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
+          {hasMore ? (
+            <div className="flex items-center justify-center gap-2 py-2">
+              <Spinner />
+              <span className="text-xs text-muted-foreground">
+                {isLoadingMore ? 'Loading more…' : 'Scroll for more'}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

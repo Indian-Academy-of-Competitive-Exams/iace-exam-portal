@@ -36,10 +36,12 @@ import { api } from '../lib/api';
 import {
   NAV_ITEMS,
   QUERY_KEYS,
-  testQueryKey,
   ROUTES,
   TEST_BUILDER_STEP_LABELS,
   TEST_STATUS_LABELS,
+  baseConfigQueryKey,
+  seriesQueryKey,
+  testQueryKey,
 } from '../lib/constants';
 import { TEST_BUILDER_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
@@ -90,7 +92,7 @@ export function TestBuilderPage() {
   });
 
   const fromSeries = useQuery({
-    queryKey: [...QUERY_KEYS.TEST_SERIES, fromSeriesId ?? ''],
+    queryKey: seriesQueryKey(fromSeriesId ?? ''),
     queryFn: () => api.admin.testSeries.detail(fromSeriesId ?? ''),
     enabled: fromSeriesId !== null,
   });
@@ -144,7 +146,7 @@ function TestBuilder({
   );
 
   const chosenConfig = useQuery({
-    queryKey: [...QUERY_KEYS.BASE_CONFIG, baseConfigId],
+    queryKey: baseConfigQueryKey(baseConfigId),
     queryFn: () => api.admin.baseConfigs.detail(baseConfigId),
     enabled: !existing && baseConfigId !== '',
   });

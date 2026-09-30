@@ -49,6 +49,7 @@ import {
   Input,
   PageHeader,
   plural,
+  ReadOnlyField,
   Skeleton,
   SkeletonParagraph,
   StatRow,
@@ -63,14 +64,16 @@ import {
   LANGUAGE_MODE_LABELS,
   MERIT_TYPE_HINTS,
   MERIT_TYPE_LABELS,
-  NAV_ITEMS,
   NAVIGATION_POLICY_HINTS,
   NAVIGATION_POLICY_LABELS,
+  NAV_ITEMS,
   QUERY_KEYS,
   ROUTES,
   TEST_UI_LABELS,
   TIMER_TEMPLATE_HINTS,
   TIMER_TEMPLATE_LABELS,
+  baseConfigQueryKey,
+  defaultBaseConfigQueryKey,
 } from '../lib/constants';
 import { minutesFieldOf, secondsFromMinutes } from '../lib/duration';
 import { useAuth } from '../providers/auth';
@@ -303,7 +306,7 @@ export function BaseConfigFormPage() {
   const configId = id ?? '';
 
   const config = useQuery({
-    queryKey: [...QUERY_KEYS.BASE_CONFIG, id],
+    queryKey: baseConfigQueryKey(id),
     queryFn: () => api.admin.baseConfigs.detail(configId),
     enabled: existing,
   });
@@ -463,7 +466,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const stageDefault = useQuery({
-    queryKey: [...QUERY_KEYS.BASE_CONFIGS, 'default', examStageId],
+    queryKey: defaultBaseConfigQueryKey(examStageId),
     queryFn: () => api.admin.baseConfigs.list({ examStageId, defaultOnly: 'true', pageSize: 1 }),
     enabled: Boolean(examStageId),
   });
@@ -770,16 +773,6 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         onConfirm={() => promoting && save.mutate(promoting)}
       />
     </FormPanel>
-  );
-}
-
-/** A value the form cannot change, drawn like the fields beside it rather than as a table row. */
-function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      <span className="flex h-9 items-center text-sm text-muted-foreground">{value}</span>
-    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,7 +52,15 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
-import { ASSIGNMENT_ROLE_LABELS, QUERY_KEYS, ROUTES, testQueryKey } from '../lib/constants';
+import {
+  ASSIGNMENT_ROLE_LABELS,
+  QUERY_KEYS,
+  ROUTES,
+  assignableAdminsQueryKey,
+  testAssignmentsQueryKey,
+  testPaperQueryKey,
+  testQueryKey,
+} from '../lib/constants';
 import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
 import { SectionThreadButton } from '../components/section-thread';
 
@@ -96,18 +104,51 @@ export function AssignStep({
 }: Readonly<{ detail: TestDetail | null; config: BaseConfigDetail | null }>) {
   const { identity } = useAuth();
   const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, detail?.id ?? ''],
+    queryKey: testAssignmentsQueryKey(detail?.id ?? ''),
     queryFn: () => api.admin.assignments.forTest(detail?.id ?? ''),
     enabled: Boolean(detail?.id),
   });
   const paper = useQuery({
-    queryKey: [...QUERY_KEYS.TEST_PAPER, detail?.id ?? ''],
+    queryKey: testPaperQueryKey(detail?.id ?? ''),
     queryFn: () => api.admin.tests.readPaper(detail?.id ?? ''),
     enabled: Boolean(detail?.paperSource),
   });
   const [assigning, setAssigning] = useState<AssignTarget | null>(null);
   const [removing, setRemoving] = useState<Assignment | null>(null);
   const [handingOver, setHandingOver] = useState<BaseConfigSection | null>(null);
+
+  // The server refuses anybody else, so a box they cannot post from is not shown at all.
+  const mayComment = useCallback(
+    (row: SectionRow): boolean =>
+      (identity?.isSuperAdmin ?? false) ||
+      [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id),
+    [identity],
+  );
+
+  const held = useMemo(() => (paper.data ? heldBySection(paper.data) : null), [paper.data]);
+  const handable = useMemo(
+    () =>
+      new Set(
+        paper.data?.sections
+          .filter((one) => one.canHandOver)
+          .map((one) => one.baseConfigSectionId) ?? [],
+      ),
+    [paper.data],
+  );
+  const columns = useMemo(
+    () =>
+      columnsOf({
+        testId: detail?.id ?? '',
+        held,
+        handable,
+        mayComment,
+        // An offered paper takes nobody new and loses nobody: there is nothing left to type or read.
+        onAssign: detail?.finalizedAt ? null : setAssigning,
+        onRemove: detail?.finalizedAt ? null : setRemoving,
+        onHandOver: detail?.finalizedAt ? null : setHandingOver,
+      }),
+    [detail?.id, detail?.finalizedAt, held, handable, mayComment],
+  );
 
   if (!detail || !config) {
     return (
@@ -153,16 +194,6 @@ export function AssignStep({
       row.finalizedAt === null &&
       (row.role === ASSIGNMENT_ROLES.PROOFREADER || detail.paperSource === PAPER_SOURCES.FRAMED),
   );
-  // The server refuses anybody else, so a box they cannot post from is not shown at all.
-  const mayComment = (row: SectionRow): boolean =>
-    (identity?.isSuperAdmin ?? false) ||
-    [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id);
-
-  const held = paper.data ? heldBySection(paper.data) : null;
-  const handable = new Set(
-    paper.data?.sections.filter((one) => one.canHandOver).map((one) => one.baseConfigSectionId) ??
-      [],
-  );
   // Who holds a role and what the paper holds both decide the hand-over, so a change re-reads both.
   const reread = () => {
     void assignments.refetch();
@@ -178,16 +209,7 @@ export function AssignStep({
       ) : null}
 
       <DataTable
-        columns={columnsOf({
-          testId: detail.id,
-          held,
-          handable,
-          mayComment,
-          // An offered paper takes nobody new and loses nobody: there is nothing left to type or read.
-          onAssign: detail.finalizedAt ? null : setAssigning,
-          onRemove: detail.finalizedAt ? null : setRemoving,
-          onHandOver: detail.finalizedAt ? null : setHandingOver,
-        })}
+        columns={columns}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
         isLoading={assignments.isLoading}
@@ -600,7 +622,7 @@ function AssignDialog({
   const dueAt = useWatch({ control: form.control, name: 'dueAt' }) ?? '';
   // The server already narrows this to active admins holding the role's feature key.
   const assignable = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'assignable', role],
+    queryKey: assignableAdminsQueryKey(role),
     queryFn: () => api.admin.assignments.assignable({ role }),
   });
   const word = ASSIGNMENT_ROLE_LABELS[role].toLowerCase();

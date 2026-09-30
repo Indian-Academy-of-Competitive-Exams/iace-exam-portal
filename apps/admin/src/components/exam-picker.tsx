@@ -1,7 +1,12 @@
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import {
+  examFilterQueryKey,
+  examPickerQueryKey,
+  examStageFilterQueryKey,
+  examStagePickerQueryKey,
+} from '../lib/constants';
 import { type MultiPickerProps, type PickerProps } from './picker-props';
 
 // Exam code is the label — it's what an enrolment stores, so a stage is qualified by it since "Tier 1" alone names several papers.
@@ -9,7 +14,7 @@ import { type MultiPickerProps, type PickerProps } from './picker-props';
 /** A CHOOSER: only active exams, because a retired one is not something to file new work under. */
 export function ExamPicker(props: Readonly<PickerProps>) {
   const exams = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.PICKER],
+    queryKey: examPickerQueryKey(),
     fetchPage: (params) => api.admin.exams.list({ ...params, activeOnly: 'true' }),
   });
 
@@ -39,7 +44,7 @@ export function ExamStagePicker({
   ...props
 }: Readonly<PickerProps & { examId?: string; onPick?: (chosen: StageChoice | null) => void }>) {
   const stages = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EXAM_STAGES, QUERY_SCOPES.PICKER, examId ?? ''],
+    queryKey: examStagePickerQueryKey(examId ?? ''),
     fetchPage: (params) =>
       api.admin.examStages.list({ ...params, examId: examId || undefined, activeOnly: 'true' }),
   });
@@ -68,7 +73,7 @@ export function ExamStagePicker({
 /** A FILTER, so it reaches retired exams — tests and configurations are still filed under them. */
 export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
   const exams = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.FILTER],
+    queryKey: examFilterQueryKey(),
     fetchPage: (params) => api.admin.exams.list(params),
   });
 
@@ -91,7 +96,7 @@ export function ExamStageMultiPicker({
   ...props
 }: Readonly<MultiPickerProps & { examIds: readonly string[] }>) {
   const stages = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EXAM_STAGES, QUERY_SCOPES.FILTER, [...examIds].join(',')],
+    queryKey: examStageFilterQueryKey([...examIds].join(',')),
     fetchPage: (params) => api.admin.examStages.list({ ...params, examId: [...examIds] }),
   });
 

@@ -2,7 +2,7 @@ import { INSTITUTE_TIME_ZONE, type LiveOpsTest } from '@iace/contracts';
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import { liveTestPickerQueryKey } from '../lib/constants';
 
 const WINDOW_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -18,7 +18,7 @@ export function LiveTestPicker({
   onChange,
 }: Readonly<{ value: string; onChange: (value: string) => void }>) {
   const tests = usePagedPicker({
-    queryKey: [...QUERY_KEYS.LIVE_OPS, QUERY_SCOPES.PICKER],
+    queryKey: liveTestPickerQueryKey(),
     fetchPage: (params) => api.admin.liveOps.tests(params),
   });
 

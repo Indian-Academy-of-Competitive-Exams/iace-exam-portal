@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { PAGE_SIZE_MAX, type Exam } from '@iace/contracts';
 import { api } from './api';
-import { QUERY_KEYS } from './constants';
+import { examsQueryKey } from './constants';
 
 /** The list plus how the read went, so a picker with nothing in it can say which it is. */
 export interface ExamList {
@@ -16,7 +16,7 @@ export function useExams(options: { activeOnly?: boolean; enabled?: boolean } = 
   const { activeOnly, enabled } = options;
 
   const query = useQuery({
-    queryKey: [...QUERY_KEYS.EXAMS, { activeOnly: activeOnly ?? false }],
+    queryKey: examsQueryKey(activeOnly ?? false),
     queryFn: () =>
       api.admin.exams.list({
         pageSize: PAGE_SIZE_MAX,

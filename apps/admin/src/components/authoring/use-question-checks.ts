@@ -10,7 +10,7 @@ import {
 } from '@iace/contracts';
 import { mathErrorIn } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { authoringDuplicateQueryKey } from '../../lib/constants';
 import { checksFor } from './authoring-checks';
 import { taxonomyFor, type AuthoringHeader, type AuthoringState } from './question-scaffold';
 
@@ -42,7 +42,7 @@ export function useDuplicate(draft: QuestionDraft | null, editingId: string): st
 
   const current = asked?.editingId === editingId ? asked : null;
   const found = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'duplicate', editingId, current?.revision],
+    queryKey: authoringDuplicateQueryKey(editingId, current?.revision),
     queryFn: () =>
       api.admin.authoring.duplicate(current?.draft as QuestionDraft, editingId || undefined),
     enabled: current !== null && hasText(current.draft.stem[DEFAULT_LANGUAGE] ?? ''),

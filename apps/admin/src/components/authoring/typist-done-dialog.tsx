@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DIFFICULTY_LABELS,
@@ -80,12 +80,18 @@ function DoneDialog({
     },
   });
 
-  const toggleDiscard = (id: string) => {
-    const next = new Set(discarded);
-    if (!next.delete(id)) next.add(id);
-    setDiscarded(next);
-  };
-  const columns = columnsOf(chosen, discarded, toggleDiscard);
+  const toggleDiscard = useCallback(
+    (id: string) => {
+      const next = new Set(discarded);
+      if (!next.delete(id)) next.add(id);
+      setDiscarded(next);
+    },
+    [discarded],
+  );
+  const columns = useMemo(
+    () => columnsOf(chosen, discarded, toggleDiscard),
+    [chosen, discarded, toggleDiscard],
+  );
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>

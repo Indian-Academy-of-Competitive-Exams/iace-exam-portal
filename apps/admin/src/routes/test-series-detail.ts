@@ -6,7 +6,7 @@ import {
   type TestSeriesKind,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import { QUERY_KEYS, TEST_SERIES_KIND_HINTS, TEST_SERIES_KIND_LABELS } from '../lib/constants';
+import { TEST_SERIES_KIND_HINTS, TEST_SERIES_KIND_LABELS, seriesQueryKey } from '../lib/constants';
 
 /** One series read four ways. What more than one of its tabs needs lives here, and only that. */
 
@@ -27,9 +27,8 @@ export interface SeriesFormValues {
   kind: TestSeriesKind;
 }
 
-export const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
-export const branchesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id, 'branches'] as const;
-export const testsKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id, 'tests'] as const;
+export const branchesKey = (id: string) => [...seriesQueryKey(id), 'branches'] as const;
+export const testsKey = (id: string) => [...seriesQueryKey(id), 'tests'] as const;
 
 /** Every path the server can name that this form registers, so a failure lands on its own input. */
 export const SERVER_FIELDS = [

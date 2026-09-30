@@ -34,7 +34,6 @@ import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser'
 import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, sectionWorkQueryKey } from '../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../lib/tours';
-import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 import { ImportWorkspace } from '../components/authoring/import-workspace';
 
@@ -102,15 +101,14 @@ export function ImportQuestionsPage() {
   // The same sheet either way; the section is only where the questions land.
   const into = testId && sectionId ? { testId, sectionId } : null;
 
-  const template = useTemplateDownload(
-    () => api.admin.imports.questionTemplate(),
-    QUESTION_IMPORT_TEMPLATE_FILENAME,
-  );
-
   const intake = useImportScreen({
     ...intakeFor(into),
     writes: (plan) => plan.summary.willCreate,
-    success: (data) => importedText(data as QuestionImportResult),
+    template: {
+      fetch: () => api.admin.imports.questionTemplate(),
+      filename: QUESTION_IMPORT_TEMPLATE_FILENAME,
+    },
+    success: importedText,
     onCommitted: () => {
       if (!into) {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
@@ -197,8 +195,8 @@ export function ImportQuestionsPage() {
           ) : null}
         </>
       }
-      onDownloadTemplate={() => template.mutate()}
-      downloadingTemplate={template.isPending}
+      onDownloadTemplate={intake.downloadTemplate}
+      downloadingTemplate={intake.isDownloadingTemplate}
       dropzone={{
         accept: `${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`,
         file: intake.file,

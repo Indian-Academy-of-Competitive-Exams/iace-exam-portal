@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Send } from 'lucide-react';
 import {
   DELIVERY_RETENTION_DAYS,
@@ -28,7 +28,7 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, announcementQueryKey } from '../lib/constants';
 import { ExportButton } from '../components/export-button';
 import { ComposeAnnouncementDialog } from '../components/announcements/compose-announcement-dialog';
 import { CHANNEL_LABEL, rupees } from '../components/announcements/money';
@@ -45,6 +45,19 @@ export function AnnouncementsPage() {
   const [resending, setResending] = useState<AnnouncementSummary | null>(null);
 
   const canSend = can(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+
+  const columns = useMemo(
+    () =>
+      columnsWith(
+        canSend
+          ? (row) => {
+              setResending(row);
+              setComposing(true);
+            }
+          : undefined,
+      ),
+    [canSend],
+  );
 
   const announcements = useListScreen({
     queryKey: QUERY_KEYS.ANNOUNCEMENTS,
@@ -89,14 +102,7 @@ export function AnnouncementsPage() {
 
       <ListView
         list={announcements}
-        columns={columnsWith(
-          canSend
-            ? (row) => {
-                setResending(row);
-                setComposing(true);
-              }
-            : undefined,
-        )}
+        columns={columns}
         rowKey={(row) => row.id}
         expand={{
           render: (row) => <AnnouncementPanel announcement={row} />,
@@ -167,7 +173,7 @@ const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 /** A row's own detail. The ledger is counted HERE — per row on the list is six queries each. */
 function AnnouncementPanel({ announcement }: Readonly<{ announcement: AnnouncementSummary }>) {
   const detail = useQuery({
-    queryKey: [...QUERY_KEYS.ANNOUNCEMENTS, announcement.id],
+    queryKey: announcementQueryKey(announcement.id),
     queryFn: () => api.admin.announcements.detail(announcement.id),
   });
 

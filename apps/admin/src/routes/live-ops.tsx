@@ -22,11 +22,15 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ATTEMPT_STATUS_LABELS, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { ATTEMPT_STATUS_LABELS, NAV_ITEMS, liveOpsBoardQueryKey } from '../lib/constants';
 import { LIVE_OPS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { LiveTestPicker } from '../components/live-test-picker';
-import { SittingActions } from '../components/sitting-actions';
+import {
+  SittingActions,
+  useSittingActions,
+  type AskSittingAction,
+} from '../components/sitting-actions';
 
 const TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -64,14 +68,21 @@ export function LiveOpsPage() {
   const board = useQuery({
     // Silent: a poll every few seconds would toast an outage over and over; the panels say it once.
     meta: { silent: true },
-    queryKey: [...QUERY_KEYS.LIVE_OPS_BOARD, testId],
+    queryKey: liveOpsBoardQueryKey(testId),
     queryFn: () => api.admin.liveOps.board(testId),
     enabled: testId !== '',
     refetchInterval: LIVE_OPS_POLL_MS,
   });
 
-  const sittingColumns = useMemo(() => liveColumns(canResolve), [canResolve]);
-  const recentColumns = useMemo(() => submissionColumns(canResolve), [canResolve]);
+  const actions = useSittingActions();
+  const sittingColumns = useMemo(
+    () => liveColumns(canResolve, actions.ask),
+    [canResolve, actions.ask],
+  );
+  const recentColumns = useMemo(
+    () => submissionColumns(canResolve, actions.ask),
+    [canResolve, actions.ask],
+  );
   const counts = board.data?.counts;
 
   const header = (
@@ -83,78 +94,81 @@ export function LiveOpsPage() {
   );
 
   return (
-    <TableFrame
-      header={header}
-      toolbar={
-        <div data-tour={TOUR_TARGETS.LIVE_PICKER} className="flex flex-col gap-3">
-          <LiveTestPicker
-            value={testId}
-            onChange={(value) => filters.set({ testId: value, panel: undefined })}
-          />
-          <ScoringBacklog board={board.data} />
-          <StaleBoard stale={board.isError && board.data !== undefined} />
-        </div>
-      }
-      tabs={{
-        value: panel,
-        onValueChange: (value) => filters.set({ panel: value }),
-        items: [
-          {
-            value: PANELS.ACTIVE,
-            label: tabLabel('Active now', counts?.active),
-            content: (
-              <SittingPanel
-                testId={testId}
-                rows={board.data?.active ?? []}
-                total={counts?.active}
-                columns={sittingColumns}
-                isLoading={board.isLoading}
-                isError={board.isError}
-                onRetry={board.refetch}
-                empty="Nobody is sitting this test right now"
-              />
-            ),
-          },
-          {
-            value: PANELS.STUCK,
-            label: tabLabel('Past deadline', counts?.stuck),
-            content: (
-              <SittingPanel
-                testId={testId}
-                rows={board.data?.stuck ?? []}
-                total={counts?.stuck}
-                columns={sittingColumns}
-                isLoading={board.isLoading}
-                isError={board.isError}
-                onRetry={board.refetch}
-                empty="Nothing is waiting to be swept"
-              />
-            ),
-          },
-          {
-            value: PANELS.RECENT,
-            label: tabLabel('Landed', counts?.submittedRecently),
-            content: (
-              <DataTable
-                columns={recentColumns}
-                rows={board.data?.recent ?? []}
-                rowKey={(row) => row.attemptId}
-                isLoading={board.isLoading}
-                isError={board.isError}
-                onRetry={board.refetch}
-                empty={testId === '' ? NO_TEST : 'No sitting has landed in the last half hour'}
-                footer={
-                  <ShowingSome
-                    shown={board.data?.recent.length ?? 0}
-                    total={counts?.submittedRecently}
-                  />
-                }
-              />
-            ),
-          },
-        ],
-      }}
-    />
+    <>
+      {actions.dialog}
+      <TableFrame
+        header={header}
+        toolbar={
+          <div data-tour={TOUR_TARGETS.LIVE_PICKER} className="flex flex-col gap-3">
+            <LiveTestPicker
+              value={testId}
+              onChange={(value) => filters.set({ testId: value, panel: undefined })}
+            />
+            <ScoringBacklog board={board.data} />
+            <StaleBoard stale={board.isError && board.data !== undefined} />
+          </div>
+        }
+        tabs={{
+          value: panel,
+          onValueChange: (value) => filters.set({ panel: value }),
+          items: [
+            {
+              value: PANELS.ACTIVE,
+              label: tabLabel('Active now', counts?.active),
+              content: (
+                <SittingPanel
+                  testId={testId}
+                  rows={board.data?.active ?? []}
+                  total={counts?.active}
+                  columns={sittingColumns}
+                  isLoading={board.isLoading}
+                  isError={board.isError}
+                  onRetry={board.refetch}
+                  empty="Nobody is sitting this test right now"
+                />
+              ),
+            },
+            {
+              value: PANELS.STUCK,
+              label: tabLabel('Past deadline', counts?.stuck),
+              content: (
+                <SittingPanel
+                  testId={testId}
+                  rows={board.data?.stuck ?? []}
+                  total={counts?.stuck}
+                  columns={sittingColumns}
+                  isLoading={board.isLoading}
+                  isError={board.isError}
+                  onRetry={board.refetch}
+                  empty="Nothing is waiting to be swept"
+                />
+              ),
+            },
+            {
+              value: PANELS.RECENT,
+              label: tabLabel('Landed', counts?.submittedRecently),
+              content: (
+                <DataTable
+                  columns={recentColumns}
+                  rows={board.data?.recent ?? []}
+                  rowKey={(row) => row.attemptId}
+                  isLoading={board.isLoading}
+                  isError={board.isError}
+                  onRetry={board.refetch}
+                  empty={testId === '' ? NO_TEST : 'No sitting has landed in the last half hour'}
+                  footer={
+                    <ShowingSome
+                      shown={board.data?.recent.length ?? 0}
+                      total={counts?.submittedRecently}
+                    />
+                  }
+                />
+              ),
+            },
+          ],
+        }}
+      />
+    </>
   );
 }
 
@@ -251,7 +265,7 @@ function studentColumn<
   };
 }
 
-function liveColumns(canResolve: boolean): DataTableColumn<LiveSitting>[] {
+function liveColumns(canResolve: boolean, ask: AskSittingAction): DataTableColumn<LiveSitting>[] {
   const columns: DataTableColumn<LiveSitting>[] = [
     studentColumn<LiveSitting>(),
     {
@@ -310,6 +324,7 @@ function liveColumns(canResolve: boolean): DataTableColumn<LiveSitting>[] {
       header: '',
       cell: (row) => (
         <SittingActions
+          onAsk={ask}
           sitting={{
             attemptId: row.attemptId,
             studentName: row.studentName,
@@ -322,7 +337,10 @@ function liveColumns(canResolve: boolean): DataTableColumn<LiveSitting>[] {
   ];
 }
 
-function submissionColumns(canResolve: boolean): DataTableColumn<RecentSubmission>[] {
+function submissionColumns(
+  canResolve: boolean,
+  ask: AskSittingAction,
+): DataTableColumn<RecentSubmission>[] {
   const columns: DataTableColumn<RecentSubmission>[] = [
     studentColumn<RecentSubmission>(),
     {
@@ -368,6 +386,7 @@ function submissionColumns(canResolve: boolean): DataTableColumn<RecentSubmissio
       cell: (row) =>
         row.status === ATTEMPT_STATUS.VOIDED ? null : (
           <SittingActions
+            onAsk={ask}
             sitting={{
               attemptId: row.attemptId,
               studentName: row.studentName,

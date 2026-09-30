@@ -40,7 +40,13 @@ import {
 import { ActiveStatus, RetireDeleteActions } from '../components/retire-delete-actions';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { NAV_ITEMS, NEW_RECORD, QUERY_KEYS, COURSE_ITEMS } from '../lib/constants';
+import {
+  COURSE_ITEMS,
+  NAV_ITEMS,
+  NEW_RECORD,
+  QUERY_KEYS,
+  examStagesQueryKey,
+} from '../lib/constants';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
@@ -375,7 +381,7 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
 
   // Keyed by the exam, so opening a second row does not read the first one's page.
   const stages = useListScreen({
-    queryKey: [...QUERY_KEYS.EXAM_STAGES, examId],
+    queryKey: examStagesQueryKey(examId),
     filters: [],
     toQuery: () => ({ examId }),
     fetchPage: (params) => api.admin.examStages.list(params),

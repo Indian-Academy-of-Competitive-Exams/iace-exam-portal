@@ -2,7 +2,7 @@ import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { durationLabel } from '../lib/duration';
-import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import { baseConfigPickerQueryKey } from '../lib/constants';
 
 /** The blueprints a test can be built on: one stage's, and only the ones still offered. */
 export function BaseConfigPicker({
@@ -17,7 +17,7 @@ export function BaseConfigPicker({
   id?: string;
 }>) {
   const configs = usePagedPicker({
-    queryKey: [...QUERY_KEYS.BASE_CONFIGS, QUERY_SCOPES.PICKER, examStageId],
+    queryKey: baseConfigPickerQueryKey(examStageId),
     fetchPage: (params) =>
       api.admin.baseConfigs.list({ ...params, examStageId, activeOnly: 'true' }),
     enabled: examStageId !== '',

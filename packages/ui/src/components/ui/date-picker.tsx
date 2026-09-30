@@ -1,5 +1,5 @@
 import * as React from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FIELD_TRIGGER_CLASS } from './combobox-shell';
@@ -275,8 +275,8 @@ export function DatePicker({
   const canZoomOut = labels.out !== mode;
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={onOpen}>
-      <PopoverPrimitive.Trigger asChild>
+    <Popover open={open} onOpenChange={onOpen}>
+      <PopoverTrigger asChild>
         <button
           type="button"
           id={id}
@@ -289,108 +289,105 @@ export function DatePicker({
           </span>
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </button>
-      </PopoverPrimitive.Trigger>
+      </PopoverTrigger>
 
-      <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content
-          align="start"
-          sideOffset={4}
-          onKeyDown={onKeyDown}
-          className="z-50 flex w-[17.5rem] flex-col gap-2 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <NavButton label={labels.back} onClick={() => page(-1)}>
-              <ChevronLeft className="size-4" aria-hidden />
-            </NavButton>
-            {/* The caret is the whole affordance: without it the heading reads as a label. */}
-            <button
-              type="button"
-              onClick={() => setMode(labels.out)}
-              disabled={!canZoomOut}
-              aria-live="polite"
-              aria-label={canZoomOut ? `${heading}. ${labels.zoomOut}` : heading}
-              className="flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium tabular-nums hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none disabled:hover:bg-transparent [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
-            >
-              {heading}
-              {canZoomOut ? <ChevronDown aria-hidden /> : null}
-            </button>
-            <NavButton label={labels.next} onClick={() => page(1)}>
-              <ChevronRight className="size-4" aria-hidden />
-            </NavButton>
-          </div>
+      <PopoverContent
+        align="start"
+        onKeyDown={onKeyDown}
+        className="flex w-[17.5rem] flex-col gap-2 rounded-md p-3"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <NavButton label={labels.back} onClick={() => page(-1)}>
+            <ChevronLeft className="size-4" aria-hidden />
+          </NavButton>
+          {/* The caret is the whole affordance: without it the heading reads as a label. */}
+          <button
+            type="button"
+            onClick={() => setMode(labels.out)}
+            disabled={!canZoomOut}
+            aria-live="polite"
+            aria-label={canZoomOut ? `${heading}. ${labels.zoomOut}` : heading}
+            className="flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium tabular-nums hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none disabled:hover:bg-transparent [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
+          >
+            {heading}
+            {canZoomOut ? <ChevronDown aria-hidden /> : null}
+          </button>
+          <NavButton label={labels.next} onClick={() => page(1)}>
+            <ChevronRight className="size-4" aria-hidden />
+          </NavButton>
+        </div>
 
-          {/* One height for all three grids, so drilling in and out never resizes the popover. */}
-          <div className="min-h-[14rem]">
-            {mode === 'day' ? (
-              <DayGrid
-                view={view}
-                value={value}
-                today={today}
-                focused={focused}
-                min={min}
-                max={max}
-                onSelect={choose}
-                onFocus={rove}
-              />
-            ) : null}
-
-            {mode === 'month' ? (
-              <PickerGrid
-                label="Choose a month"
-                items={MONTH_NAMES.map((name, month) => ({
-                  key: month,
-                  label: name,
-                  current: month === view.month,
-                  outside: false,
-                  disabled: isSpanOutOfRange(
-                    toISODate(view.year, month, 1),
-                    toISODate(view.year, month + 1, 0),
-                    min,
-                    max,
-                  ),
-                }))}
-                onPick={(month) => {
-                  setView((c) => ({ ...c, month }));
-                  setMode('day');
-                }}
-              />
-            ) : null}
-
-            {mode === 'year' ? (
-              <PickerGrid
-                label="Choose a year"
-                items={yearsOf(block).map((year) => ({
-                  key: year,
-                  label: String(year),
-                  current: year === view.year,
-                  outside: year < block.start || year > block.end,
-                  disabled: isSpanOutOfRange(
-                    toISODate(year, 0, 1),
-                    toISODate(year, 11, 31),
-                    min,
-                    max,
-                  ),
-                }))}
-                onPick={(year) => {
-                  setView((c) => ({ ...c, year }));
-                  setMode('month');
-                }}
-              />
-            ) : null}
-          </div>
-
-          {clearable ? (
-            <button
-              type="button"
-              onClick={() => choose('')}
-              className="w-full rounded-sm py-1.5 text-center text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
-            >
-              Clear
-            </button>
+        {/* One height for all three grids, so drilling in and out never resizes the popover. */}
+        <div className="min-h-[14rem]">
+          {mode === 'day' ? (
+            <DayGrid
+              view={view}
+              value={value}
+              today={today}
+              focused={focused}
+              min={min}
+              max={max}
+              onSelect={choose}
+              onFocus={rove}
+            />
           ) : null}
-        </PopoverPrimitive.Content>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
+
+          {mode === 'month' ? (
+            <PickerGrid
+              label="Choose a month"
+              items={MONTH_NAMES.map((name, month) => ({
+                key: month,
+                label: name,
+                current: month === view.month,
+                outside: false,
+                disabled: isSpanOutOfRange(
+                  toISODate(view.year, month, 1),
+                  toISODate(view.year, month + 1, 0),
+                  min,
+                  max,
+                ),
+              }))}
+              onPick={(month) => {
+                setView((c) => ({ ...c, month }));
+                setMode('day');
+              }}
+            />
+          ) : null}
+
+          {mode === 'year' ? (
+            <PickerGrid
+              label="Choose a year"
+              items={yearsOf(block).map((year) => ({
+                key: year,
+                label: String(year),
+                current: year === view.year,
+                outside: year < block.start || year > block.end,
+                disabled: isSpanOutOfRange(
+                  toISODate(year, 0, 1),
+                  toISODate(year, 11, 31),
+                  min,
+                  max,
+                ),
+              }))}
+              onPick={(year) => {
+                setView((c) => ({ ...c, year }));
+                setMode('month');
+              }}
+            />
+          ) : null}
+        </div>
+
+        {clearable ? (
+          <button
+            type="button"
+            onClick={() => choose('')}
+            className="w-full rounded-sm py-1.5 text-center text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
+          >
+            Clear
+          </button>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
 

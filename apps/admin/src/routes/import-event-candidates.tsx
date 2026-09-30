@@ -20,9 +20,8 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
-import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { NAV_ITEMS, eventQueryKey } from '../lib/constants';
 
 const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
   create: 'New candidate',
@@ -34,19 +33,18 @@ export function ImportEventCandidatesPage() {
   const { id = '' } = useParams();
 
   const event = useQuery({
-    queryKey: [...QUERY_KEYS.EVENTS, id],
+    queryKey: eventQueryKey(id),
     queryFn: () => api.admin.events.detail(id),
   });
-
-  const template = useTemplateDownload(
-    () => api.admin.imports.candidateTemplate(),
-    CANDIDATE_IMPORT_TEMPLATE_FILENAME,
-  );
 
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewEventCandidates(id, file),
     commit: (file) => api.admin.imports.commitEventCandidates(id, file as File),
     writes: (plan) => plan.summary.total - plan.summary.invalid,
+    template: {
+      fetch: () => api.admin.imports.candidateTemplate(),
+      filename: CANDIDATE_IMPORT_TEMPLATE_FILENAME,
+    },
     success: 'Candidates imported.',
   });
 
@@ -64,8 +62,8 @@ export function ImportEventCandidatesPage() {
           meta={event.data?.name}
         />
       }
-      onDownloadTemplate={() => template.mutate()}
-      downloadingTemplate={template.isPending}
+      onDownloadTemplate={intake.downloadTemplate}
+      downloadingTemplate={intake.isDownloadingTemplate}
       dropzone={{
         accept: `${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`,
         file: intake.file,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -36,11 +36,17 @@ const ACTIONS = {
   VOID: 'VOID',
 } as const;
 
-type Action = (typeof ACTIONS)[keyof typeof ACTIONS];
+export type SittingAction = (typeof ACTIONS)[keyof typeof ACTIONS];
+
+/** What a row's menu hands back: the sitting clicked, and what was asked of it. */
+export type AskSittingAction = (sitting: ActionableSitting, action: SittingAction) => void;
 
 /** The consequence, named. Every one of these reaches into a sitting somebody is really having. */
 const PROMPTS: Readonly<
-  Record<Action, { title: string; description: string; confirmLabel: string; destructive: boolean }>
+  Record<
+    SittingAction,
+    { title: string; description: string; confirmLabel: string; destructive: boolean }
+  >
 > = {
   [ACTIONS.FORCE_SUBMIT]: {
     title: 'Submit this sitting?',
@@ -72,7 +78,7 @@ const PROMPTS: Readonly<
   },
 };
 
-const SUCCESS: Readonly<Record<Action, string>> = {
+const SUCCESS: Readonly<Record<SittingAction, string>> = {
   [ACTIONS.FORCE_SUBMIT]: 'Sitting submitted.',
   [ACTIONS.EXTEND]: 'Time added.',
   [ACTIONS.RESET]: 'Live sitting put back.',
@@ -98,8 +104,44 @@ type ActionValues = z.infer<typeof actionSchema>;
 
 const FIELDS = ['reason', 'minutes', 'regrantRanked'] as const;
 
-export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSitting }>) {
-  const [asking, setAsking] = useState<Action | null>(null);
+/** The row's own menu, and nothing else: the form and the mutation belong to the panel. */
+export function SittingActions({
+  sitting,
+  onAsk,
+}: Readonly<{ sitting: ActionableSitting; onAsk: AskSittingAction }>) {
+  return (
+    <RowActions label={`Act on ${sitting.studentName ?? 'this sitting'}`}>
+      {sitting.isLive ? (
+        <>
+          <DropdownMenuItem onSelect={() => onAsk(sitting, ACTIONS.FORCE_SUBMIT)}>
+            <Send aria-hidden />
+            Submit now
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onAsk(sitting, ACTIONS.EXTEND)}>
+            <Clock aria-hidden />
+            Add time
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onAsk(sitting, ACTIONS.RESET)}>
+            <RotateCcw aria-hidden />
+            Put the live sitting back
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
+
+      <DropdownMenuItem destructive onSelect={() => onAsk(sitting, ACTIONS.VOID)}>
+        <Ban aria-hidden />
+        Void
+      </DropdownMenuItem>
+    </RowActions>
+  );
+}
+
+/** One form and one mutation for a whole panel: a hundred rows each holding their own re-render on every poll. */
+export function useSittingActions(): { ask: AskSittingAction; dialog: React.ReactNode } {
+  const [asked, setAsked] = useState<{ sitting: ActionableSitting; action: SittingAction } | null>(
+    null,
+  );
   const queryClient = useQueryClient();
 
   const form = useForm<ActionValues>({
@@ -108,8 +150,9 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
   });
 
   const resolve = useMutation({
-    meta: { success: SUCCESS[asking ?? ACTIONS.VOID], fields: FIELDS },
-    mutationFn: (values: ActionValues) => call(asking, sitting.attemptId, values),
+    meta: { success: SUCCESS[asked?.action ?? ACTIONS.VOID], fields: FIELDS },
+    mutationFn: (values: ActionValues) =>
+      call(asked?.action ?? null, asked?.sitting.attemptId ?? '', values),
     onSuccess: async (resolved) => {
       if (resolved.rankedRegranted)
         toast.info('The ranked attempt is back for their next sitting.');
@@ -119,47 +162,21 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
     onError: (error) => applyFieldErrors(error, form.setError, FIELDS),
   });
 
+  // The dialog only opens from nothing, so clearing on the way out is what leaves it clean for the next row.
   const close = () => {
-    setAsking(null);
+    setAsked(null);
     form.reset();
-  };
-
-  const ask = (action: Action) => {
     resolve.reset();
-    form.reset();
-    setAsking(action);
   };
 
-  const prompt = asking ? PROMPTS[asking] : null;
+  const ask = useCallback<AskSittingAction>((sitting, action) => setAsked({ sitting, action }), []);
 
-  return (
-    <>
-      <RowActions label={`Act on ${sitting.studentName ?? 'this sitting'}`}>
-        {sitting.isLive ? (
-          <>
-            <DropdownMenuItem onSelect={() => ask(ACTIONS.FORCE_SUBMIT)}>
-              <Send aria-hidden />
-              Submit now
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => ask(ACTIONS.EXTEND)}>
-              <Clock aria-hidden />
-              Add time
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => ask(ACTIONS.RESET)}>
-              <RotateCcw aria-hidden />
-              Put the live sitting back
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
+  const prompt = asked ? PROMPTS[asked.action] : null;
 
-        <DropdownMenuItem destructive onSelect={() => ask(ACTIONS.VOID)}>
-          <Ban aria-hidden />
-          Void
-        </DropdownMenuItem>
-      </RowActions>
-
-      {prompt && asking ? (
+  return {
+    ask,
+    dialog:
+      prompt && asked ? (
         <ConfirmDialog
           open
           onOpenChange={(open) => !open && close()}
@@ -171,7 +188,7 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
           onConfirm={form.handleSubmit((values) => resolve.mutate(values))}
         >
           <div className="flex flex-col gap-4">
-            {asking === ACTIONS.EXTEND ? (
+            {asked.action === ACTIONS.EXTEND ? (
               <FormField form={form} name="minutes" label="Extra time (minutes)">
                 {(control) => <NumericInput {...control} className="w-32 tabular-nums" />}
               </FormField>
@@ -181,7 +198,7 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
               {(control) => <Input {...control} placeholder="What happened" />}
             </FormField>
 
-            {asking === ACTIONS.VOID && sitting.isGraded ? (
+            {asked.action === ACTIONS.VOID && asked.sitting.isGraded ? (
               <Checkbox
                 label="Give the ranked attempt back"
                 // ui-copy-ok: consequence — without it the slot stays spent and a re-sit is a retake.
@@ -191,12 +208,11 @@ export function SittingActions({ sitting }: Readonly<{ sitting: ActionableSittin
             ) : null}
           </div>
         </ConfirmDialog>
-      ) : null}
-    </>
-  );
+      ) : null,
+  };
 }
 
-function call(action: Action | null, attemptId: string, values: ActionValues) {
+function call(action: SittingAction | null, attemptId: string, values: ActionValues) {
   const { reason, minutes, regrantRanked } = values;
   switch (action) {
     case ACTIONS.FORCE_SUBMIT:

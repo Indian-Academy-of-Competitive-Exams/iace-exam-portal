@@ -22,7 +22,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { COURSE_ITEMS, QUERY_KEYS } from '../../lib/constants';
+import { COURSE_ITEMS, announcementPreviewQueryKey } from '../../lib/constants';
 import { useBranches } from '../../lib/use-branches';
 
 /** The two cohort dimensions this dialog offers; the server validates the whole filter for real. */
@@ -93,7 +93,7 @@ export function ComposeAnnouncementDialog({
   const audience = { branchId, course };
 
   const preview = useQuery({
-    queryKey: [...QUERY_KEYS.ANNOUNCEMENTS, 'preview', audience],
+    queryKey: announcementPreviewQueryKey(audience),
     queryFn: () =>
       api.admin.announcements.preview({ title: 'x', body: 'x', audience, paidChannels: [] }),
     enabled: open,

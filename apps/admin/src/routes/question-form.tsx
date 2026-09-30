@@ -14,7 +14,7 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, questionQueryKey } from '../lib/constants';
 import { QuestionFields } from '../components/question-fields';
 import { emptyValues, valuesOf, type QuestionFormValues } from '../components/question-draft';
 
@@ -23,7 +23,7 @@ export function QuestionFormPage() {
   const { id = '' } = useParams();
 
   const question = useQuery({
-    queryKey: [...QUERY_KEYS.QUESTION, id],
+    queryKey: questionQueryKey(id),
     queryFn: () => api.admin.questions.detail(id),
   });
 

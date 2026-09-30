@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRightLeft, BarChart3, FileText, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -42,6 +42,10 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [moving, setMoving] = useState<SeriesTestRow | null>(null);
+  const columns = useMemo(
+    () => testColumns({ canWrite, reached: series.reachedCount, onMoving: setMoving }),
+    [canWrite, series.reachedCount],
+  );
 
   const tests = useQuery({
     queryKey: testsKey(series.id),
@@ -69,7 +73,7 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
       ) : null}
 
       <DataTable
-        columns={testColumns({ canWrite, reached: series.reachedCount, onMoving: setMoving })}
+        columns={columns}
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}

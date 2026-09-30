@@ -47,8 +47,8 @@ import {
   ANALYTICS_SYNC_MAX_MS,
   ANALYTICS_SYNC_POLL_MS,
   NAV_ITEMS,
-  QUERY_KEYS,
   ROUTES,
+  testAnalyticsQueryKey,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { durationLabel, secondsLabel } from '../lib/duration';
@@ -84,7 +84,7 @@ export function TestAnalyticsPage() {
   const [sync, setSync] = useState<SyncMark | null>(null);
 
   const analytics = useQuery({
-    queryKey: [...QUERY_KEYS.TEST_ANALYTICS, id],
+    queryKey: testAnalyticsQueryKey(id),
     queryFn: () => api.admin.tests.analytics(id),
     refetchInterval: (query) =>
       sync !== null && !hasLanded(sync, query.state.data?.summary) ? ANALYTICS_SYNC_POLL_MS : false,

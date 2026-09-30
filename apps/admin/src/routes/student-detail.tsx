@@ -41,11 +41,12 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import {
+  COURSE_ITEMS,
   GENDER_LABELS,
   NAV_ITEMS,
   QUERY_KEYS,
   STUDENT_TYPE_LABELS,
-  COURSE_ITEMS,
+  studentQueryKey,
 } from '../lib/constants';
 import { STUDENT_DETAIL_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
@@ -399,7 +400,7 @@ export function StudentDetailPage() {
   const onDetails = tab === STUDENT_TABS.DETAILS;
 
   const student = useQuery({
-    queryKey: [...QUERY_KEYS.STUDENT, id],
+    queryKey: studentQueryKey(id),
     queryFn: () => api.admin.students.detail(id),
   });
 
@@ -461,7 +462,7 @@ export function StudentDetailPage() {
       }),
     onSuccess: (updated) => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS, refetchType: 'none' });
-      queryClient.setQueryData([...QUERY_KEYS.STUDENT, id], updated);
+      queryClient.setQueryData(studentQueryKey(id), updated);
       form.reset(toFormValues(updated));
       setIsEditing(false);
     },

@@ -48,11 +48,16 @@ import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
 import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, testQueryKey } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+  testAssignmentsQueryKey,
+  testPaperQueryKey,
+  testQueryKey,
+} from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
-
-const PAPER_KEY = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as const;
 
 /** Referentially stable, so a test that has never had a pool does not remount the editor. */
 const NO_SPEC: DrawSpec = { sections: {} };
@@ -80,13 +85,13 @@ export function TestPaperPage() {
   });
 
   const paper = useQuery({
-    queryKey: PAPER_KEY(testId),
+    queryKey: testPaperQueryKey(testId),
     queryFn: () => api.admin.tests.readPaper(testId),
     enabled: testId !== '',
   });
 
   const assignments = useQuery({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, testId],
+    queryKey: testAssignmentsQueryKey(testId),
     queryFn: () => api.admin.assignments.forTest(testId),
     enabled: testId !== '',
   });
@@ -162,7 +167,7 @@ function TestPaperScreen({
   });
 
   const refresh = async (next: TestPaper) => {
-    queryClient.setQueryData(PAPER_KEY(detail.id), next);
+    queryClient.setQueryData(testPaperQueryKey(detail.id), next);
     await queryClient.invalidateQueries({ queryKey: testQueryKey(detail.id) });
   };
 

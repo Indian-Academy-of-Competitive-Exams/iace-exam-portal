@@ -12,10 +12,10 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS } from '../lib/constants';
+import { QUERY_KEYS, seriesQueryKey } from '../lib/constants';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
 import { EventPicker, ProgramPicker } from '../components/access-picker';
-import { KIND_ITEMS, chooseKind, seriesKey, type SeriesFormValues } from './test-series-detail';
+import { KIND_ITEMS, chooseKind, type SeriesFormValues } from './test-series-detail';
 
 /** The one target its kind requires, which is why exactly one of these is ever on screen. */
 function KindTarget({
@@ -157,7 +157,7 @@ export function SeriesSwitch({ series }: Readonly<{ series: TestSeriesSummary }>
     onSuccess: (saved) => {
       setAsking(null);
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES, refetchType: 'none' });
-      queryClient.setQueryData(seriesKey(saved.id), saved);
+      queryClient.setQueryData(seriesQueryKey(saved.id), saved);
     },
     // Drop out of the confirm on failure, or the row is left asking a question already answered.
     onError: () => setAsking(null),

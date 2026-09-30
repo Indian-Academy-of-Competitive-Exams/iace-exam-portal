@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   instituteDayLabel,
@@ -19,7 +20,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, assignmentProgressQueryKey } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { useTestSectionFilters } from '../lib/use-test-section-filters';
 import { AdminMultiPicker } from '../components/admin-multi-picker';
@@ -149,6 +150,7 @@ function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
 export function SectionProgressPage() {
   const { identity } = useAuth();
   const adminId = identity?.id ?? '';
+  const columns = useMemo(() => columnsOf(adminId), [adminId]);
 
   const cascade = useTestSectionFilters(EVERY_SECTION);
 
@@ -173,7 +175,7 @@ export function SectionProgressPage() {
     ] as const satisfies readonly ListFilter[];
 
   const sections = useListScreen({
-    queryKey: [...QUERY_KEYS.ASSIGNMENTS, 'progress'],
+    queryKey: assignmentProgressQueryKey(),
     filters: buildFilters({}),
     toQuery: (values) => ({
       testId: values.testId || undefined,
@@ -206,7 +208,7 @@ export function SectionProgressPage() {
       <ListView
         list={sections}
         filters={buildFilters(selectedAssigneeLabels)}
-        columns={columnsOf(adminId)}
+        columns={columns}
         rowKey={(row) => `${row.testId}:${row.baseConfigSectionId}`}
         empty="No sections yet"
         emptyFiltered="No sections match those filters"

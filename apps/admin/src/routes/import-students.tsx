@@ -4,7 +4,6 @@ import {
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type StudentImportRow,
-  type StudentImportResult,
 } from '@iace/contracts';
 import {
   Badge,
@@ -23,24 +22,20 @@ import {
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
-import { useTemplateDownload } from '../lib/save-blob';
 import { useErrorRows } from '../lib/use-error-rows';
 
 /** Preview, then commit. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
-  const template = useTemplateDownload(
-    () => api.admin.imports.studentTemplate(),
-    STUDENT_IMPORT_TEMPLATE_FILENAME,
-  );
-
   const intake = useImportScreen({
     preview: (file) => api.admin.imports.previewStudents(file),
     commit: (file) => api.admin.imports.commitStudents(file as File),
     writes: (plan) => plan.summary.willCreate + plan.summary.willUpdate,
-    success: (data) => {
-      const result = data as StudentImportResult;
-      return `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`;
+    template: {
+      fetch: () => api.admin.imports.studentTemplate(),
+      filename: STUDENT_IMPORT_TEMPLATE_FILENAME,
     },
+    success: (result) =>
+      `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`,
   });
 
   const plan = intake.plan;
@@ -51,8 +46,8 @@ export function ImportStudentsPage() {
   return (
     <ImportView
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import students" />}
-      onDownloadTemplate={() => template.mutate()}
-      downloadingTemplate={template.isPending}
+      onDownloadTemplate={intake.downloadTemplate}
+      downloadingTemplate={intake.isDownloadingTemplate}
       dropzone={{
         accept: `${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`,
         file: intake.file,

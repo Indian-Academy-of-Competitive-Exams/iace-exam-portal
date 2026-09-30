@@ -27,7 +27,7 @@ import {
 import { api } from '../lib/api';
 import { uploadQuestionImage } from '../lib/upload-question-image';
 import { useAuth } from '../providers/auth';
-import { ADMIN_ROLE_LABELS, QUERY_KEYS } from '../lib/constants';
+import { ADMIN_ROLE_LABELS, sectionThreadQueryKey } from '../lib/constants';
 
 /** The discussion on one (test, section) — spec §9, read as a conversation rather than a log. */
 
@@ -40,9 +40,6 @@ const SAID_AT = new Intl.DateTimeFormat('en-IN', {
   hour: 'numeric',
   minute: '2-digit',
 });
-
-const sectionThreadKey = (testId: string, sectionId: string) =>
-  [...QUERY_KEYS.SECTION_THREAD, testId, sectionId] as const;
 
 /** One picture waiting to be sent: the key goes to the server, the url shows it meanwhile. */
 interface Attachment {
@@ -94,14 +91,14 @@ function Thread({
   const [composing, setComposing] = useState<Composing>(BLANK);
 
   const thread = useQuery({
-    queryKey: sectionThreadKey(testId, sectionId),
+    queryKey: sectionThreadQueryKey(testId, sectionId),
     queryFn: () => api.admin.sectionWork.comments(testId, sectionId),
   });
   const rows = thread.data ?? [];
 
   const settle = async () => {
     setComposing(BLANK);
-    await queryClient.invalidateQueries({ queryKey: sectionThreadKey(testId, sectionId) });
+    await queryClient.invalidateQueries({ queryKey: sectionThreadQueryKey(testId, sectionId) });
   };
 
   const say = useMutation({

@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import * as Popover from '@radix-ui/react-popover';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '@iace/ui';
+import { cn, Popover, PopoverContent, PopoverTrigger } from '@iace/ui';
 import {
   NAV_LAYOUT,
   activeNavPath,
@@ -70,8 +69,8 @@ function SectionPopover({
   const [open, setOpen] = useState(false);
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <button
           type="button"
           className={cn(
@@ -83,30 +82,27 @@ function SectionPopover({
           <span className="flex-1 text-left">{item.label}</span>
           <ChevronRight className="size-4 shrink-0" aria-hidden />
         </button>
-      </Popover.Trigger>
+      </PopoverTrigger>
 
-      <Popover.Portal>
-        <Popover.Content
-          side="right"
-          align="start"
-          sideOffset={8}
-          collisionPadding={8}
-          className="z-[--z-popover] w-[--nav-panel-w] max-h-[--nav-panel-max-h] overflow-y-auto rounded-lg border border-border bg-surface p-2 shadow-lg"
-        >
-          <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {item.label}
-          </p>
-          <SectionChildren
-            item={item}
-            activePath={activePath}
-            onNavigate={() => {
-              setOpen(false);
-              onNavigate();
-            }}
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="max-h-[--nav-panel-max-h] w-[--nav-panel-w] overflow-y-auto p-2"
+      >
+        <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {item.label}
+        </p>
+        <SectionChildren
+          item={item}
+          activePath={activePath}
+          onNavigate={() => {
+            setOpen(false);
+            onNavigate();
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 

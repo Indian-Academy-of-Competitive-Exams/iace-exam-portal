@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@iace/ui';
-import { saveBlob } from '../lib/save-blob';
+import { saveBlob } from '@iace/app-kit/browser';
 import { useAuth } from '../providers/auth';
 
 export interface ExportChoice {

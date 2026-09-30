@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type QuestionOnOtherTest } from '@iace/contracts';
 import { Alert, SkeletonParagraph } from '@iace/ui';
-import { QUERY_KEYS } from '../lib/constants';
+import { questionOtherTestsQueryKey } from '../lib/constants';
 
 const TEST_NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });
 
@@ -53,7 +53,7 @@ export function OtherTestsNotice({
   read,
 }: Readonly<{ questionId: string; read: () => Promise<QuestionOnOtherTest[]> }>) {
   const elsewhere = useQuery({
-    queryKey: [...QUERY_KEYS.PROOFREADING, 'other-tests', questionId],
+    queryKey: questionOtherTestsQueryKey(questionId),
     queryFn: read,
   });
   return (

@@ -1,14 +1,14 @@
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import { subjectPickerQueryKey, topicPickerQueryKey } from '../lib/constants';
 import { type MultiPickerProps, type PickerProps } from './picker-props';
 
 // Subject -> topic cascade: a topic only means something under its subject, so there's no list to offer without one.
 
 export function SubjectPicker(props: Readonly<PickerProps>) {
   const subjects = usePagedPicker({
-    queryKey: [...QUERY_KEYS.SUBJECTS, QUERY_SCOPES.PICKER],
+    queryKey: subjectPickerQueryKey(),
     fetchPage: (params) => api.admin.taxonomy.listSubjects(params),
   });
 
@@ -29,7 +29,7 @@ export function TopicPicker({
   ...props
 }: Readonly<PickerProps & { subjectId: string }>) {
   const topics = usePagedPicker({
-    queryKey: [...QUERY_KEYS.TOPICS, QUERY_SCOPES.PICKER, subjectId],
+    queryKey: topicPickerQueryKey(subjectId),
     fetchPage: (params) => api.admin.taxonomy.listTopics({ ...params, subjectId }),
     enabled: subjectId !== '',
   });
@@ -51,7 +51,7 @@ export function TopicPicker({
 
 export function SubjectMultiPicker(props: Readonly<MultiPickerProps>) {
   const subjects = usePagedPicker({
-    queryKey: [...QUERY_KEYS.SUBJECTS, QUERY_SCOPES.PICKER],
+    queryKey: subjectPickerQueryKey(),
     fetchPage: (params) => api.admin.taxonomy.listSubjects(params),
   });
 
@@ -73,7 +73,7 @@ export function TopicMultiPicker({
   ...props
 }: Readonly<MultiPickerProps & { subjectIds: readonly string[] }>) {
   const topics = usePagedPicker({
-    queryKey: [...QUERY_KEYS.TOPICS, QUERY_SCOPES.PICKER, [...subjectIds].join(',')],
+    queryKey: topicPickerQueryKey([...subjectIds].join(',')),
     fetchPage: (params) => api.admin.taxonomy.listTopics({ ...params, subjectId: [...subjectIds] }),
     enabled: subjectIds.length > 0,
   });

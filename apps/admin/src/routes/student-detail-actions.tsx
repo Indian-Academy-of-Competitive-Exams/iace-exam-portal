@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ErasureReceipt, type StudentDetail } from '@iace/contracts';
 import { Button, ConfirmDialog, SectionHeading, plural } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS } from '../lib/constants';
+import { QUERY_KEYS, studentQueryKey } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 /** Everything done TO a student rather than recorded about them, each behind its own confirm. */
@@ -18,7 +18,7 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
 
   const applyUpdate = (updated: StudentDetail) => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS, refetchType: 'none' });
-    queryClient.setQueryData([...QUERY_KEYS.STUDENT, id], updated);
+    queryClient.setQueryData(studentQueryKey(id), updated);
   };
 
   const setTestBlocked = useMutation({

@@ -44,11 +44,11 @@ import {
 import { api } from '../lib/api';
 import {
   QUERY_KEYS,
-  QUERY_SCOPES,
   REVIEW_STATE_LABELS,
   ROUTES,
   SECTION_QUESTION_PARAM,
   SEND_BACK_REASON_LABELS,
+  sectionWorkHeldQueryKey,
   sectionWorkQueryKey,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
@@ -109,7 +109,9 @@ export function SectionAuthoringPage() {
       const section = sectionWorkQueryKey(testId, sectionId);
       await queryClient.invalidateQueries({ queryKey: section, exact: true });
       if (savedId === undefined) return;
-      await queryClient.invalidateQueries({ queryKey: [...section, savedId, QUERY_SCOPES.HELD] });
+      await queryClient.invalidateQueries({
+        queryKey: sectionWorkHeldQueryKey(testId, sectionId, savedId),
+      });
     },
     [queryClient, testId, sectionId],
   );
@@ -178,7 +180,7 @@ function SectionWorkspace({
         cardOf(work, question, index, seat, onChanged, onSettle),
       ),
       query: (id) => ({
-        queryKey: [...sectionWorkQueryKey(testId, sectionId), id, QUERY_SCOPES.HELD],
+        queryKey: sectionWorkHeldQueryKey(testId, sectionId, id),
         queryFn: async (): Promise<Held> => {
           const question = await api.admin.sectionWork.question(testId, sectionId, id);
           return {

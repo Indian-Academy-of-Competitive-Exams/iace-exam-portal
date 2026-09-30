@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { type BaseConfigDetail } from '@iace/contracts';
 import {
@@ -74,6 +74,7 @@ function sectionColumns(): DataTableColumn<Section>[] {
 
 export function ConfigSummaryButton({ config }: Readonly<{ config: BaseConfigDetail }>) {
   const [open, setOpen] = useState(false);
+  const columns = useMemo(() => sectionColumns(), []);
 
   return (
     <>
@@ -118,7 +119,7 @@ export function ConfigSummaryButton({ config }: Readonly<{ config: BaseConfigDet
             <section className="flex flex-col gap-3">
               <h3 className="text-sm font-semibold tracking-tight text-foreground">Each section</h3>
               <DataTable
-                columns={sectionColumns()}
+                columns={columns}
                 rows={config.sections}
                 rowKey={(section) => section.id}
                 isLoading={false}

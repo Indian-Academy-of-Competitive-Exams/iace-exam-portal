@@ -10,10 +10,7 @@ import {
   Brandmark,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  CardStep,
   Field,
   Input,
   PinField,
@@ -27,8 +24,6 @@ import { useAuth } from '../providers/auth';
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
 const EMAIL_FIELDS = ['email'] as const;
 const CODE_FIELDS = ['code'] as const;
-
-const STEP_HEADER = 'items-center pt-4 text-center';
 
 /** Email + OTP. No self-signup: an unknown address simply never receives a code. */
 export function LoginPage() {
@@ -95,37 +90,31 @@ function EmailStep({
   });
 
   return (
-    <>
-      <CardHeader className={STEP_HEADER}>
-        <CardTitle>Admin sign in</CardTitle>
-      </CardHeader>
+    <CardStep title="Admin sign in">
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
+        noValidate
+      >
+        <Field htmlFor="email" label="Email address" error={form.formState.errors.email?.message}>
+          {(control) => (
+            <Input
+              {...control}
+              {...form.register('email')}
+              type="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="you@iace.co.in"
+              invalid={Boolean(form.formState.errors.email)}
+            />
+          )}
+        </Field>
 
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
-          noValidate
-        >
-          <Field htmlFor="email" label="Email address" error={form.formState.errors.email?.message}>
-            {(control) => (
-              <Input
-                {...control}
-                {...form.register('email')}
-                type="email"
-                autoComplete="email"
-                autoFocus
-                placeholder="you@iace.co.in"
-                invalid={Boolean(form.formState.errors.email)}
-              />
-            )}
-          </Field>
-
-          <Button type="submit" loading={requestOtp.isPending}>
-            Send code
-          </Button>
-        </form>
-      </CardContent>
-    </>
+        <Button type="submit" loading={requestOtp.isPending}>
+          Send code
+        </Button>
+      </form>
+    </CardStep>
   );
 }
 
@@ -155,50 +144,48 @@ function CodeStep({
   });
 
   return (
-    <>
-      <CardHeader className={STEP_HEADER}>
-        <CardTitle>Enter the code</CardTitle>
-        <CardDescription>
+    <CardStep
+      title="Enter the code"
+      meta={
+        <>
           Sent to <span className="font-medium text-foreground">{email}</span>
-        </CardDescription>
-      </CardHeader>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => verify.mutate(values))}
+        noValidate
+      >
+        <PinField
+          name="code"
+          form={form}
+          label="One-time code"
+          // The server decides how long a code is; the boxes follow it rather than assuming six.
+          length={challenge.codeLength}
+          autoFocus
+          autoComplete="one-time-code"
+        />
 
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => verify.mutate(values))}
-          noValidate
-        >
-          <PinField
-            name="code"
-            form={form}
-            label="One-time code"
-            // The server decides how long a code is; the boxes follow it rather than assuming six.
-            length={challenge.codeLength}
-            autoFocus
-            autoComplete="one-time-code"
-          />
+        {challenge.devCode ? (
+          <Alert variant="info">
+            <Info aria-hidden />
+            <span>
+              Development sender. Your code is{' '}
+              <span className="font-semibold tabular-nums">{challenge.devCode}</span>
+            </span>
+          </Alert>
+        ) : null}
 
-          {challenge.devCode ? (
-            <Alert variant="info">
-              <Info aria-hidden />
-              <span>
-                Development sender. Your code is{' '}
-                <span className="font-semibold tabular-nums">{challenge.devCode}</span>
-              </span>
-            </Alert>
-          ) : null}
+        <Button type="submit" loading={verify.isPending}>
+          Verify &amp; continue
+        </Button>
 
-          <Button type="submit" loading={verify.isPending}>
-            Verify &amp; continue
-          </Button>
-
-          <Button type="button" variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft aria-hidden />
-            Use a different email
-          </Button>
-        </form>
-      </CardContent>
-    </>
+        <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+          <ArrowLeft aria-hidden />
+          Use a different email
+        </Button>
+      </form>
+    </CardStep>
   );
 }

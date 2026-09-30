@@ -49,6 +49,8 @@ import {
   QUESTION_STATUS_VARIANT,
   QUESTION_TYPE_LABELS,
   ROUTES,
+  authoringHistoryQueryKey,
+  authoringStatsQueryKey,
 } from '../lib/constants';
 import { useDeleteQuestion } from '../lib/use-delete-question';
 import { SubjectMultiPicker } from '../components/taxonomy-picker';
@@ -206,7 +208,7 @@ export function AuthoringHistoryPage() {
   const filters = useFilters<'view' | 'testId' | 'assignmentId'>();
   const testId = filters.get('testId');
   const stats = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'stats'],
+    queryKey: authoringStatsQueryKey(),
     queryFn: () => api.admin.authoring.stats(),
   });
 
@@ -280,7 +282,7 @@ export function AuthoringHistoryPage() {
   ] as const;
 
   const questions = useListScreen({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'history'],
+    queryKey: authoringHistoryQueryKey(),
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,

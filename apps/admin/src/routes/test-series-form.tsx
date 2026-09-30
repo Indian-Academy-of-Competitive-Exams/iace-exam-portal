@@ -20,14 +20,13 @@ import {
   type FormPanelTab,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, seriesQueryKey } from '../lib/constants';
 import { type StageChoice } from '../components/exam-picker';
 import { ExportButton } from '../components/export-button';
 import {
   SERIES_TAB,
   SERVER_FIELDS,
   bodyOf,
-  seriesKey,
   valuesOf,
   type SeriesFormValues,
   type SeriesTab,
@@ -45,7 +44,7 @@ export function TestSeriesFormPage() {
   const seriesId = id ?? '';
 
   const series = useQuery({
-    queryKey: seriesKey(seriesId),
+    queryKey: seriesQueryKey(seriesId),
     queryFn: () => api.admin.testSeries.detail(seriesId),
     enabled: existing,
   });
@@ -133,7 +132,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
         queryKey: QUERY_KEYS.TEST_SERIES,
         refetchType: 'none',
       });
-      queryClient.setQueryData(seriesKey(saved.id), saved);
+      queryClient.setQueryData(seriesQueryKey(saved.id), saved);
       if (!existing) return navigate(ROUTES.TEST_SERIES_DETAIL(saved.id));
       // The saved values become the ones Cancel returns to; without this the next Save undoes this one.
       form.reset(valuesOf(saved));

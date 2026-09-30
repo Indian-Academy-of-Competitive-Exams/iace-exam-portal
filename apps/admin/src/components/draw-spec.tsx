@@ -10,7 +10,7 @@ import {
 import { Checkbox, Field, RatioBar, type RatioPart, type RatioValues } from '@iace/ui';
 import { api } from '../lib/api';
 import { TopicMultiPicker } from './taxonomy-picker';
-import { QUERY_KEYS } from '../lib/constants';
+import { availableQuestionsQueryKey } from '../lib/constants';
 
 /** What one section is drawn from: its topics, and how many of each difficulty. */
 
@@ -40,7 +40,7 @@ export function DrawSpecEditor({
 
   /** What the draw itself would find, counted by the database — not everything the bank holds. */
   const available = useQuery({
-    queryKey: [...QUERY_KEYS.QUESTIONS, 'available', testId, section.subjectId, topicIds.join(',')],
+    queryKey: availableQuestionsQueryKey(testId, section.subjectId, topicIds.join(',')),
     queryFn: () =>
       api.admin.questions.availability({
         subjectId: section.subjectId ? [section.subjectId] : undefined,

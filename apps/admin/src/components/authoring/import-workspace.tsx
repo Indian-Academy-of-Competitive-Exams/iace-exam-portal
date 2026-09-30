@@ -16,7 +16,7 @@ import {
   cn,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/constants';
 import { AuthoringWorkspace, type Held, type WorkspaceSource } from './authoring-workspace';
 import { headerOfDraft, stateOfDraft, toDraft } from './question-scaffold';
 
@@ -103,7 +103,7 @@ export function ImportWorkspace({
   const { importLogId, rows } = plan;
 
   const source = useMemo((): WorkspaceSource => {
-    const draftsKey = [...QUERY_KEYS.QUESTIONS, 'import', importLogId] as const;
+    const draftsKey = importDraftsQueryKey(importLogId);
     // Read once for the whole sheet, and again only after a save invalidates it.
     const drafts = {
       queryKey: draftsKey,
@@ -123,7 +123,7 @@ export function ImportWorkspace({
         editable: row.action !== 'left_out',
       })),
       query: (line) => ({
-        queryKey: [...draftsKey, line],
+        queryKey: importDraftQueryKey(importLogId, line),
         queryFn: async (): Promise<Held> => {
           const found = (await queryClient.fetchQuery(drafts)).find(
             (row) => String(row.line) === line,
@@ -139,7 +139,7 @@ export function ImportWorkspace({
         queryClient.setQueryData(draftsKey, (sheet: QuestionImportDraft[] | undefined) =>
           sheet?.map((row) => (row.line === Number(line) ? { ...row, draft } : row)),
         );
-        await queryClient.invalidateQueries({ queryKey: [...draftsKey, line] });
+        await queryClient.invalidateQueries({ queryKey: importDraftQueryKey(importLogId, line) });
       },
       subjectLocked: false,
       checkDuplicates: false,

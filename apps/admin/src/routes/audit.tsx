@@ -27,20 +27,20 @@ import {
   type ListFilter,
   type ListFilterMultiControl,
 } from '@iace/ui';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, saveBlob, useFilters, useListScreen } from '@iace/app-kit/browser';
 import { ExportButton } from '../components/export-button';
 import { AdminMultiPicker } from '../components/admin-multi-picker';
 import { ChangedCell } from '../lib/audit-format';
 import { ACTION_BADGE_VARIANT } from '../lib/audit-vocabulary';
 import { api } from '../lib/api';
-import { saveBlob } from '../lib/save-blob';
 import {
   AUDIT_ACTION_LABELS,
   AUDIT_ACTOR_TYPE_LABELS,
   AUDIT_FEATURE_LABELS,
   IMPORT_SOURCE_LABELS,
   NAV_ITEMS,
-  QUERY_KEYS,
+  auditImportsQueryKey,
+  auditRowActionsQueryKey,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
@@ -225,7 +225,7 @@ export function AuditActivityPage() {
 
   // Called twice from one declaration: the hook needs only the keys, the view needs the labels too.
   const activity = useListScreen({
-    queryKey: [...QUERY_KEYS.AUDIT, 'row-actions'],
+    queryKey: auditRowActionsQueryKey(),
     filters: buildFilters({}),
     toQuery: (values) => ({
       feature: values.feature as AuditFeature[],
@@ -285,7 +285,7 @@ export function AuditImportsPage() {
   const highlightRunId = filters.get('run');
 
   const imports = useListScreen({
-    queryKey: [...QUERY_KEYS.AUDIT, 'imports'],
+    queryKey: auditImportsQueryKey(),
     filters: [],
     toQuery: () => ({}),
     fetchPage: (params) => api.admin.audit.imports(params),

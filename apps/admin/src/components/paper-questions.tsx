@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   PICK_REFUSAL,
@@ -124,13 +124,22 @@ export function PaperQuestions({
   const [confirming, setConfirming] = useState(false);
   const going = rows.filter((row) => picked.has(row.id));
 
-  const stranded = strandedPicks(
-    rows.map((row) => ({
-      questionId: row.questionId,
-      difficulty: row.question.difficulty,
-      topicId: row.question.topicId,
-    })),
-    spec,
+  const stranded = useMemo(
+    () =>
+      strandedPicks(
+        rows.map((row) => ({
+          questionId: row.questionId,
+          difficulty: row.question.difficulty,
+          topicId: row.question.topicId,
+        })),
+        spec,
+      ),
+    [rows, spec],
+  );
+
+  const columns = useMemo(
+    () => paperColumns(stranded, testId, disposition, onChanged),
+    [stranded, testId, disposition, onChanged],
   );
 
   const remove = useMutation({
@@ -164,7 +173,7 @@ export function PaperQuestions({
       {banner}
 
       <DataTable
-        columns={paperColumns(stranded, testId, disposition, onChanged)}
+        columns={columns}
         rows={rows}
         rowKey={(row) => row.id}
         selection={

@@ -21,8 +21,7 @@
     "test": "TSX_TSCONFIG_PATH=test/tsconfig.json node --import tsx --import @iace/ui/test-support/dom --test \"test/**/*.test.ts\" \"test/**/*.test.tsx\""
   },
   "dependencies": {
-    "@iace/contracts": "workspace:*",
-    "@radix-ui/react-popover": "1.1.23"
+    "@iace/contracts": "workspace:*"
   },
   "peerDependencies": {
     "@iace/ui": "workspace:*",

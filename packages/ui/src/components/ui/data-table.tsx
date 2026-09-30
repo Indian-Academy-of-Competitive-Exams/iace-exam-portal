@@ -83,18 +83,24 @@ function rowSelection(keys: readonly string[], selection: DataTableSelection | u
   );
   const allShown = reachable.size > 0 && [...reachable].every((key) => selected?.has(key));
 
-  const toggle = (touched: Iterable<string>, on: boolean) => {
-    const next = new Set(selected);
-    for (const key of touched) {
-      if (on) next.add(key);
-      else next.delete(key);
-    }
-    selection?.onChange(next);
-  };
-
-  return { reachable, allShown, toggle };
+  return { reachable, allShown };
 }
 
+/** Outside the component, so a row's own tick handler is stable while the selection is. */
+function toggleSelection(
+  selection: DataTableSelection | undefined,
+  touched: Iterable<string>,
+  on: boolean,
+) {
+  const next = new Set(selection?.selected);
+  for (const key of touched) {
+    if (on) next.add(key);
+    else next.delete(key);
+  }
+  selection?.onChange(next);
+}
+
+/** The tick arrives as three values rather than an object: memo compares props, and a literal is never equal. */
 interface DataTableRowProps<TRow> {
   row: TRow;
   id: string;
@@ -104,15 +110,14 @@ interface DataTableRowProps<TRow> {
   expand?: DataTableExpand<TRow>;
   isOpen: boolean;
   onToggleOpen: (id: string) => void;
-  tick?: {
-    checked: boolean;
-    disabled: boolean;
-    label: string;
-    onChange: (id: string, on: boolean) => void;
-  };
+  /** Undefined where the table has no selection column at all. */
+  ticked?: boolean;
+  tickDisabled?: boolean;
+  tickLabel?: string;
+  onTick: (id: string, on: boolean) => void;
 }
 
-function DataTableRow<TRow>({
+function Row<TRow>({
   row,
   id,
   columns,
@@ -121,7 +126,10 @@ function DataTableRow<TRow>({
   expand,
   isOpen,
   onToggleOpen,
-  tick,
+  ticked,
+  tickDisabled,
+  tickLabel,
+  onTick,
 }: Readonly<DataTableRowProps<TRow>>) {
   return (
     <>
@@ -146,16 +154,16 @@ function DataTableRow<TRow>({
             </button>
           </TableCell>
         ) : null}
-        {tick ? (
+        {ticked === undefined ? null : (
           <TableCell>
             <Checkbox
-              aria-label={tick.label}
-              checked={tick.checked}
-              disabled={tick.disabled}
-              onChange={(event) => tick.onChange(id, event.target.checked)}
+              aria-label={tickLabel}
+              checked={ticked}
+              disabled={tickDisabled}
+              onChange={(event) => onTick(id, event.target.checked)}
             />
           </TableCell>
-        ) : null}
+        )}
         {columns.map((column) => (
           <TableCell key={column.key} numeric={column.numeric} className={column.className}>
             {column.cell(row)}
@@ -177,6 +185,9 @@ function DataTableRow<TRow>({
   );
 }
 
+/** Memoized, so a table that re-renders redraws only the rows whose own values moved — which needs a stable `columns` from the caller. */
+const DataTableRow = React.memo(Row) as typeof Row;
+
 /** Header, three-state body and pagination in one; `colSpan` follows `columns.length`. The `empty` message stays the caller's — only they know whether a filter is set. */
 export function DataTable<TRow>({
   columns,
@@ -197,17 +208,24 @@ export function DataTable<TRow>({
 }: Readonly<DataTableProps<TRow>>) {
   const [open, setOpen] = React.useState<ReadonlySet<string>>(new Set());
 
-  const toggleOpen = (key: string) => {
-    const next = new Set(open);
-    if (!next.delete(key)) next.add(key);
-    setOpen(next);
-  };
+  // Stable, both of them: a row is memoized, and a fresh handler each render would defeat it.
+  const toggleOpen = React.useCallback((key: string) => {
+    setOpen((was) => {
+      const next = new Set(was);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }, []);
+  const toggleOne = React.useCallback(
+    (key: string, on: boolean) => toggleSelection(selection, [key], on),
+    [selection],
+  );
+
   const keyed = rows.map((row) => ({ row, id: rowKey(row) }));
-  const { reachable, allShown, toggle } = rowSelection(
+  const { reachable, allShown } = rowSelection(
     keyed.map(({ id }) => id),
     selection,
   );
-  const toggleOne = (key: string, on: boolean) => toggle([key], on);
 
   const span = columns.length + (selection ? 1 : 0) + (expand ? 1 : 0);
   const fills = useInTableFrame();
@@ -228,7 +246,7 @@ export function DataTable<TRow>({
                   aria-label={selection.label ?? 'Select every row shown'}
                   checked={allShown}
                   disabled={reachable.size === 0}
-                  onChange={(event) => toggle(reachable, event.target.checked)}
+                  onChange={(event) => toggleSelection(selection, reachable, event.target.checked)}
                 />
               </TableHead>
             ) : null}
@@ -263,16 +281,10 @@ export function DataTable<TRow>({
                 expand={expand}
                 isOpen={open.has(id)}
                 onToggleOpen={toggleOpen}
-                tick={
-                  selection
-                    ? {
-                        checked: selection.selected.has(id),
-                        disabled: !reachable.has(id),
-                        label: selection.rowLabel?.(id) ?? `Select row ${id}`,
-                        onChange: toggleOne,
-                      }
-                    : undefined
-                }
+                ticked={selection ? selection.selected.has(id) : undefined}
+                tickDisabled={selection ? !reachable.has(id) : undefined}
+                tickLabel={selection ? (selection.rowLabel?.(id) ?? `Select row ${id}`) : undefined}
+                onTick={toggleOne}
               />
             ))}
           </TableState>

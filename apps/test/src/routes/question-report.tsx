@@ -102,6 +102,17 @@ function Body({
 
   // Options with every count at zero are four empty bars, so the chevron promises nothing.
   const split = report.questions.some((row) => row.optionCounts.some((option) => option.count > 0));
+  // Stable, so a memoized row is not redrawn by a filter change on another row.
+  const expand = useMemo(
+    () =>
+      split
+        ? {
+            render: (row: QuestionReportRow) => <Distribution row={row} />,
+            label: (row: QuestionReportRow) => `Answers to question ${row.order}`,
+          }
+        : undefined,
+    [split],
+  );
 
   return (
     // Every ancestor between the frame and the table has to shrink, or the page takes the scroll.
@@ -133,14 +144,7 @@ function Body({
           rowKey={(row) => row.questionId}
           empty="This paper served no questions"
           emptyFiltered="No question matches that filter"
-          expand={
-            split
-              ? {
-                  render: (row) => <Distribution row={row} />,
-                  label: (row) => `Answers to question ${row.order}`,
-                }
-              : undefined
-          }
+          expand={expand}
         />
       </Card>
     </div>

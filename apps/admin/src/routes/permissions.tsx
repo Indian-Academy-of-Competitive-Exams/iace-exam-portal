@@ -35,7 +35,7 @@ import {
   NAV_ITEMS,
   PAGE_SIZE_FOR_PICKERS,
   QUERY_KEYS,
-  QUERY_SCOPES,
+  allAdminsQueryKey,
 } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
@@ -81,7 +81,7 @@ export function PermissionsPage() {
     queryFn: () => api.admin.features.list(),
   });
   const admins = useQuery({
-    queryKey: [...QUERY_KEYS.ADMINS, QUERY_SCOPES.ALL],
+    queryKey: allAdminsQueryKey(),
     queryFn: () =>
       api.admin.admins.list({ page: 1, pageSize: PAGE_SIZE_FOR_PICKERS, activeOnly: 'true' }),
   });

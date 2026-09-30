@@ -1,7 +1,14 @@
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, MultiCombobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
+import {
+  eventFilterQueryKey,
+  eventPickerQueryKey,
+  programFilterQueryKey,
+  programPickerQueryKey,
+  seriesPickerQueryKey,
+  studentPickerQueryKey,
+} from '../lib/constants';
 import { type MultiPickerProps, type PickerProps } from './picker-props';
 
 /** A program is picked by its CODE: a student row and a series both store that string with no FK. */
@@ -9,7 +16,7 @@ import { type MultiPickerProps, type PickerProps } from './picker-props';
 /** Only active programs: the server refuses a retired one, so it is never offered. */
 export function ProgramPicker(props: Readonly<PickerProps>) {
   const programs = usePagedPicker({
-    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.PICKER],
+    queryKey: programPickerQueryKey(),
     fetchPage: (params) => api.admin.programs.list({ ...params, activeOnly: 'true' }),
   });
 
@@ -32,7 +39,7 @@ export function ProgramPicker(props: Readonly<PickerProps>) {
 /** Only active events: an event nobody is running is not a roster to build a series on. */
 export function EventPicker(props: Readonly<PickerProps>) {
   const events = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.PICKER],
+    queryKey: eventPickerQueryKey(),
     fetchPage: (params) => api.admin.events.list({ ...params, activeOnly: 'true' }),
   });
 
@@ -86,12 +93,7 @@ export function TestSeriesPicker({
   const awaitingStage = forExamStageId === '';
 
   const series = usePagedPicker({
-    queryKey: [
-      ...QUERY_KEYS.TEST_SERIES,
-      QUERY_SCOPES.PICKER,
-      notReachedBy ?? '',
-      forExamStageId ?? '',
-    ],
+    queryKey: seriesPickerQueryKey(notReachedBy ?? '', forExamStageId ?? ''),
     fetchPage: (params) => api.admin.testSeries.list({ ...params, notReachedBy, forExamStageId }),
     enabled: !awaitingStage,
   });
@@ -127,7 +129,7 @@ export function ProgramMultiPicker({
   ...props
 }: Readonly<MultiPickerProps & { held?: readonly string[] }>) {
   const programs = usePagedPicker({
-    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.FILTER],
+    queryKey: programFilterQueryKey(),
     fetchPage: (params) => api.admin.programs.list(params),
   });
   const offered = held
@@ -157,7 +159,7 @@ export function EventMultiPicker({
   ...props
 }: Readonly<MultiPickerProps>) {
   const events = usePagedPicker({
-    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.FILTER],
+    queryKey: eventFilterQueryKey(),
     fetchPage: (params) => api.admin.events.list(params),
   });
 
@@ -180,7 +182,7 @@ export function StudentMultiPicker({
   ...props
 }: Readonly<MultiPickerProps>) {
   const students = usePagedPicker({
-    queryKey: [...QUERY_KEYS.STUDENTS, QUERY_SCOPES.PICKER],
+    queryKey: studentPickerQueryKey(),
     fetchPage: (params) => api.admin.students.list(params),
   });
 

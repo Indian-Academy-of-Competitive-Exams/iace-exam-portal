@@ -18,7 +18,7 @@ import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { usePageTour } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
-import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
+import { QUERY_KEYS, STORAGE_KEYS, authoringQuestionQueryKey } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
 import { Legend, useFocusMode } from '../components/authoring/authoring-chrome';
@@ -63,7 +63,7 @@ export function AuthoringEditorPage() {
   const editingId = id ?? '';
   usePageTour({ id: TOUR_IDS.AUTHORING, steps: AUTHORING_TOUR, ready: true });
   const editing = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, id],
+    queryKey: authoringQuestionQueryKey(id),
     queryFn: () => api.admin.authoring.detail(editingId),
     enabled: editingId !== '',
   });
