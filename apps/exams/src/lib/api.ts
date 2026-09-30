@@ -7,7 +7,7 @@ import { STORAGE_KEYS } from './constants';
 export const tokenStore = createBrowserTokenStore(STORAGE_KEYS.AUTH);
 
 export const api = createAppApiClient({
-  baseUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:3000',
+  baseUrl: import.meta.env?.VITE_API_URL ?? 'http://localhost:3000',
   tokenStore,
   signOutSignal: browserSignOutSignal,
   client: { kind: CLIENT_KINDS.WEB },

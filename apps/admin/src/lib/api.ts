@@ -9,7 +9,7 @@ export const tokenStore = createBrowserTokenStore(STORAGE_KEYS.AUTH);
 export const signOutSignal = browserSignOutSignal;
 
 export const api = createAdminAppApiClient({
-  baseUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:3000',
+  baseUrl: import.meta.env?.VITE_API_URL ?? 'http://localhost:3000',
   tokenStore,
   signOutSignal,
   client: { kind: CLIENT_KINDS.WEB },

@@ -7,6 +7,10 @@
   // `paths` drops the app's `@iace/contracts` -> source mapping on purpose: tsx honours
   // it, contracts' own package is CommonJS, and a named import off its .ts source then
   // fails at link time. Through node_modules it is the built package, as everywhere else.
+  //
+  // @iace/ui's and @iace/app-kit's sources are listed as well, and not by choice: a component
+  // test renders them, tsx resolves a single tsconfig for the whole run, and a .tsx file it
+  // does not match gets esbuild's classic JSX transform — "React is not defined" at render.
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -14,5 +18,16 @@
     "baseUrl": "..",
     "paths": {}
   },
-  "include": ["**/*.ts", "**/*.tsx", "../src/**/*.ts", "../src/**/*.tsx"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../src/**/*.ts",
+    "../src/**/*.tsx",
+    "../../../packages/ui/src/**/*.ts",
+    "../../../packages/ui/src/**/*.tsx",
+    "../../../packages/app-kit/src/**/*.ts",
+    "../../../packages/app-kit/src/**/*.tsx",
+    "../../../packages/app-kit/browser/**/*.ts",
+    "../../../packages/app-kit/browser/**/*.tsx"
+  ]
 }

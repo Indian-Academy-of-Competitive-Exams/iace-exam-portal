@@ -31,7 +31,20 @@ const PACKAGES = [
     imports: ['@iace/ui/test-support/dom'],
     globs: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
   },
-  { dir: 'apps/admin', env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' } },
+  {
+    dir: 'apps/admin',
+    env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' },
+    imports: ['@iace/ui/test-support/dom'],
+    globs: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+  },
+  {
+    dir: 'apps/exams',
+    env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' },
+    imports: ['@iace/ui/test-support/dom'],
+    globs: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+  },
+  // No DOM import: React Native cannot render into jsdom, so these are the pure-logic tests only.
+  { dir: 'apps/mobile', env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' } },
 ];
 
 const RECORD_END = 'end_of_record\n';
