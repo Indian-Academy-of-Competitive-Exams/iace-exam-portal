@@ -3,6 +3,7 @@ import { describe, it, mock } from 'node:test';
 import { z } from 'zod';
 import {
   createApiClient,
+  createAdminApiClient,
   AppException,
   ErrorCodes,
   noContentSchema,
@@ -10,7 +11,6 @@ import {
   type ApiFailure,
   type Meta,
 } from '../src/index';
-import { lazyGroup } from '../src/client';
 import { createApiCore, queryString } from '../src/client/core';
 
 /** Callers get unwrapped `data` or a typed throw — never an envelope or a raw Response. */
@@ -70,7 +70,13 @@ function clientWith(
     }) as unknown as typeof fetch,
   };
 
-  return { core: createApiCore(options), api: createApiClient(options), calls, causes };
+  return {
+    core: createApiCore(options),
+    api: createApiClient(options),
+    admin: createAdminApiClient(options).admin,
+    calls,
+    causes,
+  };
 }
 
 const schema = z.object({ id: z.string() });
@@ -167,36 +173,10 @@ describe('typed client — success', () => {
     assert.equal(calls[0]?.client, 'MOBILE');
   });
 
-  it('reaches a nested admin method through the lazy group', async () => {
-    const { api, calls } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
-    assert.equal(await api.admin.branches.remove('b1'), null);
+  it('reaches a nested admin method', async () => {
+    const { admin, calls } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
+    assert.equal(await admin.branches.remove('b1'), null);
     assert.equal(calls.length, 1);
-  });
-
-  it('turns a lazy group into a string without calling it, as React dev logging does', () => {
-    const { api, calls } = clientWith([]);
-    assert.equal(typeof String(api.admin.exams), 'string');
-    assert.equal(typeof api.admin.exams.list.name, 'string');
-    assert.equal(calls.length, 0);
-  });
-
-  it('retries a group whose load failed, rather than replaying the failure', async () => {
-    let loads = 0;
-    const group = lazyGroup(async () => {
-      loads += 1;
-      if (loads === 1) throw new TypeError('Failed to fetch dynamically imported module');
-      return { ping: async () => 'pong' };
-    });
-    await assert.rejects(group.ping(), /Failed to fetch/);
-    assert.equal(await group.ping(), 'pong');
-    assert.equal(await group.ping(), 'pong');
-    assert.equal(loads, 2);
-  });
-
-  it('names an unknown method instead of calling undefined', async () => {
-    const { api } = clientWith([]);
-    const admin = api.admin as unknown as { nope: { get: () => Promise<unknown> } };
-    await assert.rejects(admin.nope.get(), /Unknown client method: nope\.get/);
   });
 });
 

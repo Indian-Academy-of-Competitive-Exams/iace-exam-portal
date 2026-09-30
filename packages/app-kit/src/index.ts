@@ -6,7 +6,7 @@ export {
 } from './token-store';
 export { type SignOutReason, type SignOutSignal } from './sign-out-signal';
 export { signOutReasonOf, signedOutMessage } from './signed-out-message';
-export { createAppApiClient } from './api-client';
+export { createAppApiClient, createAdminAppApiClient } from './api-client';
 export { type AppApiClient } from './api-client';
 export { createAuth, type AuthState, type CreateAuthOptions } from './create-auth';
 export {

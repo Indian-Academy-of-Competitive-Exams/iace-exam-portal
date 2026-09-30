@@ -1,19 +1,34 @@
-import { createApiClient, CLIENT_HEADERS, type ClientKind } from '@iace/contracts';
+import {
+  createApiClient,
+  createAdminApiClient,
+  CLIENT_HEADERS,
+  type ApiClientOptions,
+  type ClientKind,
+} from '@iace/contracts';
 import { type TokenStore } from './token-store';
 import { type SignOutSignal } from './sign-out-signal';
 import { signOutReasonOf } from './signed-out-message';
 
-/** One typed client per app; refreshes an expired access token transparently and raises the sign-out signal when the refresh token is gone. Storage and signal are adapters. */
-export function createAppApiClient(options: {
+/** What an app knows; storage and signal are adapters, since the client below is DOM-free. */
+export interface AppClientOptions {
   baseUrl: string;
   tokenStore: TokenStore;
   signOutSignal: SignOutSignal;
   /** Which app this is; the server keeps one session of each kind per student. */
   client: { kind: ClientKind; deviceName?: string | null };
-}) {
+}
+
+/** The student client: refreshes an expired access token transparently and raises the sign-out signal when the refresh token is gone. */
+export const createAppApiClient = (options: AppClientOptions) => createApiClient(coreOf(options));
+
+/** The same plumbing over the admin group. A separate factory is what keeps `admin` out of the student bundles. */
+export const createAdminAppApiClient = (options: AppClientOptions) =>
+  createAdminApiClient(coreOf(options));
+
+function coreOf(options: AppClientOptions): ApiClientOptions {
   const { baseUrl, tokenStore, signOutSignal, client } = options;
 
-  return createApiClient({
+  return {
     baseUrl,
     headers: clientHeaders(client),
     getAccessToken: () => tokenStore.get()?.accessToken ?? null,
@@ -23,7 +38,7 @@ export function createAppApiClient(options: {
       tokenStore.clear();
       signOutSignal.emit(signOutReasonOf(cause));
     },
-  });
+  };
 }
 
 /** Header values must be printable ASCII, or fetch refuses the whole request. */
@@ -41,5 +56,5 @@ function clientHeaders(client: {
   };
 }
 
-/** The whole typed client, as the one seam a portable hook takes instead of importing an app's. */
+/** The student client, as the one seam a portable hook takes instead of importing an app's. */
 export type AppApiClient = ReturnType<typeof createAppApiClient>;
