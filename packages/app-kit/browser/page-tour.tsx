@@ -49,6 +49,26 @@ function targetElement(target: string): Element | null {
   return document.querySelector(`[data-tour="${target}"]`);
 }
 
+/** Room a tour card needs beside a target: Radix picks a side but never clamps, so the anchor has to leave it one. */
+const CARD_ROOM = 220;
+
+/** The target cut to the viewport, and trimmed when it is tall enough that neither side has room — then the card sits inside it. */
+export function spotlightAnchor(
+  { top, left, width, height }: SpotlightRect,
+  viewport: { readonly width: number; readonly height: number },
+): SpotlightRect {
+  const y = Math.max(top, 0);
+  const x = Math.max(left, 0);
+  const bottom = Math.min(top + height, viewport.height);
+  const trapped = y < CARD_ROOM && bottom > viewport.height - CARD_ROOM;
+  return {
+    top: y,
+    left: x,
+    width: Math.max(Math.min(left + width, viewport.width) - x, 0),
+    height: Math.max((trapped ? viewport.height - CARD_ROOM : bottom) - y, 0),
+  };
+}
+
 /** A control measuring nothing is one nobody can see pointed at, so it counts as absent. */
 function boxOf(target: string): SpotlightRect | null {
   const element = targetElement(target);
@@ -68,7 +88,11 @@ export function TourProvider({
   // Which screen's tour is running, so a route swap can tell a departing run from one the arriving screen just opened.
   const [owner, setOwner] = useState<string | null>(null);
   // Held with the target it was measured for: a replay would otherwise paint one frame at the box the last run ended on.
-  const [rect, setRect] = useState<{ target: string; box: SpotlightRect } | null>(null);
+  const [rect, setRect] = useState<{
+    target: string;
+    box: SpotlightRect;
+    anchor: SpotlightRect;
+  } | null>(null);
   // Every callback here is stable, which is why nothing in this file needs to keep the run in a ref.
   const { step, index, count, open, next, back, close } = useTourRun();
 
@@ -104,11 +128,17 @@ export function TourProvider({
         next();
         return;
       }
-      setRect({ target, box });
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      setRect({ target, box, anchor: spotlightAnchor(box, viewport) });
     };
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    // Captured, because the blocker stops clicks but not the wheel, and a scrolled target leaves its cutout behind.
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
   }, [target, next]);
 
   const value = useMemo(
@@ -122,6 +152,7 @@ export function TourProvider({
       {step !== null && rect !== null && rect.target === step.target ? (
         <TourSpotlight
           rect={rect.box}
+          anchor={rect.anchor}
           title={step.title}
           body={step.body}
           index={index}

@@ -3,7 +3,7 @@ import { afterEach, before, describe, it } from 'node:test';
 import { StrictMode } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@iace/ui';
-import { TourProvider, TourTrigger, usePageTour } from '../browser/page-tour';
+import { spotlightAnchor, TourProvider, TourTrigger, usePageTour } from '../browser/page-tour';
 import { type KeyValueStorage, type TourStep } from '../src';
 import { fakeStorage } from './support/fake-storage';
 
@@ -253,5 +253,34 @@ describe('a step that moves', () => {
     fireEvent(window, new Event('resize'));
 
     assert.equal(document.querySelector<HTMLElement>('[data-tour-cutout]')?.style.top, '300px');
+  });
+});
+
+describe('spotlightAnchor', () => {
+  const SCREEN = { width: 1280, height: 760 };
+
+  it('leaves a short target alone, so the card still sits beside it', () => {
+    const box = { top: 100, left: 40, width: 300, height: 48 };
+
+    assert.deepEqual(spotlightAnchor(box, SCREEN), box);
+  });
+
+  it('cuts a target that starts above the viewport back to what is on screen', () => {
+    const anchor = spotlightAnchor({ top: -60, left: -20, width: 300, height: 200 }, SCREEN);
+
+    assert.deepEqual(anchor, { top: 0, left: 0, width: 280, height: 140 });
+  });
+
+  it('trims a target too tall for either side, so the card lands inside it', () => {
+    const anchor = spotlightAnchor({ top: 151, left: 40, width: 800, height: 585 }, SCREEN);
+
+    assert.equal(anchor.top, 151);
+    assert.equal(anchor.top + anchor.height, SCREEN.height - 220);
+  });
+
+  it('keeps a tall target that clears the top, so the card flips above it as before', () => {
+    const anchor = spotlightAnchor({ top: 400, left: 40, width: 300, height: 400 }, SCREEN);
+
+    assert.equal(anchor.top + anchor.height, SCREEN.height);
   });
 });

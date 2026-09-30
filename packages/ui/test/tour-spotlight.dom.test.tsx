@@ -9,6 +9,7 @@ const RECT = { top: 100, left: 40, width: 200, height: 48 };
 
 const props = {
   rect: RECT,
+  anchor: RECT,
   title: 'Your tests',
   body: 'Every test the institute has opened to you.',
   index: 0,

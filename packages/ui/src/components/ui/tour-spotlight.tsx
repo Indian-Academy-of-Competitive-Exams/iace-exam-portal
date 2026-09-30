@@ -11,6 +11,8 @@ export interface SpotlightRect {
 
 export interface TourSpotlightProps {
   rect: SpotlightRect;
+  /** What the card points at — the lit area cut to somewhere the card can actually sit. */
+  anchor: SpotlightRect;
   title: string;
   body: string;
   index: number;
@@ -29,6 +31,7 @@ const CARD = [
 /** One stop on a page tour: the page dimmed except for one control, and a card beside it. */
 export function TourSpotlight({
   rect,
+  anchor,
   title,
   body,
   index,
@@ -52,7 +55,10 @@ export function TourSpotlight({
         style={{ ...rect, boxShadow: '0 0 0 9999px var(--overlay-bg)' }}
         className="pointer-events-none fixed z-[--z-overlay] rounded-md"
       />
-      <PopoverPrimitive.Anchor style={rect} className="pointer-events-none fixed z-[--z-overlay]" />
+      <PopoverPrimitive.Anchor
+        style={anchor}
+        className="pointer-events-none fixed z-[--z-overlay]"
+      />
       {/* Not the house Popover: that bakes in its own surface, radius and shadow-lg; this card is dialog-weight. */}
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
