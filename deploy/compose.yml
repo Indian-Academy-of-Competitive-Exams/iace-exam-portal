@@ -8,6 +8,14 @@
 
 name: iace-api
 
+# Docker's default json-file driver never rotates, and Box A has 30 GB. Capped here so a stuck
+# container logging in a loop cannot take the disk — and with it the migrate step of the next release.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   # Runs to completion before the API starts, exactly as the one-off task does on a real release.
   migrate:
@@ -18,6 +26,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
     restart: 'no'
+    logging: *logging
 
   exam:
     build: &api-image
@@ -25,6 +34,7 @@ services:
       dockerfile: apps/api/Dockerfile
       target: runtime
     restart: unless-stopped
+    logging: *logging
     env_file: .env
     environment:
       API_ROLE: exam
@@ -48,6 +58,7 @@ services:
   core:
     build: *api-image
     restart: unless-stopped
+    logging: *logging
     env_file: .env
     environment:
       API_ROLE: core
@@ -67,6 +78,7 @@ services:
   worker:
     build: *api-image
     restart: unless-stopped
+    logging: *logging
     env_file: .env
     environment:
       API_ROLE: worker
@@ -83,6 +95,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
       API_HOST: ${API_HOST}

@@ -20,6 +20,7 @@ import {
   type ApiFailure,
 } from '@iace/contracts';
 import { ensureRequestId, type RequestWithId } from './request-id';
+import { redact } from './redact';
 import { PRISMA_ERROR_CODES, isDeadlock, isMalformedValue } from './prisma-errors';
 
 /** The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma, a stray TypeError. */
@@ -53,19 +54,30 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       // The only place the real cause exists: the response deliberately does not carry it, so losing it here would mean losing it entirely.
-      this.logger.error(line, exception instanceof Error ? exception.stack : String(exception));
-      report(exception, requestId, where);
+      this.logger.error(
+        `${line}${bodyLine(request.body)}`,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+      report(exception, requestId, where, request.body);
       return;
     }
+    // No body on a 4xx: `fieldErrors` already names every field the caller got wrong.
     this.logger.debug(`${line} ${error.message}`);
   }
 }
 
-/** Only what a 500 already told the log, tagged with the id the caller was handed. */
-function report(exception: unknown, requestId: string, where: string): void {
+/** Nothing appended for a body-less request — `{}` on every 500 is noise, not evidence. */
+function bodyLine(body: unknown): string {
+  if (!body || typeof body !== 'object' || Object.keys(body).length === 0) return '';
+  return ` ${JSON.stringify(redact(body))}`;
+}
+
+/** What a 500 told the log, tagged with the id the caller was handed, and the body that caused it. */
+function report(exception: unknown, requestId: string, where: string, body: unknown): void {
   Sentry.withScope((scope) => {
     scope.setTag('requestId', requestId);
     scope.setTag('route', where);
+    scope.setContext('request', { body: redact(body) });
     Sentry.captureException(exception);
   });
 }
