@@ -119,6 +119,7 @@ export function AuthoringWorkspace({
   title,
   saveLabel,
   extraActions,
+  onDirtyChange,
   panel,
 }: Readonly<{
   source: WorkspaceSource;
@@ -130,6 +131,8 @@ export function AuthoringWorkspace({
   saveLabel: string;
   /** Beside Save in the bottom bar. */
   extraActions?: React.ReactNode;
+  /** Told while a card holds edits, so the page can ask before a move leaves them behind. */
+  onDirtyChange?: (dirty: boolean) => void;
   panel?: WorkspacePanel;
 }>) {
   const queryClient = useQueryClient();
@@ -269,6 +272,8 @@ export function AuthoringWorkspace({
   const duplicate = useDuplicate(source.checkDuplicates ? draft : null, isNew ? '' : active);
   const issues = useIssues(draft, shown?.header);
   const dirty = active in edits;
+  const anyDirty = Object.keys(edits).length > 0;
+  useEffect(() => onDirtyChange?.(anyDirty), [anyDirty, onDirtyChange]);
   const canSave = !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
 
   const saveAndNext = () => {

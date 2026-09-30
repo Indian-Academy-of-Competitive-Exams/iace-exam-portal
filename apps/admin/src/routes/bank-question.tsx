@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
-import { Pencil } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { BookOpen, Pencil } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DIFFICULTY_LABELS, DIFFICULTY_LEVEL } from '@iace/contracts';
-import { Button } from '@iace/ui';
+import { Button, ConfirmDialog } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES, heldQuestionQueryKey, questionQueryKey } from '../lib/constants';
 import {
@@ -18,6 +18,10 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const [dirty, setDirty] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const toReading = useCallback(() => navigate(ROUTES.QUESTION(id ?? '')), [id, navigate]);
 
   const detail = useQuery({
     queryKey: questionQueryKey(id ?? ''),
@@ -88,20 +92,50 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
   }, [id, lead, navigate, queryClient, readOnly]);
 
   return (
-    <AuthoringWorkspace
-      source={source}
-      startAt={id ?? null}
-      saveLabel={id ? 'Save' : 'Save and next'}
-      extraActions={
-        readOnly && id ? (
-          <Button asChild variant="outline" size="sm">
-            <Link to={ROUTES.QUESTION_EDIT(id)}>
-              <Pencil aria-hidden />
-              Edit question
-            </Link>
-          </Button>
-        ) : undefined
-      }
-    />
+    <>
+      <AuthoringWorkspace
+        // A fresh workspace each way, so edits left behind cannot show through the read card.
+        key={readOnly ? 'reading' : 'writing'}
+        source={source}
+        startAt={id ?? null}
+        saveLabel={id ? 'Save' : 'Save and next'}
+        onDirtyChange={setDirty}
+        extraActions={
+          id ? (
+            <Button
+              asChild={readOnly}
+              variant="outline"
+              size="sm"
+              onClick={readOnly ? undefined : () => (dirty ? setLeaving(true) : toReading())}
+            >
+              {readOnly ? (
+                <Link to={ROUTES.QUESTION_EDIT(id)}>
+                  <Pencil aria-hidden />
+                  Edit question
+                </Link>
+              ) : (
+                <>
+                  <BookOpen aria-hidden />
+                  Back to reading
+                </>
+              )}
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <ConfirmDialog
+        open={leaving}
+        onOpenChange={setLeaving}
+        destructive
+        title="Discard the unsaved changes?"
+        description="The changes to this question have not been saved, and reading it again drops them."
+        confirmLabel="Discard changes"
+        onConfirm={() => {
+          setLeaving(false);
+          toReading();
+        }}
+      />
+    </>
   );
 }
