@@ -447,9 +447,21 @@ platform actually sends.
 
 ## 9. Logs, metrics and alarms
 
-The API has no log statement on the **success** path, so CloudWatch ingest stays inside the free
-5 GB. A failure is the exception: `AllExceptionsFilter` logs a 4xx as one line, and a 5xx with its
-stack **and the request body**, which is the only record of what the caller actually sent.
+**`LOG_LEVEL` decides what reaches stdout, and `apps/api/src/common/logging.ts` is the only place
+that shape is chosen.** Unset means `>=debug` outside production and `>=log` in it, and production
+also switches `ConsoleLogger` to `json: true` — one object per line, so a shipper indexes it without
+a regex. Nest's own logger does both; there is no log library here and no need for one.
+
+That one variable is what keeps a live event readable. `MetricsInterceptor` logs a line per request
+— method, route pattern, status, duration, actor, request id — at **`debug`**, so it is every call
+in dev and staging and none in production, where 3K students autosaving every 20–30s is ~150 lines a
+second. A success slower than 1,000 ms is a **`warn`** instead, so production still hears the only
+thing worth hearing about a call that worked. Nothing logs a successful response _body_: at 6K
+students the exam role alone would write tens of GB an event.
+
+Failures never depend on the level. `AllExceptionsFilter` owns them — a 4xx as one line, a 5xx with
+its stack **and the request body**, which is the only record of what the caller actually sent, since
+the response deliberately carries none of it.
 
 **A body in a log or a Sentry event goes through `apps/api/src/common/redact.ts` first**, and there
 is one of it. `instrument.ts` sets `sendDefaultPii: false` precisely so a mobile number or a PIN

@@ -10,6 +10,7 @@ import { REQUEST_ID_HEADER } from '@iace/contracts';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 import { PREFLIGHT_CACHE_SEC, corsOrigin, helmetOptions } from './common/security-headers';
+import { appLogger } from './common/logging';
 import { threadpoolRisk } from './common/threadpool';
 import { containerMemoryLimit, heapLimitNow, heapRisk } from './common/heap';
 
@@ -21,6 +22,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: false,
     bodyParser: false,
+    logger: appLogger(),
   });
   const config = app.get(AppConfigService);
 

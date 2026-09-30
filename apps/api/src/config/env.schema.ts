@@ -68,6 +68,15 @@ export const OTP_SENDERS = {
   WHATSAPP: 'whatsapp',
 } as const;
 
+/** `filterLogLevels`' vocabulary. Refused here so a typo is a boot failure, not silent full output. */
+const logLevel = z
+  .string()
+  .optional()
+  .refine(
+    (v) => v === undefined || v.trim() === '' || /^(>=?)?[a-z]+(,[a-z]+)*$/.test(v.trim()),
+    'must be a level like log, a threshold like >=warn, or a list like log,error',
+  );
+
 /** A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb. */
 const byteSize = (fallback: string) =>
   z
@@ -84,6 +93,8 @@ export const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),
   // Which half a container is; here so a typo is refused at boot rather than serving nothing.
   API_ROLE: z.enum(API_ROLES).default(API_ROLES.ALL),
+  // Declared for the refusal and the docs only: main.ts reads it off process.env before this exists.
+  LOG_LEVEL: logLevel,
   CORS_ORIGINS: csv,
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
