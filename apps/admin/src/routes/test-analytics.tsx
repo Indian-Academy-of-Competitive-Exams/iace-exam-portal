@@ -43,6 +43,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ExportButton } from '../components/export-button';
+import { QuestionLink } from '../components/question-link';
 import {
   ANALYTICS_SYNC_MAX_MS,
   ANALYTICS_SYNC_POLL_MS,
@@ -381,7 +382,11 @@ function itemColumns(): DataTableColumn<TestItemAnalytics>[] {
       key: 'stem',
       header: 'Question',
       className: 'max-w-[22rem]',
-      cell: (item) => <TruncatedText>{item.stemPreview}</TruncatedText>,
+      cell: (item) => (
+        <QuestionLink questionId={item.questionId}>
+          <TruncatedText>{item.stemPreview}</TruncatedText>
+        </QuestionLink>
+      ),
     },
     { key: 'attempted', header: 'Attempted', numeric: true, cell: (item) => item.attemptedCount },
     { key: 'correct', header: 'Correct', numeric: true, cell: (item) => item.correctCount },

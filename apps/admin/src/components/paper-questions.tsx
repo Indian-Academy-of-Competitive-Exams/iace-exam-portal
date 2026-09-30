@@ -22,7 +22,7 @@ import {
 import { api } from '../lib/api';
 import { framingOf } from '../routes/test-paper-view';
 import { DispositionBadge, PaperDisposition } from './paper-disposition';
-import { QuestionLink } from './question-viewer';
+import { QuestionLink } from './question-link';
 
 /** One section of the paper as it stands: what is on it, and what its own settings now refuse. */
 

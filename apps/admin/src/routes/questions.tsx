@@ -24,7 +24,6 @@ import {
   PageHeader,
   TableFrame,
   TruncatedText,
-  linkVariants,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -40,6 +39,7 @@ import { QUESTIONS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { useAuth } from '../providers/auth';
 import { questionFacetFilters } from '../lib/question-filters';
 import { QuestionHistorySheet } from '../components/question-history';
+import { QuestionLink } from '../components/question-link';
 import { ExportButton } from '../components/export-button';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
@@ -52,9 +52,9 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
       header: 'Question',
       className: 'max-w-md',
       cell: (question) => (
-        <Link to={ROUTES.QUESTION(question.id)} className={linkVariants()}>
+        <QuestionLink questionId={question.id}>
           <TruncatedText>{question.stemPreview}</TruncatedText>
-        </Link>
+        </QuestionLink>
       ),
     },
     {
@@ -269,7 +269,7 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
         {canWrite ? (
           <>
             <DropdownMenuItem asChild>
-              <Link to={ROUTES.QUESTION(question.id)}>
+              <Link to={ROUTES.QUESTION_EDIT(question.id)}>
                 <Pencil aria-hidden />
                 Edit
               </Link>

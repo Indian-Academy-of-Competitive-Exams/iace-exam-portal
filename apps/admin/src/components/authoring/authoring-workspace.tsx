@@ -382,16 +382,18 @@ export function AuthoringWorkspace({
         actions={
           <>
             {extraActions}
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canSave}
-              loading={save.isPending}
-              onClick={saveAndNext}
-            >
-              <Save aria-hidden />
-              {editable ? saveLabel : 'Next'}
-            </Button>
+            {editable || keys.length > 1 ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canSave}
+                loading={save.isPending}
+                onClick={saveAndNext}
+              >
+                <Save aria-hidden />
+                {editable ? saveLabel : 'Next'}
+              </Button>
+            ) : null}
           </>
         }
       />

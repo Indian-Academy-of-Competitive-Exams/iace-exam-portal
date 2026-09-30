@@ -39,9 +39,6 @@ const CohortsPage = React.lazy(() =>
 const QuestionsPage = React.lazy(() =>
   import('./routes/questions').then((module) => ({ default: module.QuestionsPage })),
 );
-const QuestionFormPage = React.lazy(() =>
-  import('./routes/question-form').then((module) => ({ default: module.QuestionFormPage })),
-);
 const ImportQuestionsPage = React.lazy(() =>
   import('./routes/import-questions').then((module) => ({ default: module.ImportQuestionsPage })),
 );
@@ -165,7 +162,10 @@ export function App() {
           <Route path={ROUTES.QUESTION_NEW} element={whileLoading(<BankQuestionPage />)} />
           <Route path={ROUTES.IMPORT_QUESTIONS} element={whileLoading(<ImportQuestionsPage />)} />
           <Route path={ROUTES.TAXONOMY} element={whileLoading(<TaxonomyPage />)} />
-          <Route path={ROUTES.QUESTION_PATTERN} element={whileLoading(<QuestionFormPage />)} />
+          <Route
+            path={ROUTES.QUESTION_PATTERN}
+            element={whileLoading(<BankQuestionPage readOnly />)}
+          />
           <Route path={ROUTES.QUESTION_EDIT_PATTERN} element={whileLoading(<BankQuestionPage />)} />
           {[
             ROUTES.TYPING_SECTION_PATTERN,

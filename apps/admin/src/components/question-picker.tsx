@@ -36,7 +36,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { sectionQuestionPickerQueryKey } from '../lib/constants';
-import { QuestionLink } from './question-viewer';
+import { QuestionLink } from './question-link';
 
 /** The pool one section draws from, as its own configuration describes it, chosen from by hand. */
 
