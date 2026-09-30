@@ -145,14 +145,6 @@ export class AuthService {
     await this.pin.clearFailures(student.mobile);
   }
 
-  /** What an irreversible self-service action re-proves before it runs — same ladder, same message, as a PIN change. */
-  async verifyStudentPin(studentId: string, currentPin: string): Promise<void> {
-    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
-    await this.verifyCurrentPin(student, currentPin);
-  }
-
   /** Replacing a PIN the student already knows. The current one is checked despite the session: one left open on a shared machine would otherwise lock the owner out. Wrong attempts climb the same ladder, and the response is a FRESH session. */
   async changeStudentPin(
     studentId: string,

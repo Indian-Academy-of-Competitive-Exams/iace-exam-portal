@@ -74,13 +74,6 @@ export const changePinSchema = z
 export type ChangePinInput = z.input<typeof changePinSchema>;
 export type ChangePinBody = z.infer<typeof changePinSchema>;
 
-/** Erasure is irreversible, so it re-proves the PIN exactly as a PIN change does — a session left open on a shared machine must not be enough on its own. */
-export const eraseAccountSchema = z.object({
-  currentPin: pinSchema,
-});
-export type EraseAccountInput = z.input<typeof eraseAccountSchema>;
-export type EraseAccountBody = z.infer<typeof eraseAccountSchema>;
-
 export const ME_ROUTES = {
   profile: '/me',
   update: '/me',
@@ -94,8 +87,6 @@ export const ME_ROUTES = {
   pushDevice: '/me/push-device',
   /** The kind is in the path — see DOCUMENT_KINDS. */
   document: (kind: DocumentKind) => `/me/documents/${kind}`,
-  /** Irreversible, and not a delete: every sitting stays, and none of them names anybody. */
-  erasure: '/me/erasure',
   /** Where this student is signed in; DELETE on one signs that device out. */
   sessions: '/me/sessions',
   session: (id: string) => `/me/sessions/${id}`,

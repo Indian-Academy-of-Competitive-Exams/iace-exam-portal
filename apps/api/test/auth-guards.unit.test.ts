@@ -18,6 +18,8 @@ import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { type AdminsService } from '../src/admins';
 import { ActorGuard } from '../src/auth/guards/actor.guard';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
+import { SuperAdminGuard } from '../src/auth/guards/super-admin.guard';
+import { StudentsController } from '../src/students/students.controller';
 import { Actors, Public, RequiresFeature, type AuthenticatedUser } from '../src/common/security';
 import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
@@ -50,7 +52,7 @@ class AdminOnlyController {
   anyRoute() {}
 }
 
-type Handler = () => void;
+type Handler = (...args: never[]) => unknown;
 
 function contextFor(
   handler: Handler,
@@ -366,6 +368,42 @@ describe('ActorGuard', () => {
       () => guard.canActivate(context),
       (e: unknown) => AppException.is(e) && e.code === 'FORBIDDEN',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/** The guard's own answers are covered in branches.unit.test.ts; this reads the real route's metadata. */
+describe('SuperAdminGuard — erasing a student', () => {
+  const guard = new SuperAdminGuard(new Reflector());
+  const erasure = (user: Partial<AuthenticatedUser>) =>
+    contextFor(StudentsController.prototype.erase, StudentsController, {
+      user: {
+        id: 'adm',
+        actor: ActorTypes.ADMIN,
+        sessionId: 's',
+        isSuperAdmin: false,
+        isActive: true,
+        permissions: {},
+        ...user,
+      } satisfies AuthenticatedUser,
+    }).context;
+
+  it('lets a super admin through', () => {
+    assert.equal(guard.canActivate(erasure({ isSuperAdmin: true })), true);
+  });
+
+  /** The guarantee: a student-management grant, however wide, must not reach an irreversible action. */
+  it('refuses an admin who is not a super admin, grant or no grant', () => {
+    for (const permissions of [
+      {},
+      { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    ]) {
+      assert.throws(
+        () => guard.canActivate(erasure({ permissions })),
+        (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN,
+      );
+    }
   });
 });
 

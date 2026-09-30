@@ -26,11 +26,9 @@ import {
   DOCUMENT_MAX_BYTES,
   type DeviceSession,
   type DocumentKind,
-  type ErasureReceipt,
   type Me,
   type DropPushDeviceBody,
   type DropPushSubscriptionBody,
-  type EraseAccountBody,
   type Notification,
   type NotificationListQuery,
   type PushConfig,
@@ -44,7 +42,6 @@ import {
   documentKindSchema,
   dropPushDeviceSchema,
   dropPushSubscriptionSchema,
-  eraseAccountSchema,
   notificationListQuerySchema,
   pushDeviceSchema,
   pushSubscriptionSchema,
@@ -82,18 +79,6 @@ export class MeController {
   @Header('Cache-Control', 'no-store')
   dataExport(@CurrentUser() user: AuthenticatedUser): Promise<StudentDataExport> {
     return this.privacy.export(user.id);
-  }
-
-  /** Irreversible, and not a delete: the sittings stay, and nothing in them names anybody. The current PIN is re-proved first, exactly as a PIN change is — a session left open on a shared machine must not be enough on its own for the bigger of the two actions. */
-  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.DELETE)
-  @Post('erasure')
-  @HttpCode(HttpStatus.OK)
-  async erase(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodBody(eraseAccountSchema)) body: EraseAccountBody,
-  ): Promise<ErasureReceipt> {
-    await this.auth.verifyStudentPin(user.id, body.currentPin);
-    return this.privacy.anonymize(user.id);
   }
 
   @Get()

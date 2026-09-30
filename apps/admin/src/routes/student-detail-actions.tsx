@@ -56,6 +56,8 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
     onSuccess: () => {
       setEraseConfirm(false);
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
+      // The open page is still showing the name that was just erased.
+      void queryClient.invalidateQueries({ queryKey: studentQueryKey(id) });
     },
   });
 
