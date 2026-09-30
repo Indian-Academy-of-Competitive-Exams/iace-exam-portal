@@ -26,6 +26,7 @@ import {
 } from '../autosave-policy';
 import { isWorthAskingAgain } from '../query-client';
 import { type KeyValueStorage } from '../token-store';
+import { createPendingAnswers, type PendingAnswers } from './pending-answers';
 
 /** Where unsent answers wait: a synchronous store, so the last answer before the app dies is kept. */
 export interface AnswerQueue {
@@ -50,16 +51,6 @@ const isSetAside = (error: unknown): boolean =>
   AppException.is(error) && error.code === ErrorCodes.SITTING_SET_ASIDE;
 
 const queueKeyFor = ({ keyPrefix }: AnswerQueue, attemptId: string) => `${keyPrefix}.${attemptId}`;
-
-/** Undelivered answers outlive a reload here, because the queue they sit in does not. */
-function queuedIn(queue: AnswerQueue, attemptId: string): AnswerChange[] {
-  try {
-    const held = queue.storage.getItem(queueKeyFor(queue, attemptId));
-    return held === null ? [] : (JSON.parse(held) as AnswerChange[]);
-  } catch {
-    return [];
-  }
-}
 
 const answersFrom = (queued: readonly AnswerChange[]): Record<string, LiveAnswer> =>
   queued.reduce<Record<string, LiveAnswer>>(
@@ -134,9 +125,15 @@ export function useAttemptState(
 ): AttemptStateHandle {
   // As of mount, in a ref: callers pass an inline object, and depending on it would restart autosave every render.
   const mounted = useRef(deps);
-  // Read once, at mount: what a save could not deliver before a reload is queued and drawn again.
-  const [queued] = useState(() => queuedIn(deps.answerQueue, attemptId));
-  const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() => answersFrom(queued));
+  const kept = useRef<PendingAnswers>(undefined);
+  // Built once, from the store: what a save could not deliver before a reload is queued and drawn again.
+  const queue = (kept.current ??= createPendingAnswers(
+    deps.answerQueue.storage,
+    queueKeyFor(deps.answerQueue, attemptId),
+  ));
+  const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() =>
+    answersFrom(queue.changes()),
+  );
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
   // False until the GET below settles: before it, a screen cannot tell "never opened" from "not yet known".
   const [sectionsSettled, setSectionsSettled] = useState(false);
@@ -148,9 +145,6 @@ export function useAttemptState(
   const stopped = useRef(false);
   const heldElsewhere = useRef(false);
 
-  // Everything the server has not acknowledged, in the air or not; an ack takes out only the copy it carried.
-  const pending = useRef(new Map<string, AnswerChange>(queued.map((c) => [c.questionId, c])));
-  const pendingSections = useRef(new Map<string, SectionProgress>());
   // What the screen draws, current mid-handler: a state updater may not have run when the next write reads it.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const openedAt = useRef(0);
@@ -159,26 +153,12 @@ export function useAttemptState(
   const inFlight = useRef<Promise<boolean> | null>(null);
   const seeded = useRef(false);
   const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const onScreen = useRef(true);
   const lastSaveFailed = useRef(false);
 
   const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
     setAnswers(next);
   }, []);
-
-  const keepQueue = useCallback(() => {
-    // Unmounted, the stored queue belongs to whichever screen mounts next: a late ack must not clear it.
-    if (!onScreen.current) return;
-    const { answerQueue } = mounted.current;
-    const key = queueKeyFor(answerQueue, attemptId);
-    try {
-      if (pending.current.size === 0) answerQueue.storage.removeItem(key);
-      else answerQueue.storage.setItem(key, JSON.stringify([...pending.current.values()]));
-    } catch {
-      // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
-    }
-  }, [attemptId]);
 
   // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
@@ -233,36 +213,11 @@ export function useAttemptState(
     [standDown, unsaved],
   );
 
-  const hasUnsent = useCallback(
-    () => pending.current.size > 0 || pendingSections.current.size > 0,
-    [],
-  );
+  const hasUnsent = useCallback(() => queue.anyUnsent(), [queue]);
 
-  // Capped where the contract caps it: a whole section's worth of answers would be refused, not saved.
   const unsentBatch = useCallback(
-    (): LastBatch => ({
-      revision: revision.current,
-      answers: [...pending.current.values()].slice(0, SAVE_BATCH_MAX),
-      sections: Object.fromEntries(pendingSections.current),
-    }),
-    [],
-  );
-
-  const acknowledge = useCallback(
-    (batch: LastBatch) => {
-      for (const change of batch.answers) {
-        if (pending.current.get(change.questionId) === change) {
-          pending.current.delete(change.questionId);
-        }
-      }
-      for (const [sectionId, progress] of Object.entries(batch.sections)) {
-        if (pendingSections.current.get(sectionId) === progress) {
-          pendingSections.current.delete(sectionId);
-        }
-      }
-      keepQueue();
-    },
-    [keepQueue],
+    (): LastBatch => ({ revision: revision.current, ...queue.batch() }),
+    [queue],
   );
 
   // In the air until it settles, so whatever comes next waits behind it and the last call really is last.
@@ -292,7 +247,7 @@ export function useAttemptState(
       setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
       // A batch behind the one the server holds answers 200 too; only `applied` says it landed.
       const applied = saved.applied !== false;
-      if (applied) acknowledge(batch);
+      if (applied) queue.acknowledge(batch);
       unsaved(!applied);
       return applied;
     } catch (error: unknown) {
@@ -302,7 +257,7 @@ export function useAttemptState(
       clearTimeout(giveUp.current);
       setIsSaving(false);
     }
-  }, [acknowledge, attemptId, failed, unsaved, unsentBatch]);
+  }, [attemptId, failed, queue, unsaved, unsentBatch]);
 
   const flush = useCallback(async (): Promise<boolean> => {
     // Nothing awaited between the last check and the send, so two saves never fly side by side.
@@ -310,14 +265,14 @@ export function useAttemptState(
     const idle = !hasUnsent();
     if (stopped.current || idle) return idle;
     // A backlog past one batch goes up in consecutive saves; one oversized batch would be refused forever.
-    let over = pending.current.size - SAVE_BATCH_MAX;
+    let over = queue.size() - SAVE_BATCH_MAX;
     let sent = await inAir(save());
     while (sent && over > 0 && !stopped.current) {
       over -= SAVE_BATCH_MAX;
       sent = await inAir(save());
     }
     return sent;
-  }, [hasUnsent, inAir, save]);
+  }, [hasUnsent, inAir, queue, save]);
 
   const finish = useCallback(
     async <T>(send: (batch: LastBatch | null) => Promise<T>): Promise<T> => {
@@ -329,17 +284,14 @@ export function useAttemptState(
       // Nothing is saved beside the paper going in, nor between its retries, nor after it went.
       stopped.current = true;
       // Only one batch may ride the paper, so a backlog past it goes up as saves while it still can.
-      let over = pending.current.size - SAVE_BATCH_MAX;
+      let over = queue.size() - SAVE_BATCH_MAX;
       while (over > 0 && (await save())) over -= SAVE_BATCH_MAX;
       const idle = !hasUnsent();
       if (!idle) revision.current += 1;
       const going = (async () => {
         try {
           const done = await send(idle ? null : unsentBatch());
-          // The paper is in: the device's copy has nothing left to keep.
-          pending.current.clear();
-          pendingSections.current.clear();
-          keepQueue();
+          queue.clear();
           return done;
         } catch (error: unknown) {
           failed(error);
@@ -354,7 +306,7 @@ export function useAttemptState(
       );
       return going;
     },
-    [failed, hasUnsent, inAir, keepQueue, save, unsentBatch],
+    [failed, hasUnsent, inAir, queue, save, unsentBatch],
   );
 
   const resume = useCallback(() => {
@@ -375,23 +327,22 @@ export function useAttemptState(
   // The first question is open from the moment the paper is on screen, not from the first click.
   useEffect(() => {
     openedAt.current = Date.now();
-    onScreen.current = true;
+    queue.attach();
     // Unmounted, a save still in the air is left to land; only its give-up timer goes.
     return () => {
-      onScreen.current = false;
+      queue.detach();
       clearTimeout(giveUp.current);
     };
-  }, []);
+  }, [queue]);
 
   const record = useCallback(
     (change: AnswerChange) => {
       if (heldElsewhere.current) return;
-      pending.current.set(change.questionId, change);
-      keepQueue();
-      const held = answersNow.current;
-      commit({ ...held, [change.questionId]: answerOf(change, held[change.questionId]) });
+      queue.put(change);
+      const drawn = answersNow.current;
+      commit({ ...drawn, [change.questionId]: answerOf(change, drawn[change.questionId]) });
     },
-    [commit, keepQueue],
+    [commit, queue],
   );
 
   /** Banks the seconds the open question has cost so far, and starts its clock again from now. */
@@ -430,17 +381,20 @@ export function useAttemptState(
       openedAt.current = Date.now();
       record(changeFor(questionId, answersNow.current[questionId], next, spent, seenAt));
       // Between saves only, and not after one failed: the timer retries, rather than every tap.
-      if (!inFlight.current && !lastSaveFailed.current && shouldFlushNow(pending.current.size)) {
+      if (!inFlight.current && !lastSaveFailed.current && shouldFlushNow(queue.size())) {
         void flush();
       }
     },
-    [flush, record],
+    [flush, queue, record],
   );
 
-  const markSection = useCallback((sectionId: string, progress: SectionProgress) => {
-    setSections((held) => ({ ...held, [sectionId]: { ...held[sectionId], ...progress } }));
-    pendingSections.current.set(sectionId, progress);
-  }, []);
+  const markSection = useCallback(
+    (sectionId: string, progress: SectionProgress) => {
+      setSections((held) => ({ ...held, [sectionId]: { ...held[sectionId], ...progress } }));
+      queue.putSection(sectionId, progress);
+    },
+    [queue],
+  );
 
   const enterSection = useCallback(
     (sectionId: string, remainingSec: number) =>
