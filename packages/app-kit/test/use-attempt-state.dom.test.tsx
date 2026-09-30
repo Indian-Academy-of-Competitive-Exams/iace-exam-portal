@@ -5,16 +5,12 @@ import {
   ANSWER_STATE,
   AppException,
   ErrorCodes,
+  SAVE_BATCH_MAX,
   saveAttemptStateSchema,
   type ExamClock,
 } from '@iace/contracts';
 import { useAttemptState, type LastBatch } from '../src/exam/use-attempt-state';
-import {
-  AUTOSAVE_AT_COUNT,
-  FINISH_WAIT_MS,
-  SAVE_BATCH_MAX,
-  SAVE_TIMEOUT_MS,
-} from '../src/autosave-policy';
+import { AUTOSAVE_AT_COUNT, FINISH_WAIT_MS, SAVE_TIMEOUT_MS } from '../src/autosave-policy';
 import type { AppApiClient, KeyValueStorage } from '../src';
 import { fakeStorage } from './support/fake-storage';
 

@@ -165,7 +165,7 @@ export const PROFILE_LIST_MAX = 12;
 const programCodesSchema = z.array(z.string());
 
 /** Everything the admin may see — note what is NOT here (see the file header). */
-const studentProfileSchema = z.object({
+export const studentProfileSchema = z.object({
   motherName: z.string().nullable(),
   fatherName: z.string().nullable(),
   dob: z.string().nullable(),

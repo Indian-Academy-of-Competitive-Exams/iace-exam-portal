@@ -3,15 +3,15 @@ import { describe, it, mock } from 'node:test';
 import { z } from 'zod';
 import {
   createApiClient,
-  queryString,
   AppException,
   ErrorCodes,
   noContentSchema,
+  type ApiClientOptions,
   type ApiFailure,
   type Meta,
 } from '../src/index';
 import { lazyGroup } from '../src/client';
-import { createApiCore } from '../src/client/core';
+import { createApiCore, queryString } from '../src/client/core';
 
 /** Callers get unwrapped `data` or a typed throw — never an envelope or a raw Response. */
 
@@ -33,7 +33,7 @@ const failure = (status: number, error: ApiFailure['error']) =>
 /** A request the network swallows: it answers nothing until the caller abandons it. */
 const HANG = Symbol('hang');
 
-/** Builds a client over a scripted queue of responses, recording each call. */
+/** Builds a core and a client over one scripted queue of responses, recording each call. */
 function clientWith(
   responses: (Response | typeof HANG)[],
   tokens: { access?: string; refresh?: string } = {},
@@ -43,7 +43,7 @@ function clientWith(
   const causes: unknown[] = [];
   let accessToken = tokens.access ?? null;
 
-  const api = createApiClient({
+  const options: ApiClientOptions = {
     baseUrl: 'https://api.test',
     getAccessToken: () => accessToken,
     getRefreshToken: () => tokens.refresh ?? null,
@@ -68,25 +68,25 @@ function clientWith(
       }
       return Promise.resolve(next);
     }) as unknown as typeof fetch,
-  });
+  };
 
-  return { api, calls, causes };
+  return { core: createApiCore(options), api: createApiClient(options), calls, causes };
 }
 
 const schema = z.object({ id: z.string() });
 
 describe('typed client — success', () => {
   it('reads a 204 with no body as no content, since Express drops the envelope', async () => {
-    const { api } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
+    const { core } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
 
-    assert.equal(await api.request('/thing', { schema: noContentSchema }), null);
+    assert.equal(await core.request('/thing', { schema: noContentSchema }), null);
   });
 
   it('still refuses a 204 where the call expected data', async () => {
-    const { api } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
+    const { core } = clientWith([new Response(null, { status: 204 })], { access: 'valid' });
 
     await assert.rejects(
-      api.request('/thing', { schema }),
+      core.request('/thing', { schema }),
       (e: unknown) => AppException.is(e) && e.code === ErrorCodes.INTERNAL,
     );
   });
@@ -133,17 +133,17 @@ describe('typed client — success', () => {
   });
 
   it('returns data, not the envelope', async () => {
-    const { api } = clientWith([success({ id: 'abc' })]);
+    const { core } = clientWith([success({ id: 'abc' })]);
 
-    const result = await api.request('/thing', { schema, anonymous: true });
+    const result = await core.request('/thing', { schema, anonymous: true });
 
     assert.deepEqual(result, { id: 'abc' });
   });
 
   it('rebuilds a page from data + meta', async () => {
-    const { api } = clientWith([success(['a', 'b'], { page: 3, pageSize: 2, total: 11 })]);
+    const { core } = clientWith([success(['a', 'b'], { page: 3, pageSize: 2, total: 11 })]);
 
-    const page = await api.requestPaginated('/things', {
+    const page = await core.requestPaginated('/things', {
       schema: z.array(z.string()),
       anonymous: true,
     });
@@ -152,9 +152,9 @@ describe('typed client — success', () => {
   });
 
   it('rejects a 200 whose data does not match the schema', async () => {
-    const { api } = clientWith([success({ id: 42 })]);
+    const { core } = clientWith([success({ id: 42 })]);
 
-    await assert.rejects(api.request('/thing', { schema, anonymous: true }), (error: unknown) => {
+    await assert.rejects(core.request('/thing', { schema, anonymous: true }), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, 'INTERNAL');
       return true;
@@ -162,8 +162,8 @@ describe('typed client — success', () => {
   });
 
   it('sends the app kind on every request', async () => {
-    const { api, calls } = clientWith([success({ id: 'abc' })], {}, { 'x-client': 'MOBILE' });
-    await api.request('/thing', { schema });
+    const { core, calls } = clientWith([success({ id: 'abc' })], {}, { 'x-client': 'MOBILE' });
+    await core.request('/thing', { schema });
     assert.equal(calls[0]?.client, 'MOBILE');
   });
 
@@ -202,7 +202,7 @@ describe('typed client — success', () => {
 
 describe('typed client — failure', () => {
   it('throws an AppException carrying the server code and fieldErrors', async () => {
-    const { api } = clientWith([
+    const { core } = clientWith([
       failure(400, {
         code: 'VALIDATION_ERROR',
         message: 'Some of the details are not valid',
@@ -210,7 +210,7 @@ describe('typed client — failure', () => {
       }),
     ]);
 
-    await assert.rejects(api.request('/thing', { schema, anonymous: true }), (error: unknown) => {
+    await assert.rejects(core.request('/thing', { schema, anonymous: true }), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, 'VALIDATION_ERROR');
       assert.equal(error.httpStatus, 400);
@@ -220,9 +220,9 @@ describe('typed client — failure', () => {
   });
 
   it('types a non-envelope error from a proxy by its status', async () => {
-    const { api } = clientWith([json(502, { nginx: 'bad gateway' })]);
+    const { core } = clientWith([json(502, { nginx: 'bad gateway' })]);
 
-    await assert.rejects(api.request('/thing', { schema, anonymous: true }), (error: unknown) => {
+    await assert.rejects(core.request('/thing', { schema, anonymous: true }), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, 'INTERNAL');
       assert.equal(error.httpStatus, 502);
@@ -231,14 +231,14 @@ describe('typed client — failure', () => {
   });
 
   it('turns an unreachable API into the same typed error', async () => {
-    const api = createApiClient({
+    const core = createApiCore({
       baseUrl: 'https://api.test',
       getAccessToken: () => null,
       getRefreshToken: () => null,
       fetchImpl: (() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch,
     });
 
-    await assert.rejects(api.request('/thing', { schema, anonymous: true }), (error: unknown) => {
+    await assert.rejects(core.request('/thing', { schema, anonymous: true }), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, 'INTERNAL');
       return true;
@@ -248,7 +248,7 @@ describe('typed client — failure', () => {
 
 describe('typed client — 401 handling', () => {
   it('refreshes and replays when the session merely expired', async () => {
-    const { api, calls } = clientWith(
+    const { core, calls } = clientWith(
       [
         failure(401, { code: 'UNAUTHENTICATED', message: 'Invalid or expired token' }),
         success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
@@ -257,7 +257,7 @@ describe('typed client — 401 handling', () => {
       { access: 'stale', refresh: 'r1' },
     );
 
-    const result = await api.request('/thing', { schema });
+    const result = await core.request('/thing', { schema });
 
     assert.deepEqual(result, { id: 'abc' });
     assert.equal(calls.length, 3);
@@ -267,12 +267,12 @@ describe('typed client — 401 handling', () => {
   });
 
   it('does not refresh on a 401 that means "wrong credential"', async () => {
-    const { api, calls } = clientWith(
+    const { core, calls } = clientWith(
       [failure(401, { code: 'PIN_INVALID', message: 'Incorrect mobile number or PIN' })],
       { access: 'valid', refresh: 'r1' },
     );
 
-    await assert.rejects(api.request('/thing', { schema }), (error: unknown) => {
+    await assert.rejects(core.request('/thing', { schema }), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, 'PIN_INVALID');
       return true;
@@ -282,7 +282,7 @@ describe('typed client — 401 handling', () => {
   });
 
   it('signs out at once, without refreshing, when the session was replaced', async () => {
-    const { api, calls, causes } = clientWith(
+    const { core, calls, causes } = clientWith(
       [
         failure(401, {
           code: 'SESSION_REPLACED',
@@ -294,7 +294,7 @@ describe('typed client — 401 handling', () => {
     );
 
     await assert.rejects(
-      api.request('/thing', { schema }),
+      core.request('/thing', { schema }),
       (e: unknown) => AppException.is(e) && e.code === 'SESSION_REPLACED',
     );
     assert.equal(calls.length, 1, 'a refresh would only be refused the same way');
@@ -303,7 +303,7 @@ describe('typed client — 401 handling', () => {
 
   /** The bug this prevents: a throttled refresh signing a student out with the clock still running. */
   it('asks the refresh again when it was throttled, rather than ending the sitting', async () => {
-    const { api, calls, causes } = clientWith(
+    const { core, calls, causes } = clientWith(
       [
         failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
         failure(429, { code: 'RATE_LIMITED', message: 'Too many requests' }),
@@ -313,7 +313,7 @@ describe('typed client — 401 handling', () => {
       { access: 'stale', refresh: 'r1' },
     );
 
-    assert.deepEqual(await api.request('/thing', { schema }), { id: 'abc' });
+    assert.deepEqual(await core.request('/thing', { schema }), { id: 'abc' });
     assert.equal(calls.length, 4, 'the throttled refresh is asked a second time');
     assert.deepEqual(causes, [], 'a throttle says nothing about whether the session is still good');
   });
@@ -322,7 +322,7 @@ describe('typed client — 401 handling', () => {
   it('abandons a refresh that never answers, and asks again', async () => {
     mock.timers.enable({ apis: ['setTimeout'] });
     try {
-      const { api, calls, causes } = clientWith(
+      const { core, calls, causes } = clientWith(
         [
           failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
           HANG,
@@ -332,7 +332,7 @@ describe('typed client — 401 handling', () => {
         { access: 'stale', refresh: 'r1' },
       );
 
-      const answered = api.request('/thing', { schema });
+      const answered = core.request('/thing', { schema });
       for (let waited = 0; waited < 30_000 && calls.length < 4; waited += 500) {
         await new Promise((settle) => setImmediate(settle));
         mock.timers.tick(500);
@@ -347,7 +347,7 @@ describe('typed client — 401 handling', () => {
   });
 
   it('keeps the session when the refresh never gets through at all', async () => {
-    const { api, causes } = clientWith(
+    const { core, causes } = clientWith(
       [
         failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
         ...Array.from({ length: 4 }, () => failure(429, { code: 'RATE_LIMITED', message: 'Busy' })),
@@ -356,7 +356,7 @@ describe('typed client — 401 handling', () => {
     );
 
     await assert.rejects(
-      api.request('/thing', { schema }),
+      core.request('/thing', { schema }),
       (e: unknown) => AppException.is(e) && e.httpStatus === 429,
       'the throttle is the error, not an expired session the student must sign in for',
     );
@@ -364,7 +364,7 @@ describe('typed client — 401 handling', () => {
   });
 
   it('passes on why a refresh failed', async () => {
-    const { api, causes } = clientWith(
+    const { core, causes } = clientWith(
       [
         failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
         failure(401, {
@@ -377,7 +377,7 @@ describe('typed client — 401 handling', () => {
     );
 
     await assert.rejects(
-      api.request('/thing', { schema }),
+      core.request('/thing', { schema }),
       (e: unknown) => AppException.is(e) && e.code === 'SESSION_REPLACED',
       'the replacement is the error, not the expired token that led to the refresh',
     );
@@ -385,7 +385,7 @@ describe('typed client — 401 handling', () => {
   });
 
   it('says why when a replacement lands between the refresh and the retry', async () => {
-    const { api, causes } = clientWith(
+    const { core, causes } = clientWith(
       [
         failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
         success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
@@ -398,7 +398,7 @@ describe('typed client — 401 handling', () => {
       { access: 'stale', refresh: 'r1' },
     );
 
-    await assert.rejects(api.request('/thing', { schema }));
+    await assert.rejects(core.request('/thing', { schema }));
     assert.equal((causes[0] as AppException | undefined)?.code, 'SESSION_REPLACED');
   });
 });
@@ -458,6 +458,71 @@ describe('typed client — a download racing a request', () => {
       (e: unknown) => AppException.is(e) && e.code === 'SESSION_REPLACED',
     );
     assert.equal((causes[0] as AppException).code, 'SESSION_REPLACED');
+  });
+
+  /** The bug this prevents: a download refused twice leaves the app signed in with a session that can do nothing. */
+  it('signs out when a download is refused again after the refresh', async () => {
+    const causes: unknown[] = [];
+    const core = createApiCore({
+      baseUrl: 'https://api.test',
+      getAccessToken: () => 'stale',
+      getRefreshToken: () => 'r1',
+      onUnauthorized: (cause) => causes.push(cause),
+      fetchImpl: ((url: string) =>
+        Promise.resolve(
+          url.endsWith('/auth/refresh')
+            ? success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 })
+            : failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' }),
+        )) as unknown as typeof fetch,
+    });
+
+    await assert.rejects(
+      core.requestBlob('/file'),
+      (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
+    );
+    assert.equal((causes[0] as AppException | undefined)?.code, 'UNAUTHENTICATED');
+  });
+
+  /** The bug this prevents: a 401 landing after somebody else refreshed rotates the refresh token again, which the server reads as a reuse and revokes the session for. */
+  it('replays a late 401 with the token another request already fetched', async () => {
+    let accessToken = 'stale';
+    let refreshes = 0;
+    let refuseTheSlowOne = () => undefined as void;
+    const held = new Promise<void>((settle) => {
+      refuseTheSlowOne = () => settle();
+    });
+    const core = createApiCore({
+      baseUrl: 'https://api.test',
+      getAccessToken: () => accessToken,
+      getRefreshToken: () => 'r1',
+      onTokensRefreshed: (next) => {
+        accessToken = next.accessToken;
+      },
+      fetchImpl: ((url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshes += 1;
+          return Promise.resolve(
+            success({ accessToken: 'fresh', refreshToken: 'r2', expiresInSec: 900 }),
+          );
+        }
+        if (new Headers(init?.headers).get('Authorization') === 'Bearer fresh') {
+          return Promise.resolve(success({ id: 'a' }));
+        }
+        const refused = failure(401, { code: 'UNAUTHENTICATED', message: 'Expired' });
+        return url.endsWith('/slow') ? held.then(() => refused) : Promise.resolve(refused);
+      }) as unknown as typeof fetch,
+    });
+
+    const late = core.request('/slow', { schema });
+    assert.deepEqual(await core.request('/thing', { schema }), { id: 'a' });
+    refuseTheSlowOne();
+
+    assert.deepEqual(await late, { id: 'a' });
+    assert.equal(
+      refreshes,
+      1,
+      'a second refresh spends the rotated token and is refused as a reuse',
+    );
   });
 });
 

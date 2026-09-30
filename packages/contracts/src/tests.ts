@@ -578,16 +578,6 @@ export type TestOffering = z.infer<typeof testOfferingSchema>;
 /** Where a refused program opening is reported, so the screen puts it under its own row. */
 export const programOpeningField = (programCode: string) => `programOpenings.${programCode}`;
 
-/** What an offer did. `finalizedByThisCall` is false when the test was already frozen. */
-export const offerResultSchema = z.object({
-  testId: z.string(),
-  finalizedAt: z.string(),
-  finalizedByThisCall: z.boolean(),
-  frozenQuestions: z.number().int(),
-  status: testStatusSchema,
-});
-export type OfferResult = z.infer<typeof offerResultSchema>;
-
 /** A test reaches a student only through a series, so attaching it is what makes it offerable. */
 export const testSeriesLinkSchema = z.object({
   testSeriesId: z.string(),

@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { instituteDayLabel } from './common';
-import { TEST_SCOPES, paperQuestionStatusSchema, testScopeSchema, type TestScope } from './tests';
+import { TEST_SCOPES, testScopeSchema, type TestScope } from './tests';
 import { todayISO } from './students';
 import {
-  answerStateSchema,
   examSectionSchema,
+  scoreCardQuestionSchema,
   scoreCardSectionSchema,
   timeUseSchema,
   type PerformancePoint,
@@ -180,7 +180,7 @@ export type TestCalendar = z.infer<typeof testCalendarSchema>;
 const DAY_MS = 86_400_000;
 
 /** A civil date shifted by whole days. Safe on the string: a calendar date carries no zone. */
-export function shiftCivilDate(date: string, days: number): string {
+function shiftCivilDate(date: string, days: number): string {
   const at = new Date(`${date}T00:00:00.000Z`);
   return new Date(at.getTime() + days * DAY_MS).toISOString().slice(0, 10);
 }
@@ -702,20 +702,8 @@ const optionShareSchema = z.object({
 export type OptionShare = z.infer<typeof optionShareSchema>;
 
 /** One served question: what this student did with it, and what the cohort did with it. */
-const questionReportRowSchema = z.object({
-  questionId: z.string(),
+const questionReportRowSchema = scoreCardQuestionSchema.extend({
   paperQuestionId: z.string().nullable(),
-  order: z.number().int(),
-  baseConfigSectionId: z.string(),
-  state: answerStateSchema,
-  selectedOptionId: z.string().nullable(),
-  typedAnswer: z.string().nullable(),
-  isCorrect: z.boolean().nullable(),
-  marksAwarded: z.number().nullable(),
-  marks: z.number(),
-  negativeMarks: z.number(),
-  disposition: paperQuestionStatusSchema,
-  timeSpentSec: z.number().int(),
   /** Seconds from first seeing it to answering it. Null where it was never answered, or never measured. */
   timeToRespondSec: z.number().int().nullable(),
   // -------------------------------------------------------------------------

@@ -166,7 +166,7 @@ const sectionProgressSchema = z.object({
 export type SectionProgress = z.infer<typeof sectionProgressSchema>;
 
 /** A screenful of answers is one save; a paper is 100, so a batch never needs to be larger. */
-const SAVE_BATCH_MAX = 200;
+export const SAVE_BATCH_MAX = 200;
 
 export const saveAttemptStateSchema = z.object({
   /** The screen's own counter. A batch that arrives after a newer one is dropped, not applied. */
@@ -539,7 +539,7 @@ export type StartedAttempt = z.infer<typeof startedAttemptSchema>;
 // ============================================================================
 
 /** How one question went FOR THIS STUDENT. There is deliberately no correct option on it. */
-const scoreCardQuestionSchema = z.object({
+export const scoreCardQuestionSchema = z.object({
   questionId: z.string(),
   /** This student's display order, so the palette redraws exactly as they sat it. */
   order: z.number().int(),

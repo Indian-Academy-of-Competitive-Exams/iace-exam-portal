@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { examCourseSchema } from './exams';
-import { genderSchema, studentTypeSchema } from './students';
+import { studentProfileSchema, studentTypeSchema } from './students';
 
 // ============================================================================
 // Bulk student import. Previewed before anything is written, errors reported by
@@ -42,14 +42,14 @@ export const importPlanSchema = <Row extends z.ZodType, Summary extends z.ZodTyp
 /** What a single line would do. `skip` means it has errors and will be left. */
 const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
 
-/** The profile columns, as one object — none of them is ever queried, so none of them is a column. */
-const studentImportProfileSchema = z.object({
-  motherName: z.string().nullable(),
-  fatherName: z.string().nullable(),
-  dob: z.string().nullable(),
-  email: z.string().nullable(),
-  gender: genderSchema.nullable(),
-  address: z.string().nullable(),
+/** The profile columns a sheet may fill — the rest of the profile has no column on it. */
+const studentImportProfileSchema = studentProfileSchema.pick({
+  motherName: true,
+  fatherName: true,
+  dob: true,
+  email: true,
+  gender: true,
+  address: true,
 });
 export type StudentImportProfile = z.infer<typeof studentImportProfileSchema>;
 

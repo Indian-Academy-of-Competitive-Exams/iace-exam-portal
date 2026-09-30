@@ -27,6 +27,8 @@
   },
   "devDependencies": {
     "@iace/config": "workspace:*",
+    "@prisma/client": "6.19.3",
+    "@types/node": "22.20.1",
     "eslint": "10.8.1",
     "tsx": "4.23.12",
     "typescript": "5.9.3"

@@ -9,6 +9,7 @@ import {
   AppException,
   ErrorCodes,
   isReviewState,
+  SAVE_BATCH_MAX,
   type AnswerChange,
   type AnswerState,
   type ExamClock,
@@ -19,7 +20,6 @@ import { type AppApiClient } from '../api-client';
 import {
   autosaveDelayMs,
   FINISH_WAIT_MS,
-  SAVE_BATCH_MAX,
   SAVE_TIMEOUT_MS,
   seedRevision,
   shouldFlushNow,

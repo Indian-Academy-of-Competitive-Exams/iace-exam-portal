@@ -130,25 +130,10 @@ interface Standing extends Reach {
   sittings: ReadonlyMap<string, AttemptStatus>;
 }
 
-interface ResolvedTest {
-  id: string;
-  title: string | null;
-  durationSec: number;
-  sectionCount: number;
-  totalQuestions: number;
-  order: number | null;
-  opensAt: string | null;
-  attemptStatus: AttemptStatus | null;
-}
+/** The catalog row before the clock is read: `canStart` is the one thing derived per request. */
+type ResolvedTest = Omit<StudentCatalogTest, 'canStart'>;
 
-interface ResolvedSeries {
-  id: string;
-  name: string;
-  examStage: { id: string; name: string; examCode: string; course: ExamCourse } | null;
-  kind: TestSeriesKind;
-  sequentialTests: boolean;
-  tests: ResolvedTest[];
-}
+type ResolvedSeries = Omit<StudentCatalogSeries, 'tests'> & { tests: ResolvedTest[] };
 
 /** The one place "can this student reach this?" is answered: by the series' kind, or by a grant. */
 @Injectable()

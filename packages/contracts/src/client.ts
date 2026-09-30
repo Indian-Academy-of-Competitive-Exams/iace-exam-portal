@@ -3,7 +3,7 @@ import { authClient } from './client/auth';
 import type { meClient } from './client/me';
 import type { adminClient } from './client/admin';
 
-export { queryString, type ApiClientOptions } from './client/core';
+export { type ApiClientOptions } from './client/core';
 
 type MeClient = ReturnType<typeof meClient>;
 type AdminClient = ReturnType<typeof adminClient>;
@@ -44,12 +44,8 @@ export function lazyGroup<T extends object>(load: () => Promise<T>): T {
 /** Callers never see the envelope: every method returns `data` or throws an `AppException`. */
 export function createApiClient(options: ApiClientOptions) {
   const core = createApiCore(options);
-  const { request, requestPaginated, requestBlob } = core;
 
   return {
-    request,
-    requestPaginated,
-    requestBlob,
     auth: authClient(core),
     me: lazyGroup<MeClient>(() => import('./client/me').then((m) => m.meClient(core))),
     admin: lazyGroup<AdminClient>(() => import('./client/admin').then((m) => m.adminClient(core))),

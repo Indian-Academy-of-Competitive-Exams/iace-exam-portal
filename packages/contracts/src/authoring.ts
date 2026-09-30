@@ -1,13 +1,10 @@
 import { z } from 'zod';
-import { csvIdQuery, csvQuery, matchModeQuery, searchQuery } from './common';
-import { paginationQuerySchema } from './envelope';
+import { csvIdQuery } from './common';
 import {
-  difficultyLevelSchema,
   questionDetailSchema,
   questionDraftSchema,
+  questionListQuerySchema,
   questionStatusSchema,
-  questionTypeSchema,
-  tagSchema,
 } from './questions';
 import { dateOnlySchema } from './students';
 
@@ -24,23 +21,27 @@ export const AUTHORING_HISTORY_DAYS = 30;
 /** How many of the author's own recent tags the header offers. */
 export const AUTHORING_TAG_SUGGESTIONS = 40;
 
-export const authoringHistoryQuerySchema = paginationQuerySchema.extend({
-  /** Matches the stem in any language, the question code, and any tag. */
-  q: searchQuery(),
-  status: csvQuery(questionStatusSchema),
-  subjectId: csvIdQuery(),
-  /** The section a question was written for, which is how a typist finds one batch again. */
-  assignmentId: csvIdQuery(),
-  /** The test that section belongs to — every batch written for it, whichever section. */
-  testId: z.string().optional(),
-  type: csvQuery(questionTypeSchema),
-  difficulty: csvQuery(difficultyLevelSchema),
-  tag: tagSchema.optional(),
-  /** Institute days, inclusive, against when the question was written. */
-  from: dateOnlySchema.optional(),
-  to: dateOnlySchema.optional(),
-  match: matchModeQuery(),
-});
+/** The bank's own filters, over the author's own questions — `from`/`to` read when it was WRITTEN. */
+export const authoringHistoryQuerySchema = questionListQuerySchema
+  .pick({
+    page: true,
+    pageSize: true,
+    q: true,
+    status: true,
+    subjectId: true,
+    type: true,
+    difficulty: true,
+    tag: true,
+    from: true,
+    to: true,
+    match: true,
+  })
+  .extend({
+    /** The section a question was written for, which is how a typist finds one batch again. */
+    assignmentId: csvIdQuery(),
+    /** The test that section belongs to — every batch written for it, whichever section. */
+    testId: z.string().optional(),
+  });
 export type AuthoringHistoryQuery = z.infer<typeof authoringHistoryQuerySchema>;
 export type AuthoringHistoryQueryInput = z.input<typeof authoringHistoryQuerySchema>;
 

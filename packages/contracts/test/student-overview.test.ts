@@ -12,7 +12,6 @@ import {
   longestStreak,
   testDayWindow,
   rankSubjectsByWeakness,
-  shiftCivilDate,
   effortPerSitting,
   placeInSpread,
   scopeComparison,
@@ -507,6 +506,18 @@ describe('testDayWindow', () => {
       true,
     );
   });
+
+  /** The day shift is arithmetic on the string, so no zone gets involved and a leap day is a real day. */
+  it('crosses a year end and a leap day', () => {
+    assert.deepEqual(
+      testDayWindow([], '2027-12-31', '2028-01-01').map((day) => day.date),
+      ['2027-12-31', '2028-01-01'],
+    );
+    assert.deepEqual(
+      testDayWindow([], '2028-02-28', '2028-03-01').map((day) => day.date),
+      ['2028-02-28', '2028-02-29', '2028-03-01'],
+    );
+  });
 });
 
 describe('currentStreak', () => {
@@ -557,13 +568,5 @@ describe('longestStreak', () => {
   /** A run crossing a month end is one run: the calendar is not what breaks it. */
   it('runs across a month boundary', () => {
     assert.equal(longestStreak([on('2026-08-31'), on('2026-09-01')]), 2);
-  });
-});
-
-describe('shiftCivilDate', () => {
-  it('crosses a month and a year end without a zone getting involved', () => {
-    assert.equal(shiftCivilDate('2026-09-01', -1), '2026-08-31');
-    assert.equal(shiftCivilDate('2026-12-31', 1), '2027-01-01');
-    assert.equal(shiftCivilDate('2028-02-28', 1), '2028-02-29');
   });
 });

@@ -20,7 +20,6 @@ export { applyFieldErrors, bannerMessage } from './form-errors';
 export { numberOr, optionalNumber } from './form-numbers';
 export {
   autosaveDelayMs,
-  SAVE_BATCH_MAX,
   seedRevision,
   shouldFlushNow,
   shouldRetrySubmit,

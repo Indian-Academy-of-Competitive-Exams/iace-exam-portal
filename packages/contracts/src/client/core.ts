@@ -176,7 +176,7 @@ export function createApiCore(options: ApiClientOptions) {
       } catch (error) {
         // Refresh being REFUSED is a normal end-of-session; anything else is asked again below.
         refreshFailure = AppException.is(error) ? error : undefined;
-        const backoff = worthAskingAgain(refreshFailure) ? refreshBackoffMs(asked) : undefined;
+        const backoff = wasRefused(refreshFailure) ? undefined : refreshBackoffMs(asked);
         if (backoff === undefined) return null;
         await new Promise((wake) => setTimeout(wake, backoff));
       } finally {
@@ -186,8 +186,7 @@ export function createApiCore(options: ApiClientOptions) {
   }
 
   /** A refusal ends it, and so does having nothing to refresh with. A failure we could not reach does not. */
-  const sessionIsOver = (): boolean =>
-    getRefreshToken() === null || !worthAskingAgain(refreshFailure);
+  const sessionIsOver = (): boolean => getRefreshToken() === null || wasRefused(refreshFailure);
 
   async function envelopeOf<T>(path: string, opts: RequestOptions<T>): Promise<ApiSuccess<T>> {
     const { method = 'GET', body, schema, anonymous = false, keepalive = false, signal } = opts;
@@ -195,16 +194,17 @@ export function createApiCore(options: ApiClientOptions) {
 
     if (anonymous) return parse(await send(path, method, body, null, extra), schema);
 
-    const response = await send(path, method, body, getAccessToken(), extra);
+    const sent = getAccessToken();
+    const response = await send(path, method, body, sent, extra);
     if (response.status !== 401) return parse(response, schema);
 
-    const retried = await send(path, method, body, await tokenAfter(response), extra);
+    const retried = await send(path, method, body, await tokenAfter(response, sent), extra);
     if (retried.status === 401) onUnauthorized?.(await failureOf(retried));
     return parse(retried, schema);
   }
 
   /** A 401 either throws here or hands back the token to retry with; every caller shares the one refresh. */
-  async function tokenAfter(response: Response): Promise<string> {
+  async function tokenAfter(response: Response, sent: string | null): Promise<string> {
     const peeked = await peekFailure(response);
 
     // A replaced session is over for good; refreshing would only be refused the same way.
@@ -215,9 +215,13 @@ export function createApiCore(options: ApiClientOptions) {
     }
 
     // Only an expired session is worth retrying: refreshing on a wrong PIN hides the real code.
-    if (peeked && peeked.error.code !== 'UNAUTHENTICATED') {
+    if (peeked && peeked.error.code !== ErrorCodes.UNAUTHENTICATED) {
       throw AppException.fromFailure(peeked, response.status);
     }
+
+    // Another request already rotated the token while this one was in the air: refreshing again would spend the new refresh token and be refused as a reuse.
+    const current = getAccessToken();
+    if (current !== null && current !== sent) return current;
 
     refreshInFlight ??= refreshTokens().finally(() => {
       refreshInFlight = null;
@@ -261,9 +265,11 @@ export function createApiCore(options: ApiClientOptions) {
   }
 
   async function blobOf(url: string, method: 'GET' | 'POST', body?: FormData): Promise<Blob> {
-    let response = await send(url, method, body, getAccessToken());
+    const sent = getAccessToken();
+    let response = await send(url, method, body, sent);
     if (response.status === 401) {
-      response = await send(url, method, body, await tokenAfter(response));
+      response = await send(url, method, body, await tokenAfter(response, sent));
+      if (response.status === 401) onUnauthorized?.(await failureOf(response));
     }
 
     if (!response.ok) {
@@ -318,8 +324,9 @@ function refreshBackoffMs(asked: number, random: () => number = Math.random): nu
   return step === undefined ? undefined : step / 2 + random() * step;
 }
 
-function worthAskingAgain(failure: AppException | undefined): boolean {
-  return failure?.httpStatus !== REFUSED;
+/** Only the server's own refusal ends a session — NOT the query-retry rule, which is `isWorthAskingAgain` in app-kit. */
+function wasRefused(failure: AppException | undefined): boolean {
+  return failure?.httpStatus === REFUSED;
 }
 
 /** A 204 never has a body (Express drops one), so it can only mean null; a schema that refuses null is a real mismatch. */
@@ -351,7 +358,7 @@ function endedBy(
 ): AppException {
   if (refreshFailure?.code === ErrorCodes.SESSION_REPLACED) return refreshFailure;
   // Never refused, only unreachable: say what actually went wrong rather than "sign in again".
-  if (refreshFailure && worthAskingAgain(refreshFailure)) return refreshFailure;
+  if (refreshFailure && !wasRefused(refreshFailure)) return refreshFailure;
   if (peeked) return AppException.fromFailure(peeked, 401);
   return new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
 }
