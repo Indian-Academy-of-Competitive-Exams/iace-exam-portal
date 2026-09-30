@@ -160,9 +160,7 @@ export class AccessResolverService {
     // A block refuses as "not open to you", never as "not opened yet": no opening will ever let them in.
     const test =
       standing && !standing.isTestBlocked
-        ? catalogOf(series, standing, now)
-            .series.flatMap((row) => row.tests)
-            .find((row) => row.id === testId)
+        ? startableTest(series, standing, testId, now)
         : undefined;
     if (test?.canStart) return;
 
@@ -317,6 +315,22 @@ function sourcesOf(row: SharedSeries, reach: Reach): StudentSeriesSource[] {
 
 function reachedBy(series: readonly SharedSeries[], reach: Reach): SharedSeries[] {
   return series.filter((row) => sourcesOf(row, reach).length > 0);
+}
+
+/** ONE test's projection. A gate that projected the whole catalog paid for every test to answer about one. */
+function startableTest(
+  series: readonly SharedSeries[],
+  standing: Standing,
+  testId: string,
+  now: Date,
+): StudentCatalogTest | undefined {
+  const holder = series.find((row) => row.tests.some((test) => test.id === testId));
+  // Its own series is still projected whole: `sequentialTests` opens a test by its place among them.
+  if (!holder || sourcesOf(holder, standing).length === 0) return undefined;
+
+  return project(toResolved(holder, standing), standing.isTestBlocked, now).tests.find(
+    (test) => test.id === testId,
+  );
 }
 
 function catalogOf(series: readonly SharedSeries[], standing: Standing, now: Date): StudentCatalog {

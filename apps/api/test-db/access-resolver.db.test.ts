@@ -648,6 +648,30 @@ describe('AccessResolverService — a series that unlocks in order', () => {
 
     await refused(resolver.assertCanStart(student, tests[1] ?? '', NOW), ErrorCodes.FORBIDDEN);
   });
+
+  /** The failure this prevents: the guard's own projection drifting from the catalog the screen read. */
+  it('answers exactly what the catalog says for every test in the series', async () => {
+    const { student, tests, resolver } = await inOrder([[0, ATTEMPT_STATUS.EVALUATED]]);
+    const catalog = await resolver.catalog(student, NOW);
+    const said = new Map(
+      (catalog.series[0]?.tests ?? []).map((test) => [test.id, test.canStart] as const),
+    );
+
+    const gated = await Promise.all(
+      tests.map((testId) =>
+        resolver.assertCanStart(student, testId, NOW).then(
+          () => true,
+          () => false,
+        ),
+      ),
+    );
+
+    assert.deepEqual(gated, [true, true, false]);
+    assert.deepEqual(
+      gated,
+      tests.map((testId) => said.get(testId)),
+    );
+  });
 });
 
 describe('reading about a test', () => {
