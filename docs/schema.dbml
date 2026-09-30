@@ -768,16 +768,6 @@ Table RowActionLog {
   }
 }
 
-Table OutboxEvent {
-  id uuid [pk, default: `uuid(7)`]
-  aggregateType text [not null]
-  aggregateId uuid [not null]
-  eventType text [not null]
-  payload jsonb
-  createdAt timestamptz(3) [not null, default: `now()`]
-  processedAt timestamptz(3)
-}
-
 Table Notification {
   id uuid [pk, default: `uuid(7)`]
   studentId uuid
@@ -1086,7 +1076,6 @@ TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   NotificationDelivery
   PushSubscription
   PushDevice
-  OutboxEvent
 }
 
 TableGroup "Events" { // color: #A85A2E

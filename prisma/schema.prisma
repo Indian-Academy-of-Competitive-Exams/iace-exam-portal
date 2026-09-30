@@ -1034,24 +1034,6 @@ model RowActionLog {
 }
 
 // ============================================================================
-// Durability — transactional outbox and rollup idempotency.
-// ============================================================================
-
-// Written in the same transaction as the state change. A relay claims rows with
-// FOR UPDATE SKIP LOCKED; the poll is served by a partial index on pending rows.
-// Nothing in this build reads or writes it: kept only as the insert target of a build before 20260930140000.
-model OutboxEvent {
-  // A trigger turns a notification.requested row, which only a build before 20260929180000 writes, into its Notification.
-  id            String    @id @default(uuid(7)) @db.Uuid
-  aggregateType String
-  aggregateId   String    @db.Uuid
-  eventType     String
-  payload       Json?
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  processedAt   DateTime? @db.Timestamptz(3)
-}
-
-// ============================================================================
 // Notifications — in-app now, push behind the same sender seam later.
 // ============================================================================
 

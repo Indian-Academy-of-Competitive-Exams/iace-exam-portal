@@ -115,16 +115,6 @@ describe('conditional uniqueness a plain unique cannot state', () => {
   });
 });
 
-describe('the outbox poll', () => {
-  /** Pending rows are a shrinking tail of a table that only grows. */
-  it('is served by an index over pending rows alone', () => {
-    assert.match(
-      MIGRATION,
-      /CREATE INDEX "\w+" ON "OutboxEvent"\("createdAt"\) WHERE "processedAt" IS NULL/,
-    );
-  });
-});
-
 describe('section shape follows the config timer template', () => {
   for (const [template, column] of [
     ['SESSION_MODULE_LOCKED', 'module_id'],

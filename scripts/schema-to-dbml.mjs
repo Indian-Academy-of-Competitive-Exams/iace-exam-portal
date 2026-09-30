@@ -35,7 +35,6 @@ const GROUPS = [
       'NotificationDelivery',
       'PushSubscription',
       'PushDevice',
-      'OutboxEvent',
     ],
   ],
   ['Events', '#A85A2E', ['Event', 'EventCandidate']],

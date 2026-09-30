@@ -139,21 +139,21 @@ Only the owning module writes these tables. Every model in `prisma/schema.prisma
 model with no owner is a model any module may quietly start writing, which is how the boundary
 erodes.
 
-| Module        | Owns (Prisma models)                                                                                                             |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| admins        | `Admin`, `AdminFeaturePermission`                                                                                                |
-| students      | `Student`, `StudentProfile`                                                                                                      |
-| branches      | `Branch`                                                                                                                         |
-| access        | `Program`, `TestSeries`, `StudentGrant`                                                                                          |
-| events        | `Event`, `EventCandidate`                                                                                                        |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `ImportRowEdit`, `QuestionReview`                                             |
-| assignments   | `QuestionAssignment`, `SectionComment`                                                                                           |
-| configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                       |
-| tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                     |
-| attempts      | `Attempt`, `AttemptSheet`, `OutboxEvent`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
-| audit         | `RowActionLog`, `ImportLog`                                                                                                      |
-| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                                         |
-| saved         | `SavedQuestion`                                                                                                                  |
+| Module        | Owns (Prisma models)                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| admins        | `Admin`, `AdminFeaturePermission`                                                                                 |
+| students      | `Student`, `StudentProfile`                                                                                       |
+| branches      | `Branch`                                                                                                          |
+| access        | `Program`, `TestSeries`, `StudentGrant`                                                                           |
+| events        | `Event`, `EventCandidate`                                                                                         |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `ImportRowEdit`, `QuestionReview`                              |
+| assignments   | `QuestionAssignment`, `SectionComment`                                                                            |
+| configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                        |
+| tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                      |
+| attempts      | `Attempt`, `AttemptSheet`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
+| audit         | `RowActionLog`, `ImportLog`                                                                                       |
+| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                          |
+| saved         | `SavedQuestion`                                                                                                   |
 
 `auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
