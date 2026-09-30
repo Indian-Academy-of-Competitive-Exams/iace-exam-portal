@@ -143,7 +143,8 @@ export function ComboboxShell({
           <div
             data-focus-ring="wrapper"
             className={cn(
-              'flex items-center gap-2 border-b border-border px-3',
+              // Above the list and opaque: the ring is a box-shadow, and a later sibling would scroll over it.
+              'relative z-10 flex items-center gap-2 border-b border-border bg-popover px-3',
               'transition-[box-shadow,border-color]',
               'has-[:focus-visible]:border-ring has-[:focus-visible]:shadow-focus',
             )}
