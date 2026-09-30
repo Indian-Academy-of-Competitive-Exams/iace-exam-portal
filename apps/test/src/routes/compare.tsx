@@ -1,8 +1,15 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
+import {
+  Alert,
+  ComparisonCards,
+  EmptyState,
+  EMPTY_STATE_KINDS,
+  plural,
+  type ComparisonItem,
+} from '@iace/ui';
 import { LEADERBOARD_SCOPES, percentLabel, type CohortCurve } from '@iace/contracts';
-import { everySitting } from '@iace/app-kit';
+import { everySitting, isMarkingPending } from '@iace/app-kit';
 import { api } from '../lib/api';
 import { performanceQuery, scoreCardQuery } from '../lib/queries';
 import { leaderboardQueryKey } from '../lib/constants';
@@ -24,8 +31,30 @@ export function ComparePanel() {
     enabled: placed && testId !== '',
   });
 
+  const again = () => void card.refetch();
+
   if (card.isLoading) return <ReportSkeleton />;
-  if (!card.data) return null;
+  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
+  if (isMarkingPending(card.error)) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.EMPTY}
+        title="No marks yet"
+        // ui-copy-ok: consequence
+        hint="Your paper is handed in and safe."
+        onRetry={again}
+      />
+    );
+  }
+  if (!card.data) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="This comparison did not load"
+        onRetry={again}
+      />
+    );
+  }
 
   const sittings = everySitting(trend.data).filter((point) => point.testId === testId);
 

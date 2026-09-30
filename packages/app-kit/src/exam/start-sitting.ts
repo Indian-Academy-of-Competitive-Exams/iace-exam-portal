@@ -9,12 +9,19 @@ import {
   type StartAttemptInput,
 } from '@iace/contracts';
 import { type AppApiClient } from '../api-client';
+import { isWorthAskingAgain, retryDelayMs } from '../query-client';
 import {
   attemptPaperQueryKey,
   startedAttemptQueryKey,
   testPaperQueryKey,
 } from '../student-queries';
 import { paperFor } from './served-paper';
+
+/** Three tries at a synchronised open; a refusal is the server's answer, so only a hang or a fault is sent again. */
+const START_TRIES = 3;
+
+export const shouldRetryStart = (failures: number, error: unknown): boolean =>
+  failures < START_TRIES - 1 && isWorthAskingAgain(error);
 
 export interface BeginChoice {
   /** A DUAL paper shows every language at once, so there is nothing to choose. */
@@ -69,7 +76,9 @@ export function useStartedSitting(api: AppApiClient, testId: string, start: Star
     staleTime: Infinity,
     // Gone with its screen, or a later entry reuses a start with a stale clock; StrictMode re-subscribes first.
     gcTime: 0,
-    retry: false,
+    // One start at a time, and never a second for a refusal: the query dedupes, so only a hang or a fault is retried.
+    retry: shouldRetryStart,
+    retryDelay: (failures) => retryDelayMs(failures),
   });
 
   const started = attempt.data ?? null;

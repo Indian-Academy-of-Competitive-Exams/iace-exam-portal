@@ -3,6 +3,7 @@
  * candidate can make is on this one object, so a skin holds no state, owns no
  * clock and reaches for no mutation — it renders what it is handed.
  */
+import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
 import type {
   ExamClock,
   ExamQuestion,
@@ -13,6 +14,15 @@ import type {
   PaletteCounts,
   TestUi,
 } from '@iace/contracts';
+
+/** What each of the five states is called, so the two clients' palettes can never name one differently. */
+export const ANSWER_STATE_LABELS: Readonly<Record<AnswerState, string>> = {
+  [ANSWER_STATE.NOT_VISITED]: 'Not visited',
+  [ANSWER_STATE.NOT_ANSWERED]: 'Not answered',
+  [ANSWER_STATE.ANSWERED]: 'Answered',
+  [ANSWER_STATE.MARKED_REVIEW]: 'Marked for review',
+  [ANSWER_STATE.ANSWERED_MARKED]: 'Answered and marked',
+};
 
 /** Submitting, and what the candidate is told before it happens. */
 export interface ExamSubmitView {

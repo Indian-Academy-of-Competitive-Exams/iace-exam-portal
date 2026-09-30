@@ -1,9 +1,20 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
-import { ANSWER_STATE, AppException, ErrorCodes, type ExamClock } from '@iace/contracts';
-import { useAttemptState } from '../src/exam/use-attempt-state';
-import { AUTOSAVE_AT_COUNT, FINISH_WAIT_MS, SAVE_TIMEOUT_MS } from '../src/autosave-policy';
+import {
+  ANSWER_STATE,
+  AppException,
+  ErrorCodes,
+  saveAttemptStateSchema,
+  type ExamClock,
+} from '@iace/contracts';
+import { useAttemptState, type LastBatch } from '../src/exam/use-attempt-state';
+import {
+  AUTOSAVE_AT_COUNT,
+  FINISH_WAIT_MS,
+  SAVE_BATCH_MAX,
+  SAVE_TIMEOUT_MS,
+} from '../src/autosave-policy';
 import type { AppApiClient, KeyValueStorage } from '../src';
 import { fakeStorage } from './support/fake-storage';
 
@@ -964,4 +975,85 @@ test('while saves fail, a full queue waits for the timer instead of saving on ev
 
   await act(async () => void (await result.current.flush()));
   assert.equal(calls.length, 2, "the timer's save still goes");
+});
+
+/** The failure this prevents: a backlog past the contract's cap refused as a 400 by every save, forever. */
+test('a backlog larger than one batch goes up in batches the server accepts, and none is lost', async (t) => {
+  const sent: SentAnswers[] = [];
+  let offline = true;
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
+        sent.push(body);
+        if (offline) throw new Error('offline');
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+
+  const backlog = SAVE_BATCH_MAX + 50;
+  await act(async () => {
+    for (let seat = 0; seat < backlog; seat += 1) {
+      result.current.answer(`q${seat}`, { selectedOptionId: 'opt-1' });
+    }
+    await settle();
+  });
+
+  offline = false;
+  sent.length = 0;
+  await act(async () => void (await result.current.flush()));
+
+  for (const batch of sent) {
+    const read = saveAttemptStateSchema.safeParse(batch);
+    assert.equal(read.success, true, `the server accepts a batch of ${batch.answers.length}`);
+  }
+  const delivered = new Set(sent.flatMap((batch) => batch.answers.map((row) => row.questionId)));
+  assert.equal(delivered.size, backlog, 'every answer reached the server');
+  assert.equal(result.current.hasUnsent(), false, 'nothing is left queued');
+});
+
+/** The failure this prevents: the paper going in with 300 answers the capped last batch silently dropped. */
+test('a backlog larger than one batch is saved before the paper goes in, so the submit carries the rest', async (t) => {
+  const sent: SentAnswers[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: { revision: number } & SentAnswers) => {
+        sent.push(body);
+        return { revision: body.revision, applied: true };
+      },
+    },
+  } as unknown as AppApiClient;
+
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+
+  const backlog = SAVE_BATCH_MAX + 30;
+  act(() => {
+    for (let seat = 0; seat < backlog; seat += 1) {
+      result.current.answer(`q${seat}`, { selectedOptionId: 'opt-1' });
+    }
+  });
+
+  let last: LastBatch | null = null;
+  await act(async () => {
+    await result.current.finish((batch) => {
+      last = batch;
+      return Promise.resolve('in');
+    });
+  });
+
+  const rode = (last as LastBatch | null)?.answers ?? [];
+  assert.ok(rode.length <= SAVE_BATCH_MAX, `the last batch is within the cap: ${rode.length}`);
+  const delivered = new Set([
+    ...sent.flatMap((batch) => batch.answers.map((row) => row.questionId)),
+    ...rode.map((row) => row.questionId),
+  ]);
+  assert.equal(delivered.size, backlog, 'every answer went up, in a save or on the paper');
 });

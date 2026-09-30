@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Badge,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   ListView,
   MeasureBars,
   Metric,
@@ -25,7 +27,7 @@ import {
   type QuestionReport,
   type QuestionReportRow,
 } from '@iace/contracts';
-import { QUESTION_REPORT_FILTERS } from '@iace/app-kit';
+import { isMarkingPending, QUESTION_REPORT_FILTERS } from '@iace/app-kit';
 import { questionReportQuery } from '../lib/queries';
 import { ReportSkeleton, StatBand } from '../components/ui';
 
@@ -45,12 +47,32 @@ export function QuestionReportPanel() {
   const [filter, setFilter] = useState<QuestionFilter>(QUESTION_FILTERS.ALL);
   const report = useQuery(questionReportQuery(attemptId));
 
-  return (
-    <>
-      {report.isLoading ? <ReportSkeleton /> : null}
-      {report.data ? <Body report={report.data} filter={filter} onFilter={setFilter} /> : null}
-    </>
-  );
+  const again = () => void report.refetch();
+
+  if (report.isLoading) return <ReportSkeleton />;
+  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
+  if (isMarkingPending(report.error)) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.EMPTY}
+        title="No marks yet"
+        // ui-copy-ok: consequence
+        hint="Your paper is handed in and safe."
+        onRetry={again}
+      />
+    );
+  }
+  if (!report.data) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your question report did not load"
+        onRetry={again}
+      />
+    );
+  }
+
+  return <Body report={report.data} filter={filter} onFilter={setFilter} />;
 }
 
 function Body({

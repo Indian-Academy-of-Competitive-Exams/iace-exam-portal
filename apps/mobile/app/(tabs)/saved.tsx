@@ -11,9 +11,11 @@ import { SavedList } from '../../src/components/saved/saved-list';
 import { api } from '../../src/lib/api';
 import { savedFacetsQueryKey } from '../../src/lib/constants';
 import { useFilterState } from '../../src/lib/filters';
+import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
 /** The questions a student starred in a solution review, theirs to revise and to drop. */
 export default function SavedScreen() {
+  useRefetchOnFocus();
   const facets = useQuery({
     queryKey: savedFacetsQueryKey(),
     queryFn: () => api.me.savedFacets(),

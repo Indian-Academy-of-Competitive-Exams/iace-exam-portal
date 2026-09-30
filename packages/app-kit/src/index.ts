@@ -9,11 +9,18 @@ export { signOutReasonOf, signedOutMessage } from './signed-out-message';
 export { createAppApiClient } from './api-client';
 export { type AppApiClient } from './api-client';
 export { createAuth, type AuthState, type CreateAuthOptions } from './create-auth';
-export { createAppQueryClient, type AppMutationMeta, type Notifier } from './query-client';
+export {
+  createAppQueryClient,
+  isWorthAskingAgain,
+  retryDelayMs,
+  type AppMutationMeta,
+  type Notifier,
+} from './query-client';
 export { applyFieldErrors, bannerMessage } from './form-errors';
 export { numberOr, optionalNumber } from './form-numbers';
 export {
   autosaveDelayMs,
+  SAVE_BATCH_MAX,
   seedRevision,
   shouldFlushNow,
   shouldRetrySubmit,
@@ -35,8 +42,14 @@ export {
   type ExamSitting,
   type EndedSitting,
 } from './exam/use-exam-view';
-export { beginChoice, useStartedSitting, type BeginChoice } from './exam/start-sitting';
 export {
+  beginChoice,
+  shouldRetryStart,
+  useStartedSitting,
+  type BeginChoice,
+} from './exam/start-sitting';
+export {
+  ANSWER_STATE_LABELS,
   TIMER_KIND,
   submittingSays,
   stoodDownSays,
@@ -48,6 +61,16 @@ export {
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
 export { isMarkingPending } from './marking';
+export { markNotificationRead } from './notifications';
+export {
+  greetingFor,
+  languagesOf,
+  negativeOf,
+  resultLine,
+  sectionMarksOf,
+  sectionalOf,
+  totalMarksOf,
+} from './student-figures';
 export { seenTours, useTourRun, type SeenTours, type TourRun, type TourStep } from './tour';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
 export { useListQuery, filterKey, type ListQueryResult } from './use-list-query';

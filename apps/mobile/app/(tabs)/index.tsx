@@ -2,12 +2,17 @@
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { newestFirst, sittablesOf, waitingOn, type Sittable } from '@iace/app-kit';
+import {
+  greetingFor,
+  newestFirst,
+  resultLine,
+  sittablesOf,
+  waitingOn,
+  type Sittable,
+} from '@iace/app-kit';
 import {
   currentStreak,
   dispositionRates,
-  instituteDayLabel,
-  instituteWallTime,
   longestStreak,
   percentLabel,
   type PerformancePoint,
@@ -28,21 +33,16 @@ import { StatTile, StatTileRow } from '../../src/components/ui/stat-tile';
 import { ScoreTrend } from '../../src/components/performance/score-trend';
 import { TestTile } from '../../src/components/tests/test-tile';
 import { useAuth } from '../../src/providers/auth';
+import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
 const DASH = '—';
 
 /** How many sittings the landing screen looks back over before it sends them to Performance. */
 const RECENT_RESULTS = 3;
 
-/** The institute's clock, never the device's — a student abroad is still on an IST morning. */
-const GREETINGS = [
-  { until: 12, word: 'Good morning' },
-  { until: 17, word: 'Good afternoon' },
-  { until: 24, word: 'Good evening' },
-] as const;
-
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
 export default function HomeScreen() {
+  useRefetchOnFocus();
   const { identity } = useAuth();
   const catalog = useQuery(catalogQuery);
   const overview = useQuery(overviewQuery);
@@ -190,19 +190,4 @@ function Recent({ recent }: Readonly<{ recent: readonly PerformancePoint[] }>) {
   );
 }
 
-const resultLine = (point: PerformancePoint) =>
-  [
-    `${point.score} of ${point.maxMarks} marks`,
-    point.percentile === null ? null : `${point.percentile}th percentile`,
-    point.submittedAt === null ? null : `sat ${instituteDayLabel(point.submittedAt)}`,
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
-
 const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
-
-function greetingFor(now: Date, name: string | null | undefined): string {
-  const hour = Number(instituteWallTime(now).slice(11, 13));
-  const word = (GREETINGS.find((band) => hour < band.until) ?? GREETINGS[2]).word;
-  return name ? `${word}, ${name.trim().split(/\s+/)[0]}` : word;
-}

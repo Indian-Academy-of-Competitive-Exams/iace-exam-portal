@@ -92,17 +92,16 @@ export {
 /** The subject filter choosing no scope means every scope, the way a `choice` filter's blank does. */
 export const ANY_SCOPE = '';
 
-/** The five states a question can be in, and the colour the palette draws each one. */
+/** The five states a question can be in, and the colour the palette draws each one; app-kit names them. */
 export const PALETTE_LEGEND: readonly {
   state: AnswerState;
-  label: string;
   variant: 'neutral' | 'warning' | 'success' | 'primary' | 'danger';
 }[] = [
-  { state: ANSWER_STATE.NOT_VISITED, label: 'Not visited', variant: 'neutral' },
-  { state: ANSWER_STATE.NOT_ANSWERED, label: 'Not answered', variant: 'danger' },
-  { state: ANSWER_STATE.ANSWERED, label: 'Answered', variant: 'success' },
-  { state: ANSWER_STATE.MARKED_REVIEW, label: 'Marked for review', variant: 'primary' },
-  { state: ANSWER_STATE.ANSWERED_MARKED, label: 'Answered and marked', variant: 'warning' },
+  { state: ANSWER_STATE.NOT_VISITED, variant: 'neutral' },
+  { state: ANSWER_STATE.NOT_ANSWERED, variant: 'danger' },
+  { state: ANSWER_STATE.ANSWERED, variant: 'success' },
+  { state: ANSWER_STATE.MARKED_REVIEW, variant: 'primary' },
+  { state: ANSWER_STATE.ANSWERED_MARKED, variant: 'warning' },
 ];
 
 /** The account screens, under the user menu, above Log out. */

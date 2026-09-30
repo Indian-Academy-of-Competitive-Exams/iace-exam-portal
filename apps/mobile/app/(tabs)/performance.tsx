@@ -7,6 +7,7 @@ import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour
 import { PERFORMANCE_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 import { LeaderboardPanel } from '../../src/components/performance/leaderboard-panel';
 import { OverviewPanel } from '../../src/components/performance/overview-panel';
+import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
 const OVERVIEW = 'overview';
 const LEADERBOARD = 'leaderboard';
@@ -18,6 +19,7 @@ const VIEWS: readonly ChipOption[] = [
 
 /** Their whole career, and where it stands against everyone else's. */
 export default function PerformanceScreen() {
+  useRefetchOnFocus();
   const [view, setView] = useState(OVERVIEW);
   const views = useTourTarget(TOUR_TARGETS.PERFORMANCE_VIEWS);
   const panel = useTourTarget(TOUR_TARGETS.PERFORMANCE_PANEL);

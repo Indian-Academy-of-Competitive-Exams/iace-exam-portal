@@ -15,6 +15,12 @@ export function isWorthAskingAgain(error: unknown): boolean {
 
 const THROTTLED = 429;
 const SERVER_FAULT = 500;
+const RETRY_BASE_MS = 1_000;
+
+/** Doubling, with a full base of jitter: a fixed delay brings 6K clients back to a failed read in lockstep. */
+export function retryDelayMs(failures: number, random: () => number = Math.random): number {
+  return Math.round(RETRY_BASE_MS * 2 ** failures * (1 + random()));
+}
 
 /** What a query may declare. `silent` opts out of the central reporting, or only for the failures its screen draws itself. */
 export interface AppQueryMeta {
@@ -68,6 +74,7 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
     defaultOptions: {
       queries: {
         retry: (failures, error) => failures < 1 && isWorthAskingAgain(error),
+        retryDelay: (failures) => retryDelayMs(failures),
         staleTime: 30_000,
         refetchOnWindowFocus: false,
       },

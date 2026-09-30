@@ -1,8 +1,16 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
+import {
+  Badge,
+  DataTable,
+  EmptyState,
+  EMPTY_STATE_KINDS,
+  TruncatedText,
+  plural,
+  type DataTableColumn,
+} from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
-import { minutes } from '@iace/app-kit';
+import { isMarkingPending, minutes } from '@iace/app-kit';
 import { round2, type SectionalStanding } from '@iace/contracts';
 import { scoreCardQuery } from '../lib/queries';
 import { PageBody, ReportSkeleton, Section } from '../components/ui';
@@ -21,12 +29,32 @@ export function SubjectPanel() {
   const { attemptId = '' } = useParams();
   const card = useQuery(scoreCardQuery(attemptId));
 
-  return (
-    <>
-      {card.isLoading ? <ReportSkeleton /> : null}
-      {card.data ? <Body sections={card.data.sections} /> : null}
-    </>
-  );
+  const again = () => void card.refetch();
+
+  if (card.isLoading) return <ReportSkeleton />;
+  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
+  if (isMarkingPending(card.error)) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.EMPTY}
+        title="No marks yet"
+        // ui-copy-ok: consequence
+        hint="Your paper is handed in and safe."
+        onRetry={again}
+      />
+    );
+  }
+  if (!card.data) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your sections did not load"
+        onRetry={again}
+      />
+    );
+  }
+
+  return <Body sections={card.data.sections} />;
 }
 
 function Body({ sections }: Readonly<{ sections: readonly SectionalStanding[] }>) {

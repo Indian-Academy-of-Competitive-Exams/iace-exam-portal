@@ -3,10 +3,10 @@
  * A push carries a title and a way in and nothing else, so the tap opens the list rather than
  * trying to render what it was told. In Expo Go none of this loads and the app is unaffected.
  */
-import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { usePathname, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ACCOUNT_ROUTES } from './nav';
+import { ACCOUNT_ROUTES, EXAM_PATH } from './nav';
 import { UNREAD_QUERY_KEY } from './constants';
 import { loadNotifications } from './notifications';
 import { registerOncePerProcess } from './push-device';
@@ -22,6 +22,12 @@ const WHILE_OPEN = {
 export function usePushDevice(signedIn: boolean): void {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const pathname = usePathname();
+  // In a ref, not the effect's deps: moving between screens must not tear the listeners down and build them again.
+  const inSitting = useRef(false);
+  useEffect(() => {
+    inSitting.current = pathname.startsWith(EXAM_PATH);
+  }, [pathname]);
 
   useEffect(() => {
     if (signedIn) void registerOncePerProcess();
@@ -42,6 +48,8 @@ export function usePushDevice(signedIn: boolean): void {
           router.navigate(ACCOUNT_ROUTES.NOTIFICATIONS);
         }),
         notifications.addNotificationReceivedListener(() => {
+          // The bell waits while a paper is being sat: one broadcast would otherwise be a read per sitting.
+          if (inSitting.current) return;
           void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY });
         }),
       );

@@ -6,6 +6,7 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
+import { ANSWER_STATE_LABELS } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -149,7 +150,7 @@ function GeneralStep({ brief, forwardOnly }: Readonly<{ brief: ExamBrief; forwar
         <div className="flex flex-wrap gap-2">
           {PALETTE_LEGEND.filter((entry) => isStateShown(entry.state, forwardOnly)).map((entry) => (
             <Badge key={entry.state} variant={entry.variant}>
-              {entry.label}
+              {ANSWER_STATE_LABELS[entry.state]}
             </Badge>
           ))}
         </div>

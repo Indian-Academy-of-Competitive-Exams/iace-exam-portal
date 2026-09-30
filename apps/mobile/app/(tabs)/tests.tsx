@@ -23,6 +23,7 @@ import { asText, useFilterState, type FilterSpec, type FilterState } from '../..
 import { plural } from '../../src/lib/plural';
 import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour';
 import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
+import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
 const ANY = ANY_CHOICE;
 
@@ -35,6 +36,7 @@ interface Shelf {
 }
 
 export default function TestsScreen() {
+  useRefetchOnFocus();
   const catalog = useQuery(catalogQuery);
   const trend = useQuery(performanceQuery);
 

@@ -2,8 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { LANGUAGE_CODE, LANGUAGE_MODE, type LanguageCode } from '@iace/contracts';
-import { beginChoice, useStartedSitting } from '../src/exam/start-sitting';
+import {
+  AppException,
+  ErrorCodes,
+  LANGUAGE_CODE,
+  LANGUAGE_MODE,
+  type LanguageCode,
+} from '@iace/contracts';
+import { beginChoice, shouldRetryStart, useStartedSitting } from '../src/exam/start-sitting';
 import type { AppApiClient } from '../src';
 import { startedAttemptQueryKey, testPaperQueryKey } from '../src/student-queries';
 
@@ -29,6 +35,20 @@ test('a dual paper has nothing to pick and begins in every language it shows', (
   assert.equal(choice.dual, true);
   assert.equal(choice.ready, true);
   assert.deepEqual(choice.languages, [EN, HI]);
+});
+
+/** The failure this prevents: one 5xx at a synchronised open sending a student back to their tests to tap again. */
+test('a start the server never answered is sent again, up to a bound', () => {
+  const unreachable = new AppException(ErrorCodes.INTERNAL, 'offline', { httpStatus: 0 });
+  assert.equal(shouldRetryStart(0, unreachable), true);
+  assert.equal(shouldRetryStart(1, unreachable), true);
+  assert.equal(shouldRetryStart(2, unreachable), false, 'three tries and no more');
+});
+
+/** The failure this prevents: a test that is not open to this student asked for three times over. */
+test('a start the server refused is never sent again', () => {
+  const refused = new AppException(ErrorCodes.FORBIDDEN);
+  assert.equal(shouldRetryStart(0, refused), false);
 });
 
 test('nothing begins before the declaration', () => {

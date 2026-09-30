@@ -1,6 +1,6 @@
 import { ANSWER_STATES, isStateShown, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { cn } from '@iace/ui';
-import { PALETTE_LEGEND } from '../../lib/constants';
+import { ANSWER_STATE_LABELS } from '@iace/app-kit';
 
 /** The grid every candidate reads before they read anything else. */
 
@@ -38,9 +38,7 @@ export function QuestionPalette({
         {states.map((state) => (
           <li key={state} className="flex items-center gap-2 text-xs">
             <span className={cn('size-4 shrink-0 rounded-exam-cell', SWATCH[state])} />
-            <span className="text-exam-ink-muted">
-              {PALETTE_LEGEND.find((entry) => entry.state === state)?.label}
-            </span>
+            <span className="text-exam-ink-muted">{ANSWER_STATE_LABELS[state]}</span>
             <span className="ml-auto font-semibold tabular-nums text-exam-ink">
               {counts[state]}
             </span>

@@ -22,6 +22,7 @@ import {
   type TimeUse,
   percentLabel,
   placeInSpread,
+  round2,
 } from '@iace/contracts';
 
 const UNMEASURED = '—';
@@ -118,7 +119,7 @@ export function CohortFigure({
       />
       {cohort.topperScore === null ? null : (
         <div className="flex flex-col gap-1 border-t border-border pt-3">
-          <StatRow label="Behind the topper" value={round(cohort.topperScore - cohort.score)} />
+          <StatRow label="Behind the topper" value={round2(cohort.topperScore - cohort.score)} />
           {cohort.averageScore === null ? null : (
             <StatRow
               label="Against the average"
@@ -224,7 +225,7 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
     value:
       section.cohortAverageScore === null
         ? null
-        : round(section.score - section.cohortAverageScore),
+        : round2(section.score - section.cohortAverageScore),
     caption: sectionCaption(section),
   }));
 
@@ -340,6 +341,4 @@ export function TimeFigure({
   );
 }
 
-const signed = (value: number) => (value > 0 ? `+${round(value)}` : String(round(value)));
-
-const round = (value: number) => Math.round(value * 100) / 100;
+const signed = (value: number) => (value > 0 ? `+${round2(value)}` : String(round2(value)));

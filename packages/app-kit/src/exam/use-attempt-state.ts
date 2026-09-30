@@ -19,6 +19,7 @@ import { type AppApiClient } from '../api-client';
 import {
   autosaveDelayMs,
   FINISH_WAIT_MS,
+  SAVE_BATCH_MAX,
   SAVE_TIMEOUT_MS,
   seedRevision,
   shouldFlushNow,
@@ -237,10 +238,11 @@ export function useAttemptState(
     [],
   );
 
+  // Capped where the contract caps it: a whole section's worth of answers would be refused, not saved.
   const unsentBatch = useCallback(
     (): LastBatch => ({
       revision: revision.current,
-      answers: [...pending.current.values()],
+      answers: [...pending.current.values()].slice(0, SAVE_BATCH_MAX),
       sections: Object.fromEntries(pendingSections.current),
     }),
     [],
@@ -307,7 +309,14 @@ export function useAttemptState(
     while (inFlight.current) await inFlight.current;
     const idle = !hasUnsent();
     if (stopped.current || idle) return idle;
-    return inAir(save());
+    // A backlog past one batch goes up in consecutive saves; one oversized batch would be refused forever.
+    let over = pending.current.size - SAVE_BATCH_MAX;
+    let sent = await inAir(save());
+    while (sent && over > 0 && !stopped.current) {
+      over -= SAVE_BATCH_MAX;
+      sent = await inAir(save());
+    }
+    return sent;
   }, [hasUnsent, inAir, save]);
 
   const finish = useCallback(
@@ -319,6 +328,9 @@ export function useAttemptState(
       }
       // Nothing is saved beside the paper going in, nor between its retries, nor after it went.
       stopped.current = true;
+      // Only one batch may ride the paper, so a backlog past it goes up as saves while it still can.
+      let over = pending.current.size - SAVE_BATCH_MAX;
+      while (over > 0 && (await save())) over -= SAVE_BATCH_MAX;
       const idle = !hasUnsent();
       if (!idle) revision.current += 1;
       const going = (async () => {
@@ -342,7 +354,7 @@ export function useAttemptState(
       );
       return going;
     },
-    [failed, hasUnsent, inAir, keepQueue, unsentBatch],
+    [failed, hasUnsent, inAir, keepQueue, save, unsentBatch],
   );
 
   const resume = useCallback(() => {

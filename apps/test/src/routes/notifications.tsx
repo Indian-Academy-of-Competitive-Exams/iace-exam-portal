@@ -5,8 +5,14 @@
  */
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { asText, NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-kit';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  asText,
+  markNotificationRead,
+  NOTIFICATION_FILTERS,
+  READ_STATE,
+  useInfinitePages,
+} from '@iace/app-kit';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
 import { Settings } from 'lucide-react';
 import {
@@ -25,7 +31,6 @@ import {
   NOTIFICATION_TYPE,
   type Notification,
   type NotificationType,
-  type Paginated,
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import {
@@ -202,28 +207,7 @@ function useMarkRead(notification: Notification) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => api.me.readNotification(notification.id),
-    // Counted down here, not re-read: a screenful of rows seen at once is otherwise a GET per row.
-    onSuccess: () => {
-      queryClient.setQueryData<Paginated<Notification>>(UNREAD_QUERY_KEY, (count) =>
-        count ? { ...count, total: Math.max(0, count.total - 1) } : count,
-      );
-      // Marked in both lists too, so the row reads as read and is never counted down again.
-      for (const unreadOnly of [true, false]) {
-        queryClient.setQueryData<InfiniteData<Paginated<Notification>>>(
-          notificationsQueryKey(unreadOnly),
-          (lists) =>
-            lists && {
-              ...lists,
-              pages: lists.pages.map((page) => ({
-                ...page,
-                items: page.items.map((row) =>
-                  row.id === notification.id ? { ...row, isRead: true } : row,
-                ),
-              })),
-            },
-        );
-      }
-    },
+    onSuccess: () => markNotificationRead(queryClient, notification.id),
     onError: () => void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY }),
   });
 

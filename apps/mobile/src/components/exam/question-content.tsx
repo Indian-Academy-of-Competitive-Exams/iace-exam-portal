@@ -44,21 +44,41 @@ export function QuestionContent({
   onBubble,
   question,
   paperQuestions,
-  ...input
+  languages,
+  languageMode,
+  testUi,
+  examTemplate,
+  selectedOptionId,
+  marked,
 }: Readonly<QuestionContentProps>) {
   const web = useRef<WebView>(null);
   // Bumped when the page says it is ready and after every intent, so the page redraws native's truth.
   const [echo, setEcho] = useState(0);
   // Bumped only on READY, since a full re-send belongs to a fresh page, not to every tap.
   const [readyTick, setReadyTick] = useState(0);
-  const screen = question ? questionScreen({ ...input, question }) : NOTHING_ON_SCREEN;
-  const script = question ? showScript(screen) : null;
+  // Memoized: both walk a bilingual question and stringify it, and this renders on every tap and every second.
+  const screen = useMemo(
+    () =>
+      question
+        ? questionScreen({
+            question,
+            languages,
+            languageMode,
+            testUi,
+            examTemplate,
+            selectedOptionId,
+            marked,
+          })
+        : NOTHING_ON_SCREEN,
+    [question, languages, languageMode, testUi, examTemplate, selectedOptionId, marked],
+  );
+  const script = useMemo(() => (question ? showScript(screen) : null), [question, screen]);
   const preload = useMemo(
     () =>
       paperQuestions.length > 0
-        ? preloadScript(preloadHtmlOf(paperQuestions, input.languages, input.languageMode))
+        ? preloadScript(preloadHtmlOf(paperQuestions, languages, languageMode))
         : null,
-    [paperQuestions, input.languages, input.languageMode],
+    [paperQuestions, languages, languageMode],
   );
 
   useEffect(() => {

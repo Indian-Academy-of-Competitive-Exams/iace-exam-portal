@@ -2,11 +2,16 @@
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { NOTIFICATION_FILTERS, READ_STATE, useInfinitePages } from '@iace/app-kit';
+import {
+  markNotificationRead,
+  NOTIFICATION_FILTERS,
+  READ_STATE,
+  useInfinitePages,
+} from '@iace/app-kit';
 import { instituteDayLabel, type Notification } from '@iace/contracts';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
-import { NOTIFICATIONS_QUERY_KEY, notificationsQueryKey } from '../src/lib/constants';
+import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
 import { useTokenColor } from '../src/lib/use-token-color';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
@@ -32,7 +37,9 @@ export default function NotificationsScreen() {
 
   const read = useMutation({
     mutationFn: (id: string) => api.me.readNotification(id),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY }),
+    // Patched, as the web does: invalidating the prefix refetched every loaded page plus the count, per tap.
+    onSuccess: (_data, id) => markNotificationRead(queryClient, id),
+    onError: () => void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY }),
   });
 
   const open = (row: Notification) => {

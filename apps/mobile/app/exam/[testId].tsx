@@ -96,7 +96,15 @@ export default function ExamScreen() {
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="This test could not be started"
           hint="Check when it opens on your tests."
-          action={<Button onPress={() => router.dismissTo(ROUTES.TESTS)}>Go to your tests</Button>}
+          action={
+            // Retry first: at a synchronised open the server being busy is likelier than the test being shut.
+            <View className="flex-row items-center gap-3">
+              <Button onPress={() => void attempt.refetch()}>Retry</Button>
+              <Button variant="outline" onPress={() => router.dismissTo(ROUTES.TESTS)}>
+                Go to your tests
+              </Button>
+            </View>
+          }
         />
       </View>
     );
@@ -175,7 +183,7 @@ const SittingEngine = memo(function SittingEngine({
   // Before paint, so the skin never shows a view the engine has already moved past.
   useLayoutEffect(() => {
     onView(view);
-  });
+  }, [onView, view]);
 
   return null;
 });

@@ -17,17 +17,22 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
-import { everySitting, isBriefRefused, shutReason } from '@iace/app-kit';
+import {
+  everySitting,
+  isBriefRefused,
+  languagesOf,
+  negativeOf,
+  sectionalOf,
+  sectionMarksOf,
+  shutReason,
+  totalMarksOf,
+} from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
-  LANGUAGE_LABELS,
-  contentLanguageOf,
-  LANGUAGE_MODE,
   TEST_BUCKET,
   testAction,
   testBucket,
   type ExamBrief,
-  type LanguageCode,
   type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
@@ -194,7 +199,7 @@ const SECTION_COLUMNS: readonly DataTableColumn<ExamBrief['sections'][number]>[]
     key: 'total',
     header: 'Section marks',
     numeric: true,
-    cell: (row) => round(row.questionCount * row.marksPerQuestion),
+    cell: (row) => sectionMarksOf(row),
   },
 ];
 
@@ -251,33 +256,3 @@ function Exits({
     </div>
   );
 }
-
-const totalMarksOf = (brief: ExamBrief) =>
-  round(
-    brief.sections.reduce(
-      (sum, section) => sum + section.questionCount * section.marksPerQuestion,
-      0,
-    ),
-  );
-
-/** One figure where every section agrees, and a range where they do not — never a wrong single one. */
-function negativeOf(brief: ExamBrief): string {
-  const values = [...new Set(brief.sections.map((section) => section.negativeMarks))].sort(
-    (a, b) => a - b,
-  );
-  if (values.length === 0) return '—';
-  if (values.length === 1) return `−${values[0]}`;
-  return `−${values[0]} to −${values.at(-1)}`;
-}
-
-const languagesOf = (brief: ExamBrief) => {
-  const named = brief.languages
-    .map((code: LanguageCode) => LANGUAGE_LABELS[contentLanguageOf(code)])
-    .join(', ');
-  return brief.languageMode === LANGUAGE_MODE.DUAL ? `${named} (side by side)` : named;
-};
-
-const sectionalOf = (brief: ExamBrief) =>
-  brief.sections.some((section) => section.durationSec !== null) ? 'Yes' : 'No';
-
-const round = (value: number) => Math.round(value * 100) / 100;

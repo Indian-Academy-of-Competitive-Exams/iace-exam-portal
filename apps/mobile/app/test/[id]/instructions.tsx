@@ -26,6 +26,7 @@ import { SystemCheck } from '../../../src/components/tests/system-check';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
+import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -239,14 +240,3 @@ function Declaration({
 
 const dualLanguageNote = (paper: ExamBrief) =>
   `This paper is shown in ${paper.languages.map((code) => LANGUAGE_LABELS[contentLanguageOf(code)]).join(' and ')} together. There is nothing to choose.`;
-
-function sectionLine(section: ExamBrief['sections'][number]): string {
-  const clock = section.durationSec === null ? null : `${Math.round(section.durationSec / 60)} min`;
-  return [
-    plural(section.questionCount, 'question'),
-    `+${section.marksPerQuestion} / −${section.negativeMarks}`,
-    clock,
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
-}

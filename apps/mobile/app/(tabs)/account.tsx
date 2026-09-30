@@ -18,8 +18,10 @@ import { UNREAD_QUERY_KEY } from '../../src/lib/constants';
 import { useTokenColor } from '../../src/lib/use-token-color';
 import { cn } from '../../src/lib/cn';
 import { useAuth } from '../../src/providers/auth';
+import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
 export default function AccountScreen() {
+  useRefetchOnFocus();
   const { identity, signOut } = useAuth();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);

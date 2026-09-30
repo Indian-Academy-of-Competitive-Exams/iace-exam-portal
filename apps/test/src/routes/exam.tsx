@@ -51,9 +51,13 @@ export function ExamPage() {
           /* ui-copy-ok: rule — when it opens is the one thing that decides whether they can */
           hint="Check when it opens on your tests."
           action={
-            <Button asChild variant="outline">
-              <Link to={ROUTES.TESTS}>Go to your tests</Link>
-            </Button>
+            // Retry first: at a synchronised open the server being busy is likelier than the test being shut.
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button onClick={() => void attempt.refetch()}>Retry</Button>
+              <Button asChild variant="outline">
+                <Link to={ROUTES.TESTS}>Go to your tests</Link>
+              </Button>
+            </div>
           }
         />
       </div>

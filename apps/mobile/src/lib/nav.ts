@@ -40,6 +40,9 @@ export const ACCOUNT_ROUTES = {
   NOTIFICATIONS: '/notifications',
 } as const;
 
+/** What a path starts with while a paper is being sat: nothing pushed over the tabs may refetch behind it. */
+export const EXAM_PATH = '/exam/';
+
 /** Pushed over the tab shell, outside `(tabs)` — a series and a test each get their own stack screen. */
 export const DETAIL_ROUTES = {
   SERIES: (seriesId: string) => `/series/${seriesId}` as const,
@@ -47,7 +50,7 @@ export const DETAIL_ROUTES = {
   TEST_INSTRUCTIONS: (testId: string) => `/test/${testId}/instructions` as const,
   /** Keyed by TEST: no attempt exists until this screen starts one on arrival. */
   EXAM: (testId: string, languages: readonly LanguageCode[]) =>
-    `/exam/${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}` as const,
+    `${EXAM_PATH}${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}` as const,
   /** The web's own path, so the two apps name one sitting the same way. */
   SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted` as const,
   REPORT: (attemptId: string) => `/attempts/${attemptId}/report` as const,

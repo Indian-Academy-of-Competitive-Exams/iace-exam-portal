@@ -13,8 +13,11 @@ export const AUTOSAVE_JITTER_MS = 5_000;
 /** Enough unsaved answers that waiting for the timer risks losing real work. */
 export const AUTOSAVE_AT_COUNT = 20;
 
-/** Only a dead request lasts this long: saves already queue behind each other, and the submit waits FINISH_WAIT_MS at most. */
-export const SAVE_TIMEOUT_MS = 45_000;
+/** Given up before the earliest next tick (25s less the jitter), so one hang cannot swallow two intervals of taps. */
+export const SAVE_TIMEOUT_MS = 15_000;
+
+/** What one save may carry, matching the cap `saveAttemptStateSchema` enforces — a 500-question section exceeds it. */
+export const SAVE_BATCH_MAX = 200;
 
 /** How long the paper waits on a save in the air: its 1s+2s+4s retries still land inside the server's 30s grace. */
 export const FINISH_WAIT_MS = 5_000;

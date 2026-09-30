@@ -6,40 +6,34 @@
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ANSWER_STATE, ANSWER_STATES, isStateShown, type AnswerState } from '@iace/contracts';
-import { type ExamView } from '@iace/app-kit';
+import { ANSWER_STATE_LABELS, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
 
 interface PaletteEntry {
-  label: string;
   fill: string;
   ink: string;
 }
 
-/** The five states, their names and their colours — the palette's only source of any of them. */
+/** The five states and their colours; app-kit names them, so the two clients cannot label one differently. */
 const PALETTE_LEGEND: Readonly<Record<AnswerState, PaletteEntry>> = {
   [ANSWER_STATE.NOT_VISITED]: {
-    label: 'Not visited',
     fill: 'bg-exam-notvisited',
     ink: 'text-exam-notvisited-ink',
   },
   [ANSWER_STATE.NOT_ANSWERED]: {
-    label: 'Not answered',
     fill: 'bg-exam-notanswered',
     ink: 'text-exam-notanswered-ink',
   },
   [ANSWER_STATE.ANSWERED]: {
-    label: 'Answered',
     fill: 'bg-exam-answered',
     ink: 'text-exam-answered-ink',
   },
   [ANSWER_STATE.MARKED_REVIEW]: {
-    label: 'Marked for review',
     fill: 'bg-exam-marked',
     ink: 'text-exam-marked-ink',
   },
   [ANSWER_STATE.ANSWERED_MARKED]: {
-    label: 'Answered and marked',
     fill: 'bg-exam-answered-marked',
     ink: 'text-exam-answered-marked-ink',
   },
@@ -73,7 +67,7 @@ export function QuestionPalette({
             {ANSWER_STATES.filter((state) => isStateShown(state, view.forwardOnly)).map((state) => (
               <View key={state} className="flex-row items-center gap-3">
                 <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
-                <Text className="flex-1 text-sm text-exam-ink">{PALETTE_LEGEND[state].label}</Text>
+                <Text className="flex-1 text-sm text-exam-ink">{ANSWER_STATE_LABELS[state]}</Text>
                 <Text className="text-sm font-semibold tabular-nums text-exam-ink">
                   {view.sectionCounts(view.sectionId)[state]}
                 </Text>
@@ -119,12 +113,12 @@ function PaletteCell({
   closed: boolean;
   onPress: () => void;
 }>) {
-  const { label, fill, ink } = PALETTE_LEGEND[state];
+  const { fill, ink } = PALETTE_LEGEND[state];
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Question ${number}, ${label}`}
+      accessibilityLabel={`Question ${number}, ${ANSWER_STATE_LABELS[state]}`}
       accessibilityState={{ selected: current, disabled: closed }}
       disabled={closed}
       onPress={onPress}

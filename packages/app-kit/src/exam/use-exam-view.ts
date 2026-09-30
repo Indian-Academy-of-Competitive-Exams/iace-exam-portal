@@ -94,10 +94,17 @@ export function useExamView(
   }, [sectional, sectionsSettled, firstReachable, heldSections, paper.sections, enterSection]);
 
   const section = paper.sections.find((row) => row.id === sectionId);
-  const inSection = paper.questions.filter((row) => row.baseConfigSectionId === sectionId);
-  const order = inSection.map((row) => row.questionId);
+  // Memoized down this whole block: every one of them walks the paper, and a sitting re-renders per tap and per second.
+  const inSection = useMemo(
+    () => paper.questions.filter((row) => row.baseConfigSectionId === sectionId),
+    [paper.questions, sectionId],
+  );
+  const order = useMemo(() => inSection.map((row) => row.questionId), [inSection]);
   // A forward-only reload lands where the candidate had got to, not on a seat already left.
-  const landing = forwardOnly ? Math.max(0, furthestSeat(order, state.answers)) : 0;
+  const landing = useMemo(
+    () => (forwardOnly ? Math.max(0, furthestSeat(order, state.answers)) : 0),
+    [forwardOnly, order, state.answers],
+  );
   const current = inSection.find((row) => row.questionId === questionId) ?? inSection[landing];
   const onScreen = current?.questionId;
   const { open } = state;
@@ -105,11 +112,15 @@ export function useExamView(
   useEffect(() => {
     if (sectionsSettled && onScreen !== undefined) open(onScreen);
   }, [sectionsSettled, onScreen, open]);
-  const counts = paletteCounts(
-    paper.questions.map((row) => row.questionId),
-    state.answers,
+  const paperOrder = useMemo(() => paper.questions.map((row) => row.questionId), [paper.questions]);
+  const counts = useMemo(
+    () => paletteCounts(paperOrder, state.answers),
+    [paperOrder, state.answers],
   );
-  const sectionCounts = sectionPaletteCounts(paper.sections, paper.questions, state.answers);
+  const sectionCounts = useMemo(
+    () => sectionPaletteCounts(paper.sections, paper.questions, state.answers),
+    [paper.sections, paper.questions, state.answers],
+  );
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -138,8 +149,8 @@ export function useExamView(
       state.resume();
     },
     onSuccess: async (submitted) => {
-      // The sat test moves from Open now to Done; nothing waits on the refetch.
-      void queryClient.invalidateQueries({ queryKey: catalogQueryKey });
+      // Marked stale, not refetched: the mobile tabs sit mounted under the paper, and every one would GET at the bell.
+      void queryClient.invalidateQueries({ queryKey: catalogQueryKey, refetchType: 'none' });
       // The hall gives the screen back before the next one draws; `nagging` is already stood down.
       await focus.exit();
       onEnded({

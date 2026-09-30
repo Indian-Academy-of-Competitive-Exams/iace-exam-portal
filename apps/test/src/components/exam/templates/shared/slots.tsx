@@ -18,7 +18,7 @@ import {
   Watermark,
   cn,
 } from '@iace/ui';
-import { TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { ANSWER_STATE_LABELS, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
@@ -96,7 +96,7 @@ function Timer({ view: { timer }, config }: Readonly<ExamSlotProps>) {
 function sectionTally(counts: PaletteCounts): string {
   // The same five states the palette draws, so the tab and the grid never disagree.
   return PALETTE_LEGEND.filter((entry) => counts[entry.state] > 0)
-    .map((entry) => `${counts[entry.state]} ${entry.label.toLowerCase()}`)
+    .map((entry) => `${counts[entry.state]} ${ANSWER_STATE_LABELS[entry.state].toLowerCase()}`)
     .join(' · ');
 }
 

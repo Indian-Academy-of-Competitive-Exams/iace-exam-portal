@@ -1,6 +1,6 @@
 /** The two things a candidate may re-read mid-sitting: the whole paper, and the rules. */
 import { contentLanguageOf } from '@iace/contracts';
-import { htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
+import { ANSWER_STATE_LABELS, htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, RichContent } from '@iace/ui';
 import { PALETTE_LEGEND } from '../../../../lib/constants';
 
@@ -60,7 +60,9 @@ export function RulesPanel({
           <ul className="flex flex-col gap-1.5">
             {PALETTE_LEGEND.map((entry) => (
               <li key={entry.state} className="text-exam-ink-muted">
-                <span className="font-medium text-exam-ink">{entry.label}</span>
+                <span className="font-medium text-exam-ink">
+                  {ANSWER_STATE_LABELS[entry.state]}
+                </span>
               </li>
             ))}
           </ul>

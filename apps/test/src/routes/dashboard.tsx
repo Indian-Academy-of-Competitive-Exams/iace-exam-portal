@@ -15,13 +15,19 @@ import {
   linkVariants,
   plural,
 } from '@iace/ui';
-import { newestFirst, sittablesOf, trendOf, waitingOn, type Sittable } from '@iace/app-kit';
+import {
+  greetingFor,
+  newestFirst,
+  resultLine,
+  sittablesOf,
+  trendOf,
+  waitingOn,
+  type Sittable,
+} from '@iace/app-kit';
 import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
   instituteDateTimeLabel,
-  instituteDayLabel,
   dispositionRates,
-  instituteWallTime,
   percentLabel,
   testIsOpen,
   type PerformancePoint,
@@ -41,13 +47,6 @@ import { api } from '../lib/api';
 import { catalogQuery, overviewQuery, performanceQuery } from '../lib/queries';
 import { NAV_ITEMS, ROUTES, TEST_DAYS_QUERY_KEY } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-
-/** The institute's clock, never the device's — a student abroad is still on an IST morning. */
-const GREETINGS = [
-  { until: 12, word: 'Good morning' },
-  { until: 17, word: 'Good afternoon' },
-  { until: 24, word: 'Good evening' },
-] as const;
 
 /** How many sittings the landing screen looks back over before it sends them to Performance. */
 const RECENT_RESULTS = 3;
@@ -337,27 +336,11 @@ const papersLine = (row: Sittable, now: Date) =>
     .filter((part) => part !== null)
     .join(' · ');
 
-const resultLine = (point: PerformancePoint) =>
-  [
-    `${point.score} of ${point.maxMarks} marks`,
-    point.percentile === null ? null : `${point.percentile}th percentile`,
-    point.rank === null ? null : `rank ${point.rank}`,
-    point.submittedAt === null ? null : `sat ${instituteDayLabel(point.submittedAt)}`,
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
-
 function whenLine(row: Sittable, now: Date): string | null {
   const { opensAt } = row.test;
   if (opensAt === null || testIsOpen(opensAt, now)) return null;
 
   return `opens ${instituteDateTimeLabel(opensAt)}`;
-}
-
-function greetingFor(now: Date, name: string | null | undefined): string {
-  const hour = Number(instituteWallTime(now).slice(11, 13));
-  const word = (GREETINGS.find((band) => hour < band.until) ?? GREETINGS[2]).word;
-  return name ? `${word}, ${name}` : word;
 }
 
 interface QueryState {

@@ -6,17 +6,21 @@ import { Fragment } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { isBriefRefused, shutReason } from '@iace/app-kit';
 import {
-  contentLanguageOf,
+  isBriefRefused,
+  languagesOf,
+  negativeOf,
+  sectionalOf,
+  sectionMarksOf,
+  shutReason,
+  totalMarksOf,
+} from '@iace/app-kit';
+import {
   instituteDateTimeLabel,
-  LANGUAGE_LABELS,
-  LANGUAGE_MODE,
   TEST_BUCKET,
   testAction,
   testBucket,
   type ExamBrief,
-  type LanguageCode,
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { Text } from '../../../src/components/ui/text';
@@ -32,6 +36,7 @@ import { cn } from '../../../src/lib/cn';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { plural } from '../../../src/lib/plural';
+import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -169,7 +174,7 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
               <Text numberOfLines={1} className="flex-1 text-sm font-medium text-foreground">
                 {section.name}
               </Text>
-              <Text variant="subsection">{sectionMarks(section)} marks</Text>
+              <Text variant="subsection">{sectionMarksOf(section)} marks</Text>
             </View>
             <Text variant="meta">{sectionLine(section)}</Text>
           </View>
@@ -187,7 +192,7 @@ function PaperCard({ brief }: Readonly<{ brief: ExamBrief }>) {
       <Text variant="section">The paper</Text>
       <Card className="gap-3 p-4">
         <InfoRow label="Languages" value={languagesOf(brief)} />
-        <InfoRow label="Sectional timing" value={sectionalOf(brief) ? 'Yes' : 'No'} />
+        <InfoRow label="Sectional timing" value={sectionalOf(brief)} />
       </Card>
     </View>
   );
@@ -218,48 +223,4 @@ function Exits({
       <Button>{action === 'RESUME' ? 'Resume test' : 'Proceed to test'}</Button>
     </Link>
   );
-}
-
-const round = (value: number) => Math.round(value * 100) / 100;
-
-const totalMarksOf = (brief: ExamBrief) =>
-  round(
-    brief.sections.reduce(
-      (sum, section) => sum + section.questionCount * section.marksPerQuestion,
-      0,
-    ),
-  );
-
-/** One figure where every section agrees, and a range where they do not — never a wrong single one. */
-function negativeOf(brief: ExamBrief): string {
-  const values = [...new Set(brief.sections.map((section) => section.negativeMarks))].sort(
-    (a, b) => a - b,
-  );
-  if (values.length === 0) return '—';
-  if (values.length === 1) return `−${values[0]}`;
-  return `−${values[0]} to −${values.at(-1)}`;
-}
-
-const languagesOf = (brief: ExamBrief) => {
-  const named = brief.languages
-    .map((code: LanguageCode) => LANGUAGE_LABELS[contentLanguageOf(code)])
-    .join(', ');
-  return brief.languageMode === LANGUAGE_MODE.DUAL ? `${named} (side by side)` : named;
-};
-
-const sectionalOf = (brief: ExamBrief) =>
-  brief.sections.some((section) => section.durationSec !== null);
-
-const sectionMarks = (section: ExamBrief['sections'][number]) =>
-  round(section.questionCount * section.marksPerQuestion);
-
-function sectionLine(section: ExamBrief['sections'][number]): string {
-  const clock = section.durationSec === null ? null : `${Math.round(section.durationSec / 60)} min`;
-  return [
-    plural(section.questionCount, 'question'),
-    `+${section.marksPerQuestion} / −${section.negativeMarks}`,
-    clock,
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
 }

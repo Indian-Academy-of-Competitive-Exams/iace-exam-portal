@@ -6,9 +6,11 @@ import {
   AUTOSAVE_EVERY_MS,
   AUTOSAVE_JITTER_MS,
   autosaveDelayMs,
+  SAVE_TIMEOUT_MS,
   seedRevision,
   shouldFlushNow,
   shouldRetrySubmit,
+  SUBMIT_TIMEOUT_MS,
   submitRetryDelayMs,
 } from '../src/autosave-policy';
 
@@ -36,6 +38,15 @@ describe('when a sitting saves what it has', () => {
       assert.ok(delay >= AUTOSAVE_EVERY_MS - AUTOSAVE_JITTER_MS, `low at ${step}`);
       assert.ok(delay <= AUTOSAVE_EVERY_MS + AUTOSAVE_JITTER_MS, `high at ${step}`);
     }
+  });
+
+  /** The failure this prevents: one hung save swallowing a whole interval of taps, then emitting an oversized batch. */
+  it('gives a hung save up before the next one is due', () => {
+    assert.ok(
+      SAVE_TIMEOUT_MS < AUTOSAVE_EVERY_MS - AUTOSAVE_JITTER_MS,
+      'a save is abandoned before the earliest next tick',
+    );
+    assert.ok(SAVE_TIMEOUT_MS >= SUBMIT_TIMEOUT_MS, 'a save is no less patient than the submit');
   });
 
   it('goes early once enough answers are waiting', () => {

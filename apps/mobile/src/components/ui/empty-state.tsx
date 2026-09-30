@@ -56,11 +56,6 @@ export interface EmptyCopy {
   icon?: LucideIcon;
 }
 
-export type EmptyMessage = string | EmptyCopy;
-
-export const emptyCopy = (message: EmptyMessage): EmptyCopy =>
-  typeof message === 'string' ? { title: message } : message;
-
 export interface EmptyStateProps extends EmptyCopy {
   kind?: EmptyStateKind;
   /** Draws the Retry when there is no `action` — a failure without one is a dead end. */
