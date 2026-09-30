@@ -149,11 +149,11 @@ export class PushService {
 
     return {
       decided: new Set(decided.map((row) => ledgerKey(row.notificationId, row.channel))),
-      browsers: groupBy(
+      browsers: Map.groupBy(
         subscriptions.filter((target) => isAllowedPushEndpoint(target.endpoint) && live(target)),
         (target) => target.studentId,
       ),
-      phones: groupBy(
+      phones: Map.groupBy(
         devices.filter((device) => live(device)),
         (device) => device.studentId,
       ),
@@ -303,14 +303,4 @@ function ledgerRow(
     attempts: 1,
     lastError: `Nothing accepted the push (${results.length} tried)`,
   };
-}
-
-function groupBy<T>(rows: readonly T[], keyOf: (row: T) => string): Map<string, T[]> {
-  const groups = new Map<string, T[]>();
-  for (const row of rows) {
-    const group = groups.get(keyOf(row));
-    if (group) group.push(row);
-    else groups.set(keyOf(row), [row]);
-  }
-  return groups;
 }
