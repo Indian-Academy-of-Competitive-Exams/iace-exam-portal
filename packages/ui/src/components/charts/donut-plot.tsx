@@ -50,7 +50,7 @@ export function DonutPlot({
       <div className="relative" role="img" aria-label={props['aria-label']} style={{ height }}>
         <PieChart responsive height={height} style={{ width: '100%', height }}>
           <Pie
-            data={[...drawn]}
+            data={drawn}
             dataKey="value"
             nameKey="label"
             innerRadius={RING_INNER}

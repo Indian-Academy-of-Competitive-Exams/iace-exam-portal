@@ -23,18 +23,13 @@ import {
   SERIES_VAR,
   TIP_WRAPPER,
   UNMEASURED,
+  type PlotPoint,
   type SeriesSlot,
 } from './chart-theme';
 import { PlotTip, tipRows } from './chart-tooltip';
 
-export interface DivergingItem {
-  key: string;
-  label: string;
-  /** Signed: below the middle is negative. Null is unmeasured, and draws no bar. */
-  value: number | null;
-  display?: string;
-  caption?: string;
-}
+/** Signed here: below the middle is negative. The same reading a line plots, so it is the same shape. */
+export type DivergingItem = PlotPoint;
 
 export interface DivergingBarsProps {
   items: readonly DivergingItem[];
@@ -58,6 +53,9 @@ const LABEL_GAP = 8;
 const BELOW: SeriesSlot = 4;
 const ABOVE: SeriesSlot = 1;
 
+/** Hoisted, like chart-theme's own: a fresh object on every render sends Recharts round again. */
+const MARGIN = { top: TOP, right: VALUE_GUTTER, bottom: FOOT, left: 0 } as const;
+
 const isBelow = (item: DivergingItem) => (item.value ?? 0) < 0;
 
 /** Every bar carries its signed value: the middle is what the reader is measured against. */
@@ -76,9 +74,9 @@ export function DivergingBars({
     <BarChart
       responsive
       layout="vertical"
-      data={[...items]}
+      data={items}
       height={height}
-      margin={{ top: TOP, right: VALUE_GUTTER, bottom: FOOT, left: 0 }}
+      margin={MARGIN}
       style={{ width: '100%', height }}
       className={className}
       {...props}

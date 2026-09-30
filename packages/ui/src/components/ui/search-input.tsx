@@ -59,14 +59,13 @@ export interface DebouncedSearch {
 export function useDebouncedSearch(
   value: string,
   onChange: (next: string) => void,
-  delay: number = SEARCH_DEBOUNCE_MS,
 ): DebouncedSearch {
   const [draft, setDraft] = React.useState(value);
   const committed = React.useRef(value);
   /** The last `value` the parent actually gave us — not the last one we sent. */
   const seen = React.useRef(value);
   const debouncer = React.useRef<Debouncer>(undefined);
-  debouncer.current ??= createDebouncer(delay);
+  debouncer.current ??= createDebouncer(SEARCH_DEBOUNCE_MS);
 
   React.useEffect(() => {
     // Gated on the PARENT having moved, not on `value` differing from our own commit — a parent that hasn't applied it yet still holds the old term.
@@ -112,8 +111,6 @@ export interface SearchInputProps {
   'aria-label': string;
   id?: string;
   placeholder?: string;
-  /** Milliseconds of quiet before the search runs. */
-  delay?: number;
   className?: string;
 }
 
@@ -122,12 +119,11 @@ export function SearchInput({
   value,
   onChange,
   placeholder,
-  delay = SEARCH_DEBOUNCE_MS,
   className,
   id,
   'aria-label': ariaLabel,
 }: Readonly<SearchInputProps>) {
-  const { draft, type, flush, clear } = useDebouncedSearch(value, onChange, delay);
+  const { draft, type, flush, clear } = useDebouncedSearch(value, onChange);
 
   return (
     <Input

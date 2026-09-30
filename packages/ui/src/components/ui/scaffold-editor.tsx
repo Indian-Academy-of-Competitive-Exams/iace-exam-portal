@@ -47,7 +47,6 @@ export interface ScaffoldEditorProps {
   imageLimits?: ImageLimits;
   /** At the toolbar's right end, for a control over the whole box. */
   toolbarEnd?: React.ReactNode;
-  disabled?: boolean;
   lang?: string;
   'aria-label': string;
   className?: string;
@@ -60,6 +59,16 @@ const SHELL = [
 
 const CONTENT =
   'scaffold-content rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
+
+/** Built once: a fresh array of configured extensions fails `useEditor`'s compare, and every render then rebuilds the view's props. */
+const EXTENSIONS = [
+  StarterKit.configure({ document: false, heading: false, horizontalRule: false }),
+  ScaffoldDocument,
+  ScaffoldRegionNode,
+  TableKit.configure({ table: { resizable: true } }),
+  TableTools,
+  Transliterate,
+];
 
 const ESCAPED: Readonly<Record<string, string>> = {
   '&': '&amp;',
@@ -139,7 +148,6 @@ export function ScaffoldEditor({
   imageLimits,
   toolbarEnd,
   script = null,
-  disabled = false,
   lang,
   'aria-label': label,
   className,
@@ -152,29 +160,28 @@ export function ScaffoldEditor({
     run.current = { onSave, onCycleLanguage };
   });
 
-  const { editor, math, setMath } = useQuestionEditor({
-    editable: !disabled,
-    extensions: [
-      StarterKit.configure({ document: false, heading: false, horizontalRule: false }),
-      ScaffoldDocument,
-      ScaffoldRegionNode,
-      TableKit.configure({ table: { resizable: true } }),
-      TableTools,
-      Transliterate,
-    ],
-    content: docFrom(regions),
-    onUpdate: (current) => emit.current(regionsOf(current)),
-    onUploadImage,
-    imageLimits,
-    editorProps: {
-      handleKeyDown: (view, event) => handleKey(view, event, run.current),
+  const editorProps = React.useMemo(
+    () => ({
+      handleKeyDown: (view: EditorView, event: KeyboardEvent) =>
+        handleKey(view, event, run.current),
       attributes: {
         class: CONTENT,
         role: 'textbox',
         'aria-label': label,
         ...(lang ? { lang } : {}),
       },
-    },
+    }),
+    [label, lang],
+  );
+
+  const { editor, math, setMath } = useQuestionEditor({
+    editable: true,
+    extensions: EXTENSIONS,
+    content: docFrom(regions),
+    onUpdate: (current) => emit.current(regionsOf(current)),
+    onUploadImage,
+    imageLimits,
+    editorProps,
   });
 
   // A transaction, not a ref: the plugin carries the script and the editor is built once.
@@ -193,8 +200,8 @@ export function ScaffoldEditor({
   }, [editor, docKey, regions]);
 
   return (
-    <div className={cn(SHELL, disabled && 'bg-disabled', className)} data-focus-ring="wrapper">
-      {editor && !disabled ? (
+    <div className={cn(SHELL, className)} data-focus-ring="wrapper">
+      {editor ? (
         <RichTextToolbar
           // Pinned: the box runs the height of the column, and the tools have to stay reachable.
           className="sticky top-0 z-[--z-sticky] px-3"

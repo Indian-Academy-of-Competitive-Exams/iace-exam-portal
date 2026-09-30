@@ -19,9 +19,9 @@ const SIZES = {
 } as const;
 
 export function Avatar({ src, name, fallback, size = 'md', className }: Readonly<AvatarProps>) {
-  // Signed URLs expire; a failed load falls back to initials.
-  const [failed, setFailed] = React.useState(false);
-  const showPhoto = Boolean(src) && !failed;
+  // Signed URLs expire; a failed load falls back to initials. Held against the src, so a fresh URL is tried rather than written off with the last one.
+  const [failed, setFailed] = React.useState<string | null>(null);
+  const showPhoto = Boolean(src) && failed !== src;
 
   return (
     <span
@@ -39,7 +39,7 @@ export function Avatar({ src, name, fallback, size = 'md', className }: Readonly
           src={src ?? undefined}
           alt={name ?? 'Profile photo'}
           className="size-full object-cover"
-          onError={() => setFailed(true)}
+          onError={() => setFailed(src ?? null)}
         />
       ) : (
         initialsOf(name, fallback)

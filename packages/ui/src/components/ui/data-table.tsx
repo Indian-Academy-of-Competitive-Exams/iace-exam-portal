@@ -67,6 +67,8 @@ export interface DataTableSelection {
   onChange: (selected: ReadonlySet<string>) => void;
   /** The label the header checkbox announces, since a table has no heading of its own. */
   label?: string;
+  /** Names the row a tick belongs to. Without it a reader hears the row's id read out. */
+  rowLabel?: (key: string) => string;
   /** Which rows a tick may be ADDED to. A ticked row can always be unticked. */
   selectable?: (key: string) => boolean;
 }
@@ -102,7 +104,12 @@ interface DataTableRowProps<TRow> {
   expand?: DataTableExpand<TRow>;
   isOpen: boolean;
   onToggleOpen: (id: string) => void;
-  tick?: { checked: boolean; disabled: boolean; onChange: (id: string, on: boolean) => void };
+  tick?: {
+    checked: boolean;
+    disabled: boolean;
+    label: string;
+    onChange: (id: string, on: boolean) => void;
+  };
 }
 
 function DataTableRow<TRow>({
@@ -142,7 +149,7 @@ function DataTableRow<TRow>({
         {tick ? (
           <TableCell>
             <Checkbox
-              aria-label={`Select row ${id}`}
+              aria-label={tick.label}
               checked={tick.checked}
               disabled={tick.disabled}
               onChange={(event) => tick.onChange(id, event.target.checked)}
@@ -261,6 +268,7 @@ export function DataTable<TRow>({
                     ? {
                         checked: selection.selected.has(id),
                         disabled: !reachable.has(id),
+                        label: selection.rowLabel?.(id) ?? `Select row ${id}`,
                         onChange: toggleOne,
                       }
                     : undefined

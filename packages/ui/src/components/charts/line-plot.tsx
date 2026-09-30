@@ -29,17 +29,12 @@ import {
   TIP_WRAPPER,
   UNMEASURED,
   anchorAt,
+  type PlotPoint,
 } from './chart-theme';
 import { PlotTip, tipRows } from './chart-tooltip';
 
-export interface LinePoint {
-  key: string;
-  label: string;
-  /** Null is nothing to plot, which is not zero — it draws no marker and breaks the line. */
-  value: number | null;
-  display?: string;
-  caption?: string;
-}
+/** A line's points and a diverging chart's items are the same reading; `PlotPoint` is the one shape. */
+export type LinePoint = PlotPoint;
 
 /** A shaded y-range the line is read against, such as where the middle of the cohort sits. */
 export interface PlotBand {
@@ -101,7 +96,7 @@ export function LinePlot({
   return (
     <LineChart
       responsive
-      data={[...points]}
+      data={points}
       height={box}
       margin={compact ? COMPACT_MARGIN : PLOT_MARGIN}
       style={{ width: '100%', height: box }}

@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { after, afterEach, before, describe, it, mock } from 'node:test';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Combobox } from '../src/components/ui/combobox';
+import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
+
+/** Every combobox trigger carries a Tooltip, so the tests mount the provider `mountApp` mounts. */
+const show = (ui: React.ReactNode) => render(<TooltipProvider>{ui}</TooltipProvider>);
 
 const items = [
   { value: 'ext_1', label: 'SSC CGL' },
@@ -19,7 +23,7 @@ describe('Combobox search focus', () => {
   const searchable = { search: '', onSearchChange: () => {}, searchPlaceholder: 'Search groups' };
 
   it('gives the search row the wrapper ring, as input and select do', () => {
-    render(box(searchable));
+    show(box(searchable));
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
     const row = screen.getByLabelText('Search groups').parentElement;
@@ -30,7 +34,7 @@ describe('Combobox search focus', () => {
 
   /** It autofocuses on every open, so focus-within would flash a ring nobody asked for. */
   it('rings on focus-visible, not on the autofocus that opening it causes', () => {
-    render(box(searchable));
+    show(box(searchable));
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
     const row = screen.getByLabelText('Search groups').parentElement;
@@ -42,20 +46,20 @@ describe('Combobox search focus', () => {
 
 describe('Combobox', () => {
   it('reads as its placeholder while nothing is chosen', () => {
-    render(box());
+    show(box());
 
     assert.ok(screen.getByRole('button', { name: 'Choose…' }));
   });
 
   it('names the chosen item on the trigger', () => {
-    render(box({ value: 'ext_2' }));
+    show(box({ value: 'ext_2' }));
 
     assert.ok(screen.getByRole('button', { name: 'RRB JE' }));
   });
 
   /** An option outside a listbox is invalid ARIA — a pile of buttons with no count or position. */
   it('opens a listbox of options', async () => {
-    render(box());
+    show(box());
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
@@ -66,7 +70,7 @@ describe('Combobox', () => {
 
   it('reports the chosen value and closes', async () => {
     const onChange = mock.fn();
-    render(box({ onChange }));
+    show(box({ onChange }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
     fireEvent.click(await screen.findByRole('option', { name: /SSC CGL/ }));
@@ -76,7 +80,7 @@ describe('Combobox', () => {
   });
 
   it('offers no way back to nothing when it is not clearable', async () => {
-    render(box({ clearable: false }));
+    show(box({ clearable: false }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
@@ -85,7 +89,7 @@ describe('Combobox', () => {
   });
 
   it('holds the shape of the rows that are coming rather than collapsing', async () => {
-    render(box({ items: [], isLoading: true }));
+    show(box({ items: [], isLoading: true }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
@@ -96,7 +100,7 @@ describe('Combobox', () => {
   });
 
   it('says nothing matches when the list is genuinely empty', async () => {
-    render(box({ items: [], isLoading: false }));
+    show(box({ items: [], isLoading: false }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
@@ -104,7 +108,7 @@ describe('Combobox', () => {
   });
 
   it('does not open when disabled', () => {
-    render(box({ disabled: true }));
+    show(box({ disabled: true }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
@@ -112,7 +116,7 @@ describe('Combobox', () => {
   });
 
   it('closes on Escape, not just on picking an option', async () => {
-    render(box());
+    show(box());
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
     const list = await screen.findByRole('listbox');
@@ -124,7 +128,7 @@ describe('Combobox', () => {
 
   /** Radix focuses the first tabbable descendant of the popover content on open; with no search box that's the clear row, which reads as the placeholder. Pinned as observed, not a deliberate design choice. */
   it('moves focus onto the first row when it opens', async () => {
-    render(box());
+    show(box());
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
     await screen.findByRole('listbox');
@@ -133,11 +137,59 @@ describe('Combobox', () => {
   });
 
   it('moves focus into the search box when the list is searchable', async () => {
-    render(box({ search: '', onSearchChange: () => {}, searchPlaceholder: 'Search groups' }));
+    show(box({ search: '', onSearchChange: () => {}, searchPlaceholder: 'Search groups' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
 
     const searchBox = await screen.findByPlaceholderText('Search groups');
     assert.equal(document.activeElement, searchBox);
+  });
+});
+
+const WIDTH_PER_CHARACTER = 10;
+const TRIGGER_WIDTH = 100;
+
+/** jsdom lays nothing out, so a label is told to measure ten pixels a character against a fixed box — which is what makes a long one genuinely cut. */
+function measureByLength(): () => void {
+  const element = window.HTMLElement.prototype;
+  Object.defineProperty(element, 'scrollWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return (this.textContent ?? '').length * WIDTH_PER_CHARACTER;
+    },
+  });
+  Object.defineProperty(element, 'clientWidth', { configurable: true, get: () => TRIGGER_WIDTH });
+
+  return () => {
+    Reflect.deleteProperty(element, 'scrollWidth');
+    Reflect.deleteProperty(element, 'clientWidth');
+  };
+}
+
+describe('the combobox trigger tooltip', () => {
+  const LONG = 'Staff Selection Commission Combined Graduate Level Tier One';
+  const named = [
+    { value: 'ext_1', label: 'SSC' },
+    { value: 'ext_2', label: LONG },
+  ];
+
+  let restoreMeasuring = () => {};
+  before(() => {
+    restoreMeasuring = measureByLength();
+  });
+  after(() => restoreMeasuring());
+
+  /** The failure this prevents: truncation is MEASURED, so it flips after the first paint — and the trigger used to be swapped for a tooltip-wrapped copy at that moment, remounting the button, which lost its focus and left the measurement watching a detached span. */
+  it('reveals a label it had to cut, on the button that was already there', async () => {
+    const { rerender } = show(box({ items: named, value: 'ext_1' }));
+    const trigger = screen.getByRole('button');
+
+    rerender(<TooltipProvider>{box({ items: named, value: 'ext_2' })}</TooltipProvider>);
+
+    assert.equal(screen.getByRole('button'), trigger, 'the trigger is the same button');
+
+    act(() => trigger.focus());
+
+    assert.equal((await screen.findByRole('tooltip')).textContent, LONG);
   });
 });

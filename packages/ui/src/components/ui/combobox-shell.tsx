@@ -127,14 +127,11 @@ export function ComboboxShell({
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      {revealed ? (
-        <Tooltip>
-          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-          <TooltipContent>{revealed}</TooltipContent>
-        </Tooltip>
-      ) : (
-        trigger
-      )}
+      {/* Always mounted: swapping the trigger out remounts the button, losing its focus and the span the measurement watches. */}
+      <Tooltip>
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+        {revealed ? <TooltipContent>{revealed}</TooltipContent> : null}
+      </Tooltip>
 
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content

@@ -4,7 +4,6 @@ import { type Theme } from './theme';
 export interface ThemeContextValue {
   theme: Theme;
   toggle: () => void;
-  setTheme: (theme: Theme) => void;
 }
 
 /** Context + hook live apart from the provider component so editing the provider hot-reloads instead of forcing a full page refresh. */

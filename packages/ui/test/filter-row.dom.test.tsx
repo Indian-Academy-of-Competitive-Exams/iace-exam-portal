@@ -7,6 +7,7 @@ import {
   type ListFilter,
   type ListFilterValue,
 } from '../src/components/ui/list-view';
+import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
 
@@ -26,8 +27,11 @@ function row(
   filters: readonly ListFilter[] = [SEARCH, BRANCH],
   clearFilters: FilterState['clearFilters'] = () => {},
 ) {
+  // Every combobox trigger carries a Tooltip, so the tests mount the provider `mountApp` mounts.
   return render(
-    <FilterRow state={{ values, setFilter: () => {}, clearFilters }} filters={filters} />,
+    <TooltipProvider>
+      <FilterRow state={{ values, setFilter: () => {}, clearFilters }} filters={filters} />
+    </TooltipProvider>,
   );
 }
 

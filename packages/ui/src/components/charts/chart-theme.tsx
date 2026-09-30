@@ -46,6 +46,16 @@ export const CHART_VAR = {
 /** Nothing measured. Never 0 — a zero would claim the student scored nothing. */
 export const UNMEASURED = '—';
 
+/** One reading in a plot: what it is called, what it measured, and what to write instead of the number. */
+export interface PlotPoint {
+  key: string;
+  label: string;
+  /** Null is unmeasured, which is not zero: it draws no marker and breaks the line. Signed, where a plot has a middle to diverge from. */
+  value: number | null;
+  display?: string;
+  caption?: string;
+}
+
 /** The three sizes a plot writes in, off the token scale: 13, 12 and 11. */
 export const PLOT_TEXT = {
   value: 'fill-foreground text-sm font-semibold',

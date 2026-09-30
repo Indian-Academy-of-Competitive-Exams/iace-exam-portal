@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { PageFrame, PanelFrame, TableFrame } from '../src/components/ui/table-frame';
+import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
 
@@ -122,9 +123,11 @@ describe('PanelFrame — the filter bar', () => {
   /** The same bar a list screen draws, in the same place: inside the card, above the body. */
   it('draws the spec as a bar above the body', () => {
     render(
-      <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
-        <p>The body</p>
-      </PanelFrame>,
+      <TooltipProvider>
+        <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
+          <p>The body</p>
+        </PanelFrame>
+      </TooltipProvider>,
     );
 
     assert.ok(screen.getByRole('searchbox', { name: 'Search' }));
@@ -176,9 +179,11 @@ describe('PanelFrame — the filter bar', () => {
 
   it('keeps the body the only scroller when it also carries a bar', () => {
     const { container } = render(
-      <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
-        <p>The body</p>
-      </PanelFrame>,
+      <TooltipProvider>
+        <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
+          <p>The body</p>
+        </PanelFrame>
+      </TooltipProvider>,
     );
 
     const scrollers = container.querySelectorAll('.overflow-y-auto');

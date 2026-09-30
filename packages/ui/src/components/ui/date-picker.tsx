@@ -179,6 +179,12 @@ const MODES: Readonly<
   year: { out: 'year', zoomOut: '', back: 'Previous years', next: 'Next years' },
 };
 
+/** The cell the arrows move, and whether it takes focus — an arrow key moves focus with it, a chevron must not take it off itself. */
+interface Roving {
+  iso: string;
+  take: boolean;
+}
+
 export interface DatePickerProps {
   /** `YYYY-MM-DD`, or '' for nothing chosen. */
   value: string;
@@ -219,13 +225,15 @@ export function DatePicker({
   };
   const [view, setView] = React.useState(seed);
   const [mode, setMode] = React.useState<CalendarMode>('day');
-  const [focused, setFocused] = React.useState(value || today);
+  const [focused, setFocused] = React.useState<Roving>({ iso: value || today, take: true });
+
+  const rove = (iso: string) => setFocused({ iso, take: true });
 
   // Re-seeded on every open, so reopening lands on the chosen month rather than wherever it was left.
   const onOpen = (next: boolean) => {
     if (next) {
       setView(seed());
-      setFocused(value || today);
+      rove(value || today);
       setMode('day');
     }
     setOpen(next);
@@ -233,12 +241,12 @@ export function DatePicker({
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (mode !== 'day') return;
-    const iso = nextFocusedDate(focused || today, event.key, event.shiftKey);
+    const iso = nextFocusedDate(focused.iso || today, event.key, event.shiftKey);
     if (iso === null) return;
     event.preventDefault();
     const parts = parseISODate(iso);
     if (parts === null) return;
-    setFocused(iso);
+    rove(iso);
     setView({ year: parts.year, month: parts.month });
   };
 
@@ -249,7 +257,14 @@ export function DatePicker({
 
   // A chevron pages by whatever the current grid is a page of.
   const page = (by: number) => {
-    if (mode === 'day') return setView((c) => shiftMonth(c.year, c.month, by));
+    if (mode === 'day') {
+      // The roving cell pages with the view; left behind, no cell is tabbable and the next arrow key snaps back.
+      setFocused((current) => ({
+        iso: nextFocusedDate(current.iso, by < 0 ? 'PageUp' : 'PageDown') ?? current.iso,
+        take: false,
+      }));
+      return setView((c) => shiftMonth(c.year, c.month, by));
+    }
     const years = mode === 'month' ? by : by * YEARS_IN_DECADE;
     setView((c) => ({ ...c, year: c.year + years }));
   };
@@ -315,7 +330,7 @@ export function DatePicker({
                 min={min}
                 max={max}
                 onSelect={choose}
-                onFocus={setFocused}
+                onFocus={rove}
               />
             ) : null}
 
@@ -393,7 +408,7 @@ function DayGrid({
   view: { year: number; month: number };
   value: string;
   today: string;
-  focused: string;
+  focused: Roving;
   min?: string;
   max?: string;
   onSelect: (iso: string) => void;
@@ -401,11 +416,12 @@ function DayGrid({
 }>) {
   const grid = React.useRef<HTMLTableElement>(null);
 
-  // Keyed on the view too: paging remounts the cells, and the focused one must take focus again.
+  // An arrow key remounts the cell it moved to, so the grid has to take focus back; paging keeps it where it is.
   React.useEffect(() => {
+    if (!focused.take) return;
     const cell = grid.current?.querySelector<HTMLButtonElement>('[tabindex="0"]');
     if (cell && document.activeElement !== cell) cell.focus();
-  }, [focused, view.year, view.month]);
+  }, [focused]);
 
   return (
     // A calendar IS a week-by-weekday grid, and <td> carries the gridcell role for free.
@@ -433,7 +449,7 @@ function DayGrid({
                 <td key={cell.iso} className="p-[1px]">
                   <button
                     type="button"
-                    tabIndex={cell.iso === focused ? 0 : -1}
+                    tabIndex={cell.iso === focused.iso ? 0 : -1}
                     disabled={disabled}
                     aria-pressed={selected}
                     aria-current={cell.iso === today ? 'date' : undefined}

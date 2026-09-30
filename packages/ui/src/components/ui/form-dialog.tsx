@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  type DialogContentProps,
 } from './dialog';
 
 export interface FormDialogProps<TValues extends FieldValues> {
@@ -24,7 +23,6 @@ export interface FormDialogProps<TValues extends FieldValues> {
   submitLabel: string;
   /** Mid-request: the submit button spins and both buttons go inert. */
   loading?: boolean;
-  size?: NonNullable<DialogContentProps['size']>;
   children: React.ReactNode;
 }
 
@@ -38,7 +36,6 @@ export function FormDialog<TValues extends FieldValues>({
   description,
   submitLabel,
   loading = false,
-  size,
   children,
 }: Readonly<FormDialogProps<TValues>>) {
   const change = (next: boolean) => {
@@ -48,7 +45,7 @@ export function FormDialog<TValues extends FieldValues>({
 
   return (
     <Dialog open={open} onOpenChange={change}>
-      <DialogContent size={size} closeLabel={`Close ${title}`}>
+      <DialogContent closeLabel={`Close ${title}`}>
         <form
           // A portal still bubbles React events, so without this the page's own form submits too.
           onSubmit={(event) => {

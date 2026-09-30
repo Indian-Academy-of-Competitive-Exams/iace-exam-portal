@@ -111,7 +111,5 @@ export {
 } from './components/ui/table';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent } from './components/ui/card';
 
-export { THEMES, type Theme } from './theme/theme';
-export { useTheme } from './theme/theme-context';
 export { ThemeProvider } from './theme/theme-provider';
 export { ThemeToggle } from './theme/theme-toggle';

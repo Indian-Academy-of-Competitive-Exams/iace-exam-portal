@@ -67,8 +67,9 @@ const CONTENT = 'rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m
 
 interface QuestionEditorOptions {
   editable: boolean;
-  /** The kit and the box's own nodes; the marks, images and maths every box shares follow them. */
+  /** The kit and the box's own nodes; the marks, images and maths every box shares follow them. Stable, or every render runs `setOptions`. */
   extensions: Extensions;
+  /** Read once, at creation: a box tracks later changes with `setContent`, never through this. */
   content: Content;
   onUpdate: (editor: Editor) => void;
   onUploadImage?: UploadImage;
@@ -89,15 +90,22 @@ export function useQuestionEditor({
   const [math, setMath] = React.useState<MathDraft | null>(null);
   // The editor emits an update for its INITIAL content, which is a load and not a keystroke.
   const settled = React.useRef(false);
+  // Read through a ref, so the handlers below stay the same functions render after render.
+  const takes = React.useRef({ onUploadImage, imageLimits });
+  React.useEffect(() => {
+    takes.current = { onUploadImage, imageLimits };
+  });
 
-  const editor = useEditor({
-    editable,
-    extensions: [
+  const [started] = React.useState(content);
+  const takesImages = Boolean(onUploadImage);
+
+  const all = React.useMemo(
+    () => [
       ...extensions,
       Superscript,
       Subscript,
       TextSizeMark,
-      ...(onUploadImage ? [QuestionImage] : []),
+      ...(takesImages ? [QuestionImage] : []),
       // A half-typed formula shows in red rather than taking the editor down with it.
       BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
       InlineMathAtDollar.configure({
@@ -105,18 +113,39 @@ export function useQuestionEditor({
         onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
       }),
     ],
-    content,
-    onUpdate: ({ editor: current }: { editor: Editor }) => {
-      if (settled.current) onUpdate(current);
-    },
-    editorProps: {
+    [extensions, takesImages],
+  );
+
+  const props = React.useMemo<EditorProps>(
+    () => ({
       ...editorProps,
       // Without these a pasted image becomes a base64 `data:` uri inside the question row.
       handlePaste: (view, event) =>
-        takeImages(view, event.clipboardData, onUploadImage, imageLimits),
+        takeImages(
+          view,
+          event.clipboardData,
+          takes.current.onUploadImage,
+          takes.current.imageLimits,
+        ),
       handleDrop: (view, event) =>
-        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage, imageLimits),
+        takeImages(
+          view,
+          (event as DragEvent).dataTransfer,
+          takes.current.onUploadImage,
+          takes.current.imageLimits,
+        ),
+    }),
+    [editorProps],
+  );
+
+  const editor = useEditor({
+    editable,
+    extensions: all,
+    content: started,
+    onUpdate: ({ editor: current }: { editor: Editor }) => {
+      if (settled.current) onUpdate(current);
     },
+    editorProps: props,
   });
 
   // After the editor exists, so its creation update has already been and gone.
@@ -146,20 +175,21 @@ export function RichText({
   className,
 }: Readonly<RichTextProps>) {
   const off = useFormDisabled() || (disabled ?? false);
+  /** The html this box last handed up, which is what `value` is compared against — `getHTML()` serialises the whole document to answer the same question. */
+  const emitted = React.useRef(value);
 
-  const { editor, math, setMath } = useQuestionEditor({
-    editable: !off,
-    extensions: [
+  const extensions = React.useMemo(
+    () => [
       StarterKit.configure(
         singleLine ? { heading: false, bulletList: false, orderedList: false } : {},
       ),
       ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } }), TableTools]),
     ],
-    content: documentFrom(value),
-    onUpdate: (current) => onChange(current.getHTML()),
-    onUploadImage,
-    imageLimits,
-    editorProps: {
+    [singleLine],
+  );
+
+  const editorProps = React.useMemo(
+    () => ({
       attributes: {
         class: cn(CONTENT, singleLine && 'whitespace-nowrap'),
         ...(id ? { id } : {}),
@@ -167,12 +197,27 @@ export function RichText({
         ...(describedBy ? { 'aria-describedby': describedBy } : {}),
         ...(invalid ? { 'aria-invalid': 'true' } : {}),
       },
+    }),
+    [singleLine, id, lang, describedBy, invalid],
+  );
+
+  const { editor, math, setMath } = useQuestionEditor({
+    editable: !off,
+    extensions,
+    content: documentFrom(value),
+    onUpdate: (current) => {
+      emitted.current = current.getHTML();
+      onChange(emitted.current);
     },
+    onUploadImage,
+    imageLimits,
+    editorProps,
   });
 
-  // Only when the two genuinely differ, or every keystroke would reset the caret to the start.
+  // Only when the value came from somewhere else, or every keystroke would reset the caret to the start.
   React.useEffect(() => {
-    if (!editor || value === editor.getHTML()) return;
+    if (!editor || value === emitted.current) return;
+    emitted.current = value;
     // `emitUpdate: false` or loading a question reads as the user typing it — v3 emits by default.
     editor.commands.setContent(documentFrom(value), { emitUpdate: false });
   }, [editor, value]);

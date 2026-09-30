@@ -148,7 +148,9 @@ describe('ListView', () => {
 
   it('draws no filter bar for a list nobody filters', () => {
     render(
-      <ListView list={state()} columns={columns} rowKey={(r) => r.id} empty="No admins yet" />,
+      <TooltipProvider>
+        <ListView list={state()} columns={columns} rowKey={(r) => r.id} empty="No admins yet" />
+      </TooltipProvider>,
     );
 
     assert.equal(screen.queryByRole('button', { name: /Filters/ }), null);

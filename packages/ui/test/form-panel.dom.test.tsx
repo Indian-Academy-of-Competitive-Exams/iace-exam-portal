@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { FormPanel, FormSection } from '../src/components/ui/form-panel';
 import { Combobox } from '../src/components/ui/combobox';
 import { Input } from '../src/components/ui/input';
+import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
 
@@ -167,10 +168,12 @@ describe('a read-only FormPanel', () => {
   /** `.disabled` reflects an element's OWN attribute, so the guarantee is `:disabled`. */
   it('makes every control inside inert, including the button a Combobox renders', () => {
     render(
-      <FormPanel disabled>
-        <Input aria-label="Full name" />
-        <Combobox aria-label="Gender" value="" onChange={() => {}} items={[]} />
-      </FormPanel>,
+      <TooltipProvider>
+        <FormPanel disabled>
+          <Input aria-label="Full name" />
+          <Combobox aria-label="Gender" value="" onChange={() => {}} items={[]} />
+        </FormPanel>
+      </TooltipProvider>,
     );
 
     assert.ok(screen.getByLabelText('Full name').matches(':disabled'), 'the input is inert');
@@ -193,10 +196,12 @@ describe('a read-only FormPanel', () => {
 
   it('leaves the same controls live when it is not disabled', () => {
     render(
-      <FormPanel>
-        <Input aria-label="Full name" />
-        <Combobox aria-label="Gender" value="" onChange={() => {}} items={[]} />
-      </FormPanel>,
+      <TooltipProvider>
+        <FormPanel>
+          <Input aria-label="Full name" />
+          <Combobox aria-label="Gender" value="" onChange={() => {}} items={[]} />
+        </FormPanel>
+      </TooltipProvider>,
     );
 
     assert.ok(!screen.getByLabelText('Full name').matches(':disabled'));

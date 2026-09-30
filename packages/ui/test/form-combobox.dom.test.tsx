@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FormCombobox } from '../src/components/ui/form-field';
+import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
 
@@ -32,7 +33,12 @@ function Harness({
     expose?.(form);
   }, [error, expose, form]);
 
-  return <FormCombobox form={form} name="mode" label="Mode" items={MODES} onChange={onChange} />;
+  // Every combobox trigger carries a Tooltip, so the tests mount the provider `mountApp` mounts.
+  return (
+    <TooltipProvider>
+      <FormCombobox form={form} name="mode" label="Mode" items={MODES} onChange={onChange} />
+    </TooltipProvider>
+  );
 }
 
 describe('FormCombobox', () => {

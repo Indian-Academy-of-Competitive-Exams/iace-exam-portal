@@ -1,6 +1,6 @@
 import * as React from 'react';
 import katex from 'katex';
-import { type Editor } from '@tiptap/react';
+import { useEditorState, type Editor } from '@tiptap/react';
 import {
   AArrowDown,
   AArrowUp,
@@ -193,6 +193,18 @@ export function RichTextToolbar({
   className,
 }: Readonly<RichTextToolbarProps>) {
   const fileRef = React.useRef<HTMLInputElement>(null);
+  // Subscribed, not read at render: the editor re-renders on a doc change alone, so a caret move would leave every button's pressed state behind.
+  const pressed = useEditorState({
+    editor,
+    selector: ({ editor: current }) => ({
+      marks: MARKS.filter(({ name }) => current.isActive(name)).map(({ name }) => name),
+      sizes: SIZES.filter(({ size }) => current.isActive(TEXT_SIZE_MARK, { size })).map(
+        ({ size }) => size,
+      ),
+      lists: LISTS.filter(({ name }) => current.isActive(name)).map(({ name }) => name),
+    }),
+  });
+
   type Chain = ReturnType<Editor['chain']>;
   // `.run()` is what commits it — a chain that is only built does nothing at all.
   const run = (act: (chain: Chain) => Chain) => act(editor.chain().focus()).run();
@@ -228,7 +240,7 @@ export function RichTextToolbar({
         <ToolButton
           key={name}
           label={label}
-          active={editor.isActive(name)}
+          active={pressed.marks.includes(name)}
           onClick={() => editor.chain().focus().toggleMark(name).run()}
         >
           <Icon aria-hidden />
@@ -239,7 +251,7 @@ export function RichTextToolbar({
         <ToolButton
           key={size}
           label={label}
-          active={editor.isActive(TEXT_SIZE_MARK, { size })}
+          active={pressed.sizes.includes(size)}
           onClick={() => setSize(size)}
         >
           <Icon aria-hidden />
@@ -252,7 +264,7 @@ export function RichTextToolbar({
             <ToolButton
               key={name}
               label={label}
-              active={editor.isActive(name)}
+              active={pressed.lists.includes(name)}
               onClick={() => editor.chain().focus().toggleList(name, 'listItem').run()}
             >
               <Icon aria-hidden />

@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { cn } from '../../lib/utils';
 import { DatePicker } from './date-picker';
 import { Input } from './input';
 
@@ -17,7 +16,6 @@ export interface DateTimePickerProps {
   id?: string;
   'aria-label'?: string;
   'aria-describedby'?: string;
-  className?: string;
 }
 
 const partsOf = (value: string): { date: string; time: string } => {
@@ -35,7 +33,6 @@ export function DateTimePicker({
   minDate,
   disabled = false,
   id,
-  className,
   ...aria
 }: Readonly<DateTimePickerProps>) {
   const { date: given, time } = partsOf(value);
@@ -51,7 +48,7 @@ export function DateTimePicker({
   };
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className="flex items-center gap-2">
       <DatePicker
         {...aria}
         id={id}

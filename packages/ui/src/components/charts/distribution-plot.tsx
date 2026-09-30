@@ -1,3 +1,4 @@
+import * as React from 'react';
 import {
   Bar,
   BarChart,
@@ -94,6 +95,17 @@ export function DistributionPlot({
   className,
   ...props
 }: Readonly<DistributionPlotProps>) {
+  // The markers stack above the plot, so the head room is theirs; held, like chart-theme's own margins.
+  const margin = React.useMemo(
+    () => ({
+      top: MARKER_TOP + markers.length * MARKER_STEP,
+      right: MARKER_SIDE,
+      bottom: 0,
+      left: MARKER_SIDE,
+    }),
+    [markers.length],
+  );
+
   if (bands.length === 0) return null;
 
   const rows: DistributionRow[] = bands.map((band) => ({
@@ -110,12 +122,7 @@ export function DistributionPlot({
       data={rows}
       height={height}
       barCategoryGap={BIN_GAP}
-      margin={{
-        top: MARKER_TOP + markers.length * MARKER_STEP,
-        right: MARKER_SIDE,
-        bottom: 0,
-        left: MARKER_SIDE,
-      }}
+      margin={margin}
       style={{ width: '100%', height }}
       className={className}
       {...props}
