@@ -1,3 +1,4 @@
+import './load-env';
 import './instrument';
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
