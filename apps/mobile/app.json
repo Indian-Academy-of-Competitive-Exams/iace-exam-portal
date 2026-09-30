@@ -6,11 +6,24 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "iace-mobile",
+    "icon": "./assets/icon.png",
     "android": {
-      "package": "in.co.iace.mobile"
+      "package": "in.co.iace.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#bf0d10"
+      }
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#f6f7f9"
+        }
+      ],
       "expo-sqlite",
       "expo-notifications",
       "@react-native-community/datetimepicker",
