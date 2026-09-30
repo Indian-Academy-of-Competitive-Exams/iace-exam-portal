@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { isMarkingPending, useBookmarks } from '@iace/app-kit';
@@ -8,11 +9,12 @@ import { api } from '../lib/api';
 import { solutionsQuery } from '../lib/queries';
 import { ReviewPaper } from '../components/review/review-paper';
 
-/** One read: the solutions carry the student's own answers, the marks and the key together. */
+/** One section at a time: its questions carry the student's own answers, the marks and the key. */
 export function SolutionPanel() {
   const { attemptId = '' } = useParams();
+  const [sectionId, setSectionId] = useState('');
 
-  const solutions = useQuery(solutionsQuery(attemptId));
+  const solutions = useQuery(solutionsQuery(attemptId, sectionId));
   const stars = useBookmarks(api, attemptId, solutions.data !== undefined);
 
   return (
@@ -25,6 +27,8 @@ export function SolutionPanel() {
         <ReviewPaper
           sections={solutions.data.sections}
           questions={solutions.data.questions}
+          sectionId={sectionId || (solutions.data.sectionId ?? '')}
+          onSectionChange={setSectionId}
           languages={solutions.data.languages}
           languageMode={LANGUAGE_MODE.SINGLE}
           bookmark={stars}

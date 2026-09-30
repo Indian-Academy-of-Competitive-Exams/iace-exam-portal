@@ -17,6 +17,7 @@ import {
   type ScoreCardQuestion,
   type SolutionQuestion,
   type SolutionReport,
+  type SolutionsQuery,
   round2 as round,
   servedQuestions,
 } from '@iace/contracts';
@@ -25,7 +26,7 @@ import { StorageService } from '../storage/storage.service';
 import { answeredRows, type ServedAnswer } from './answer-sheet';
 import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
-import { SHEET_ROW_SELECT } from './paper-sheet.service';
+import { PaperSheetService, type SolutionPaperRow } from './paper-sheet.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { percentageOf } from './attempt-report';
 import { answerKeyIn, optionsIn } from '../common/prisma-json';
@@ -39,29 +40,11 @@ const TREND_LENGTH = 20;
 const HISTORY_LENGTH = 500;
 const NOT_REVIEWABLE = 'This paper has not been marked yet, so there is nothing to review.';
 
-/** The paper's own terms per row; every sitting of a test was served the whole of it. */
-const PRICED_ROW_SELECT = {
-  ...SHEET_ROW_SELECT,
-  marks: true,
-  negativeMarks: true,
-  status: true,
-} as const satisfies Prisma.PaperQuestionSelect;
-
-type PricedRow = Prisma.PaperQuestionGetPayload<{ select: typeof PRICED_ROW_SELECT }> &
-  ServedAnswer;
-
-/** What the GATE needs, and nothing else — this read happens before anybody has been let in. */
-const GATE_SELECT = {
-  id: true,
-  testId: true,
-  status: true,
-  test: { select: { baseConfig: { select: { durationSec: true } } } },
-} as const satisfies Prisma.AttemptSelect;
-
-/** The KEY. Reached only past `solutionsAreOpen`, which is why it is a second read and not a join. */
+/** The sitting a review is drawn from. The KEY is not here — it rides the paper, read past the gate. */
 const SOLUTION_SELECT = {
   id: true,
   testId: true,
+  status: true,
   languages: true,
   startedAt: true,
   shuffleSeed: true,
@@ -69,6 +52,7 @@ const SOLUTION_SELECT = {
   test: {
     select: {
       title: true,
+      paperRevision: true,
       baseConfig: {
         select: {
           shuffleOptions: true,
@@ -89,14 +73,7 @@ const SOLUTION_SELECT = {
   },
 } as const satisfies Prisma.AttemptSelect;
 
-const SOLUTION_ROW_SELECT = {
-  ...PRICED_ROW_SELECT,
-  question: { select: { type: true } },
-  questionVersion: { select: { content: true, options: true, answerKey: true } },
-} as const satisfies Prisma.PaperQuestionSelect;
-
-type SolutionRow = Prisma.PaperQuestionGetPayload<{ select: typeof SOLUTION_ROW_SELECT }> &
-  ServedAnswer;
+type SolutionRow = SolutionPaperRow & ServedAnswer;
 
 @Injectable()
 export class AttemptReportService {
@@ -104,6 +81,7 @@ export class AttemptReportService {
     private readonly prisma: PrismaService,
     private readonly leaderboard: LeaderboardService,
     private readonly storage: StorageService,
+    private readonly papers: PaperSheetService,
   ) {}
 
   /** Every sitting this student has had marked, oldest first; only the chart's newest are stood. */
@@ -143,55 +121,70 @@ export class AttemptReportService {
   }
 
   /** The answer key. Only a sitting the student finished and had marked ever reaches it. */
-  async solutions(studentId: string, attemptId: string): Promise<SolutionReport> {
-    const gate = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
-      select: GATE_SELECT,
-    });
-    if (!gate) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    if (gate.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_REVIEWABLE);
-    }
-
+  async solutions(
+    studentId: string,
+    attemptId: string,
+    query: SolutionsQuery,
+  ): Promise<SolutionReport> {
     const attempt = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
       select: SOLUTION_SELECT,
     });
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
+      throw new AppException(ErrorCodes.CONFLICT, NOT_REVIEWABLE);
+    }
 
     const config = attempt.test.baseConfig;
-    const paper = await this.prisma.paperQuestion.findMany({
-      where: { testId: attempt.testId },
-      orderBy: { order: 'asc' },
-      select: SOLUTION_ROW_SELECT,
-    });
+    const paper = await this.papers.solutionsOf(attempt.testId, attempt.test.paperRevision);
     // The same sequencer the paper was served through, so the option they remember as "C" is "C" here.
-    const questions = servedQuestions(
+    const served = servedQuestions(
       answeredRows(paper, attempt).map((row) => toSolutionQuestion(row, attempt.languages)),
       attempt.shuffleSeed,
       config.shuffleQuestions,
       config.shuffleOptions,
     );
-    const urls = imageUrlsIn(this.storage, questions.flatMap(htmlOfQuestion));
+    // Narrowed AFTER the sequencer: its option generator is spent across the whole paper in display order.
+    const sections = config.sections.map((section) => ({
+      id: section.id,
+      name: section.name,
+      order: section.order,
+      questionCount: section.questionCount,
+      durationSec: section.durationSec,
+    }));
+    const asked = wantedOf(served, query, sections[0]?.id ?? null);
+    const urls = imageUrlsIn(this.storage, asked.questions.flatMap(htmlOfQuestion));
 
     return {
       attemptId: attempt.id,
       testId: attempt.testId,
       testTitle: attempt.test.title,
       languages: attempt.languages,
-      sections: attempt.test.baseConfig.sections.map((section) => ({
-        id: section.id,
-        name: section.name,
-        order: section.order,
-        questionCount: section.questionCount,
-        durationSec: section.durationSec,
-      })),
-      questions: questions.map((row) => servedQuestion(row, urls)),
+      sections,
+      sectionId: asked.sectionId,
+      questions: asked.questions.map((row) => servedQuestion(row, urls)),
     };
   }
 }
 
-function toScoreCardQuestion(row: PricedRow): ScoreCardQuestion {
+/** One question where a saved row asked for it, one section otherwise — never a whole paper. */
+function wantedOf(
+  served: readonly SolutionQuestion[],
+  query: SolutionsQuery,
+  first: string | null,
+): { sectionId: string | null; questions: SolutionQuestion[] } {
+  if (query.questionId !== undefined) {
+    const one = served.filter((row) => row.questionId === query.questionId);
+    return { sectionId: one[0]?.baseConfigSectionId ?? null, questions: one };
+  }
+  const sectionId = query.sectionId ?? first;
+  return {
+    sectionId,
+    questions: served.filter((row) => row.baseConfigSectionId === sectionId),
+  };
+}
+
+function toScoreCardQuestion(row: SolutionRow): ScoreCardQuestion {
   return {
     questionId: row.questionId,
     order: row.order,

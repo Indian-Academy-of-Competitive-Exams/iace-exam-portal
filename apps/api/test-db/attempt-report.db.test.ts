@@ -54,7 +54,12 @@ const processor = new ScoringProcessor(
 );
 
 const reports = (client: PrismaService = prisma) =>
-  new AttemptReportService(client, new LeaderboardService(client), new FakeStorage() as never);
+  new AttemptReportService(
+    client,
+    new LeaderboardService(client),
+    new FakeStorage() as never,
+    new PaperSheetService(client),
+  );
 
 const analytics = (client: PrismaService = prisma) =>
   new PerformanceAnalyticsService(client, new LeaderboardService(client));
@@ -319,7 +324,7 @@ describe('the Solution Report', () => {
   it('serves the right answer and the working once the sitting is marked', async () => {
     const { studentId, attemptId } = await reviewed();
 
-    const report = await reports().solutions(studentId, attemptId);
+    const report = await reports().solutions(studentId, attemptId, {});
     const missed = report.questions[0];
 
     assert.equal(report.attemptId, attemptId);
@@ -350,7 +355,7 @@ describe('the Solution Report', () => {
     });
 
     await assert.rejects(
-      () => reports(watched).solutions(studentId, attemptId),
+      () => reports(watched).solutions(studentId, attemptId, {}),
       (error: AppException) => {
         assert.equal(error.code, ErrorCodes.CONFLICT);
         const thrown = JSON.stringify({ ...error, message: error.message });
@@ -367,7 +372,7 @@ describe('the Solution Report', () => {
   it('serves the options in the order the student sat them, not the order they are stored', async () => {
     const { studentId, attemptId } = await reviewed({ shuffleSeed: 12345 });
 
-    const report = await reports().solutions(studentId, attemptId);
+    const report = await reports().solutions(studentId, attemptId, {});
 
     const ids = report.questions[0]?.options.map((option) => option.id) ?? [];
     assert.deepEqual([...ids].sort(), [RIGHT, 'o_wrong']);
@@ -376,7 +381,9 @@ describe('the Solution Report', () => {
   it('keeps only the languages the sitting was taken in', async () => {
     const { studentId, attemptId } = await reviewed({ languages: ['EN'] });
 
-    const shown = JSON.stringify((await reports().solutions(studentId, attemptId)).questions[0]);
+    const shown = JSON.stringify(
+      (await reports().solutions(studentId, attemptId, {})).questions[0],
+    );
 
     assert.ok(shown.includes('What is 7'), 'the English stem must be there');
     assert.ok(!shown.includes('saat guna chhah'), 'a language nobody sat must not be');
@@ -386,7 +393,7 @@ describe('the Solution Report', () => {
     const { studentId, attemptId } = await reviewed({ marked: false });
 
     await assert.rejects(
-      () => reports().solutions(studentId, attemptId),
+      () => reports().solutions(studentId, attemptId, {}),
       refusedWith(ErrorCodes.CONFLICT),
     );
   });
@@ -396,7 +403,7 @@ describe('the Solution Report', () => {
     const someoneElse = await makeStudent(prisma);
 
     await assert.rejects(
-      () => reports().solutions(someoneElse.id, attemptId),
+      () => reports().solutions(someoneElse.id, attemptId, {}),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
   });
@@ -422,7 +429,9 @@ describe('the Solution Report', () => {
     });
     const { studentId, attemptId } = await sat(onPaper, ['o_wrong'], { languages: ['EN'] });
 
-    const shown = JSON.stringify((await reports().solutions(studentId, attemptId)).questions[0]);
+    const shown = JSON.stringify(
+      (await reports().solutions(studentId, attemptId, {})).questions[0],
+    );
 
     assert.doesNotMatch(shown, /tracker\.example/);
   });

@@ -45,7 +45,10 @@ const VERDICT_SEAT: Readonly<Record<Verdict, string>> = {
 
 export interface ReviewPaperProps {
   sections: readonly ExamSection[];
+  /** The open section's questions alone — the server is asked for one section at a time. */
   questions: readonly ReviewedQuestion[];
+  sectionId: string;
+  onSectionChange: (sectionId: string) => void;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
   /** What the gate is still holding back, said once at the top rather than per question. */
@@ -58,13 +61,14 @@ export interface ReviewPaperProps {
 export function ReviewPaper({
   sections,
   questions,
+  sectionId,
+  onSectionChange,
   languages,
   languageMode,
   notice,
   bookmark,
 }: Readonly<ReviewPaperProps>) {
-  const [sectionId, setSectionId] = useState(sections[0]?.id ?? '');
-  const inSection = questions.filter((row) => row.baseConfigSectionId === sectionId);
+  const inSection = questions;
   const [openId, setOpenId] = useState(inSection[0]?.questionId ?? '');
   const open = inSection.find((row) => row.questionId === openId) ?? inSection[0];
   const at = open ? inSection.indexOf(open) : -1;
@@ -84,7 +88,7 @@ export function ReviewPaper({
           <Tabs
             value={sectionId}
             onValueChange={(next) => {
-              setSectionId(next);
+              onSectionChange(next);
               setOpenId('');
             }}
           >

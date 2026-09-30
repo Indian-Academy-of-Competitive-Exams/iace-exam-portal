@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
 import { Text } from '../ui/text';
-import { solutionsQuery } from '../../lib/queries';
+import { savedSolutionQuery } from '../../lib/queries';
 import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
@@ -73,13 +73,16 @@ export function SavedQuestionSheet({
   );
 }
 
-/** The review screen's own read, cached per sitting so a second row is free. */
+/** This one question alone: a saved row has no section to name, so it asks by question. */
 function useSatQuestion(saved: SavedQuestion) {
   const attemptId = saved.attemptId ?? '';
-  const solutions = useQuery({ ...solutionsQuery(attemptId), enabled: attemptId !== '' });
+  const solutions = useQuery({
+    ...savedSolutionQuery(attemptId, saved.questionId),
+    enabled: attemptId !== '',
+  });
 
   return {
-    question: solutions.data?.questions.find((row) => row.questionId === saved.questionId),
+    question: solutions.data?.questions[0],
     languages: solutions.data?.languages ?? ['EN'],
     isLoading: solutions.isLoading,
     isError: solutions.isError,

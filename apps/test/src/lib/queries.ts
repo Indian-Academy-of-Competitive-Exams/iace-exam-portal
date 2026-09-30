@@ -10,4 +10,5 @@ export const {
   scoreCardQuery,
   testPaperQuery,
   solutionsQuery,
+  savedSolutionQuery,
 } = createStudentQueries(api);

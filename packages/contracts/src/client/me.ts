@@ -45,6 +45,7 @@ import {
   type StartedAttempt,
   type PerformanceTrend,
   type SolutionReport,
+  type SolutionsQuery,
   type SaveAttemptStateInput,
   type SubmitAttemptInput,
   type StartAttemptInput,
@@ -181,9 +182,12 @@ export function meClient(core: ApiCore) {
     scoreCard: (attemptId: string): Promise<ScoreCard> =>
       get(ME_ATTEMPT_ROUTES.scoreCard(attemptId), scoreCardSchema),
 
-    /** The worked solutions. Refused until the paper has been marked. */
-    solutions: (attemptId: string): Promise<SolutionReport> =>
-      get(ME_ATTEMPT_ROUTES.solutions(attemptId), solutionReportSchema),
+    /** One section's worked solutions, or one question's. Refused until the paper has been marked. */
+    solutions: (attemptId: string, query: SolutionsQuery = {}): Promise<SolutionReport> =>
+      get(
+        `${ME_ATTEMPT_ROUTES.solutions(attemptId)}${queryString({ ...query })}`,
+        solutionReportSchema,
+      ),
 
     /** Their paper question by question, beside the cohort's. The key rides the solution gate. */
     questionReport: (attemptId: string): Promise<QuestionReport> =>

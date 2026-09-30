@@ -12,6 +12,7 @@ export const {
   scoreCardQuery,
   testPaperQuery,
   solutionsQuery,
+  savedSolutionQuery,
 } = createStudentQueries(api);
 
 /** Never fetched: the exam writes it as the paper goes in, and a killed process simply has none. */

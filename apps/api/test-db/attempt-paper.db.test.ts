@@ -58,7 +58,13 @@ const service = new AttemptPaperService(
   noStorage(),
   new PaperSheetService(prisma),
 );
-const reports = () => new AttemptReportService(prisma, new LeaderboardService(prisma), noStorage());
+const reports = () =>
+  new AttemptReportService(
+    prisma,
+    new LeaderboardService(prisma),
+    noStorage(),
+    new PaperSheetService(prisma),
+  );
 
 /** Content in three languages, and options as the column holds them — `isCorrect` and all. */
 const question = {
@@ -305,40 +311,84 @@ describe('AttemptPaperService — a paper read twice', () => {
   });
 });
 
+/** A marked sitting of a 2+2-section paper on a seed that really reorders it, and the paper it was served. */
+async function reviewed() {
+  const onPaper = await makePaper(prisma, {
+    sections: ['Section A', 'Section B'],
+    questions: [
+      'Reasoning',
+      'Reasoning',
+      { subject: 'Reasoning', section: 1 },
+      { subject: 'Reasoning', section: 1 },
+    ],
+  });
+  await prisma.baseConfig.update({
+    where: { id: onPaper.catalog.baseConfigId },
+    data: { shuffleQuestions: true, shuffleOptions: true },
+  });
+  const student = (await makeStudent(prisma)).id;
+  const attempt = await sitPaper(prisma, {
+    paper: onPaper,
+    studentId: student,
+    chosen: [null, null, null, null],
+    status: ATTEMPT_STATUS.EVALUATED,
+    shuffleSeed: 1,
+  });
+  return {
+    onPaper,
+    student,
+    attemptId: attempt.id,
+    paper: await service.paper(student, attempt.id),
+  };
+}
+
 describe('AttemptPaperService and AttemptReportService — one derived order', () => {
   /** A seed that really reorders a 2+2-section paper — established by the score card's own test. */
   it('serves the exam paper in the same order the solutions review does, and not the paper’s own', async () => {
-    const onPaper = await makePaper(prisma, {
-      sections: ['Section A', 'Section B'],
-      questions: [
-        'Reasoning',
-        'Reasoning',
-        { subject: 'Reasoning', section: 1 },
-        { subject: 'Reasoning', section: 1 },
-      ],
-    });
-    await prisma.baseConfig.update({
-      where: { id: onPaper.catalog.baseConfigId },
-      data: { shuffleQuestions: true },
-    });
-    const student = (await makeStudent(prisma)).id;
-    const attempt = await sitPaper(prisma, {
-      paper: onPaper,
-      studentId: student,
-      chosen: [null, null, null, null],
-      status: ATTEMPT_STATUS.EVALUATED,
-      shuffleSeed: 1,
-    });
+    const { onPaper, student, attemptId, paper } = await reviewed();
+    const opened = await reports().solutions(student, attemptId, {});
 
-    const paper = await service.paper(student, attempt.id);
-    const solutions = await reports().solutions(student, attempt.id);
+    // The review is asked for one section at a time, so every section must land where the paper put it.
+    for (const section of opened.sections) {
+      const chunk = await reports().solutions(student, attemptId, { sectionId: section.id });
+      const served = paper.questions.filter((row) => row.baseConfigSectionId === section.id);
+
+      assert.equal(chunk.sectionId, section.id);
+      assert.deepEqual(
+        chunk.questions.map((row) => [row.questionId, row.options.map((option) => option.id)]),
+        served.map((row) => [row.questionId, row.options.map((option) => option.id)]),
+      );
+    }
 
     const paperOrder = paper.questions.map((row) => row.questionId);
-    const solutionOrder = solutions.questions.map((row) => row.questionId);
-    assert.deepEqual(solutionOrder, paperOrder);
+    assert.deepEqual(
+      opened.questions.map((row) => row.questionId),
+      paperOrder.filter((id) =>
+        paper.questions.some(
+          (row) => row.questionId === id && row.baseConfigSectionId === opened.sectionId,
+        ),
+      ),
+    );
     assert.notDeepEqual(
       paperOrder,
       onPaper.items.map((item) => item.questionId),
+    );
+  });
+
+  /** A saved row has no section to name, so it asks by question and must get that question's own order. */
+  it('answers one saved question with the options that question was served', async () => {
+    const { student, attemptId, paper } = await reviewed();
+
+    const asked = paper.questions[2];
+    assert.ok(asked);
+
+    const one = await reports().solutions(student, attemptId, { questionId: asked.questionId });
+
+    assert.equal(one.questions.length, 1);
+    assert.equal(one.sectionId, asked.baseConfigSectionId);
+    assert.deepEqual(
+      one.questions[0]?.options.map((option) => option.id),
+      asked.options.map((option) => option.id),
     );
   });
 });

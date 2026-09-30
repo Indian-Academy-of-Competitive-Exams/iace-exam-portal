@@ -14,9 +14,10 @@ import { Skeleton } from '../ui/skeleton';
 import { ReviewContent } from '../review/review-content';
 import { ReviewPalette, VERDICT_STYLE } from '../review/review-palette';
 
-/** The paper again, once it is marked: one read carries their own answer, the marks and the key. */
+/** The paper again, once it is marked, a section at a time: their own answer, the marks and the key. */
 export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
-  const solutions = useQuery(solutionsQuery(attemptId));
+  const [sectionId, setSectionId] = useState('');
+  const solutions = useQuery(solutionsQuery(attemptId, sectionId));
 
   if (solutions.isLoading) {
     return (
@@ -47,31 +48,38 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
     );
   }
 
-  return <Paper attemptId={attemptId} solutions={solutions.data} />;
+  return (
+    <Paper
+      attemptId={attemptId}
+      solutions={solutions.data}
+      sectionId={sectionId || (solutions.data.sectionId ?? '')}
+      onSection={setSectionId}
+    />
+  );
 }
 
 function Paper({
   attemptId,
   solutions,
-}: Readonly<{ attemptId: string; solutions: SolutionReport }>) {
-  const { questions } = solutions;
-  const [sectionId, setSectionId] = useState(solutions.sections[0]?.id ?? '');
-  const [openId, setOpenId] = useState(questions[0]?.questionId ?? '');
+  sectionId,
+  onSection,
+}: Readonly<{
+  attemptId: string;
+  solutions: SolutionReport;
+  sectionId: string;
+  onSection: (sectionId: string) => void;
+}>) {
+  const inSection = solutions.questions;
+  const [openId, setOpenId] = useState(inSection[0]?.questionId ?? '');
   const [palette, setPalette] = useState(false);
   const bookmark = useBookmarks(api, attemptId);
 
-  const inSection = questions.filter((row) => row.baseConfigSectionId === sectionId);
+  // A section the reader has just switched to holds none of the ids the last one did, so it opens at its first.
   const at = Math.max(
     inSection.findIndex((row) => row.questionId === openId),
     0,
   );
   const question = inSection[at];
-
-  const openSection = (id: string) => {
-    setSectionId(id);
-    const first = questions.find((row) => row.baseConfigSectionId === id);
-    if (first) setOpenId(first.questionId);
-  };
 
   if (!question) return <EmptyState title="No questions" className="px-6 py-10" />;
 
@@ -86,7 +94,7 @@ function Paper({
             scroll
             options={sectionOptions(solutions.sections)}
             value={sectionId}
-            onChange={openSection}
+            onChange={onSection}
           />
         ) : null}
 

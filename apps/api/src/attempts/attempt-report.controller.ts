@@ -1,12 +1,15 @@
 /** What a sitting reads once it is over — never on the sitting's own clock, so it sits on core. */
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
   ActorTypes,
+  solutionsQuerySchema,
   type PerformanceTrend,
   type ScoreCard,
   type SolutionReport,
+  type SolutionsQuery,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
+import { ZodQuery } from '../common/zod-validation.pipe';
 import { AttemptReportService } from './attempt-report.service';
 import { PerformanceAnalyticsService } from './performance.service';
 
@@ -24,13 +27,14 @@ export class MeAttemptReportController {
     return this.analytics.scoreCard(user.id, id);
   }
 
-  /** The answer key, and the ONLY endpoint carrying it. Refused until the gate opens. */
+  /** The answer key, and the ONLY endpoint carrying it. One section at a time, refused until the gate opens. */
   @Get('attempts/:id/solutions')
   solutions(
     @Param('id') id: string,
+    @Query(new ZodQuery(solutionsQuerySchema)) query: SolutionsQuery,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SolutionReport> {
-    return this.reports.solutions(user.id, id);
+    return this.reports.solutions(user.id, id, query);
   }
 
   /** Every test this student has sat, oldest first — the line the Performance tab draws. */

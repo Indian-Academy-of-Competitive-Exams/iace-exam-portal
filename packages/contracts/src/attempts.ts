@@ -583,12 +583,24 @@ const solutionQuestionSchema = scoreCardQuestionSchema.extend({
 });
 export type SolutionQuestion = z.infer<typeof solutionQuestionSchema>;
 
+/** A screen reads ONE section at a time, so the review is asked for one at a time. */
+export const solutionsQuerySchema = z.object({
+  /** Absent means the paper's first section — the one a review screen opens on. */
+  sectionId: z.string().min(1).optional(),
+  /** One question, for a saved row opened on its own. Answered ahead of `sectionId`. */
+  questionId: z.string().min(1).optional(),
+});
+export type SolutionsQuery = z.infer<typeof solutionsQuerySchema>;
+
 export const solutionReportSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
   testTitle: z.string().nullable(),
   languages: z.array(languageCodeSchema),
+  /** Every section of the paper, so the screen can offer the ones it has not asked for yet. */
   sections: z.array(examSectionSchema),
+  /** Which section `questions` holds; null where the paper has none to hold. */
+  sectionId: z.string().nullable(),
   questions: z.array(solutionQuestionSchema),
 });
 export type SolutionReport = z.infer<typeof solutionReportSchema>;

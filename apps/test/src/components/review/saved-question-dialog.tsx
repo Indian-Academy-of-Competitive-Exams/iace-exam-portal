@@ -14,16 +14,19 @@ import {
   EMPTY_STATE_KINDS,
   SkeletonParagraph,
 } from '@iace/ui';
-import { solutionsQuery } from '../../lib/queries';
+import { savedSolutionQuery } from '../../lib/queries';
 import { ReviewQuestion } from './review-paper';
 
-/** The review screen's own read, cached per sitting so a second row is free. */
+/** This one question alone: a saved row has no section to name, so it asks by question. */
 function useSatQuestion(saved: SavedQuestion) {
   const attemptId = saved.attemptId ?? '';
-  const solutions = useQuery({ ...solutionsQuery(attemptId), enabled: attemptId !== '' });
+  const solutions = useQuery({
+    ...savedSolutionQuery(attemptId, saved.questionId),
+    enabled: attemptId !== '',
+  });
 
   return {
-    question: solutions.data?.questions.find((row) => row.questionId === saved.questionId),
+    question: solutions.data?.questions[0],
     languages: solutions.data?.languages ?? ['EN'],
     isLoading: solutions.isLoading,
     isError: solutions.isError,

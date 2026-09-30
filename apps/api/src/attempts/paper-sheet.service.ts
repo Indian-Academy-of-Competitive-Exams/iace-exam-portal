@@ -26,6 +26,20 @@ const SERVED_ROW_SELECT = {
 
 export type ServedPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof SERVED_ROW_SELECT }>;
 
+/** The review's view: the sheet's columns, the paper's terms, and the KEY — held only where a review is served. */
+const SOLUTION_ROW_SELECT = {
+  ...SHEET_ROW_SELECT,
+  marks: true,
+  negativeMarks: true,
+  status: true,
+  question: { select: { type: true } },
+  questionVersion: { select: { content: true, options: true, answerKey: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+export type SolutionPaperRow = Prisma.PaperQuestionGetPayload<{
+  select: typeof SOLUTION_ROW_SELECT;
+}>;
+
 const TERMS_SELECT = {
   ...SHEET_ROW_SELECT,
   marks: true,
@@ -96,6 +110,7 @@ export class PaperSheetService {
   private readonly rows = new Map<string, Promise<SheetPaperRow[]>>();
   private readonly terms = new Map<string, Promise<PaperTerm[]>>();
   private readonly served = new Map<string, Promise<ServedPaperRow[]>>();
+  private readonly solutions = new Map<string, Promise<SolutionPaperRow[]>>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -117,6 +132,17 @@ export class PaperSheetService {
         where: { testId },
         orderBy: { order: 'asc' },
         select: SERVED_ROW_SELECT,
+      }),
+    );
+  }
+
+  /** Every reader of one paper's review gets the same rows, so a results storm reads it once. */
+  solutionsOf(testId: string, paperRevision: number): Promise<SolutionPaperRow[]> {
+    return hold(this.solutions, `${testId}:${paperRevision}`, () =>
+      this.prisma.paperQuestion.findMany({
+        where: { testId },
+        orderBy: { order: 'asc' },
+        select: SOLUTION_ROW_SELECT,
       }),
     );
   }

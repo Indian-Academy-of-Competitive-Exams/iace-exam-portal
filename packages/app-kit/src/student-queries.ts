@@ -46,8 +46,9 @@ const attemptQueryKey = (attemptId: string) => [ME, 'attempts', attemptId] as co
 export const scoreCardQueryKey = (attemptId: string) =>
   [...attemptQueryKey(attemptId), 'score-card'] as const;
 
-export const solutionsQueryKey = (attemptId: string) =>
-  [...attemptQueryKey(attemptId), 'solutions'] as const;
+/** Keyed by the section, because the review is fetched one section at a time. */
+export const solutionsQueryKey = (attemptId: string, sectionId = '') =>
+  [...attemptQueryKey(attemptId), 'solutions', sectionId] as const;
 
 export const questionReportQueryKey = (attemptId: string) =>
   [...attemptQueryKey(attemptId), 'question-report'] as const;
@@ -108,10 +109,18 @@ export function createStudentQueries(api: AppApiClient) {
         queryFn: () => api.me.scoreCard(attemptId),
         meta: { silent: isMarkingPending },
       }),
-    solutionsQuery: (attemptId: string) =>
+    solutionsQuery: (attemptId: string, sectionId = '') =>
       queryOptions({
-        queryKey: solutionsQueryKey(attemptId),
-        queryFn: () => api.me.solutions(attemptId),
+        queryKey: solutionsQueryKey(attemptId, sectionId),
+        queryFn: () => api.me.solutions(attemptId, { sectionId: sectionId || undefined }),
+        // The section on screen stays there while the next one loads, so its tabs do not leave.
+        placeholderData: (held) => held,
+        meta: { silent: isMarkingPending },
+      }),
+    savedSolutionQuery: (attemptId: string, questionId: string) =>
+      queryOptions({
+        queryKey: [...solutionsQueryKey(attemptId), 'question', questionId] as const,
+        queryFn: () => api.me.solutions(attemptId, { questionId }),
         meta: { silent: isMarkingPending },
       }),
     questionReportQuery: (attemptId: string) =>
