@@ -30,9 +30,17 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "IACE uses your photos so you can add the one that goes on your hall ticket."
+          "photosPermission": "IACE uses your photos so you can add the one that goes on your hall ticket.",
+          "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "243dc5bc-b41a-422f-b3fa-9c2c5139ac2e"
+      }
+    },
+    "owner": "indian-academy-of-competitive-exams"
   }
 }
