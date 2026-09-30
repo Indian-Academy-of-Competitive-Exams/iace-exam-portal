@@ -210,8 +210,11 @@ rather than failing per send — so skip this unless you are working on notifica
 2. **Add an Android app** to it. The package name must be exactly `in.co.iace.mobile`, the value in
    `apps/mobile/app.json`; a mismatch registers a token FCM will not deliver to. No SHA-1 is needed
    — that is for Google Sign-In, not messaging.
-3. **Download `google-services.json`** and put it at `apps/mobile/google-services.json`. It is
-   gitignored: it names one project's app, so every environment drops in its own.
+3. **Download `google-services.json`** and put it at `apps/mobile/google-services.json`, then add
+   `"googleServicesFile": "./google-services.json"` back to `android` in `apps/mobile/app.json`.
+   The file is gitignored — it names one project's app, so every environment drops in its own — and
+   the key is out of `app.json` because prebuild throws rather than warns when it cannot copy a file
+   no checkout has, which made every Android build impossible until push was wired.
 4. **Project settings → Service accounts → Generate new private key.** From the JSON it downloads,
    three fields go in the root `.env` — and the file itself goes nowhere near the repo:
 
@@ -223,9 +226,10 @@ rather than failing per send — so skip this unless you are working on notifica
 
 5. **Restart the API.** It logs `Mobile push is not configured` on boot until all three are set.
 6. **Build a development client.** Expo Go cannot receive remote push at all — it was removed in
-   SDK 53 — so `npx expo run:android` (Android Studio and an SDK required), or an EAS development
-   build. There is no EAS project id to set: the app registers the phone's own FCM token, not an
-   Expo push token.
+   SDK 53 — so `npx expo run:android` (Android Studio and an SDK required), or
+   `npx eas build -p android --profile development` from `apps/mobile`. The app registers the
+   phone's own FCM token, never an Expo push token, so nothing here needs an Expo account — but
+   `eas build` does, and `eas init` writes the project id `appVersionSource: remote` reads.
 
 Signing in on that build registers the phone; a `PushDevice` row is the proof. iOS is not wired:
 Expo hands back an APNs token there, which FCM cannot address without the Firebase iOS SDK.
