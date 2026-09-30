@@ -14,6 +14,7 @@ export function ScrollPane({
   children,
 }: Readonly<{ className?: string; children: ReactNode }>) {
   const pane = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState({ height: 0, top: 0, shown: false });
 
   const measure = useCallback(() => {
@@ -44,8 +45,10 @@ export function ScrollPane({
     const refuse = (event: WheelEvent) => event.preventDefault();
     node.addEventListener('wheel', refuse, { passive: false });
 
+    // The pane's own box does not change when the question does — only what is inside it does.
     const watch = new ResizeObserver(measure);
     watch.observe(node);
+    if (content.current) watch.observe(content.current);
     measure();
 
     return () => {
@@ -79,7 +82,7 @@ export function ScrollPane({
   return (
     <div className={cn('rw-scrollwrap', className)}>
       <div ref={pane} className="rw-scrollpane" onScroll={measure}>
-        {children}
+        <div ref={content}>{children}</div>
       </div>
       {thumb.shown ? (
         <div className="rw-scrolltrack">

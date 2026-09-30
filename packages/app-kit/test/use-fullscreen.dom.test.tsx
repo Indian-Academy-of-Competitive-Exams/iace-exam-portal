@@ -64,6 +64,23 @@ describe('useFullscreen', () => {
     });
   });
 
+  /** The failure this prevents: a submit reporting "could not submit" on a paper the server already has. */
+  it('survives a prefixed call that answers with nothing instead of a promise', async () => {
+    let released = 0;
+    await withDocument(
+      {
+        exitFullscreen: undefined,
+        webkitExitFullscreen: () => {
+          released += 1;
+        },
+      },
+      async () => {
+        await mounted()().exit();
+        assert.equal(released, 1);
+      },
+    );
+  });
+
   it('does nothing where the browser offers no way out', async () => {
     await withDocument({ exitFullscreen: undefined, webkitExitFullscreen: undefined }, async () => {
       await mounted()().exit();

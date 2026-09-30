@@ -31,6 +31,15 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
+/** iPadOS before 16.4 returns undefined from the prefixed calls, so calling `.catch` on the result throws. */
+async function settled(call: (() => Promise<void>) | undefined): Promise<void> {
+  try {
+    await call?.();
+  } catch {
+    // Refused, or not supported: the screen asks again rather than failing the action it was part of.
+  }
+}
+
 export function useFullscreen(): FullscreenHandle {
   const isFullscreen = useSyncExternalStore(
     subscribe,
@@ -57,13 +66,13 @@ export function useFullscreen(): FullscreenHandle {
     const root = document.documentElement as PrefixedElement;
     const request = root.requestFullscreen?.bind(root) ?? root.webkitRequestFullscreen?.bind(root);
     // A refusal is not an error worth throwing: the screen offers it again rather than breaking.
-    await request?.().catch(() => undefined);
+    await settled(request);
   }, []);
 
   const exit = useCallback(async () => {
     const doc = document as PrefixedDocument;
     const release = doc.exitFullscreen?.bind(doc) ?? doc.webkitExitFullscreen?.bind(doc);
-    await release?.().catch(() => undefined);
+    await settled(release);
   }, []);
 
   return { isFullscreen, isSupported, exits, enter, exit };
