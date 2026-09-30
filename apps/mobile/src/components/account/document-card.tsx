@@ -7,6 +7,7 @@
 import { Alert as NativeAlert, Image, Linking, Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ACCEPTED_TYPES_FOR,
@@ -110,11 +111,7 @@ async function pickPhoto(): Promise<UploadFile | null> {
   if (!asset) return null;
   if (tooBig(asset.fileSize)) return null;
 
-  return {
-    uri: asset.uri,
-    name: asset.fileName ?? 'photo.jpg',
-    type: asset.mimeType ?? 'image/jpeg',
-  };
+  return new File(asset.uri);
 }
 
 async function pickFile(kind: DocumentKind): Promise<UploadFile | null> {
@@ -127,11 +124,7 @@ async function pickFile(kind: DocumentKind): Promise<UploadFile | null> {
   if (!asset) return null;
   if (tooBig(asset.size)) return null;
 
-  return {
-    uri: asset.uri,
-    name: asset.name,
-    type: asset.mimeType ?? 'application/octet-stream',
-  };
+  return new File(asset.uri);
 }
 
 /** Refused here rather than after the upload: the server's answer costs them the whole file. */

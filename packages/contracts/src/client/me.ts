@@ -99,8 +99,7 @@ export function meClient(core: ApiCore) {
     /** A photo or an identity document. Returns the refreshed profile. */
     uploadDocument: (kind: DocumentKind, file: UploadFile): Promise<Me> => {
       const form = new FormData();
-      // React Native passes a { uri, name, type } descriptor where a browser passes a File.
-      form.append(DOCUMENT_FILE_FIELD, file as Blob);
+      form.append(DOCUMENT_FILE_FIELD, file);
       return write('POST', ME_ROUTES.document(kind), meSchema, form);
     },
 
