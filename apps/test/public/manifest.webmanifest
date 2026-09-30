@@ -1,7 +1,7 @@
 {
   "name": "IACE",
   "short_name": "IACE",
-  "description": "Mock tests for government exams.",
+  "description": "Mock exams for SSC, Banking, RRB and SI/Constable.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
