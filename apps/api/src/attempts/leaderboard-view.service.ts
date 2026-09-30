@@ -1,8 +1,8 @@
 /**
  * The board a signed-in student reads. ONE paper, ranked on marks — papers do not compare on marks,
- * so no board spans more than one. A paper's whole ranking is read once per rollup and every
- * reader's seats are cut from that copy; nothing is saved. No select here reaches a mobile, an
- * email or a question.
+ * so no board spans more than one. The reader's own standing is always counted live, by the same
+ * call the score card makes; the seats around it are cut from a ranking held per rollup. No select
+ * here reaches a mobile, an email or a question.
  */
 import { Injectable } from '@nestjs/common';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { boardName, splitBoard } from './leaderboard-board';
+import { LeaderboardService, type Standing } from './leaderboard.service';
 import { hold } from './paper-sheet.service';
 import { rankedCohortSql, testBoardSql, type CohortSeatRow } from './ranking-sql';
 
@@ -29,7 +30,10 @@ const HELD_BOARDS = 8;
 export class LeaderboardViewService {
   private readonly rankings = new Map<string, Promise<CohortSeatRow[]>>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderboard: LeaderboardService,
+  ) {}
 
   /** No places-moved arrow: it would need a rank saved from some earlier read, and none is. */
   async board(studentId: string, query: LeaderboardQuery): Promise<Leaderboard> {
@@ -46,29 +50,32 @@ export class LeaderboardViewService {
     if (!mine) throw new AppException(ErrorCodes.NOT_FOUND, NO_BOARD);
 
     const frame = emptyBoard(testId, mine.test.title);
+    // Counted now, by the call the score card makes, so the two can never quote different ranks.
+    const standing = await this.leaderboard.standing(testId, mine.id);
+    // A sitting the cohort does not count has no standing, and reads a board with nobody on it.
+    if (standing === null) return frame;
+
     const seats =
-      (await this.heldSeats(testId, mine.id, mine.test.stat?.computedAt)) ??
+      (await this.heldSeats(testId, mine.id, standing, mine.test.stat?.computedAt)) ??
       (await this.prisma.$queryRaw<CohortSeatRow[]>(testBoardSql(testId, mine.id)));
-    // A sitting the cohort does not count has no seat, and reads a board with nobody on it.
-    const seated = seats.find((seat) => seat.attempt_id === mine.id);
-    if (seated === undefined) return frame;
 
     const rows: LeaderboardRow[] = seats.map((seat) => ({
       rank: seat.rank,
       name: boardName(seat.name),
       branch: seat.branch,
       score: seat.score,
-      percentile: seat.attempt_id === mine.id ? seat.percentile : null,
+      percentile: seat.attempt_id === mine.id ? standing.percentile : null,
       isYou: seat.attempt_id === mine.id,
     }));
 
-    return { ...frame, ...splitBoard(rows), cohortSize: seated.cohort, you: yours(rows) };
+    return { ...frame, ...splitBoard(rows), cohortSize: standing.cohortSize, you: yours(rows) };
   }
 
-  /** Null where the held ranking cannot answer this reader — no rollup yet, or a sitting it never counted. */
+  /** Null where the held ranking disagrees with the live standing, so no board mixes the two. */
   private async heldSeats(
     testId: string,
     attemptId: string,
+    standing: Standing,
     countedAt: Date | undefined,
   ): Promise<CohortSeatRow[] | null> {
     if (countedAt === undefined) return null;
@@ -80,7 +87,8 @@ export class LeaderboardViewService {
       HELD_BOARDS,
     );
     const seat = ranked.find((row) => row.attempt_id === attemptId);
-    return seat ? seatsNear(ranked, seat.rank) : null;
+    const agrees = seat?.rank === standing.rank && seat?.cohort === standing.cohortSize;
+    return agrees ? seatsNear(ranked, standing.rank) : null;
   }
 }
 

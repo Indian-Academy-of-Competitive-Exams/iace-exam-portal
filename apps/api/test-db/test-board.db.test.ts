@@ -22,7 +22,7 @@ import {
 
 const prisma = testPrisma();
 const leaderboard = new LeaderboardService(prisma);
-const view = new LeaderboardViewService(prisma);
+const view = new LeaderboardViewService(prisma, leaderboard);
 
 after(() => prisma.$disconnect());
 
@@ -211,22 +211,45 @@ describe('the board for one paper', () => {
     );
   });
 
-  /** The failure this prevents: a held board outliving the recount that moved the cohort under it. */
-  it('holds one paper\u2019s ranking until the rollup has counted the cohort again', async () => {
+  /** The failure this prevents: a held board quoting a rank the reader's own score card does not. */
+  it('counts the reader’s own standing now, however old the ranking around it is', async () => {
     const testId = await paper();
     const mine = await entrant(testId, 'Harshith Diyyala', 100);
     await entrant(testId, 'Priya Sharma', 90);
     await countedAt(testId, new Date('2026-09-01T06:00:00.000Z'));
+    await board(mine.studentId, testId);
+
+    await entrant(testId, 'Latecomer', 200);
+    const read = await board(mine.studentId, testId);
+
+    assert.deepEqual([read.cohortSize, read.you?.rank], [3, 2]);
+    assert.deepEqual(await leaderboard.standing(testId, mine.attemptId), {
+      rank: read.you?.rank,
+      percentile: read.you?.percentile,
+      cohortSize: read.cohortSize,
+    });
+  });
+
+  /** The failure this prevents: a held ranking outliving the recount that renamed a seat on it. */
+  it('holds the seats around the reader until the rollup has counted again', async () => {
+    const testId = await paper();
+    const mine = await entrant(testId, 'Harshith Diyyala', 100);
+    const rival = await entrant(testId, 'Priya Sharma', 90);
+    await countedAt(testId, new Date('2026-09-03T06:00:00.000Z'));
+    const named = (read: Leaderboard) => rowsOf(read).map((row) => row.name);
 
     const before = await board(mine.studentId, testId);
-    await entrant(testId, 'Latecomer', 200);
+    await prisma.student.update({
+      where: { id: rival.studentId },
+      data: { fullName: 'Renamed Rival' },
+    });
     const held = await board(mine.studentId, testId);
-    await countedAt(testId, new Date('2026-09-02T06:00:00.000Z'));
+    await countedAt(testId, new Date('2026-09-04T06:00:00.000Z'));
     const after = await board(mine.studentId, testId);
 
-    assert.deepEqual([before.cohortSize, before.you?.rank], [2, 1]);
-    assert.deepEqual([held.cohortSize, held.you?.rank], [2, 1]);
-    assert.deepEqual([after.cohortSize, after.you?.rank], [3, 2]);
+    assert.deepEqual(named(before), ['Harshith Diyyala', 'Priya Sharma']);
+    assert.deepEqual(named(held), ['Harshith Diyyala', 'Priya Sharma']);
+    assert.deepEqual(named(after), ['Harshith Diyyala', 'Renamed Rival']);
   });
 
   /** The failure this prevents: a sitting scored since the last rollup reading as nobody on the board. */
