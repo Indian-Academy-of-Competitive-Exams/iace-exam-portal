@@ -86,6 +86,7 @@ export function ExamPage() {
     <ExamHall
       paper={paper.data.paper}
       arrivedAt={paper.data.arrivedAt}
+      startedByThisCall={attempt.data.startedByThisCall}
       title={attempt.data.testTitle}
       // The one thing on the paper that leads back to a person: there is no enrolment number.
       watermark={student?.mobile ?? ''}
@@ -101,6 +102,7 @@ function ExamHall(
   sitting: Readonly<{
     paper: ExamPaper;
     arrivedAt: number;
+    startedByThisCall: boolean;
     title: string | null;
     watermark: string;
     onEnded: (ended: EndedSitting) => void;

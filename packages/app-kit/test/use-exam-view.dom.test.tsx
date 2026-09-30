@@ -99,16 +99,59 @@ function apiWith(
   } as unknown as AppApiClient;
 }
 
-function mounted(api: AppApiClient, sitting: ExamPaper = paper(), onEnded = () => {}) {
+function mounted(
+  api: AppApiClient,
+  sitting: ExamPaper = paper(),
+  onEnded = () => {},
+  startedByThisCall = false,
+) {
   const deps = depsFor(api);
   // Built once, the way a caller holds it: rebuilding the sitting per render would restart the paper's clock.
-  const held = { paper: sitting, arrivedAt: Date.now(), title: null, watermark: '', onEnded };
+  const held = {
+    paper: sitting,
+    arrivedAt: Date.now(),
+    startedByThisCall,
+    title: null,
+    watermark: '',
+    onEnded,
+  };
   return renderHook(() => useExamView(held, deps), {
     wrapper: ({ children }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
   });
 }
+
+/** The failure this prevents: 7K candidates each asking for a state the start had just written empty. */
+test('a sitting this screen started asks the server for no state at all', async (t) => {
+  let asked = 0;
+  const api = {
+    me: {
+      attemptState: async () => {
+        asked += 1;
+        return { answers: {}, sections: {}, revision: 0 };
+      },
+    },
+  } as unknown as AppApiClient;
+
+  const fresh = mounted(api, paper(), () => {}, true);
+  t.after(fresh.unmount);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  assert.equal(asked, 0);
+  // Settled all the same, or a sectional paper would take no input while it waited on nothing.
+  assert.deepEqual(fresh.result.current.reachable, ['sec1']);
+
+  const reloaded = mounted(api);
+  t.after(reloaded.unmount);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  assert.equal(asked, 1);
+});
 
 /** The failure this prevents: a reloaded sitting mounting into section one though it closed long ago. */
 test("a reload lands in the first section still open, not the paper's first", async (t) => {
@@ -233,7 +276,14 @@ test('leaving the paper nags until acknowledged, and again on the next exit', (t
   const { result, rerender, unmount } = renderHook(
     ({ exits }) =>
       useExamView(
-        { paper: paper(), arrivedAt: Date.now(), title: null, watermark: '', onEnded: () => {} },
+        {
+          paper: paper(),
+          arrivedAt: Date.now(),
+          startedByThisCall: false,
+          title: null,
+          watermark: '',
+          onEnded: () => {},
+        },
         { ...deps, focus: { ...focus, isSupported: true, exits } },
       ),
     {
@@ -786,7 +836,14 @@ test('a submit refused for good says so, and the retry sends it again', async (t
 /** Each step below moves ONE of the four, so none of them can be riding another's dependency. */
 test('the fullscreen view carries the screen state and the exits it is nagging about', (t) => {
   const deps = depsFor(apiWith({}));
-  const held = { paper: paper(), arrivedAt: Date.now(), title: null, watermark: '', onEnded() {} };
+  const held = {
+    paper: paper(),
+    arrivedAt: Date.now(),
+    startedByThisCall: false,
+    title: null,
+    watermark: '',
+    onEnded() {},
+  };
   const { result, rerender, unmount } = renderHook(
     ({ exits, isFullscreen }) =>
       useExamView(held, { ...deps, focus: { ...focus, isSupported: true, isFullscreen, exits } }),

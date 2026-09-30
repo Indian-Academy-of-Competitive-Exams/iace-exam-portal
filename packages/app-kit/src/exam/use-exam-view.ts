@@ -52,19 +52,21 @@ export interface ExamSitting {
   paper: ExamPaper;
   /** `Date.now()` when the paper landed, so device skew cancels out of the countdown. */
   arrivedAt: number;
+  /** The start's own answer: true means nothing was held for this sitting before this screen. */
+  startedByThisCall: boolean;
   title: string | null;
   watermark: string;
   onEnded: (sitting: EndedSitting) => void;
 }
 
 export function useExamView(
-  { paper, arrivedAt, title, watermark, onEnded }: Readonly<ExamSitting>,
+  { paper, arrivedAt, startedByThisCall, title, watermark, onEnded }: Readonly<ExamSitting>,
   deps: Readonly<ExamEngineDeps>,
 ): ExamView {
   const { api, focus, catalogQueryKey, tab } = deps;
   const queryClient = useQueryClient();
   const [ignoringFullscreen, setIgnoringFullscreen] = useState(0);
-  const state = useAttemptState(paper.attemptId, deps);
+  const state = useAttemptState(paper.attemptId, deps, startedByThisCall);
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);

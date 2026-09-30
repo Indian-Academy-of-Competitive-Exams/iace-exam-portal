@@ -131,6 +131,7 @@ export default function ExamScreen() {
           key={reclaims}
           paper={paper.data.paper}
           arrivedAt={paper.data.arrivedAt}
+          startedByThisCall={attempt.data.startedByThisCall}
           title={attempt.data.testTitle}
           // The one thing on the paper that leads back to a person: there is no enrolment number.
           watermark={student?.mobile ?? ''}

@@ -122,6 +122,7 @@ export interface AnswerIntent {
 export function useAttemptState(
   attemptId: string,
   deps: Readonly<AttemptStateDeps>,
+  startedByThisCall = false,
 ): AttemptStateHandle {
   // As of mount, in a ref: callers pass an inline object, and depending on it would restart autosave every render.
   const mounted = useRef(deps);
@@ -150,6 +151,7 @@ export function useAttemptState(
   const openedAt = useRef(0);
   const openQuestion = useRef<string | null>(null);
   const revision = useRef(0);
+  const fresh = useRef(startedByThisCall);
   const inFlight = useRef<Promise<boolean> | null>(null);
   const seeded = useRef(false);
   const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -162,6 +164,13 @@ export function useAttemptState(
 
   // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
+    // A sitting this screen just started holds no answers and no open section, so there is nothing to ask for.
+    if (fresh.current) {
+      setSectionsSettled(true);
+      seeded.current = true;
+      return;
+    }
+
     let live = true;
     let again: ReturnType<typeof setTimeout> | undefined;
     const seed = () =>
