@@ -4,7 +4,7 @@
  * finished view. What a sectional clock changes is which sections are open, and
  * that is read from the config rather than branched into a second screen.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
@@ -28,7 +28,13 @@ import {
 import { shouldRetrySubmit, SUBMIT_TIMEOUT_MS, submitRetryDelayMs } from '../autosave-policy';
 import { type FullscreenHandle } from './focus-guard';
 import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
-import { TIMER_KIND, type ExamTimerView, type ExamView } from './exam-view';
+import {
+  TIMER_KIND,
+  type ExamFullscreenView,
+  type ExamSubmitView,
+  type ExamTimerView,
+  type ExamView,
+} from './exam-view';
 
 /** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
 export interface ExamEngineDeps extends AttemptStateDeps {
@@ -74,7 +80,10 @@ export function useExamView(
 
   const sectional = paper.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
   const forwardOnly = paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY;
-  const reachable = openSections(paper.sections, sectional, state.sections);
+  const reachable = useMemo(
+    () => openSections(paper.sections, sectional, state.sections),
+    [paper.sections, sectional, state.sections],
+  );
   // Drawn but inert until the server says which section is open: the one on screen may already be closed.
   const inert = sectional && !state.sectionsSettled;
 
@@ -208,12 +217,8 @@ export function useExamView(
   const sectionSec = sectional
     ? sectionLeftSec(section?.durationSec, state.sections[sectionId]?.openedAt, clock.serverNow)
     : null;
-  const timer: ExamTimerView =
-    sectionSec === null
-      ? { kind: TIMER_KIND.PAPER, clock, onExpire: end }
-      : { kind: TIMER_KIND.SECTION, key: sectionId, allowedSec: sectionSec, onExpire: endSection };
-
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
+  const markedForReview = counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED];
   // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
   const nagging =
     !state.takenOver &&
@@ -224,82 +229,177 @@ export function useExamView(
     focus.exits > 0 &&
     focus.exits > ignoringFullscreen;
 
-  return {
-    title: title ?? 'Your test',
-    watermark,
-    languages: paper.languages,
-    languageMode: paper.languageMode,
-    testUi: paper.testUi,
-
-    sections: paper.sections,
-    sectionId,
-    reachable,
-    forwardOnly,
-
-    questions: inSection,
-    question: current,
-    questionIndex: current ? inSection.indexOf(current) : -1,
-    selectedOptionId: current
-      ? (state.answers[current.questionId]?.selectedOptionId ?? null)
-      : null,
-    marked: isReviewState(current ? state.answers[current.questionId]?.state : undefined),
-    answers: state.answers,
-    counts,
-    sectionCounts: (id) => sectionCounts[id] ?? counts,
-
-    timer,
-
-    isSaving: state.isSaving,
-    hasUnsaved: state.hasUnsaved,
-    hasUnsent: state.hasUnsent,
-    leave: state.leave,
-    takenOver: state.takenOver,
-    setAside: state.setAside,
-
-    openQuestion: (id) => {
-      if (canOpen(id)) move(id);
-    },
+  // This render's every move, read when a handler is CALLED — so no exposed handler carries a dep list to get wrong.
+  const now = {
     canOpen,
+    move,
     nextQuestion,
-    chooseOption: (optionId) => record({ selectedOptionId: optionId }),
-    bubbleAnswer: (optionId, fill) => {
-      const state = omrStateFor(fill);
-      // A smudge is not an answer, so it must not pick the option either — only stop flagging it.
-      if (state === ANSWER_STATE.NOT_ANSWERED) return;
-      record({ selectedOptionId: optionId, marked: state === ANSWER_STATE.ANSWERED_MARKED });
-      // A full bubble IS Save & Next — the gesture does what the button used to.
-      if (state === ANSWER_STATE.ANSWERED) nextQuestion();
-    },
-    markAndNext: () => {
-      record({ marked: true });
-      nextQuestion();
-    },
-    clearResponse: () => record({ selectedOptionId: null }),
+    record,
     openSection,
+    end,
+    expire: sectionSec === null ? end : endSection,
+    sectionCounts,
+    counts,
+    focus,
+  };
+  const live = useRef(now);
+  // Before any child's layout effect, so a handler called in the same commit is already this render's.
+  useInsertionEffect(() => {
+    live.current = now;
+  });
 
-    submit: {
-      asking: asking && !state.takenOver,
-      isPending: submit.isPending,
-      /** True once every retry is spent: the paper could not go in, and the screen must say so. */
-      failed: submit.isError,
-      retry: end,
-      unanswered,
-      markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
-      ask,
+  // Built once. Identity never changes, and every one of them is current because it reads through the ref.
+  const on = useMemo(
+    () => ({
+      openQuestion: (id: string) => {
+        if (live.current.canOpen(id)) live.current.move(id);
+      },
+      canOpen: (id: string) => live.current.canOpen(id),
+      nextQuestion: () => live.current.nextQuestion(),
+      chooseOption: (optionId: string) => live.current.record({ selectedOptionId: optionId }),
+      bubbleAnswer: (optionId: string, fill: number) => {
+        const filled = omrStateFor(fill);
+        // A smudge is not an answer, so it must not pick the option either — only stop flagging it.
+        if (filled === ANSWER_STATE.NOT_ANSWERED) return;
+        live.current.record({
+          selectedOptionId: optionId,
+          marked: filled === ANSWER_STATE.ANSWERED_MARKED,
+        });
+        // A full bubble IS Save & Next — the gesture does what the button used to.
+        if (filled === ANSWER_STATE.ANSWERED) live.current.nextQuestion();
+      },
+      markAndNext: () => {
+        live.current.record({ marked: true });
+        live.current.nextQuestion();
+      },
+      clearResponse: () => live.current.record({ selectedOptionId: null }),
+      openSection: (id: string) => live.current.openSection(id),
+      sectionCounts: (id: string) => live.current.sectionCounts[id] ?? live.current.counts,
+      expire: () => live.current.expire(),
+      retry: () => live.current.end(),
       cancel: () => setAsking(false),
       confirm: () => {
         setAsking(false);
-        end();
+        live.current.end();
       },
-    },
+      enter: () => void live.current.focus.enter(),
+      ignore: () => setIgnoringFullscreen(live.current.focus.exits),
+    }),
+    [],
+  );
 
-    fullscreen: {
+  const timer = useMemo<ExamTimerView>(
+    () =>
+      sectionSec === null
+        ? { kind: TIMER_KIND.PAPER, clock, onExpire: on.expire }
+        : { kind: TIMER_KIND.SECTION, key: sectionId, allowedSec: sectionSec, onExpire: on.expire },
+    [sectionSec, clock, sectionId, on],
+  );
+
+  const submitView = useMemo<ExamSubmitView>(
+    () => ({
+      asking: asking && !state.takenOver,
+      isPending: submit.isPending,
+      failed: submit.isError,
+      retry: on.retry,
+      unanswered,
+      markedForReview,
+      ask,
+      cancel: on.cancel,
+      confirm: on.confirm,
+    }),
+    [
+      asking,
+      state.takenOver,
+      submit.isPending,
+      submit.isError,
+      unanswered,
+      markedForReview,
+      ask,
+      on,
+    ],
+  );
+
+  const fullscreen = useMemo<ExamFullscreenView>(
+    () => ({
       nagging,
       isFullscreen: focus.isFullscreen,
       isSupported: focus.isSupported,
       exits: focus.exits,
-      enter: () => void focus.enter(),
-      ignore: () => setIgnoringFullscreen(focus.exits),
-    },
-  };
+      enter: on.enter,
+      ignore: on.ignore,
+    }),
+    [nagging, focus.isFullscreen, focus.isSupported, focus.exits, on],
+  );
+
+  const { answers, isSaving, hasUnsaved, hasUnsent, leave, takenOver, setAside } = state;
+  return useMemo<ExamView>(
+    () => ({
+      title: title ?? 'Your test',
+      watermark,
+      languages: paper.languages,
+      languageMode: paper.languageMode,
+      testUi: paper.testUi,
+
+      sections: paper.sections,
+      sectionId,
+      reachable,
+      forwardOnly,
+
+      questions: inSection,
+      question: current,
+      questionIndex: current ? inSection.indexOf(current) : -1,
+      selectedOptionId: current ? (answers[current.questionId]?.selectedOptionId ?? null) : null,
+      marked: isReviewState(current ? answers[current.questionId]?.state : undefined),
+      answers,
+      counts,
+      sectionCounts: on.sectionCounts,
+
+      timer,
+
+      isSaving,
+      hasUnsaved,
+      hasUnsent,
+      leave,
+      takenOver,
+      setAside,
+
+      openQuestion: on.openQuestion,
+      canOpen: on.canOpen,
+      nextQuestion: on.nextQuestion,
+      chooseOption: on.chooseOption,
+      bubbleAnswer: on.bubbleAnswer,
+      markAndNext: on.markAndNext,
+      clearResponse: on.clearResponse,
+      openSection: on.openSection,
+
+      submit: submitView,
+      fullscreen,
+    }),
+    [
+      title,
+      watermark,
+      paper.languages,
+      paper.languageMode,
+      paper.testUi,
+      paper.sections,
+      sectionId,
+      reachable,
+      forwardOnly,
+      inSection,
+      current,
+      answers,
+      counts,
+      timer,
+      isSaving,
+      hasUnsaved,
+      hasUnsent,
+      leave,
+      takenOver,
+      setAside,
+      on,
+      submitView,
+      fullscreen,
+    ],
+  );
 }
