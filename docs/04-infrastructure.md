@@ -171,6 +171,15 @@ machine and keeps the schedulers in one place.
 each 100 ms window and the process is frozen for the rest, which shows as a low CPU average beside
 a terrible p99. The throughput figures that used to sit here are unverified and now in §16.
 
+**The exam role runs under a budget, and the others do not.** Every route it serves belongs to a
+live sitting and none of them is slow on purpose, so its Prisma connection carries a 6 s
+`statement_timeout` and a request that has not answered in 8 s is refused with a 503
+(`apps/api/src/common/request-budget.ts`). Both sit under the paper's own give-up — a submit at 10 s,
+a save at 15 s — so a candidate gets a refusal their screen already retries rather than a request
+nobody ends, and a query that ran long is cancelled by Postgres instead of holding a pool slot the
+next candidate needs. It is keyed on the role being exactly `exam`: `all` and `worker` run the
+scoring sweeps, whose transactions take minutes by design.
+
 An 8,000-candidate event peaks around **350–500 requests a second** — autosaves at 320, plus the
 paper loads at the opening and the submit spike at the end. What one vCPU actually serves against
 that is the first thing to measure on the staging box.

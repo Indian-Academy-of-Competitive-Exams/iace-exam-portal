@@ -34,6 +34,7 @@ import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
 import { SuperAdminGuard } from './auth/guards/super-admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
+import { RequestBudgetInterceptor } from './common/request-budget';
 import { RequestIdMiddleware } from './common/request-id';
 
 /** Guards run in registration order and every route is protected by default — a new endpoint is authenticated unless it explicitly opts out with @Public(). */
@@ -69,6 +70,8 @@ import { RequestIdMiddleware } from './common/request-id';
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // First, so the budget bounds the interceptors below it too, not the handler alone.
+    { provide: APP_INTERCEPTOR, useClass: RequestBudgetInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
