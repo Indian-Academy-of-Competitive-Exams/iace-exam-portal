@@ -28,7 +28,7 @@ const CONTENT = [
   // The centring wrapper waives pointer-events so a click beside this reaches the overlay.
   'pointer-events-auto relative flex w-full flex-col',
   'max-h-[calc(100dvh-4rem)]',
-  'bg-surface text-foreground rounded-[--modal-radius] shadow-[--shadow-overlay]',
+  'bg-surface text-foreground rounded-[--modal-radius] shadow-overlay',
   'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
   'focus:outline-none',
 ].join(' ');

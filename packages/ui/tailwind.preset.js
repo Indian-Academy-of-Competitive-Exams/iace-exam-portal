@@ -163,6 +163,8 @@ module.exports = {
         sm: token('--shadow-sm'),
         md: token('--shadow-md'),
         lg: token('--shadow-lg'),
+        // Named, because `shadow-[--shadow-overlay]` compiled to a shadow COLOUR and painted nothing.
+        overlay: token('--shadow-overlay'),
         // Focus and invalid are elevation-like tokens on purpose: a control should never hand-roll either, or the two drift into looking alike.
         focus: token('--focus-ring'),
         'focus-invalid': token('--focus-ring-invalid'),

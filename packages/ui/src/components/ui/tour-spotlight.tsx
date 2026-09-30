@@ -22,7 +22,7 @@ export interface TourSpotlightProps {
 
 const CARD = [
   'z-[--z-popover] w-[min(20rem,calc(100vw-2rem))] rounded-[--modal-radius] border border-border',
-  'flex flex-col gap-1 bg-surface p-4 text-foreground shadow-[--shadow-overlay] focus:outline-none',
+  'flex flex-col gap-1 bg-surface p-4 text-foreground shadow-overlay focus:outline-none',
   'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
 ].join(' ');
 
@@ -53,6 +53,7 @@ export function TourSpotlight({
         className="pointer-events-none fixed z-[--z-overlay] rounded-md"
       />
       <PopoverPrimitive.Anchor style={rect} className="pointer-events-none fixed z-[--z-overlay]" />
+      {/* Not the house Popover: that bakes in its own surface, radius and shadow-lg; this card is dialog-weight. */}
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           side="bottom"

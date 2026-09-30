@@ -29,7 +29,7 @@ const SheetContent = React.forwardRef<
       ref={ref}
       className={cn(
         'fixed inset-y-0 z-[--z-drawer] flex w-[--drawer-w] max-w-[85vw] flex-col',
-        'bg-surface p-[--sidebar-pad] shadow-[--shadow-overlay] focus:outline-none',
+        'bg-surface p-[--sidebar-pad] shadow-overlay focus:outline-none',
         SIDES[side],
         className,
       )}

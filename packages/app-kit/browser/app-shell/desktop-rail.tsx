@@ -26,7 +26,7 @@ export function DesktopRail({
           'absolute inset-y-0 left-0 z-[--z-drawer] flex flex-col overflow-hidden',
           'border-r border-border bg-surface py-[--sidebar-rail-pad]',
           'transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none',
-          rail.open ? 'w-[--sidebar-w] shadow-[--shadow-overlay]' : 'w-[--sidebar-w-rail]',
+          rail.open ? 'w-[--sidebar-w] shadow-overlay' : 'w-[--sidebar-w-rail]',
         )}
       >
         {/* Held at the width it is FOR, so widening reveals the rows rather than reflowing them. */}
