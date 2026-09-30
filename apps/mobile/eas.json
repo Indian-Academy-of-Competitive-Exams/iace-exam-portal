@@ -9,13 +9,11 @@
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://staging-api.iace.co.in" }
+      "android": { "buildType": "apk" }
     },
     "production": {
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.iace.co.in" }
+      "android": { "buildType": "app-bundle" }
     }
   }
 }
