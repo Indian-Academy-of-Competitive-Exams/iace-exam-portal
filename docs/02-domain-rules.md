@@ -365,7 +365,13 @@ nothing stands in the way of computing it — that is a feature to ask for, not 
 The pass's watermark is `Attempt.updatedAt`, not `evaluatedAt`. The two things that move marks
 already counted — a dropped question re-scoring every sitting, and a void — both leave `evaluatedAt`
 exactly where it was, so a pass keyed on it would see neither. It also looks back past its own
-watermark by a short lag, because a sitting can commit after a pass has read. On the student side
+watermark by a short lag, because a sitting can commit after a pass has read.
+
+A pass wakes only for a sitting that MOVES the cohort — voided, or graded and evaluated. A start, a
+resume, a submitted claim and an ungraded retake all bump `updatedAt` without changing a single
+total, and counting them as work re-armed the item pass, which replays every sheet in the cohort
+inside one transaction. `isGraded` alone is not the test either: regranting a void clears it, and
+that sitting still has to come back out of the totals. On the student side
 the watermark is when a rebuild last read, and only a sitting that moved after its first evaluation
 (`updatedAt` past `evaluatedAt`: a re-score, or a void) counts as drift: the first evaluation
 commits its fold with its marks, so treating it as drift would replay every student on every pass.
