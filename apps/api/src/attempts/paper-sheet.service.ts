@@ -79,8 +79,13 @@ export function recall<V>(held: Map<string, V>, key: string): V | undefined {
 }
 
 /** A Map iterates in insertion order, so the first key is the one longest unread. */
-export function remember<V>(held: Map<string, V>, key: string, value: V): void {
-  if (!held.delete(key) && held.size >= HELD_PAPERS) {
+export function remember<V>(
+  held: Map<string, V>,
+  key: string,
+  value: V,
+  ceiling = HELD_PAPERS,
+): void {
+  if (!held.delete(key) && held.size >= ceiling) {
     const coldest = held.keys().next();
     if (!coldest.done) held.delete(coldest.value);
   }
@@ -92,12 +97,13 @@ export function hold<V>(
   held: Map<string, Promise<V>>,
   key: string,
   read: () => Promise<V>,
+  ceiling = HELD_PAPERS,
 ): Promise<V> {
   const waiting = recall(held, key);
   if (waiting) return waiting;
 
   const next = read();
-  remember(held, key, next);
+  remember(held, key, next, ceiling);
   // Not held once it fails, so the next reader retries instead of inheriting the failure.
   next.catch(() => {
     if (held.get(key) === next) held.delete(key);

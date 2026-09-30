@@ -89,8 +89,8 @@ export function cohortSizeSql(testId: string): Prisma.Sql {
   `;
 }
 
-/** A seat on one test's board: the podium and the reader's neighbourhood, ranked in SQL. */
-export interface TestBoardRow {
+/** One seat on one test's board. Nothing here says who is reading it — that is decided in Node. */
+export interface CohortSeatRow {
   attempt_id: string;
   rank: number;
   score: number;
@@ -98,30 +98,45 @@ export interface TestBoardRow {
   percentile: number;
   name: string | null;
   branch: string | null;
-  is_you: boolean;
 }
 
-/** The podium and the reader's neighbourhood, seated in `RANK_ORDER`, with `testResultsSql`'s percentile. */
+/** Every seat, in `RANK_ORDER`, with `testResultsSql`'s percentile: what a whole board is held as. */
+const SEATED = Prisma.sql`
+  SELECT a."id", a."studentId", a."score",
+         (ROW_NUMBER() OVER (ORDER BY ${RANK_ORDER}))::int AS rank,
+         (COUNT(*) OVER ())::int AS cohort,
+         sitting_percentile(
+           RANK() OVER (ORDER BY a."score" ASC) - 1,
+           COUNT(*) OVER (PARTITION BY a."score"),
+           COUNT(*) OVER ()
+         )::float8 AS percentile
+  FROM "Attempt" a
+`;
+
+/** The named half of a seat, which only the rows a board actually shows ever pay for. */
+const NAMED = Prisma.sql`
+  SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort, r.percentile,
+         s."fullName" AS name, br."name" AS branch
+  FROM ranked r
+  JOIN "Student" s ON s."id" = r."studentId"
+  LEFT JOIN "Branch" br ON br."id" = s."currentBranchId"
+`;
+
+/** One paper's whole ranking, read once per rollup and sliced per reader from memory. */
+export function rankedCohortSql(testId: string): Prisma.Sql {
+  return Prisma.sql`
+    WITH ranked AS (${SEATED} WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT})
+    ${NAMED}
+    ORDER BY r.rank
+  `;
+}
+
+/** The podium and one reader's neighbourhood alone — the live answer where no held ranking has them. */
 export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
   return Prisma.sql`
-    WITH ranked AS (
-      SELECT a."id", a."studentId", a."score",
-             (ROW_NUMBER() OVER (ORDER BY ${RANK_ORDER}))::int AS rank,
-             (COUNT(*) OVER ())::int AS cohort,
-             sitting_percentile(
-               RANK() OVER (ORDER BY a."score" ASC) - 1,
-               COUNT(*) OVER (PARTITION BY a."score"),
-               COUNT(*) OVER ()
-             )::float8 AS percentile
-      FROM "Attempt" a
-      WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
-    ),
+    WITH ranked AS (${SEATED} WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}),
     mine AS (SELECT rank FROM ranked WHERE "id" = ${attemptId}::uuid)
-    SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort, r.percentile,
-           s."fullName" AS name, br."name" AS branch, (r."id" = ${attemptId}::uuid) AS is_you
-    FROM ranked r
-    JOIN "Student" s ON s."id" = r."studentId"
-    LEFT JOIN "Branch" br ON br."id" = s."currentBranchId"
+    ${NAMED}
     WHERE r.rank <= ${LEADERBOARD_PODIUM}
        OR r.rank BETWEEN (SELECT rank FROM mine) - ${LEADERBOARD_NEIGHBOURS}
                      AND (SELECT rank FROM mine) + ${LEADERBOARD_NEIGHBOURS}

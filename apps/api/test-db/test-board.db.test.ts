@@ -48,6 +48,14 @@ const board = (studentId: string, testId: string) => view.board(studentId, { tes
 
 const rowsOf = (read: Leaderboard): LeaderboardRow[] => [...read.podium, ...read.neighbourhood];
 
+/** The rollup's own watermark, which is what a held ranking is keyed on. */
+const countedAt = (testId: string, at: Date) =>
+  prisma.testStat.upsert({
+    where: { testId },
+    create: { testId, evaluatedCount: 0, sumTimeSec: 0, computedAt: at },
+    update: { computedAt: at },
+  });
+
 describe('the board for one paper', () => {
   it('draws the podium and the reader among their neighbours, ranked by the database', async () => {
     const testId = await paper();
@@ -201,6 +209,37 @@ describe('the board for one paper', () => {
       [read.label, read.cohortSize, read.podium, read.neighbourhood, read.you],
       ['Board mock', 0, [], [], null],
     );
+  });
+
+  /** The failure this prevents: a held board outliving the recount that moved the cohort under it. */
+  it('holds one paper\u2019s ranking until the rollup has counted the cohort again', async () => {
+    const testId = await paper();
+    const mine = await entrant(testId, 'Harshith Diyyala', 100);
+    await entrant(testId, 'Priya Sharma', 90);
+    await countedAt(testId, new Date('2026-09-01T06:00:00.000Z'));
+
+    const before = await board(mine.studentId, testId);
+    await entrant(testId, 'Latecomer', 200);
+    const held = await board(mine.studentId, testId);
+    await countedAt(testId, new Date('2026-09-02T06:00:00.000Z'));
+    const after = await board(mine.studentId, testId);
+
+    assert.deepEqual([before.cohortSize, before.you?.rank], [2, 1]);
+    assert.deepEqual([held.cohortSize, held.you?.rank], [2, 1]);
+    assert.deepEqual([after.cohortSize, after.you?.rank], [3, 2]);
+  });
+
+  /** The failure this prevents: a sitting scored since the last rollup reading as nobody on the board. */
+  it('counts a reader the held ranking does not have yet from the cohort itself', async () => {
+    const testId = await paper();
+    const early = await entrant(testId, 'Priya Sharma', 100);
+    await countedAt(testId, new Date('2026-09-03T06:00:00.000Z'));
+    await board(early.studentId, testId);
+
+    const late = await entrant(testId, 'Harshith Diyyala', 50);
+    const read = await board(late.studentId, testId);
+
+    assert.deepEqual([read.cohortSize, read.you?.rank, read.you?.percentile], [2, 2, 25]);
   });
 
   it('refuses a paper the reader holds no graded sitting on', async () => {
