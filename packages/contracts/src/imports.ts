@@ -328,7 +328,7 @@ export const IMPORT_LIST_SEPARATORS = /[,;|/\n]+/;
 export const NO_ACCESS_ROUTE_MESSAGE =
   'This row reaches no test series. Give it an enrolled course, an enrolled exam or a program.';
 
-export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
+type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];
 
 /** The roster list FILTERED, never restated: the sample and the parser read one set of aliases. */

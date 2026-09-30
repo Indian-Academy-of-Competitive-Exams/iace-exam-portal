@@ -47,9 +47,9 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
 }
 
-export type WriteMethod = 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+type WriteMethod = 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
-export interface RequestOptions<T> {
+interface RequestOptions<T> {
   method?: 'GET' | WriteMethod;
   body?: unknown;
   schema: ZodType<T>;

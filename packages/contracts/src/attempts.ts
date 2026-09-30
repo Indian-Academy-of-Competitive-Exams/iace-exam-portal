@@ -41,7 +41,7 @@ export const ANSWER_STATE = {
   MARKED_REVIEW: 'MARKED_REVIEW',
   ANSWERED_MARKED: 'ANSWERED_MARKED',
 } as const;
-export const answerStateSchema = z.enum(ANSWER_STATE);
+const answerStateSchema = z.enum(ANSWER_STATE);
 export type AnswerState = z.infer<typeof answerStateSchema>;
 export const ANSWER_STATES = answerStateSchema.options;
 
@@ -125,7 +125,7 @@ export type StartAttemptInput = z.input<typeof startAttemptSchema>;
 export type StartAttemptBody = z.infer<typeof startAttemptSchema>;
 
 /** The attempt plus what the exam screen needs to draw its frame before the paper arrives. */
-export const liveAttemptSchema = attemptSchema.extend({
+const liveAttemptSchema = attemptSchema.extend({
   /** True when this call started it, false when it resumed one already running. */
   startedByThisCall: z.boolean(),
   testTitle: z.string().nullable(),

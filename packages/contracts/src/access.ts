@@ -296,7 +296,7 @@ export const pushConfigSchema = z.object({
 export type PushConfig = z.infer<typeof pushConfigSchema>;
 
 /** The push services a browser's endpoint may point at — never a host a student chose. */
-export const PUSH_ENDPOINT_HOSTS = [
+const PUSH_ENDPOINT_HOSTS = [
   'fcm.googleapis.com',
   'push.services.mozilla.com',
   'notify.windows.com',

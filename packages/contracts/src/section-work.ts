@@ -12,7 +12,7 @@ export const SEND_BACK_REASONS = {
   DATA_CORRECTION: 'DATA_CORRECTION',
   ANSWER_OPTION: 'ANSWER_OPTION',
 } as const;
-export const sendBackReasonSchema = z.enum(SEND_BACK_REASONS);
+const sendBackReasonSchema = z.enum(SEND_BACK_REASONS);
 export type SendBackReason = z.infer<typeof sendBackReasonSchema>;
 
 /** Where one question stands with the proof-reader. Derived from its review row, never stored. */
@@ -22,10 +22,10 @@ export const REVIEW_STATES = {
   SENT_BACK: 'SENT_BACK',
   FIXED: 'FIXED',
 } as const;
-export const reviewStateSchema = z.enum(REVIEW_STATES);
+const reviewStateSchema = z.enum(REVIEW_STATES);
 export type ReviewState = z.infer<typeof reviewStateSchema>;
 
-export const questionReviewSchema = z.object({
+const questionReviewSchema = z.object({
   state: reviewStateSchema,
   /** Set while a question is, or last was, sent back. */
   reason: sendBackReasonSchema.nullable(),
@@ -42,10 +42,10 @@ export const SECTION_SEATS = {
   READER: 'READER',
   OWNER: 'OWNER',
 } as const;
-export const sectionSeatSchema = z.enum(SECTION_SEATS);
+const sectionSeatSchema = z.enum(SECTION_SEATS);
 export type SectionSeat = z.infer<typeof sectionSeatSchema>;
 
-export const sectionQuestionSchema = z.object({
+const sectionQuestionSchema = z.object({
   questionId: z.string(),
   preview: z.string(),
   difficulty: difficultyLevelSchema,

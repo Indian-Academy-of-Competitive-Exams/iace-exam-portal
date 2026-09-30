@@ -358,7 +358,7 @@ export const testSchema = z.object({
 export type Test = z.infer<typeof testSchema>;
 
 /** An earlier opening of one test, for the students of one program. */
-export const testProgramUnlockSchema = z.object({
+const testProgramUnlockSchema = z.object({
   programCode: z.string(),
   opensAt: z.string(),
 });

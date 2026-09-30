@@ -102,7 +102,7 @@ export type TypistDoneBody = z.infer<typeof typistDoneSchema>;
 // ============================================================================
 
 /** One role's standing on one section. */
-export const sectionRoleProgressSchema = z.object({
+const sectionRoleProgressSchema = z.object({
   /** Null where nobody has been given the section: there is nothing to open. */
   assignmentId: z.string().nullable(),
   assigneeId: z.string().nullable(),
@@ -198,7 +198,7 @@ export type AssignableQueryInput = z.input<typeof assignableQuerySchema>;
 // ============================================================================
 
 /** What a message said before it was reworded. Oldest first; the current body is never here. */
-export const commentRevisionSchema = z.object({
+const commentRevisionSchema = z.object({
   body: z.string(),
   at: z.string(),
 });

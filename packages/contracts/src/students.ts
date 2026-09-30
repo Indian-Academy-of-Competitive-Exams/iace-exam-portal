@@ -16,7 +16,7 @@ import { examCourseSchema } from './exams';
 // Students, as the ADMIN sees them.
 // ============================================================================
 
-export const genderSchema = z.enum(['MALE', 'FEMALE', 'OTHER']);
+const genderSchema = z.enum(['MALE', 'FEMALE', 'OTHER']);
 export type Gender = z.infer<typeof genderSchema>;
 /** The same values as a list, for building a picker without restating them. */
 export const GENDERS = genderSchema.options;

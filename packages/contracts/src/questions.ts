@@ -195,7 +195,7 @@ export const localizedContentSchema = z.partialRecord(languageSchema, questionCo
 export type LocalizedContent = z.infer<typeof localizedContentSchema>;
 
 /** An option's `text`, as it sits inside a question version. */
-export const localizedRichSchema = z.partialRecord(languageSchema, richContentSchema);
+const localizedRichSchema = z.partialRecord(languageSchema, richContentSchema);
 export type LocalizedRich = z.infer<typeof localizedRichSchema>;
 
 // ============================================================================
@@ -715,7 +715,7 @@ export const questionImportPlanSchema = importPlanSchema(
 export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
 
 /** A previewed row's question for the review window, corrections laid over the sheet; a Skip row may lack a subject. */
-export const questionImportDraftSchema = z.object({
+const questionImportDraftSchema = z.object({
   line: z.number().int(),
   draft: questionDraftSchema.extend({ subjectId: z.string() }),
 });

@@ -336,7 +336,7 @@ function checkTaxonomy(
 }
 
 /** What a question's identity is read from — all a stored version still has once the draft is gone. */
-export type StemKeyInput = Pick<QuestionDraft, 'type' | 'stem' | 'options' | 'answerKey'>;
+type StemKeyInput = Pick<QuestionDraft, 'type' | 'stem' | 'options' | 'answerKey'>;
 
 /** Two questions in one string: the stem, the options as a SET, and the correct one's text. */
 export function canonicalStemKey(draft: StemKeyInput): string {
