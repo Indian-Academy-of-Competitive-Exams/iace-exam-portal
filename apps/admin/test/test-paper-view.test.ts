@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { SECTION_FULLNESS, sectionFullness, sectionTally } from '../src/routes/test-paper-view';
+import {
+  SECTION_FULLNESS,
+  sectionFullness,
+  sectionTally,
+} from '../src/features/tests/test-paper-view';
 
 describe('sectionFullness', () => {
   const section = { id: 'sec_1', questionCount: 25 };

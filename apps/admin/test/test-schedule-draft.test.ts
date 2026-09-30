@@ -6,7 +6,7 @@ import {
   savedSchedule,
   wallOf,
   type ScheduleDraft,
-} from '../src/routes/test-schedule-draft';
+} from '../src/features/tests/test-schedule-draft';
 
 const draft = (over: Partial<ScheduleDraft> = {}): ScheduleDraft => ({
   opensAt: '2026-09-10T09:00',

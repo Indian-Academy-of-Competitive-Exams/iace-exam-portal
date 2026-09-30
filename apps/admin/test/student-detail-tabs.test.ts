@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { FEATURE_KEYS, type FeatureKey } from '@iace/contracts';
-import { openStudentTab, studentTabsFor, STUDENT_TABS } from '../src/routes/student-detail-tabs';
+import {
+  openStudentTab,
+  studentTabsFor,
+  STUDENT_TABS,
+} from '../src/features/students/student-detail-tabs';
 
 const holding = (...keys: FeatureKey[]) => {
   const held = new Set<FeatureKey>(keys);

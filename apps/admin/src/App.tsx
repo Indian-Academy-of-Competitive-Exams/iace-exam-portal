@@ -6,119 +6,139 @@ import { PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { AppShell } from './components/app-shell';
 import { PageSkeleton } from './components/page-skeleton';
-import { LoginPage } from './routes/login';
-import { NotFoundPage } from './routes/not-found';
+import { LoginPage } from './features/auth/login';
+import { NotFoundPage } from './components/not-found';
 import { ROUTES } from './lib/constants';
 
 const DashboardPage = React.lazy(() =>
-  import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
+  import('./features/dashboard/dashboard').then((module) => ({ default: module.DashboardPage })),
 );
 const StudentsPage = React.lazy(() =>
-  import('./routes/students').then((module) => ({ default: module.StudentsPage })),
+  import('./features/students/students').then((module) => ({ default: module.StudentsPage })),
 );
 const StudentDetailPage = React.lazy(() =>
-  import('./routes/student-detail').then((module) => ({ default: module.StudentDetailPage })),
+  import('./features/students/student-detail').then((module) => ({
+    default: module.StudentDetailPage,
+  })),
 );
 const StudentPerformancePage = React.lazy(() =>
-  import('./routes/student-performance').then((module) => ({
+  import('./features/students/student-performance-redirect').then((module) => ({
     default: module.StudentPerformancePage,
   })),
 );
 const ImportStudentsPage = React.lazy(() =>
-  import('./routes/import-students').then((module) => ({ default: module.ImportStudentsPage })),
+  import('./features/imports/import-students').then((module) => ({
+    default: module.ImportStudentsPage,
+  })),
 );
 const BranchesPage = React.lazy(() =>
-  import('./routes/branches').then((module) => ({ default: module.BranchesPage })),
+  import('./features/catalog/branches').then((module) => ({ default: module.BranchesPage })),
 );
 const ExamsPage = React.lazy(() =>
-  import('./routes/exams').then((module) => ({ default: module.ExamsPage })),
+  import('./features/catalog/exams').then((module) => ({ default: module.ExamsPage })),
 );
 const CohortsPage = React.lazy(() =>
-  import('./routes/cohorts').then((module) => ({ default: module.CohortsPage })),
+  import('./features/students/cohorts').then((module) => ({ default: module.CohortsPage })),
 );
 const QuestionsPage = React.lazy(() =>
-  import('./routes/questions').then((module) => ({ default: module.QuestionsPage })),
+  import('./features/questions/questions').then((module) => ({ default: module.QuestionsPage })),
 );
 const ImportQuestionsPage = React.lazy(() =>
-  import('./routes/import-questions').then((module) => ({ default: module.ImportQuestionsPage })),
+  import('./features/imports/import-questions').then((module) => ({
+    default: module.ImportQuestionsPage,
+  })),
 );
 const AssignmentQueuePage = React.lazy(() =>
-  import('./routes/assignment-queue').then((module) => ({
+  import('./features/authoring/assignment-queue').then((module) => ({
     default: module.AssignmentQueuePage,
   })),
 );
 const SectionProgressPage = React.lazy(() =>
-  import('./routes/section-progress').then((module) => ({ default: module.SectionProgressPage })),
+  import('./features/authoring/section-progress').then((module) => ({
+    default: module.SectionProgressPage,
+  })),
 );
 const BankQuestionPage = React.lazy(() =>
-  import('./routes/bank-question').then((module) => ({ default: module.BankQuestionPage })),
+  import('./features/questions/bank-question').then((module) => ({
+    default: module.BankQuestionPage,
+  })),
 );
 const SectionAuthoringPage = React.lazy(() =>
-  import('./routes/section-authoring').then((module) => ({
+  import('./features/authoring/section-authoring').then((module) => ({
     default: module.SectionAuthoringPage,
   })),
 );
 const AuthoringEditorPage = React.lazy(() =>
-  import('./routes/authoring-editor').then((module) => ({ default: module.AuthoringEditorPage })),
+  import('./features/authoring/authoring-editor').then((module) => ({
+    default: module.AuthoringEditorPage,
+  })),
 );
 const AuthoringHistoryPage = React.lazy(() =>
-  import('./routes/authoring-history').then((module) => ({
+  import('./features/authoring/authoring-history').then((module) => ({
     default: module.AuthoringHistoryPage,
   })),
 );
 const TaxonomyPage = React.lazy(() =>
-  import('./routes/taxonomy').then((module) => ({ default: module.TaxonomyPage })),
+  import('./features/questions/taxonomy').then((module) => ({ default: module.TaxonomyPage })),
 );
 const BaseConfigsPage = React.lazy(() =>
-  import('./routes/base-configs').then((module) => ({ default: module.BaseConfigsPage })),
+  import('./features/catalog/base-configs').then((module) => ({ default: module.BaseConfigsPage })),
 );
 const BaseConfigFormPage = React.lazy(() =>
-  import('./routes/base-config-form').then((module) => ({ default: module.BaseConfigFormPage })),
+  import('./features/catalog/base-config-form').then((module) => ({
+    default: module.BaseConfigFormPage,
+  })),
 );
 const TestsAndSeriesPage = React.lazy(() =>
-  import('./routes/tests-and-series').then((module) => ({
+  import('./features/tests/tests-and-series').then((module) => ({
     default: module.TestsAndSeriesPage,
   })),
 );
 const TestBuilderPage = React.lazy(() =>
-  import('./routes/test-builder').then((module) => ({ default: module.TestBuilderPage })),
+  import('./features/tests/test-builder').then((module) => ({ default: module.TestBuilderPage })),
 );
 const TestPaperPage = React.lazy(() =>
-  import('./routes/test-paper').then((module) => ({ default: module.TestPaperPage })),
+  import('./features/tests/test-paper').then((module) => ({ default: module.TestPaperPage })),
 );
 const TestAnalyticsPage = React.lazy(() =>
-  import('./routes/test-analytics').then((module) => ({ default: module.TestAnalyticsPage })),
+  import('./features/tests/test-analytics').then((module) => ({
+    default: module.TestAnalyticsPage,
+  })),
 );
 const TestSeriesFormPage = React.lazy(() =>
-  import('./routes/test-series-form').then((module) => ({ default: module.TestSeriesFormPage })),
+  import('./features/test-series/test-series-form').then((module) => ({
+    default: module.TestSeriesFormPage,
+  })),
 );
 const ImportEventCandidatesPage = React.lazy(() =>
-  import('./routes/import-event-candidates').then((module) => ({
+  import('./features/imports/import-event-candidates').then((module) => ({
     default: module.ImportEventCandidatesPage,
   })),
 );
 const ImportProgramStudentsPage = React.lazy(() =>
-  import('./routes/import-program-students').then((module) => ({
+  import('./features/imports/import-program-students').then((module) => ({
     default: module.ImportProgramStudentsPage,
   })),
 );
 const AdminsPage = React.lazy(() =>
-  import('./routes/admins').then((module) => ({ default: module.AdminsPage })),
+  import('./features/admins/admins').then((module) => ({ default: module.AdminsPage })),
 );
 const PermissionsPage = React.lazy(() =>
-  import('./routes/permissions').then((module) => ({ default: module.PermissionsPage })),
+  import('./features/admins/permissions').then((module) => ({ default: module.PermissionsPage })),
 );
 const AuditActivityPage = React.lazy(() =>
-  import('./routes/audit').then((module) => ({ default: module.AuditActivityPage })),
+  import('./features/admins/audit').then((module) => ({ default: module.AuditActivityPage })),
 );
 const AuditImportsPage = React.lazy(() =>
-  import('./routes/audit').then((module) => ({ default: module.AuditImportsPage })),
+  import('./features/admins/audit').then((module) => ({ default: module.AuditImportsPage })),
 );
 const AnnouncementsPage = React.lazy(() =>
-  import('./routes/announcements').then((module) => ({ default: module.AnnouncementsPage })),
+  import('./features/announcements/announcements').then((module) => ({
+    default: module.AnnouncementsPage,
+  })),
 );
 const LiveOpsPage = React.lazy(() =>
-  import('./routes/live-ops').then((module) => ({ default: module.LiveOpsPage })),
+  import('./features/live-ops/live-ops').then((module) => ({ default: module.LiveOpsPage })),
 );
 
 /** Each chunk waits behind the same held-frame skeleton, so a route swap never shifts the layout. */

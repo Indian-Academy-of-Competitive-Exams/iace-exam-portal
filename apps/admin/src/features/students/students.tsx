@@ -1,0 +1,537 @@
+import { useMemo } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Upload, UserPlus } from 'lucide-react';
+import {
+  BRANCH_TYPE,
+  EXPORT_KINDS,
+  STUDENT_EXPORT_VIEWS,
+  examsInCourses,
+  FEATURE_KEYS,
+  MOBILE_DIGITS,
+  PERMISSION_LEVELS,
+  STUDENT_SORTS,
+  STUDENT_TYPE,
+  STUDENT_TYPES,
+  createStudentSchema,
+  normaliseMobile,
+  type CreateStudentInput,
+  type ExamCourse,
+  type StudentSort,
+  type StudentSummary,
+} from '@iace/contracts';
+import {
+  FormCombobox,
+  Badge,
+  BadgeList,
+  Button,
+  Combobox,
+  FormDialog,
+  FormField,
+  Input,
+  ListView,
+  MultiCombobox,
+  NumericInput,
+  PageHeader,
+  TableFrame,
+  TruncatedText,
+  digitsOnly,
+  linkVariants,
+  type DataTableColumn,
+  type ListFilterMultiControl,
+} from '@iace/ui';
+import { EventMultiPicker, ProgramMultiPicker } from '../../components/access-picker';
+import { ExportButton, type ExportChoice } from '../../components/export-button';
+import { api } from '../../lib/api';
+import {
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+  STUDENT_TYPE_LABELS,
+  COURSE_ITEMS,
+} from '../../lib/constants';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { useBranchChoice, useBranches } from '../../lib/use-branches';
+import { useExams } from './use-exams';
+import { useAuth } from '../../providers/auth';
+type StatusFilter = 'all' | 'active' | 'inactive' | 'blocked' | 'defaultpin';
+
+/** `false` is a question ("not ready yet"), not "don't care" — absent is "don't care". */
+function asBooleanParam(value: string): 'true' | 'false' | undefined {
+  return value === 'true' || value === 'false' ? value : undefined;
+}
+
+/** Each filter is one query shape; keeping them together stops them contradicting. */
+const STATUS_QUERY: Record<
+  StatusFilter,
+  {
+    isActive?: 'true' | 'false';
+    isTestBlocked?: 'true';
+    hasDefaultPin?: 'true';
+  }
+> = {
+  all: {},
+  active: { isActive: 'true' },
+  inactive: { isActive: 'false' },
+  blocked: { isTestBlocked: 'true' },
+  defaultpin: { hasDefaultPin: 'true' },
+};
+
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
+function studentColumns(): DataTableColumn<StudentSummary>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Student',
+      className: 'max-w-60',
+      cell: (s) => <StudentNameCell student={s} />,
+    },
+    {
+      key: 'mobile',
+      header: 'Mobile',
+      className: 'tabular-nums text-muted-foreground',
+      cell: (s) => s.mobile,
+    },
+    {
+      key: 'access',
+      header: 'Access',
+      cell: (s) =>
+        s.hasOwnAccess ? (
+          <AccessCell student={s} />
+        ) : (
+          // Nothing of their own is not "no access": a free series reaches everyone.
+          <Badge variant="warning">No access of their own</Badge>
+        ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (s) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <SignInStatus student={s} />
+          {/* Its own badge: being unable to start a test is not a sign-in state. */}
+          {s.isTestBlocked ? <Badge variant="danger">Blocked from tests</Badge> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'pretest',
+      header: 'Pre-test details',
+      cell: (s) => (
+        <Badge variant={s.preTestReady ? 'success' : 'neutral'}>
+          {s.preTestReady ? 'On file' : 'Needed'}
+        </Badge>
+      ),
+    },
+  ];
+}
+
+// What reaches a series without a row of its own: courses and programs. A grant or an event shows as a dash.
+function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
+  const labels = [...new Set([...student.enrolledCourses, ...student.programs])];
+  if (labels.length === 0) return <TruncatedText>{null}</TruncatedText>;
+
+  return (
+    <BadgeList items={labels} label={(entry) => entry} className="max-w-[12rem]">
+      {(entry) => (
+        <Badge className="min-w-0 shrink">
+          <TruncatedText>{entry}</TruncatedText>
+        </Badge>
+      )}
+    </BadgeList>
+  );
+}
+
+export function StudentsPage() {
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The "Add student" button links here; reading it is what makes it work.
+  const creating = searchParams.get('new') === '1';
+
+  const { branches } = useBranches();
+
+  // The spec declares the URL keys, so the controls, Clear and the query cannot disagree.
+  const filterSpec = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search students',
+      placeholder: 'Search by name or mobile',
+      primary: true,
+    },
+    {
+      key: 'status',
+      kind: 'choice',
+      label: 'Filter by status',
+      primary: true,
+      items: [
+        { value: 'all', label: 'All students' },
+        { value: 'active', label: 'Active' },
+        { value: 'inactive', label: 'Sign-in suspended' },
+        { value: 'blocked', label: 'Blocked from tests' },
+        { value: 'defaultpin', label: 'Still on the default PIN' },
+      ],
+    },
+    {
+      key: 'sort',
+      kind: 'choice',
+      label: 'Sort by',
+      primary: true,
+      // An order, not a filter: it narrows nothing, so it is not one of the things to match.
+      alwaysApplies: true,
+      items: [
+        { value: STUDENT_SORTS.RECENT, label: 'Newest first' },
+        { value: STUDENT_SORTS.OLDEST, label: 'Oldest first' },
+        { value: STUDENT_SORTS.NAME, label: 'Name (A–Z)' },
+        { value: STUDENT_SORTS.MOBILE, label: 'Mobile number' },
+      ],
+    },
+    {
+      key: 'branchId',
+      kind: 'multi',
+      label: 'Branch',
+      placeholder: 'Any branch',
+      items: branches.map((option) => ({ value: option.id, label: option.name })),
+    },
+    {
+      key: 'course',
+      kind: 'multi',
+      label: 'Course',
+      placeholder: 'Any course',
+      items: COURSE_ITEMS,
+    },
+    {
+      key: 'programCode',
+      kind: 'customMulti',
+      label: 'Program',
+      render: (control: ListFilterMultiControl) => <ProgramMultiPicker {...control} />,
+    },
+    {
+      key: 'eventId',
+      kind: 'customMulti',
+      label: 'Event',
+      render: (control: ListFilterMultiControl) => <EventMultiPicker {...control} />,
+    },
+    {
+      key: 'preTestReady',
+      kind: 'choice',
+      label: 'Pre-test details',
+      items: [
+        { value: '', label: 'Any' },
+        { value: 'true', label: 'On file' },
+        { value: 'false', label: 'Needed' },
+      ],
+    },
+    {
+      key: 'profileCompleted',
+      kind: 'choice',
+      label: 'Full profile',
+      items: [
+        { value: '', label: 'Any' },
+        { value: 'true', label: 'Complete' },
+        { value: 'false', label: 'Incomplete' },
+      ],
+    },
+    {
+      key: 'noAccess',
+      kind: 'choice',
+      label: 'Access',
+      items: [
+        { value: '', label: 'Any' },
+        { value: 'true', label: 'Nothing of their own' },
+        { value: 'false', label: 'Has an enrolment or program' },
+      ],
+    },
+  ] as const;
+
+  const students = useListScreen({
+    queryKey: QUERY_KEYS.STUDENTS,
+    filters: filterSpec,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      branchId: values.branchId,
+      course: values.course,
+      programCode: values.programCode,
+      eventId: values.eventId,
+      preTestReady: asBooleanParam(values.preTestReady),
+      profileCompleted: asBooleanParam(values.profileCompleted),
+      noAccess: asBooleanParam(values.noAccess),
+      sort: (values.sort || undefined) as StudentSort | undefined,
+      ...STATUS_QUERY[(values.status || 'all') as StatusFilter],
+    }),
+    fetchPage: (params) => api.admin.students.list(params),
+  });
+
+  const chosenBranches = branches.filter((candidate) =>
+    students.values.branchId.includes(candidate.id),
+  );
+  const columns = useMemo(() => studentColumns(), []);
+
+  const exportChoices: ExportChoice[] = [
+    {
+      kind: EXPORT_KINDS.STUDENTS,
+      label: 'Roster',
+      download: () => api.admin.students.export(students.query, STUDENT_EXPORT_VIEWS.ROSTER),
+    },
+  ];
+  if (can(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.READ)) {
+    exportChoices.push({
+      kind: EXPORT_KINDS.STUDENT_PERFORMANCE,
+      label: 'Performance',
+      download: () => api.admin.students.export(students.query, STUDENT_EXPORT_VIEWS.PERFORMANCE),
+    });
+  }
+  const exportControl = (
+    <ExportButton
+      label={`Export ${students.total.toLocaleString('en-IN')} ${students.total === 1 ? 'row' : 'rows'}`}
+      disabled={students.total === 0}
+      choices={exportChoices}
+    />
+  );
+
+  const header = (
+    <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+      title="Students"
+      action={
+        <div className="flex flex-wrap gap-2">
+          {/* Write actions appear only with WRITE. Hiding is not the security
+                (the endpoints enforce it), it is not offering a control that
+                would be refused. */}
+          {canWrite ? (
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link to={ROUTES.IMPORT_STUDENTS}>
+                  <Upload aria-hidden />
+                  Import
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link to={`${ROUTES.STUDENTS}?new=1`}>
+                  <UserPlus aria-hidden />
+                  Add student
+                </Link>
+              </Button>
+            </>
+          ) : null}
+        </div>
+      }
+    />
+  );
+
+  const branchBanner =
+    chosenBranches.length > 0 ? (
+      // Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once.
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Showing</span>
+        {chosenBranches.map((entry) => (
+          <Badge key={entry.id} variant={entry.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
+            {entry.name}
+          </Badge>
+        ))}
+      </div>
+    ) : null;
+
+  const banner = branchBanner;
+
+  return (
+    <TableFrame header={header}>
+      {/* Rendered inside the frame, not the header: a dialog is portalled, so where it
+          sits in the tree costs the pinned header nothing. */}
+      <NewStudentDialog
+        open={creating}
+        onClose={() => {
+          searchParams.delete('new');
+          setSearchParams(searchParams);
+        }}
+      />
+      <ListView
+        list={students}
+        filters={filterSpec}
+        banner={banner}
+        trailing={exportControl}
+        columns={columns}
+        rowKey={(student) => student.id}
+        empty={{ title: 'No students yet', hint: 'Add one, or import a roster.' }}
+        emptyFiltered="No students match those filters"
+      />
+    </TableFrame>
+  );
+}
+
+/** Three sign-in states, in the order they matter. A list, not a chain of ternaries. */
+function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
+  if (!student.isActive) return <Badge variant="danger">Sign-in suspended</Badge>;
+  // Its own state on purpose — they CAN sign in, but on a PIN anyone with the roster can guess.
+  if (student.hasDefaultPin) return <Badge variant="warning">Default PIN</Badge>;
+  return <Badge variant="success">Active</Badge>;
+}
+
+function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
+  return (
+    <Link to={ROUTES.STUDENT(student.id)} className={linkVariants()}>
+      <TruncatedText empty="No name yet">{student.fullName}</TruncatedText>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+const NEW_STUDENT_FIELDS = [
+  'mobile',
+  'fullName',
+  'studentType',
+  'enrolledExams',
+  'enrolledCourses',
+  'currentBranchId',
+] as const;
+
+/** Adds a student before signup. The mobile is the join key, so the OTP flow upserts onto this row. */
+function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: () => void }>) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const form = useForm<CreateStudentInput>({
+    resolver: zodResolver(createStudentSchema),
+    defaultValues: {
+      mobile: '',
+      fullName: '',
+      studentType: STUDENT_TYPE.ONLINE,
+      enrolledExams: [],
+      enrolledCourses: [],
+      currentBranchId: '',
+    },
+  });
+
+  const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
+  const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
+  const studentType = useWatch({ control: form.control, name: 'studentType' });
+  const { exams } = useExams({ activeOnly: true, enabled: open });
+  const branch = useBranchChoice(studentType);
+
+  const create = useMutation({
+    meta: {
+      success: 'Student added.',
+      fields: NEW_STUDENT_FIELDS,
+    },
+    mutationFn: (values: CreateStudentInput) =>
+      api.admin.students.create({
+        mobile: values.mobile,
+        // An untouched name field is "not known yet", not an empty name.
+        fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
+        studentType: values.studentType,
+        enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
+        enrolledCourses: values.enrolledCourses?.length ? values.enrolledCourses : undefined,
+        // A locked picker is the server's to fill; an untouched one is "not recorded", and '' is no branch id.
+        currentBranchId: branch.locked ? undefined : currentBranchId || undefined,
+      }),
+    onSuccess: (student) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
+      void navigate(ROUTES.STUDENT(student.id));
+    },
+    onError: (error) => applyFieldErrors(error, form.setError, NEW_STUDENT_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="New student"
+      submitLabel="Add student"
+      loading={create.isPending}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+    >
+      <FormField form={form} name="mobile" label="Mobile number">
+        {(control) => (
+          <NumericInput
+            {...control}
+            autoFocus
+            prefix="+91"
+            // Room to paste a +91 prefix; normaliseMobile trims it rather than truncating.
+            maxLength={15}
+            sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
+            placeholder="98765 43210"
+            className="tabular-nums"
+          />
+        )}
+      </FormField>
+
+      <FormField form={form} name="fullName" label="Full name">
+        {(control) => <Input {...control} />}
+      </FormField>
+
+      <FormCombobox
+        form={form}
+        name="studentType"
+        label="Student type"
+        items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
+      />
+
+      <FormField form={form} name="enrolledCourses" label="Enrolled courses">
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <MultiCombobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            value={enrolledCourses}
+            onChange={(next) =>
+              form.setValue('enrolledCourses', next as ExamCourse[], { shouldDirty: true })
+            }
+            items={COURSE_ITEMS}
+            placeholder="None yet"
+            emptyLabel="No course matches that"
+          />
+        )}
+      </FormField>
+
+      <FormField form={form} name="enrolledExams" label="Enrolled exams">
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <MultiCombobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            value={enrolledExams}
+            onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
+            items={examsInCourses(exams, enrolledCourses, enrolledExams).map((exam) => ({
+              value: exam.code,
+              label: exam.code,
+              hint: exam.name,
+            }))}
+            placeholder="None yet"
+            emptyLabel="No exam matches that"
+          />
+        )}
+      </FormField>
+
+      <FormField
+        form={form}
+        name="currentBranchId"
+        label="Current branch"
+        /* ui-copy-ok: rule */ hint={branch.hint}
+      >
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <Combobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            disabled={branch.locked}
+            value={branch.shownId ?? currentBranchId}
+            onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
+            items={branch.branches.map((option) => ({ value: option.id, label: option.name }))}
+            placeholder="Not recorded"
+            emptyLabel="No branch matches that"
+          />
+        )}
+      </FormField>
+    </FormDialog>
+  );
+}

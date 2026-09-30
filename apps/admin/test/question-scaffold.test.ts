@@ -25,7 +25,7 @@ import {
   withOptionCount,
   type AuthoringHeader,
   type AuthoringState,
-} from '../src/components/authoring/question-scaffold';
+} from '../src/features/authoring/question-scaffold';
 
 const HEADER: AuthoringHeader = {
   subjectId: 'sub_1',

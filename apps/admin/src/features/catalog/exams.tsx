@@ -1,0 +1,580 @@
+import { useCallback, useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm, useWatch } from 'react-hook-form';
+import { Pencil, Plus } from 'lucide-react';
+import {
+  courseLabel,
+  DEFAULT_EXAM_COURSE,
+  DEFAULT_EXAM_MODE,
+  DEFAULT_STAGE_DISPOSITION,
+  EXAM_MODES,
+  STAGE_DISPOSITIONS,
+  createExamSchema,
+  createExamStageSchema,
+  updateExamStageSchema,
+  type CreateExamInput,
+  type CreateExamStageInput,
+  type Exam,
+  type ExamStage,
+  type UpdateExamStageInput,
+} from '@iace/contracts';
+import {
+  Alert,
+  Badge,
+  Button,
+  DropdownMenuItem,
+  FormCombobox,
+  FormDialog,
+  FormField,
+  Input,
+  ListView,
+  NumericInput,
+  PageHeader,
+  plural,
+  TableFrame,
+  TruncatedText,
+  type DataTableColumn,
+  UPPERCASE_CODE,
+} from '@iace/ui';
+import { ActiveStatus, RetireDeleteActions } from './retire-delete-actions';
+import { useAuth } from '../../providers/auth';
+import { api } from '../../lib/api';
+import {
+  COURSE_ITEMS,
+  NAV_ITEMS,
+  NEW_RECORD,
+  QUERY_KEYS,
+  examStagesQueryKey,
+} from '../../lib/constants';
+import { ExamPicker } from '../../components/exam-picker';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+
+const EXAM_FIELDS = ['course', 'name', 'code'] as const;
+
+/** AP_TS_POLICE reads as AP/TS POLICE — the underscore is a Prisma enum's constraint, not a name. */
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
+function examColumns(
+  isSuperAdmin: boolean,
+  refresh: () => void,
+  onEdit: (exam: Exam) => void,
+): DataTableColumn<Exam>[] {
+  return [
+    { key: 'course', header: 'Course', cell: (exam) => courseLabel(exam.course) },
+    {
+      key: 'name',
+      header: 'Exam',
+      className: 'max-w-[18rem] font-medium',
+      cell: (exam) => <TruncatedText>{exam.name}</TruncatedText>,
+    },
+    {
+      key: 'code',
+      header: 'Code',
+      cell: (exam) => <span className="font-mono text-sm">{exam.code}</span>,
+    },
+    {
+      key: 'stages',
+      header: 'Stages',
+      numeric: true,
+      cell: (exam) =>
+        exam.stageCount > 0 ? exam.stageCount : <span className="text-muted-foreground">0</span>,
+    },
+    { key: 'status', header: 'Status', cell: (exam) => <ActiveStatus isActive={exam.isActive} /> },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (exam) => (
+        <RetireDeleteActions
+          name={exam.name}
+          noun="exam"
+          isActive={exam.isActive}
+          canEdit={isSuperAdmin}
+          resource={api.admin.exams}
+          id={exam.id}
+          onChanged={refresh}
+          retireText={
+            exam.isActive
+              ? `Nothing it already holds changes. ${plural(exam.stageCount, 'stage')} and every student enrolled under ${exam.code} keep working exactly as now. What stops is new ones: this exam will no longer be offered when anyone enrols a student. Reactivating puts it back.`
+              : 'The exam is offered again on the student form. Nothing else changes.'
+          }
+          deleteText={
+            exam.stageCount === 0
+              ? `Nothing hangs off ${exam.code}. If a student is still enrolled on it, this will be refused. Deleting cannot be undone.`
+              : `${plural(exam.stageCount, 'stage')} still hang off ${exam.code}, and deleting it will be refused. Retire the exam instead. It keeps everything it has and is simply no longer offered.`
+          }
+        >
+          {isSuperAdmin ? (
+            <DropdownMenuItem onSelect={() => onEdit(exam)}>
+              <Pencil aria-hidden />
+              Edit
+            </DropdownMenuItem>
+          ) : null}
+        </RetireDeleteActions>
+      ),
+    },
+  ];
+}
+
+/** Every filter the bar can clear. Two controls, so nothing folds. */
+const EXAM_FILTERS = [
+  { key: 'q', kind: 'search', label: 'Search exams', placeholder: 'Search exams', primary: true },
+  {
+    key: 'course',
+    kind: 'multi',
+    label: 'Filter by course',
+    primary: true,
+    placeholder: 'Any course',
+    items: COURSE_ITEMS,
+  },
+] as const;
+
+/** Anyone managing students may read the catalog, because they pick from it. Only a super admin writes. */
+export function ExamsPage() {
+  const { identity: admin } = useAuth();
+  const canWrite = admin?.isSuperAdmin ?? false;
+  const [dialog, setDialog] = useState<Exam | typeof NEW_RECORD | null>(null);
+  const queryClient = useQueryClient();
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAMS });
+  }, [queryClient]);
+
+  const columns = useMemo(() => examColumns(canWrite, refresh, setDialog), [canWrite, refresh]);
+
+  const exams = useListScreen({
+    queryKey: QUERY_KEYS.EXAMS,
+    filters: EXAM_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      course: values.course as Exam['course'][],
+    }),
+    fetchPage: (params) => api.admin.exams.list(params),
+  });
+
+  const header = (
+    <>
+      <PageHeader
+        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+        title="Exams"
+        action={
+          canWrite ? (
+            <Button size="sm" onClick={() => setDialog(NEW_RECORD)}>
+              <Plus aria-hidden />
+              New exam
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {!canWrite ? (
+        <Alert variant="info">
+          <span>
+            Only a super admin can add or change the catalog. You can see it to pick from.
+          </span>
+        </Alert>
+      ) : null}
+    </>
+  );
+
+  return (
+    <TableFrame header={header}>
+      {/* Mounted only while open and keyed by its row, so its defaults are the row that was clicked. */}
+      {dialog ? (
+        <ExamDialog
+          key={dialog === NEW_RECORD ? NEW_RECORD : dialog.id}
+          exam={dialog === NEW_RECORD ? null : dialog}
+          onDone={() => {
+            setDialog(null);
+            refresh();
+          }}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+
+      <ListView
+        list={exams}
+        filters={EXAM_FILTERS}
+        columns={columns}
+        rowKey={(exam) => exam.id}
+        empty={{ title: 'No exams yet', hint: 'Add the first one. Every stage hangs off it.' }}
+        emptyFiltered="No exams match those filters"
+        expand={{
+          render: (exam) => <ExamStages exam={exam} canWrite={canWrite} />,
+          label: (exam) => `Show the stages under ${exam.name}`,
+        }}
+      />
+    </TableFrame>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+// A code is editable until a student enrolls, then the server refuses (examEditBlocker) — the save is what blocks it, not this input.
+function ExamDialog({
+  exam,
+  onDone,
+  onClose,
+}: Readonly<{ exam: Exam | null; onDone: () => void; onClose: () => void }>) {
+  const form = useForm<CreateExamInput>({
+    resolver: zodResolver(createExamSchema),
+    defaultValues: exam
+      ? { course: exam.course, name: exam.name, code: exam.code }
+      : { course: DEFAULT_EXAM_COURSE, name: '', code: '' },
+  });
+
+  const save = useMutation({
+    meta: { success: exam ? 'Exam saved.' : 'Exam created.', fields: EXAM_FIELDS },
+    mutationFn: (values: CreateExamInput) =>
+      exam ? api.admin.exams.update(exam.id, values) : api.admin.exams.create(values),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, EXAM_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={exam ? `Edit ${exam.name}` : 'New exam'}
+      submitLabel={exam ? 'Save' : 'Create'}
+      loading={save.isPending}
+    >
+      <FormCombobox form={form} name="course" label="Course" items={COURSE_ITEMS} />
+
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} placeholder="SSC Combined Graduate Level" autoFocus />}
+      </FormField>
+
+      <FormField
+        form={form}
+        name="code"
+        label="Code"
+        /* ui-copy-ok: rule */ hint={exam ? 'Locked once a student is enrolled' : undefined}
+      >
+        {(control) => <Input {...control} className={UPPERCASE_CODE} placeholder="SSC CGL" />}
+      </FormField>
+    </FormDialog>
+  );
+}
+
+// ============================================================================
+// Stages
+// ============================================================================
+
+const NEW_STAGE_FIELDS = ['examId', 'stageKey', 'name', 'order'] as const;
+const EDIT_STAGE_FIELDS = ['stageKey', 'name', 'order'] as const;
+
+/** What each disposition means for a stage — the difference between a mock and a listing. */
+const DISPOSITION_LABELS: Readonly<Record<(typeof STAGE_DISPOSITIONS)[number], string>> = {
+  CONDUCTED: 'Conducted',
+  PARTIAL: 'Partly conducted',
+  CATALOG_ONLY: 'Listed only',
+};
+
+const DISPOSITION_ITEMS = STAGE_DISPOSITIONS.map((value) => ({
+  value,
+  label: DISPOSITION_LABELS[value],
+}));
+
+const MODE_ITEMS = EXAM_MODES.map((mode) => ({ value: mode, label: mode }));
+
+const DISPOSITION_VARIANT = {
+  CONDUCTED: 'success',
+  PARTIAL: 'info',
+  CATALOG_ONLY: 'neutral',
+} as const;
+
+function stageColumns(
+  canWrite: boolean,
+  refresh: () => void,
+  onEdit: (stage: ExamStage) => void,
+): DataTableColumn<ExamStage>[] {
+  return [
+    { key: 'order', header: '#', numeric: true, cell: (stage) => stage.order },
+    {
+      key: 'name',
+      header: 'Stage',
+      className: 'max-w-[16rem] font-medium',
+      cell: (stage) => <TruncatedText>{stage.name}</TruncatedText>,
+    },
+    {
+      key: 'stageKey',
+      header: 'Key',
+      cell: (stage) => <span className="font-mono text-sm">{stage.stageKey}</span>,
+    },
+    { key: 'mode', header: 'Mode', cell: (stage) => <Badge variant="neutral">{stage.mode}</Badge> },
+    {
+      key: 'disposition',
+      header: 'Runs as',
+      cell: (stage) => (
+        <Badge variant={DISPOSITION_VARIANT[stage.disposition]}>
+          {DISPOSITION_LABELS[stage.disposition]}
+        </Badge>
+      ),
+    },
+    { key: 'configs', header: 'Configurations', numeric: true, cell: (stage) => stage.configCount },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (stage) => <ActiveStatus isActive={stage.isActive} />,
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (stage) => (
+        <RetireDeleteActions
+          name={stage.name}
+          noun="stage"
+          isActive={stage.isActive}
+          canEdit={canWrite}
+          resource={api.admin.examStages}
+          id={stage.id}
+          onChanged={refresh}
+          deleteTitle={`${stage.exam.code} / ${stage.name}`}
+          retireText={
+            stage.isActive
+              ? `Nothing it already holds changes. ${plural(stage.configCount, 'base configuration')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a configuration, a series or a test. Reactivating puts it back.`
+              : 'The stage is offered again when anyone builds a configuration, a series or a test. Nothing else changes.'
+          }
+          deleteText={
+            stage.configCount + stage.testCount + stage.seriesCount === 0
+              ? `Nothing hangs off ${stage.stageKey}. Deleting cannot be undone.`
+              : `${plural(stage.configCount, 'base configuration')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead. It keeps everything it has and is simply no longer offered.`
+          }
+        >
+          {canWrite ? (
+            <DropdownMenuItem onSelect={() => onEdit(stage)}>
+              <Pencil aria-hidden />
+              Edit
+            </DropdownMenuItem>
+          ) : null}
+        </RetireDeleteActions>
+      ),
+    },
+  ];
+}
+
+/** The stages of ONE exam, under its row. The exam is the context, so it is not a column here. */
+function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean }>) {
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<ExamStage | null>(null);
+  const queryClient = useQueryClient();
+  const examId = exam.id;
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAM_STAGES });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAMS });
+  }, [queryClient]);
+
+  const startEdit = useCallback((stage: ExamStage) => {
+    setCreating(false);
+    setEditing(stage);
+  }, []);
+
+  const columns = useMemo(
+    () => stageColumns(canWrite, refresh, startEdit),
+    [canWrite, refresh, startEdit],
+  );
+
+  // Keyed by the exam, so opening a second row does not read the first one's page.
+  const stages = useListScreen({
+    queryKey: examStagesQueryKey(examId),
+    filters: [],
+    toQuery: () => ({ examId }),
+    fetchPage: (params) => api.admin.examStages.list(params),
+  });
+
+  return (
+    <div className="flex flex-col gap-3">
+      {canWrite ? (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setEditing(null);
+              setCreating(true);
+            }}
+          >
+            <Plus aria-hidden />
+            New stage
+          </Button>
+        </div>
+      ) : null}
+
+      <NewStageDialog
+        examId={examId}
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          refresh();
+        }}
+      />
+
+      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
+      {editing ? (
+        <EditStageDialog
+          key={editing.id}
+          stage={editing}
+          onDone={() => {
+            setEditing(null);
+            refresh();
+          }}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+
+      <ListView
+        list={stages}
+        columns={columns}
+        rowKey={(stage) => stage.id}
+        empty={{
+          title: 'No stages here yet',
+          hint: 'A base config, a series and a test all hang off one.',
+        }}
+      />
+    </div>
+  );
+}
+
+function NewStageDialog({
+  examId,
+  open,
+  onOpenChange,
+  onDone,
+}: Readonly<{
+  examId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}>) {
+  const form = useForm<CreateExamStageInput>({
+    resolver: zodResolver(createExamStageSchema),
+    // Seeded from the filter: adding stages to the exam you are looking at is the normal case.
+    defaultValues: {
+      examId,
+      stageKey: '',
+      name: '',
+      order: 0,
+      mode: DEFAULT_EXAM_MODE,
+      disposition: DEFAULT_STAGE_DISPOSITION,
+    },
+  });
+  const chosenExam = useWatch({ control: form.control, name: 'examId' }) ?? '';
+
+  const create = useMutation({
+    meta: { success: 'Stage added.', fields: NEW_STAGE_FIELDS },
+    mutationFn: (values: CreateExamStageInput) => api.admin.examStages.create(values),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, NEW_STAGE_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+      title="New stage"
+      submitLabel="Add stage"
+      loading={create.isPending}
+    >
+      <FormField form={form} name="examId" label="Exam">
+        {(control) => (
+          <ExamPicker
+            id={control.id}
+            value={chosenExam}
+            placeholder="Choose an exam"
+            onChange={(value) => form.setValue('examId', value, { shouldValidate: true })}
+          />
+        )}
+      </FormField>
+
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} placeholder="Tier 1" autoFocus />}
+      </FormField>
+
+      <FormField form={form} name="stageKey" label="Key">
+        {(control) => <Input {...control} className={UPPERCASE_CODE} placeholder="SSC_CGL_T1" />}
+      </FormField>
+
+      <FormField form={form} name="order" label="Order" /* ui-copy-ok: rule */ hint="Lowest first">
+        {(control) => <NumericInput {...control} {...form.register('order')} />}
+      </FormField>
+
+      <FormCombobox form={form} name="mode" label="Mode" items={MODE_ITEMS} />
+
+      <FormCombobox form={form} name="disposition" label="Runs as" items={DISPOSITION_ITEMS} />
+    </FormDialog>
+  );
+}
+
+/** A stage never moves exam, so the exam is stated here rather than offered. */
+function EditStageDialog({
+  stage,
+  onDone,
+  onClose,
+}: Readonly<{ stage: ExamStage; onDone: () => void; onClose: () => void }>) {
+  const form = useForm<UpdateExamStageInput>({
+    resolver: zodResolver(updateExamStageSchema),
+    defaultValues: {
+      stageKey: stage.stageKey,
+      name: stage.name,
+      order: stage.order,
+      mode: stage.mode,
+      disposition: stage.disposition,
+    },
+  });
+
+  const save = useMutation({
+    meta: { success: 'Stage saved.', fields: EDIT_STAGE_FIELDS },
+    mutationFn: (values: UpdateExamStageInput) => api.admin.examStages.update(stage.id, values),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, EDIT_STAGE_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={`Edit ${stage.exam.code} / ${stage.name}`}
+      submitLabel="Save"
+      loading={save.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} autoFocus />}
+      </FormField>
+
+      <FormField
+        form={form}
+        name="stageKey"
+        label="Key"
+        /* ui-copy-ok: rule */ hint={
+          stage.configCount > 0
+            ? `${plural(stage.configCount, 'base configuration')} hangs off this key, so it can no longer change.`
+            : 'Free to change only while no base configuration hangs off it.'
+        }
+      >
+        {(control) => (
+          <Input {...control} disabled={stage.configCount > 0} className={UPPERCASE_CODE} />
+        )}
+      </FormField>
+
+      <FormField form={form} name="order" label="Order" /* ui-copy-ok: rule */ hint="Lowest first">
+        {(control) => <NumericInput {...control} {...form.register('order')} />}
+      </FormField>
+
+      <FormCombobox form={form} name="mode" label="Mode" items={MODE_ITEMS} />
+
+      <FormCombobox form={form} name="disposition" label="Runs as" items={DISPOSITION_ITEMS} />
+    </FormDialog>
+  );
+}

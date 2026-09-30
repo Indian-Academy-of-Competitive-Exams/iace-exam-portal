@@ -8,8 +8,8 @@ import {
   passedOpenings,
   savedOffer,
   type OfferDraft,
-} from '../src/routes/test-offer-draft';
-import type { ProgramOpening } from '../src/routes/test-schedule-draft';
+} from '../src/features/tests/test-offer-draft';
+import type { ProgramOpening } from '../src/features/tests/test-schedule-draft';
 
 const draftTest = (over: Partial<OfferDraft> = {}): OfferDraft => ({
   series: { id: 'srs_1', name: 'SSC CGL Mocks' },

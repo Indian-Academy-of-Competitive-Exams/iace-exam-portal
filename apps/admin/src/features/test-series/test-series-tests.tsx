@@ -1,0 +1,258 @@
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRightLeft, BarChart3, FileText, Plus } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import {
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  type SeriesTestRow,
+  type TestSeriesDetail,
+  type TestSeriesSummary,
+} from '@iace/contracts';
+import {
+  Button,
+  ConfirmDialog,
+  DataTable,
+  DropdownMenuItem,
+  FormDialog,
+  FormField,
+  FormSection,
+  RowActions,
+  TruncatedText,
+  linkVariants,
+  type DataTableColumn,
+} from '@iace/ui';
+import { applyFieldErrors } from '@iace/app-kit';
+import { TestStatusBadges } from '../../components/test-status-badges';
+import { durationLabel, opensLabel } from '../../lib/duration';
+import { api } from '../../lib/api';
+import { QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { useAuth } from '../../providers/auth';
+import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { testsKey } from './test-series-detail';
+
+interface MoveFormValues {
+  testSeriesId: string;
+}
+
+/** The one field the server can refuse a move on, so it lands inline instead of also being toasted. */
+const MOVE_FIELDS = ['testSeriesId'] as const;
+export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) {
+  const queryClient = useQueryClient();
+  const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [moving, setMoving] = useState<SeriesTestRow | null>(null);
+  const columns = useMemo(
+    () => testColumns({ canWrite, reached: series.reachedCount, onMoving: setMoving }),
+    [canWrite, series.reachedCount],
+  );
+
+  const tests = useQuery({
+    queryKey: testsKey(series.id),
+    queryFn: () => api.admin.testSeries.tests(series.id),
+  });
+
+  // Both series' lists and counts move, and the test's own record names its new series.
+  const moved = () => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
+  };
+
+  return (
+    <FormSection title="Tests">
+      {canWrite ? (
+        <div className="flex justify-end">
+          <Button size="sm" asChild>
+            {/* The series goes with it, so the builder opens knowing it and often the stage. */}
+            <Link to={`${ROUTES.TEST_NEW}?series=${series.id}`}>
+              <Plus aria-hidden />
+              New test
+            </Link>
+          </Button>
+        </div>
+      ) : null}
+
+      <DataTable
+        columns={columns}
+        rows={tests.data ?? []}
+        rowKey={(row) => row.testId}
+        isLoading={tests.isLoading}
+        isError={tests.isError}
+        onRetry={tests.refetch}
+        empty={{
+          title: 'No test in this series yet',
+          hint: 'Build the first one here; its Offer step sets when it opens.',
+        }}
+      />
+
+      {moving ? (
+        <MoveDialog
+          key={moving.testId}
+          series={series}
+          row={moving}
+          onClose={() => setMoving(null)}
+          onMoved={moved}
+        />
+      ) : null}
+    </FormSection>
+  );
+}
+
+const UNTITLED = 'Untitled test';
+
+function testColumns(
+  options: Readonly<{
+    canWrite: boolean;
+    reached: number;
+    onMoving: (row: SeriesTestRow) => void;
+  }>,
+): DataTableColumn<SeriesTestRow>[] {
+  const { canWrite, reached, onMoving } = options;
+
+  return [
+    { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
+    {
+      key: 'title',
+      header: 'Test',
+      className: 'max-w-[18rem] font-medium',
+      cell: (row) => (
+        <Link to={ROUTES.TEST(row.testId)} className={linkVariants()}>
+          <TruncatedText>{row.title ?? UNTITLED}</TruncatedText>
+        </Link>
+      ),
+    },
+    { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.totalQuestions },
+    {
+      key: 'duration',
+      header: 'Duration',
+      numeric: true,
+      cell: (row) => durationLabel(row.durationSec),
+    },
+    {
+      key: 'opens',
+      header: 'Opens',
+      className: 'max-w-56',
+      cell: (row) => <TruncatedText>{opensLabel(row.unlockAt)}</TruncatedText>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (row) => <TestStatusBadges status={row.status} finalizedAt={row.finalizedAt} />,
+    },
+    {
+      key: 'sat',
+      header: 'Sat',
+      numeric: true,
+      className: 'whitespace-nowrap',
+      cell: (row) =>
+        `${row.attemptCount.toLocaleString('en-IN')} / ${reached.toLocaleString('en-IN')}`,
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (row) => (
+        <RowActions label={`Actions for ${row.title ?? UNTITLED}`}>
+          <DropdownMenuItem asChild>
+            <Link to={ROUTES.TEST_ANALYTICS(row.testId)}>
+              <BarChart3 aria-hidden />
+              Analytics
+            </Link>
+          </DropdownMenuItem>
+          {/* Left out rather than offered and refused: the paper waits on the source. */}
+          {row.paperSource ? (
+            <DropdownMenuItem asChild>
+              <Link to={ROUTES.TEST_PAPER(row.testId)}>
+                <FileText aria-hidden />
+                Paper
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+          {/* Unsat-only: a sat test's series is part of the record. */}
+          {canWrite && row.attemptCount === 0 ? (
+            <DropdownMenuItem onSelect={() => onMoving(row)}>
+              <ArrowRightLeft aria-hidden />
+              Move to another series
+            </DropdownMenuItem>
+          ) : null}
+        </RowActions>
+      ),
+    },
+  ];
+}
+
+function MoveDialog({
+  series,
+  row,
+  onClose,
+  onMoved,
+}: Readonly<{
+  series: TestSeriesSummary;
+  row: SeriesTestRow;
+  onClose: () => void;
+  onMoved: () => void;
+}>) {
+  const form = useForm<MoveFormValues>({ defaultValues: { testSeriesId: '' } });
+  const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES);
+  // Picked, not yet moved: choosing a series and agreeing to lose the old one are two questions.
+  const [confirming, setConfirming] = useState<ChosenSeries | null>(null);
+
+  const move = useMutation({
+    meta: { success: 'Test moved.', fields: MOVE_FIELDS },
+    mutationFn: (testSeriesId: string) =>
+      api.admin.tests.moveToSeries(row.testId, { testSeriesId }),
+    onSuccess: () => {
+      onClose();
+      onMoved();
+    },
+    onError: (error) => {
+      setConfirming(null);
+      applyFieldErrors(error, form.setError, MOVE_FIELDS);
+    },
+  });
+
+  /** A new pick clears whatever the server refused the last one with. */
+  const choose = (next: ChosenSeries) => {
+    setChosen(next);
+    form.setValue('testSeriesId', next.id, { shouldDirty: true });
+    form.clearErrors('testSeriesId');
+  };
+
+  return (
+    <>
+      <FormDialog
+        open={confirming === null}
+        onOpenChange={(open) => !open && onClose()}
+        form={form}
+        onSubmit={() => chosen.id !== '' && setConfirming(chosen)}
+        title={`Move ${row.title ?? 'this test'} to another series`}
+        description={`It is offered through ${series.name} today.`}
+        submitLabel="Choose it"
+        loading={move.isPending}
+      >
+        <FormField form={form} name="testSeriesId" label="Series">
+          {(control) => (
+            <TestSeriesPicker
+              id={control.id}
+              value={chosen.id}
+              selectedLabel={chosen.name || undefined}
+              placeholder="Choose a series"
+              clearable={false}
+              forExamStageId={series.examStageId ?? undefined}
+              onChange={choose}
+            />
+          )}
+        </FormField>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={`Move ${row.title ?? 'this test'} to ${confirming?.name ?? ''}?`}
+        description={`Students reached through ${series.name} stop being offered it, and students reached through ${confirming?.name ?? ''} start. Its paper and its opening time are untouched.`}
+        confirmLabel="Move it"
+        loading={move.isPending}
+        onConfirm={() => confirming && move.mutate(confirming.id)}
+      />
+    </>
+  );
+}
