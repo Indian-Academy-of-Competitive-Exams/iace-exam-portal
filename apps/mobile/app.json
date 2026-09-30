@@ -7,8 +7,7 @@
     "userInterfaceStyle": "light",
     "scheme": "iace-mobile",
     "android": {
-      "package": "in.co.iace.mobile",
-      "googleServicesFile": "./google-services.json"
+      "package": "in.co.iace.mobile"
     },
     "plugins": [
       "expo-router",
