@@ -3,16 +3,17 @@
  * candidate can make is on this one object, so a skin holds no state, owns no
  * clock and reaches for no mutation — it renders what it is handed.
  */
-import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
-import type {
-  ExamClock,
-  ExamQuestion,
-  ExamSection,
-  LanguageCode,
-  LanguageMode,
-  LiveAnswer,
-  PaletteCounts,
-  TestUi,
+import {
+  ANSWER_STATE,
+  type AnswerState,
+  type ExamClock,
+  type ExamQuestion,
+  type ExamSection,
+  type LanguageCode,
+  type LanguageMode,
+  type LiveAnswer,
+  type PaletteCounts,
+  type TestUi,
 } from '@iace/contracts';
 
 /** What each of the five states is called, so the two clients' palettes can never name one differently. */

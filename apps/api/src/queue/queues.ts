@@ -126,7 +126,7 @@ export function rollupRebuildStudentJobId(studentId: string): string {
 }
 
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
-export const ROLLUP_REBUILD_DELAY_MS = MS_PER_MINUTE;
+export const ROLLUP_REBUILD_DELAY_MS = 1 * MS_PER_MINUTE;
 
 /** The push sweep, and the sweep that notices tests opening by the clock. */
 export const NOTIFICATION_JOBS = {
@@ -136,7 +136,7 @@ export const NOTIFICATION_JOBS = {
 } as const;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
-export const NOTIFICATION_SWEEP_EVERY_MS = MS_PER_MINUTE;
+export const NOTIFICATION_SWEEP_EVERY_MS = 1 * MS_PER_MINUTE;
 
 /** A test opening is not to the minute; five is soon enough and a fifth of the wake-ups. */
 export const TESTS_OPENED_SWEEP_EVERY_MS = 5 * MS_PER_MINUTE;
@@ -152,7 +152,7 @@ export function notificationDeliveryJobId(deliveryId: string): string {
 }
 
 /** How often the live sittings are drained to Postgres. A crash costs at most this much. */
-export const ATTEMPT_FLUSH_EVERY_MS = MS_PER_MINUTE;
+export const ATTEMPT_FLUSH_EVERY_MS = 1 * MS_PER_MINUTE;
 
 /** How often sittings past their deadline are ended. Slower: nothing is lost by ending one late. */
 export const ATTEMPT_SWEEP_EVERY_MS = 2 * MS_PER_MINUTE;

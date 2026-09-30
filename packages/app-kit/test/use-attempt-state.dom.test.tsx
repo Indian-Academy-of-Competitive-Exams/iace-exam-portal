@@ -1031,11 +1031,9 @@ test('a backlog larger than one batch is saved before the paper goes in, so the 
   await act(async () => void (await Promise.resolve()));
 
   const backlog = SAVE_BATCH_MAX + 30;
-  act(() => {
-    for (let seat = 0; seat < backlog; seat += 1) {
-      result.current.answer(`q${seat}`, { selectedOptionId: 'opt-1' });
-    }
-  });
+  for (let seat = 0; seat < backlog; seat += 1) {
+    result.current.answer(`q${seat}`, { selectedOptionId: 'opt-1' });
+  }
 
   let last: LastBatch | null = null;
   await act(async () => {

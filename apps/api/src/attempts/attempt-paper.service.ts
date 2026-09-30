@@ -23,8 +23,7 @@ import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { StorageService } from '../storage/storage.service';
 import { PaperSheetService, recall, remember, type ServedPaperRow } from './paper-sheet.service';
-import { optionsIn } from '../common/prisma-json';
-import { scopeRefOf } from '../common/prisma-json';
+import { optionsIn, scopeRefOf } from '../common/prisma-json';
 
 /** Named field by field, never `include`: the sitting's own scored columns never load at all. */
 const PAPER_SELECT = {

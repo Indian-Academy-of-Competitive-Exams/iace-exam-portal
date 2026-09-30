@@ -477,9 +477,11 @@ function paperRowsOf(
   const ordered = [...modules].sort((a, b) => a.order - b.order);
   const rankOf = new Map(ordered.map((module, rank) => [module.order, rank]));
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
-  // Only a session paper has modules, and a section names its own by order. Unnamed falls to the first, which is what a one-module paper means without saying it.
+  // Unnamed falls to the first module, which is what a one-module paper means without saying it.
+  const firstRank = ordered.length > 0 ? 0 : null;
+  // Only a session paper has modules, and a section names its own by order.
   const rankFor = (asked: number | null | undefined) =>
-    sessionPaper ? (rankOf.get(asked ?? -1) ?? (ordered.length > 0 ? 0 : null)) : null;
+    sessionPaper ? (rankOf.get(asked ?? -1) ?? firstRank) : null;
 
   return {
     modules: ordered.map((module) => ({

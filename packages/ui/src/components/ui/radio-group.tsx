@@ -38,7 +38,10 @@ export function RadioGroup({
   children,
   ...props
 }: Readonly<RadioGroupProps>) {
-  const context = { name, value, onValueChange, disabled, inline };
+  const context = React.useMemo(
+    () => ({ name, value, onValueChange, disabled, inline }),
+    [name, value, onValueChange, disabled, inline],
+  );
   const labelId = React.useId();
 
   if (inline) {
