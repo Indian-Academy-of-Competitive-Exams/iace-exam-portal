@@ -164,10 +164,16 @@ export class NotificationDeliveryProcessor extends ReportingWorkerHost {
       ORDER BY "queuedAt" ASC
       LIMIT ${REPAIR_BATCH}`;
 
-    // ponytail: sequential, not through the queue's rate limiter — repairs are rare and few.
+    // ponytail: sequential, so a sweep drains at most REPAIR_BATCH a minute; enqueue them instead once a sweep reports a full batch.
     for (const row of stuck) {
       this.logger.warn(`Delivery ${row.id} outlived its window with no worker; forcing a decision`);
       await this.deliver(row.id, ATTEMPT_CAP);
+    }
+
+    if (stuck.length === REPAIR_BATCH) {
+      this.logger.warn(
+        `Repaired a full batch of ${REPAIR_BATCH} stalled deliveries; more are likely still waiting`,
+      );
     }
   }
 
