@@ -24,6 +24,7 @@ import {
 } from '@iace/app-kit/browser';
 import { everySitting, newestFirst, sittingHint } from '@iace/app-kit';
 import {
+  RECENT_STANDINGS,
   TEST_SCOPE_LABELS,
   civilDate,
   instituteDayLabel,
@@ -238,8 +239,9 @@ function daysSince(at: string): number {
 /** The average alone is half the story; the best is what a student is actually chasing. */
 function bestLine(overview: StudentOverview): string {
   const { avgPercentile, bestPercentile } = overview.standing;
-  if (bestPercentile === null) return 'average percentile';
+  const over = `average of your last ${RECENT_STANDINGS}`;
+  if (bestPercentile === null) return over;
   const spread =
     avgPercentile === null ? '' : ` · ${Math.round(bestPercentile - avgPercentile)} above it`;
-  return `average percentile · best ${bestPercentile}${spread}`;
+  return `${over} · best ${bestPercentile}${spread}`;
 }

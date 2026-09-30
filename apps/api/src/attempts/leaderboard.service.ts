@@ -34,9 +34,12 @@ export class LeaderboardService {
     return row?.cohort_size ?? 0;
   }
 
-  /** Every graded sitting of one student, each against its own test's cohort, keyed by sitting. */
-  async standingsOfStudent(studentId: string): Promise<ReadonlyMap<string, SittingStanding>> {
-    const rows = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ studentId }));
+  /** One student's graded sittings, newest first, each against its own test's cohort. Bounded by `newest`. */
+  async standingsOfStudent(
+    studentId: string,
+    newest?: number,
+  ): Promise<ReadonlyMap<string, SittingStanding>> {
+    const rows = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ studentId }, newest));
     return sittingsOf(rows);
   }
 

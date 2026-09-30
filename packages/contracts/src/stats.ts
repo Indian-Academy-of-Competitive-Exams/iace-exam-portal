@@ -37,12 +37,15 @@ import {
 export const SUBJECT_SAMPLE_FLOOR = 20;
 
 /** Tallies off `StudentStat`, percentiles live. Every average is null at a zero denominator. */
+/** Sittings a standing figure is counted over. One LATERAL cohort count each, so it is bounded. */
+export const RECENT_STANDINGS = 5;
+
 const overviewStandingSchema = z.object({
   /** Every folded sitting, retakes included — zero means nothing has been sat at all. */
   testsAttempted: z.number().int(),
   testsEvaluated: z.number().int(),
   retakeCount: z.number().int(),
-  /** Over every graded sitting, at the percentile its cohort gives it now — it moves as others sit. */
+  /** Over the RECENT_STANDINGS newest graded sittings, at the percentile each cohort gives it now. */
   avgPercentile: z.number().nullable(),
   bestPercentile: z.number().nullable(),
   avgScore: z.number().nullable(),

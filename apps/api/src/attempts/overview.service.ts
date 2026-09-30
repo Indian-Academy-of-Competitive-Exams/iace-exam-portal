@@ -1,10 +1,12 @@
 /**
  * The overall dashboard: `StudentStat` and `StudentSubjectStat` for the tallies, and the student's
- * live standings for the percentiles, which no rollup can hold still.
+ * live standings for the percentiles, which no rollup can hold still — the newest RECENT_STANDINGS
+ * of them, because each one costs its own cohort count.
  */
 import { Injectable } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import {
+  RECENT_STANDINGS,
   TEST_SCOPE,
   measureOf,
   round2,
@@ -57,7 +59,7 @@ export class StudentOverviewService {
         where: { studentId },
         select: SUBJECT_SELECT,
       }),
-      this.leaderboard.standingsOfStudent(studentId),
+      this.leaderboard.standingsOfStudent(studentId, RECENT_STANDINGS),
     ]);
     const percentiles = percentilesOf(standings);
 

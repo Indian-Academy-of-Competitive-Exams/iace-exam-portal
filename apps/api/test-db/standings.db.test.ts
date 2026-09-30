@@ -200,6 +200,34 @@ describe('standingsOfStudent', () => {
 
     assert.equal((await leaderboard.standingsOfStudent(id)).size, 0);
   });
+
+  /** The failure this prevents: every sitting a student ever sat costing its own cohort count, per read. */
+  it('reads only the newest few when it is bounded, newest by when they were handed in', async () => {
+    const { id: studentId } = await makeStudent(prisma);
+    const sat: { attemptId: string; day: number }[] = [];
+    for (let day = 1; day <= 7; day += 1) {
+      const { id } = await makeSitting(prisma, {
+        testId: await paper(),
+        studentId,
+        score: 100,
+        submittedAt: new Date(Date.UTC(2026, 0, day, 6)),
+      });
+      sat.push({ attemptId: id, day });
+    }
+
+    const standings = await leaderboard.standingsOfStudent(studentId, 3);
+
+    assert.equal(standings.size, 3);
+    assert.deepEqual(
+      [...standings.values()].map((standing) => standing.attemptId).sort(),
+      sat
+        .filter((row) => row.day > 4)
+        .map((row) => row.attemptId)
+        .sort(),
+    );
+    // Unbounded still reads the whole history, which is what a data export asks for.
+    assert.equal((await leaderboard.standingsOfStudent(studentId)).size, 7);
+  });
 });
 
 describe('standingsOf', () => {

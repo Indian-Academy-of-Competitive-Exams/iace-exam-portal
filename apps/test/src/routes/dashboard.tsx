@@ -26,6 +26,7 @@ import {
 } from '@iace/app-kit';
 import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
+  RECENT_STANDINGS,
   instituteDateTimeLabel,
   dispositionRates,
   percentLabel,
@@ -205,13 +206,17 @@ function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
   return (
     <StatBand>
       <Metric
-        label="Average percentile"
+        label={`Average percentile (last ${RECENT_STANDINGS})`}
         value={standing.avgPercentile ?? '—'}
         /* ui-copy-ok: consequence */
         unit={standing.testsEvaluated === 0 ? 'nothing marked yet' : undefined}
         size="sm"
       />
-      <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
+      <Metric
+        label={`Best percentile (last ${RECENT_STANDINGS})`}
+        value={standing.bestPercentile ?? '—'}
+        size="sm"
+      />
       <Metric label="Average score" value={standing.avgScore ?? '—'} size="sm" />
       <Metric label="Sittings" value={standing.testsAttempted} size="sm" />
       <Metric label="Accuracy" value={percentLabel(rates.accuracy, '—')} size="sm" />

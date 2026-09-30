@@ -43,15 +43,26 @@ function chosenSittings(where: StandingsWhere): Prisma.Sql {
 }
 
 /** Each chosen sitting counted against its test's cohort, one LATERAL count per sitting. */
-export function standingsSql(where: StandingsWhere): Prisma.Sql {
+export function standingsSql(where: StandingsWhere, newest?: number): Prisma.Sql {
   const chosen = chosenSittings(where);
+  // Chosen BEFORE the laterals, so a bound is a bound on how many cohorts are counted.
+  const bounded =
+    newest === undefined
+      ? Prisma.empty
+      : Prisma.sql`ORDER BY a."submittedAt" DESC NULLS LAST, a."id" DESC LIMIT ${newest}`;
   return Prisma.sql`
+    WITH chosen AS (
+      SELECT a."id", a."testId", a."score", a."timeTakenSec"
+      FROM "Attempt" a
+      WHERE ${chosen} AND ${IN_COHORT}
+      ${bounded}
+    )
     SELECT a."id" AS attempt_id,
            a."testId" AS test_id,
            c.rank::int AS rank,
            sitting_percentile(c.outscored, c.tied, c.cohort)::float8 AS percentile,
            c.cohort::int AS cohort_size
-    FROM "Attempt" a
+    FROM chosen a
     CROSS JOIN LATERAL (
       SELECT COUNT(*) AS cohort,
              COUNT(*) FILTER (WHERE b."score" < a."score") AS outscored,
@@ -67,7 +78,6 @@ export function standingsSql(where: StandingsWhere): Prisma.Sql {
       FROM "Attempt" b
       WHERE b."testId" = a."testId" AND ${IN_COHORT}
     ) c
-    WHERE ${chosen} AND ${IN_COHORT}
   `;
 }
 

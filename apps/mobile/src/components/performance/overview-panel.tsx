@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { everySitting, minutes, newestFirst, sittingHint } from '@iace/app-kit';
 import {
+  RECENT_STANDINGS,
   dispositionRates,
   effortPerSitting,
   instituteDayLabel,
@@ -115,7 +116,7 @@ function Standing({ overview }: Readonly<{ overview: StudentOverview }>) {
 
   return (
     <Hero
-      eyebrow="Average percentile"
+      eyebrow={`Average percentile · last ${RECENT_STANDINGS}`}
       meta={lastAttemptAt === null ? undefined : `Last sat ${instituteDayLabel(lastAttemptAt)}`}
     >
       <HeroFigure
