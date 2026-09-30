@@ -65,9 +65,9 @@ const GREETINGS = [
   { until: 24, word: 'Good evening' },
 ] as const;
 
-/** The first name only: a greeting is not a formal address. */
+/** The name as the roster holds it, so the greeting reads the same on both clients. */
 export function greetingFor(now: Date, name: string | null | undefined): string {
   const hour = Number(instituteWallTime(now).slice(11, 13));
   const word = (GREETINGS.find((band) => hour < band.until) ?? GREETINGS[2]).word;
-  return name ? `${word}, ${name.trim().split(/\s+/)[0]}` : word;
+  return name ? `${word}, ${name}` : word;
 }

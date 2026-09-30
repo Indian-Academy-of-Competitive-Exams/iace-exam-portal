@@ -95,13 +95,17 @@ describe('when a submit decides whether to try again', () => {
 
   it('never retries a refusal the server actually answered', () => {
     const refused = new AppException(ErrorCodes.SITTING_TAKEN_OVER);
+    assert.equal(refused.httpStatus < 500, true, 'a refusal is a 4xx');
     assert.equal(shouldRetrySubmit(0, refused), false);
   });
 
-  it('never retries a server error that did land', () => {
-    const landed = new AppException(ErrorCodes.INTERNAL);
-    assert.equal(landed.httpStatus === 0, false, 'INTERNAL default status is not 0');
-    assert.equal(shouldRetrySubmit(0, landed), false);
+  /** The failure this prevents: a 502 from a saturated proxy at the deadline, taking the last batch with it. */
+  it('retries a server fault and a throttle, which never reached the paper', () => {
+    const faulted = new AppException(ErrorCodes.INTERNAL, 'x', { httpStatus: 502 });
+    const throttled = new AppException(ErrorCodes.INTERNAL, 'x', { httpStatus: 429 });
+    assert.equal(shouldRetrySubmit(0, faulted), true);
+    assert.equal(shouldRetrySubmit(0, throttled), true);
+    assert.equal(shouldRetrySubmit(3, faulted), false, 'still capped at 3');
   });
 
   it('delays 1s, 2s, 4s, never more than 8s', () => {
