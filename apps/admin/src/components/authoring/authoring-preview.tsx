@@ -24,7 +24,7 @@ export function AuthoringPreview({
       <RichContent html={content.stem} lang={language} />
 
       {isMcq ? (
-        <ol className="flex flex-col gap-2 border-t border-dotted border-border-strong pt-4">
+        <ol className="flex flex-col gap-2">
           {content.options.map((option, index) => (
             <li
               key={optionLetter(index)}

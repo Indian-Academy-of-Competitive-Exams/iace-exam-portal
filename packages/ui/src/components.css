@@ -256,8 +256,9 @@ h3 {
   font-size: var(--text-xs);
 }
 
-/* Dotted, so an option's area is bounded without reading as the rule that closes the options. */
-.scaffold-content .scaffold-region[data-kind='seat'] + .scaffold-region[data-kind='seat'] {
+/* Dotted, so a slot's area is bounded without reading as the solid rule that closes the options. */
+.scaffold-content .scaffold-region + .scaffold-region[data-kind='seat'],
+.scaffold-content .scaffold-region[data-kind='named'] + .scaffold-region[data-kind='named'] {
   border-top: 1px dotted var(--border);
 }
 
