@@ -16,7 +16,7 @@ const ASSET_PREFIX = '/assets/';
 /** An exam is never served from cache: offline, it must fail rather than look like it opened. */
 const EXAM_PATH = /^\/tests\/[^/]+\/exam$/;
 
-/** Its twin is PUSH_RECEIVED in apps/test/src/lib/constants.ts; this file is served, never bundled. */
+/** Its twin is PUSH_RECEIVED in apps/exams/src/lib/constants.ts; this file is served, never bundled. */
 const PUSH_RECEIVED = 'push-received';
 
 self.addEventListener('install', (event) => {

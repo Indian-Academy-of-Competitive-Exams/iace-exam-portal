@@ -8,9 +8,9 @@
       "port": 5174
     },
     {
-      "name": "test",
+      "name": "exams",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@iace/test", "dev"],
+      "runtimeArgs": ["--filter", "@iace/exams", "dev"],
       "port": 5173
     },
     {

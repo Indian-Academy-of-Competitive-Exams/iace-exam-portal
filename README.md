@@ -9,7 +9,7 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 - **`docs/02-domain-rules.md`** — the mock-test rules the schema cannot state.
 - **`docs/03-conventions.md`** — where code goes, table ownership, the event catalog.
 - **`docs/design/design-system.html`** — the living style guide, and the **admin** composition language (open in a browser).
-- **`docs/design/student/README.md`** — the **student** composition language, binding for every `apps/test` screen.
+- **`docs/design/student/README.md`** — the **student** composition language, binding for every `apps/exams` screen.
 - **`docs/local-setup.md`** — the same run-through as below, at a new machine's pace.
 - **`prisma/schema.prisma`** — the data model (source of truth).
 
@@ -17,7 +17,7 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 
 TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP). No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
 
-`apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
+`apps/exams` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
 `apps/mobile` is the student client in Expo + React Native (Android first). It is **in progress and not yet shipped**: the screens are built, push is dark until Firebase is wired, and nothing is device-verified. It shares `@iace/contracts` and `@iace/app-kit` with the SPAs and nothing else — `@iace/ui` is web, so the mobile app has its own components.
 

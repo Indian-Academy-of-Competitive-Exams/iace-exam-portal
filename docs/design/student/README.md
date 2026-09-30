@@ -1,12 +1,12 @@
 # Student portal — the design language
 
-The rules the student portal (`apps/test`) is built to. `ui-conventions` is binding for
+The rules the student portal (`apps/exams`) is built to. `ui-conventions` is binding for
 both portals and points here for the bullets where the two differ; everything structural
-and editorial in that skill applies to `apps/test` unchanged.
+and editorial in that skill applies to `apps/exams` unchanged.
 
 The mockups this was written from are gone: they were a starting point, and a screenshot
 of an early idea outlives its usefulness the day the screen ships. The rules below and
-the pattern layer in `apps/test/src/components/ui/` are what the portal is built to.
+the pattern layer in `apps/exams/src/components/ui/` are what the portal is built to.
 
 Admin's language is `docs/design/design-system.html`. This one is not a second design
 system — it is the same tokens composed differently.
@@ -72,7 +72,7 @@ shell's own narrow width, with the walk in its `footer` so the controls do not s
 
 ## The component vocabulary
 
-The student pattern layer belongs in `apps/test/src/components/ui/` — with the web app
+The student pattern layer belongs in `apps/exams/src/components/ui/` — with the web app
 rather than in `packages/ui`, because the post-V1 React Native app will not reuse web
 components. Each piece is thin: a shared atom plus the rules above, and no new tokens.
 

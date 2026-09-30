@@ -181,7 +181,7 @@ pnpm dev          # Turborepo runs api + test + admin together
 | Test / student portal | http://localhost:5173                                              |
 | Admin panel           | http://localhost:5174                                              |
 
-To run just one: `pnpm --filter @iace/api dev` (or `@iace/test`, `@iace/admin`).
+To run just one: `pnpm --filter @iace/api dev` (or `@iace/exams`, `@iace/admin`).
 
 **The mobile app runs in its own terminal**, and deliberately not under `pnpm dev`: Metro is
 restarted far more often than the API is, and sharing one process makes every reload cost all four.
@@ -277,5 +277,5 @@ The SonarQube scan is the exception and is **opt-in**: it regenerates coverage b
 - `docs/02-domain-rules.md` — the mock‑test rules the schema cannot state.
 - `docs/03-conventions.md` — what's shared, module boundaries, table ownership, events.
 - `docs/design/design-system.html` — the living style guide, and the admin composition language.
-- `docs/design/student/README.md` — the student composition language, binding for every `apps/test` screen.
+- `docs/design/student/README.md` — the student composition language, binding for every `apps/exams` screen.
 - `prisma/schema.prisma` — the data model (source of truth).

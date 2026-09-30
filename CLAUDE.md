@@ -23,7 +23,7 @@ SI/Constable), replacing ThinkExam.
 
 - **V1 = the mock-test feature.** One developer + AI pair, ~45 days.
 - **Scale:** ~3K concurrent normal, handle 6K, 8K with minor infra additions. Should be easily able to handle 10K as well - within current infra limits.
-- **Portals:** **Test** (`apps/test`, V1) and **Admin** (`apps/admin`, V1); a broad Student portal later.
+- **Portals:** **Test** (`apps/exams`, V1) and **Admin** (`apps/admin`, V1); a broad Student portal later.
   A **mobile** student client (`apps/mobile`, Expo, Android first) - not launched, development done mostly.
 - **Rollout:** internal IACE students first, by branch and enrolment; public later.
 
@@ -62,7 +62,7 @@ Do not break these — they are why the live test holds at 6–8K:
 - `docs/04-infrastructure.md` — what it runs on: the AWS sizing, what each piece costs and why,
   the release runbook, and what was deliberately deferred.
 - `docs/design/design-system.html` — living style guide, and the **admin** composition language.
-- `docs/design/student/README.md` — the **student** composition language for `apps/test`.
+- `docs/design/student/README.md` — the **student** composition language for `apps/exams`.
   One token set, two compositions; `ui-conventions` marks the bullets that differ.
 - `.claude/skills/ui-conventions/` — the binding UI rules. The constraints file above says when to
   invoke it; this is where it lives.

@@ -16,7 +16,7 @@ simplify some, upgrade some, discard the rest.
 
 - **Load:** ~3K concurrent normal, must hold 6K, 8K with minor infra additions, and 10K
   within the same infra limits.
-- **Portals:** Test (`apps/test`) — sitting a test and reading the report; Admin (`apps/admin`) —
+- **Portals:** Test (`apps/exams`) — sitting a test and reading the report; Admin (`apps/admin`) —
   everything that builds and runs one; Mobile (`apps/mobile`) — the student side on Android, in
   progress; a broad Student portal later.
 - **Rollout:** internal IACE students first, by branch and enrolment; public later.

@@ -1,6 +1,6 @@
 ---
 name: ui-conventions
-description: The binding shared-code and UI-behaviour rules for this repo - where a component lives (packages/ui vs app-kit vs apps), the shape of a list screen, navigation, confirm dialogs, loading states, pagination and chips, and which of the two composition languages a screen follows (admin is dense and data-first; apps/test follows the student design language in docs/design/student). Use before writing or changing ANY screen, component, form, table, dialog, filter or nav entry in apps/admin or apps/test, and before adding anything to packages/ui or packages/app-kit.
+description: The binding shared-code and UI-behaviour rules for this repo - where a component lives (packages/ui vs app-kit vs apps), the shape of a list screen, navigation, confirm dialogs, loading states, pagination and chips, and which of the two composition languages a screen follows (admin is dense and data-first; apps/exams follows the student design language in docs/design/student). Use before writing or changing ANY screen, component, form, table, dialog, filter or nav entry in apps/admin or apps/exams, and before adding anything to packages/ui or packages/app-kit.
 ---
 
 # UI conventions
@@ -24,11 +24,11 @@ Files named in a bullet are the shape to STOP copying, not licence to add anothe
 **Two portals, one token set, two composition languages.** Everything below binds BOTH unless a
 bullet says otherwise — where a component lives, the frames and the scrolling, `Combobox`,
 `DatePicker`, confirm dialogs, and every `<copy>` rule are correctness rather than look, and
-`apps/test` needs them as much as `apps/admin`.
+`apps/exams` needs them as much as `apps/admin`.
 
 Where they diverge a bullet is marked: **[admin]** for the dense, data-first language in
 `docs/design/design-system.html`, **[student]** for `docs/design/student/README.md`, which governs
-every `apps/test` screen. **Divergence happens ONLY above the primitive layer** — the tokens in
+every `apps/exams` screen. **Divergence happens ONLY above the primitive layer** — the tokens in
 `packages/ui/src/tokens.css` and the atoms built on them never fork, so a needed value is a shared
 token change, never a one-off in one portal.
 
@@ -156,7 +156,7 @@ primary `#BF0D10`; Cancel neutral grey; destructive crimson `#BE123C`; charts us
 colorblind-safe set, never brand red. Light + dark via CSS variables.
 
 - **[admin]** `docs/design/design-system.html` is the living style guide: dense, data-first.
-- **[student]** `docs/design/student/README.md` is the language for every `apps/test` screen —
+- **[student]** `docs/design/student/README.md` is the language for every `apps/exams` screen —
   the type ramp used at its top end, `--gap-section` rhythm, brick as a sparing accent, a hero
-  before the grid, and the pattern layer in `apps/test/src/components/ui/` that all of it is built
+  before the grid, and the pattern layer in `apps/exams/src/components/ui/` that all of it is built
   from.

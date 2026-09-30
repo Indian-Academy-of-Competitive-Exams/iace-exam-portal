@@ -15,7 +15,7 @@ ADMIN_DISTRIBUTION=${4:?admin distribution id}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-VITE_API_URL="$API_ORIGIN" pnpm --filter @iace/test --filter @iace/admin build
+VITE_API_URL="$API_ORIGIN" pnpm --filter @iace/exams --filter @iace/admin build
 
 publish() {
   local dist=$1 prefix=$2 distribution=$3
@@ -35,7 +35,7 @@ publish() {
     --paths /index.html /sw.js /manifest.webmanifest >/dev/null
 }
 
-publish apps/test/dist student "$STUDENT_DISTRIBUTION"
+publish apps/exams/dist student "$STUDENT_DISTRIBUTION"
 publish apps/admin/dist admin "$ADMIN_DISTRIBUTION"
 
 echo "published against $API_ORIGIN"
