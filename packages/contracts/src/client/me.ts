@@ -53,14 +53,11 @@ import {
 } from '../attempts';
 import {
   OVERVIEW_ROUTES,
-  PERFORMANCE_ROUTES,
   questionReportSchema,
-  satSeriesSchema,
   scoreCardSchema,
   studentOverviewSchema,
   testCalendarSchema,
   type QuestionReport,
-  type SatSeries,
   type ScoreCard,
   type StudentOverview,
   type TestCalendar,
@@ -69,7 +66,7 @@ import {
   LEADERBOARD_ROUTES,
   leaderboardSchema,
   type Leaderboard,
-  type LeaderboardQueryInput,
+  type LeaderboardQuery,
 } from '../leaderboard';
 import {
   notificationSchema,
@@ -199,15 +196,11 @@ export function meClient(core: ApiCore) {
     /** Sitting counts by institute day, for the calendar the trend's twenty cannot fill. */
     testDays: (): Promise<TestCalendar> => get(ME_ATTEMPT_ROUTES.testDays, testCalendarSchema),
 
-    /** Every series they have sat a test in — the SERIES scope has nothing else to offer. */
-    performanceSeries: (): Promise<SatSeries[]> =>
-      get(PERFORMANCE_ROUTES.mySeries, satSeriesSchema.array()),
-
     /** Their whole career off the two rollup tables: standing, disposition and subjects. */
     overview: (): Promise<StudentOverview> => get(OVERVIEW_ROUTES.me, studentOverviewSchema),
 
     /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
-    leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
+    leaderboard: (query: LeaderboardQuery): Promise<Leaderboard> =>
       get(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, leaderboardSchema),
 
     /** Everything they starred, newest first. */

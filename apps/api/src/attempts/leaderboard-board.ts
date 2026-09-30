@@ -1,15 +1,11 @@
 /**
- * Shaping a board out of a ranking. Everything here is pure: how far a reader moved, the name a
- * row may show, and how the rows split between the podium and the table under it.
+ * Shaping a board out of a ranking. Everything here is pure: the name a row may show, and how
+ * the rows split between the podium and the table under it.
  */
 import { LEADERBOARD_PODIUM, type LeaderboardRow } from '@iace/contracts';
 
 /** Shown where a student has no name on file. Never their mobile number — this board is public to peers. */
 const UNNAMED = 'Student';
-
-/** Positive is up the board. Null where nothing was ever recorded to move from. */
-export const deltaOf = (previousRank: number | null, rank: number): number | null =>
-  previousRank === null ? null : previousRank - rank;
 
 export function boardName(fullName: string | null): string {
   const named = fullName?.trim() ?? '';

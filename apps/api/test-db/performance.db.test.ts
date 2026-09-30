@@ -426,18 +426,6 @@ describe('the performance report — the admin path', () => {
   });
 });
 
-describe('the performance report — the series a student may ask about', () => {
-  /** The picker cannot offer a series they never sat: that report would be an empty screen. */
-  it('offers the scope picker only the series the student has sat', async () => {
-    const { student, seriesId, first } = await world();
-    await prisma.testSeries.create({
-      data: { id: uid(), name: 'Untouched', examStageId: first.catalog.examStageId },
-    });
-
-    assert.deepEqual(await service.satSeries(student), [{ id: seriesId, name: SERIES }]);
-  });
-});
-
 /** Every key the report may carry, at any depth. Adding one here is a review, never a side effect. */
 const REPORT_FIELDS = [
   'attemptId',

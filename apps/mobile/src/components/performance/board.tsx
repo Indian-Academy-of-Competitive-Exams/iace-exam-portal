@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { View } from 'react-native';
-import { LEADERBOARD_MEASURE_LABELS, PODIUM_LABELS } from '@iace/app-kit';
+import { PODIUM_LABELS } from '@iace/app-kit';
 import { type Leaderboard, type LeaderboardRow } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { cn } from '../../lib/cn';
@@ -34,7 +34,7 @@ export function Podium({ rows }: Readonly<{ rows: readonly LeaderboardRow[] }>) 
               </Text>
             ) : null}
           </View>
-          <Text className="text-lg font-bold text-foreground">{row.value}</Text>
+          <Text className="text-lg font-bold text-foreground">{row.score}</Text>
         </Card>
       ))}
     </View>
@@ -51,7 +51,7 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
 
   return (
     <View className="gap-3">
-      <Text variant="section">{LEADERBOARD_MEASURE_LABELS[board.measure]}</Text>
+      <Text variant="section">Marks</Text>
       <Card>
         {rows.map((row, index) => (
           <View
@@ -73,19 +73,7 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
                 </Text>
               ) : null}
             </View>
-            <View className="items-end">
-              <Text variant="subsection">{row.value}</Text>
-              {row.deltaRank === null || row.deltaRank === 0 ? null : (
-                <Text
-                  className={cn(
-                    'text-xs',
-                    row.deltaRank > 0 ? 'text-success-ink' : 'text-destructive',
-                  )}
-                >
-                  {`${row.deltaRank > 0 ? '+' : ''}${row.deltaRank}`}
-                </Text>
-              )}
-            </View>
+            <Text variant="subsection">{row.score}</Text>
           </View>
         ))}
       </Card>

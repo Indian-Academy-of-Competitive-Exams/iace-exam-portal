@@ -1,7 +1,6 @@
 /**
  * The admin's way into a student's report, named in the path and paid for with STUDENT_PERFORMANCE.
- * A student reads the same figures for one sitting off its score card, and the calendar and the
- * series picker here.
+ * A student reads the same figures for one sitting off its score card, and the calendar here.
  */
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
@@ -11,7 +10,6 @@ import {
   performanceReportQuerySchema,
   type PerformanceReport,
   type PerformanceReportQuery,
-  type SatSeries,
   type TestCalendar,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
@@ -27,12 +25,6 @@ export class MePerformanceController {
   @Get('days')
   testDays(@CurrentUser() user: AuthenticatedUser): Promise<TestCalendar> {
     return this.performance.testDays(user.id);
-  }
-
-  /** What the SERIES scope may be asked about — a series they have sat, and whether it is a ramp. */
-  @Get('series')
-  series(@CurrentUser() user: AuthenticatedUser): Promise<SatSeries[]> {
-    return this.performance.satSeries(user.id);
   }
 }
 

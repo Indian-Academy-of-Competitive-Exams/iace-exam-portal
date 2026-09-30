@@ -8,7 +8,7 @@ import {
   plural,
   type ComparisonItem,
 } from '@iace/ui';
-import { LEADERBOARD_SCOPES, percentLabel, type CohortCurve } from '@iace/contracts';
+import { percentLabel, type CohortCurve } from '@iace/contracts';
 import { everySitting, isMarkingPending } from '@iace/app-kit';
 import { api } from '../lib/api';
 import { performanceQuery, scoreCardQuery } from '../lib/queries';
@@ -26,8 +26,8 @@ export function ComparePanel() {
   const testId = card.data?.testId ?? '';
   const placed = (card.data?.cohort?.cohortSize ?? 0) > 0;
   const board = useQuery({
-    queryKey: leaderboardQueryKey(LEADERBOARD_SCOPES.TEST, testId),
-    queryFn: () => api.me.leaderboard({ scope: LEADERBOARD_SCOPES.TEST, testId }),
+    queryKey: leaderboardQueryKey(testId),
+    queryFn: () => api.me.leaderboard({ testId }),
     enabled: placed && testId !== '',
   });
 

@@ -4,47 +4,21 @@ import {
   EMPTY_STATE_KINDS,
   Alert,
   Button,
-  Combobox,
   EmptyState,
   PageHeader,
   PanelFrame,
   plural,
   type ListFilter,
 } from '@iace/ui';
-import {
-  boardQueryFor,
-  everySitting,
-  isBoardAsked,
-  LEADERBOARD_SCOPE_LABELS,
-  scopeIdFor,
-} from '@iace/app-kit';
-import { PageCrumbs, useFilters, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
-import {
-  LEADERBOARD_SCOPES,
-  leaderboardScopeSchema,
-  testsSat,
-  type Leaderboard,
-  type SatTest,
-} from '@iace/contracts';
+import { everySitting } from '@iace/app-kit';
+import { PageCrumbs, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
+import { testsSat, type Leaderboard, type SatTest } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceQuery } from '../lib/queries';
-import {
-  NAV_ITEMS,
-  PERFORMANCE_SERIES_QUERY_KEY,
-  ROUTES,
-  leaderboardQueryKey,
-} from '../lib/constants';
+import { NAV_ITEMS, ROUTES, leaderboardQueryKey } from '../lib/constants';
 import { Podium, Standings } from '../components/leaderboard/board';
 import { LEADERBOARD_TOUR, TOUR_IDS, TOUR_TARGETS } from '../lib/tours';
 import { RowsSkeleton, Section } from '../components/ui';
-
-// TEST is the empty row, not a labelled one, so an unset URL shows the board it actually defaults to.
-const SCOPE_ITEMS = [
-  { value: '', label: LEADERBOARD_SCOPE_LABELS[LEADERBOARD_SCOPES.TEST] },
-  ...Object.entries(LEADERBOARD_SCOPE_LABELS)
-    .filter(([value]) => value !== LEADERBOARD_SCOPES.TEST)
-    .map(([value, label]) => ({ value, label })),
-];
 
 const UNTITLED = 'Untitled test';
 
@@ -52,19 +26,6 @@ export function LeaderboardPage() {
   const trend = useQuery(performanceQuery);
 
   const sat = testsSat(everySitting(trend.data));
-
-  // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
-  const scopeParam = useFilters<'scope'>();
-  const parsedScope = leaderboardScopeSchema.safeParse(scopeParam.get('scope'));
-  const scope = parsedScope.success ? parsedScope.data : LEADERBOARD_SCOPES.TEST;
-  const onSeries = scope === LEADERBOARD_SCOPES.SERIES;
-
-  const series = useQuery({
-    queryKey: PERFORMANCE_SERIES_QUERY_KEY,
-    queryFn: () => api.me.performanceSeries(),
-    enabled: onSeries,
-  });
-  const seriesRows = series.data ?? [];
 
   // The empty row IS sat[0] (testsSat sorts most-recent-first), so sat[0] is not listed again.
   const TEST_FILTER = {
@@ -78,55 +39,23 @@ export function LeaderboardPage() {
     ],
   } as const;
 
-  // Same for seriesRows[0] (satSeries sorts by name) — "First series" is its own literal fallback.
-  const SERIES_FILTER = {
-    key: 'seriesId',
-    kind: 'choice',
-    label: 'Series',
-    primary: true,
-    items: [
-      { value: '', label: seriesRows[0]?.name ?? 'First series' },
-      ...seriesRows.slice(1).map((row) => ({ value: row.id, label: row.name })),
-    ],
-  } as const;
-
-  // Nothing ranked to pick from leaves the board control alone in the bar, still reachable.
-  const pickable = () => {
-    if (scope === LEADERBOARD_SCOPES.SERIES && seriesRows.length > 0) {
-      return [SERIES_FILTER] as const satisfies readonly ListFilter[];
-    }
-    if (scope === LEADERBOARD_SCOPES.TEST && sat.length > 0) {
-      return [TEST_FILTER] as const satisfies readonly ListFilter[];
-    }
-    return [] as const satisfies readonly ListFilter[];
-  };
-  const FILTERS = pickable();
+  // Nothing ranked leaves the bar empty rather than offering a picker with one dead row in it.
+  const FILTERS =
+    sat.length > 0
+      ? ([TEST_FILTER] as const satisfies readonly ListFilter[])
+      : ([] as const satisfies readonly ListFilter[]);
 
   const filters = useFilterSpec(FILTERS);
   const testId = filters.values.testId || (sat[0]?.testId ?? '');
-  const seriesId = filters.values.seriesId || (seriesRows[0]?.id ?? '');
 
-  const scopeId = scopeIdFor(scope, testId, seriesId);
   const board = useQuery({
-    queryKey: leaderboardQueryKey(scope, scopeId),
-    queryFn: () => api.me.leaderboard(boardQueryFor(scope, scopeId)),
-    enabled: isBoardAsked(scope, scopeId, sat.length),
+    queryKey: leaderboardQueryKey(testId),
+    queryFn: () => api.me.leaderboard({ testId }),
+    enabled: testId !== '',
   });
 
   // The podium and the ranks live inside the board's own query, so `trend` landing is too early to point at them.
   usePageTour({ id: TOUR_IDS.LEADERBOARD, steps: LEADERBOARD_TOUR, ready: board.isSuccess });
-
-  const boardControl = (
-    <div className="w-44">
-      <Combobox
-        aria-label="Board"
-        clearable={false}
-        value={scope === LEADERBOARD_SCOPES.TEST ? '' : scope}
-        onChange={(next) => scopeParam.set({ scope: next || undefined })}
-        items={SCOPE_ITEMS}
-      />
-    </div>
-  );
 
   return (
     <PanelFrame
@@ -137,16 +66,10 @@ export function LeaderboardPage() {
           meta={standingMeta(board.data)}
         />
       }
-      filters={{ spec: FILTERS, state: filters, leading: boardControl }}
+      filters={{ spec: FILTERS, state: filters }}
       filtersBesideTitle
     >
-      <Body
-        trend={trend}
-        series={{ ...series, length: seriesRows.length }}
-        board={board}
-        tests={sat}
-        onSeries={onSeries}
-      />
+      <Body trend={trend} board={board} tests={sat} />
     </PanelFrame>
   );
 }
@@ -160,16 +83,12 @@ interface QueryState {
 /** Loading, failed and empty are three facts. A failed read must never read as "nobody is here". */
 function Body({
   trend,
-  series,
   board,
   tests,
-  onSeries,
 }: Readonly<{
   trend: QueryState;
-  series: QueryState & { length: number };
   board: QueryState & { data?: Leaderboard };
   tests: readonly SatTest[];
-  onSeries: boolean;
 }>) {
   if (trend.isLoading) return <RowsSkeleton rows={6} />;
   if (trend.isError) {
@@ -192,19 +111,6 @@ function Body({
         }
       />
     );
-  }
-
-  if (onSeries) {
-    if (series.isError) {
-      return (
-        <EmptyState
-          kind={EMPTY_STATE_KINDS.FAILURE}
-          title="Your test series did not load"
-          onRetry={series.refetch}
-        />
-      );
-    }
-    if (series.length === 0) return <EmptyState title="No test series sat" />;
   }
 
   if (board.isError) {

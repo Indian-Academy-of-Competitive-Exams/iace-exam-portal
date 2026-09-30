@@ -103,7 +103,6 @@ export {
   questionReportQueryKey,
   PERFORMANCE_QUERY_KEY,
   OVERVIEW_QUERY_KEY,
-  PERFORMANCE_SERIES_QUERY_KEY,
   leaderboardQueryKey,
   briefQueryKey,
   ACTIVE_DEVICES_QUERY_KEY,
@@ -114,14 +113,7 @@ export {
 export { paperFor } from './exam/served-paper';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';
 export { LOGIN_FIELDS, OTP_INTENTS, type LoginStep, type OtpIntent } from './login-steps';
-export {
-  LEADERBOARD_MEASURE_LABELS,
-  LEADERBOARD_SCOPE_LABELS,
-  PODIUM_LABELS,
-  boardQueryFor,
-  isBoardAsked,
-  scopeIdFor,
-} from './leaderboard';
+export { PODIUM_LABELS } from './leaderboard';
 export {
   VERDICT,
   useBookmarks,

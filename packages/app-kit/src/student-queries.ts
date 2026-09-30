@@ -1,6 +1,6 @@
 /** Every read both student clients cache, keyed once, so web and mobile can never cache one read twice. */
 import { queryOptions } from '@tanstack/react-query';
-import { type LanguageCode, type LeaderboardScope } from '@iace/contracts';
+import { type LanguageCode } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
 import { isMarkingPending } from './marking';
@@ -58,11 +58,7 @@ export const PERFORMANCE_QUERY_KEY = [ME, 'performance'] as const;
 /** The whole career off the two rollup tables — what Performance opens on. */
 export const OVERVIEW_QUERY_KEY = [ME, 'overview'] as const;
 
-/** The series the SERIES board may be asked about, which only a sitting puts on the list. */
-export const PERFORMANCE_SERIES_QUERY_KEY = [...PERFORMANCE_QUERY_KEY, 'series'] as const;
-
-export const leaderboardQueryKey = (scope: LeaderboardScope, scopeId: string) =>
-  [ME, 'leaderboard', scope, scopeId] as const;
+export const leaderboardQueryKey = (testId: string) => [ME, 'leaderboard', testId] as const;
 
 /** What a test covers, read before the clock starts. */
 export const briefQueryKey = (testId: string) => [ME, 'tests', testId, 'brief'] as const;

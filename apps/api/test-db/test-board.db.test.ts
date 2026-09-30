@@ -4,8 +4,6 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  LEADERBOARD_MEASURES,
-  LEADERBOARD_SCOPES,
   leaderboardSchema,
   type Leaderboard,
   type LeaderboardRow,
@@ -46,8 +44,7 @@ async function entrant(
   return { studentId, attemptId: id };
 }
 
-const board = (studentId: string, testId: string) =>
-  view.board(studentId, { scope: LEADERBOARD_SCOPES.TEST, testId });
+const board = (studentId: string, testId: string) => view.board(studentId, { testId });
 
 const rowsOf = (read: Leaderboard): LeaderboardRow[] => [...read.podium, ...read.neighbourhood];
 
@@ -63,7 +60,7 @@ describe('the board for one paper', () => {
 
     const read = await board(me, testId);
 
-    assert.equal(read.measure, LEADERBOARD_MEASURES.MARKS);
+    assert.equal(read.testId, testId);
     assert.equal(read.label, 'Board mock');
     assert.equal(read.cohortSize, 12);
     assert.deepEqual(
@@ -75,23 +72,19 @@ describe('the board for one paper', () => {
       [5, 6, 7, 8, 9, 10, 11],
     );
     assert.deepEqual(
-      rowsOf(read).map((row) => [row.name, row.value]),
+      rowsOf(read).map((row) => [row.name, row.score]),
       rowsOf(read).map((row) => [`Seat ${row.rank}`, 210 - row.rank * 10]),
     );
     assert.deepEqual(read.you, {
       rank: 8,
       name: 'Seat 8',
       branch: null,
-      value: 130,
+      score: 130,
       percentile: 37.5,
-      sittings: 1,
-      deltaRank: null,
       isYou: true,
     });
     assert.deepEqual(
-      rowsOf(read).filter(
-        (row) => !row.isYou && (row.percentile !== null || row.deltaRank !== null),
-      ),
+      rowsOf(read).filter((row) => !row.isYou && row.percentile !== null),
       [],
     );
     leaderboardSchema.parse(read);
@@ -176,7 +169,7 @@ describe('the board for one paper', () => {
 
     assert.equal(read.cohortSize, 1);
     assert.deepEqual(
-      rowsOf(read).map((row) => [row.rank, row.name, row.value]),
+      rowsOf(read).map((row) => [row.rank, row.name, row.score]),
       [[1, 'Harshith Diyyala', 90]],
     );
   });

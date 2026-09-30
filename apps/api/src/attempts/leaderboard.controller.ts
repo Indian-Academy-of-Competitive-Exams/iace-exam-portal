@@ -19,7 +19,7 @@ import { LeaderboardViewService } from './leaderboard-view.service';
 export class MeLeaderboardController {
   constructor(private readonly board: LeaderboardViewService) {}
 
-  /** This paper, this series or every paper they have sat — the reader is always the token's. */
+  /** One paper's board; the reader is always the token's, never a student named in the query. */
   @Get()
   read(
     @Query(new ZodQuery(leaderboardQuerySchema)) query: LeaderboardQuery,

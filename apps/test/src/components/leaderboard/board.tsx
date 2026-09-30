@@ -1,4 +1,3 @@
-import { ArrowDown, ArrowUp } from 'lucide-react';
 import {
   Avatar,
   Card,
@@ -8,13 +7,8 @@ import {
   type DataTableColumn,
   type EmptyMessage,
 } from '@iace/ui';
-import {
-  LEADERBOARD_MEASURES,
-  LEADERBOARD_SCOPES,
-  type Leaderboard,
-  type LeaderboardRow,
-} from '@iace/contracts';
-import { LEADERBOARD_MEASURE_LABELS, PODIUM_LABELS } from '@iace/app-kit';
+import { type Leaderboard, type LeaderboardRow } from '@iace/contracts';
+import { PODIUM_LABELS } from '@iace/app-kit';
 
 /** The topper takes the middle seat from `sm` up, so the shape reads as a podium. */
 const PODIUM_ORDER: Readonly<Record<number, string>> = {
@@ -62,7 +56,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
           top ? 'text-warning-ink' : 'text-foreground',
         )}
       >
-        {row.value}
+        {row.score}
       </span>
       <span
         className={cn(
@@ -79,7 +73,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
 export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty: EmptyMessage }>) {
   return (
     <DataTable
-      columns={standingColumns(board)}
+      columns={STANDING_COLUMNS}
       rows={board.neighbourhood}
       rowKey={(row) => String(row.rank)}
       rowClassName={(row) => (row.isYou ? '[&>td]:bg-primary-subtle' : undefined)}
@@ -89,54 +83,29 @@ export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty
   );
 }
 
-function standingColumns({
-  scope,
-  measure,
-}: Pick<Leaderboard, 'scope' | 'measure'>): DataTableColumn<LeaderboardRow>[] {
-  const papers: DataTableColumn<LeaderboardRow>[] =
-    measure === LEADERBOARD_MEASURES.PERCENTILE_POINTS
-      ? [{ key: 'papers', header: 'Papers', numeric: true, cell: (row) => row.sittings }]
-      : [];
-  // A test board keeps no earlier standing, so its change is never anything but a dash.
-  const change: DataTableColumn<LeaderboardRow>[] =
-    scope === LEADERBOARD_SCOPES.TEST
-      ? []
-      : [
-          {
-            key: 'delta',
-            header: 'Change',
-            numeric: true,
-            className: 'w-24',
-            cell: (row) => <Delta seats={row.deltaRank} />,
-          },
-        ];
-
-  return [
-    {
-      key: 'rank',
-      header: 'Rank',
-      numeric: true,
-      className: 'w-16',
-      cell: (row) => (
-        <span className={row.isYou ? 'font-medium text-primary-ink' : ''}>{row.rank}</span>
-      ),
-    },
-    {
-      key: 'student',
-      header: 'Student',
-      className: 'max-w-[18rem]',
-      cell: (row) => <StudentCell row={row} />,
-    },
-    ...papers,
-    {
-      key: 'value',
-      header: LEADERBOARD_MEASURE_LABELS[measure],
-      numeric: true,
-      cell: (row) => <span className="font-semibold">{row.value}</span>,
-    },
-    ...change,
-  ];
-}
+const STANDING_COLUMNS: DataTableColumn<LeaderboardRow>[] = [
+  {
+    key: 'rank',
+    header: 'Rank',
+    numeric: true,
+    className: 'w-16',
+    cell: (row) => (
+      <span className={row.isYou ? 'font-medium text-primary-ink' : ''}>{row.rank}</span>
+    ),
+  },
+  {
+    key: 'student',
+    header: 'Student',
+    className: 'max-w-[18rem]',
+    cell: (row) => <StudentCell row={row} />,
+  },
+  {
+    key: 'score',
+    header: 'Marks',
+    numeric: true,
+    cell: (row) => <span className="font-semibold">{row.score}</span>,
+  },
+];
 
 function StudentCell({ row }: Readonly<{ row: LeaderboardRow }>) {
   const under =
@@ -156,24 +125,5 @@ function StudentCell({ row }: Readonly<{ row: LeaderboardRow }>) {
         </div>
       </div>
     </div>
-  );
-}
-
-/** Positive is up the board. Nothing moved and never having moved read the same to a student. */
-function Delta({ seats }: Readonly<{ seats: number | null }>) {
-  if (seats === null || seats === 0) return <span className="text-muted-foreground">—</span>;
-
-  const up = seats > 0;
-  const Arrow = up ? ArrowUp : ArrowDown;
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center justify-end gap-0.5 tabular-nums [&_svg]:size-3.5',
-        up ? 'text-success' : 'text-destructive',
-      )}
-    >
-      <Arrow aria-hidden />
-      {Math.abs(seats)}
-    </span>
   );
 }

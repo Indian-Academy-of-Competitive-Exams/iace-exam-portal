@@ -16,7 +16,6 @@ import {
   type PerformanceReport,
   type PerformanceReportQuery,
   type PercentilePoint,
-  type SatSeries,
   type ScoreCard,
   type ScoreCardSection,
   civilDate,
@@ -364,20 +363,6 @@ export class PerformanceAnalyticsService {
       counted.set(day, (counted.get(day) ?? 0) + 1);
     }
     return { from, days: [...counted].map(([date, sittings]) => ({ date, sittings })) };
-  }
-
-  /** The scope picker's only honest list: a series they have never sat has no report to show. */
-  async satSeries(studentId: string): Promise<SatSeries[]> {
-    const rows = await this.prisma.testSeries.findMany({
-      where: {
-        tests: {
-          some: { attempts: { some: { studentId, status: ATTEMPT_STATUS.EVALUATED } } },
-        },
-      },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    });
-    return rows;
   }
 }
 

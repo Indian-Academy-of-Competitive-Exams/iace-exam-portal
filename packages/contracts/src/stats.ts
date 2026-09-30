@@ -558,13 +558,6 @@ const sectionalStandingSchema = scoreCardSectionSchema.extend({
 });
 export type SectionalStanding = z.infer<typeof sectionalStandingSchema>;
 
-/** A series the student has sat at least one test in — what the scope picker offers. */
-export const satSeriesSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-});
-export type SatSeries = z.infer<typeof satSeriesSchema>;
-
 /** One sitting against its paper's cohort: a report's anchor, and the body of a score card. */
 const sittingFiguresSchema = z.object({
   /** This paper's clock against the cohort's average: above 1 is slower, below 1 faster. */
@@ -810,8 +803,6 @@ export const questionFilterSchema = z.enum(QUESTION_FILTERS);
 export type QuestionFilter = z.infer<typeof questionFilterSchema>;
 
 export const PERFORMANCE_ROUTES = {
-  /** The series the picker may offer: one they have sat a test in, so a report cannot be empty. */
-  mySeries: '/me/performance/series',
   ofStudent: (studentId: string) => `/admin/students/${studentId}/performance`,
 } as const;
 
