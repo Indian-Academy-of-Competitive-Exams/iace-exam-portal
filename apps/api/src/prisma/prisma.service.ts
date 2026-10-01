@@ -29,7 +29,12 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    super({ datasourceUrl: budgetedUrl(), log: [{ emit: 'event', level: 'query' }] });
+    super({
+      datasourceUrl: budgetedUrl(),
+      log: [{ emit: 'event', level: 'query' }],
+      // Derived and only ever a predicate's target: a page of 20 would otherwise carry 20 stems twice.
+      omit: { question: { searchText: true } },
+    });
     this.$on('query', (event) => {
       if (event.duration >= SLOW_QUERY_MS) {
         this.logger.warn(`Slow query (${event.duration}ms): ${event.query}`);

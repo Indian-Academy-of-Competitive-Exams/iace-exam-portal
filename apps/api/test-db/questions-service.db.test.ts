@@ -980,7 +980,7 @@ describe('QuestionsService — finding a question again', () => {
     assert.equal(found.items.length, 1);
   });
 
-  /** Three arms of one UNION: a term matching any of them finds the question, and only it. */
+  /** One column holds all three, so a term matching any of them finds the question, and only it. */
   it('finds a question by its stem, by its code, and by a tag', async () => {
     const { questions } = await build();
     await questions.create(
@@ -1011,6 +1011,44 @@ describe('QuestionsService — finding a question again', () => {
       [1, 1, 1],
       'each arm finds its own question and nothing else',
     );
+  });
+
+  /** THE failure the fan-out prevents: searchText is a COPY, so an edit nothing re-derives goes stale. */
+  it('finds a reworded question by its new words, and no longer by its old ones', async () => {
+    const { questions } = await build();
+    const created = await questions.create(
+      draft({ stem: { en: '<p>Area of a trapezium</p>', hi: '<p>समलम्ब</p>' } }),
+      ADMIN,
+    );
+
+    await questions.update(
+      created.id,
+      draft({
+        stem: { en: '<p>Area of a rhombus</p>', hi: '<p>समचतुर्भुज</p>' },
+        expectedUpdatedAt: (await questions.detail(created.id)).updatedAt,
+      }),
+      ADMIN,
+    );
+
+    assert.equal((await questions.list(listQuery({ q: 'rhombus' }))).items.length, 1);
+    assert.equal((await questions.list(listQuery({ q: 'trapezium' }))).items.length, 0);
+  });
+
+  /** A tag is the one source an admin changes without touching the wording. */
+  it('finds a question by a tag added after it was written', async () => {
+    const { questions } = await build();
+    const created = await questions.create(draft(), ADMIN);
+
+    await questions.update(
+      created.id,
+      draft({
+        tags: ['taggedlater'],
+        expectedUpdatedAt: (await questions.detail(created.id)).updatedAt,
+      }),
+      ADMIN,
+    );
+
+    assert.equal((await questions.list(listQuery({ q: 'taggedlater' }))).items.length, 1);
   });
 
   /** An archived twin is not in the list the admin is sent back to, so the error has to say so. */

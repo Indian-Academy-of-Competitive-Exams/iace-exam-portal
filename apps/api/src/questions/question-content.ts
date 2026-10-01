@@ -73,7 +73,7 @@ const ESCAPED: Readonly<Record<string, string>> = { '&': '&amp;', '<': '&lt;', '
 const DIV_TAG = /<(\/?)div\b[^<>]*>/gi;
 
 /** The characters content escapes on the way in, so a search for them looks for what was stored. */
-export function escapeForContent(text: string): string {
+function escapeForContent(text: string): string {
   return text.replaceAll(/[&<>]/g, (char) => ESCAPED[char] ?? char);
 }
 

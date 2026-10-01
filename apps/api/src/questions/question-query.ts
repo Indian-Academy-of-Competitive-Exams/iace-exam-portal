@@ -34,20 +34,14 @@ export function writtenBetween(from: string | undefined, to: string | undefined)
 }
 
 /** The filter half of the questions list. Pure, so it is testable without a database. */
-export function questionWhere(
-  query: QuestionListQuery,
-  matchedIds: string[] | null,
-): Prisma.QuestionWhereInput {
-  const and = matchFilters(narrowsTheBank(query, matchedIds), whatWasAsked(query), query.match);
+export function questionWhere(query: QuestionListQuery): Prisma.QuestionWhereInput {
+  const and = matchFilters(narrowsTheBank(query), whatWasAsked(query), query.match);
 
   return and.length > 0 ? { AND: and } : {};
 }
 
 /** What narrows the bank whichever mode is chosen — the match toggle does not reach these. */
-function narrowsTheBank(
-  query: QuestionListQuery,
-  matchedIds: string[] | null,
-): Prisma.QuestionWhereInput[] {
+function narrowsTheBank(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
   const filters: Prisma.QuestionWhereInput[] = [];
 
   // Out of circulation is out of the bank: only naming ARCHIVED asks for them, since matching any widens past a status that does not.
@@ -61,8 +55,8 @@ function narrowsTheBank(
     const wroteIt = { assignment: { testId: query.forTestId } };
     filters.push(query.writtenFor === WRITTEN_FOR.BANK ? { NOT: wroteIt } : wroteIt);
   }
-  // The search ran as its own query, so an empty result must match nothing rather than be dropped.
-  if (matchedIds) filters.push({ id: { in: matchedIds } });
+  // One column holds the stem, the code and the tags, so this is a predicate rather than a list of ids.
+  if (query.q) filters.push({ searchText: { contains: query.q, mode: 'insensitive' } });
 
   return filters;
 }

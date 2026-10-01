@@ -462,6 +462,8 @@ model Question {
   // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
   stemHash         String?
+  // Derived: the current version's content, the code and the tags as searchable text, trigger-maintained.
+  searchText       String?
   // The fold stemHash was made with; the worker rehashes any row below the code's STEM_HASH_VERSION.
   stemHashVersion  Int             @default(1)
   assignmentId     String?         @db.Uuid
@@ -487,8 +489,8 @@ model Question {
   @@index([createdById])
   @@index([assignmentId])
   @@index([tags], type: Gin)
-  // Trigram, for the bank search's leading-wildcard ILIKE on the code.
-  @@index([questionCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "Question_questionCode_trgm_idx")
+  // Trigram, for the bank search's one ILIKE over the stem, the code and the tags together.
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "Question_searchText_trgm_idx")
   // The admin dashboard counts the whole bank by status, which no other index leads on.
   @@index([status])
   @@index([createdAt, id])

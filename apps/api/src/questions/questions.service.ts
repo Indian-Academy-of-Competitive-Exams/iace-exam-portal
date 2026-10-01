@@ -40,7 +40,7 @@ import {
   questionImageKey,
   type UploadedImage,
 } from './question-images';
-import { escapeForContent, mapQuestionHtml, rewriteQuestionHtml } from './question-content';
+import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
   drawableFor,
@@ -146,8 +146,7 @@ export class QuestionsService {
     query: QuestionListQuery,
     scope?: Prisma.QuestionWhereInput,
   ): Promise<Paginated<QuestionSummary>> {
-    const matchedIds = query.q ? await this.searchIds(query.q) : null;
-    const filtered = questionWhere(query, matchedIds);
+    const filtered = questionWhere(query);
     const where = scope ? { AND: [filtered, scope] } : filtered;
 
     const [rows, total] = await this.prisma.$transaction([
@@ -167,8 +166,7 @@ export class QuestionsService {
   async exportRows(
     query: QuestionExportQuery,
   ): Promise<{ questions: ExportedQuestion[]; authoring: AuthoringCount[] }> {
-    const matchedIds = query.q ? await this.searchIds(query.q) : null;
-    const where = questionWhere({ ...query, page: 1, pageSize: 1 }, matchedIds);
+    const where = questionWhere({ ...query, page: 1, pageSize: 1 });
     assertExportable(await this.prisma.question.count({ where }));
 
     const [rows, groups] = await Promise.all([
@@ -609,25 +607,6 @@ export class QuestionsService {
     const row = await this.prisma.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
     return row;
-  }
-
-  /** Its own query: the stem is JSON on the version, so no column holds text a filter could read. */
-  private async searchIds(term: string): Promise<string[]> {
-    // Content is stored as html, so "Ram & Shyam" sits in it as "Ram &amp; Shyam".
-    const like = `%${escapeForContent(term)}%`;
-    // A tag is stored as the admin typed it, so the escaping the html content needs would miss it.
-    const tagLike = `%${term}%`;
-    // A UNION, not an OR: Postgres builds a BitmapOr within one relation, never across a join.
-    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
-      SELECT q."id" FROM "Question" q
-        JOIN "QuestionVersion" v ON v."id" = q."currentVersionId" AND v."questionId" = q."id"
-        WHERE v."content"::text ILIKE ${like}
-      UNION
-      SELECT q."id" FROM "Question" q WHERE q."questionCode" ILIKE ${like}
-      UNION
-      SELECT q."id" FROM "Question" q WHERE "tagsText"(q."tags") ILIKE ${tagLike}
-    `;
-    return rows.map((row) => row.id);
   }
 }
 

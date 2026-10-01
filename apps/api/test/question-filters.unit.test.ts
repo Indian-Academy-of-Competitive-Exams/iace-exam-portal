@@ -5,7 +5,7 @@ import { questionWhere } from '../src/questions/question-query';
 
 /** Parsed the way the controller parses it, so the test cannot assume a shape the wire never sends. */
 const whereFor = (input: Record<string, unknown>) =>
-  questionWhere(questionListQuerySchema.parse(input) as QuestionListQuery, null);
+  questionWhere(questionListQuerySchema.parse(input) as QuestionListQuery);
 
 const conditions = (input: Record<string, unknown>) => {
   const where = whereFor(input);
@@ -96,24 +96,30 @@ describe('questionWhere — a filter holding several values', () => {
   /** A search says what you are looking for; matching "any" must not list what you did not. */
   it('keeps a search narrowing even when matching any', () => {
     const where = questionWhere(
-      questionListQuerySchema.parse({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' }),
-      ['q_1'],
+      questionListQuerySchema.parse({
+        q: 'triangle',
+        subjectId: 'sub_1',
+        difficulty: 'LOW',
+        match: 'any',
+      }),
     );
 
     assert.deepEqual(where, {
       AND: [
         { status: { not: 'ARCHIVED' } },
-        { id: { in: ['q_1'] } },
+        { searchText: { contains: 'triangle', mode: 'insensitive' } },
         { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
       ],
     });
   });
 
-  /** The search runs as its own query; no result must still match nothing, not everything. */
-  it('keeps an empty search result matching nothing', () => {
-    const where = questionWhere(questionListQuerySchema.parse({}) as QuestionListQuery, []);
-
-    assert.deepEqual(where, { AND: [{ status: { not: 'ARCHIVED' } }, { id: { in: [] } }] });
+  /** The failure this prevents: the ids coming back on the wire again, and with them the bind ceiling. */
+  it('searches with one predicate, never a list of matched ids', () => {
+    assert.deepEqual(conditionFor({ q: 'Ram & Shyam' }, 'searchText'), {
+      contains: 'Ram & Shyam',
+      mode: 'insensitive',
+    });
+    assert.equal(conditionFor({ q: 'Ram & Shyam' }, 'id'), undefined);
   });
 });
 
