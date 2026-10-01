@@ -9,6 +9,8 @@ const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
 /** Every request carries one, from the middleware onward. */
 export interface RequestWithId extends Request {
   requestId?: string;
+  /** Stamped before the guards, so a 401 the interceptor never sees still has a duration. */
+  startedAt?: bigint;
 }
 
 /** Stamps each request with an id, echoes it in `X-Request-Id`, and hands it to the interceptor and the exception filter for `meta.requestId`. */
@@ -19,6 +21,7 @@ export class RequestIdMiddleware implements NestMiddleware {
     const claimed = Array.isArray(inbound) ? inbound[0] : inbound;
 
     request.requestId = claimed && SAFE_REQUEST_ID.test(claimed) ? claimed : randomUUID();
+    request.startedAt = process.hrtime.bigint();
     response.setHeader(REQUEST_ID_HEADER, request.requestId);
     next();
   }
@@ -29,4 +32,15 @@ export function ensureRequestId(request: { requestId?: string } | undefined): st
   if (!request) return randomUUID();
   request.requestId ??= randomUUID();
   return request.requestId;
+}
+
+/** The route PATTERN, never the URL: `/me/attempts/:id` is one series, and 5,000 ids are not. `unmatched` is a body-parser refusal, which is thrown before a route is chosen. */
+export function routeOf(request: Request): string {
+  return (request.route as { path?: string } | undefined)?.path ?? 'unmatched';
+}
+
+/** Milliseconds since the middleware stamped the request; 0 when it never ran. */
+export function elapsedMs(request: RequestWithId): number {
+  if (request.startedAt === undefined) return 0;
+  return Number(process.hrtime.bigint() - request.startedAt) / 1e6;
 }

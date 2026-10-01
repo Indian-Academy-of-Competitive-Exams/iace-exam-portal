@@ -452,12 +452,20 @@ that shape is chosen.** Unset means `>=debug` outside production and `>=log` in 
 also switches `ConsoleLogger` to `json: true` — one object per line, so a shipper indexes it without
 a regex. Nest's own logger does both; there is no log library here and no need for one.
 
-That one variable is what keeps a live event readable. `MetricsInterceptor` logs a line per request
-— method, route pattern, status, duration, actor, request id — at **`debug`**, so it is every call
-in dev and staging and none in production, where 3K students autosaving every 20–30s is ~150 lines a
-second. A success slower than 1,000 ms is a **`warn`** instead, so production still hears the only
-thing worth hearing about a call that worked. Nothing logs a successful response _body_: at 6K
-students the exam role alone would write tens of GB an event.
+That one variable is what keeps a live event readable. `RequestObserverMiddleware` logs a line per
+request — method, route pattern, status, duration, actor, request id — at **`debug`**, so it is
+every call in dev and staging and none in production, where 3K students autosaving every 20–30s is
+~150 lines a second. A call slower than 1,000 ms is a **`warn`** instead, so production still hears
+the only thing worth hearing about a call that worked. Nothing logs a successful response _body_: at
+6K students the exam role alone would write tens of GB an event.
+
+**It is middleware, not an interceptor, and that is the point.** Guards run BEFORE interceptors, so
+a 401, 403 or 429 never reaches one, and a body-parser 413 is thrown before a route is even chosen.
+Both were missing from `iace_http_request_duration_seconds` entirely until 2026-10-01 — a
+credential-stuffing burst or a rate-limit storm was invisible in the error rate. `response.on`
+`('finish')` fires whatever produced the response, with the final status and matched route already
+set, so one observer counts every request exactly once. `RequestIdMiddleware` stamps `startedAt`
+before the guards, so the duration is honest on that path too.
 
 Failures never depend on the level. `AllExceptionsFilter` owns them — a 4xx as one line, a 5xx with
 its stack **and the request body**, which is the only record of what the caller actually sent, since

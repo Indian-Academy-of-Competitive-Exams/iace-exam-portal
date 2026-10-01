@@ -61,6 +61,12 @@ interface RequestOptions<T> {
   signal?: AbortSignal;
 }
 
+/** A correlation id, never a secret: randomUUID is absent on older React Native, and the server's SAFE_REQUEST_ID accepts either shape. */
+function newRequestId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return uuid ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 /** Callers never see the envelope: every method returns `data` or throws an `AppException`. */
 export function createApiCore(options: ApiClientOptions) {
   const {
@@ -95,6 +101,8 @@ export function createApiCore(options: ApiClientOptions) {
         method,
         headers: {
           ...headers,
+          // Sent, not just read back: it is what joins Caddy's access log to the API's own line.
+          [REQUEST_ID_HEADER]: newRequestId(),
           ...(body === undefined || isFormData ? {} : { 'Content-Type': 'application/json' }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },

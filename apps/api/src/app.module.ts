@@ -34,6 +34,7 @@ import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
 import { SuperAdminGuard } from './auth/guards/super-admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
+import { RequestObserverMiddleware } from './common/metrics/request-observer.middleware';
 import { RequestBudgetInterceptor } from './common/request-budget';
 import { RequestIdMiddleware } from './common/request-id';
 
@@ -85,6 +86,8 @@ import { RequestIdMiddleware } from './common/request-id';
 export class AppModule implements NestModule {
   /** Runs before everything else, so the id exists for guards and the filter. */
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware, AuditContextMiddleware).forRoutes('*');
+    consumer
+      .apply(RequestIdMiddleware, RequestObserverMiddleware, AuditContextMiddleware)
+      .forRoutes('*');
   }
 }
