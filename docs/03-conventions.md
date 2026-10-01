@@ -166,9 +166,9 @@ owns the sitting owns the derivation.
 - `imports` and `questions` create `ImportLog`; `audit` only reads it back for the log viewer.
 - `attempts` sets a `BaseConfig` locked on the first sitting. The lock is an attempt's effect and
   `configs` has no way to learn that a paper was sat.
-- `tests` moves a `Question` in-use counter on the offer, once per question served. Being depended
-  on is what freezes a question, and only the offer knows; `finalizedAt` is the watermark that keeps
-  a re-offer from counting twice.
+- `tests` does **not** count a question's uses, and `Question` carries no such column. In use is
+  derived per read from whether any `PaperQuestion` or `TestQuestionStat` points at the row; what
+  stops a used question changing is `question_version_sat_guard`, not a counter.
 - `tests` stamps a typist's `QuestionAssignment.finalizedAt` on Done, and the section's reader's
   `handedAt` with it; on a picked section it stamps `handedAt` at the owner's hand-over. The stamps
   and the paper rows they rest on are one fact and commit together; the leftover questions go to
