@@ -35,6 +35,18 @@ export class AttemptSheetService {
     await this.prisma.$executeRaw`
       UPDATE "AttemptSheet" SET "answers" = ${JSON.stringify(sheet)}::jsonb, "updatedAt" = now()
       WHERE "attemptId" = ${held.attemptId}::uuid ${gate}`;
+    await this.writeSections(held, onlyWhileLive);
     return sheet;
+  }
+
+  /** A composite paper has one clock and no sections, so it pays for nothing here. */
+  private async writeSections(held: HeldState, onlyWhileLive: boolean): Promise<void> {
+    if (Object.keys(held.sections).length === 0) return;
+    const gate = onlyWhileLive
+      ? Prisma.sql`AND "status" = ${ATTEMPT_STATUS.IN_PROGRESS}::"AttemptStatus"`
+      : Prisma.empty;
+    await this.prisma.$executeRaw`
+      UPDATE "Attempt" SET "sectionState" = ${JSON.stringify(held.sections)}::jsonb
+      WHERE "id" = ${held.attemptId}::uuid ${gate}`;
   }
 }

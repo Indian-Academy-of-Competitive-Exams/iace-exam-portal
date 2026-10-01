@@ -66,6 +66,7 @@ async function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS, saved =
     attemptId: attempt.id,
     studentId,
     questionId,
+    sectionId: paper.sectionIds[0] ?? '',
     startedAt,
     state,
     processor: new AttemptFlushProcessor(
@@ -84,6 +85,40 @@ const answering = (questionId: string, selectedOptionId: string, timeSpentSec: n
   selectedOptionId,
   typedAnswer: null,
   timeSpentSec,
+});
+
+describe('AttemptFlushProcessor — a sectional clock outlives the key holding it', () => {
+  /** The bug this prevents: Valkey restarts mid-sitting, the rebuild hands every section its full time back, and a candidate sits the same section twice over. */
+  it('writes the section clocks down, and puts them back when the key is gone', async () => {
+    const { processor, state, redis, attemptId, studentId, sectionId } = await build();
+    const sections = { [sectionId]: { remainingSec: 600, closed: false } };
+    await state.save(studentId, attemptId, { revision: 2, answers: [], sections }, NOW);
+
+    await processor.process();
+
+    const row = await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } });
+    // `openedAt` is the server's own stamp, added on the way through, so the column holds it too.
+    assert.deepEqual(row.sectionState, {
+      [sectionId]: { remainingSec: 600, closed: false, openedAt: NOW.toISOString() },
+    });
+
+    await redis.client.del(redisKeys.attemptState(attemptId));
+    const rebuilt = await state.current(studentId, attemptId, NOW);
+
+    assert.equal(rebuilt.sections[sectionId]?.remainingSec, 600);
+  });
+
+  /** A composite paper has one clock, so it must not pay for a column it has nothing to put in. */
+  it('leaves the column alone for a paper with no sections', async () => {
+    const { processor, attemptId } = await build();
+
+    await processor.process();
+
+    assert.equal(
+      (await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } })).sectionState,
+      null,
+    );
+  });
 });
 
 describe('AttemptFlushProcessor', () => {

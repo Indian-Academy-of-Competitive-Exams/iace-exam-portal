@@ -699,7 +699,7 @@ model Attempt {
   evaluatedAt      DateTime?           @db.Timestamptz(3)
   shuffleSeed      Int
   languages        SupportedLanguage[] @default([])
-  // Written and read by nothing — the live section clocks stay in Redis and never land here.
+  // The sectional clocks, flushed with the sheet so a lost Redis key cannot hand them back in full.
   sectionState     Json?
   score            Decimal?            @db.Decimal(8, 2)
   correctCount     Int?

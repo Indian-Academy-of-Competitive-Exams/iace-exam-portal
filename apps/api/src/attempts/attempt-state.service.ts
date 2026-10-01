@@ -17,6 +17,7 @@ import {
   displayOrder,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { sectionsIn } from '../common/prisma-json';
 import { parseJsonOrNull, RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { answersOf } from './answer-sheet';
@@ -312,6 +313,7 @@ export class AttemptStateService {
         endsAt: true,
         status: true,
         shuffleSeed: true,
+        sectionState: true,
         test: { select: { baseConfig: { select: { navigation: true, shuffleQuestions: true } } } },
         sheet: { select: { answers: true, updatedAt: true } },
       },
@@ -343,7 +345,8 @@ export class AttemptStateService {
       lastSeenAt: (attempt.sheet?.updatedAt ?? attempt.startedAt).toISOString(),
       revision: 0,
       answers,
-      sections: {},
+      // Without these a lost key would hand a sectional candidate every section's clock back in full.
+      sections: sectionsIn(attempt.sectionState),
       forwardOnly: forwardOrderOf(
         attempt.test.baseConfig.navigation,
         attempt.shuffleSeed,

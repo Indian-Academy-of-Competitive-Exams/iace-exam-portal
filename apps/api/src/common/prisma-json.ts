@@ -4,7 +4,12 @@
  * checks — these are the only ones in the API.
  */
 import { type Prisma } from '@prisma/client';
-import { type AnswerKey, type QuestionOption, type TestScopeRef } from '@iace/contracts';
+import {
+  type AnswerKey,
+  type QuestionOption,
+  type SectionProgress,
+  type TestScopeRef,
+} from '@iace/contracts';
 
 /** A `QuestionVersion`'s options. Anything that is not an array has none at all. */
 export function optionsIn(stored: unknown): QuestionOption[] {
@@ -15,6 +20,12 @@ export function optionsIn(stored: unknown): QuestionOption[] {
 export function answerKeyIn(stored: unknown): AnswerKey | null {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return null;
   return stored as AnswerKey;
+}
+
+/** An `Attempt`'s sectional clocks. A composite paper has one clock and stores none of these. */
+export function sectionsIn(stored: unknown): Record<string, SectionProgress> {
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
+  return stored as Record<string, SectionProgress>;
 }
 
 /** A `Test`'s scope reference: `Prisma.JsonNull` and a SQL NULL both read as none. */
