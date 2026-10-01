@@ -73,7 +73,8 @@ describe('RequestObserverMiddleware', () => {
     serve({ method: 'GET', route: { path: '/health' }, startedAt }, 200);
 
     assert.ok(observed[0] !== undefined);
-    assert.ok(observed[0].seconds >= 0.24 && observed[0].seconds < 1, `got ${observed[0].seconds}`);
+    assert.ok(observed[0].seconds >= 0.24, `too short: ${observed[0].seconds}`);
+    assert.ok(observed[0].seconds < 1, `too long: ${observed[0].seconds}`);
   });
 
   it('counts each response once, never twice', () => {
