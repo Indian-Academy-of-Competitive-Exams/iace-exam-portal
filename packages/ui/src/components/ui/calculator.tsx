@@ -96,7 +96,14 @@ export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
         <span className="text-xs font-semibold text-exam-ink">Calculator</span>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button type="button" variant="ghost" size="iconSm" onClick={onClose}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="iconSm"
+              // Exam ink, not the design system's: a skin with no dark variant must not get a dark glyph.
+              className="text-exam-ink hover:bg-exam-surface-2"
+              onClick={onClose}
+            >
               <X aria-hidden />
               <span className="sr-only">Close the calculator</span>
             </Button>

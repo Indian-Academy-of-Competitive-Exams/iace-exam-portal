@@ -613,6 +613,7 @@
 }
 
 /* Strict — the austere real-CBT baseline: flat fills, square edges, dense. */
+/* No dark variant: `railway.css` pins this skin's chrome light, so flipping tokens would darken half the paper. */
 [data-exam-template='ssc_railways'] {
   --exam-surface: #ffffff;
   --exam-surface-2: #eef1f5;
@@ -681,43 +682,4 @@
   --exam-timer-urgent-bg: transparent;
   --exam-timer-urgent-ink: #ef4444;
   --exam-timer-urgent-border: #ef4444;
-}
-
-:root[data-theme='dark'] [data-exam-template='ssc_railways'] {
-  --exam-surface: #0f1216;
-  --exam-surface-2: #191d23;
-  --exam-ink: #f2f4f7;
-  --exam-ink-muted: #aab2bd;
-  --exam-border: #4b535e;
-
-  --exam-answered: #2eb551;
-  --exam-answered-ink: #04140a;
-  --exam-notanswered: #ef4444;
-  --exam-notanswered-ink: #ffffff;
-  --exam-notvisited: #2b313a;
-  --exam-notvisited-ink: #e2e8f0;
-  --exam-marked: #8257c8;
-  --exam-marked-ink: #ffffff;
-  --exam-answered-marked: #8257c8;
-  --exam-answered-marked-ink: #ffffff;
-  --exam-answered-marked-tick: #4ade80;
-  --exam-current: #6ea8ff;
-
-  --exam-option-bg: #0f1216;
-  --exam-option-border: #4b535e;
-  --exam-option-selected-bg: #14243f;
-  --exam-option-selected-border: #6ea8ff;
-
-  --exam-section-ink: #f2f4f7;
-  --exam-section-active-bg: #6ea8ff;
-  --exam-section-active-ink: #0f1216;
-
-  --exam-timer-ink: #f2f4f7;
-  --exam-timer-bg: #191d23;
-  --exam-timer-border: #4b535e;
-  --exam-timer-urgent-bg: #ef4444;
-  --exam-timer-urgent-ink: #ffffff;
-  --exam-timer-urgent-border: #ef4444;
-
-  --watermark-ink: #f2f4f7;
 }
