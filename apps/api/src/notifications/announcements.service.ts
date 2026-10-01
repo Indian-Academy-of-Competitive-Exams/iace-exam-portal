@@ -216,7 +216,7 @@ export class AnnouncementsService {
     return {
       readCount,
       sent: counted((row) => row.status === DeliveryStatus.SENT),
-      delivered: counted((row) => row.status === DeliveryStatus.DELIVERED),
+      // DELIVERED is never counted: it waits on a provider delivery receipt nothing sends yet.
       failed: counted((row) => row.status === DeliveryStatus.FAILED),
       skipped: counted((row) => row.status === DeliveryStatus.SKIPPED),
       savedByRead: counted((row) => row.skipReason === SKIP_REASONS.ALREADY_READ),
@@ -229,7 +229,6 @@ const DELIVERY_SELECT = {
   status: true,
   skipReason: true,
   sentAt: true,
-  deliveredAt: true,
   failedAt: true,
   notification: { select: { studentId: true } },
 } as const satisfies Prisma.NotificationDeliverySelect;
@@ -247,7 +246,6 @@ const DELIVERY_COLUMNS: ExportColumn<DeliveryRow>[] = [
   { header: 'Status', width: 12, value: (row) => row.status },
   { header: 'Skip reason', width: 16, value: (row) => row.skipReason },
   { header: 'Sent at', width: 18, date: AT, value: (row) => exportInstant(row.sentAt) },
-  { header: 'Delivered at', width: 18, date: AT, value: (row) => exportInstant(row.deliveredAt) },
   { header: 'Failed at', width: 18, date: AT, value: (row) => exportInstant(row.failedAt) },
 ];
 

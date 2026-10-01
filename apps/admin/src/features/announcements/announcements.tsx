@@ -190,7 +190,6 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
       {detail.data ? (
         <MetricGroup>
           <Metric label="Sent" value={detail.data.stats.sent} />
-          <Metric label="Delivered" value={detail.data.stats.delivered} />
           <Metric label="Failed" value={detail.data.stats.failed} />
           <Metric label="Read" value={detail.data.stats.readCount} />
           {/* Paid sends the grace window made unnecessary — an email, SMS or WhatsApp not spent. */}

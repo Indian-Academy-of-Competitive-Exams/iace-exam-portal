@@ -52,7 +52,6 @@ export type AnnouncementPreview = z.infer<typeof announcementPreviewSchema>;
 const announcementStatsSchema = z.object({
   readCount: z.number(),
   sent: z.number(),
-  delivered: z.number(),
   failed: z.number(),
   skipped: z.number(),
   /** Skipped because the student had already read it — the grace window paying for itself. */
