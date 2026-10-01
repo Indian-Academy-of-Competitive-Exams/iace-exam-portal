@@ -314,6 +314,28 @@ describe('BaseConfigsService — one default per stage', () => {
   });
 });
 
+describe('base_config_guard — what the database refuses on a locked config', () => {
+  /** The bug this prevents: a paper somebody has already sat being re-skinned by a script or a psql session, which the service layer refuses but the trigger used to let through. */
+  it('refuses a skin change, the same as every other shape column', async () => {
+    const id = await seedConfig({ examStageId: await makeStage(prisma), locked: true });
+
+    await assert.rejects(
+      prisma.$executeRaw`UPDATE "BaseConfig" SET "examTemplate" = 'SSC_RAILWAYS' WHERE "id" = ${id}::uuid`,
+      /locked; clone it to change its shape/,
+    );
+    assert.equal((await configRow(id)).examTemplate, 'DEFAULT');
+  });
+
+  /** Name, isDefault and isActive stay editable by design — freezing them would deadlock a stage on whichever config locked first. */
+  it('still takes a rename', async () => {
+    const id = await seedConfig({ examStageId: await makeStage(prisma), locked: true });
+
+    await prisma.$executeRaw`UPDATE "BaseConfig" SET "name" = 'Renamed' WHERE "id" = ${id}::uuid`;
+
+    assert.equal((await configRow(id)).name, 'Renamed');
+  });
+});
+
 describe('BaseConfigsService — editing an unlocked config', () => {
   /** The totals are a cache, so an edit that leaves them stale puts a number on screen the paper is not. */
   it('recomputes the cached totals when the sections change', async () => {

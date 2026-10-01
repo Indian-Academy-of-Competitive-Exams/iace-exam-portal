@@ -9,6 +9,15 @@ const MIGRATION = readFileSync(
   'utf8',
 );
 
+/** The guard's current home: the baseline wrote it, the uuid migration recreated it, and this one added the skin. A frozen-column list is only true of the newest definition. */
+const LOCKED_CONFIG_GUARD = readFileSync(
+  join(
+    __dirname,
+    '../../../prisma/migrations/20261001100000_a_locked_config_freezes_its_skin/migration.sql',
+  ),
+  'utf8',
+);
+
 const COURSE_RENAME = readFileSync(
   join(
     __dirname,
@@ -174,6 +183,7 @@ describe('a locked config', () => {
     'navigation',
     'optionalSectionCount',
     'defaultTestUi',
+    'examTemplate',
     'languageMode',
     'languages',
     'shuffleQuestions',
@@ -184,7 +194,7 @@ describe('a locked config', () => {
   ]) {
     it(`freezes ${column}`, () => {
       assert.match(
-        MIGRATION,
+        LOCKED_CONFIG_GUARD,
         new RegExp(`NEW\\."${column}"\\s+IS DISTINCT FROM OLD\\."${column}"`),
       );
     });
