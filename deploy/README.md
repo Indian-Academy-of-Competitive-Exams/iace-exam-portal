@@ -88,6 +88,36 @@ show `migrate` exited and everything else healthy.
 **Seeding.** Migrations create the schema and no rows. Follow `docs/local-setup.md` §6 against RDS
 — the first super admin is a SQL insert by design, and **without it nobody can sign in**.
 
+## Logs — the alloy container
+
+It comes up with everything else; the three `LOKI_*` values in `deploy/.env` are all it needs.
+Confirm it is shipping before you need it to be:
+
+```bash
+docker compose -f deploy/compose.yml --env-file deploy/.env logs --tail 30 alloy
+```
+
+Then in Grafana, `{env="staging"}` should return lines within a few seconds. The labels are
+`service_name` (the compose service: `exam`, `core`, `worker`, `caddy`, `migrate`), `level`, and
+`env`. Everything per-request stays in the line and comes out at query time:
+
+```
+{service_name="exam", level="error"} |= "bug=" | pattern "<_>bug=<bug> <_>"
+```
+
+**Alloy is root on this box.** It reads the Docker API to learn which containers exist and what
+compose calls them, and `:ro` on a socket mount protects the file rather than the API behind it —
+anything that can reach that socket can start a privileged container. That is the price of
+`service_name` being a name instead of a 64-character id. The alternative is mounting
+`/var/lib/docker/containers:ro` and tailing the files directly, which needs no socket and gives
+you those ids.
+
+**The `json-file` caps stay.** Alloy going down must cost visibility and never the disk, so each
+container still keeps its own 10 MB × 3 locally and `docker logs` still works.
+
+**Caddy's access log is stdout**, not a file in a volume — one stream, one shipper, one cap.
+Before Alloy existed it was a file precisely because nothing would have carried it off the box.
+
 ## The SPAs
 
 ```bash

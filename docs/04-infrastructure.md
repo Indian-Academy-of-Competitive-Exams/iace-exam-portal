@@ -484,11 +484,25 @@ a log query. Revisit a dedicated tracker when volume makes issue state and relea
 a second vendor; one student pre-launch is not that.
 
 Containers log to Docker's `json-file` driver, **capped in `deploy/compose.yml` at 10 MB × 3 per
-container** — the default never rotates, and Box A has 30 GB to lose. An environment that ships to
-CloudWatch overrides the driver to `awslogs` there, 14-day retention; nothing in the repo assumes
-it, so a box boots and logs whether or not AWS answers. **Caddy's access log is the access log** —
-a JSON line per request to a file, rolled by Caddy itself at 100 MiB, with no bucket and no S3
-lifecycle to configure because nothing writes access logs to a bucket.
+container** — the default never rotates, and Box A has 30 GB to lose. That cap is the local safety
+net and stays: the shipper going down must cost visibility, never the disk, and `docker logs` keeps
+working on the box.
+
+**A `grafana/alloy` container ships all of it to Grafana Cloud Loki** (`deploy/alloy/config.alloy`).
+It reads the Docker API for what is running and what compose calls it, so the labels are
+`service_name`, `level` and `env` — and nothing else. A label is an index in Loki, so anything
+per-request or per-bug stays in the LINE and is extracted at query time:
+`{service_name="exam", level="error"} |= "bug=" | pattern "<_>bug=<bug> <_>"`. It skips its own
+container, or one shipping error becomes a loop.
+
+**That socket is the cost.** `:ro` protects the socket file, not the Docker API behind it, so Alloy
+is root on Box A. It buys `service_name` being `exam` instead of a 64-character id; tailing
+`/var/lib/docker/containers:ro` is the no-socket alternative and gives you the ids.
+
+**Caddy's access log is stdout**, not a file in a volume — one stream, one shipper, one cap. It was
+a file only because nothing would have carried it off the box; the `caddy-logs` volume is gone with
+the reason for it. There is no bucket and no S3 lifecycle to configure because nothing writes
+access logs to a bucket.
 
 About ten alarms at $0.10 each. **The list changed with the front door**, and an alarm on a metric
 that no longer exists is worse than no alarm:

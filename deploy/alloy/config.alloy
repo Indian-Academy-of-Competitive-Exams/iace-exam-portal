@@ -1,0 +1,65 @@
+// Box A's log shipper: every container's stdout into Grafana Cloud Loki.
+//
+// Nothing in the API knows this exists. It reads what Docker already captured, which is why
+// LOG_LEVEL in the API is still the only thing deciding how much there is to ship.
+//
+//   docker compose -f deploy/compose.yml --env-file deploy/.env up -d alloy
+//
+// The json-file caps in compose.yml stay as the local safety net: Alloy going down must cost
+// visibility, never the disk.
+
+discovery.docker "boxa" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// The compose SERVICE name, not the container name: `exam`, not `/iace-api-exam-1`.
+discovery.relabel "containers" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service_name"
+	}
+
+	// Without this Alloy tails its own stdout, and one shipping error becomes a loop.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "alloy"
+		action        = "drop"
+	}
+}
+
+loki.source.docker "boxa" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.docker.boxa.targets
+	relabel_rules = discovery.relabel.containers.rules
+	labels        = {env = sys.env("ENVIRONMENT")}
+	forward_to    = [loki.process.levels.receiver]
+}
+
+// The API and Caddy both log one JSON object per line, and both call the severity `level`.
+loki.process "levels" {
+	stage.json {
+		expressions = {level = ""}
+	}
+
+	// `level` and `service_name` only. A label is an index in Loki, so anything per-request or
+	// per-bug belongs in the LINE and comes out at query time:
+	//   {service_name="exam"} |= "bug=" | pattern "<_>bug=<bug> <_>" | sum by (bug)
+	stage.labels {
+		values = {level = ""}
+	}
+
+	forward_to = [loki.write.cloud.receiver]
+}
+
+loki.write "cloud" {
+	endpoint {
+		url = sys.env("LOKI_URL")
+
+		basic_auth {
+			username = sys.env("LOKI_USERNAME")
+			password = sys.env("LOKI_PASSWORD")
+		}
+	}
+}

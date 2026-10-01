@@ -92,6 +92,31 @@ services:
         condition: service_completed_successfully
     healthcheck: *api-health
 
+  # Reads what Docker already captured, so nothing in the API knows it exists.
+  alloy:
+    image: grafana/alloy:v1.12.0
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
+      LOKI_URL: ${LOKI_URL}
+      LOKI_USERNAME: ${LOKI_USERNAME}
+      LOKI_PASSWORD: ${LOKI_PASSWORD}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Docker's API is how it finds containers and their compose service names. `:ro` protects the
+      # socket FILE and not the API behind it, so this container is root on the box — see the README.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Where it got to in each file, so a restart does not re-ship the last 10 MB.
+      - alloy-data:/var/lib/alloy/data
+    # Caddy publishes the only ports on this box; Alloy's own UI stays on the compose network.
+    expose:
+      - '12345'
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -108,7 +133,6 @@ services:
       # which rate-limits at five duplicate certificates a week per hostname.
       - caddy-data:/data
       - caddy-config:/config
-      - caddy-logs:/var/log/caddy
     depends_on:
       - exam
       - core
@@ -116,4 +140,4 @@ services:
 volumes:
   caddy-data:
   caddy-config:
-  caddy-logs:
+  alloy-data:

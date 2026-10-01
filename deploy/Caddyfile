@@ -31,8 +31,10 @@
 		max_fails 3
 	}
 
+	# stdout, not a file: Docker captures it, Alloy ships it, and it is rotated by the same
+	# json-file caps as everything else. A file here would need its own shipper and its own cap.
 	log {
-		output file /var/log/caddy/access.log
+		output stdout
 		format json
 	}
 }
