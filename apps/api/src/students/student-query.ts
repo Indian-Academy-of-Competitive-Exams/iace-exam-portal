@@ -11,7 +11,8 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   const chosen: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => chosen.push(condition);
   /** What narrows the roster whichever mode is chosen: the search box, and the caller's scope. */
-  const always: Prisma.StudentWhereInput[] = [];
+  // Never `chosen`: under `match=any` an erased student would widen the result rather than narrow it.
+  const always: Prisma.StudentWhereInput[] = [{ deletedAt: null }];
 
   if (query.isActive !== undefined) add({ isActive: query.isActive });
   if (query.isTestBlocked !== undefined) add({ isTestBlocked: query.isTestBlocked });

@@ -9,9 +9,18 @@ import { readinessWhere } from '../src/students/student-flags';
 const query = (params: Record<string, string> = {}): StudentListQuery =>
   studentListQuerySchema.parse(params);
 
+/** Every query carries this: an erased student is a tombstone, never a row the roster offers. */
+const LIVE_ONLY = { deletedAt: null };
+
 /** The conditions a query produced, in no particular order. */
 const conditionsFor = (params: Record<string, string> = {}) =>
   (studentWhere(query(params)).AND as Record<string, unknown>[] | undefined) ?? [];
+
+/** What the filters themselves asked for, without the live-only guard every query carries. */
+const chosenFor = (params: Record<string, string> = {}) =>
+  conditionsFor(params).filter(
+    (condition) => JSON.stringify(condition) !== JSON.stringify(LIVE_ONLY),
+  );
 
 /** Asserts one exact condition is present among them. */
 const assertHas = (params: Record<string, string>, condition: unknown) => {
@@ -22,14 +31,25 @@ const assertHas = (params: Record<string, string>, condition: unknown) => {
   assert.ok(found, `expected ${JSON.stringify(condition)} among ${JSON.stringify(conditions)}`);
 };
 
-describe('studentWhere — an absent filter narrows nothing', () => {
+describe('studentWhere — an absent filter adds nothing of its own', () => {
   /** The failure this exists to prevent: a filter nobody set still restricts the list, and the roster quietly shows a subset of the students while looking exactly like the whole thing. */
-  it('is empty when nothing was asked for', () => {
-    assert.deepEqual(studentWhere(query()), {});
+  it('asks for nothing but the live students when nothing was asked for', () => {
+    assert.deepEqual(studentWhere(query()), { AND: [LIVE_ONLY] });
   });
 
   it('ignores an empty search box', () => {
-    assert.deepEqual(studentWhere(query({ q: '   ' })), {});
+    assert.deepEqual(studentWhere(query({ q: '   ' })), { AND: [LIVE_ONLY] });
+  });
+
+  /** The bug this prevents: an erased student, mobile and name gone, listed in the roster and carried into an export. */
+  it('leaves an erased student out whichever way the filters are matched', () => {
+    for (const match of ['all', 'any']) {
+      const conditions = conditionsFor({ match, isActive: 'true' });
+      const found = conditions.some(
+        (candidate) => JSON.stringify(candidate) === JSON.stringify(LIVE_ONLY),
+      );
+      assert.ok(found, `match=${match} dropped the live-only guard: ${JSON.stringify(conditions)}`);
+    }
   });
 });
 
@@ -37,7 +57,7 @@ describe('studentWhere — three-state filters', () => {
   /** `false` is a question, not a default. A control offering any/yes/no must be able to ask for "no", so absent and false cannot collapse into each other. */
   it('tells absent apart from false, for every boolean filter', () => {
     for (const field of ['isActive', 'isTestBlocked'] as const) {
-      assert.equal(conditionsFor().length, 0, `${field} must be absent by default`);
+      assert.equal(chosenFor().length, 0, `${field} must be absent by default`);
       assertHas({ [field]: 'false' }, { [field]: false });
       assertHas({ [field]: 'true' }, { [field]: true });
     }
@@ -49,7 +69,7 @@ describe('studentWhere — three-state filters', () => {
 
   it('can ask for exactly the students still on a starting PIN', () => {
     assertHas({ hasDefaultPin: 'true' }, { pinIsDefault: true });
-    assert.equal(conditionsFor().length, 0);
+    assert.equal(chosenFor().length, 0);
   });
 
   /** The badge beside it reads the same rule, so "no access of their own" means one thing on the screen. */
@@ -71,7 +91,7 @@ describe('studentWhere — access-shaped filters', () => {
 
   /** `in: []` matches nothing, so an emptied branch filter must list every student. */
   it('drops the branch filter when it names none', () => {
-    assert.deepEqual(conditionsFor({ branchId: '' }), []);
+    assert.deepEqual(chosenFor({ branchId: '' }), []);
   });
 
   /** What an import wrote onto the student, and the only way to see who is on a program. */
@@ -105,12 +125,12 @@ describe('studentWhere — access-shaped filters', () => {
 
   /** Set-valued like the rest: naming no event means every student, never none of them. */
   it('drops the event filter when it names none', () => {
-    assert.deepEqual(conditionsFor({ eventId: '' }), []);
+    assert.deepEqual(chosenFor({ eventId: '' }), []);
   });
 
   /** Both are set-valued: naming none means every student, never none of them. */
   it('drops the program and course filters when they name none', () => {
-    assert.deepEqual(conditionsFor({ programCode: '', course: '' }), []);
+    assert.deepEqual(chosenFor({ programCode: '', course: '' }), []);
   });
 
   /** The enum is checked at the edge, so a typo is a 400 and never a silently empty roster. */
@@ -126,7 +146,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
 
     assertHas(params, { currentBranchId: { in: ['b1'] } });
     assertHas(params, { isTestBlocked: true });
-    assert.equal(conditionsFor(params).length, 2);
+    assert.equal(chosenFor(params).length, 2);
   });
 
   it('keeps the branch filter alongside the access one', () => {
@@ -154,7 +174,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
   });
 
   it('applies every filter at once rather than the last one set', () => {
-    const conditions = conditionsFor({
+    const conditions = chosenFor({
       q: '98765',
       branchId: 'b1',
       isActive: 'true',
