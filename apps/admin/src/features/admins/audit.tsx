@@ -5,6 +5,7 @@ import {
   AUDIT_WINDOW_DAYS,
   EXPORT_KINDS,
   IMPORT_LOG_STATUS,
+  XLSX_CONTENT_TYPE,
   auditActionSchema,
   auditFeatureSchema,
   type AuditAction,
@@ -162,7 +163,11 @@ function ImportFileAction({ run }: Readonly<{ run: ImportLogSummary }>) {
   const download = useMutation({
     meta: { success: 'File downloaded.' },
     mutationFn: () => api.admin.audit.importFile(run.id),
-    onSuccess: (blob) => saveBlob(blob, `${run.feature.toLowerCase()}-import-${run.id}.xlsx`),
+    // The stored sheet keeps the format it arrived in, so the name follows the type that came back.
+    onSuccess: (blob) => {
+      const extension = blob.type === XLSX_CONTENT_TYPE ? 'xlsx' : 'csv';
+      saveBlob(blob, `${run.feature.toLowerCase()}-import-${run.id}.${extension}`);
+    },
   });
 
   return (

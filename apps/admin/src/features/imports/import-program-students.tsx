@@ -69,7 +69,7 @@ export function ImportProgramStudentsPage() {
       fileErrors={plan?.fileErrors}
       outcome={
         intake.result
-          ? `${intake.result.enrolled} enrolled, ${intake.result.alreadyEnrolled} already carried it, ${intake.result.skipped} skipped.`
+          ? `${intake.result.enrolled} enrolled, ${intake.result.alreadyEnrolled} already carried it, ${intake.result.invalid} skipped.`
           : null
       }
       errorRows={errorRows}

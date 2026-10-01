@@ -81,7 +81,7 @@ export function ImportEventCandidatesPage() {
       fileErrors={plan?.fileErrors}
       outcome={
         intake.result
-          ? `${intake.result.created} created, ${intake.result.added} on the event, ${intake.result.skipped} skipped.`
+          ? `${intake.result.added} on the event, ${intake.result.created} of them new, ${intake.result.skipped} skipped.`
           : null
       }
       errorRows={errorRows}
