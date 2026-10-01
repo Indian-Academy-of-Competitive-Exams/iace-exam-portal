@@ -95,7 +95,7 @@ export interface CohortShape {
 /** Columns to aim for, so a 200-mark paper reads in tens rather than in hundreds of them. */
 const COHORT_BAND_TARGET = 10;
 
-/** The banding convention is pinned beside `scoreHistogramSchema`; a rollup writer must match it. */
+/** The banding convention is pinned beside `CohortBand`; a rollup writer must match it. */
 export function cohortShapeOf(counted: readonly ScoreCount[]): CohortShape {
   let size = 0;
   let total = 0;

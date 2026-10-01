@@ -77,7 +77,7 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   },
 };
 
-/** What an admin is CALLED — it presets, labels and orders, and no guard ever reads it. */
+/** Seeds the grants at create, labels and orders the person, and decides `isSuperAdmin` on every write. */
 export const ADMIN_ROLES = {
   TYPIST: 'TYPIST',
   PROOFREADER: 'PROOFREADER',

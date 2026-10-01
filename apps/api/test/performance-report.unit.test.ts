@@ -127,7 +127,7 @@ describe('flagYours', () => {
 });
 
 describe('cohortShapeOf', () => {
-  /** The convention a rollup writer must match, pinned beside `scoreHistogramSchema`. */
+  /** The convention a rollup writer must match, pinned beside `CohortBand`. */
   it('bands the scores into ascending, contiguous, equal-width columns holding every sitting', () => {
     const shape = cohortShapeOf([
       { score: 0, count: 1 },
