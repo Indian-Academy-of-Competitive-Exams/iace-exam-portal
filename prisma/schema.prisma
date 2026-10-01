@@ -2,8 +2,9 @@
 // IACE Platform — V1 data model (PostgreSQL).
 //
 // This file is the target of record. What Prisma cannot express — partial-unique
-// indexes, CHECK constraints, the locked-config immutability trigger and the
-// outbox poll index — is hand-written in the migration.
+// and expression indexes, CHECK constraints, the BaseConfig and sat guards, the
+// optionIds fan-out, sitting_percentile, tagsText and the AttemptSheetAnswer
+// view — is hand-written in the migration.
 // ============================================================================
 
 datasource db {
@@ -42,9 +43,7 @@ enum QuestionType {
   TEXT_FIELD
 }
 
-// How a TEXT_FIELD answerKey is matched. Lives inside QuestionVersion.answerKey
-// JSON, never as a column. Aligned with ANSWER_MODE in @iace/contracts, which
-// the importer already writes; both sides move to the target NUMERIC/TEXT in T10.
+// No column uses it — a TEXT_FIELD's mode lives in QuestionVersion.answerKey JSON, as ANSWER_MODE in @iace/contracts.
 enum AnswerMode {
   EXACT
   NUMERIC
@@ -146,8 +145,7 @@ enum AttemptStatus {
   IN_PROGRESS
   SUBMITTED
   EVALUATED
-  // Reserved, never written - a stranded sitting ends SUBMITTED so it is still scored. Writing it
-  // means choosing for SCORABLE, cohortSittingsOf and slotsAfter, which today all differ by default.
+  // Reserved, never written — a stranded sitting ends SUBMITTED, so a switch on this must still answer for it.
   EXPIRED
   // Archived by an admin (support console). Excluded from every rollup, leaderboard and cohort read.
   VOIDED
@@ -359,6 +357,7 @@ model BaseConfig {
   shuffleQuestions     Boolean             @default(true)
   shuffleOptions       Boolean             @default(true)
   calculatorEnabled    Boolean             @default(false)
+  // Written and read by nothing, though base_config_guard freezes it with the other locked columns.
   featureFlags         Json?
   // Which scoring algorithm produced a result — bump to reproduce history exactly.
   scoringVersion       Int                 @default(1)
@@ -530,7 +529,7 @@ model Test {
   scope              TestScope    @default(FULL)
   scopeRef           Json?
   questionPoolFilter Json?
-  // Null until an admin declares it; set once, and only a super admin ever moves it after.
+  // Null until an admin declares it; chosen once and never moved, super admin included.
   paperSource        PaperSource?
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate @default(DEFAULT)
@@ -700,6 +699,7 @@ model Attempt {
   evaluatedAt      DateTime?           @db.Timestamptz(3)
   shuffleSeed      Int
   languages        SupportedLanguage[] @default([])
+  // Written and read by nothing — the live section clocks stay in Redis and never land here.
   sectionState     Json?
   score            Decimal?            @db.Decimal(8, 2)
   correctCount     Int?
@@ -821,7 +821,6 @@ model StudentProfile {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
-// DPDP §6: what the student agreed to, when, and to which version of the notice.
 model Admin {
   id           String    @id @default(uuid(7)) @db.Uuid
   email        String    @unique
@@ -894,7 +893,7 @@ model TestSeries {
   examStageId     String?        @db.Uuid
   programCode     String?
   sequentialTests Boolean        @default(false)
-  // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
+  // What the series IS: FREE reaches every live student, STANDARD by branch and course, PROGRAM only by program, EVENT only its Event's candidates.
   kind            TestSeriesKind @default(STANDARD)
   eventId         String?        @db.Uuid
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
@@ -935,6 +934,7 @@ model Event {
   name        String
   description String?
   isActive    Boolean  @default(true)
+  // Written and read by nothing — who created an event is the audit row's actor.
   createdById String?  @db.Uuid
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -1016,7 +1016,7 @@ model RowActionLog {
   id          String       @id @default(uuid(7)) @db.Uuid
   feature     AuditFeature
   entityId    String       @db.Uuid
-  // The label as it was, so the log survives a rename or a delete.
+  // Written and read by nothing — the audit screen shows the entity id, never a label.
   entityLabel String?
   action      AuditAction
   actorType   ActorType
@@ -1057,7 +1057,7 @@ model Notification {
   testSeriesId   String?          @db.Uuid
   announcementId String?          @db.Uuid
   isRead         Boolean          @default(false)
-  // Which channel actually brought them back, so the policy stops being an assumption.
+  // Written and read by nothing — no channel attribution is recorded today.
   openedVia      DeliveryChannel?
   // Stamped when the push sweep claims the row; the sweep finds its work through a partial index on null.
   pushedAt       DateTime?        @db.Timestamptz(3)
@@ -1108,7 +1108,7 @@ model NotificationDelivery {
   // NO_TEMPLATE, NO_CONTACT, ALREADY_READ — why we decided not to spend.
   skipReason        String?
   templateId        String?
-  // Dark until a provider that reports delivery is configured; indexed for the webhook that will.
+  // Dark and unindexed: no provider reports delivery, so nothing writes or reads it.
   providerMessageId String?
   attempts          Int             @default(0)
   lastError         String?
