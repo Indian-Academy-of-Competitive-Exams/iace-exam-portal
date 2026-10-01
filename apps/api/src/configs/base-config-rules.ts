@@ -69,8 +69,18 @@ export function configShapeIssues(
     }
   }
 
-  if (timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length === 0) {
-    issues.push('A session paper is made of modules. Add at least one.');
+  if (timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED) {
+    if (modules.length === 0) {
+      issues.push('A session paper is made of modules. Add at least one.');
+    } else if (durationSec !== undefined) {
+      // A module's clock is optional, so the total is judged for an overrun and never for a match.
+      const clocked = modules.reduce((sum, module) => sum + (module.durationSec ?? 0), 0);
+      if (clocked > durationSec) {
+        issues.push(
+          `The modules add up to ${minutes(clocked)}, but the paper is set to ${minutes(durationSec)}.`,
+        );
+      }
+    }
   }
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {

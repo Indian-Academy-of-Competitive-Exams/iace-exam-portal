@@ -526,8 +526,8 @@ describe('BaseConfigsService — a session paper', () => {
     draft(examStageId, {
       timerTemplate: TIMER_TEMPLATE.SESSION_MODULE_LOCKED,
       modules: [
-        { name: 'Session 1', order: 1, durationSec: 3600 },
-        { name: 'Session 2', order: 2, durationSec: 3600 },
+        { name: 'Session 1', order: 1, durationSec: 1800 },
+        { name: 'Session 2', order: 2, durationSec: 1800 },
       ],
       sections: [
         {
@@ -569,6 +569,28 @@ describe('BaseConfigsService — a session paper', () => {
           ADMIN,
         ),
       AppException.is,
+    );
+  });
+
+  /** The bug this catches: two 60-minute sessions saved onto a paper that only runs for 60. */
+  it('refuses a session paper whose modules run past its own clock', async () => {
+    const overrun = draft(await makeStage(prisma), {
+      timerTemplate: TIMER_TEMPLATE.SESSION_MODULE_LOCKED,
+      durationSec: 3600,
+      modules: [
+        { name: 'Session 1', order: 1, durationSec: 3600 },
+        { name: 'Session 2', order: 2, durationSec: 3600 },
+      ],
+    });
+
+    await assert.rejects(
+      () => service.create(overrun, ADMIN),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+        assert.match(error.message, /120 minutes.*60 minutes/);
+        return true;
+      },
     );
   });
 
