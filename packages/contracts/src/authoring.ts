@@ -18,9 +18,6 @@ import { dateOnlySchema } from './students';
 /** How far back the output chart reads. A typist's pace is a month's shape, not a year's. */
 export const AUTHORING_HISTORY_DAYS = 30;
 
-/** How many of the author's own recent tags the header offers. */
-export const AUTHORING_TAG_SUGGESTIONS = 40;
-
 /** The bank's own filters, over the author's own questions — `from`/`to` read when it was WRITTEN. */
 export const authoringHistoryQuerySchema = questionListQuerySchema
   .pick({
@@ -78,9 +75,6 @@ export const authoringDuplicateQuerySchema = questionDraftSchema.extend({
   exceptId: z.string().nullable().default(null),
 });
 export type AuthoringDuplicateQuery = z.infer<typeof authoringDuplicateQuerySchema>;
-
-export const authoringTagsSchema = z.object({ tags: z.array(z.string()) });
-export type AuthoringTags = z.infer<typeof authoringTagsSchema>;
 
 export const ADMIN_AUTHORING_ROUTES = {
   stats: '/admin/authoring/stats',

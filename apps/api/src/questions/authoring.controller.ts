@@ -24,7 +24,6 @@ import {
   type AuthoringHistoryQuery,
   type AuthoringSaveResult,
   type AuthoringStats,
-  type AuthoringTags,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
@@ -41,11 +40,6 @@ import { AuthoringService } from './authoring.service';
 @RequiresFeature(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.READ)
 export class AuthoringController {
   constructor(private readonly authoring: AuthoringService) {}
-
-  @Get('tags')
-  async tags(@CurrentUser() user: AuthenticatedUser): Promise<AuthoringTags> {
-    return { tags: await this.authoring.tags(user.id) };
-  }
 
   @Get('stats')
   stats(@CurrentUser() user: AuthenticatedUser): Promise<AuthoringStats> {

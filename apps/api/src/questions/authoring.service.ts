@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   AUTHORING_HISTORY_DAYS,
-  AUTHORING_TAG_SUGGESTIONS,
   ErrorCodes,
   INSTITUTE_TIME_ZONE,
   QUESTION_STATUSES,
@@ -95,21 +94,6 @@ export class AuthoringService {
       byStatus,
       daily,
     };
-  }
-
-  /** The author's own tags, the most recently used first — what the header offers as they type. */
-  async tags(adminId: string): Promise<string[]> {
-    const rows = await this.prisma.$queryRaw<{ tag: string }[]>`
-      SELECT tag FROM (
-        SELECT unnest(q."tags") AS tag, MAX(q."updatedAt") AS last_used
-        FROM "Question" q
-        WHERE q."createdById" = ${adminId}::uuid
-        GROUP BY 1
-      ) used
-      ORDER BY last_used DESC
-      LIMIT ${AUTHORING_TAG_SUGGESTIONS}
-    `;
-    return rows.map((row) => row.tag);
   }
 
   /** Grouped in the database at the institute's day boundary, never at UTC midnight. */

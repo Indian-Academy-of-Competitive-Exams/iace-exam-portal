@@ -21,7 +21,6 @@ describe('what the authoring routes charge', () => {
   /** The failure this prevents: a typist reaching the bank because the nav was the only gate. */
   it('charges every route QUESTION_AUTHORING, at the level the act deserves', () => {
     const priced = [
-      [AuthoringController.prototype.tags, PERMISSION_LEVELS.READ],
       [AuthoringController.prototype.stats, PERMISSION_LEVELS.READ],
       [AuthoringController.prototype.history, PERMISSION_LEVELS.READ],
       [AuthoringController.prototype.detail, PERMISSION_LEVELS.READ],
