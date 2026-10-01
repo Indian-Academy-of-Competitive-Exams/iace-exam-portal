@@ -129,6 +129,19 @@ describe('the proxy hop count', () => {
   });
 });
 
+describe("the OTP budget's divisor", () => {
+  /** The bug this prevents: 0 makes maxSends Infinity, so the platform-wide spend cap never fires. */
+  it('refuses a zero SMS cost', () => {
+    assert.throws(() => validateEnv(env({ NOTIFICATION_COST_SMS_PAISE: '0' })));
+  });
+
+  it('takes a real price', () => {
+    const parsed = validateEnv(env({ NOTIFICATION_COST_SMS_PAISE: '18' }));
+
+    assert.equal(parsed.NOTIFICATION_COST_SMS_PAISE, 18);
+  });
+});
+
 describe('the secrets .env.example publishes', () => {
   const PUBLISHED = {
     JWT_ACCESS_SECRET: 'dev_only_access_secret_change_me_before_any_deploy',

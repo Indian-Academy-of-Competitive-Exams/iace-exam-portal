@@ -19,7 +19,7 @@ import { Public } from '../common/security';
 /** Long enough for a slow round trip, short enough that a probe answers before the orchestrator gives up. */
 const PROBE_TIMEOUT_MS = 2000;
 
-/** Liveness at `/health`, readiness at `/health/ready` — an orchestrator restarts on one and stops routing on the other. */
+/** `/health` always answers 200 — a probe keyed on the status code must use `/health/ready` instead. */
 @SkipThrottle()
 @Controller('health')
 export class HealthController {

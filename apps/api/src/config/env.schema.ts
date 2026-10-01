@@ -181,7 +181,8 @@ export const envSchema = z.object({
 
   // What one paid message costs in PAISE, so a preview is priced in what the invoice will say.
   NOTIFICATION_COST_WHATSAPP_PAISE: z.coerce.number().int().nonnegative().default(17),
-  NOTIFICATION_COST_SMS_PAISE: z.coerce.number().int().nonnegative().default(18),
+  // Floor of 1: `assertGlobalDailyBudget` divides the OTP budget by it, and 0 would lift the cap.
+  NOTIFICATION_COST_SMS_PAISE: z.coerce.number().int().positive().default(18),
   // The wall a mistargeted broadcast hits instead of an invoice.
   NOTIFICATION_MAX_RECIPIENTS: z.coerce.number().int().positive().default(50000),
 

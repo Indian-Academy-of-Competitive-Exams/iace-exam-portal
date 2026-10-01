@@ -36,7 +36,7 @@ export const QUEUE_POLICY = {
   { concurrency: number; attempts: number; backoffMs: number }
 >;
 
-/** A job that ran out of attempts is the dead letter: kept a week, because nobody watches on the day. */
+/** The scheduled sweeps' dead letter, kept a week. A keyedJob add overrides it and keeps nothing. */
 export const FAILED_JOB_RETENTION = { age: 7 * DAY_SEC, count: 500 } as const;
 
 /** The aggregator's ceiling, not ours: paid sends above it are refused and still billed as attempts. */
@@ -80,7 +80,7 @@ export function rescoreJobId(attemptId: string, paperRevision: number): string {
 /** Unscored this long is a backlog the gauge reports. */
 export const SCORING_RETRY_AFTER_MS = 5 * MS_PER_MINUTE;
 
-/** How many stranded events one relay pass hands on. */
+/** How many unpushed notifications one sweep pass claims. */
 export const RELAY_BATCH = 200;
 
 /** How long a sweep leaves an ended sitting to its own submit before queuing it itself. */
@@ -130,6 +130,7 @@ export const ROLLUP_REBUILD_DELAY_MS = 1 * MS_PER_MINUTE;
 
 /** The push sweep, and the sweep that notices tests opening by the clock. */
 export const NOTIFICATION_JOBS = {
+  // The live repeat scheduler is registered under this id: renaming it strands the old one.
   SWEEP: 'relay-sweep',
   /** Finds tests that have opened since anybody was last told, and tells whoever reaches them. */
   TESTS_OPENED: 'tests-opened-sweep',

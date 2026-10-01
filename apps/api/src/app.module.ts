@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
+// The event BUS. `./events` below is the Event/EventCandidate feature, and keeps the plain name.
 import { EventsModule as DomainEventsModule } from './common/events';
 import { MessagingModule } from './common/messaging';
 import { ThrottlingModule } from './common/throttling';
