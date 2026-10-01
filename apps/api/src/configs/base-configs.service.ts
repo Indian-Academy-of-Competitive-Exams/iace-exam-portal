@@ -263,7 +263,6 @@ export class BaseConfigsService {
           shuffleOptions: source.shuffleOptions,
           calculatorEnabled: source.calculatorEnabled,
           scoringVersion: source.scoringVersion,
-          featureFlags: source.featureFlags ?? Prisma.DbNull,
         },
       });
 

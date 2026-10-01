@@ -640,12 +640,8 @@ describe('BaseConfigsService — clone to evolve', () => {
   });
 
   /** The failure this prevents: a clone of the official pattern losing the workbook's own words. */
-  it('carries the pattern notes and the feature flags no contract shows', async () => {
+  it('carries the pattern notes no contract shows', async () => {
     const original = await seedConfig({ examStageId: await makeStage(prisma), sections: ['A'] });
-    await prisma.baseConfig.update({
-      where: { id: original },
-      data: { featureFlags: { omrPreview: true } },
-    });
     await prisma.baseConfigSection.updateMany({
       where: { baseConfigId: original },
       data: { patternNote: 'Part A — 25 questions, 2 marks each' },
@@ -653,7 +649,6 @@ describe('BaseConfigsService — clone to evolve', () => {
 
     const clone = await service.clone(original, {}, ADMIN);
 
-    assert.deepEqual((await configRow(clone.id)).featureFlags, { omrPreview: true });
     const copied = await prisma.baseConfigSection.findMany({ where: { baseConfigId: clone.id } });
     assert.equal(copied[0]?.patternNote, 'Part A — 25 questions, 2 marks each');
   });

@@ -357,8 +357,6 @@ model BaseConfig {
   shuffleQuestions     Boolean             @default(true)
   shuffleOptions       Boolean             @default(true)
   calculatorEnabled    Boolean             @default(false)
-  // Written and read by nothing, though base_config_guard freezes it with the other locked columns.
-  featureFlags         Json?
   // Which scoring algorithm produced a result — bump to reproduce history exactly.
   scoringVersion       Int                 @default(1)
   createdById          String?             @db.Uuid
@@ -482,9 +480,10 @@ model Question {
   reviews        QuestionReview[]
   assignment     QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
+  // Unique, not just indexed: the duplicate pre-check reads outside the write, so two commits can race past it.
+  @@unique([stemHash])
   @@index([subjectId, difficulty, status])
   @@index([topicId])
-  @@index([stemHash])
   @@index([createdById])
   @@index([assignmentId])
   @@index([tags], type: Gin)
@@ -601,6 +600,8 @@ model PaperQuestion {
   @@index([questionId])
   @@index([questionVersionId])
   @@index([baseConfigId, baseConfigSectionId])
+  // The authoring queue counts a section's rows per test; testId alone leaves the whole paper to filter.
+  @@index([testId, baseConfigSectionId])
 }
 
 // One person's job on one section of one test. Two rows per section: who types it, who reads it.
@@ -934,8 +935,6 @@ model Event {
   name        String
   description String?
   isActive    Boolean  @default(true)
-  // Written and read by nothing — who created an event is the audit row's actor.
-  createdById String?  @db.Uuid
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -1016,8 +1015,6 @@ model RowActionLog {
   id          String       @id @default(uuid(7)) @db.Uuid
   feature     AuditFeature
   entityId    String       @db.Uuid
-  // Written and read by nothing — the audit screen shows the entity id, never a label.
-  entityLabel String?
   action      AuditAction
   actorType   ActorType
   actorId     String?      @db.Uuid
@@ -1053,15 +1050,13 @@ model Notification {
   // When what this is about stops being actionable. Null means waiting costs the student nothing.
   actBy     DateTime?        @db.Timestamptz(3)
 
-  testId         String?          @db.Uuid
-  testSeriesId   String?          @db.Uuid
-  announcementId String?          @db.Uuid
-  isRead         Boolean          @default(false)
-  // Written and read by nothing — no channel attribution is recorded today.
-  openedVia      DeliveryChannel?
+  testId         String?   @db.Uuid
+  testSeriesId   String?   @db.Uuid
+  announcementId String?   @db.Uuid
+  isRead         Boolean   @default(false)
   // Stamped when the push sweep claims the row; the sweep finds its work through a partial index on null.
-  pushedAt       DateTime?        @db.Timestamptz(3)
-  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  pushedAt       DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
 
   student      Student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)
   admin        Admin?                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
@@ -1101,21 +1096,19 @@ model Announcement {
 
 // One row per channel that can FAIL — in-app has none, because the Notification row IS its delivery.
 model NotificationDelivery {
-  id                String          @id @default(uuid(7)) @db.Uuid
-  notificationId    String          @db.Uuid
-  channel           DeliveryChannel
-  status            DeliveryStatus  @default(PENDING)
+  id             String          @id @default(uuid(7)) @db.Uuid
+  notificationId String          @db.Uuid
+  channel        DeliveryChannel
+  status         DeliveryStatus  @default(PENDING)
   // NO_TEMPLATE, NO_CONTACT, ALREADY_READ — why we decided not to spend.
-  skipReason        String?
-  templateId        String?
-  // Dark and unindexed: no provider reports delivery, so nothing writes or reads it.
-  providerMessageId String?
-  attempts          Int             @default(0)
-  lastError         String?
-  queuedAt          DateTime        @default(now()) @db.Timestamptz(3)
-  sentAt            DateTime?       @db.Timestamptz(3)
-  deliveredAt       DateTime?       @db.Timestamptz(3)
-  failedAt          DateTime?       @db.Timestamptz(3)
+  skipReason     String?
+  templateId     String?
+  attempts       Int             @default(0)
+  lastError      String?
+  queuedAt       DateTime        @default(now()) @db.Timestamptz(3)
+  sentAt         DateTime?       @db.Timestamptz(3)
+  deliveredAt    DateTime?       @db.Timestamptz(3)
+  failedAt       DateTime?       @db.Timestamptz(3)
 
   notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 

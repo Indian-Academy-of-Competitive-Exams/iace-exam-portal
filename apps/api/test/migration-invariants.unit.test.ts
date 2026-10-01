@@ -13,7 +13,7 @@ const MIGRATION = readFileSync(
 const LOCKED_CONFIG_GUARD = readFileSync(
   join(
     __dirname,
-    '../../../prisma/migrations/20261001100000_a_locked_config_freezes_its_skin/migration.sql',
+    '../../../prisma/migrations/20261001110000_the_schema_drops_what_nothing_writes/migration.sql',
   ),
   'utf8',
 );
@@ -189,7 +189,6 @@ describe('a locked config', () => {
     'shuffleQuestions',
     'shuffleOptions',
     'calculatorEnabled',
-    'featureFlags',
     'scoringVersion',
   ]) {
     it(`freezes ${column}`, () => {
