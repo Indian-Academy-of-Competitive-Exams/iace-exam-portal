@@ -10,6 +10,7 @@ import { type Response } from 'express';
 import * as Sentry from '@sentry/nestjs';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import {
   AppException,
   FORM_LEVEL_FIELD,
@@ -53,12 +54,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const line = `${where} → ${status} ${error.code} [${requestId}]`;
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      const fingerprint = fingerprintOf(exception);
       // The only place the real cause exists: the response deliberately does not carry it, so losing it here would mean losing it entirely.
       this.logger.error(
-        `${line}${bodyLine(request.body)}`,
+        `${line} bug=${fingerprint}${bodyLine(request.body)}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
-      report(exception, requestId, where, request.body);
+      report(exception, requestId, where, request.body, fingerprint);
       return;
     }
     // No body on a 4xx: `fieldErrors` already names every field the caller got wrong.
@@ -72,11 +74,37 @@ function bodyLine(body: unknown): string {
   return ` ${JSON.stringify(redact(body))}`;
 }
 
+const FRAME_LOCATION = /\(?([^()\s]+):\d+:\d+\)?$/;
+
+/** The same bug hashes the same, so `sum by (bug)` in Loki groups what Sentry would have grouped. Line and column are dropped deliberately: a refactor that shifts a function must not look like a new bug. */
+export function fingerprintOf(exception: unknown): string {
+  if (!(exception instanceof Error) || !exception.stack) return 'nostack';
+
+  const frames = exception.stack
+    .split('\n')
+    .filter((line) => line.trimStart().startsWith('at ') && !line.includes('node_modules'))
+    .slice(0, 4)
+    .map((line) => line.trim().replace(FRAME_LOCATION, '$1'));
+
+  if (frames.length === 0) return 'nostack';
+  return createHash('sha1')
+    .update(`${exception.name}|${frames.join('|')}`)
+    .digest('hex')
+    .slice(0, 10);
+}
+
 /** What a 500 told the log, tagged with the id the caller was handed, and the body that caused it. */
-function report(exception: unknown, requestId: string, where: string, body: unknown): void {
+function report(
+  exception: unknown,
+  requestId: string,
+  where: string,
+  body: unknown,
+  fingerprint: string,
+): void {
   Sentry.withScope((scope) => {
     scope.setTag('requestId', requestId);
     scope.setTag('route', where);
+    scope.setTag('bug', fingerprint);
     scope.setContext('request', { body: redact(body) });
     Sentry.captureException(exception);
   });

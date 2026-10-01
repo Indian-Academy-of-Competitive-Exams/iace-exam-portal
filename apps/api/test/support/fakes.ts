@@ -713,12 +713,24 @@ export class FakeMetrics {
 
   readonly scoringBacklog: number[] = [];
 
+  readonly authAttempts: string[] = [];
+
+  readonly scorings: number[] = [];
+
   countSubmit(outcome: string): void {
     this.submits.push(outcome);
   }
 
   countOtpSend(outcome: string): void {
     this.otpSends.push(outcome);
+  }
+
+  countAuthAttempt(outcome: string): void {
+    this.authAttempts.push(outcome);
+  }
+
+  observeScoring(submittedAt: Date, evaluatedAt: Date): void {
+    this.scorings.push((evaluatedAt.getTime() - submittedAt.getTime()) / 1000);
   }
 
   countQueueFailure(queue: string, spent: boolean): void {

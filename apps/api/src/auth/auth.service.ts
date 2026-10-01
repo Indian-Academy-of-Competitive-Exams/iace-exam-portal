@@ -29,6 +29,7 @@ import {
   PIN_RESET_REASONS,
   type PinResetReason,
 } from '../common/events';
+import { AUTH_OUTCOMES, MetricsService } from '../common/metrics/metrics.service';
 import { type DeviceContext } from './auth.types';
 import { isRecordNotFound } from '../common/prisma-errors';
 
@@ -52,6 +53,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly events: DomainEventBus,
     private readonly admins: AdminsService,
+    private readonly metrics: MetricsService,
   ) {}
 
   // ==========================================================================
@@ -180,7 +182,12 @@ export class AuthService {
     pin: string,
     device: DeviceContext,
   ): Promise<AuthSessionResponse> {
-    await this.pin.assertNotLocked(mobile);
+    try {
+      await this.pin.assertNotLocked(mobile);
+    } catch (locked) {
+      this.metrics.countAuthAttempt(AUTH_OUTCOMES.LOCKED);
+      throw locked;
+    }
 
     const student = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
@@ -191,11 +198,17 @@ export class AuthService {
       : await this.pin.burnVerifyTime().then(() => false);
 
     if (!ok || !student) {
+      // Separated for the metric only: the message stays identical, or it tells a stranger which mobiles exist.
+      this.metrics.countAuthAttempt(student ? AUTH_OUTCOMES.BAD_PIN : AUTH_OUTCOMES.NO_STUDENT);
       await this.pin.registerFailure(mobile);
       throw new AppException(ErrorCodes.PIN_INVALID, 'Incorrect mobile number or PIN');
     }
-    if (!student.isActive) throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
+    if (!student.isActive) {
+      this.metrics.countAuthAttempt(AUTH_OUTCOMES.DEACTIVATED);
+      throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
+    }
 
+    this.metrics.countAuthAttempt(AUTH_OUTCOMES.OK);
     await this.pin.clearFailures(mobile);
 
     const identity = this.studentIdentity(student);

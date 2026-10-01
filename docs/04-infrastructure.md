@@ -502,7 +502,16 @@ have depended on them is the app's own `/metrics` or an EC2 status check.
 
 `/metrics` already publishes what an event needs watching — latency and error rate, submits, queue
 depth and oldest wait, job failures, Redis memory and evictions, live sittings not yet in Postgres,
-database connections. **Grafana Cloud's free tier** scrapes it; Amazon Managed Prometheus and
+database connections. Two of them answer questions nothing else can: `scoring_duration_seconds` is
+submit to EVALUATED on a FIRST evaluation, the one SLA a live event is judged on — queue depth says
+how many are waiting, never how long one takes — and `auth_attempts_total{outcome}` separates a
+student who forgot their PIN from somebody enumerating mobile numbers, which a bare 401 count
+cannot. The sign-in MESSAGE stays identical across `bad_pin` and `no_student`; only the label
+differs, or the metric would become the enumeration oracle it exists to detect.
+
+A 5xx log line and its Sentry event both carry `bug=<10 hex>`, a hash of the error kind and its top
+four non-`node_modules` frames with line and column dropped, so a refactor that shifts a function
+does not read as a new bug. `sum by (bug)` in Loki is then the grouping Sentry would have done. **Grafana Cloud's free tier** scrapes it; Amazon Managed Prometheus and
 Grafana would be $14–19 for the same picture.
 
 Off deliberately: Container Insights and VPC flow logs (one zone, nothing to see).

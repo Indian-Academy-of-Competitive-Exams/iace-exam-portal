@@ -8,7 +8,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   disposeQuestion,
@@ -31,6 +31,8 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
+const metrics = new FakeMetrics();
+
 const processor = new ScoringProcessor(
   prisma,
   new RollupQueue(new FakeQueue().asQueue()),
@@ -38,6 +40,7 @@ const processor = new ScoringProcessor(
   fakeQueueFailures(),
   new PaperSheetService(prisma),
   new RollupService(prisma),
+  metrics.asService(),
 );
 
 type Sat = Omit<SitInput, 'paper' | 'studentId' | 'chosen'>;
@@ -167,6 +170,19 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(await snapshot(), first);
   });
 
+  /** Submit to EVALUATED is the one number a live event is judged on, and only the FIRST pass measures it: a re-score days later would report days. */
+  it('times the first evaluation from submit, and times no re-score at all', async () => {
+    const { attemptId } = await sitting();
+    metrics.scorings.length = 0;
+
+    await processor.score(attemptId);
+    assert.equal(metrics.scorings.length, 1);
+    assert.ok(metrics.scorings[0] !== undefined && metrics.scorings[0] >= 0);
+
+    await processor.score(attemptId);
+    assert.equal(metrics.scorings.length, 1);
+  });
+
   /** The first score warms the terms cache, so the drop only lands if the revision unkeys it. */
   it('re-scores an evaluated sitting, which is how a dropped question reaches it', async () => {
     const { paper, attemptId } = await sitting();
@@ -203,6 +219,7 @@ describe('ScoringProcessor — what it writes', () => {
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     );
 
     assert.equal(await voided.score(attemptId), null);
@@ -233,6 +250,7 @@ describe('ScoringProcessor — what it writes', () => {
       fakeQueueFailures(),
       olderPaper,
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     );
 
     assert.equal(await overtaken.score(attemptId), null);

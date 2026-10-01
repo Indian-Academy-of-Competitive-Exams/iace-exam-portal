@@ -192,6 +192,7 @@ async function scoredHall() {
     fakeQueueFailures(),
     new PaperSheetService(prisma),
     rollup,
+    new FakeMetrics().asService(),
   );
   const sweeper = new AttemptSweeperProcessor(
     prisma,

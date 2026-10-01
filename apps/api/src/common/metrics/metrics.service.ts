@@ -18,6 +18,20 @@ const LATENCY_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
 const PREFIX = 'iace_';
 
+/** Why a sign-in ended. A rising `bad_pin` against many mobiles is enumeration; against one it is a student who forgot. */
+export const AUTH_OUTCOMES = {
+  OK: 'ok',
+  BAD_PIN: 'bad_pin',
+  NO_STUDENT: 'no_student',
+  LOCKED: 'locked',
+  DEACTIVATED: 'deactivated',
+} as const;
+
+export type AuthOutcome = (typeof AUTH_OUTCOMES)[keyof typeof AUTH_OUTCOMES];
+
+/** Submit to EVALUATED. The buckets reach 300s because the number that matters is the tail of a 6K hall, not the median. */
+const SCORING_BUCKETS = [1, 5, 15, 30, 60, 120, 300];
+
 @Injectable()
 export class MetricsService implements OnModuleInit {
   private readonly logger = new Logger(MetricsService.name);
@@ -25,6 +39,8 @@ export class MetricsService implements OnModuleInit {
 
   private readonly httpDuration: Histogram<'method' | 'route' | 'status'>;
   private readonly submits: Counter<'outcome'>;
+  private readonly authAttempts: Counter<'outcome'>;
+  private readonly scoringDuration: Histogram<string>;
   private readonly otpSends: Counter<'outcome'>;
   private readonly queueDepth: Gauge<'queue'>;
   private readonly queueOldestWait: Gauge<'queue'>;
@@ -56,6 +72,20 @@ export class MetricsService implements OnModuleInit {
       name: `${PREFIX}attempt_submits_total`,
       help: 'Sittings handed in — the spike everything downstream is sized for',
       labelNames: ['outcome'] as const,
+      registers: [this.registry],
+    });
+
+    this.authAttempts = new Counter({
+      name: `${PREFIX}auth_attempts_total`,
+      help: 'Student sign-ins by outcome — a 401 says a call was refused, this says why',
+      labelNames: ['outcome'] as const,
+      registers: [this.registry],
+    });
+
+    this.scoringDuration = new Histogram({
+      name: `${PREFIX}scoring_duration_seconds`,
+      help: 'Submit to EVALUATED on a first evaluation — the one SLA a live event is judged on',
+      buckets: SCORING_BUCKETS,
       registers: [this.registry],
     });
 
@@ -153,6 +183,16 @@ export class MetricsService implements OnModuleInit {
 
   countSubmit(outcome: 'accepted' | 'refused'): void {
     this.submits.inc({ outcome });
+  }
+
+  countAuthAttempt(outcome: AuthOutcome): void {
+    this.authAttempts.inc({ outcome });
+  }
+
+  /** First evaluations only: a re-score days later would report days, and bury the number this exists to show. */
+  observeScoring(submittedAt: Date, evaluatedAt: Date): void {
+    const seconds = (evaluatedAt.getTime() - submittedAt.getTime()) / 1000;
+    if (seconds >= 0) this.scoringDuration.observe(seconds);
   }
 
   countOtpSend(

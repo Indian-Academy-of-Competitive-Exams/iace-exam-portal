@@ -57,8 +57,9 @@ function build(bus: { asService(): DomainEventBus } = new FakeEventBus()) {
     sessions,
     bus.asService(),
     new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
+    metrics.asService(),
   );
-  return { auth, tokens, sessions, redis, sender };
+  return { auth, tokens, sessions, redis, sender, metrics };
 }
 
 type Ctx = ReturnType<typeof build>;
@@ -144,6 +145,30 @@ describe('AuthService — student login', () => {
       () => ctx.auth.loginStudent('9999999999', '0000', NO_DEVICE),
       failsWith('PIN_LOCKED'),
     );
+  });
+
+  /** A 401 says a call was refused; only this says whether one student forgot their PIN or someone is enumerating numbers. */
+  it('counts each sign-in outcome apart, while telling the caller the same thing', async () => {
+    const ctx = build();
+    await signUp(ctx, MOBILE, '4813');
+    ctx.metrics.authAttempts.length = 0;
+
+    await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
+    await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '0000', NO_DEVICE));
+    await assert.rejects(() => ctx.auth.loginStudent('9999999999', '0000', NO_DEVICE));
+
+    assert.deepEqual(ctx.metrics.authAttempts, ['ok', 'bad_pin', 'no_student']);
+  });
+
+  it('counts a lockout as its own outcome, not as another bad PIN', async () => {
+    const ctx = build();
+    await signUp(ctx, MOBILE, '4813');
+
+    for (let i = 0; i < 6; i++) {
+      await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '0000', NO_DEVICE));
+    }
+
+    assert.equal(ctx.metrics.authAttempts.at(-1), 'locked');
   });
 
   it('refuses a deactivated account, even with the correct PIN', async () => {

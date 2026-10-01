@@ -12,7 +12,7 @@ import { topperIdOf } from '../src/attempts/topper';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { COHORT_SWEEP_JOB_ID, ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   disposeQuestion,
@@ -48,6 +48,7 @@ function build(rollupClient: PrismaService = prisma) {
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     ),
     rollup: new RollupService(rollupClient),
   };
@@ -256,6 +257,7 @@ describe('RollupService — sweeping the cohorts that changed', () => {
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     );
     const paper = await paperOf();
     const { attemptId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);

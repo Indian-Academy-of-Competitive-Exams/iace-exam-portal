@@ -17,6 +17,7 @@ import { RollupQueue } from './rollup-queue';
 import { NotificationsService } from '../notifications';
 import { packedSections, scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 import { QueueFailures } from '../common/metrics/queue-failures';
+import { MetricsService } from '../common/metrics/metrics.service';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
 import { PaperSheetService, type PaperTerm } from './paper-sheet.service';
 import { RollupService } from './rollup.service';
@@ -60,6 +61,7 @@ export class ScoringProcessor extends ReportingWorkerHost {
     failures: QueueFailures,
     private readonly papers: PaperSheetService,
     private readonly rollups: RollupService,
+    private readonly metrics: MetricsService,
   ) {
     super(QUEUE_NAMES.SCORING, failures);
   }
@@ -87,6 +89,9 @@ export class ScoringProcessor extends ReportingWorkerHost {
     // Stood down, or overtaken by a newer paper's marks: counting it now would count the wrong ones.
     if (!written.applied) return null;
 
+    if (written.first && attempt.submittedAt) {
+      this.metrics.observeScoring(attempt.submittedAt, new Date());
+    }
     if (!written.first) await this.recount(attempt);
     return scored;
   }

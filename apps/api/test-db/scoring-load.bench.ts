@@ -12,7 +12,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { sheetOf } from '../src/attempts/answer-sheet';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import { RIGHT_OPTION, makePaper, resetDatabase, testPrisma, uid } from './support/database';
 
 const ATTEMPTS = Number(process.argv[2] ?? 500);
@@ -158,6 +158,7 @@ async function main(): Promise<void> {
     fakeQueueFailures(),
     new PaperSheetService(prisma),
     new RollupService(prisma),
+    new FakeMetrics().asService(),
   );
 
   // One score outside the measurement so the paper cache and the pool are warm, as they are in a live hall.

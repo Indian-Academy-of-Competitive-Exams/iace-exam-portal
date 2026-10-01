@@ -10,7 +10,7 @@ import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -110,6 +110,7 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     );
     const rollupQueue = new FakeQueue();
     const { state, audit } = support();

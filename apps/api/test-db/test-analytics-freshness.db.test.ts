@@ -10,7 +10,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { ROLLUP_JOBS } from '../src/queue/queues';
-import { FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, FakeRedis, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -45,6 +45,7 @@ function build() {
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     ),
   };
 }

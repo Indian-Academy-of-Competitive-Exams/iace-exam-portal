@@ -13,7 +13,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -40,6 +40,7 @@ const processor = new ScoringProcessor(
   fakeQueueFailures(),
   new PaperSheetService(prisma),
   new RollupService(prisma),
+  new FakeMetrics().asService(),
 );
 
 const leaderboard = new LeaderboardService(prisma);

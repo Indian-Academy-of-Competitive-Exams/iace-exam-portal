@@ -11,7 +11,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
-import { FakeQueue, fakeQueueFailures } from '../test/support/fakes';
+import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -40,6 +40,7 @@ const scorer = new ScoringProcessor(
   fakeQueueFailures(),
   new PaperSheetService(prisma),
   new RollupService(prisma),
+  new FakeMetrics().asService(),
 );
 
 /** Three sittings on one paper, scored, so three counting requests are pending. */
@@ -152,6 +153,7 @@ describe('RollupService — a sweep and a rebuild that overlap', () => {
       fakeQueueFailures(),
       new PaperSheetService(prisma),
       new RollupService(prisma),
+      new FakeMetrics().asService(),
     );
 
     const scoring = paused.score(second.id);
