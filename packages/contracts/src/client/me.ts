@@ -84,7 +84,6 @@ import {
 } from '../access';
 import { queryString, type ApiCore } from './core';
 
-/** Admin-only. A student token gets 403 from every one of these. */
 /** The signed-in student's own account. No ids — the token is the subject. */
 export function meClient(core: ApiCore) {
   const { get, write, list } = core;
@@ -95,14 +94,14 @@ export function meClient(core: ApiCore) {
     update: (input: UpdateMeInput): Promise<Me> =>
       write('PATCH', ME_ROUTES.update, meSchema, input),
 
-    /** Returns a FRESH session — the caller must store these tokens. */
-    /** A photo or an identity document. Returns the refreshed profile. */
+    /** A photo or the tenth marksheet. Returns the refreshed profile. */
     uploadDocument: (kind: DocumentKind, file: UploadFile): Promise<Me> => {
       const form = new FormData();
       form.append(DOCUMENT_FILE_FIELD, file);
       return write('POST', ME_ROUTES.document(kind), meSchema, form);
     },
 
+    /** Returns a FRESH session — the caller must store these tokens. */
     changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
       write('POST', ME_ROUTES.changePin, authSessionResponseSchema, input),
 
@@ -188,7 +187,7 @@ export function meClient(core: ApiCore) {
         solutionReportSchema,
       ),
 
-    /** Their paper question by question, beside the cohort's. The key rides the solution gate. */
+    /** Their paper question by question, beside the cohort's. Refused until the paper has been marked. */
     questionReport: (attemptId: string): Promise<QuestionReport> =>
       get(ME_ATTEMPT_ROUTES.questionReport(attemptId), questionReportSchema),
 

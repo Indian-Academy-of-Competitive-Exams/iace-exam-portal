@@ -2,11 +2,16 @@
    IACE DESIGN TOKENS — v0.4
    packages/ui/tokens.css
 
-   v0.4 moves the brand red from #B83939 to #A8221B. The old red sat ΔE 6.4
+   apps/mobile/global.css @imports this by relative path; moving it breaks Metro.
+
+   v0.4 moved the brand red RAMP from #B83939 to #A8221B. The old red sat ΔE 6.4
    from destructive crimson and ΔE 2.9 from the CBT "not answered" chip, so
    Save/Delete and Submit/not-answered were the same colour to a glance. The
-   new one is brick rather than dusty rose: ΔE 10.2 and 6.1, and white on it
-   goes 5.70:1 → 7.22:1. The whole ramp moved with it, same lightness rhythm.
+   new one is brick rather than dusty rose: ΔE 10.2 and 6.1, and white on
+   #A8221B goes 5.70:1 → 7.22:1. The whole ramp moved, same lightness rhythm.
+
+   The semantic light `--primary` never took that value: it is #BF0D10, 6.40:1
+   on white and on no ramp in this file. README.md quotes it correctly.
 
    v0.2 added the layers that were documented but never tokenised:
      spacing · typography · motion · state · focus
@@ -253,7 +258,10 @@
 
   /* ==========================================================================
      7. EXAM CBT — the palette lives per template, at the end of this file
-     A repeating mark over whatever it covers. The exam skins re-point these.
+     ========================================================================== */
+
+  /* ==========================================================================
+     8. WATERMARK — a repeating mark over whatever it covers; skins re-point it
      ========================================================================== */
   --watermark-ink: var(--foreground);
   --watermark-opacity: 0.05;
@@ -415,7 +423,7 @@
   --input: #262c35;
   --ring: #60a5fa;
 
-  /* Lifted one ramp step: #A8221B on #13161C reads muddy as a filled shape. */
+  /* Lifted a ramp step off --red-600: #A8221B on #13161C reads muddy as a filled shape. */
   --primary: #bf5448;
   --primary-hover: #d3776a;
   --primary-active: #e4a399;

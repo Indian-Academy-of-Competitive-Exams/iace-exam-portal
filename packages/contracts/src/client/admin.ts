@@ -674,8 +674,6 @@ export function adminClient(core: ApiCore) {
       remove: (id: string): Promise<NoContent> =>
         write('DELETE', ADMIN_QUESTION_ROUTES.remove(id), noContentSchema),
 
-      /** One decision over a page of drafts — one request, so nothing is half-approved. */
-
       /** Content stores the `key`; the `url` is for showing the image that was just chosen. */
       uploadImage: (file: File): Promise<QuestionImage> => {
         const form = new FormData();
@@ -684,7 +682,6 @@ export function adminClient(core: ApiCore) {
       },
     },
 
-    /** The proof-reading document, and the flags raised on it. */
     /** One section of one test, as its typist, proof-reader or test owner works on it. */
     sectionWork: {
       one: (testId: string, sectionId: string): Promise<SectionWork> =>

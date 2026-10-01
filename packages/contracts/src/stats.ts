@@ -501,8 +501,8 @@ const cohortBandSchema = z.object({
 export type CohortBand = z.infer<typeof cohortBandSchema>;
 
 // ============================================================================
-// The banding convention, because a rollup's histogram and the one the report
-// counts off `Attempt` when no rollup exists must be the same curve:
+// The banding convention `cohortShapeOf` implements, the one producer left
+// now that no rollup column stores a curve:
 //
 //   Ascending by `from`, contiguous, equal integer widths. `from` is inclusive
 //   and `to` exclusive, except on the last band, which owns its top edge.
@@ -510,9 +510,6 @@ export type CohortBand = z.infer<typeof cohortBandSchema>;
 //   puts the floor below zero — in ~10 columns, each ceil(span / 10) wide and
 //   never narrower than 1. A score off either end takes the nearest end band.
 // ============================================================================
-
-/** The shape `TestStat.scoreHistogram` holds. Read defensively — the column is free-form JSON. */
-export const scoreHistogramSchema = z.array(cohortBandSchema);
 
 const cohortCurveBandSchema = cohortBandSchema.extend({
   /** True on exactly one band: the one holding this score, or the end band nearest it. */
@@ -681,13 +678,12 @@ export function bestSitting(points: readonly PerformancePoint[]): PerformancePoi
 
 // ============================================================================
 // The Question Report — one row per served question, the student's own beside
-// the cohort's. Two halves with different rules: the cohort's item-stats are
-// safe the moment they exist, while anything naming the RIGHT answer waits for
-// `solutionsAreOpen`, exactly as the Solution Report does.
+// the cohort's. Two halves with different rules: the cohort's item-stats read
+// as null until a rollup has counted the question, while the key is on every
+// marked read — nothing gates it by time.
 // ============================================================================
 
 /** How hard the cohort ACTUALLY found a question, as opposed to how hard it was authored. */
-/** GATED: past a p-value of one half, the option with the most votes IS the key, no inference. */
 const optionShareSchema = z.object({
   optionId: z.string(),
   /** Its place on the paper, so a screen can say "C" without loading the question. */
@@ -714,8 +710,8 @@ const questionReportRowSchema = scoreCardQuestionSchema.extend({
   topperTimeSec: z.number().int().nullable(),
   topperMarksAwarded: z.number().nullable(),
   // -------------------------------------------------------------------------
-  // Gated. Empty and null until `solutionsAreOpen`, and absent from the read
-  // that builds the rest — the key is a second query, never a join.
+  // The key, read with the sheet's rows in one query and present on every
+  // marked read; only the option COUNTS wait on a rollup.
   // -------------------------------------------------------------------------
   optionCounts: z.array(optionShareSchema),
   correctOptionId: z.string().nullable(),

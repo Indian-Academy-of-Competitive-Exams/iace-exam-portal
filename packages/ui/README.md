@@ -9,7 +9,7 @@ Foundation: **Tailwind CSS + shadcn/ui**, driven by CSS-variable tokens.
 - `src/tokens.css` — every design token as CSS variables, light + dark. The one place values are defined.
 - `src/fonts.css` — the `@fontsource` imports, split out so `tokens.css` stays pure custom properties and Metro can read it for `apps/mobile`.
 - `tailwind.preset.js` — maps Tailwind color/radius/shadow names to those variables.
-- `src/components/` — the shadcn-based primitives (Button, Input, Card, Tabs, Table, Badge, StatTile, QuestionPalette, …). _(added during scaffolding)_
+- `src/components/` — the shadcn-based primitives (Button, Input, Card, Tabs, Table, Badge, Combobox, ListView, …). _(added during scaffolding)_
 
 ## Usage in an app
 

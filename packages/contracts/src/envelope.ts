@@ -258,9 +258,10 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
   404: ErrorCodes.NOT_FOUND,
   409: ErrorCodes.CONFLICT,
   429: ErrorCodes.RATE_LIMITED,
+  503: ErrorCodes.SERVICE_UNAVAILABLE,
 };
 
-/** For a bare status with no envelope — a framework 404, a gateway 502. 5xx is INTERNAL. */
+/** For a bare status with no envelope — a framework 404, a gateway 502. Other 5xx is INTERNAL. */
 export function errorCodeForStatus(status: number): ErrorCode {
   return (
     STATUS_TO_CODE[status] ?? (status >= 500 ? ErrorCodes.INTERNAL : ErrorCodes.VALIDATION_ERROR)

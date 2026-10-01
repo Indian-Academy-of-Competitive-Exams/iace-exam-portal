@@ -110,4 +110,18 @@ describe('eslint-no-dom', () => {
     );
     assert.ok(properties.every((entry) => entry.object === 'globalThis'));
   });
+
+  it('refuses the web-only packages too, subpaths and all', () => {
+    const [block] = noDom;
+    const [{ group }] = block.rules['no-restricted-imports'][1].patterns;
+
+    assert.deepEqual(group, [
+      '@iace/ui',
+      '@iace/ui/*',
+      'react-dom',
+      'react-dom/*',
+      'react-router-dom',
+      'react-router-dom/*',
+    ]);
+  });
 });

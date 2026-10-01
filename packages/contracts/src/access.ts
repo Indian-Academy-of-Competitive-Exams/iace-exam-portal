@@ -116,9 +116,14 @@ export const eventListQuerySchema = paginationQuerySchema.extend({
 export type EventListQuery = z.infer<typeof eventListQuerySchema>;
 export type EventListQueryInput = z.input<typeof eventListQuerySchema>;
 
+const CANDIDATE_BATCH_MAX = 1000;
+
 /** A whole roster in one write. Re-importing the same sheet adds nobody twice. */
 export const addEventCandidatesSchema = z.object({
-  studentIds: z.array(z.string().min(1)).min(1, 'Choose at least one student'),
+  studentIds: z
+    .array(z.uuid())
+    .min(1, 'Choose at least one student')
+    .max(CANDIDATE_BATCH_MAX, `Add at most ${CANDIDATE_BATCH_MAX} candidates at a time`),
 });
 export type AddEventCandidatesInput = z.input<typeof addEventCandidatesSchema>;
 export type AddEventCandidatesBody = z.infer<typeof addEventCandidatesSchema>;
