@@ -96,6 +96,7 @@ export function ImportStudentsPage() {
             <TableHead numeric>Line</TableHead>
             <TableHead>Mobile</TableHead>
             <TableHead>Name</TableHead>
+            <TableHead>DOB</TableHead>
             <TableHead>Branch</TableHead>
             <TableHead>Reaches</TableHead>
             <TableHead>What happens</TableHead>
@@ -105,7 +106,7 @@ export function ImportStudentsPage() {
           <TableState
             isLoading={false}
             isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={6}
+            colSpan={7}
             empty={
               plan === null
                 ? {
@@ -135,6 +136,7 @@ function ImportRow({ row }: Readonly<{ row: StudentImportRow }>) {
       <TableCell>
         <TruncatedText className="max-w-[12rem]">{row.fullName}</TruncatedText>
       </TableCell>
+      <TableCell className="tabular-nums">{row.profile.dob ?? '—'}</TableCell>
       <TableCell>
         <TruncatedText className="max-w-[10rem]">{row.branchName}</TruncatedText>
       </TableCell>
