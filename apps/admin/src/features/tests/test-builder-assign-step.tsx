@@ -696,7 +696,7 @@ function RemoveDialog({
         ? `${assignment.assigneeName} removed from ${assignment.sectionName}.`
         : undefined,
     },
-    mutationFn: (id: string) => api.admin.assignments.remove(id),
+    mutationFn: (row: Assignment) => api.admin.assignments.remove(row.testId, row.id),
     onSuccess: () => {
       onRemoved();
       onClose();
@@ -712,7 +712,7 @@ function RemoveDialog({
       description="The questions they have already written stay in the bank; only the assignment record is removed."
       confirmLabel="Remove"
       loading={remove.isPending}
-      onConfirm={() => assignment && remove.mutate(assignment.id)}
+      onConfirm={() => assignment && remove.mutate(assignment)}
     />
   );
 }

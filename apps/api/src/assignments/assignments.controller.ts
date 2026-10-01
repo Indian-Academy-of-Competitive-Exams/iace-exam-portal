@@ -124,9 +124,9 @@ export class AssignmentsController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @HttpCode(HttpStatus.OK)
-  @Delete(':id')
-  remove(@Param('id') id: string): Promise<void> {
-    return this.assignments.remove(id);
+  @Delete('tests/:testId/:id')
+  remove(@Param('testId') testId: string, @Param('id') id: string): Promise<void> {
+    return this.assignments.remove(testId, id);
   }
 
   /** Who a role can be given to — the same key `assign` itself requires, never the admin directory. */

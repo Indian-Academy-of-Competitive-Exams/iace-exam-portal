@@ -837,8 +837,8 @@ export function adminClient(core: ApiCore) {
       assign: (testId: string, input: CreateAssignmentInput): Promise<Assignment> =>
         write('POST', ADMIN_ASSIGNMENTS_ROUTES.assign(testId), assignmentSchema, input),
 
-      remove: (id: string): Promise<NoContent> =>
-        write('DELETE', ADMIN_ASSIGNMENTS_ROUTES.remove(id), noContentSchema),
+      remove: (testId: string, id: string): Promise<NoContent> =>
+        write('DELETE', ADMIN_ASSIGNMENTS_ROUTES.remove(testId, id), noContentSchema),
 
       mine: (query: MineAssignmentsQueryInput = {}): Promise<Paginated<AssignmentWithTest>> =>
         list(ADMIN_ASSIGNMENTS_ROUTES.mine, query, assignmentWithTestSchema),

@@ -430,7 +430,7 @@ describe('AssignmentsService — a role its section took with it', () => {
     assert.equal(byId.get(passedOn.id)?.sectionDropped, false);
     assert.equal(byId.get(standing.id)?.sectionDropped, true);
     await assert.rejects(
-      () => assignments.remove(standing.id),
+      () => assignments.remove(test.id, standing.id),
       (error: unknown) => AppException.is(error) && /left the test/.test(error.message),
     );
     await assert.rejects(
@@ -527,7 +527,7 @@ describe('AssignmentsService — removing', () => {
       typist.id,
     );
 
-    await assignments.remove(created.id);
+    await assignments.remove(test.id, created.id);
 
     assert.equal(await prisma.questionAssignment.findUnique({ where: { id: created.id } }), null);
   });
@@ -551,7 +551,10 @@ describe('AssignmentsService — removing', () => {
     );
     await finalizedNow(created.id);
 
-    await assert.rejects(() => assignments.remove(created.id), refusedWith(ErrorCodes.CONFLICT));
+    await assert.rejects(
+      () => assignments.remove(test.id, created.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
   });
 });
 
@@ -1612,9 +1615,12 @@ describe('AssignmentsService — a reader gets a whole section', () => {
         body: 'Starting on this tomorrow.',
       },
     });
-    await assert.rejects(() => assignments.remove(reading.id), refusedWith(ErrorCodes.CONFLICT));
+    await assert.rejects(
+      () => assignments.remove(test.id, reading.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
 
-    await assignments.remove(typing.id);
+    await assignments.remove(test.id, typing.id);
     assert.equal(await prisma.questionAssignment.count({ where: { id: typing.id } }), 0);
   });
 });

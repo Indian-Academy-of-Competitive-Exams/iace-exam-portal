@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import {
+  AUDIT_FEATURE,
   AUDIT_WINDOW_DAYS,
   EXPORT_KINDS,
   IMPORT_LOG_STATUS,
+  IMPORT_TARGET_BANK,
   XLSX_CONTENT_TYPE,
   auditActionSchema,
   auditFeatureSchema,
@@ -95,6 +97,13 @@ function auditColumns(): DataTableColumn<RowAction>[] {
   ];
 }
 
+/** Only a question run has one, and only since the column landed; nothing else has one to miss. */
+function importTargetLabel(row: ImportLogSummary): string | null {
+  if (row.feature !== AUDIT_FEATURE.QUESTION) return null;
+  if (row.target === null) return 'Not recorded';
+  return row.target === IMPORT_TARGET_BANK ? 'Question bank' : 'Test section';
+}
+
 /** Built outside the component for the same reason `auditColumns` is — `highlightId` is its one input. */
 function importColumns(highlightId: string): DataTableColumn<ImportLogSummary>[] {
   return [
@@ -124,6 +133,11 @@ function importColumns(highlightId: string): DataTableColumn<ImportLogSummary>[]
       key: 'source',
       header: 'Source',
       cell: (row) => IMPORT_SOURCE_LABELS[row.source],
+    },
+    {
+      key: 'target',
+      header: 'Target',
+      cell: (row) => <TruncatedText>{importTargetLabel(row)}</TruncatedText>,
     },
     {
       key: 'status',

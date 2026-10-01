@@ -309,9 +309,9 @@ export class AssignmentsService {
   }
 
   /** Work done is a record: only a row nothing has been done under can be taken back. */
-  async remove(id: string): Promise<void> {
-    const row = await this.prisma.questionAssignment.findUnique({
-      where: { id },
+  async remove(testId: string, id: string): Promise<void> {
+    const row = await this.prisma.questionAssignment.findFirst({
+      where: { id, testId },
       include: ASSIGNMENT_INCLUDE,
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');

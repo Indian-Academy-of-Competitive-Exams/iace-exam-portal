@@ -825,7 +825,14 @@ describe('QuestionsService.update — reworded words are read again', () => {
     const releasedAt = async () =>
       (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } }))
         .finalizedAt;
-    return { questions, questionId: created.id, readingId: reading.id, checkedAt, releasedAt };
+    return {
+      questions,
+      testId,
+      questionId: created.id,
+      readingId: reading.id,
+      checkedAt,
+      releasedAt,
+    };
   }
 
   /** The failure this prevents: an owner's edit after release reaching students under the reader's old tick. */
@@ -850,7 +857,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
 
   /** Undone by the edit, not unmade: the reader did the work, so their seat is not one nobody used. */
   it('keeps the record of who checked it, so that reader cannot be removed as unused', async () => {
-    const { questions, questionId, readingId } = await readAndReleased();
+    const { questions, testId, questionId, readingId } = await readAndReleased();
     const assignments = new AssignmentsService(
       prisma,
       new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
@@ -858,7 +865,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
 
     await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
 
-    await assert.rejects(() => assignments.remove(readingId), conflict);
+    await assert.rejects(() => assignments.remove(testId, readingId), conflict);
   });
 
   /** The failure this prevents: a draft spared on the earlier words carrying that tick onto the new ones when the question is put back. */

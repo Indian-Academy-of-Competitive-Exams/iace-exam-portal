@@ -263,7 +263,7 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** GET lists a test's assignments; POST to the same path creates one. */
   forTest: (testId: string) => `/admin/assignments/tests/${testId}`,
   assign: (testId: string) => `/admin/assignments/tests/${testId}`,
-  remove: (id: string) => `/admin/assignments/${id}`,
+  remove: (testId: string, id: string) => `/admin/assignments/tests/${testId}/${id}`,
   mine: '/admin/assignments/mine',
   /** Read access over every section, for a super admin. Assigned or not, finished or not. */
   progress: '/admin/assignments/progress',

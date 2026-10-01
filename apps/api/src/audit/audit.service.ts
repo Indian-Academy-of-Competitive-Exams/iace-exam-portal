@@ -283,6 +283,7 @@ export class AuditService {
       id: row.id,
       feature: row.feature,
       source: row.source,
+      target: row.target,
       actorId: row.actorId,
       actorName: row.actorId ? (names.get(row.actorId) ?? null) : null,
       total: row.total,

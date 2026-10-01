@@ -157,10 +157,15 @@ export const rowActionExportQuerySchema = rowActionListQuerySchema.omit({
 export type RowActionExportQuery = z.infer<typeof rowActionExportQuerySchema>;
 export type RowActionExportQueryInput = z.input<typeof rowActionExportQuerySchema>;
 
+/** The question importer's one named target; every other value is a `testId/baseConfigSectionId`. */
+export const IMPORT_TARGET_BANK = 'bank';
+
 export const importLogSchema = z.object({
   id: z.string(),
   feature: auditFeatureSchema,
   source: importSourceSchema,
+  /** Where a question run lands. Null on a run of anything else, and on one previewed before the column. */
+  target: z.string().nullable(),
   actorId: z.string().nullable(),
   /** Resolved server-side — the column is a plain id with no FK. */
   actorName: z.string().nullable(),

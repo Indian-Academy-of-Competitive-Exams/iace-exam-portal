@@ -202,6 +202,7 @@ describe('audit read contracts', () => {
       id: 'imp_1',
       feature: 'STUDENT',
       source: 'SHEET',
+      target: null,
       actorId: 'adm_1',
       actorName: 'R Kumar',
       total: 10,
