@@ -4,7 +4,7 @@
     "slug": "iace-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "iace-mobile",
     "icon": "./assets/icon.png",
     "android": {

@@ -5,7 +5,7 @@
  * intent that `readPageMessage` has vouched for.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useColorScheme, View } from 'react-native';
 import { type WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { type ExamQuestion } from '@iace/contracts';
 import { Skeleton } from '../ui/skeleton';
@@ -21,7 +21,7 @@ import {
 } from './question-protocol';
 
 /** Before the paper lands there is nothing to choose, so only the page's READY gets through. */
-const NOTHING_ON_SCREEN: QuestionScreen = {
+const NOTHING_ON_SCREEN: Omit<QuestionScreen, 'theme'> = {
   template: '',
   bubbling: false,
   locked: false,
@@ -56,10 +56,12 @@ export function QuestionContent({
   const [echo, setEcho] = useState(0);
   // Bumped only on READY, since a full re-send belongs to a fresh page, not to every tap.
   const [readyTick, setReadyTick] = useState(0);
+  // Not a prop: the page follows the phone, never the paper.
+  const theme = useColorScheme() === 'dark' ? 'dark' : 'light';
   // Memoized: both walk a bilingual question and stringify it, and this renders on every tap and every second.
   const screen = useMemo(
-    () =>
-      question
+    () => ({
+      ...(question
         ? questionScreen({
             question,
             languages,
@@ -69,8 +71,10 @@ export function QuestionContent({
             selectedOptionId,
             marked,
           })
-        : NOTHING_ON_SCREEN,
-    [question, languages, languageMode, testUi, examTemplate, selectedOptionId, marked],
+        : NOTHING_ON_SCREEN),
+      theme,
+    }),
+    [question, languages, languageMode, testUi, examTemplate, selectedOptionId, marked, theme],
   );
   const script = useMemo(() => (question ? showScript(screen) : null), [question, screen]);
   const preload = useMemo(

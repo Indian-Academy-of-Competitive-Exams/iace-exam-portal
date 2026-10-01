@@ -24,7 +24,7 @@ export function reviewScreen({
   question,
   languages,
   languageMode,
-}: Readonly<ReviewInput>): QuestionScreen {
+}: Readonly<ReviewInput>): Omit<QuestionScreen, 'theme'> {
   const shown = shownLanguages(languages, languageMode).map(contentLanguageOf);
   const inShown = (
     pick: (language: QuestionLanguage) => RichContent | undefined,

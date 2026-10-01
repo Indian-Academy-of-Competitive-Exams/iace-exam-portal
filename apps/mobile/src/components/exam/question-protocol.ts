@@ -45,7 +45,7 @@ export function questionScreen({
   examTemplate,
   selectedOptionId,
   marked,
-}: Readonly<ScreenInput>): QuestionScreen {
+}: Readonly<ScreenInput>): Omit<QuestionScreen, 'theme'> {
   const shown = shownLanguages(languages, languageMode).map(contentLanguageOf);
   const inShown = (
     pick: (language: QuestionLanguage) => RichContent | undefined,
@@ -111,7 +111,7 @@ function parsed(data: string): unknown {
 }
 
 /** Whether this screen offers what the message asks for — a stale or forged one names what it does not. */
-function allowedOn(message: PageMessage, screen: QuestionScreen): boolean {
+function allowedOn(message: PageMessage, screen: Omit<QuestionScreen, 'theme'>): boolean {
   if (message.type === PAGE_MESSAGE.READY) return true;
   if (!screen.options.some((option) => option.id === message.optionId)) return false;
   if (message.type === PAGE_MESSAGE.CHOOSE) return !screen.bubbling;
@@ -119,7 +119,10 @@ function allowedOn(message: PageMessage, screen: QuestionScreen): boolean {
 }
 
 /** The only way a page message reaches native code. Anything it cannot vouch for is null. */
-export function readPageMessage(data: string, screen: QuestionScreen): PageMessage | null {
+export function readPageMessage(
+  data: string,
+  screen: Omit<QuestionScreen, 'theme'>,
+): PageMessage | null {
   const result = pageMessageSchema.safeParse(parsed(data));
   return result.success && allowedOn(result.data, screen) ? result.data : null;
 }

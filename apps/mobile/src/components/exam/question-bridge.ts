@@ -47,6 +47,8 @@ export interface ScreenReview {
 export interface QuestionScreen {
   /** The `data-exam-template` value that picks the skin's tokens. */
   template: string;
+  /** The `data-theme` the page paints in: the phone's scheme, never the paper's. */
+  theme: string;
   bubbling: boolean;
   locked: boolean;
   selectedOptionId: string | null;

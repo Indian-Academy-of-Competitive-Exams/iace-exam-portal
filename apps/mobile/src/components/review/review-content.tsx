@@ -5,7 +5,7 @@
  */
 /// <reference types="nativewind/types" />
 import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useColorScheme, View } from 'react-native';
 import { type WebView } from 'react-native-webview';
 import { type LanguageCode, type LanguageMode } from '@iace/contracts';
 import { showScript } from '../exam/question-protocol';
@@ -23,7 +23,8 @@ export interface ReviewContentProps {
 export function ReviewContent({ question, languages, languageMode }: Readonly<ReviewContentProps>) {
   const web = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
-  const script = showScript(reviewScreen({ question, languages, languageMode }));
+  const theme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const script = showScript({ ...reviewScreen({ question, languages, languageMode }), theme });
 
   useEffect(() => {
     if (ready) web.current?.injectJavaScript(script);

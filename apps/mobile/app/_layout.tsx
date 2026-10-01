@@ -50,11 +50,16 @@ function Navigation() {
   usePushDevice(Boolean(identity));
   const insets = useSafeAreaInsets();
   const pageColor = useTokenColor('--background');
+  const headerColor = useTokenColor('--surface');
+  const headerInk = useTokenColor('--foreground');
   if (isLoading) return null;
 
   // A pushed page ends above the home indicator; the tab bar and the exam hold that space themselves.
   const page = {
     headerShown: true,
+    // The header is navigator chrome, so it takes colours rather than classes, as the tab bar does.
+    headerStyle: { backgroundColor: headerColor },
+    headerTintColor: headerInk,
     contentStyle: { paddingBottom: insets.bottom, backgroundColor: pageColor },
   };
 

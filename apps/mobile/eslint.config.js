@@ -15,4 +15,9 @@ export default [
     },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
+  {
+    // Tailwind loads the preset through jiti, which hands CommonJS globals to ES module syntax.
+    files: ['tailwind.preset.native.js'],
+    languageOptions: { globals: { __dirname: 'readonly' } },
+  },
 ];

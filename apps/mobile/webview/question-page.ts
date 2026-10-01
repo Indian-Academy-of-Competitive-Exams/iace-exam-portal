@@ -169,6 +169,7 @@ function show(screen: QuestionScreen): void {
   hold = null;
   current = screen;
   document.body.dataset.examTemplate = screen.template;
+  document.documentElement.dataset.theme = screen.theme;
   const content = JSON.stringify([
     screen.bubbling,
     screen.stem,
