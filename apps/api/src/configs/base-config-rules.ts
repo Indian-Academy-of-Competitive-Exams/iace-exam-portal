@@ -50,38 +50,10 @@ export function configShapeIssues(
   modules: readonly BaseConfigModuleDraft[],
   durationSec?: number,
 ): string[] {
-  const issues: string[] = [];
-
-  if (timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED) {
-    const untimed = sections.filter((section) => !section.durationSec);
-    if (untimed.length > 0) {
-      issues.push(
-        `A sectional paper gives every section its own clock, and ${untimed.map((section) => section.name).join(', ')} has no time.`,
-      );
-    } else if (durationSec !== undefined) {
-      // The section clocks are the ones a candidate sits, so the paper's own has to be their sum.
-      const clocked = sections.reduce((sum, section) => sum + (section.durationSec ?? 0), 0);
-      if (clocked !== durationSec) {
-        issues.push(
-          `The sections add up to ${minutes(clocked)}, but the paper is set to ${minutes(durationSec)}.`,
-        );
-      }
-    }
-  }
-
-  if (timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED) {
-    if (modules.length === 0) {
-      issues.push('A session paper is made of modules. Add at least one.');
-    } else if (durationSec !== undefined) {
-      // A module's clock is optional, so the total is judged for an overrun and never for a match.
-      const clocked = modules.reduce((sum, module) => sum + (module.durationSec ?? 0), 0);
-      if (clocked > durationSec) {
-        issues.push(
-          `The modules add up to ${minutes(clocked)}, but the paper is set to ${minutes(durationSec)}.`,
-        );
-      }
-    }
-  }
+  const issues = [
+    ...sectionalIssues(timerTemplate, sections, durationSec),
+    ...sessionIssues(timerTemplate, modules, durationSec),
+  ];
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {
     issues.push('Only a session paper has modules. Change the timer, or remove them.');
@@ -93,6 +65,53 @@ export function configShapeIssues(
   }
 
   return issues;
+}
+
+/** Every section carries a clock, and the paper's own is their sum — not more, not less. */
+function sectionalIssues(
+  timerTemplate: TimerTemplate,
+  sections: readonly BaseConfigSectionDraft[],
+  durationSec?: number,
+): string[] {
+  if (timerTemplate !== TIMER_TEMPLATE.SECTIONAL_LOCKED) return [];
+
+  const untimed = sections.filter((section) => !section.durationSec);
+  if (untimed.length > 0) {
+    return [
+      `A sectional paper gives every section its own clock, and ${untimed.map((section) => section.name).join(', ')} has no time.`,
+    ];
+  }
+  // The section clocks are the ones a candidate sits, so the paper's own has to be their sum.
+  return clockIssue('sections', sections, durationSec, (clocked, paper) => clocked !== paper);
+}
+
+/** A module's clock is optional, so the total is judged for an overrun and never for a match. */
+function sessionIssues(
+  timerTemplate: TimerTemplate,
+  modules: readonly BaseConfigModuleDraft[],
+  durationSec?: number,
+): string[] {
+  if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED) return [];
+  if (modules.length === 0) return ['A session paper is made of modules. Add at least one.'];
+
+  return clockIssue('modules', modules, durationSec, (clocked, paper) => clocked > paper);
+}
+
+/** Both templates say it the same way, so the wording cannot drift between them. */
+function clockIssue(
+  noun: string,
+  parts: readonly { durationSec?: number | null }[],
+  durationSec: number | undefined,
+  wrong: (clocked: number, paper: number) => boolean,
+): string[] {
+  if (durationSec === undefined) return [];
+
+  const clocked = parts.reduce((sum, part) => sum + (part.durationSec ?? 0), 0);
+  return wrong(clocked, durationSec)
+    ? [
+        `The ${noun} add up to ${minutes(clocked)}, but the paper is set to ${minutes(durationSec)}.`,
+      ]
+    : [];
 }
 
 /** Said in what the reader set it in: a paper's clock is minutes on the screen, seconds in the row. */

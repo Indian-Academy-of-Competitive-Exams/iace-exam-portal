@@ -72,7 +72,7 @@ function bodyLine(body: unknown): string {
   return ` ${JSON.stringify(redact(body))}`;
 }
 
-const FRAME_LOCATION = /\(?([^()\s]+):\d+:\d+\)?$/;
+const FRAME_LOCATION = /:\d+:\d+(\)?)$/;
 
 /** The same bug hashes the same, so `sum by (bug)` groups a thousand instances into one. Line and column are dropped deliberately: a refactor that shifts a function must not look like a new bug. */
 export function fingerprintOf(exception: unknown): string {
