@@ -22,7 +22,7 @@ function darkTokens(selector) {
   const opens = css.indexOf(selector);
   if (opens === -1) throw new Error(`tokens.css no longer declares ${selector}`);
   const body = css.slice(opens + selector.length, css.indexOf('\n}', opens));
-  const declared = [...body.matchAll(/^[ \t]*(--[\w-]+)[ \t]*:[ \t]*([^;]+);/gm)];
+  const declared = [...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)];
   if (declared.length === 0) throw new Error(`${selector} declared nothing`);
   return Object.fromEntries(declared.map(([, name, value]) => [name, value.trim()]));
 }
