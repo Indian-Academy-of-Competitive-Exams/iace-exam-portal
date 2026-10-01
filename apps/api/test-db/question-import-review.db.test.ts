@@ -216,3 +216,53 @@ describe('QuestionImportService — leaving a previewed row out', () => {
     );
   });
 });
+
+describe('QuestionImportService — what a run counts', () => {
+  /** The failure this prevents: a sheet of 1 create and 2 unanswered rows reading 2 skipped on screen and 0 skipped / 2 failed in the audit. */
+  it('files every row it chose not to write as skipped, and nothing as failed', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const imports = service();
+    const plan = await imports.preview(
+      sheet(
+        ROW,
+        { ...ROW, stem_en: 'What is 10% of 150?', correct_option: '' },
+        { ...ROW, stem_en: 'What is 30% of 150?', correct_option: '' },
+      ),
+      ADMIN,
+    );
+
+    const result = await imports.commit(plan.importLogId, { actorId: ADMIN });
+
+    assert.deepEqual(
+      { created: result.created, skipped: result.skipped },
+      { created: 1, skipped: 2 },
+    );
+    const log = await prisma.importLog.findUniqueOrThrow({ where: { id: plan.importLogId } });
+    assert.deepEqual(
+      { created: log.created, skipped: log.skipped, failed: log.failed },
+      { created: 1, skipped: 2, failed: 0 },
+    );
+  });
+});
+
+describe('QuestionImportService — a file nothing can be planned from', () => {
+  /** The failure this prevents: a header-only sheet, or one with no Subject column, leaving a total-0 run row and a sheet in storage nothing ever cleans up. */
+  it('opens no run and stores nothing', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const storage = new FakeStorage();
+    const imports = new QuestionImportService(
+      prisma,
+      storage as never,
+      new AuditService(prisma, new FakeStorage() as never),
+    );
+
+    const empty = await imports.preview(sheet(), ADMIN);
+    assert.deepEqual(empty.fileErrors, ['That file has no question rows']);
+
+    const noSubject = await imports.preview(Buffer.from('Difficulty\nmedium'), ADMIN);
+    assert.ok(noSubject.fileErrors.includes('The column "Subject" is missing'));
+
+    assert.equal(await prisma.importLog.count(), 0);
+    assert.equal(storage.objects.size, 0);
+  });
+});

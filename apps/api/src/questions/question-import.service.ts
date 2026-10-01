@@ -8,7 +8,6 @@ import {
   ErrorCodes,
   IMPORT_LOG_STATUS,
   QUESTION_IMPORT_SHEETS,
-  XLSX_CONTENT_TYPE,
   imageKeysIn,
   type QuestionDraft,
   type QuestionImportDraft,
@@ -16,6 +15,7 @@ import {
   type QuestionImportResult,
 } from '@iace/contracts';
 import {
+  importFileContentType,
   importFileKey,
   readUploadedTable,
   refuseFileErrors,
@@ -45,6 +45,9 @@ const UPLOAD_GONE = 'That upload is no longer available';
 const ALREADY_IMPORTED = 'That file has already been imported';
 const PREVIEWED_ELSEWHERE = 'That file was previewed for somewhere else. Upload it again here.';
 const BANK_TARGET = 'bank';
+
+/** A file-level refusal opens no run, so the plan it hands back names none. */
+const NO_RUN = '';
 
 /** What the review window laid over the file: each corrected line's draft, and the lines left out. */
 interface RowOverlay {
@@ -77,6 +80,8 @@ export class QuestionImportService {
     section?: ImportSection,
   ): Promise<QuestionImportPlan> {
     const planning = await this.plan(file);
+    // Judged before the run exists: a file nothing can be planned from would leave a total-0 row and a sheet in storage nothing ever fetches.
+    if (planning.fileErrors.length > 0) return withoutDrafts(planning, NO_RUN);
 
     const log = await this.prisma.importLog.create({
       data: {
@@ -91,8 +96,8 @@ export class QuestionImportService {
     });
 
     // Keyed by the run, so the sheet that produced a set of questions can always be fetched back — the answer to "where did this question come from".
-    const key = importFileKey(AUDIT_FEATURE.QUESTION, log.id);
-    await this.storage.upload(key, file, XLSX_CONTENT_TYPE);
+    const key = importFileKey(AUDIT_FEATURE.QUESTION, log.id, file);
+    await this.storage.upload(key, file, importFileContentType(key));
     await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
     // Stored now, not at Import: the review window has to show them before anything is written.
     await this.storePictures(planning.rows);
@@ -179,8 +184,8 @@ export class QuestionImportService {
       data: {
         total: planning.summary.total,
         created: result.created,
-        skipped: planning.summary.duplicates + planning.summary.leftOut,
-        failed: planning.summary.invalid,
+        // `failed` stays 0: a commit that returned reached every row, and a row it chose not to write is skipped.
+        skipped: result.skipped,
         status: IMPORT_LOG_STATUS.COMMITTED,
         finishedAt: new Date(),
         errors: fileErrorsOf(planning),
