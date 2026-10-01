@@ -51,9 +51,6 @@ export interface ReviewPaperProps {
   onSectionChange: (sectionId: string) => void;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
-  /** What the gate is still holding back, said once at the top rather than per question. */
-  notice?: React.ReactNode;
-  /** Absent while the gate is shut — there is nothing to review yet. */
   bookmark?: BookmarkControl;
 }
 
@@ -65,7 +62,6 @@ export function ReviewPaper({
   onSectionChange,
   languages,
   languageMode,
-  notice,
   bookmark,
 }: Readonly<ReviewPaperProps>) {
   const inSection = questions;
@@ -80,8 +76,6 @@ export function ReviewPaper({
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      {notice}
-
       {/* The paper is the box: the report's own strip stays outside it, this one sits within. */}
       <Card className="flex min-h-0 flex-col gap-4 p-4">
         {sections.length > 1 ? (

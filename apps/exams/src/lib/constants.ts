@@ -109,7 +109,7 @@ export const USER_MENU_ITEMS: readonly NavItem[] = [
   { to: ROUTES.ACCOUNT, label: 'Account', icon: KeyRound },
 ];
 
-/** localStorage keys owned by this app, namespaced so the SPAs never read each other's; the theme key is absent since it belongs to @iace/ui and is shared. */
+/** Browser storage keys owned by this app, namespaced so the SPAs never read each other's; the theme key is absent since it belongs to @iace/ui and is shared. */
 export const STORAGE_KEYS = {
   // Named for the app, not the audience: the student portal is a separate SPA on this origin.
   AUTH: 'iace.test.auth',

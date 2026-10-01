@@ -71,7 +71,6 @@ function FullscreenNag({
   );
 }
 
-/** Over the paper, because the answers it names are already gone from it. */
 /** Said once without a count, because "1 times" is how a screen tells a student it is a machine. */
 function nagSays(exits: number): string {
   const left = exits > 1 ? `You left full screen ${exits} times.` : 'You left full screen.';

@@ -34,6 +34,7 @@ export function usePushDevice(signedIn: boolean): void {
   }, [signedIn]);
 
   useEffect(() => {
+    if (!signedIn) return;
     let listening = true;
     const held: { remove: () => void }[] = [];
 
@@ -59,5 +60,5 @@ export function usePushDevice(signedIn: boolean): void {
       listening = false;
       for (const subscription of held) subscription.remove();
     };
-  }, [router, queryClient]);
+  }, [signedIn, router, queryClient]);
 }

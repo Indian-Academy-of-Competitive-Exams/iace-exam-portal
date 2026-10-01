@@ -13,7 +13,7 @@ export function NotFoundPage() {
         hint="The address may have changed, or the test behind it is no longer offered."
         action={
           <Button asChild>
-            <Link to={ROUTES.HOME}>Go to your tests</Link>
+            <Link to={ROUTES.TESTS}>Go to your tests</Link>
           </Button>
         }
       />
