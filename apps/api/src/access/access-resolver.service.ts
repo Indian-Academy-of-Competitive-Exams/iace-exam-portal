@@ -128,6 +128,7 @@ interface Reach {
 
 interface Standing extends Reach {
   sittings: ReadonlyMap<string, AttemptStatus>;
+  everSat: ReadonlySet<string>;
 }
 
 /** The catalog row before the clock is read: `canStart` is the one thing derived per request. */
@@ -139,6 +140,7 @@ type ResolvedSeries = Omit<StudentCatalogSeries, 'tests'> & { tests: ResolvedTes
 @Injectable()
 export class AccessResolverService {
   private held: HeldCatalog | null = null;
+  private lastEpoch = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -171,11 +173,11 @@ export class AccessResolverService {
   async reachableTest(studentId: string, testId: string): Promise<ReachableTest> {
     const [reach, series] = await Promise.all([this.reachOf(studentId), this.shared()]);
 
-    const test = reach
-      ? reachedBy(series, reach)
-          .flatMap((row) => row.tests)
-          .find((row) => row.id === testId)
-      : undefined;
+    const holder = holderOf(series, testId);
+    const test =
+      reach && holder && sourcesOf(holder, reach).length > 0
+        ? holder.tests.find((row) => row.id === testId)
+        : undefined;
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
 
     return test;
@@ -232,7 +234,12 @@ export class AccessResolverService {
 
   /** The counter every held copy of the catalog is keyed on, for the readers that hold one of their own. */
   async catalogEpoch(): Promise<number> {
-    return counterOf(await this.redis.client.get(redisKeys.catalogEpoch));
+    // A Valkey that cannot be reached is no news rather than a new counter: the held copy stands, and still ages out.
+    this.lastEpoch = await this.redis.client
+      .get(redisKeys.catalogEpoch)
+      .then(counterOf)
+      .catch(() => this.lastEpoch);
+    return this.lastEpoch;
   }
 
   /** Concurrent readers share one build; a build that started before a bump carries the old counter, so it is replaced. */
@@ -281,6 +288,8 @@ export class AccessResolverService {
       ...reachFrom(student),
       // They arrive in attempt order and the last write wins, so the latest sitting is what shows.
       sittings: new Map(student.attempts.map((row) => [row.testId, row.status])),
+      // A retake must not re-lock the papers behind it, so in-order reads this and not the newest sitting.
+      everSat: new Set(student.attempts.flatMap((row) => (isSat(row.status) ? [row.testId] : []))),
     };
   }
 }
@@ -317,6 +326,11 @@ function reachedBy(series: readonly SharedSeries[], reach: Reach): SharedSeries[
   return series.filter((row) => sourcesOf(row, reach).length > 0);
 }
 
+/** The series one test hangs off, which is all that has to be weighed to answer about that test. */
+function holderOf(series: readonly SharedSeries[], testId: string): SharedSeries | undefined {
+  return series.find((row) => row.tests.some((test) => test.id === testId));
+}
+
 /** ONE test's projection. A gate that projected the whole catalog paid for every test to answer about one. */
 function startableTest(
   series: readonly SharedSeries[],
@@ -324,11 +338,11 @@ function startableTest(
   testId: string,
   now: Date,
 ): StudentCatalogTest | undefined {
-  const holder = series.find((row) => row.tests.some((test) => test.id === testId));
+  const holder = holderOf(series, testId);
   // Its own series is still projected whole: `sequentialTests` opens a test by its place among them.
   if (!holder || sourcesOf(holder, standing).length === 0) return undefined;
 
-  return project(toResolved(holder, standing), standing.isTestBlocked, now).tests.find(
+  return project(toResolved(holder, standing), standing, now).tests.find(
     (test) => test.id === testId,
   );
 }
@@ -337,7 +351,7 @@ function catalogOf(series: readonly SharedSeries[], standing: Standing, now: Dat
   return {
     testBlocked: standing.isTestBlocked,
     series: reachedBy(series, standing).map((row) =>
-      project(toResolved(row, standing), standing.isTestBlocked, now),
+      project(toResolved(row, standing), standing, now),
     ),
   };
 }
@@ -393,7 +407,7 @@ const SOURCE_OF_KIND: Readonly<Record<TestSeriesKind, StudentSeriesSource>> = {
   [TEST_SERIES_KIND.EVENT]: STUDENT_SERIES_SOURCE.EVENT,
 };
 
-/** What a series reaches, as a STUDENT filter. The mirror of `seriesSources`; edit the two together. */
+/** What a series reaches, as a STUDENT filter. The mirror of `seriesSources`, less the blocked; edit the two together. */
 function audienceOf(
   series: Readonly<{
     id: string;
@@ -404,12 +418,12 @@ function audienceOf(
     examStage: { exam: { course: ExamCourse } } | null;
   }>,
 ): Prisma.StudentWhereInput {
-  const live = { deletedAt: null, isActive: true };
+  const canSit = { deletedAt: null, isActive: true, isTestBlocked: false };
   // No OR at all: Prisma reads an empty member as matching NOBODY, so `{}` would empty the cohort.
-  if (series.kind === TEST_SERIES_KIND.FREE) return live;
+  if (series.kind === TEST_SERIES_KIND.FREE) return canSit;
 
   return {
-    ...live,
+    ...canSit,
     // A grant overrides every kind, exactly as it does reading the other way.
     OR: [{ grants: { some: { testSeriesId: series.id } } }, ...automaticAudience(series)],
   };
@@ -487,16 +501,17 @@ function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
   };
 }
 
-function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
-  // In order means: the first one not yet sat is open, and everything past it waits its turn.
+function project(series: ResolvedSeries, standing: Standing, now: Date): StudentCatalogSeries {
+  // In order means: the first one never sat is open, and everything past it waits its turn.
   const waiting = series.sequentialTests
-    ? series.tests.findIndex((test) => !isSat(test.attemptStatus))
+    ? series.tests.findIndex((test) => !standing.everSat.has(test.id))
     : NONE_WAITING;
+  const itsTurn = (index: number) => waiting === NONE_WAITING || index <= waiting;
 
   return {
     ...series,
     tests: series.tests.map((test, index) =>
-      projectTest(test, !testBlocked && (waiting === NONE_WAITING || index <= waiting), now),
+      projectTest(test, !standing.isTestBlocked && itsTurn(index), now),
     ),
   };
 }

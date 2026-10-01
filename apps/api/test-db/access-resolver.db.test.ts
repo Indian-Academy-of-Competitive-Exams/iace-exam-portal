@@ -498,6 +498,18 @@ describe('AccessResolverService — the shared copy', () => {
     assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), []);
   });
 
+  /** THE failure this prevents: a Valkey blip 500ing the catalog, the paper and the start guard at once. */
+  it('serves the held copy when the counter cannot be read at all', async () => {
+    const { student, seriesId, testId } = await reachable();
+    const redis = new FakeRedis();
+    const resolver = new AccessResolverService(prisma, redis.asService());
+    await resolver.catalog(student, NOW);
+    redis.client.get = () => Promise.reject(new Error('Valkey is unreachable'));
+
+    assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), [seriesId]);
+    await assert.doesNotReject(() => resolver.assertCanStart(student, testId, NOW));
+  });
+
   /** Nothing per student is held, so nothing per student has to be bumped. */
   it('shows a student’s own grant and sitting on the next read, with nothing bumped', async () => {
     const { at, student, testId } = await reachable();
@@ -586,13 +598,18 @@ describe('AccessResolverService — a series that unlocks in order', () => {
       await testIn(at, seriesId, 3),
     ];
     const student = await studentAt(at);
+    const taken = new Map<number, number>();
     for (const [index, status] of sittings) {
+      const attemptNo = (taken.get(index) ?? 0) + 1;
+      taken.set(index, attemptNo);
       await prisma.attempt.create({
         data: {
           id: uid(),
           testId: tests[index] ?? '',
           studentId: student,
-          attemptNo: 1,
+          attemptNo,
+          // `Attempt_graded_per_test_key`: the first sitting holds the ranked slot, so a retake is ungraded.
+          isGraded: attemptNo === 1,
           status,
           startedAt: NOW,
           endsAt: new Date(NOW.getTime() + HOUR_MS),
@@ -629,6 +646,22 @@ describe('AccessResolverService — a series that unlocks in order', () => {
 
   it('does not count a sitting still in progress', async () => {
     assert.deepEqual(await startable([[0, ATTEMPT_STATUS.IN_PROGRESS]]), [true, false, false]);
+  });
+
+  /** THE failure this prevents: a retake of test 1 shutting test 2 again, because the newest sitting is not sat. */
+  it('keeps the next one open while a sat test is being retaken', async () => {
+    const { student, resolver } = await inOrder([
+      [0, ATTEMPT_STATUS.EVALUATED],
+      [0, ATTEMPT_STATUS.IN_PROGRESS],
+    ]);
+
+    const tests = (await resolver.catalog(student, NOW)).series[0]?.tests ?? [];
+
+    assert.deepEqual(
+      tests.map((test) => test.canStart),
+      [true, true, false],
+    );
+    assert.equal(tests[0]?.attemptStatus, ATTEMPT_STATUS.IN_PROGRESS);
   });
 
   it('holds nothing back when the series does not unlock in order', async () => {
@@ -739,7 +772,7 @@ describe('reading about a test', () => {
   });
 });
 
-/** The mirror of `seriesSources`: everyone counted here reaches the series reading the other way. */
+/** The mirror of `seriesSources`: everyone counted here reaches the series the other way, and can sit it. */
 describe('AccessResolverService.audienceCount', () => {
   const counted = (seriesId: string) => resolverOn().audienceCount(seriesId);
 
@@ -812,6 +845,17 @@ describe('AccessResolverService.audienceCount', () => {
     await studentAt(at, { isActive: false });
 
     assert.equal(await counted(seriesId), 0);
+  });
+
+  /** THE failure this prevents: a blocked student in the admin's reach figure, told a test they cannot sit is open. */
+  it('leaves out a student blocked from sitting tests', async () => {
+    const at = await place();
+    const seriesId = await series(at);
+    const free = await series(at, { kind: TEST_SERIES_KIND.FREE, branchIds: [] });
+    await studentAt(at, { isTestBlocked: true });
+
+    assert.equal(await counted(seriesId), 0);
+    assert.deepEqual(await resolverOn().studentsReaching(free), []);
   });
 });
 
