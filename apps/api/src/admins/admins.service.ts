@@ -176,15 +176,30 @@ export class AdminsService {
     // requireAdmin, not an active check: renaming a deactivated admin, or making one a super admin before switching them back on, are both reasonable.
     const before = await this.requireAdmin(id);
 
-    const row = await this.prisma.admin.update({
-      where: { id },
-      data: {
-        ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
-        ...(input.role === undefined
-          ? {}
-          : { role: input.role, isSuperAdmin: input.role === ADMIN_ROLES.SUPER_ADMIN }),
-      },
-    });
+    // A super admin is past every check their grants are read at, so theirs stay dormant for a demotion to narrow instead.
+    const prunesTo =
+      input.role === undefined || input.role === ADMIN_ROLES.SUPER_ADMIN
+        ? null
+        : Object.keys(ROLE_PERMISSION_PRESET[input.role]);
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.admin.update({
+        where: { id },
+        data: {
+          ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
+          ...(input.role === undefined
+            ? {}
+            : { role: input.role, isSuperAdmin: input.role === ADMIN_ROLES.SUPER_ADMIN }),
+        },
+      });
+      // Prunes, never seeds: a grant the new role does not carry goes, and one it does keeps whatever the Permissions screen set.
+      if (prunesTo) {
+        await tx.adminFeaturePermission.deleteMany({
+          where: { adminId: id, featureKey: { notIn: prunesTo } },
+        });
+      }
+      return updated;
+    }, TX_LIMITS.SHORT);
 
     this.auditContext.setChanged(
       fieldDiff(auditFieldsOf(before), auditFieldsOf(row), AUDITED_ADMIN_FIELDS),

@@ -473,6 +473,63 @@ describe('AdminsService — setActive', () => {
   });
 });
 
+describe('AdminsService.update — a role change re-aligns the grants', () => {
+  /** THE failure this prevents: a demotion that left every grant of the role they came from live. */
+  it('drops every grant the new role does not carry, and seeds nothing in their place', async () => {
+    const { service } = build();
+    const admin = await service.create(
+      { email: 'wide@iace.co.in', role: ADMIN_ROLES.ADMIN },
+      ACTOR,
+    );
+    assert.ok((await grantsOf(admin.id)).length > 0, 'the ADMIN preset opened grants to narrow');
+
+    const demoted = await service.update(admin.id, { role: ADMIN_ROLES.TYPIST });
+
+    assert.deepEqual(demoted.permissions, {}, 'narrowed, and the TYPIST preset not seeded');
+    assert.deepEqual(await grantsOf(admin.id), []);
+  });
+
+  it('keeps a grant the new role still carries, at the level it was set to', async () => {
+    const { service } = build();
+    const admin = await service.create(
+      { email: 'moved@iace.co.in', role: ADMIN_ROLES.TYPIST },
+      ACTOR,
+    );
+    await grant(admin.id, FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+
+    const moved = await service.update(admin.id, { role: ADMIN_ROLES.PROOFREADER });
+
+    // The PROOFREADER preset holds this key at READ, so WRITE surviving is the set level rather than the preset's.
+    assert.deepEqual(moved.permissions, {
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    });
+  });
+
+  /** identityOf already ignores a super admin's grants, so a promotion leaves them for the demotion to narrow. */
+  it('holds a super admin’s grants dormant, and narrows them when the role comes back down', async () => {
+    const { service } = build();
+    const admin = await service.create(
+      { email: 'promoted@iace.co.in', role: ADMIN_ROLES.ADMIN },
+      ACTOR,
+    );
+    const opened = await service.permissionsFor(admin.id);
+
+    const promoted = await service.update(admin.id, { role: ADMIN_ROLES.SUPER_ADMIN });
+
+    assert.equal(promoted.isSuperAdmin, true);
+    assert.deepEqual(await service.permissionsFor(admin.id), opened, 'a promotion prunes nothing');
+    const identity = await service.identityOf(admin.id);
+    assert.deepEqual(identity?.permissions, {}, 'dormant: the bypass answers, the grants do not');
+
+    const down = await service.update(admin.id, { role: ADMIN_ROLES.PROOFREADER });
+
+    assert.equal(down.isSuperAdmin, false);
+    assert.deepEqual(down.permissions, {
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    });
+  });
+});
+
 describe('AdminsService.setPermissions — the audit diff is what actually moved', () => {
   it('reports each feature that moved, from and to, and nothing for one that did not', async () => {
     const { service, auditContext } = build();

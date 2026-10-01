@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import {
+  ADMIN_ROLES,
   ADMIN_ROLE_VALUES,
   PERMISSION_LEVELS,
   ROLE_PERMISSION_PRESET,
@@ -164,6 +165,7 @@ function AdminPanel({
 }: Readonly<{ admin: Admin; features: readonly Feature[]; onSaved: () => void }>) {
   const [draft, setDraft] = useState<Draft>(() => new Map<FeatureKey, Level>());
   const [confirming, setConfirming] = useState(false);
+  const [pendingRole, setPendingRole] = useState<AdminRole | null>(null);
 
   const changes = useMemo<Change[]>(
     () =>
@@ -190,8 +192,9 @@ function AdminPanel({
     meta: { success: `Role updated for ${admin.email}.` },
     mutationFn: (role: AdminRole) => api.admin.admins.update(admin.id, { role }),
     // The preset is loaded as an ordinary unsaved draft: the role names the job, the Save grants it.
-    onSuccess: (saved) => {
-      setDraft(presetDraft(saved, features));
+    onSuccess: (saved) => setDraft(presetDraft(saved, features)),
+    onSettled: () => {
+      setPendingRole(null);
       onSaved();
     },
   });
@@ -208,6 +211,9 @@ function AdminPanel({
   });
 
   const heldCount = features.filter((f) => admin.permissions[f.key] !== undefined).length;
+  // Held through the close so the dialog does not rewrite itself on its way out.
+  const nextRole = pendingRole ?? admin.role;
+  const pruned = prunedBy(admin, nextRole, features);
 
   return (
     <Accordion
@@ -235,7 +241,7 @@ function AdminPanel({
           <Field
             htmlFor={`role-${admin.id}`}
             label="Role"
-            /* ui-copy-ok: consequence */ hint="Ticks its usual access below; nothing is granted until you save"
+            /* ui-copy-ok: consequence */ hint="Removes access the new role does not carry; nothing is granted until you save"
           >
             {(control) => (
               <Combobox
@@ -244,10 +250,35 @@ function AdminPanel({
                 clearable={false}
                 items={ROLE_ITEMS}
                 disabled={setRole.isPending || save.isPending}
-                onChange={(next) => next && setRole.mutate(next as AdminRole)}
+                onChange={(next) =>
+                  next && next !== admin.role && setPendingRole(next as AdminRole)
+                }
               />
             )}
           </Field>
+
+          <ConfirmDialog
+            open={pendingRole !== null}
+            onOpenChange={(open) => !open && setPendingRole(null)}
+            destructive={pruned.length > 0}
+            loading={setRole.isPending}
+            title={`Change ${admin.email} to ${ADMIN_ROLE_LABELS[nextRole]}?`}
+            description={roleChangeWarning(nextRole, pruned.length)}
+            confirmLabel="Change role"
+            onConfirm={() => pendingRole && setRole.mutate(pendingRole)}
+          >
+            {pruned.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {pruned.map((change) => (
+                  <StatRow
+                    key={change.feature.key}
+                    label={<code className="text-xs">{change.feature.key}</code>}
+                    value={`${levelWord(change.from)} → none`}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </ConfirmDialog>
 
           <FeatureGrid
             admin={admin}
@@ -310,6 +341,27 @@ function AdminPanel({
       )}
     </Accordion>
   );
+}
+
+/** What the role write itself takes away — every held grant the new role's preset does not name. */
+function prunedBy(admin: Admin, role: AdminRole, features: readonly Feature[]): Change[] {
+  // A super admin is past every check their grants are read at, so the server leaves them dormant.
+  if (role === ADMIN_ROLES.SUPER_ADMIN) return [];
+  const preset = ROLE_PERMISSION_PRESET[role];
+  return features
+    .filter((feature) => admin.permissions[feature.key] !== undefined && !(feature.key in preset))
+    .map((feature) => ({ feature, from: admin.permissions[feature.key] ?? null, to: null }));
+}
+
+function roleChangeWarning(role: AdminRole, prunedCount: number): string {
+  if (role === ADMIN_ROLES.SUPER_ADMIN) {
+    return 'They bypass every feature check from their next request, so nothing is removed and their grants are left as they are. Super admin cannot be taken back from this portal.';
+  }
+  const loss =
+    prunedCount === 0
+      ? 'They hold no grant the new role drops, so nothing is removed.'
+      : `${plural(prunedCount, 'grant')} the new role does not carry will be removed, and they lose that access on their next request — no signing out and in again.`;
+  return `${loss} Grants the new role still carries are kept, and nothing new is granted until you save the permissions below.`;
 }
 
 /** Every registered key the role's preset names, as a draft against what is already stored. */
