@@ -182,7 +182,7 @@ export class OtpService {
       }
       const maxAttempts = this.config.get('OTP_MAX_VERIFY_ATTEMPTS');
       if (attempts >= maxAttempts) {
-        await this.redis.del(key, attemptsKey);
+        await this.redis.del(key, attemptsKey, redisKeys.otpCooldown(actor, identifier));
         // The challenge is burnt, not just wrong — a different code, because the client's next step is "request a new one", not "try again".
         throw new AppException(
           ErrorCodes.RATE_LIMITED,

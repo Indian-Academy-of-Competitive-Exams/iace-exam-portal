@@ -178,6 +178,19 @@ describe('OtpService — verify', () => {
     );
   });
 
+  /** The failure this prevents: being told to request a new code, then refused one for the rest of the cooldown. */
+  it('clears the cooldown when it burns the challenge, so the new code it asks for can be had', async () => {
+    const { otp, redis } = build();
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    for (let i = 0; i < 5; i += 1) {
+      await assert.rejects(() => otp.verify(ActorTypes.STUDENT, MOBILE, '000000'));
+    }
+
+    assert.equal(redis.snapshot()[`otp:cooldown:student:${MOBILE}`], undefined);
+    assert.equal((await otp.request(ActorTypes.STUDENT, MOBILE)).sent, true);
+  });
+
   it('reports an expired code as expired, not as wrong', async () => {
     const { otp, sender, redis } = build();
     await otp.request(ActorTypes.STUDENT, MOBILE);
