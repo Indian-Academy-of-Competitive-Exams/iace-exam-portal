@@ -48,8 +48,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    # `/health` answers 200 even while degraded; only `/health/ready` fails when a dependency is down.
     healthcheck: &api-health
-      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/health']
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/health/ready']
       interval: 10s
       timeout: 5s
       retries: 10

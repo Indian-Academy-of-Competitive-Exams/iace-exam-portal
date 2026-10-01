@@ -259,6 +259,13 @@ a second box running the same compose file, a health check at $0.50 a month, and
 the record moved to it. That is the thing to build if an outage ever costs more than it costs; it
 is not a load balancer, and it does not bring a scheduler with it.
 
+**That health check points at `/health/ready`, never `/health`.** `/health` answers 200 even while
+degraded, on purpose — restarting the API does not fix a dead Redis — so a probe keyed on the status
+code would sit on a 200 and never fail over. `/health/ready` is the one that returns 503, and it
+watches the database, Redis and the queue, deliberately not S3, so an object-store blip cannot flap
+a box out of rotation. `deploy/compose.yml`'s container healthcheck uses the same endpoint for the
+same reason.
+
 **Let's Encrypt will not issue for `*.amazonaws.com`** — those names are on the Public Suffix List
 and blocked. So an AWS-provided EC2 hostname cannot have HTTPS, which matters because the student
 app is a PWA and a service worker requires it. Every environment needs a real name. CloudFront's
