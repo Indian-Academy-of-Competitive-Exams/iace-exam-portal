@@ -32,13 +32,14 @@ rate limiting, BullMQ), **MinIO** (S3‑compatible object storage).
 
 ## 1. Prerequisites
 
-| Tool                    | Version                                                   | Notes                                                          |
-| ----------------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
-| Node.js                 | **22.23.2** (see `.nvmrc`; engine floor is 22.13)         | `nvm install && nvm use`                                       |
-| pnpm                    | **11.21.0** (pinned in `package.json` → `packageManager`) | Get it via Corepack — see below                                |
-| Docker + Docker Compose | any recent                                                | for Postgres/Valkey/MinIO                                      |
-| Git                     | any                                                       |                                                                |
-| SonarQube               | optional                                                  | only if you want the pre‑commit scan; it skips itself if unset |
+| Tool                    | Version                                                   | Notes                                                                     |
+| ----------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Node.js                 | **22.23.2** (see `.nvmrc`; engine floor is 22.13)         | `nvm install && nvm use`                                                  |
+| pnpm                    | **11.21.0** (pinned in `package.json` → `packageManager`) | Get it via Corepack — see below                                           |
+| Docker + Docker Compose | any recent                                                | for Postgres/Valkey/MinIO                                                 |
+| Git                     | any                                                       |                                                                           |
+| SonarQube               | optional                                                  | only if you want the pre‑commit scan; it skips itself if unset            |
+| k6                      | optional                                                  | only to run `scripts/load` — `brew install k6`, or the `grafana/k6` image |
 
 Enable the pinned pnpm with Corepack (don't `npm i -g pnpm` — you'll drift off the pinned version):
 
@@ -236,22 +237,23 @@ Expo hands back an APNs token there, which FCM cannot address without the Fireba
 
 ## 8. Everyday commands
 
-| Command                                           | What it does                                |
-| ------------------------------------------------- | ------------------------------------------- |
-| `pnpm dev`                                        | api + both SPAs (watch mode)                |
-| `pnpm dev:mobile`                                 | Metro on its own, for its own reloads       |
-| `pnpm build`                                      | build everything                            |
-| `pnpm typecheck`                                  | TS typecheck across the monorepo            |
-| `pnpm lint`                                       | ESLint across the monorepo                  |
-| `pnpm test`                                       | tests that need no database                 |
-| `pnpm test:db`                                    | migrate `TEST_DATABASE_URL`, run DB tests   |
-| `pnpm test:coverage`                              | both tiers with coverage (needs Postgres)   |
-| `pnpm format` / `pnpm format:check`               | Prettier write / check                      |
-| `pnpm deps:check` / `pnpm deps:fix`               | syncpack — keep shared dep versions aligned |
-| `pnpm db:setup`                                   | new device: generate + migrate + seed       |
-| `pnpm db:migrate` / `db:generate` / `db:studio`   | Prisma workflows                            |
-| `pnpm db:dbml`                                    | redraw `docs/schema.dbml` from the schema   |
-| `pnpm docker:up` / `docker:down` / `docker:reset` | infra up / stop / stop+wipe volumes         |
+| Command                                             | What it does                                |
+| --------------------------------------------------- | ------------------------------------------- |
+| `pnpm dev`                                          | api + both SPAs (watch mode)                |
+| `pnpm dev:mobile`                                   | Metro on its own, for its own reloads       |
+| `pnpm build`                                        | build everything                            |
+| `pnpm typecheck`                                    | TS typecheck across the monorepo            |
+| `pnpm lint`                                         | ESLint across the monorepo                  |
+| `pnpm test`                                         | tests that need no database                 |
+| `pnpm test:db`                                      | migrate `TEST_DATABASE_URL`, run DB tests   |
+| `pnpm test:coverage`                                | both tiers with coverage (needs Postgres)   |
+| `pnpm format` / `pnpm format:check`                 | Prettier write / check                      |
+| `pnpm deps:check` / `pnpm deps:fix`                 | syncpack — keep shared dep versions aligned |
+| `pnpm db:setup`                                     | new device: generate + migrate + seed       |
+| `pnpm db:migrate` / `db:generate` / `db:studio`     | Prisma workflows                            |
+| `pnpm db:dbml`                                      | redraw `docs/schema.dbml` from the schema   |
+| `pnpm docker:up` / `docker:down` / `docker:reset`   | infra up / stop / stop+wipe volumes         |
+| `k6 run -e TIER=sitting scripts/load/exam-event.js` | the HTTP load tiers against a running API   |
 
 Before committing, the Husky pre‑commit hook runs prettier on the staged files, then lint and typecheck across the workspace, then one check on what the commit ADDS: one line per comment, and no screen explaining what it already says. **No test runs**, so nothing has to be up to commit.
 
