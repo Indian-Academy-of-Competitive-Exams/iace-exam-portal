@@ -4,16 +4,14 @@ import { AppException, ErrorCodes, readinessOf } from '@iace/contracts';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE } from '../src/students/anonymize';
 import { DOMAIN_EVENTS } from '../src/common/events';
-import { FakeEventBus, FakeLeaderboard, makeStanding } from '../test/support/fakes';
+import { FakeEventBus, FakeStorage } from '../test/support/fakes';
 import {
-  makeBranch,
   makeCatalog,
   makeSitting,
   makeStudent,
   makeTest,
   resetDatabase,
   testPrisma,
-  uid,
 } from './support/database';
 
 const prisma = testPrisma();
@@ -21,64 +19,8 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-const build = (leaderboard = new FakeLeaderboard(), events = new FakeEventBus()) =>
-  new StudentPrivacyService(prisma, leaderboard.asService(), events.asService());
-
-describe('the copy a student may take away', () => {
-  it('carries the profile fields nothing else on the platform shows them', async () => {
-    const service = build();
-    const branch = await makeBranch(prisma, 'AMEERPET');
-    const student = await makeStudent(prisma, {
-      mobile: '9876543210',
-      currentBranchId: branch.id,
-    });
-    await prisma.studentProfile.create({
-      data: { studentId: student.id, motherName: 'Lakshmi', fatherName: 'Rao' },
-    });
-
-    const copy = await service.export(student.id);
-
-    assert.equal(copy.student.mobile, '9876543210');
-    assert.equal(copy.student.branch, 'AMEERPET');
-    assert.equal(copy.profile?.motherName, 'Lakshmi');
-    assert.ok(copy.exportedAt);
-  });
-
-  it('lists their sittings with the marks and the percentile each holds now, and refuses somebody else’s id', async () => {
-    const student = await makeStudent(prisma);
-    const test = await makeTest(prisma, await makeCatalog(prisma));
-    const first = await makeSitting(prisma, {
-      testId: test.id,
-      studentId: student.id,
-      score: 42,
-      createdAt: new Date('2026-09-01T05:00:00.000Z'),
-    });
-    const retake = await makeSitting(prisma, {
-      testId: test.id,
-      studentId: student.id,
-      score: 50,
-      attemptNo: 2,
-      isGraded: false,
-      createdAt: new Date('2026-09-02T05:00:00.000Z'),
-    });
-    const service = build(
-      new FakeLeaderboard([
-        makeStanding({ attemptId: first.id, studentId: student.id, percentile: 62.5 }),
-      ]),
-    );
-
-    const copy = await service.export(student.id);
-    assert.deepEqual(
-      copy.attempts.map((attempt) => [attempt.id, attempt.score, attempt.percentile]),
-      [
-        [first.id, 42, 62.5],
-        [retake.id, 50, null],
-      ],
-    );
-
-    await assert.rejects(service.export(uid()), AppException.is);
-  });
-});
+const build = (events = new FakeEventBus(), storage = new FakeStorage()) =>
+  new StudentPrivacyService(prisma, events.asService(), storage as never);
 
 describe('erasure is anonymisation', () => {
   it('takes the person out of the row and leaves the row', async () => {
@@ -135,12 +77,46 @@ describe('erasure is anonymisation', () => {
   /** The bug this prevents: an erased account still answering with its live token. */
   it('asks for the sessions to go, the same signal a deactivation sends', async () => {
     const events = new FakeEventBus();
-    const service = build(new FakeLeaderboard(), events);
+    const service = build(events);
     const student = await makeStudent(prisma);
 
     await service.anonymize(student.id);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_DEACTIVATED), [{ studentId: student.id }]);
+  });
+
+  /** The bug this prevents: the photo and the marksheet outliving the erasure, under the student's own id. */
+  it('takes the uploaded documents out of storage, not just their keys off the row', async () => {
+    const storage = new FakeStorage();
+    const student = await makeStudent(prisma);
+    const photo = `students/${student.id}/photo-1.jpg`;
+    const marksheet = `students/${student.id}/tenth-marksheet-1.pdf`;
+    await storage.upload(photo, Buffer.from('a face'));
+    await storage.upload(marksheet, Buffer.from('a marksheet'));
+    await prisma.studentProfile.create({
+      data: { studentId: student.id, photoUrl: photo, tenthMarksheetUrl: marksheet },
+    });
+
+    await build(new FakeEventBus(), storage).anonymize(student.id);
+
+    assert.deepEqual([...storage.objects.keys()], []);
+  });
+
+  /** Reporting a successful erasure over files that are still there is the one outcome worth refusing. */
+  it('erases nothing if the documents cannot be removed', async () => {
+    const storage = new FakeStorage();
+    const student = await makeStudent(prisma, { fullName: 'Asha' });
+    await storage.upload('students/photo.jpg', Buffer.from('a face'));
+    await prisma.studentProfile.create({
+      data: { studentId: student.id, photoUrl: 'students/photo.jpg' },
+    });
+    storage.failNextRemove = true;
+
+    await assert.rejects(build(new FakeEventBus(), storage).anonymize(student.id));
+
+    const row = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
+    assert.equal(row.fullName, 'Asha');
+    assert.equal(row.anonymizedAt, null);
   });
 
   /** Erasing twice would rewrite the date the promise was kept on. */

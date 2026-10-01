@@ -33,7 +33,7 @@ import { API_ROLES, onRole } from '../config/api-role';
         (module.require('../notifications') as { NotificationsModule: typeof NotificationsModule })
           .NotificationsModule,
     ),
-    // Same re-entry, for the live standings a student's own copy of their data carries.
+    // Same re-entry: the roster screen reads a student's rollups through the overview service.
     forwardRef(
       () =>
         (module.require('../attempts') as { AttemptsModule: typeof AttemptsModule }).AttemptsModule,

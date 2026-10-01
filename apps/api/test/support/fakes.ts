@@ -346,11 +346,19 @@ export class FakeMessageSender implements MessageSender {
 /** In-memory `StorageService`, typed against the two methods it stands in for so a signature drift here fails the build rather than surfacing as a confusing test failure. */
 export class FakeStorage implements Pick<
   StorageService,
-  'upload' | 'objectSize' | 'read' | 'createDownloadUrl' | 'publicUrl'
+  'upload' | 'objectSize' | 'read' | 'createDownloadUrl' | 'publicUrl' | 'remove'
 > {
   objects = new Map<string, Buffer>();
   failNextUpload = false;
+  failNextRemove = false;
   private readonly reportedSizes = new Map<string, number>();
+
+  /** Idempotent, like S3's own delete: forgetting a key that was never there is not an error. */
+  remove(key: string): Promise<void> {
+    if (this.failNextRemove) return Promise.reject(new Error('s3 is down'));
+    this.objects.delete(key);
+    return Promise.resolve();
+  }
 
   upload(key: string, body: Buffer | Uint8Array | string, _contentType?: string) {
     if (this.failNextUpload) return Promise.reject(new Error('s3 is down'));

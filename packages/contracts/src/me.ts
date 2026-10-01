@@ -99,53 +99,8 @@ export const DOCUMENT_FILE_FIELD = 'file';
 export type UploadFile = Blob;
 
 // ============================================================================
-// DPDP — the copy a student may take away, and erasure
+// DPDP — erasure
 // ============================================================================
-
-/** One sitting, as it appears in a student's own copy of their data — marks, never the paper. */
-const exportedAttemptSchema = z.object({
-  id: z.string(),
-  testId: z.string(),
-  testName: z.string(),
-  status: z.string(),
-  startedAt: z.string().nullable(),
-  submittedAt: z.string().nullable(),
-  score: z.number().nullable(),
-  percentile: z.number().nullable(),
-});
-
-/** Everything the platform holds ABOUT one student, in the shape they can read. */
-export const studentDataExportSchema = z.object({
-  exportedAt: z.string(),
-  student: z.object({
-    id: z.string(),
-    mobile: z.string(),
-    fullName: z.string().nullable(),
-    studentType: z.string(),
-    branch: z.string().nullable(),
-    enrolledExams: z.array(z.string()),
-    enrolledCourses: z.array(z.string()),
-    programs: z.array(z.string()),
-    createdAt: z.string(),
-  }),
-  profile: z
-    .object({
-      motherName: z.string().nullable(),
-      fatherName: z.string().nullable(),
-      dob: z.string().nullable(),
-      email: z.string().nullable(),
-      address: z.string().nullable(),
-      gender: z.string().nullable(),
-      photoUrl: z.string().nullable(),
-      aadhaarVerified: z.boolean(),
-      panVerified: z.boolean(),
-      educationDetails: z.unknown().nullable(),
-      pastExamHistory: z.unknown().nullable(),
-    })
-    .nullable(),
-  attempts: z.array(exportedAttemptSchema),
-});
-export type StudentDataExport = z.infer<typeof studentDataExportSchema>;
 
 /** What erasure left behind: the sittings are still counted, and the person is no longer named. */
 export const erasureReceiptSchema = z.object({

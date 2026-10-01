@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Header,
   HttpCode,
   HttpStatus,
   Delete,
@@ -36,7 +35,6 @@ import {
   type PushDeviceBody,
   type PushSubscriptionBody,
   type StudentCatalog,
-  type StudentDataExport,
   type UpdateMeBody,
   changePinSchema,
   documentKindSchema,
@@ -53,7 +51,6 @@ import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
 import { NotificationsService, PushService } from '../notifications';
 import { MeService } from './me.service';
-import { StudentPrivacyService } from '../students';
 
 /** The signed-in student's own account. No ids in any route — the subject is always `user.id` from the token, so no request shape can reach another student's record. */
 /** The two fields we use off a multipart upload — see imports.controller.ts. */
@@ -71,15 +68,7 @@ export class MeController {
     private readonly auth: AuthService,
     private readonly notifications: NotificationsService,
     private readonly push: PushService,
-    private readonly privacy: StudentPrivacyService,
   ) {}
-
-  /** Everything held about them, in one read. */
-  @Get('data-export')
-  @Header('Cache-Control', 'no-store')
-  dataExport(@CurrentUser() user: AuthenticatedUser): Promise<StudentDataExport> {
-    return this.privacy.export(user.id);
-  }
 
   @Get()
   profile(@CurrentUser() user: AuthenticatedUser): Promise<Me> {
