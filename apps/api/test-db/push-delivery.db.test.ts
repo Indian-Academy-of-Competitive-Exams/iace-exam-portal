@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DeliveryChannel, DeliveryStatus, DevicePlatform, type Prisma } from '@prisma/client';
 import { ActorTypes, NOTIFICATION_INBOX_PATH } from '@iace/contracts';
-import { PushService } from '../src/notifications/push.service';
+import { PushService, type PushDelivery } from '../src/notifications/push.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeConfig, FakeFcmSender, FakePushSender, FakeRedis } from '../test/support/fakes';
 import { makeNotification, makeStudent, resetDatabase, testPrisma, uid } from './support/database';
@@ -450,5 +450,61 @@ describe('A push reaches only a session that is still signed in', () => {
       sender.sent.map((row) => row.endpoint),
       [SUBSCRIPTION.endpoint],
     );
+  });
+});
+
+/** What a sweep does around a push: claims the row, pushes it, and reports whether the claim stood. */
+async function swept(push: PushService, delivery: PushDelivery): Promise<Date | null> {
+  const where = { id: delivery.notificationId };
+  await prisma.notification.update({ where, data: { pushedAt: new Date() } });
+  await push.deliverAll([delivery]);
+  return (await prisma.notification.findUniqueOrThrow({ where })).pushedAt;
+}
+
+describe('When nothing accepted a free push', () => {
+  const failing = () => new FakePushSender(true, [], [SUBSCRIPTION.endpoint]);
+
+  /** The failure this prevents: one web-push outage losing a whole sweep page's pushes, silently. */
+  it('gives the claim back, so the next sweep pushes it again', async () => {
+    const { push, student, delivery } = await build(failing());
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+
+    assert.equal(await swept(push, delivery), null);
+  });
+
+  it('moves the one ledger row rather than booking a second', async () => {
+    const { push, student, delivery } = await build(failing());
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+
+    await swept(push, delivery);
+    await swept(push, delivery);
+
+    const rows = await prisma.notificationDelivery.findMany();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.attempts, 2);
+    assert.equal(rows[0]?.status, DeliveryStatus.FAILED);
+  });
+
+  /** The bound, so an outage that never ends cannot re-push every five minutes for ever. */
+  it('stops after three sweeps', async () => {
+    const { push, student, delivery } = await build(failing());
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+
+    await swept(push, delivery);
+    await swept(push, delivery);
+
+    assert.notEqual(await swept(push, delivery), null, 'the third attempt spends it');
+    assert.notEqual(await swept(push, delivery), null);
+    const [row] = await prisma.notificationDelivery.findMany();
+    assert.equal(row?.attempts, 3);
+  });
+
+  /** A phone that got it is a student who has been told, so the browser is not worth trying again. */
+  it('keeps the claim when the other free channel got through', async () => {
+    const { push, student, delivery } = await build(failing());
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+    await push.registerDevice(student, SESSION, DEVICE);
+
+    assert.notEqual(await swept(push, delivery), null);
   });
 });

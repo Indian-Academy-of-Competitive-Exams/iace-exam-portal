@@ -100,11 +100,11 @@ export class PushService {
   private async reachOf(inputs: readonly PushDelivery[]): Promise<Reach> {
     const notificationId = { in: inputs.map((input) => input.notificationId) };
     const studentId = { in: [...new Set(inputs.map((input) => input.studentId))] };
-    const [decided, subscriptions, devices] = await Promise.all([
-      // A ledger row means this was already decided, so a redelivered job cannot push a second time.
+    const [priors, subscriptions, devices] = await Promise.all([
+      // A ledger row is what a redelivered job reads to see it must not push the same thing twice.
       this.prisma.notificationDelivery.findMany({
         where: { notificationId, channel: { in: PUSH_CHANNELS } },
-        select: { notificationId: true, channel: true },
+        select: { notificationId: true, channel: true, status: true, attempts: true },
       }),
       this.sender.isConfigured
         ? this.prisma.pushSubscription.findMany({
@@ -148,7 +148,9 @@ export class PushService {
     }
 
     return {
-      decided: new Set(decided.map((row) => ledgerKey(row.notificationId, row.channel))),
+      priors: new Map(
+        priors.map((row) => [ledgerKey(row.notificationId, row.channel), row] as const),
+      ),
       browsers: Map.groupBy(
         subscriptions.filter((target) => isAllowedPushEndpoint(target.endpoint) && live(target)),
         (target) => target.studentId,
@@ -187,8 +189,14 @@ export class PushService {
       url: NOTIFICATION_INBOX_PATH,
       notificationId: input.notificationId,
     };
-    const open = (channel: DeliveryChannel) =>
-      !reach.decided.has(ledgerKey(input.notificationId, channel));
+    // A send that got through is settled; one that nothing accepted is open again until the cap.
+    const open = (channel: DeliveryChannel) => {
+      const prior = reach.priors.get(ledgerKey(input.notificationId, channel));
+      return (
+        prior === undefined ||
+        (prior.status === DeliveryStatus.FAILED && prior.attempts < PUSH_ATTEMPT_CAP)
+      );
+    };
 
     // A subscription or a token IS the consent, so having none is an absence and not a refusal.
     const browsers = reach.browsers.get(input.studentId) ?? [];
@@ -196,7 +204,7 @@ export class PushService {
 
     await Promise.all([
       open(DeliveryChannel.WEB_PUSH) && browsers.length > 0
-        ? this.attempt(input, DeliveryChannel.WEB_PUSH, outcome, () =>
+        ? this.attempt(input, DeliveryChannel.WEB_PUSH, reach, outcome, () =>
             Promise.all(
               browsers.map(async (target) => {
                 const result = await this.sender.send(target, payload);
@@ -207,7 +215,7 @@ export class PushService {
           )
         : null,
       open(DeliveryChannel.MOBILE_PUSH) && phones.length > 0
-        ? this.attempt(input, DeliveryChannel.MOBILE_PUSH, outcome, () =>
+        ? this.attempt(input, DeliveryChannel.MOBILE_PUSH, reach, outcome, () =>
             Promise.all(
               phones.map(async (device) => {
                 const result = await this.fcm.send(device.token, payload);
@@ -223,18 +231,22 @@ export class PushService {
   private async attempt(
     input: PushDelivery,
     channel: DeliveryChannel,
+    reach: Reach,
     outcome: PageOutcome,
     send: () => Promise<PushOutcome[]>,
   ): Promise<void> {
+    const prior = reach.priors.get(ledgerKey(input.notificationId, channel));
     try {
       const results = await send();
-      outcome.ledger.push(ledgerRow(input.notificationId, channel, results));
+      outcome.ledger.push(
+        ledgerRow(input.notificationId, channel, results, (prior?.attempts ?? 0) + 1),
+      );
     } catch (error) {
       this.logger.warn(`${channel} for notification ${input.notificationId} failed`, error);
     }
   }
 
-  /** The page's ledger in one write, and whatever the services said is gone, pruned in one each. */
+  /** The page's new rows in one write, its retries one each, and whatever is gone pruned in one. */
   private async settle(outcome: PageOutcome): Promise<void> {
     await Promise.all([
       outcome.deadEndpoints.length > 0
@@ -246,10 +258,45 @@ export class PushService {
         ? this.prisma.pushDevice.deleteMany({ where: { token: { in: outcome.deadTokens } } })
         : null,
     ]);
-    // Skipping a duplicate: a racing pass that booked the same row first already decided it.
+    // A second attempt has a row to move, so it cannot be a duplicate to skip past.
+    const retried = outcome.ledger.filter((row) => row.attempts > 1);
     await this.prisma.notificationDelivery.createMany({
-      data: outcome.ledger,
+      // Skipping a duplicate: a racing pass that booked the same row first already decided it.
+      data: outcome.ledger.filter((row) => row.attempts === 1),
       skipDuplicates: true,
+    });
+    for (const row of retried) {
+      await this.prisma.notificationDelivery.updateMany({
+        where: { notificationId: row.notificationId, channel: row.channel },
+        data: {
+          status: row.status,
+          attempts: row.attempts,
+          sentAt: row.sentAt ?? null,
+          failedAt: row.failedAt ?? null,
+          lastError: row.lastError ?? null,
+        },
+      });
+    }
+    await this.reopen(outcome.ledger);
+  }
+
+  /** Unstamps the sweep's claim, so a push nothing accepted is tried again rather than lost. */
+  private async reopen(ledger: readonly LedgerRow[]): Promise<void> {
+    const reached = new Set(
+      ledger.flatMap((row) => (row.status === DeliveryStatus.SENT ? [row.notificationId] : [])),
+    );
+    const lost = ledger.flatMap((row) =>
+      row.status === DeliveryStatus.FAILED &&
+      !reached.has(row.notificationId) &&
+      row.attempts < PUSH_ATTEMPT_CAP
+        ? [row.notificationId]
+        : [],
+    );
+    if (lost.length === 0) return;
+
+    await this.prisma.notification.updateMany({
+      where: { id: { in: lost } },
+      data: { pushedAt: null },
     });
   }
 }
@@ -259,6 +306,9 @@ const PUSH_CHANNELS: DeliveryChannel[] = [DeliveryChannel.WEB_PUSH, DeliveryChan
 
 /** Lanes, because a push is an HTTP call each and a hall's worth of them is not a loop to await. */
 const PUSH_LANES = 8;
+
+/** ponytail: three sweeps of riding out a web-push or FCM outage; a backlogged pass may spend them in one go. */
+const PUSH_ATTEMPT_CAP = 3;
 
 type WebTarget = { endpoint: string; p256dh: string; auth: string };
 
@@ -272,13 +322,13 @@ const sessionKey = (target: SessionBound): string =>
   `${target.studentId}:${target.sessionId ?? ''}`;
 
 interface Reach {
-  decided: ReadonlySet<string>;
+  priors: ReadonlyMap<string, { status: DeliveryStatus; attempts: number }>;
   browsers: ReadonlyMap<string, WebTarget[]>;
   phones: ReadonlyMap<string, { token: string }[]>;
 }
 
 interface PageOutcome {
-  ledger: Prisma.NotificationDeliveryCreateManyInput[];
+  ledger: LedgerRow[];
   deadEndpoints: string[];
   deadTokens: string[];
 }
@@ -286,21 +336,28 @@ interface PageOutcome {
 const ledgerKey = (notificationId: string, channel: DeliveryChannel) =>
   `${notificationId}:${channel}`;
 
+/** What one channel's attempt decided. `attempts` is required: it is the bound on retrying a free push. */
+type LedgerRow = Prisma.NotificationDeliveryCreateManyInput & {
+  status: DeliveryStatus;
+  attempts: number;
+};
+
 function ledgerRow(
   notificationId: string,
   channel: DeliveryChannel,
   results: readonly PushOutcome[],
-): Prisma.NotificationDeliveryCreateManyInput {
+  attempts: number,
+): LedgerRow {
   const now = new Date();
   if (results.includes(PUSH_OUTCOMES.SENT)) {
-    return { notificationId, channel, status: DeliveryStatus.SENT, sentAt: now, attempts: 1 };
+    return { notificationId, channel, status: DeliveryStatus.SENT, sentAt: now, attempts };
   }
   return {
     notificationId,
     channel,
     status: DeliveryStatus.FAILED,
     failedAt: now,
-    attempts: 1,
+    attempts,
     lastError: `Nothing accepted the push (${results.length} tried)`,
   };
 }

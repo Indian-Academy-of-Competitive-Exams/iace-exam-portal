@@ -1,12 +1,12 @@
 /**
  * Tells whoever reaches a test that it has opened. A test opens by the CLOCK, so nothing writes at
  * the moment it happens and there is no event to hang this off — a sweep is the only shape that
- * works. `Test.announcedAt` is what makes it exactly-once: it is stamped in the same transaction as
- * the bell rows, so a crash mid-fan-out replays and a finished one is never seen again.
+ * works. `Test.announcedAt` is what stops a finished one being seen again, and the dedupe key on
+ * each bell row is what makes a replayed fan-out land once rather than tell a cohort twice.
  */
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { NOTIFICATION_TYPE, TEST_STATUS } from '@iace/contracts';
-import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { type AccessResolverService } from '../access';
 import { NotificationsService } from './notifications.service';
 
@@ -65,24 +65,23 @@ export class TestOpeningService {
   ): Promise<void> {
     const recipients = await this.access.studentsReaching(test.testSeriesId);
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const batch of chunked(recipients)) {
-        await this.notifications.tell(
-          tx,
-          ...batch.map((studentId) => ({
-            studentId,
-            type: NOTIFICATION_TYPE.TEST_ASSIGNED,
-            title: test.title ?? 'A new test is open',
-            body: 'It is open now, and stays open. Sit it whenever you are ready.',
-            // The natural key of the fact: this test opening, once, however often the sweep runs.
-            dedupeKey: `test-open:${test.id}`,
-            testId: test.id,
-          })),
-        );
-      }
-      // Stamped WITH the fan-out: a crash between them replays, and never half-tells a cohort.
-      await tx.test.update({ where: { id: test.id }, data: { announcedAt: now } });
-    }, TX_LIMITS.BULK);
+    // A batch at a time, not one transaction over the cohort: 8K rows under one lock outlive its ceiling.
+    for (const batch of chunked(recipients)) {
+      await this.notifications.tell(
+        this.prisma,
+        ...batch.map((studentId) => ({
+          studentId,
+          type: NOTIFICATION_TYPE.TEST_ASSIGNED,
+          title: test.title ?? 'A new test is open',
+          body: 'It is open now, and stays open. Sit it whenever you are ready.',
+          // The natural key of the fact: this test opening, once, however often the sweep runs.
+          dedupeKey: `test-open:${test.id}`,
+          testId: test.id,
+        })),
+      );
+    }
+    // Stamped last, so a crash leaves the cohort part-told and the next sweep lands only the rest.
+    await this.prisma.test.update({ where: { id: test.id }, data: { announcedAt: now } });
   }
 }
 

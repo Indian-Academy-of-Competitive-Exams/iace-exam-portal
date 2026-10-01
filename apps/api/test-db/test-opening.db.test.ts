@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
+import { type Prisma } from '@prisma/client';
 import { NOTIFICATION_TYPE, TEST_STATUS, type TestStatus } from '@iace/contracts';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { TestOpeningService } from '../src/notifications/test-opening.service';
@@ -125,5 +126,52 @@ describe('What the sweep leaves alone', () => {
 
     assert.equal((await requests()).length, 0);
     assert.deepEqual(await announcedAt(test.id), NOW);
+  });
+});
+
+describe('When the fan-out dies part-way through', () => {
+  /** Only the first row lands, then the write throws — what a timeout or a lost connection looks like. */
+  function diesAfterOne(cohort: string[]) {
+    const access = { studentsReaching: () => Promise.resolve(cohort) } as never;
+    const dying = new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== 'notification') return Reflect.get(target, key) as unknown;
+        return new Proxy(target.notification, {
+          get(delegate, method: string | symbol) {
+            if (method !== 'createMany') return Reflect.get(delegate, method) as unknown;
+            return async (args: Prisma.NotificationCreateManyArgs) => {
+              await delegate.createMany({
+                ...args,
+                data: (args.data as Prisma.NotificationCreateManyInput[]).slice(0, 1),
+              });
+              throw new Error('the fan-out died');
+            };
+          },
+        });
+      },
+    });
+    return new TestOpeningService(dying, access, new NotificationsService(dying));
+  }
+
+  it('leaves the watermark unstamped, so the next sweep still owes the cohort', async () => {
+    const { cohort } = await build();
+    const test = await openingTest();
+
+    assert.equal(await diesAfterOne(cohort).sweep(NOW), 0);
+
+    assert.equal((await requests()).length, 1);
+    assert.equal(await announcedAt(test.id), null);
+  });
+
+  /** The failure this prevents: a part-told cohort either never finished, or told somebody twice. */
+  it('tells the rest on the next sweep, and nobody a second time', async () => {
+    const { service, cohort } = await build();
+    const test = await openingTest();
+    await diesAfterOne(cohort).sweep(NOW);
+
+    assert.equal(await service.sweep(LATER), 1);
+
+    assert.deepEqual(await told(), cohort);
+    assert.deepEqual(await announcedAt(test.id), LATER);
   });
 });
