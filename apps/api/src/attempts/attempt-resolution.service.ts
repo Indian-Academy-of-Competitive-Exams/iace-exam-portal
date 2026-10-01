@@ -18,6 +18,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
+import { AttemptSheetService } from './attempt-sheet.service';
 import { AttemptStateService } from './attempt-state.service';
 import { RollupQueue } from './rollup-queue';
 import { SubmitService } from './submit.service';
@@ -51,6 +52,7 @@ export class AttemptResolutionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
+    private readonly sheets: AttemptSheetService,
     private readonly submit: SubmitService,
     private readonly rollup: RollupQueue,
     private readonly audit: AuditContext,
@@ -75,7 +77,9 @@ export class AttemptResolutionService {
     now: Date = new Date(),
   ): Promise<ResolvedAttempt> {
     const attempt = await this.require(attemptId, SUPPORT_ACTIONS.EXTEND);
-    const endsAt = extendedEndsAt(attempt.endsAt, body.minutes, now);
+    // Counted from the key where there is one, like `lastAnswers` does, or an extend could shorten it.
+    const held = await this.state.read(attemptId);
+    const endsAt = extendedEndsAt(held ? new Date(held.endsAt) : attempt.endsAt, body.minutes, now);
 
     await this.prisma.attempt.update({ where: { id: attemptId }, data: { endsAt } });
     await this.state.pushDeadline(attemptId, endsAt);
@@ -121,7 +125,9 @@ export class AttemptResolutionService {
       },
     });
     // Nothing more may be saved to it, and the fallback in Postgres now refuses this sitting too.
-    await this.state.take(attemptId);
+    const stray = await this.state.take(attemptId);
+    // Archived, not deleted: what they answered since the last flush is kept, as `closeOff` keeps it.
+    if (stray) await this.sheets.write(stray, false);
     await this.reverse(attempt);
 
     this.record(SUPPORT_ACTIONS.VOID, body.reason, attempt, {

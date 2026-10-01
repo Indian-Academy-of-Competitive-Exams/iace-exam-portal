@@ -1,9 +1,16 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { ATTEMPT_STATUS, AppException, ErrorCodes, type AttemptStatus } from '@iace/contracts';
+import {
+  ANSWER_STATE,
+  ATTEMPT_STATUS,
+  AppException,
+  ErrorCodes,
+  type AttemptStatus,
+} from '@iace/contracts';
 import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
 import { SUPPORT_ACTIONS } from '../src/attempts/attempt-resolution';
+import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
@@ -16,6 +23,7 @@ import {
   makePaper,
   makeStudent,
   resetDatabase,
+  servedAnswers,
   sitPaper,
   testPrisma,
 } from './support/database';
@@ -45,11 +53,8 @@ async function sitting(over: { status?: AttemptStatus; isGraded?: boolean } = {}
     startedAt,
     ...(live ? { submittedAt: null } : {}),
   });
-  const state = new AttemptStateService(
-    prisma,
-    new FakeRedis().asService(),
-    new PaperSheetService(prisma),
-  );
+  const papers = new PaperSheetService(prisma);
+  const state = new AttemptStateService(prisma, new FakeRedis().asService(), papers);
   if (live) {
     await state.open({
       id: attempt.id,
@@ -64,6 +69,7 @@ async function sitting(over: { status?: AttemptStatus; isGraded?: boolean } = {}
   const service = new AttemptResolutionService(
     prisma,
     state,
+    new AttemptSheetService(prisma, papers),
     {} as never,
     new RollupQueue(rollupQueue.asQueue()),
     audit,
@@ -73,6 +79,7 @@ async function sitting(over: { status?: AttemptStatus; isGraded?: boolean } = {}
   return {
     attemptId: attempt.id,
     testId: paper.testId,
+    questionId: paper.items[0]?.questionId ?? '',
     studentId,
     adminId,
     state,
@@ -124,6 +131,30 @@ describe('voiding a sitting — archived, and taken out of everything that count
 
     assert.equal(await state.read(attemptId), null);
     assert.equal(rollupQueue.jobs.length, 2);
+  });
+
+  /** The loss this prevents: a void dropping whatever the flusher had not written yet. */
+  it('archives what was answered since the last flush instead of dropping it with the key', async () => {
+    const { attemptId, studentId, questionId, state, voiding } = await sitting({
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+    });
+    await state.save(studentId, attemptId, {
+      revision: 1,
+      answers: [
+        {
+          questionId,
+          state: ANSWER_STATE.ANSWERED,
+          selectedOptionId: 'o2',
+          typedAnswer: null,
+          timeSpentSec: 42,
+        },
+      ],
+    });
+
+    await voiding();
+
+    const [archived] = await servedAnswers(prisma, attemptId);
+    assert.deepEqual([archived?.selectedOptionId, archived?.timeSpentSec], ['o2', 42]);
   });
 
   it('leaves the ranked slot spent unless the regrant was asked for', async () => {

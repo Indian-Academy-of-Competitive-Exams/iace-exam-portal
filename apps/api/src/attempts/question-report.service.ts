@@ -37,7 +37,6 @@ const NOT_MARKED = 'This paper has not been marked yet, so there is nothing to c
 const REPORT_SELECT = {
   id: true,
   testId: true,
-  status: true,
   startedAt: true,
   shuffleSeed: true,
   sheet: { select: { answers: true, verdicts: true } },
@@ -86,14 +85,12 @@ export class QuestionReportService {
   ) {}
 
   async forAttempt(studentId: string, attemptId: string): Promise<QuestionReport> {
+    // Marked is in the WHERE, so a refusal never pays for the nested reads behind the row.
     const attempt = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
+      where: { id: attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
       select: REPORT_SELECT,
     });
-    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
-    }
+    if (!attempt) return this.refuse(studentId, attemptId);
 
     // One read of the paper serves both the sheet and its key.
     const [cohort, paper, topper, rows, sittings] = await Promise.all([
@@ -116,6 +113,16 @@ export class QuestionReportService {
       keyed: keyOf(rows),
       sittings,
     });
+  }
+
+  /** Which of the two refusals it is, asked only once the cheap read has already failed. */
+  private async refuse(studentId: string, attemptId: string): Promise<never> {
+    const theirs = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: { id: true },
+    });
+    if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
   }
 
   private assemble(

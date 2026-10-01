@@ -234,9 +234,7 @@ export class RollupService {
       SELECT ${testId}::uuid, (part->>0)::uuid, count(*)::int,
              sum((part->>1)::numeric), sum((part->>5)::bigint), ${now}
       FROM "Attempt" a, jsonb_array_elements(COALESCE(a."sectionScores", '[]'::jsonb)) part
-      WHERE a."testId" = ${testId}::uuid
-        AND a."status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus"
-        AND a."isGraded"
+      WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}
       GROUP BY (part->>0)`;
   }
 

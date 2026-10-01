@@ -118,6 +118,7 @@ describe('AttemptResolutionService — voiding a sitting the scorer is mid-fligh
       prisma,
       state,
       {} as never,
+      {} as never,
       new RollupQueue(rollupQueue.asQueue()),
       audit,
     );

@@ -168,7 +168,6 @@ export function verdictsOf(
   });
 }
 
-/** `paper` in paper order; the rows come back in the order this sitting was shown them. */
 /** Each paper row carrying this sitting's answer, in PAPER order — `servedQuestions` orders it. */
 export function answeredRows<P extends ServedRow>(
   paper: readonly P[],

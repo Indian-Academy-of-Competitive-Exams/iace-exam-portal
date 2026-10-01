@@ -13,6 +13,9 @@ export const IN_COHORT = Prisma.sql`"isGraded" AND "status" = 'EVALUATED' AND "s
 /** The board's order, unqualified like `IN_COHORT`: marks, then less time, then id; no time is slowest. */
 export const RANK_ORDER = Prisma.sql`"score" DESC, "timeTakenSec" ASC NULLS LAST, "id" ASC`;
 
+/** `RANK_ORDER`'s `NULLS LAST` as a value a comparison can hold: `timeTakenSec` is int4. */
+const SLOWEST_SEC = Prisma.sql`2147483647`;
+
 /** The board's rank 1 alone: `RANK_ORDER` is `Attempt_ranking_idx`'s own order, so one index probe. */
 export function rankOneSql(testId: string): Prisma.Sql {
   return Prisma.sql`
@@ -70,9 +73,9 @@ export function standingsSql(where: StandingsWhere, newest?: number): Prisma.Sql
              COUNT(*) FILTER (
                WHERE b."score" > a."score"
                   OR (b."score" = a."score"
-                      AND COALESCE(b."timeTakenSec", 2147483647) < COALESCE(a."timeTakenSec", 2147483647))
+                      AND COALESCE(b."timeTakenSec", ${SLOWEST_SEC}) < COALESCE(a."timeTakenSec", ${SLOWEST_SEC}))
                   OR (b."score" = a."score"
-                      AND COALESCE(b."timeTakenSec", 2147483647) = COALESCE(a."timeTakenSec", 2147483647)
+                      AND COALESCE(b."timeTakenSec", ${SLOWEST_SEC}) = COALESCE(a."timeTakenSec", ${SLOWEST_SEC})
                       AND b."id" < a."id")
              ) + 1 AS rank
       FROM "Attempt" b
@@ -95,27 +98,21 @@ export interface CohortSeatRow {
   rank: number;
   score: number;
   cohort: number;
-  percentile: number;
   name: string | null;
   branch: string | null;
 }
 
-/** Every seat, in `RANK_ORDER`, with `testResultsSql`'s percentile: what a whole board is held as. */
+/** Every seat in `RANK_ORDER`: a whole board. No percentile — only the reader's is shown, counted live. */
 const SEATED = Prisma.sql`
   SELECT a."id", a."studentId", a."score",
          (ROW_NUMBER() OVER (ORDER BY ${RANK_ORDER}))::int AS rank,
-         (COUNT(*) OVER ())::int AS cohort,
-         sitting_percentile(
-           RANK() OVER (ORDER BY a."score" ASC) - 1,
-           COUNT(*) OVER (PARTITION BY a."score"),
-           COUNT(*) OVER ()
-         )::float8 AS percentile
+         (COUNT(*) OVER ())::int AS cohort
   FROM "Attempt" a
 `;
 
 /** The named half of a seat, which only the rows a board actually shows ever pay for. */
 const NAMED = Prisma.sql`
-  SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort, r.percentile,
+  SELECT r."id" AS attempt_id, r.rank, r."score"::float8 AS score, r.cohort,
          s."fullName" AS name, br."name" AS branch
   FROM ranked r
   JOIN "Student" s ON s."id" = r."studentId"
