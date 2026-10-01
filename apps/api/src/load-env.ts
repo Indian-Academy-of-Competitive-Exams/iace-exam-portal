@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-/** Imported FIRST by main.ts: instrument.ts reads SENTRY_DSN as it loads, and an import is hoisted above any statement. */
+/** Imported FIRST by main.ts: the config module reads process.env as it loads, and an import is hoisted above any statement. */
 const found = [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env')].find(
   existsSync,
 );

@@ -106,7 +106,7 @@ thirty events a month are ~24 GB against the free 100 GB. That margin is what `c
 
 **Traffic between the boxes is free** — same VPC, same zone. It is not free of latency: §3.
 
-Outside AWS: Sentry (free tier), Grafana Cloud (free tier), the SMS aggregator and WhatsApp
+Outside AWS: Grafana Cloud (free tier) for metrics and logs, the SMS aggregator and WhatsApp
 per message, and the domain.
 
 ## 2. The shape
@@ -126,8 +126,8 @@ membership. It carries a public address only so it can pull images.
 
 **RDS** sits in the private subnet, reachable from the API boxes' security group on 5432.
 
-**No NAT.** Both boxes are public-subnet, so nothing needs a gateway to reach SMS, push, Sentry or
-ECR — which removes the `t4g.nano` and its address the ALB shape would have needed.
+**No NAT.** Both boxes are public-subnet, so nothing needs a gateway to reach SMS, push, Grafana
+Cloud or ECR — which removes the `t4g.nano` and its address the ALB shape would have needed.
 
 A student's browser resolves the domain at Route 53, loads the two SPAs and question images from
 CloudFront, and sends every API call to Box A.
@@ -401,7 +401,7 @@ Scaled to 8,000 candidates they would put an event at roughly 64–120 Mbps and 
 ## 8. Networking
 
 **No NAT, and nothing to run.** Both boxes sit in the public subnet with an address of their own, so
-outbound — SMS, WhatsApp, push, Sentry, log shipping, ECR, image pulls — needs no gateway. The
+outbound — SMS, WhatsApp, push, metrics, log shipping, ECR, image pulls — needs no gateway. The
 shape this file used to describe needed a `t4g.nano` NAT instance at $6.42 because its compute was
 private; this one does not.
 
@@ -471,11 +471,17 @@ Failures never depend on the level. `AllExceptionsFilter` owns them — a 4xx as
 its stack **and the request body**, which is the only record of what the caller actually sent, since
 the response deliberately carries none of it.
 
-**A body in a log or a Sentry event goes through `apps/api/src/common/redact.ts` first**, and there
-is one of it. `instrument.ts` sets `sendDefaultPii: false` precisely so a mobile number or a PIN
-cannot leave inside a stack frame, so a body attached by hand is scrubbed by key word and capped at
-2 KB, six levels and twenty array items. Nothing logs a successful response body: at 6K students
-autosaving, the exam role alone would write tens of GB an event.
+**Everything PII that could reach a log goes through `apps/api/src/common/redact.ts` first**, and
+there is one of it. A logged body is scrubbed by key word and capped at 2 KB, six levels and twenty
+array items; `maskedMobile` keeps a number's last four digits and `endpointHost` keeps a push
+endpoint's vendor and drops the credential in its path. Nothing logs a successful response body: at
+6K students autosaving, the exam role alone would write tens of GB an event.
+
+**There is no error-tracking vendor.** Sentry was wired and never switched on — no DSN was set in
+any environment — and it was removed on 2026-10-01 rather than left as a second place to look. What
+it uniquely gave was grouping identical stacks, and the `bug=` fingerprint below reproduces that in
+a log query. Revisit a dedicated tracker when volume makes issue state and release regressions worth
+a second vendor; one student pre-launch is not that.
 
 Containers log to Docker's `json-file` driver, **capped in `deploy/compose.yml` at 10 MB × 3 per
 container** — the default never rotates, and Box A has 30 GB to lose. An environment that ships to
@@ -509,10 +515,11 @@ student who forgot their PIN from somebody enumerating mobile numbers, which a b
 cannot. The sign-in MESSAGE stays identical across `bad_pin` and `no_student`; only the label
 differs, or the metric would become the enumeration oracle it exists to detect.
 
-A 5xx log line and its Sentry event both carry `bug=<10 hex>`, a hash of the error kind and its top
-four non-`node_modules` frames with line and column dropped, so a refactor that shifts a function
-does not read as a new bug. `sum by (bug)` in Loki is then the grouping Sentry would have done. **Grafana Cloud's free tier** scrapes it; Amazon Managed Prometheus and
-Grafana would be $14–19 for the same picture.
+A 5xx log line carries `bug=<10 hex>`, a hash of the error kind and its top four non-`node_modules`
+frames with line and column dropped, so a refactor that shifts a function does not read as a new
+bug. `sum by (bug)` in Loki is the grouping that was the one reason to keep an error vendor.
+**Grafana Cloud's free tier** scrapes `/metrics`; Amazon Managed Prometheus and Grafana would be
+$14–19 for the same picture.
 
 Off deliberately: Container Insights and VPC flow logs (one zone, nothing to see).
 

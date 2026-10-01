@@ -1,7 +1,7 @@
 /**
- * What a request body may carry into a log line or a Sentry event.
- * `instrument.ts` sets `sendDefaultPii: false` so a mobile number or a PIN never leaves inside a
- * stack frame; a body attached by hand would undo that, so every one goes through here first.
+ * What a request body may carry into a log line, and the one place that rule lives.
+ * A mobile number or a PIN must not reach stdout, because stdout is shipped off the box and
+ * kept; every body logged beside a 500 goes through here first.
  * Bounded as well as scrubbed — an unbounded body fills the disk it was meant to help debug.
  */
 const REDACTED = '[redacted]';

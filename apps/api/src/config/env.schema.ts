@@ -137,10 +137,8 @@ export const envSchema = z.object({
   // Proxies in front. 0 trusts nothing; behind a load balancer this MUST be its hop count.
   TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 
-  // Observability. A scraper identifies itself; Sentry is inert without a DSN (.env.example).
+  // Observability. A scraper identifies itself (.env.example).
   METRICS_TOKEN: optional,
-  SENTRY_DSN: optional,
-  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
 
   // Request body limits.
   BODY_LIMIT_DEFAULT: byteSize('256kb'),

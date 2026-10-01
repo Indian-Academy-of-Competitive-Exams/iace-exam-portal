@@ -26,7 +26,6 @@
     "@nestjs/platform-express": "11.1.29",
     "@nestjs/throttler": "6.5.0",
     "@prisma/client": "6.19.3",
-    "@sentry/nestjs": "10.73.0",
     "argon2": "0.45.1",
     "bullmq": "6.0.10",
     "compression": "1.8.2",

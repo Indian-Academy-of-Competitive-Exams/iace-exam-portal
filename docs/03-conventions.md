@@ -344,8 +344,8 @@ Built and in use. Reach for these rather than adding a second of any of them.
   daily OTP cap, which is a count per number rather than a window per route.
 - **Request context** is `AsyncLocalStorage` in the audit module, carrying the request id, the actor
   and the field diff into the audit record without threading them through every signature.
-- **Metrics and errors** — a token-gated Prometheus scrape, and Sentry initialised before anything
-  else loads so it can patch what it instruments.
+- **Metrics** — a token-gated Prometheus scrape, and one middleware on `response.on('finish')` that
+  counts every request: guards throw before any interceptor, so an interceptor cannot see a 401.
 - **Idempotence is a property of the write, not an interceptor.** Start resumes a live sitting,
   finalize reports the first finalize's outcome, submit recomputes off held state. A generic
   interceptor would hide which writes actually hold that guarantee.

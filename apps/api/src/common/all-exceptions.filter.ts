@@ -7,7 +7,6 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 import { type Response } from 'express';
-import * as Sentry from '@sentry/nestjs';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
@@ -60,7 +59,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `${line} bug=${fingerprint}${bodyLine(request.body)}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
-      report(exception, requestId, where, request.body, fingerprint);
       return;
     }
     // No body on a 4xx: `fieldErrors` already names every field the caller got wrong.
@@ -76,7 +74,7 @@ function bodyLine(body: unknown): string {
 
 const FRAME_LOCATION = /\(?([^()\s]+):\d+:\d+\)?$/;
 
-/** The same bug hashes the same, so `sum by (bug)` in Loki groups what Sentry would have grouped. Line and column are dropped deliberately: a refactor that shifts a function must not look like a new bug. */
+/** The same bug hashes the same, so `sum by (bug)` groups a thousand instances into one. Line and column are dropped deliberately: a refactor that shifts a function must not look like a new bug. */
 export function fingerprintOf(exception: unknown): string {
   if (!(exception instanceof Error) || !exception.stack) return 'nostack';
 
@@ -91,23 +89,6 @@ export function fingerprintOf(exception: unknown): string {
     .update(`${exception.name}|${frames.join('|')}`)
     .digest('hex')
     .slice(0, 10);
-}
-
-/** What a 500 told the log, tagged with the id the caller was handed, and the body that caused it. */
-function report(
-  exception: unknown,
-  requestId: string,
-  where: string,
-  body: unknown,
-  fingerprint: string,
-): void {
-  Sentry.withScope((scope) => {
-    scope.setTag('requestId', requestId);
-    scope.setTag('route', where);
-    scope.setTag('bug', fingerprint);
-    scope.setContext('request', { body: redact(body) });
-    Sentry.captureException(exception);
-  });
 }
 
 interface Translated {
