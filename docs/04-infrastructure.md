@@ -149,11 +149,11 @@ all three; unset means all of them, which is what local development runs. They r
 Compose on **Box A and nothing else** — Valkey and Postgres are on Box B (§2), so the whole box is
 the API's.
 
-| Service    | Share               | Count                       | Serves                                                                |
-| ---------- | ------------------- | --------------------------- | --------------------------------------------------------------------- |
-| **exam**   | 0.8 vCPU, heap 1536 | scales with the box         | `AttemptsController`, `MeLeaderboardController`                       |
-| **core**   | 0.6 vCPU, heap 768  | scales with the box         | auth, `me`, saved, results, every `admin/*` route, imports            |
-| **worker** | 0.4 vCPU, heap 768  | **exactly one, never more** | no routes but health and metrics; all eight processors and schedulers |
+| Service    | Weight, heap    | Count                       | Serves                                                                |
+| ---------- | --------------- | --------------------------- | --------------------------------------------------------------------- |
+| **exam**   | 2048, heap 1536 | scales with the box         | `AttemptsController`, `MeLeaderboardController`                       |
+| **core**   | 1536, heap 768  | scales with the box         | auth, `me`, saved, results, every `admin/*` route, imports            |
+| **worker** | 1024, heap 768  | **exactly one, never more** | no routes but health and metrics; all eight processors and schedulers |
 
 **The worker is a singleton, and that is a constraint rather than a choice.** The flush runs every
 60 s and the sweep every 120 s, and `concurrency: 1` in `QUEUE_POLICY` is the _only_ thing stopping
@@ -167,9 +167,21 @@ not a second worker.
 container on a 2-vCPU box uses half of it, permanently. Three is the minimum that both uses the
 machine and keeps the schedulers in one place.
 
-**Why exam gets the largest share.** CFS throttling: below a whole core the quota is spent early in
-each 100 ms window and the process is frozen for the rest, which shows as a low CPU average beside
-a terrible p99. The throughput figures that used to sit here are unverified and now in §16.
+**CPU is a weight, not a quota, and that is the whole reason for the numbers above.** `cpu_shares`
+sets the cgroup's `cpu.weight`, which decides only who yields when the box is contended; an idle box
+is free to whoever asks for it. A hard `cpus` ceiling behaves differently and worse: below a whole
+core CFS spends the quota early in each 100 ms window and freezes the process for the rest of it,
+which shows as a low CPU average beside a terrible p99. The exam role is the one that cannot afford
+that, and it is also the one whose neighbours are idle exactly when it is busy — nobody imports a
+roster or runs an admin report mid-sitting.
+
+**What the weights buy, and what they do not.** 2048:1536:1024 is the old 0.8:0.6:0.4 ratio; caddy
+keeps the unset default of 1024 and the log shipper is held down at 256, so under TOTAL contention on
+2 vCPU the floor is exam 0.70, core 0.52, worker 0.35. That floor is the guarantee; the ceiling is the box.
+What a weight cannot do is reserve capacity — there is no minimum held back for a container that is
+not asking, which is the right trade here and the wrong one for a latency SLO under constant load.
+Memory stays a hard `mem_limit`: overrunning it is an OOM, not a slow request. The throughput figures
+that used to sit here are unverified and now in §16.
 
 **The exam role runs under a budget, and the others do not.** Every route it serves belongs to a
 live sitting and none of them is slow on purpose, so its Prisma connection carries a 6 s
