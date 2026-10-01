@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { redact } from '../src/common/redact';
+import { endpointHost, maskedMobile, redact } from '../src/common/redact';
 
 describe('redact', () => {
   it('keeps everything a 500 is actually debugged from', () => {
@@ -66,5 +66,32 @@ describe('redact', () => {
   it('passes a body-less request through untouched', () => {
     assert.equal(redact(undefined), undefined);
     assert.deepEqual(redact({}), {});
+  });
+});
+
+describe('maskedMobile', () => {
+  /** An error log has to name SOMEBODY, and the last four digits find the row without being the number. */
+  it('keeps the last four digits and nothing before them', () => {
+    assert.equal(maskedMobile('9876543210'), '****3210');
+    assert.equal(maskedMobile('+91 98765 43210'), '****3210');
+  });
+
+  it('gives away nothing at all when there is too little to mask', () => {
+    assert.equal(maskedMobile('123'), '****');
+    assert.equal(maskedMobile(''), '****');
+  });
+});
+
+describe('endpointHost', () => {
+  /** The path of a push endpoint IS the credential for pushing to that device; the host is just the vendor. */
+  it('keeps the service and drops the device credential', () => {
+    assert.equal(
+      endpointHost('https://fcm.googleapis.com/fcm/send/dXNlci1zZWNyZXQtdG9rZW4'),
+      'fcm.googleapis.com',
+    );
+  });
+
+  it('says so rather than echoing something it could not parse', () => {
+    assert.equal(endpointHost('not a url'), 'an unparseable endpoint');
   });
 });

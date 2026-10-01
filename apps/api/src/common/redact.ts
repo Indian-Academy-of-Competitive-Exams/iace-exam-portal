@@ -52,3 +52,18 @@ function strip(value: unknown, depth: number): unknown {
 
   return out;
 }
+
+/** Enough of a mobile to find the student in the database, never enough to be the number. */
+export function maskedMobile(mobile: string): string {
+  const digits = mobile.replace(/\D/g, '');
+  return digits.length <= 4 ? '****' : `****${digits.slice(-4)}`;
+}
+
+/** A push endpoint's host says which service refused us; its path is the device's send credential. */
+export function endpointHost(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return 'an unparseable endpoint';
+  }
+}

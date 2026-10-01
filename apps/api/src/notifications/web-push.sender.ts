@@ -6,6 +6,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WebPushError, sendNotification, setVapidDetails } from 'web-push';
 import { AppConfigService } from '../config/app-config.service';
+import { endpointHost } from '../common/redact';
 
 /** One browser endpoint and the keys that encrypt for it. */
 export interface PushTarget {
@@ -64,7 +65,7 @@ export class WebPushSender {
       return PUSH_OUTCOMES.SENT;
     } catch (error) {
       const gone = error instanceof WebPushError && DEAD_STATUS.has(error.statusCode);
-      if (!gone) this.logger.warn(`Push to ${target.endpoint} failed`, error);
+      if (!gone) this.logger.warn(`Push to ${endpointHost(target.endpoint)} failed`, error);
 
       return gone ? PUSH_OUTCOMES.GONE : PUSH_OUTCOMES.FAILED;
     }

@@ -6,6 +6,7 @@
 import { randomInt } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ActorTypes, PIN_LENGTH } from '@iace/contracts';
+import { maskedMobile } from '../../common/redact';
 import {
   MESSAGE_CHANNELS,
   MESSAGE_KINDS,
@@ -64,7 +65,7 @@ export class StartingPinService {
           data: { pin },
         })
         .catch((error: unknown) => {
-          this.logger.error(`Starting PIN not delivered to ${mobile}`, error);
+          this.logger.error(`Starting PIN not delivered to ${maskedMobile(mobile)}`, error);
         });
     }
   }
