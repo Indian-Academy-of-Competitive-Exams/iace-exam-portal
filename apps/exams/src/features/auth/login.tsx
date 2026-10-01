@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm, type FieldValues, type Path, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Info } from 'lucide-react';
 import {
   MOBILE_DIGITS,
@@ -43,13 +43,17 @@ import { useAuth } from '../../providers/auth';
 export function LoginPage() {
   const { identity: student, signIn, signedOutReason } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<LoginStep>({ kind: 'signIn' });
 
-  if (student) return <Navigate to={ROUTES.HOME} replace />;
+  // Where ProtectedRoute turned them away from, so a deep link survives the sign-in.
+  const cameFrom = (location.state as { from?: string } | null)?.from ?? ROUTES.HOME;
+
+  if (student) return <Navigate to={cameFrom} replace />;
 
   const onSignedIn = (session: AuthSessionResponse) => {
     signIn(session);
-    void navigate(ROUTES.HOME, { replace: true });
+    void navigate(cameFrom, { replace: true });
   };
 
   return (
