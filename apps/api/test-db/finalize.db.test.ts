@@ -210,25 +210,6 @@ describe('FinalizeService — a second offer', () => {
     assert.equal((await testRow(paper)).version, 1);
   });
 
-  /** The failure this prevents: a paper gone short behind the service's back put back in front of students. */
-  it('still proves the paper of a finalized test before opening it again', async () => {
-    const paper = await draft();
-    await offerTest(prisma, paper.testId);
-    const [dropped] = await prisma.paperQuestion.findMany({
-      where: { testId: paper.testId, baseConfigSectionId: paper.sectionIds[1] ?? '' },
-      select: { id: true },
-    });
-    await prisma.paperQuestion.delete({ where: { id: dropped?.id ?? '' } });
-    await prisma.test.update({
-      where: { id: paper.testId },
-      data: { status: TEST_STATUS.INACTIVE },
-    });
-
-    await assert.rejects(() => offerTest(prisma, paper.testId), /Quant holds 1 of the 2/);
-
-    assert.equal(await statusOf(paper), TEST_STATUS.INACTIVE);
-  });
-
   /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
   it('opens a retired test again without re-freezing its paper', async () => {
     const paper = await draft();

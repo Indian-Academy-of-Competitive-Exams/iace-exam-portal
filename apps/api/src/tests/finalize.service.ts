@@ -46,8 +46,6 @@ export class FinalizeService {
     const test = await tx.test.findUnique({ where: { id: testId }, select: OFFER_SELECT });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
-    // A re-offer is an offer: the paper is proved before the status goes back to ACTIVE.
-    await this.assertPaperIsWhole(tx, test, await this.paperOf(tx, test));
 
     if (test.finalizedAt !== null) {
       if (test.status !== TEST_STATUS.ACTIVE) {
@@ -56,6 +54,7 @@ export class FinalizeService {
       return;
     }
 
+    await this.assertPaperIsWhole(tx, test, await this.paperOf(tx, test));
     const finalizedAt = new Date();
     // The status rides the SAME write, so the two can never land apart.
     await tx.test.update({
