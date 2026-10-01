@@ -53,6 +53,7 @@ const NOT_DRAWABLE_MESSAGE =
   'That question is archived, or has no version to pin, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
+const NOT_ON_THE_PAPER_MESSAGE = 'That question is not on this paper';
 const NOT_FROZEN_MESSAGE =
   'Only an offered test can have a question dropped or made a bonus. Edit the paper before offering it instead.';
 const NO_SUCH_SECTION_MESSAGE = 'No such section on this paper';
@@ -527,9 +528,14 @@ export class PaperService {
     this.assertAssemblable(test);
 
     // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
-    const sectionIds = new Set<string>();
-    for (const rowId of rowIds)
-      sectionIds.add((await this.requireRow(testId, rowId)).baseConfigSectionId);
+    const rows = await this.prisma.paperQuestion.findMany({
+      where: { testId, id: { in: [...rowIds] } },
+      select: { baseConfigSectionId: true },
+    });
+    if (rows.length !== new Set(rowIds).size) {
+      throw new AppException(ErrorCodes.NOT_FOUND, NOT_ON_THE_PAPER_MESSAGE);
+    }
+    const sectionIds = new Set(rows.map((row) => row.baseConfigSectionId));
     this.assertNotTyped(test, editor);
     await this.assertWithOwner(testId, [...sectionIds], editor);
 
@@ -593,7 +599,7 @@ export class PaperService {
       },
     });
     if (row?.testId !== testId) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'That question is not on this paper');
+      throw new AppException(ErrorCodes.NOT_FOUND, NOT_ON_THE_PAPER_MESSAGE);
     }
     return row;
   }

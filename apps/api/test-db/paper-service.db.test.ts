@@ -715,6 +715,16 @@ describe('PaperService — one row at a time', () => {
     );
   });
 
+  /** The failure this prevents: a batch half removed, with no way to tell which half landed. */
+  it('refuses the whole batch when one row is not on this paper', async () => {
+    const { service, row } = await drawn();
+
+    const error = await refused(service.removeQuestions(TEST, [row.id, randomUUID()]));
+
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+    assert.equal((await rows()).length, 5);
+  });
+
   it('refuses both once a student has sat the test', async () => {
     const { service, row } = await drawn();
     await sat();

@@ -216,11 +216,11 @@ export class TestsService {
   async update(id: string, input: UpdateTestBody, editor: Editor = {}): Promise<TestDetail> {
     const test = await this.requireTest(id);
     await takeTestEditLock(this.redis, this.prisma, id, editor);
-    if (input.paperSource !== undefined) {
-      this.assertPaperSourceOpen(test);
-    }
 
     const changed = changedTestFields(test, input);
+    if (changed.includes('paperSource')) {
+      this.assertPaperSourceOpen(test);
+    }
     if (locksOutTestEdit(changed) && (await this.anySitting(id))) {
       throw formRefusal(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE);
     }
@@ -246,16 +246,14 @@ export class TestsService {
         const keptIds = scopedSections(config.sections, scope, scopeRef).map(
           (section) => section.id,
         );
-        if (keptIds.length > 0) {
-          await tx.paperQuestion.deleteMany({
-            where: { testId: id, baseConfigSectionId: { notIn: keptIds } },
-          });
-          // Its holders stand down with the paper, or a dropped section's reader blocks the offer for ever.
-          await tx.questionAssignment.updateMany({
-            where: { testId: id, baseConfigSectionId: { notIn: keptIds }, replacedAt: null },
-            data: { replacedAt: new Date() },
-          });
-        }
+        // A scope covering no section at all leaves every row out of it, so none is spared.
+        const outOfScope = keptIds.length === 0 ? {} : { baseConfigSectionId: { notIn: keptIds } };
+        await tx.paperQuestion.deleteMany({ where: { testId: id, ...outOfScope } });
+        // Its holders stand down with the paper, or a dropped section's reader blocks the offer for ever.
+        await tx.questionAssignment.updateMany({
+          where: { testId: id, ...outOfScope, replacedAt: null },
+          data: { replacedAt: new Date() },
+        });
       }
 
       return tx.test.update({

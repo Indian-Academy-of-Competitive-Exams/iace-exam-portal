@@ -14,7 +14,6 @@ import {
 import {
   ActorTypes,
   addPaperQuestionSchema,
-  replacePaperQuestionSchema,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   createTestSchema,
@@ -25,7 +24,6 @@ import {
   testListQuerySchema,
   updateTestSchema,
   type AddPaperQuestionBody,
-  type ReplacePaperQuestionBody,
   type CreateTestBody,
   type Paginated,
   type SetTestSeriesBody,
@@ -114,19 +112,6 @@ export class TestsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestPaper> {
     return this.paper.addQuestions(id, body, user);
-  }
-
-  /** One row of the paper, so a paper right but for a single question is not redrawn whole. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/paper/:rowId')
-  replacePaperQuestion(
-    @Param('id') id: string,
-    @Param('rowId') rowId: string,
-    @Body(new ZodBody(replacePaperQuestionSchema)) body: ReplacePaperQuestionBody,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<TestPaper> {
-    return this.paper.replaceQuestion(id, rowId, body, user);
   }
 
   /** The only change a finalized paper allows — and it re-scores every sitting that served it. */

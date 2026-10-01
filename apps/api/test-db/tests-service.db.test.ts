@@ -334,6 +334,51 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
     assert.equal(await replacedAt(kept.id), null);
     assert.notEqual(await replacedAt(dropped.id), null);
   });
+
+  /** THE failure this prevents: a scope covering no section sparing every row and seat it covers none of. */
+  it('drops the whole paper when the new scope covers no section at all', async () => {
+    const { service } = await serviceWith({ test: {} });
+    const empty = await prisma.baseConfigModule.create({
+      data: { baseConfigId: BUILDER.CONFIG, name: 'Session 2', order: 2 },
+    });
+    const subject = await makeSubject(prisma);
+    const question = await makeQuestion(prisma, { subjectId: subject.id });
+    await prisma.paperQuestion.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_1'),
+        questionId: question.id,
+        questionVersionId: question.versionId,
+        order: 1,
+        marks: 2,
+        negativeMarks: 0.5,
+      },
+    });
+    const reading = await prisma.questionAssignment.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor('sec_1'),
+        assigneeId: (await makeAdmin(prisma)).id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      },
+    });
+
+    const updated = await service.update(TEST, {
+      scope: TEST_SCOPE.MODULE,
+      scopeRef: { moduleId: empty.id },
+    });
+
+    assert.equal(updated.paperQuestionCount, 0);
+    assert.equal(await prisma.paperQuestion.count({ where: { testId: TEST } }), 0);
+    assert.notEqual(
+      (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } })).replacedAt,
+      null,
+    );
+  });
 });
 
 describe('TestsService — a name belongs to one test inside its series', () => {
@@ -394,6 +439,21 @@ describe('TestsService — where a test gets its questions', () => {
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.equal((await testRow())?.paperSource, PAPER_SOURCES.FRAMED);
+  });
+
+  /** THE failure this prevents: a client round-tripping `TestDetail` back into `update` reading a 409. */
+  it('takes the stored choice back, because sending it again changes nothing', async () => {
+    const { service } = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+
+    const updated = await service.update(TEST, {
+      title: 'Mock 1 (revised)',
+      paperSource: PAPER_SOURCES.FRAMED,
+    });
+
+    assert.deepEqual(
+      [updated.title, updated.paperSource],
+      ['Mock 1 (revised)', PAPER_SOURCES.FRAMED],
+    );
   });
 
   /** Choosing it moves no question, so an offered test must not be refused the choice. */

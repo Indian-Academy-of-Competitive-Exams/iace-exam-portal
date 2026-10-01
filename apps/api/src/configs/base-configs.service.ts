@@ -263,6 +263,7 @@ export class BaseConfigsService {
           shuffleOptions: source.shuffleOptions,
           calculatorEnabled: source.calculatorEnabled,
           scoringVersion: source.scoringVersion,
+          featureFlags: source.featureFlags ?? Prisma.DbNull,
         },
       });
 
@@ -298,6 +299,7 @@ export class BaseConfigsService {
             mandatory: section.mandatory,
             meritOrQualifying: section.meritOrQualifying,
             qualifyingCutoff: section.qualifyingCutoff,
+            patternNote: section.patternNote,
           },
         });
       }
