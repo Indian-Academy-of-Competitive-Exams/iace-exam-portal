@@ -43,7 +43,7 @@ const KEY =
   'h-10 rounded border border-exam-border bg-exam-surface text-sm text-exam-ink transition hover:bg-exam-surface-2 focus-visible:shadow-focus focus-visible:outline-none';
 
 /** An operator reads as the instruction, a digit as the number: all the colour has to say. */
-const OPERATORS: readonly string[] = [...Object.values(CALCULATOR_OPS), CALCULATOR_KEYS.EQUALS];
+const OPERATORS = new Set<string>([...Object.values(CALCULATOR_OPS), CALCULATOR_KEYS.EQUALS]);
 
 export interface CalculatorProps {
   onClose: () => void;
@@ -53,7 +53,7 @@ export interface CalculatorProps {
 export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
   const [state, setState] = React.useState<CalculatorState>(CALCULATOR_START);
   const [at, setAt] = React.useState<{ x: number; y: number } | null>(null);
-  const panel = React.useRef<HTMLDivElement>(null);
+  const panel = React.useRef<HTMLFieldSetElement>(null);
   const grip = React.useRef<{ dx: number; dy: number } | null>(null);
 
   const startDrag = (event: React.PointerEvent<HTMLElement>) => {
@@ -76,13 +76,12 @@ export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
   };
 
   return (
-    <div
+    <fieldset
       ref={panel}
-      role="group"
       aria-label="Calculator"
       style={at ? { left: at.x, top: at.y } : undefined}
       className={cn(
-        'absolute z-[--z-overlay] w-60 overflow-hidden rounded-md border border-exam-border bg-exam-surface shadow-overlay',
+        'absolute z-[--z-overlay] w-60 min-w-0 overflow-hidden rounded-md border border-exam-border bg-exam-surface shadow-overlay',
         at ? null : 'bottom-24 right-6',
         className,
       )}
@@ -127,7 +126,7 @@ export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
             onClick={() => setState((before) => pressCalculatorKey(before, key))}
             className={cn(
               KEY,
-              OPERATORS.includes(key) ? 'font-semibold text-exam-current' : 'font-medium',
+              OPERATORS.has(key) ? 'font-semibold text-exam-current' : 'font-medium',
               key === CALCULATOR_KEYS.EQUALS && 'bg-exam-surface-2',
               span,
             )}
@@ -136,7 +135,7 @@ export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
           </button>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
 

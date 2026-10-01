@@ -184,9 +184,9 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     try {
       await this.pin.assertNotLocked(mobile);
-    } catch (locked) {
+    } catch (error) {
       this.metrics.countAuthAttempt(AUTH_OUTCOMES.LOCKED);
-      throw locked;
+      throw error;
     }
 
     const student = await this.prisma.student.findFirst({
