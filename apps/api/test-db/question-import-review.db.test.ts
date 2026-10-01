@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
+import { type Prisma } from '@prisma/client';
 import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  IMPORT_LOG_STATUS,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_TAG,
   type QuestionDraft,
@@ -12,6 +14,7 @@ import {
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import type { AuthenticatedUser } from '../src/common/security';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import { QuestionImportController } from '../src/questions/question-import.controller';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { FakeStorage } from '../test/support/fakes';
@@ -52,6 +55,30 @@ const service = () =>
     new FakeStorage() as never,
     new AuditService(prisma, new FakeStorage() as never),
   );
+
+/** The question write inside the commit throws, the way a dropped connection would. */
+function failingOnWrite(): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        target.$transaction((tx) => {
+          const table = new Proxy(tx.question, {
+            get(delegate, method: string | symbol) {
+              if (method !== 'create') return Reflect.get(delegate, method) as unknown;
+              return () => Promise.reject(new Error('connection dropped'));
+            },
+          });
+          return work(
+            new Proxy(tx, {
+              get: (inner, member: string | symbol) =>
+                member === 'question' ? table : (Reflect.get(inner, member) as unknown),
+            }),
+          );
+        });
+    },
+  });
+}
 
 /** A good row, and on line 3 the same question with no correct answer marked. */
 async function previewed() {
@@ -242,6 +269,26 @@ describe('QuestionImportService — what a run counts', () => {
       { created: log.created, skipped: log.skipped, failed: log.failed },
       { created: 1, skipped: 2, failed: 0 },
     );
+  });
+
+  /** The failure this prevents: a commit that died leaving its run PREVIEWED, so the audit list shows it in progress for ever. */
+  it('closes a run FAILED when the question write throws', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const storage = new FakeStorage();
+    const audit = new AuditService(prisma, new FakeStorage() as never);
+    const plan = await new QuestionImportService(prisma, storage as never, audit).preview(
+      sheet(ROW),
+      ADMIN,
+    );
+
+    const dying = new QuestionImportService(failingOnWrite(), storage as never, audit);
+    await assert.rejects(dying.commit(plan.importLogId, { actorId: ADMIN }), /connection dropped/);
+
+    const log = await prisma.importLog.findUniqueOrThrow({ where: { id: plan.importLogId } });
+    assert.equal(log.status, IMPORT_LOG_STATUS.FAILED);
+    assert.ok(log.finishedAt, 'a closed run carries when it ended');
+    assert.deepEqual({ created: log.created, failed: log.failed }, { created: 0, failed: 1 });
+    assert.equal(await prisma.question.count(), 0);
   });
 });
 

@@ -136,30 +136,36 @@ export class QuestionImportService {
         row.action === 'create' && row.draft !== null,
     );
 
-    await this.storePictures(creatable);
+    let created: { id: string }[];
+    try {
+      await this.storePictures(creatable);
 
-    // Interactive, not an array of promises: every question is three statements — the row, its first version, and the pointer between them — and all of them share one transaction.
-    const created = await this.prisma.$transaction(async (tx) => {
-      const rows: { id: string }[] = [];
-      for (const row of creatable) {
-        const built = buildContent(row.draft);
-        const question = await tx.question.create({
-          data: {
-            ...questionData(row.draft, built, log.actorId),
-            assignmentId: into.section?.assignmentId,
-          },
-        });
-        const version = await tx.questionVersion.create({
-          data: versionData(question.id, built, log.actorId),
-        });
-        await tx.question.update({
-          where: { id: question.id },
-          data: { currentVersionId: version.id },
-        });
-        rows.push(question);
-      }
-      return rows;
-    }, TX_LIMITS.BULK);
+      // Interactive, not an array of promises: every question is three statements — the row, its first version, and the pointer between them — and all of them share one transaction.
+      created = await this.prisma.$transaction(async (tx) => {
+        const rows: { id: string }[] = [];
+        for (const row of creatable) {
+          const built = buildContent(row.draft);
+          const question = await tx.question.create({
+            data: {
+              ...questionData(row.draft, built, log.actorId),
+              assignmentId: into.section?.assignmentId,
+            },
+          });
+          const version = await tx.questionVersion.create({
+            data: versionData(question.id, built, log.actorId),
+          });
+          await tx.question.update({
+            where: { id: question.id },
+            data: { currentVersionId: version.id },
+          });
+          rows.push(question);
+        }
+        return rows;
+      }, TX_LIMITS.BULK);
+    } catch (error) {
+      await this.closeFailedRun(log.id, creatable.length, error);
+      throw error;
+    }
 
     try {
       await this.audit.recordImportRows(
@@ -193,6 +199,19 @@ export class QuestionImportService {
     });
 
     return result;
+  }
+
+  /** A commit that died closes its run the way the roster importer's does: FAILED, with the rows it never reached and why, rather than PREVIEWED for ever. */
+  private async closeFailedRun(logId: string, failed: number, error: unknown): Promise<void> {
+    await this.prisma.importLog.update({
+      where: { id: logId },
+      data: {
+        failed,
+        status: IMPORT_LOG_STATUS.FAILED,
+        finishedAt: new Date(),
+        errors: { message: error instanceof Error ? error.message : String(error) },
+      },
+    });
   }
 
   /** Before the questions: a row must never show a picture that is not there yet. Keyed by content, so a retry rewrites the same objects. */
