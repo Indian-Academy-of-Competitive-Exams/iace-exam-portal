@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Info } from 'lucide-react';
 import { otpCodeFormSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import {
@@ -18,7 +18,7 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
 import { useAuth } from '../../providers/auth';
 
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
@@ -27,12 +27,16 @@ const CODE_FIELDS = ['code'] as const;
 
 /** Email + OTP. No self-signup: an unknown address simply never receives a code. */
 export function LoginPage() {
-  const { identity: admin, signIn } = useAuth();
+  const { identity: admin, signIn, signedOutReason } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<OtpRequestResponse | null>(null);
 
-  if (admin) return <Navigate to={ROUTES.HOME} replace />;
+  // Where ProtectedRoute turned them away from, so a deep link survives the sign-in.
+  const cameFrom = (location.state as { from?: string } | null)?.from ?? ROUTES.HOME;
+
+  if (admin) return <Navigate to={cameFrom} replace />;
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col bg-background">
@@ -43,6 +47,12 @@ export function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
           <Brandmark size="lg" portal="Admin" className="justify-center px-6 pt-7" />
+
+          {signedOutMessage(signedOutReason) ? (
+            <div className="px-6 pt-4">
+              <Alert variant="warning">{signedOutMessage(signedOutReason)}</Alert>
+            </div>
+          ) : null}
 
           {email === null || challenge === null ? (
             <EmailStep
@@ -61,7 +71,7 @@ export function LoginPage() {
               }}
               onVerified={(session) => {
                 signIn(session);
-                void navigate(ROUTES.HOME, { replace: true });
+                void navigate(cameFrom, { replace: true });
               }}
             />
           )}

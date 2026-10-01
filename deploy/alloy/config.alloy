@@ -1,4 +1,4 @@
-// Box A's log shipper: every container's stdout into Grafana Cloud Loki.
+// Box A's telemetry: every container's stdout into Loki, and the API's /metrics into Prometheus.
 //
 // Nothing in the API knows this exists. It reads what Docker already captured, which is why
 // LOG_LEVEL in the API is still the only thing deciding how much there is to ship.
@@ -61,5 +61,66 @@ loki.write "cloud" {
 			username = sys.env("LOKI_USERNAME")
 			password = sys.env("LOKI_PASSWORD")
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+// Discovered rather than listed, so `up -d --scale exam=4` is picked up with no edit here —
+// the same reason Caddy's upstreams are `dynamic a`.
+discovery.relabel "api" {
+	targets = discovery.docker.boxa.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "exam|core|worker"
+		action        = "keep"
+	}
+
+	// Built from the network address and the fixed port: nothing publishes 3000, so there is no
+	// published port for discovery to have found.
+	rule {
+		source_labels = ["__meta_docker_network_ip"]
+		regex         = "(.+)"
+		replacement   = "$1:3000"
+		target_label  = "__address__"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "role"
+	}
+
+	// The container, so four exam replicas are four series and not one that flaps between them.
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "instance"
+	}
+}
+
+prometheus.scrape "api" {
+	targets = discovery.relabel.api.output
+	// The same token the API checks; /metrics carries live attempt counts and error rates.
+	bearer_token = sys.env("METRICS_TOKEN")
+	// 15s is the default and what the histogram buckets assume; a slower scrape blurs a submit spike.
+	scrape_interval = "15s"
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+	endpoint {
+		url = sys.env("PROM_URL")
+
+		basic_auth {
+			username = sys.env("PROM_USERNAME")
+			password = sys.env("PROM_PASSWORD")
+		}
+	}
+
+	external_labels = {
+		env = sys.env("ENVIRONMENT"),
 	}
 }

@@ -226,8 +226,8 @@ function AdminPanel({
         // No checkboxes: a super admin bypasses every check, so a grant changes nothing.
         <Alert variant="info">
           <span>
-            Bypasses every feature check, so there is nothing to grant. Remove super admin on the
-            Admins screen to give them specific access instead.
+            Bypasses every feature check, so there is nothing to grant. Super admin cannot be taken
+            back from this portal.
           </span>
         </Alert>
       ) : (

@@ -88,22 +88,32 @@ show `migrate` exited and everything else healthy.
 **Seeding.** Migrations create the schema and no rows. Follow `docs/local-setup.md` §6 against RDS
 — the first super admin is a SQL insert by design, and **without it nobody can sign in**.
 
-## Logs — the alloy container
+## Telemetry — the alloy container
 
-It comes up with everything else; the three `LOKI_*` values in `deploy/.env` are all it needs.
-Confirm it is shipping before you need it to be:
+One container carries both signals off the box: every container's stdout into Loki, and the API's
+`/metrics` into Prometheus. It comes up with everything else; the `LOKI_*` and `PROM_*` values in
+`deploy/.env` are all it needs. Confirm it is shipping before you need it to be:
 
 ```bash
 docker compose -f deploy/compose.yml --env-file deploy/.env logs --tail 30 alloy
 ```
 
-Then in Grafana, `{env="staging"}` should return lines within a few seconds. The labels are
+Then in Grafana, `{env="staging"}` should return lines within a few seconds. The log labels are
 `service_name` (the compose service: `exam`, `core`, `worker`, `caddy`, `migrate`), `level`, and
 `env`. Everything per-request stays in the line and comes out at query time:
 
 ```
 {service_name="exam", level="error"} |= "bug=" | pattern "<_>bug=<bug> <_>"
 ```
+
+**Metrics are discovered, not listed.** Alloy keeps the `exam`, `core` and `worker` containers off
+the same Docker API, scrapes `:3000/metrics` on each every 15s with `METRICS_TOKEN`, and labels the
+series `role` and `instance`. `up{role="exam"}` is the one to check first — it is `1` per container,
+so `up == 0` is a container the scrape cannot reach and `count(up)` is how many replicas are
+running. `--scale exam=4` needs no edit anywhere, the same way Caddy's `dynamic a` upstreams do not.
+
+`PROM_USERNAME` is **not** `LOKI_USERNAME` — Grafana Cloud numbers each signal separately, and
+pasting one into the other fails with a 401 that reads like a bad token.
 
 **Alloy is root on this box.** It reads the Docker API to learn which containers exist and what
 compose calls them, and `:ro` on a socket mount protects the file rather than the API behind it —

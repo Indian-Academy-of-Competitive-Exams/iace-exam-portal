@@ -24,6 +24,7 @@ import { NAV_ITEMS, ROUTES, assignmentProgressQueryKey } from '../../lib/constan
 import { useAuth } from '../../providers/auth';
 import { useTestSectionFilters } from './use-test-section-filters';
 import { AdminMultiPicker } from '../../components/admin-multi-picker';
+import { SuperAdminOnly } from '../admins/super-admin-only';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
 
@@ -204,15 +205,17 @@ export function SectionProgressPage() {
   );
 
   return (
-    <TableFrame header={header}>
-      <ListView
-        list={sections}
-        filters={buildFilters(selectedAssigneeLabels)}
-        columns={columns}
-        rowKey={(row) => `${row.testId}:${row.baseConfigSectionId}`}
-        empty="No sections yet"
-        emptyFiltered="No sections match those filters"
-      />
-    </TableFrame>
+    <SuperAdminOnly title="Section progress">
+      <TableFrame header={header}>
+        <ListView
+          list={sections}
+          filters={buildFilters(selectedAssigneeLabels)}
+          columns={columns}
+          rowKey={(row) => `${row.testId}:${row.baseConfigSectionId}`}
+          empty="No sections yet"
+          emptyFiltered="No sections match those filters"
+        />
+      </TableFrame>
+    </SuperAdminOnly>
   );
 }

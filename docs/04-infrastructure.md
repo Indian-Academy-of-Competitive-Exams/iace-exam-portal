@@ -488,7 +488,13 @@ container** — the default never rotates, and Box A has 30 GB to lose. That cap
 net and stays: the shipper going down must cost visibility, never the disk, and `docker logs` keeps
 working on the box.
 
-**A `grafana/alloy` container ships all of it to Grafana Cloud Loki** (`deploy/alloy/config.alloy`).
+**A `grafana/alloy` container carries both signals off the box** (`deploy/alloy/config.alloy`) —
+stdout into Grafana Cloud Loki, and `/metrics` into its Prometheus. It discovers the `exam`, `core`
+and `worker` containers off the Docker API rather than listing them, so `--scale exam=4` needs no
+edit, and scrapes each every 15s with `METRICS_TOKEN` — the same secret the API checks, at both ends
+of the one request. Series carry `role`, `instance` and `env`.
+
+For the logs:
 It reads the Docker API for what is running and what compose calls it, so the labels are
 `service_name`, `level` and `env` — and nothing else. A label is an index in Loki, so anything
 per-request or per-bug stays in the LINE and is extracted at query time:

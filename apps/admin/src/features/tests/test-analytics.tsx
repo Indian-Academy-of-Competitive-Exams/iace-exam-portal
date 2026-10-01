@@ -233,7 +233,7 @@ function Freshness({
     <div className="flex items-center gap-2">
       {summary.isSettling ? (
         <Badge variant="neutral">
-          {`Updating: ${summary.evaluatedCount} of ${summary.liveEvaluatedCount} counted`}
+          {`Updating: ${summary.liveEvaluatedCount} ranked, ${summary.evaluatedCount} in the figures`}
         </Badge>
       ) : null}
       {canSync ? (

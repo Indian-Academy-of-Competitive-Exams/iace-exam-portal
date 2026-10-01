@@ -65,7 +65,7 @@ const PROMPTS: Readonly<
   [ACTIONS.RESET]: {
     title: 'Put this live sitting back?',
     description:
-      'The answers already saved are read back from the database and the sitting carries on from there. Section timers start again from where the paper says.',
+      'The answers already saved are read back from the database and the sitting carries on from there. Section timers keep what they have left, and start again from where the paper says only if the live state is gone.',
     confirmLabel: 'Put it back',
     destructive: false,
   },
