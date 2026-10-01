@@ -2,7 +2,7 @@
  * Tells whoever reaches a test that it has opened. A test opens by the CLOCK, so nothing writes at
  * the moment it happens and there is no event to hang this off — a sweep is the only shape that
  * works. `Test.announcedAt` is what makes it exactly-once: it is stamped in the same transaction as
- * the outbox rows, so a crash mid-fan-out replays and a finished one is never seen again.
+ * the bell rows, so a crash mid-fan-out replays and a finished one is never seen again.
  */
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { NOTIFICATION_TYPE, TEST_STATUS } from '@iace/contracts';

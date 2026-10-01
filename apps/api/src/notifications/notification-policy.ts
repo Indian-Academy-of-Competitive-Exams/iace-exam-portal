@@ -48,7 +48,7 @@ export function escalationFor(
 ): EscalationPlan {
   if (chosen.length === 0) return { channels: [], deferSec: 0 };
 
-  // Urgency belongs to the notification, not its kind: the same kind gets opposite answers.
+  // Dead until a producer sets actBy — with none, the full window is always waited out.
   const leftToAct = actBy === null ? Infinity : actBy.getTime() - now.getTime();
   const cannotWait = leftToAct <= (DEFER_SEC + ACTION_MARGIN_SEC) * MS_PER_SECOND;
 

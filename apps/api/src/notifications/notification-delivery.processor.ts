@@ -37,7 +37,7 @@ import {
   type SkipReason,
 } from './notification-policy';
 
-/** Only the kinds policy lets escalate can arrive here; anything else has no template to send. */
+/** Only GENERIC is live today: an announcement is the one thing that books a paid channel. */
 const KIND_OF: Partial<Record<NotificationType, MessageKind>> = {
   [NOTIFICATION_TYPE.RESULT_READY]: MESSAGE_KINDS.RESULT_READY,
   [NOTIFICATION_TYPE.TEST_ASSIGNED]: MESSAGE_KINDS.TEST_ASSIGNED,

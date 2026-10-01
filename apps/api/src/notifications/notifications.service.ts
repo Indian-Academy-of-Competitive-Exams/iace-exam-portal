@@ -23,7 +23,7 @@ export interface NewNotification {
   dedupeKey?: string;
   /** The announcement this belongs to. Its paidChannels become this message's fallback chain. */
   announcementId?: string;
-  /** When this stops being actionable. Given one, escalation stops waiting as it approaches. */
+  /** When this stops being actionable. Nothing sets one yet, so escalation never skips the wait. */
   actBy?: Date;
   testId?: string;
   testSeriesId?: string;
