@@ -7,6 +7,7 @@ import {
   AUDIT_ACTION,
   ErrorCodes,
   IMPORT_LOG_STATUS,
+  IMPORT_TARGET_BANK,
   QUESTION_IMPORT_SHEETS,
   imageKeysIn,
   type QuestionDraft,
@@ -44,7 +45,6 @@ import { loadTaxonomyCatalog } from './taxonomy-context';
 const UPLOAD_GONE = 'That upload is no longer available';
 const ALREADY_IMPORTED = 'That file has already been imported';
 const PREVIEWED_ELSEWHERE = 'That file was previewed for somewhere else. Upload it again here.';
-const BANK_TARGET = 'bank';
 
 /** A file-level refusal opens no run, so the plan it hands back names none. */
 const NO_RUN = '';
@@ -391,5 +391,5 @@ export interface ImportTarget {
 }
 
 function targetOf(section: ImportSection | undefined): string {
-  return section ? `${section.testId}/${section.baseConfigSectionId}` : BANK_TARGET;
+  return section ? `${section.testId}/${section.baseConfigSectionId}` : IMPORT_TARGET_BANK;
 }
