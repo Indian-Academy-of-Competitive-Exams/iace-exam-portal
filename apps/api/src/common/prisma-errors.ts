@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 /** The Prisma failures that mean something to a user rather than to us. Every other P-code is our bug and is reported as INTERNAL. https://www.prisma.io/docs/orm/reference/error-reference */
 export const PRISMA_ERROR_CODES = {
   UNIQUE_CONSTRAINT_VIOLATION: 'P2002',
+  // Both directions: a row naming a parent that is not there, and a parent a RESTRICT still holds.
+  FOREIGN_KEY_VIOLATION: 'P2003',
   RECORD_NOT_FOUND: 'P2025',
   // Ids are uuid columns, so a malformed one is refused here rather than matching no row.
   MALFORMED_VALUE: 'P2023',

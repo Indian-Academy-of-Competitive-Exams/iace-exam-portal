@@ -152,6 +152,21 @@ describe('AllExceptionsFilter', () => {
     assert.equal(capture(filter, missing).failure.error.code, 'NOT_FOUND');
   });
 
+  /** The failure this prevents: a well-formed id for a row that is not there answering 500, which is what a foreign key refusing has always done. */
+  it('maps a foreign key refusing to CONFLICT, and names the relation', () => {
+    const refused = new Prisma.PrismaClientKnownRequestError('fk', {
+      code: 'P2003',
+      clientVersion: 'test',
+      meta: { field_name: 'EventCandidate_studentId_fkey' },
+    });
+
+    const { status, failure } = capture(filter, refused);
+
+    assert.equal(status, 409);
+    assert.equal(failure.error.code, 'CONFLICT');
+    assert.deepEqual(failure.error.details, { field: 'EventCandidate_studentId_fkey' });
+  });
+
   /** The failure this prevents: an old cuid in a bookmark answering 500 once ids became uuids. */
   it('maps a malformed id to NOT_FOUND, however it reached Postgres', () => {
     const typed = new Prisma.PrismaClientKnownRequestError('bad uuid', {

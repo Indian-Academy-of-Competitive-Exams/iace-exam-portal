@@ -137,6 +137,16 @@ function translate(exception: unknown): Translated {
         },
       };
     }
+    if (exception.code === PRISMA_ERROR_CODES.FOREIGN_KEY_VIOLATION) {
+      return {
+        status: ERROR_CODE_STATUS.CONFLICT,
+        error: {
+          code: ErrorCodes.CONFLICT,
+          message: 'Something that request depends on is missing, or still in use',
+          details: fieldNameOf(exception),
+        },
+      };
+    }
     // An id that is not a uuid names nothing, which is what a wrong id has always meant here.
     if (exception.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND || isMalformedValue(exception)) {
       return {
@@ -225,4 +235,10 @@ function messageOf(exception: HttpException): string {
 function targetOf(exception: Prisma.PrismaClientKnownRequestError): unknown {
   const target = exception.meta?.target;
   return Array.isArray(target) || typeof target === 'string' ? { target } : undefined;
+}
+
+/** Which relation refused, so a caller can tell a missing parent from a child still holding one. */
+function fieldNameOf(exception: Prisma.PrismaClientKnownRequestError): unknown {
+  const field = exception.meta?.field_name;
+  return typeof field === 'string' ? { field } : undefined;
 }
